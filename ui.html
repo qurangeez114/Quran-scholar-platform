@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Qur’an Search</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+body { font-family: system-ui; padding:12px; background:#f7f7f7; }
+.controls { display:grid; gap:8px; }
+select,input,button { padding:10px; font-size:16px; }
+button { background:#1e88e5; color:#fff; border:none; border-radius:4px; }
+.verse { background:#fff; padding:12px; margin-top:10px; border-radius:6px; }
+.arabic { font-size:20px; direction:rtl; text-align:right; }
+.translit { font-size:14px; color:#444; margin-top:4px; font-style:italic; }
+.translation { margin-top:6px; }
+.meta { font-size:12px; color:#666; }
+.missing { color:#999; font-style:italic; }
+.options { display:flex; gap:12px; font-size:14px; }
+</style>
+</head>
+
+<body>
+<h2>Qur’an Search</h2>
+
+<div class="controls">
+  <select id="mode" onchange="toggleMode()">
+    <option value="text">Text Search</option>
+    <option value="concept">Concept Search</option>
+  </select>
+
+  <input id="query" placeholder="Type word (mercy / እምነት / الله)" />
+  <select id="conceptSelect" style="display:none;"></select>
+
+  <select id="lang">
+    <option value="en">English</option>
+    <option value="ti">Tigrinya</option>
+    <option value="ar">Arabic</option>
+  </select>
+
+  <div class="options">
+    <label><input type="checkbox" id="showArabic"> Show Arabic</label>
+    <label><input type="checkbox" id="showTranslit"> Show Transliteration</label>
+  </div>
+
+  <button onclick="search()">Search</button>
+</div>
+
+<div id="results"></div>
+
+<script>
+const API = "http://127.0.0.1:8000";
+
+/* VERY SIMPLE ARABIC → LATIN TRANSLITERATION */
+function transliterate(ar) {
+  if (!ar) return "";
+  const map = {
+    'ا':'ā','ب':'b','ت':'t','ث':'th','ج':'j','ح':'ḥ','خ':'kh',
+    'د':'d','ذ':'dh','ر':'r','ز':'z','س':'s','ش':'sh',
+    'ص':'ṣ','ض':'ḍ','ط':'ṭ','ظ':'ẓ','ع':'ʿ','غ':'gh',
+    'ف':'f','ق':'q','ك':'k','ل':'l','م':'m','ن':'n',
+    'ه':'h','و':'w','ي':'y','ء':'ʾ','ى':'ā'
+  };
+  return ar.split('').map(c => map[c] || c).join('');
+}
+
+async function loadConcepts() {
+  const r = await fetch(API + "/concepts");
+  const data = await r.json();
+  const s = document.getElementById("conceptSelect");
+  s.innerHTML = "";
+  data.forEach(c => {
+    const o = document.createElement("option");
+    o.value = c.concept;
+    o.textContent = `${c.concept} (${c.total_verses})`;
+    s.appendChild(o);
+  });
+}
+
+function toggleMode() {
+  const m = mode.value;
+  query.style.display = m === "text" ? "block" : "none";
+  conceptSelect.style.display = m === "concept" ? "block" : "none";
+  if (m === "concept") loadConcepts();
+}
+
+async function search() {
+  const m = mode.value;
+  const l = lang.value;
+  const showAr = showArabic.checked;
+  const showTr = showTranslit.checked;
+  const r = document.getElementById("results");
+  r.innerHTML = "Loading...";
+
+  let url;
+  if (m === "concept") {
+    url = `${API}/concept/verses?name=${encodeURIComponent(conceptSelect.value)}&lang=${l}`;
+  } else {
+    if (!query.value.trim()) { r.innerHTML = "Enter text"; return; }
+    url = `${API}/search/unified?q=${encodeURIComponent(query.value)}&lang=${l}`;
+  }
+
+  const res = await fetch(url);
+  const d = await res.json();
+  r.innerHTML = "";
+
+  d.results.forEach(v => {
+    let html = `<div class="verse"><div class="meta">Surah ${v.surah_number}:${v.ayah_number}</div>`;
+
+    if (showAr && v.arabic_text) {
+      html += `<div class="arabic">${v.arabic_text}</div>`;
+      if (showTr) {
+        html += `<div class="translit">${transliterate(v.arabic_text)}</div>`;
+      }
+    }
+
+    if (l !== "ar") {
+      html += v.translation
+        ? `<div class="translation">${v.translation}</div>`
+        : `<div class="missing">Translation not available.</div>`;
+    }
+
+    html += `</div>`;
+    r.innerHTML += html;
+  });
+}
+
+toggleMode();
+</script>
+</body>
+</html>
