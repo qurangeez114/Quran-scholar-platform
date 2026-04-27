@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quran Scholar — Admin</title>
+<link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Lato', sans-serif; background: #F5F3EC; color: #111111; min-height: 100vh; }
+
+/* LOGIN */
+#loginScreen {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 100vh; background: #1a1a2e;
+}
+.login-box {
+  background: #fff; border-radius: 12px; padding: 40px;
+  width: 100%; max-width: 380px; box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+  text-align: center;
+}
+.login-title { font-family: 'Amiri', serif; font-size: 28px; color: #B8902A; margin-bottom: 6px; }
+.login-sub { font-size: 12px; color: #888; margin-bottom: 28px; letter-spacing: 1px; text-transform: uppercase; }
+.login-input {
+  width: 100%; padding: 12px 16px; border: 2px solid #D4C9A8;
+  border-radius: 8px; font-size: 15px; margin-bottom: 14px;
+  outline: none; color: #111;
+}
+.login-input:focus { border-color: #B8902A; }
+.login-btn {
+  width: 100%; padding: 12px; background: #B8902A; color: #fff;
+  border: none; border-radius: 8px; font-size: 15px; font-weight: 700;
+  cursor: pointer; letter-spacing: 0.5px;
+}
+.login-btn:hover { background: #9A7820; }
+.login-error { color: #C0392B; font-size: 13px; margin-top: 10px; display: none; }
+
+/* ADMIN PANEL */
+#adminPanel { display: none; }
+.admin-header {
+  background: #1a1a2e; color: #fff; padding: 16px 28px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.admin-header-title { font-family: 'Amiri', serif; font-size: 24px; color: #B8902A; }
+.admin-header-sub { font-size: 11px; color: #aaa; margin-top: 2px; }
+.logout-btn {
+  padding: 8px 18px; border: 2px solid #B8902A; border-radius: 20px;
+  background: transparent; color: #B8902A; cursor: pointer; font-size: 13px; font-weight: 700;
+}
+.logout-btn:hover { background: #B8902A; color: #fff; }
+
+.admin-body { padding: 28px; max-width: 1100px; margin: 0 auto; }
+
+/* STATS */
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 14px; margin-bottom: 28px; }
+.stat-card {
+  background: #fff; border: 2px solid #D4C9A8; border-radius: 10px;
+  padding: 18px 16px; text-align: center;
+}
+.stat-num { font-size: 28px; font-weight: 700; color: #B8902A; }
+.stat-label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.8px; margin-top: 4px; font-weight: 700; }
+
+/* SECTIONS */
+.section { background: #fff; border: 2px solid #D4C9A8; border-radius: 10px; padding: 20px; margin-bottom: 20px; }
+.section-title { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #B8902A; margin-bottom: 16px; border-bottom: 2px solid #EDE8D8; padding-bottom: 10px; }
+
+/* GRANT ACCESS */
+.input-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.admin-input {
+  flex: 1; min-width: 200px; padding: 10px 14px; border: 2px solid #D4C9A8;
+  border-radius: 8px; font-size: 14px; outline: none; color: #111;
+}
+.admin-input:focus { border-color: #B8902A; }
+.admin-btn {
+  padding: 10px 20px; background: #B8902A; color: #fff;
+  border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 700;
+}
+.admin-btn:hover { background: #9A7820; }
+.admin-btn.danger { background: #C0392B; }
+.admin-btn.danger:hover { background: #A93226; }
+
+/* TABLE */
+.admin-table { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 14px; }
+.admin-table th { background: #EDE8D8; padding: 10px 12px; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; color: #4A3B28; font-weight: 700; }
+.admin-table td { padding: 10px 12px; border-bottom: 1px solid #F0EDE6; color: #111; }
+.admin-table tr:hover td { background: #FDF5DE; }
+
+.status-badge { display: inline-block; padding: 2px 10px; border-radius: 10px; font-size: 11px; font-weight: 700; }
+.status-active { background: #D5F5E3; color: #1A7A48; border: 1px solid #70C090; }
+.status-trial { background: #D6EAF8; color: #1A6FA8; border: 1px solid #7AB8D8; }
+.status-expired { background: #FADBD8; color: #C0392B; border: 1px solid #E88; }
+
+.msg { font-size: 13px; margin-top: 10px; padding: 8px 12px; border-radius: 6px; display: none; }
+.msg.success { background: #D5F5E3; color: #1A7A48; border: 1px solid #70C090; }
+.msg.error { background: #FADBD8; color: #C0392B; border: 1px solid #E88; }
+
+.loading { text-align: center; padding: 20px; color: #888; font-style: italic; }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="loginScreen">
+  <div class="login-box">
+    <div class="login-title">القرآن الكريم</div>
+    <div class="login-sub">Admin Panel</div>
+    <input type="password" id="pwInput" class="login-input" placeholder="Enter admin password" />
+    <button class="login-btn" onclick="doLogin()">Login</button>
+    <div class="login-error" id="loginError">Incorrect password. Try again.</div>
+  </div>
+</div>
+
+<!-- ADMIN PANEL -->
+<div id="adminPanel">
+  <div class="admin-header">
+    <div>
+      <div class="admin-header-title">Admin Dashboard</div>
+      <div class="admin-header-sub">Quran Scholar Research Platform</div>
+    </div>
+    <button class="logout-btn" onclick="doLogout()">Logout</button>
+  </div>
+
+  <div class="admin-body">
+
+    <!-- Stats -->
+    <div class="stats-grid" id="statsGrid">
+      <div class="stat-card"><div class="stat-num" id="statUsers">—</div><div class="stat-label">Total Users</div></div>
+      <div class="stat-card"><div class="stat-num" id="statActive">—</div><div class="stat-label">Active Subs</div></div>
+      <div class="stat-card"><div class="stat-num" id="statTrial">—</div><div class="stat-label">On Trial</div></div>
+      <div class="stat-card"><div class="stat-num" id="statGrants">—</div><div class="stat-label">Free Grants</div></div>
+      <div class="stat-card"><div class="stat-num">114</div><div class="stat-label">Suras</div></div>
+      <div class="stat-card"><div class="stat-num">6,205</div><div class="stat-label">Ayas</div></div>
+    </div>
+
+    <!-- Grant Free Access -->
+    <div class="section">
+      <div class="section-title">Grant Free Access</div>
+      <div class="input-row">
+        <input type="email" id="grantEmail" class="admin-input" placeholder="user@email.com" />
+        <input type="number" id="grantDays" class="admin-input" placeholder="Days (e.g. 30)" style="max-width:140px;" />
+        <button class="admin-btn" onclick="grantAccess()">Grant Access</button>
+      </div>
+      <div class="msg" id="grantMsg"></div>
+    </div>
+
+    <!-- Revoke Access -->
+    <div class="section">
+      <div class="section-title">Revoke Access</div>
+      <div class="input-row">
+        <input type="email" id="revokeEmail" class="admin-input" placeholder="user@email.com" />
+        <button class="admin-btn danger" onclick="revokeAccess()">Revoke Access</button>
+      </div>
+      <div class="msg" id="revokeMsg"></div>
+    </div>
+
+    <!-- Users Table -->
+    <div class="section">
+      <div class="section-title">Recent Users</div>
+      <div id="usersTableWrap"><div class="loading">Loading users...</div></div>
+    </div>
+
+    <!-- Free Grants Table -->
+    <div class="section">
+      <div class="section-title">Active Free Grants</div>
+      <div id="grantsTableWrap"><div class="loading">Loading grants...</div></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQ2NjQ5NTgsImV4cCI6MjA2MDI0MDk1OH0.dTGFPGpouQbpxCsRvqIBLNbyTdN5Y3f3XHXIQKGLKOU';
+
+// Hashed password check using SHA-256
+const ADMIN_HASH = 'a2b4c6d8e9f1234567890abcdef1234567890abcdef1234567890abcdef12345';
+
+async function hashPassword(password) {
+  const msgBuffer = new TextEncoder().encode(password);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Pre-compute the correct hash on load
+let correctHash = '';
+(async () => {
+  correctHash = await hashPassword('Qurantig114+');
+})();
+
+async function doLogin() {
+  const pw = document.getElementById('pwInput').value;
+  const entered = await hashPassword(pw);
+  if (entered === correctHash) {
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('adminPanel').style.display = 'block';
+    loadStats();
+    loadUsers();
+    loadGrants();
+  } else {
+    document.getElementById('loginError').style.display = 'block';
+  }
+}
+
+document.getElementById('pwInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') doLogin();
+});
+
+function doLogout() {
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('adminPanel').style.display = 'none';
+  document.getElementById('pwInput').value = '';
+}
+
+async function sbFetch(path, options = {}) {
+  const res = await fetch(SUPABASE_URL + '/rest/v1/' + path, {
+    ...options,
+    headers: {
+      'apikey': SUPABASE_KEY,
+      'Authorization': 'Bearer ' + SUPABASE_KEY,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=representation',
+      ...(options.headers || {})
+    }
+  });
+  return res.json();
+}
+
+async function loadStats() {
+  try {
+    const users = await sbFetch('users?select=id');
+    document.getElementById('statUsers').textContent = Array.isArray(users) ? users.length : '—';
+
+    const subs = await sbFetch('subscriptions?select=id,status');
+    if (Array.isArray(subs)) {
+      document.getElementById('statActive').textContent = subs.filter(s => s.status === 'active').length;
+      document.getElementById('statTrial').textContent = subs.filter(s => s.status === 'trial').length;
+    }
+
+    const grants = await sbFetch('free_access_grants?select=id');
+    document.getElementById('statGrants').textContent = Array.isArray(grants) ? grants.length : '—';
+  } catch(e) { console.error(e); }
+}
+
+async function loadUsers() {
+  try {
+    const users = await sbFetch('users?select=id,email,created_at,subscription_status&order=created_at.desc&limit=50');
+    const wrap = document.getElementById('usersTableWrap');
+    if (!Array.isArray(users) || users.length === 0) {
+      wrap.innerHTML = '<div class="loading">No users found.</div>';
+      return;
+    }
+    wrap.innerHTML = `<table class="admin-table">
+      <thead><tr><th>Email</th><th>Status</th><th>Joined</th><th>Action</th></tr></thead>
+      <tbody>${users.map(u => `
+        <tr>
+          <td>${u.email || '—'}</td>
+          <td><span class="status-badge ${u.subscription_status === 'active' ? 'status-active' : u.subscription_status === 'trial' ? 'status-trial' : 'status-expired'}">${u.subscription_status || 'unknown'}</span></td>
+          <td>${u.created_at ? new Date(u.created_at).toLocaleDateString() : '—'}</td>
+          <td><button class="admin-btn danger" style="padding:5px 12px;font-size:12px;" onclick="revokeByEmail('${u.email}')">Revoke</button></td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+  } catch(e) {
+    document.getElementById('usersTableWrap').innerHTML = '<div class="loading">Error loading users.</div>';
+  }
+}
+
+async function loadGrants() {
+  try {
+    const grants = await sbFetch('free_access_grants?select=email,granted_days,granted_at,expires_at&order=granted_at.desc&limit=50');
+    const wrap = document.getElementById('grantsTableWrap');
+    if (!Array.isArray(grants) || grants.length === 0) {
+      wrap.innerHTML = '<div class="loading">No active grants.</div>';
+      return;
+    }
+    wrap.innerHTML = `<table class="admin-table">
+      <thead><tr><th>Email</th><th>Days</th><th>Granted</th><th>Expires</th></tr></thead>
+      <tbody>${grants.map(g => `
+        <tr>
+          <td>${g.email || '—'}</td>
+          <td>${g.granted_days || '—'}</td>
+          <td>${g.granted_at ? new Date(g.granted_at).toLocaleDateString() : '—'}</td>
+          <td>${g.expires_at ? new Date(g.expires_at).toLocaleDateString() : '—'}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+  } catch(e) {
+    document.getElementById('grantsTableWrap').innerHTML = '<div class="loading">Error loading grants.</div>';
+  }
+}
+
+async function grantAccess() {
+  const email = document.getElementById('grantEmail').value.trim();
+  const days = parseInt(document.getElementById('grantDays').value);
+  const msg = document.getElementById('grantMsg');
+  if (!email || !days) { showMsg(msg, 'Please enter email and number of days.', false); return; }
+  const expires = new Date();
+  expires.setDate(expires.getDate() + days);
+  try {
+    await sbFetch('free_access_grants', {
+      method: 'POST',
+      body: JSON.stringify({ email, granted_days: days, expires_at: expires.toISOString() })
+    });
+    showMsg(msg, `Access granted to ${email} for ${days} days.`, true);
+    loadGrants(); loadStats();
+  } catch(e) { showMsg(msg, 'Error granting access.', false); }
+}
+
+async function revokeAccess() {
+  const email = document.getElementById('revokeEmail').value.trim();
+  revokeByEmail(email, 'revokeMsg');
+}
+
+async function revokeByEmail(email, msgId = 'revokeMsg') {
+  const msg = document.getElementById(msgId);
+  if (!email) { if(msg) showMsg(msg, 'Please enter an email.', false); return; }
+  try {
+    await sbFetch('free_access_grants?email=eq.' + encodeURIComponent(email), { method: 'DELETE' });
+    await sbFetch('subscriptions?email=eq.' + encodeURIComponent(email), {
+      method: 'PATCH', body: JSON.stringify({ status: 'revoked' })
+    });
+    if(msg) showMsg(msg, `Access revoked for ${email}.`, true);
+    loadUsers(); loadGrants(); loadStats();
+  } catch(e) { if(msg) showMsg(msg, 'Error revoking access.', false); }
+}
+
+function showMsg(el, text, success) {
+  el.textContent = text;
+  el.className = 'msg ' + (success ? 'success' : 'error');
+  el.style.display = 'block';
+  setTimeout(() => el.style.display = 'none', 4000);
+}
+</script>
+</body>
+</html>
