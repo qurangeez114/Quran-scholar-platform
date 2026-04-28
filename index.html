@@ -2467,8 +2467,14 @@ async function searchLexicon(q) {
     return;
   }
 
+  // Strip diacritics and common Arabic prefixes from pasted Quran text
+  const stripped = raw
+    .replace(/[ً-ٰٟٱۖ-ۭ]/g, '') // remove diacritics
+    .replace(/^[الوفبلك]+/, ''); // strip prefixes ا ال و ف ب ل ك
+  const searchTerm = stripped.length >= 2 ? stripped : raw;
+
   // 1) Try the lexicon (word_analysis) table first using variants
-  const variants = searchVariants(raw);
+  const variants = searchVariants(searchTerm);
   const cols = 'id,sura_id,aya_number,word_position,arabic_word,original_meaning,root_word,modern_meaning,meaning_evolution,scholarly_explanation,lexicon_sources';
   let results = [];
   try {
