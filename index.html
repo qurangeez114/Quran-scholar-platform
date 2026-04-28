@@ -2657,40 +2657,43 @@ function renderLexiconDictionary(word) {
 }
 
 async function loadLexiconConcordance(word) {
-  // Support being called from typed search (searchResults) or word click (lexiconConcordance)
   const box = document.getElementById('lexiconConcordance') || document.getElementById('searchResults');
   if (!box) return;
   const arabicWord = word.word || '';
-  const translitWord = word.transliteration || word.roman || '';
-  const englishHint = (word.quranic_meaning || '').split(/[,;.]/)[0].trim(); // first sense
+  const englishHint = (word.quranic_meaning || '').split(/[,;.]/)[0].trim();
   try {
-    // Search by Arabic word in arabic / arabic_warsh / arabic_qalun, plus English hint in english/translations
     const cols = 'sura_id,aya_number,arabic,english,amharic,oromo,somali,aya_text';
     const tasks = [];
+
+    // Primary: find matching rows in word_analysis by arabic_word, then fetch those verses
     if (arabicWord) {
-      tasks.push(sbSearch('ayas', cols, 'arabic', arabicWord));
-      // Also search stripped form (no diacritics) for bare Arabic roots
-      const stripped = arabicWord.replace(/[ً-ٰٟۖ-ۭ]/g, '');
-      if (stripped && stripped !== arabicWord) tasks.push(sbSearch('ayas', cols, 'arabic', stripped).catch(() => []));
+      tasks.push(
+        sbSearch('word_analysis', 'sura_id,aya_number', 'arabic_word', arabicWord)
+          .then(async refs => {
+            if (!refs || !refs.length) return [];
+            const seen = new Set();
+            const pairs = refs.filter(r => {
+              const k = `${r.sura_id}:${r.aya_number}`;
+              if (seen.has(k)) return false;
+              seen.add(k); return true;
+            }).slice(0, 50);
+            const versePromises = pairs.map(r =>
+              sbFetch('ayas', { select: cols, sura_id: `eq.${r.sura_id}`, aya_number: `eq.${r.aya_number}` }).catch(() => [])
+            );
+            return (await Promise.all(versePromises)).flat();
+          }).catch(() => [])
+      );
     }
-    // Also search transliteration column
-    if (translitWord && translitWord.length >= 2) {
-      tasks.push(sbSearch('ayas', cols, 'transliteration', translitWord).catch(() => []));
-    }
-    // Also search the raw typed word directly in English and Tigrinya
-    const rawTerm = arabicWord || translitWord || englishHint;
-    if (rawTerm && rawTerm.length >= 2) {
-      tasks.push(sbSearch('ayas', cols, 'english', rawTerm).catch(() => []));
-      tasks.push(sbSearch('ayas', cols, 'aya_text', rawTerm).catch(() => []));
-      tasks.push(sbSearch('ayas', cols, 'amharic', rawTerm).catch(() => []));
-      tasks.push(sbSearch('ayas', cols, 'oromo', rawTerm).catch(() => []));
-      tasks.push(sbSearch('ayas', cols, 'somali', rawTerm).catch(() => []));
-    } else if (englishHint && englishHint.length >= 3) {
+
+    // Fallback: English meaning search
+    if (englishHint && englishHint.length >= 3) {
       tasks.push(sbSearch('ayas', cols, 'english', englishHint).catch(() => []));
     }
+
     const results = await Promise.all(tasks);
     const seen = new Set();
     const all = results.flat().filter(v => {
+      if (!v || !v.sura_id) return false;
       const key = `${v.sura_id}:${v.aya_number}`;
       if (seen.has(key)) return false;
       seen.add(key); return true;
@@ -2701,51 +2704,38 @@ async function loadLexiconConcordance(word) {
       return;
     }
 
-    const stripped = arabicWord ? arabicWord.replace(/[ً-ٰٟۖ-ۭ]/g, '') : '';
-    const keywords = [arabicWord, stripped, englishHint].filter(k => k && k.length >= 2);
+    const keywords = [arabicWord, englishHint].filter(k => k && k.length >= 2);
     function hl(text) {
       if (!text) return '';
       let out = text;
       keywords.forEach(kw => {
-        if (!kw) return;
-        const escaped = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        out = out.replace(new RegExp(`(${escaped})`, 'gi'),
-          '<mark style="background:#FFE066;color:#1a1a1a;border-radius:3px;padding:0 2px;font-weight:700;">$1</mark>');
+        const esc = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        try { out = out.replace(new RegExp(`(${esc})`, 'gi'), '<mark>$1</mark>'); } catch(e) {}
       });
       return out;
     }
 
-    const headerCount = `<div style="font-size:12px;color:#C9A84C;font-weight:700;margin-bottom:10px;">${all.length} verse${all.length===1?'':'s'} found</div>`;
+    const countDiv = document.getElementById('searchCount');
+    if (countDiv) countDiv.textContent = `${all.length} verse${all.length===1?'':'s'} found for "${arabicWord || englishHint}"`;
 
-    box.innerHTML = headerCount + all.map(v => {
-      const suraInfo = allSuras.find(s => (s.sura_id||s.id) === v.sura_id);
-      const translit = transliterateArabic(v.arabic || '');
-      return `
-      <div style="background:#fff;border:1px solid #E8E4DC;border-radius:10px;margin-bottom:10px;overflow:hidden;cursor:pointer;" onclick="gotoResult(${v.sura_id},${v.aya_number},event)">
-        <div style="background:#FDF8EE;border-bottom:1px solid #E8C97B;padding:8px 14px;display:flex;align-items:center;gap:10px;">
-          <div style="width:22px;height:22px;border-radius:50%;background:#C9A84C;color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0">${v.sura_id}</div>
-          <div style="font-family:'Amiri',serif;font-size:14px;color:#1a1a1a">${ARABIC_NAMES[v.sura_id]||''}</div>
-          <div style="font-size:11px;color:#8B7355">${suraInfo?.sura_name_english || suraInfo?.sura_name_translated || ''}</div>
-          <div style="margin-left:auto;font-size:11px;font-weight:700;color:#C9A84C">${v.sura_id}:${v.aya_number}</div>
-          <div style="font-size:10px;color:#999">↗ Go</div>
+    box.innerHTML = all.map(v => {
+      const suraName = (window.surasCache && window.surasCache[v.sura_id]) ? window.surasCache[v.sura_id] : '';
+      return `<div class="verse-card" style="margin:8px 0;padding:14px;background:#fff;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <span style="font-weight:600;color:#8B6914">${v.sura_id}:${v.aya_number}${suraName ? ' — '+suraName : ''}</span>
+          <button onclick="goToVerse(${v.sura_id},${v.aya_number})" style="font-size:11px;padding:3px 8px;background:#f5f0e8;border:1px solid #ddd;border-radius:4px;cursor:pointer">Go</button>
         </div>
-        <div style="padding:12px 14px;">
-          ${v.arabic ? `<div class="lang-arabic" style="font-family:'Amiri',serif;font-size:20px;direction:rtl;text-align:right;line-height:1.8;margin-bottom:6px;${!langState.arabic?'display:none;':''}">${hl(v.arabic)}</div>` : ''}
-          ${translit ? `<div class="lang-translit" style="font-size:13px;color:#555;line-height:1.6;font-style:italic;margin-bottom:4px;letter-spacing:0.3px;${!langState.translit?'display:none;':''}">${hl(translit)}</div>` : ''}
-          ${v.english ? `<div class="lang-english" style="font-size:13px;color:#444;line-height:1.6;font-style:italic;margin-bottom:4px;${!langState.english?'display:none;':''}">${hl(v.english)}</div>` : ''}
-          ${v.aya_text ? `<div class="lang-tigrinya" style="font-size:12px;color:#8B7355;line-height:1.5;margin-bottom:3px;${!langState.tigrinya?'display:none;':''}">${hl(v.aya_text)}</div>` : ''}
-          ${v.amharic ? `<div class="lang-amharic" style="font-size:12px;color:#6B8E6B;line-height:1.5;margin-bottom:3px;${!langState.amharic?'display:none;':''}">${hl(v.amharic)}</div>` : ''}
-          ${v.oromo ? `<div class="lang-oromo" style="font-size:12px;color:#5B7355;line-height:1.5;margin-bottom:3px;${!langState.oromo?'display:none;':''}">${hl(v.oromo)}</div>` : ''}
-          ${v.somali ? `<div class="lang-somali" style="font-size:12px;color:#355573;line-height:1.5;${!langState.somali?'display:none;':''}">${hl(v.somali)}</div>` : ''}
-        </div>
+        ${v.arabic ? `<div style="font-family:'Amiri',serif;font-size:20px;direction:rtl;text-align:right;line-height:1.8;margin-bottom:8px">${hl(v.arabic)}</div>` : ''}
+        ${v.english ? `<div style="font-size:13px;color:#444;margin-bottom:4px">${hl(v.english)}</div>` : ''}
+        ${v.aya_text ? `<div style="font-size:13px;color:#555;margin-bottom:4px">${hl(v.aya_text)}</div>` : ''}
       </div>`;
     }).join('');
   } catch(e) {
-    box.innerHTML = `<div style="padding:20px;color:#C0392B;font-size:13px">Concordance error: ${escapeHtml(e.message)}</div>`;
+    box.innerHTML = `<div style="padding:20px;text-align:center;color:#c00">Error: ${e.message}</div>`;
   }
 }
 
-// ─── Generate missing lexicon fields with Claude API ────────────────────
+
 async function generateLexiconField(wordId, field, btn) {
   const word = lexiconData.find(w => w.id === wordId);
   if (!word) return;
