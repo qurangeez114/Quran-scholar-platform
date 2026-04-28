@@ -592,9 +592,12 @@ async function sbFetch(table, params) {
 
 async function sbSearch(table, select, column, query) {
   const orderCol = table === 'verses' ? 'surah_id' : 'sura_id';
-  const encodedQuery = encodeURIComponent(query);
-  const url = `${SUPABASE_URL}/rest/v1/${table}?select=${encodeURIComponent(select)}&${encodeURIComponent(column)}=ilike.*${encodedQuery}*&order=${orderCol}&limit=50`;
-  const r = await fetch(url, { headers: HEADERS });
+  const url = new URL(`${SUPABASE_URL}/rest/v1/${table}`);
+  url.searchParams.set('select', select);
+  url.searchParams.set(column, `ilike.*${query}*`);
+  url.searchParams.set('order', orderCol);
+  url.searchParams.set('limit', '50');
+  const r = await fetch(url.toString(), { headers: HEADERS });
   if (!r.ok) return [];
   const rows = await r.json();
   if (!Array.isArray(rows)) return [];
@@ -2658,14 +2661,24 @@ async function loadLexiconConcordance(word) {
   const box = document.getElementById('lexiconConcordance') || document.getElementById('searchResults');
   if (!box) return;
   const arabicWord = word.word || '';
+  const translitWord = word.transliteration || word.roman || '';
   const englishHint = (word.quranic_meaning || '').split(/[,;.]/)[0].trim(); // first sense
   try {
     // Search by Arabic word in arabic / arabic_warsh / arabic_qalun, plus English hint in english/translations
     const cols = 'sura_id,aya_number,arabic,english,amharic,oromo,somali,aya_text';
     const tasks = [];
-    if (arabicWord) tasks.push(sbSearch('ayas', cols, 'arabic', arabicWord));
+    if (arabicWord) {
+      tasks.push(sbSearch('ayas', cols, 'arabic', arabicWord));
+      // Also search stripped form (no diacritics) for bare Arabic roots
+      const stripped = arabicWord.replace(/[ً-ٰٟۖ-ۭ]/g, '');
+      if (stripped && stripped !== arabicWord) tasks.push(sbSearch('ayas', cols, 'arabic', stripped).catch(() => []));
+    }
+    // Also search transliteration column
+    if (translitWord && translitWord.length >= 2) {
+      tasks.push(sbSearch('ayas', cols, 'transliteration', translitWord).catch(() => []));
+    }
     // Also search the raw typed word directly in English and Tigrinya
-    const rawTerm = arabicWord || englishHint;
+    const rawTerm = arabicWord || translitWord || englishHint;
     if (rawTerm && rawTerm.length >= 2) {
       tasks.push(sbSearch('ayas', cols, 'english', rawTerm).catch(() => []));
       tasks.push(sbSearch('ayas', cols, 'aya_text', rawTerm).catch(() => []));
@@ -2688,7 +2701,8 @@ async function loadLexiconConcordance(word) {
       return;
     }
 
-    const keywords = [arabicWord, englishHint].filter(k => k && k.length >= 2);
+    const stripped = arabicWord ? arabicWord.replace(/[ً-ٰٟۖ-ۭ]/g, '') : '';
+    const keywords = [arabicWord, stripped, englishHint].filter(k => k && k.length >= 2);
     function hl(text) {
       if (!text) return '';
       let out = text;
