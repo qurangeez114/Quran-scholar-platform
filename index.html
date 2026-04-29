@@ -1036,6 +1036,7 @@ function buildAIPanel(num, arabic, english, tigrinya) {
       <button class="ai-preset" onclick="sendChat(${num},'Explain the grammatical structure (I\'rab)')">Grammar</button>
       <button class="ai-preset" onclick="sendChat(${num},'What Hadith are connected to this verse?')">Related Hadith</button>
     </div>
+    <div style="margin-bottom:8px;">${renderAILangSelector()}</div>
     <div id="chat-messages-${num}" style="max-height:320px;overflow-y:auto;margin-bottom:10px;display:flex;flex-direction:column;gap:8px;"></div>
     <div class="ai-input-row">
       <input class="ai-input" id="ai-input-${num}" placeholder="Ask anything about this verse..." onkeydown="if(event.key==='Enter')sendChat(${num})">
@@ -1106,13 +1107,14 @@ Answer questions about this verse with scholarly depth. Be concise but thorough.
 
   try {
     const messages = verseChats[num].map(m => ({ role: m.role, content: m.content }));
+    const langInstr4 = getAILanguageInstruction();
     const response = await fetch('https://Qurangeez-quran-scholar-api.hf.space/claude', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'claude-sonnet-4-5',
         max_tokens: 1000,
-        system: systemPrompt,
+        system: systemPrompt + ' ' + langInstr4,
         messages: messages
       })
     });
@@ -1420,6 +1422,61 @@ function applyLangState() {
     });
   });
 }
+
+// AI response language selector
+window._aiLang = localStorage.getItem('aiLang') || 'english';
+
+const AI_LANG_LABELS = {
+  english: 'English',
+  arabic: 'Arabic (فصحى)',
+  tigrinya: 'Tigrinya (ትግርኛ)',
+  amharic: 'Amharic (አማርኛ)',
+  oromo: 'Oromo (Afaan Oromoo)',
+  somali: 'Somali (Soomaali)',
+  german: 'Deutsch',
+  urdu: 'Urdu (اردو)',
+  french: 'Français',
+  turkish: 'Türkçe',
+  indonesian: 'Bahasa Indonesia'
+};
+
+const AI_LANG_INSTRUCTIONS = {
+  english: 'Respond in English.',
+  arabic: 'Respond in Modern Standard Arabic (فصحى). Use Arabic script.',
+  tigrinya: "Respond in Tigrinya (ትግርኛ). Use Ge'ez script.",
+  amharic: "Respond in Amharic (አማርኛ). Use Ge'ez script.",
+  oromo: 'Respond in Oromo (Afaan Oromoo). Use Latin script.',
+  somali: 'Respond in Somali (Soomaali).',
+  german: 'Respond in German (Deutsch).',
+  urdu: 'Respond in Urdu (اردو). Use Nastaliq script, right to left.',
+  french: 'Respond in French (Français).',
+  turkish: 'Respond in Turkish (Türkçe).',
+  indonesian: 'Respond in Indonesian (Bahasa Indonesia).'
+};
+
+function getAILanguageInstruction() {
+  return AI_LANG_INSTRUCTIONS[window._aiLang] || 'Respond in English.';
+}
+
+function setAILang(lang) {
+  window._aiLang = lang;
+  localStorage.setItem('aiLang', lang);
+  document.querySelectorAll('.ai-lang-selector').forEach(s => s.value = lang);
+}
+
+function renderAILangSelector() {
+  const opts = Object.entries(AI_LANG_LABELS).map(([v,l]) =>
+    `<option value="${v}" ${v===window._aiLang?'selected':''}>${l}</option>`
+  ).join('');
+  return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;padding:8px;background:#FDF8EE;border-radius:8px;border:1px solid #E8C97B;">
+    <span style="font-size:11px;font-weight:700;color:#8B7355;">🌐 AI Language:</span>
+    <select class="ai-lang-selector" onchange="setAILang(this.value)"
+      style="padding:4px 10px;border:1px solid #E8C97B;border-radius:6px;font-size:12px;background:#fff;color:#5a4a2a;cursor:pointer;flex:1;">
+      ${opts}
+    </select>
+  </div>`;
+}
+
 
 function closeWordModal(e) {
   if (e.target === document.getElementById('wordModal')) {
@@ -2614,7 +2671,7 @@ function renderLexiconDictionary(word) {
       label: 'Modern Meaning',
       color: '#1A6FA8',
       bg: '#E8F4FD',
-      content: `<em style="color:#888">Not yet stored.</em><br><button onclick="generateLexiconField(${word.id},'modern_meaning',this)" style="margin-top:8px;padding:6px 14px;background:#1A6FA8;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">✨ Generate with AI</button>`,
+      content: `${renderAILangSelector()}<em style="color:#888">Not yet stored.</em><br><button onclick="generateLexiconField(${word.id},'modern_meaning',this)" style="margin-top:8px;padding:6px 14px;background:#1A6FA8;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">✨ Generate with AI</button>`,
       isAI: true
     });
   }
@@ -2767,9 +2824,10 @@ async function generateLexiconField(wordId, field, btn) {
   const original = btn.innerHTML;
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span> Generating...';
+  const langInstr = getAILanguageInstruction();
   const prompt = field === 'modern_meaning'
-    ? `In one or two concise sentences, explain how the Arabic word "${word.word}" (${word.transliteration || ''}) is used in MODERN Standard Arabic today. Focus only on present-day usage and meaning. Do not discuss the Quranic meaning. Plain text, no markdown.`
-    : `In two or three concise sentences, explain how the meaning of the Arabic word "${word.word}" (${word.transliteration || ''}) has shifted from its Quranic-era meaning ("${word.quranic_meaning || 'unspecified'}") to its modern usage. Focus on the semantic evolution: what it meant then, what it means now, and what changed. Plain text, no markdown.`;
+    ? `In one or two concise sentences, explain how the Arabic word "${word.word}" (${word.transliteration || ''}) is used in MODERN Standard Arabic today. Focus only on present-day usage and meaning. Do not discuss the Quranic meaning. Plain text, no markdown. ${langInstr}`
+    : `In two or three concise sentences, explain how the meaning of the Arabic word "${word.word}" (${word.transliteration || ''}) has shifted from its Quranic-era meaning ("${word.quranic_meaning || 'unspecified'}") to its modern usage. Focus on the semantic evolution: what it meant then, what it means now, and what changed. Plain text, no markdown. ${langInstr}`;
   try {
     const response = await fetch('https://Qurangeez-quran-scholar-api.hf.space/claude', {
       method: 'POST',
@@ -2815,6 +2873,7 @@ async function generateScholarlyExplanation(wordId, btn) {
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span> Researching... (this may take 10-20 seconds)';
 
+  const langInstr2 = getAILanguageInstruction();
   const prompt = `You are an Arabic lexicographer providing a scholarly analysis of the Quranic word "${word.word}" (root: ${word.root || 'detect from the word'}). The word's classical Quranic meaning is recorded as: "${word.quranic_meaning || 'unspecified'}".
 
 Provide a substantive multi-paragraph scholarly explanation (4-6 paragraphs) covering:
@@ -2833,7 +2892,7 @@ Important constraints:
 
 Then on a separate line at the very end, prefix with "SOURCES:" and list the lexicographic works your analysis draws on, comma-separated. Example: "SOURCES: Mufradāt al-Qurʾān (al-Raghib al-Isfahani), Lisān al-ʿArab (Ibn Manzur), Tāj al-ʿArūs (al-Zabidi)".
 
-Plain text, no markdown headers or asterisks.`;
+Plain text, no markdown headers or asterisks. ${langInstr2}`;
 
   try {
     const response = await fetch('https://Qurangeez-quran-scholar-api.hf.space/claude', {
@@ -3140,6 +3199,7 @@ async function loadCompareVerses(t) {
   document.getElementById('compareAI').innerHTML = `
     <div style="margin-top:20px;background:linear-gradient(135deg,#FDFAF2,#FBF6E8);border:1px solid #E8C97B;border-radius:10px;padding:16px;">
       <div style="font-size:13px;font-weight:700;color:#8B7355;margin-bottom:10px;">⚖ AI Story Comparison Analysis</div>
+      ${renderAILangSelector()}
       <button onclick="runCompareAI()" 
         style="width:100%;padding:10px;background:#C9A84C;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">
         Analyze Similarities &amp; Differences
@@ -3189,7 +3249,8 @@ async function runCompareAI(topic, verses) {
       `${v.sura_id}:${v.aya_number} — ${v.arabic || ''} | ${v.english || v.aya_text || ''}`
     ).join('\n');
 
-    const prompt = `You are a Quranic scholar. Analyze the theme "${topic}" across these verses:\n\n${verseTexts}\n\nProvide:\n1. What unifies these verses thematically\n2. Key similarities in language or imagery\n3. Notable differences in context or emphasis\n4. The overall Quranic message on this topic\n\nBe concise but scholarly. Plain text, no markdown.`;
+    const langInstr3 = getAILanguageInstruction();
+    const prompt = `You are a Quranic scholar. Analyze the theme "${topic}" across these verses:\n\n${verseTexts}\n\nProvide:\n1. What unifies these verses thematically\n2. Key similarities in language or imagery\n3. Notable differences in context or emphasis\n4. The overall Quranic message on this topic\n\nBe concise but scholarly. Plain text, no markdown. ${langInstr3}`;
 
     const response = await fetch('https://Qurangeez-quran-scholar-api.hf.space/claude', {
       method: 'POST',
