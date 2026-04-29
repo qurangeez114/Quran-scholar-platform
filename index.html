@@ -2788,8 +2788,9 @@ async function generateLexiconField(wordId, field, btn) {
       })
     });
     const data = await response.json();
+    if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
     const text = (data.content && data.content[0] && data.content[0].text) || '';
-    if (!text) throw new Error('Empty AI response');
+    if (!text) throw new Error('Empty response: ' + JSON.stringify(data).slice(0,200));
     // Save back to Supabase so we don't regenerate
     const updateUrl = `${SUPABASE_URL}/rest/v1/word_analysis?id=eq.${wordId}`;
     await fetch(updateUrl, {
