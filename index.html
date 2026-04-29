@@ -453,10 +453,12 @@ function searchVariants(query) {
 
   // ───── Arabic ─────
   if (isArabic) {
-    // Strip diacritics (harakat)
-    const noHarakat = q.replace(/[\u064B-\u0652\u0670\u06D6-\u06ED]/g, '');
+    // Strip diacritics (harakat) and alef wasla
+    const noHarakat = q.replace(/[ً-ْٰۖ-ۭٱ]/g, '');
     if (noHarakat && noHarakat !== q) out.add(noHarakat);
-    // Strip definite article ال
+    // Strip definite article ال or ٱل
+    const noAl = noHarakat.replace(/^[اٱ]ل/, '');
+    if (noAl !== noHarakat && noAl.length >= 2) out.add(noAl);
     if (noHarakat.startsWith('ال') && noHarakat.length > 4) {
       out.add(noHarakat.slice(2));
     }
@@ -2468,15 +2470,26 @@ async function searchLexicon(q) {
   }
 
   // Strip diacritics and common Arabic prefixes from pasted Quran text
-  const stripped = raw
-    .replace(/[ً-ٰٟۖ-ۭ]/g, '') // remove all diacritics
-    .replace(/^ٱ/, '')       // remove alef wasla ٱ
-    .replace(/^ال/, '') // remove ال
-    .replace(/^لل/, '') // remove لل
-    .replace(/^[وفبلك]/, ''); // remove single prefix و ف ب ل ك
-  const searchTerm = stripped.length >= 2 ? stripped : raw.replace(/[ً-ٰٟۖ-ۭ]/g, '');
+  const clean = raw
+    .replace(/[ً-ٰٟۖ-ۭٱ]/g, ''); // remove all diacritics + alef wasla
+
+  // Try progressively shorter forms by stripping prefixes
+  const forms = [clean];
+  // Strip ال prefix
+  if (clean.startsWith('ال')) forms.push(clean.slice(2));
+  // Strip لل prefix
+  if (clean.startsWith('لل')) forms.push(clean.slice(2));
+  // Strip single letter prefixes و ف ب ل ك
+  if (['و','ف','ب','ل','ك'].includes(clean[0])) forms.push(clean.slice(1));
+  // Also strip ال after single prefix
+  forms.forEach(f => {
+    if (f.startsWith('ال')) forms.push(f.slice(2));
+  });
+
+  const searchTerm = forms.find(f => f.length >= 2) || clean;
 
   // 1) Try the lexicon (word_analysis) table first using variants
+  // Try all forms until we get results
   const variants = searchVariants(searchTerm);
   const cols = 'id,sura_id,aya_number,word_position,arabic_word,original_meaning,root_word,modern_meaning,meaning_evolution,scholarly_explanation,lexicon_sources';
   let results = [];
