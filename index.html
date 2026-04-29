@@ -2476,17 +2476,19 @@ async function searchLexicon(q) {
   // Try progressively shorter forms by stripping prefixes
   const forms = [clean];
   // Strip ال prefix
-  if (clean.startsWith('ال')) forms.push(clean.slice(2));
+  if (clean.startsWith('ال') && clean.length > 4) forms.push(clean.slice(2));
   // Strip لل prefix
-  if (clean.startsWith('لل')) forms.push(clean.slice(2));
-  // Strip single letter prefixes و ف ب ل ك
-  if (['و','ف','ب','ل','ك'].includes(clean[0])) forms.push(clean.slice(1));
-  // Also strip ال after single prefix
-  forms.forEach(f => {
-    if (f.startsWith('ال')) forms.push(f.slice(2));
-  });
+  if (clean.startsWith('لل') && clean.length > 4) forms.push(clean.slice(2));
+  // Strip single letter prefixes و ف ب ل ك — only if remaining word >= 3 chars
+  if (['و','ف','ب','ل','ك'].includes(clean[0]) && clean.length > 3) {
+    const afterPrefix = clean.slice(1);
+    forms.push(afterPrefix);
+    // Also strip ال after single prefix
+    if (afterPrefix.startsWith('ال') && afterPrefix.length > 4) forms.push(afterPrefix.slice(2));
+  }
 
-  const searchTerm = forms.find(f => f.length >= 2) || clean;
+  // Use the full clean form first (most accurate), fall back to stripped forms
+  const searchTerm = clean.length >= 2 ? clean : forms.find(f => f.length >= 2) || clean;
 
   // 1) Try the lexicon (word_analysis) table first using variants
   // Try all forms until we get results
