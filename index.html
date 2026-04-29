@@ -2109,14 +2109,16 @@ async function loadHadithPanel(sura, aya) {
     return;
   }
 
-  panel.innerHTML = entries.map(h => `
-    <div style="background:#FDFAF2;border:1px solid #E8C97B;border-radius:10px;padding:14px;margin-bottom:12px;">
+  const sunniEntries = entries.filter(h => h.tradition === 'sunni' || !h.tradition);
+  const shiaEntries = entries.filter(h => h.tradition === 'shia');
+
+  function renderHadithCard(h) {
+    return `<div style="background:#FDFAF2;border:1px solid #E8C97B;border-radius:10px;padding:14px;margin-bottom:12px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:4px;">
         <div style="font-weight:700;color:#8B5E1A;font-size:13px;">${escapeHtml(h.collection)}</div>
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
           ${h.reference ? `<span style="font-size:11px;background:#F0E8D0;color:#8B5E1A;padding:2px 8px;border-radius:10px;">${escapeHtml(h.reference)}</span>` : ''}
           ${h.hadith_grade ? `<span style="font-size:11px;background:${h.hadith_grade==='sahih'?'#E8F5E9':'#FFF8E1'};color:${h.hadith_grade==='sahih'?'#2E7D32':'#F57F17'};padding:2px 8px;border-radius:10px;">${escapeHtml(h.hadith_grade)}</span>` : ''}
-          ${h.is_ai_generated ? `<span style="font-size:10px;color:#999;font-style:italic;">AI</span>` : ''}
         </div>
       </div>
       ${h.narrator ? `<div style="font-size:11px;color:#8B7355;margin-bottom:6px;">Narrated by: <b>${escapeHtml(h.narrator)}</b></div>` : ''}
@@ -2125,8 +2127,43 @@ async function loadHadithPanel(sura, aya) {
       ${h.isnad ? `<div style="font-size:11px;color:#999;margin-bottom:6px;font-style:italic;">Chain: ${escapeHtml(h.isnad)}</div>` : ''}
       ${h.similarity_note ? `<div style="font-size:12px;color:#2E7D32;background:#E8F5E9;padding:6px 10px;border-radius:6px;margin-bottom:4px;">🔗 ${escapeHtml(h.similarity_note)}</div>` : ''}
       ${h.difference_note ? `<div style="font-size:12px;color:#1565C0;background:#E3F2FD;padding:6px 10px;border-radius:6px;">↔ ${escapeHtml(h.difference_note)}</div>` : ''}
-    </div>`).join('');
+    </div>`;
+  }
+
+  const hadithTradId = `hadith-trad-${sura}-${aya}`;
+  panel.innerHTML = `
+    <div style="display:flex;gap:8px;margin-bottom:12px;">
+      <button id="${hadithTradId}-sunni" onclick="switchHadithTrad('${hadithTradId}','sunni')"
+        style="flex:1;padding:7px;border-radius:8px;border:1px solid #C9A84C;background:#C9A84C;color:#fff;font-weight:700;font-size:12px;cursor:pointer;">
+        ☀️ Sunni (${sunniEntries.length})
+      </button>
+      <button id="${hadithTradId}-shia" onclick="switchHadithTrad('${hadithTradId}','shia')"
+        style="flex:1;padding:7px;border-radius:8px;border:1px solid #ddd;background:#fff;color:#666;font-weight:700;font-size:12px;cursor:pointer;">
+        🌙 Shia (${shiaEntries.length})
+      </button>
+      <button id="${hadithTradId}-both" onclick="switchHadithTrad('${hadithTradId}','both')"
+        style="flex:1;padding:7px;border-radius:8px;border:1px solid #ddd;background:#fff;color:#666;font-weight:700;font-size:12px;cursor:pointer;">
+        ⚖️ Compare
+      </button>
+    </div>
+    <div id="${hadithTradId}-sunni-panel">${sunniEntries.map(renderHadithCard).join('') || '<div style="padding:10px;color:#999;font-style:italic;">No Sunni hadith found.</div>'}</div>
+    <div id="${hadithTradId}-shia-panel" style="display:none;">${shiaEntries.map(renderHadithCard).join('') || '<div style="padding:10px;color:#999;font-style:italic;">No Shia hadith found yet.</div>'}</div>
+    <div id="${hadithTradId}-both-panel" style="display:none;">
+      ${sunniEntries.length ? `<div style="font-weight:700;color:#C9A84C;margin-bottom:8px;font-size:13px;">☀️ SUNNI</div>${sunniEntries.map(renderHadithCard).join('')}` : ''}
+      ${shiaEntries.length ? `<div style="font-weight:700;color:#6A2A9A;margin-bottom:8px;margin-top:12px;font-size:13px;">🌙 SHIA</div>${shiaEntries.map(renderHadithCard).join('')}` : ''}
+    </div>`;
 }
+
+function switchHadithTrad(id, trad) {
+  ['sunni','shia','both'].forEach(t => {
+    const btn = document.getElementById(`${id}-${t}`);
+    const panel = document.getElementById(`${id}-${t}-panel`);
+    const active = t === trad;
+    if (btn) { btn.style.background = active ? '#C9A84C' : '#fff'; btn.style.color = active ? '#fff' : '#666'; btn.style.borderColor = active ? '#C9A84C' : '#ddd'; }
+    if (panel) panel.style.display = active ? '' : 'none';
+  });
+}
+
 
 // ============ Chronological view ============
 let chronoData = null;
