@@ -2078,42 +2078,54 @@ async function loadHadithPanel(sura, aya) {
   const panel = document.getElementById(`tp-${aya}-hadith`);
   if (!panel || !panel.querySelector('.loading')) return;
   const tabBtn = document.getElementById(`hadith-tab-${aya}`);
-  const current = traditionState[tradKey(sura, aya, 'hadith')] || 'sunni';
   let entries = [];
   try {
     const rows = await sbFetch('hadith_connections', {
-      select: 'hadith_text,narrator,collection,tradition,similarity_note,difference_note',
+      select: 'hadith_text,arabic_text,narrator,collection,reference,hadith_grade,tradition,similarity_note,difference_note,isnad,is_ai_generated',
       sura_id: `eq.${sura}`,
       aya_number: `eq.${aya}`
     });
     entries = rows.map(r => {
-      let body = r.hadith_text || '';
-      if (r.similarity_note) body += `\n\nSimilarity: ${r.similarity_note}`;
-      if (r.difference_note) body += `\n\nDifference: ${r.difference_note}`;
-      const metaParts = [];
-      if (r.narrator) metaParts.push(`Narrator: ${r.narrator}`);
-      if (r.collection) metaParts.push(r.collection);
       return {
-        scholar: r.collection || 'Hadith',
-        tradition: r.tradition,
-        text: body,
-        meta: metaParts.join(' · ') || null,
-        isAI: false
+        hadith_text: r.hadith_text || '',
+        arabic_text: r.arabic_text || '',
+        narrator: r.narrator || '',
+        collection: r.collection || '',
+        reference: r.reference || '',
+        hadith_grade: r.hadith_grade || '',
+        tradition: r.tradition || 'sunni',
+        similarity_note: r.similarity_note || '',
+        difference_note: r.difference_note || '',
+        isnad: r.isnad || '',
+        is_ai_generated: r.is_ai_generated
       };
     });
-  } catch {}
+  } catch(e) { console.error('Hadith load error:', e); }
+
   if (tabBtn) tabBtn.textContent = entries.length > 0 ? `Hadith (${entries.length})` : 'Hadith';
+
   if (entries.length === 0) {
-    entries = [{
-      scholar: 'No connected hadith',
-      tradition: current,
-      text: `No hadith linked to ${sura}:${aya} in the database yet. Connected hadith typically come from Sahih Bukhari, Muslim, Tirmidhi (Sunni) or Al-Kafi, Bihar al-Anwar (Shia). Add entries to the hadith_connections table.`,
-      meta: null,
-      isAI: true
-    }];
+    panel.innerHTML = `<div style="padding:20px;text-align:center;color:#999;font-style:italic;">No hadith connections found for ${sura}:${aya}.</div>`;
+    return;
   }
-  panel.innerHTML = buildTradToggle(sura, aya, 'hadith', current) +
-    renderScholarEntries(entries, current, 'No hadith connections found.');
+
+  panel.innerHTML = entries.map(h => `
+    <div style="background:#FDFAF2;border:1px solid #E8C97B;border-radius:10px;padding:14px;margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:4px;">
+        <div style="font-weight:700;color:#8B5E1A;font-size:13px;">${escapeHtml(h.collection)}</div>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+          ${h.reference ? `<span style="font-size:11px;background:#F0E8D0;color:#8B5E1A;padding:2px 8px;border-radius:10px;">${escapeHtml(h.reference)}</span>` : ''}
+          ${h.hadith_grade ? `<span style="font-size:11px;background:${h.hadith_grade==='sahih'?'#E8F5E9':'#FFF8E1'};color:${h.hadith_grade==='sahih'?'#2E7D32':'#F57F17'};padding:2px 8px;border-radius:10px;">${escapeHtml(h.hadith_grade)}</span>` : ''}
+          ${h.is_ai_generated ? `<span style="font-size:10px;color:#999;font-style:italic;">AI</span>` : ''}
+        </div>
+      </div>
+      ${h.narrator ? `<div style="font-size:11px;color:#8B7355;margin-bottom:6px;">Narrated by: <b>${escapeHtml(h.narrator)}</b></div>` : ''}
+      ${h.arabic_text ? `<div style="font-family:'Noto Naskh Arabic',serif;font-size:18px;direction:rtl;text-align:right;line-height:1.8;color:#1a1a1a;margin-bottom:8px;padding:8px;background:#fff;border-radius:6px;">${escapeHtml(h.arabic_text)}</div>` : ''}
+      <div style="font-size:14px;color:#333;line-height:1.6;margin-bottom:8px;">${escapeHtml(h.hadith_text)}</div>
+      ${h.isnad ? `<div style="font-size:11px;color:#999;margin-bottom:6px;font-style:italic;">Chain: ${escapeHtml(h.isnad)}</div>` : ''}
+      ${h.similarity_note ? `<div style="font-size:12px;color:#2E7D32;background:#E8F5E9;padding:6px 10px;border-radius:6px;margin-bottom:4px;">🔗 ${escapeHtml(h.similarity_note)}</div>` : ''}
+      ${h.difference_note ? `<div style="font-size:12px;color:#1565C0;background:#E3F2FD;padding:6px 10px;border-radius:6px;">↔ ${escapeHtml(h.difference_note)}</div>` : ''}
+    </div>`).join('');
 }
 
 // ============ Chronological view ============
