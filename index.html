@@ -2469,39 +2469,36 @@ async function searchLexicon(q) {
     return;
   }
 
-  // Strip ALL diacritics from typed/pasted Arabic
-  function stripArabic(s) {
-    return s
-      .replace(/[\u064B-\u065F\u0610-\u061A\u0670\u06D6-\u06ED\u0671]/g, '')
-      .replace(/[\u0622\u0623\u0625]/g, '\u0627')
-      .replace(/\u0624/g, '\u0648')
-      .replace(/\u0626/g, '\u064A')
-      .replace(/\u0629/g, '\u0647')
+  // Normalize Arabic input
+  function normalizeArabicWord(s) {
+    return (s || '')
+      .replace(/[ٱأإآ]/g, 'ا') // ٱأإآ → ا
+      .replace(/ى/g, 'ي')                      // ى → ي
+      .replace(/ة/g, 'ه')                      // ة → ه
+      .replace(/[ً-ْٰۖ-ۭ]/g, '') // strip harakat
+      .replace(/[^؀-ۿ]/g, '')                  // keep only Arabic
       .trim();
   }
-  const clean = stripArabic(raw);
-  const allForms = new Set([clean]);
-  if (clean.startsWith('\u0627\u0644') && clean.length > 3) allForms.add(clean.slice(2));
-  if (clean.startsWith('\u0644\u0644') && clean.length > 3) allForms.add(clean.slice(2));
-  if (['\u0648','\u0641','\u0628','\u0644','\u0643'].includes(clean[0]) && clean.length > 3) {
-    const after = clean.slice(1);
-    allForms.add(after);
-    if (after.startsWith('\u0627\u0644') && after.length > 3) allForms.add(after.slice(2));
+
+  function getArabicSearchForms(raw) {
+    const normalized = normalizeArabicWord(raw);
+    const withoutAl = normalized.startsWith('ال') ? normalized.slice(2) : normalized;
+    return [...new Set([raw, normalized, withoutAl, 'ال' + withoutAl].filter(Boolean))];
   }
-  const searchTerm = clean;
-  const variants = [...new Set([...searchVariants(searchTerm), ...allForms])];
+
+  const formsToSearch = getArabicSearchForms(raw);
   const cols = 'id,sura_id,aya_number,word_position,arabic_word,original_meaning,root_word,modern_meaning,meaning_evolution,scholarly_explanation,lexicon_sources';
   let results = [];
   try {
-    const tasks = [];
-    for (const v of variants) {
-      tasks.push(sbSearch('word_analysis', cols, 'original_meaning', v).catch(() => []));
-      tasks.push(sbSearch('word_analysis', cols, 'arabic_word', v).catch(() => []));
-    }
+    const tasks = formsToSearch.map(form =>
+      sbSearch('word_analysis', cols, 'arabic_word', form).catch(() => [])
+    );
+    // Also search English meaning
+    tasks.push(sbSearch('word_analysis', cols, 'original_meaning', formsToSearch[0]).catch(() => []));
     const all = (await Promise.all(tasks)).flat();
     const seen = new Set();
     results = all.filter(r => {
-      if (seen.has(r.id)) return false;
+      if (!r || seen.has(r.id)) return false;
       seen.add(r.id); return true;
     }).map(r => ({
       id: r.id, word: r.arabic_word, transliteration: '',
@@ -2516,12 +2513,16 @@ async function searchLexicon(q) {
     results = [];
   }
 
-  // 2) Fall back to local-data filter if Supabase returned nothing
+  // Fallback uses normalized form
   if (!results.length) {
+    const norm = normalizeArabicWord(raw);
     results = lexiconData.filter(w =>
-      (w.word||'').includes(raw) || (w.quranic_meaning||'').toLowerCase().includes(raw.toLowerCase())
+      normalizeArabicWord(w.word||'').includes(norm) ||
+      (w.quranic_meaning||'').toLowerCase().includes(raw.toLowerCase())
     );
   }
+
+
 
   renderLexicon(results);
 
