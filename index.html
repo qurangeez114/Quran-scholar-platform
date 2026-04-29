@@ -3075,6 +3075,9 @@ async function loadCompareVerses(t) {
     );
     const results = await Promise.all(promises);
     allVerseData = results.flat();
+    // Store for AI comparison button
+    window._compareTopicNow = t.topic;
+    window._compareVersesNow = allVerseData.slice(0, 12);
   } catch(e) {
     document.getElementById('compareVerses').innerHTML = `<div style="color:#C0392B;padding:20px">Error loading verses: ${e.message}</div>`;
     return;
@@ -3097,9 +3100,12 @@ async function loadCompareVerses(t) {
       <div style="padding:14px;">
         ${verses.map(v => `
           <div style="margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid #F5F3ED;">
-            <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
-              <div style="width:22px;height:22px;border-radius:50%;background:#FDF8EE;border:1px solid #E8C97B;display:flex;align-items:center;justify-content:center;font-size:10px;color:#C9A84C;font-weight:700;">${v.aya_number}</div>
-              <div style="font-size:10px;color:#BBB">${suraNum}:${v.aya_number}</div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:8px;">
+              <div style="display:flex;align-items:center;gap:6px;">
+                <div style="width:22px;height:22px;border-radius:50%;background:#FDF8EE;border:1px solid #E8C97B;display:flex;align-items:center;justify-content:center;font-size:10px;color:#C9A84C;font-weight:700;">${v.aya_number}</div>
+                <div style="font-size:10px;color:#BBB">${suraNum}:${v.aya_number}</div>
+              </div>
+              <button onclick="goToVerse(${suraNum},${v.aya_number})" style="font-size:11px;padding:3px 10px;background:#f5f0e8;border:1px solid #ddd;border-radius:4px;cursor:pointer;color:#8B7355;">→ Go</button>
             </div>
             <div style="font-family:'Amiri',serif;font-size:19px;direction:rtl;text-align:right;line-height:1.8;color:#1a1a1a;margin-bottom:6px">${v.arabic || ''}</div>
             <div style="font-size:13px;color:#444;line-height:1.6;font-style:italic;margin-bottom:4px">${v.english || ''}</div>
@@ -3116,7 +3122,6 @@ async function loadCompareVerses(t) {
   document.getElementById('compareAI').innerHTML = `
     <div style="margin-top:20px;background:linear-gradient(135deg,#FDFAF2,#FBF6E8);border:1px solid #E8C97B;border-radius:10px;padding:16px;">
       <div style="font-size:13px;font-weight:700;color:#8B7355;margin-bottom:10px;">⚖ AI Story Comparison Analysis</div>
-      <script>window._compareTopicNow='${t.topic.replace(/'/g,"\\'")}'; window._compareVersesNow=JSON.parse('${JSON.stringify(allVerseData.slice(0,12)).replace(/\\/g,'\\\\').replace(/'/g,"\\'")}');</script>
       <button onclick="runCompareAI()" 
         style="width:100%;padding:10px;background:#C9A84C;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">
         Analyze Similarities &amp; Differences
