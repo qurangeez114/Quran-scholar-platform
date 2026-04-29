@@ -239,6 +239,20 @@ body { font-family: 'Lato', sans-serif; background: #F5F3EC; color: #111111; }
       </div>
       <button onclick="location.reload()" title="Home / Refresh" style="background:none;border:1px solid #E8C97B;border-radius:50%;width:36px;height:36px;cursor:pointer;font-size:18px;color:#C9A84C;display:flex;align-items:center;justify-content:center;">🏠</button>
     </div>
+    <div style="padding:6px 12px;border-bottom:1px solid #E8E4DC;display:flex;align-items:center;gap:6px;">
+      <span style="font-size:10px;color:#8B7355;">🌍</span>
+      <select class="ui-lang-selector" onchange="setUILang(this.value)"
+        style="flex:1;padding:4px 6px;border:1px solid #E8C97B;border-radius:6px;font-size:11px;background:#FDF8EE;color:#5a4a2a;cursor:pointer;">
+        <option value="en">English</option>
+        <option value="ar">العربية</option>
+        <option value="ti">ትግርኛ</option>
+        <option value="am">አማርኛ</option>
+        <option value="de">Deutsch</option>
+        <option value="ur">اردو</option>
+        <option value="so">Soomaali</option>
+        <option value="om">Afaan Oromoo</option>
+      </select>
+    </div>
     <div style="display:flex;border-bottom:1px solid #E8E4DC;flex-shrink:0;flex-wrap:wrap;">
       <button id="tab-suras" onclick="switchSidebarTab('suras')" style="flex:1;padding:9px;font-size:10px;font-weight:700;text-transform:uppercase;border:none;background:#FDF8EE;color:#C9A84C;cursor:pointer;border-bottom:2px solid #C9A84C;">Suras</button>
       <button id="tab-chrono" onclick="switchSidebarTab('chrono')" style="flex:1;padding:9px;font-size:10px;font-weight:700;text-transform:uppercase;border:none;background:#fff;color:#999;cursor:pointer;border-bottom:2px solid transparent;">Chrono</button>
@@ -611,6 +625,8 @@ async function sbSearch(table, select, column, query) {
 }
 
 async function init() {
+  // Apply UI language on startup
+  applyUITranslations();
   try {
     const suras = await sbFetch('suras', { select: '*,sura_name_english,sura_name_tigrinya,sura_name_amharic', order: 'sura_id' });
     allSuras = suras;
@@ -1478,6 +1494,193 @@ function renderAILangSelector() {
 }
 
 
+// ─── UI Language / Localization ───────────────────────────────────────────────
+const UI_TRANSLATIONS = {
+  en: {
+    subtitle: 'Quran Scholar Research Platform',
+    suras: 'Suras', chrono: 'Chrono', topics: 'Topics', lexicon: 'Lexicon', saved: 'Saved',
+    searchSuras: 'Search suras...', searchWord: '🔍 Search any word in all verses...',
+    searchTopics: 'Search topics...', searchLexicon: 'Search Arabic, English...',
+    bookmarked: 'BOOKMARKED VERSES', clearAll: 'Clear all',
+    noSaved: 'No saved verses yet.', tapToBookmark: 'Tap 🔖 on any verse to bookmark it.',
+    loading: 'Loading...', loadingOrder: 'Loading order...',
+    sunni: 'Sunni', shia: 'Shia', orderedBy: 'Ordered by revelation',
+    allOn: 'All On', arabic: 'Arabic', translit: 'Transliteration',
+    english: 'English', tigrinya: 'Tigrinya', amharic: 'Amharic',
+    oromo: 'Oromo', somali: 'Somali', german: 'German', urdu: 'Urdu',
+    go: 'Go', sura: 'Sura', verse: 'Verse', send: 'Send', clearChat: 'Clear chat',
+    askVerse: 'Ask anything about this verse...', verses: 'verses',
+    uiLang: '🌍 Interface Language'
+  },
+  ar: {
+    subtitle: 'منصة باحث القرآن الكريم',
+    suras: 'السور', chrono: 'الترتيب', topics: 'المواضيع', lexicon: 'المعجم', saved: 'المحفوظ',
+    searchSuras: 'ابحث في السور...', searchWord: '🔍 ابحث عن أي كلمة...',
+    searchTopics: 'ابحث في المواضيع...', searchLexicon: 'ابحث بالعربية أو الإنجليزية...',
+    bookmarked: 'الآيات المحفوظة', clearAll: 'حذف الكل',
+    noSaved: 'لا توجد آيات محفوظة بعد.', tapToBookmark: 'اضغط 🔖 على أي آية لحفظها.',
+    loading: 'جارٍ التحميل...', loadingOrder: 'جارٍ تحميل الترتيب...',
+    sunni: 'سني', shia: 'شيعي', orderedBy: 'مرتب حسب النزول',
+    allOn: 'الكل', arabic: 'العربية', translit: 'الترجمة الصوتية',
+    english: 'الإنجليزية', tigrinya: 'التيغرينيا', amharic: 'الأمهرية',
+    oromo: 'الأورومو', somali: 'الصومالية', german: 'الألمانية', urdu: 'الأردية',
+    go: 'انتقل', sura: 'السورة', verse: 'الآية', send: 'إرسال', clearChat: 'مسح المحادثة',
+    askVerse: 'اسأل أي شيء عن هذه الآية...', verses: 'آيات',
+    uiLang: '🌍 لغة الواجهة'
+  },
+  ti: {
+    subtitle: 'መፅሓፍ ቅዱስ መጽናዕቲ መድረኽ',
+    suras: 'ሱራ', chrono: 'ሰዓዊ', topics: 'ኣርእስቲ', lexicon: 'መዝገበ ቃላት', saved: 'ዝተቐምጠ',
+    searchSuras: 'ሱራ ድለ...', searchWord: '🔍 ዝኾነ ቃል ድለ...',
+    searchTopics: 'ኣርእስቲ ድለ...', searchLexicon: 'ዓረብ ወይ እንግሊዝ ድለ...',
+    bookmarked: 'ዝተቐምጡ ኣያቶ', clearAll: 'ኹሉ ሓዊ',
+    noSaved: 'ዝተቐምጠ ኣያ የለን።', tapToBookmark: '🔖 ጠቅዕ ኣያ ኣቐምጥ።',
+    loading: 'ይጽዕን ኣሎ...', loadingOrder: 'ስርዓት ይጽዕን...',
+    sunni: 'ሱኒ', shia: 'ሺዓ', orderedBy: 'ብምውራድ ዝተሰርዐ',
+    allOn: 'ኹሉ', arabic: 'ዓረብኛ', translit: 'ድምጻዊ',
+    english: 'እንግሊዝኛ', tigrinya: 'ትግርኛ', amharic: 'ኣምሓርኛ',
+    oromo: 'ኦሮምኛ', somali: 'ሶማልኛ', german: 'ጀርመንኛ', urdu: 'ኡርዱ',
+    go: 'ኺድ', sura: 'ሱራ', verse: 'ኣያ', send: 'ስደድ', clearChat: 'ዕላል ሓዊ',
+    askVerse: 'ብዛዕባ እዚ ኣያ ዝኾነ ሕተት...', verses: 'ኣያቶ',
+    uiLang: '🌍 ቋንቋ ኢንተርፌስ'
+  },
+  am: {
+    subtitle: 'የቁርዓን ምሁር ምርምር መድረክ',
+    suras: 'ሱራዎች', chrono: 'ዘመናዊ', topics: 'ርዕሶች', lexicon: 'መዝገበ ቃላት', saved: 'የተቀመጠ',
+    searchSuras: 'ሱራ ፈልግ...', searchWord: '🔍 ማንኛውም ቃል ፈልግ...',
+    searchTopics: 'ርዕስ ፈልግ...', searchLexicon: 'አረብኛ ወይም እንግሊዝኛ ፈልግ...',
+    bookmarked: 'የተቀመጡ አናቶ', clearAll: 'ሁሉንም አጽዳ',
+    noSaved: 'የተቀመጠ አያ የለም።', tapToBookmark: '🔖 ማንኛውም አያ ለማስቀመጥ ጠቅ አድርግ።',
+    loading: 'እየጫነ ነው...', loadingOrder: 'ስርዓት እየጫነ...',
+    sunni: 'ሱኒ', shia: 'ሺዓ', orderedBy: 'በመውረድ ቅደም ተከተል',
+    allOn: 'ሁሉም', arabic: 'አረብኛ', translit: 'ድምጸ ፊደል',
+    english: 'እንግሊዝኛ', tigrinya: 'ትግርኛ', amharic: 'አማርኛ',
+    oromo: 'ኦሮምኛ', somali: 'ሶማሊ', german: 'ጀርመንኛ', urdu: 'ኡርዱ',
+    go: 'ሂድ', sura: 'ሱራ', verse: 'አያ', send: 'ላክ', clearChat: 'ውይይት አጽዳ',
+    askVerse: 'ስለዚህ አያ ማንኛውም ጥያቄ...', verses: 'አናቶ',
+    uiLang: '🌍 የበይነ-መረብ ቋንቋ'
+  },
+  de: {
+    subtitle: 'Quran-Gelehrten-Forschungsplattform',
+    suras: 'Suren', chrono: 'Chronol.', topics: 'Themen', lexicon: 'Lexikon', saved: 'Gespeichert',
+    searchSuras: 'Suren suchen...', searchWord: '🔍 Beliebiges Wort suchen...',
+    searchTopics: 'Themen suchen...', searchLexicon: 'Arabisch oder Englisch suchen...',
+    bookmarked: 'GESPEICHERTE VERSE', clearAll: 'Alle löschen',
+    noSaved: 'Noch keine gespeicherten Verse.', tapToBookmark: 'Tippe 🔖 auf einen Vers.',
+    loading: 'Lädt...', loadingOrder: 'Reihenfolge lädt...',
+    sunni: 'Sunni', shia: 'Schia', orderedBy: 'Nach Offenbarung geordnet',
+    allOn: 'Alle', arabic: 'Arabisch', translit: 'Transliteration',
+    english: 'Englisch', tigrinya: 'Tigrinisch', amharic: 'Amharisch',
+    oromo: 'Oromo', somali: 'Somali', german: 'Deutsch', urdu: 'Urdu',
+    go: 'Gehe', sura: 'Sure', verse: 'Vers', send: 'Senden', clearChat: 'Chat löschen',
+    askVerse: 'Frage zu diesem Vers...', verses: 'Verse',
+    uiLang: '🌍 Oberflächensprache'
+  },
+  ur: {
+    subtitle: 'قرآن اسکالر ریسرچ پلیٹ فارم',
+    suras: 'سورتیں', chrono: 'ترتیب', topics: 'موضوعات', lexicon: 'لغت', saved: 'محفوظ',
+    searchSuras: 'سورت تلاش...', searchWord: '🔍 کوئی بھی لفظ تلاش...',
+    searchTopics: 'موضوع تلاش...', searchLexicon: 'عربی یا انگریزی تلاش...',
+    bookmarked: 'محفوظ شدہ آیات', clearAll: 'سب حذف کریں',
+    noSaved: 'ابھی کوئی محفوظ آیت نہیں۔', tapToBookmark: '🔖 کسی آیت پر ٹیپ کریں۔',
+    loading: 'لوڈ ہو رہا ہے...', loadingOrder: 'ترتیب لوڈ ہو رہی ہے...',
+    sunni: 'سنی', shia: 'شیعہ', orderedBy: 'نزول کے مطابق',
+    allOn: 'سب', arabic: 'عربی', translit: 'حروف نویسی',
+    english: 'انگریزی', tigrinya: 'تگرینیا', amharic: 'امہاری',
+    oromo: 'اورومو', somali: 'صومالی', german: 'جرمن', urdu: 'اردو',
+    go: 'جائیں', sura: 'سورہ', verse: 'آیت', send: 'بھیجیں', clearChat: 'چیٹ صاف',
+    askVerse: 'اس آیت کے بارے میں کچھ بھی پوچھیں...', verses: 'آیات',
+    uiLang: '🌍 انٹرفیس زبان'
+  },
+  so: {
+    subtitle: 'Barashada Qur'aanka Cilmiga',
+    suras: 'Suurooyinka', chrono: 'Taariikhda', topics: 'Mawduucyada', lexicon: 'Qaamuuska', saved: 'La Kaydiyey',
+    searchSuras: 'Raadi suurad...', searchWord: '🔍 Raadi erayo...',
+    searchTopics: 'Raadi mawduuc...', searchLexicon: 'Raadi Carabi ama Ingiriisi...',
+    bookmarked: 'AAYAADKA LA KAYDIYEY', clearAll: 'Tirtir dhammaan',
+    noSaved: 'Wax aan la kaydinin.', tapToBookmark: 'Taabo 🔖 si aad u kaydsato.',
+    loading: 'Waa la soo dejinayaa...', loadingOrder: 'Tartiibbka waa la soo dejinayaa...',
+    sunni: 'Sunni', shia: 'Shiica', orderedBy: 'Loo kala horreeyey',
+    allOn: 'Dhammaan', arabic: 'Carabi', translit: 'Tarjumaad',
+    english: 'Ingiriisi', tigrinya: 'Tigrinya', amharic: 'Amxaari',
+    oromo: 'Oromo', somali: 'Soomaali', german: 'Jarmal', urdu: 'Urdu',
+    go: 'Tag', sura: 'Suurad', verse: 'Aayad', send: 'Dir', clearChat: 'Nadiifi sheekada',
+    askVerse: 'Su'aal ku weydi aayadan...', verses: 'aayad',
+    uiLang: '🌍 Luqadda Shabakadda'
+  },
+  om: {
+    subtitle: 'Qur'aanaa Baradhu Mana Qormaataa',
+    suras: 'Suuraalee', chrono: 'Yeroo', topics: 'Mata Duree', lexicon: 'Galmee Jechootaa', saved: 'Kuusame',
+    searchSuras: 'Suuraa barbaadi...', searchWord: '🔍 Jecha barbaadi...',
+    searchTopics: 'Mata duree barbaadi...', searchLexicon: 'Arabiciin ykn Ingiliffaan...',
+    bookmarked: 'AAYAATTI KUUSAME', clearAll: 'Hunda haquu',
+    noSaved: 'Aayaatti kuusame hin jiru.', tapToBookmark: '🔖 Aayaatti kaʼuu tuqi.',
+    loading: 'Fe'aa jira...', loadingOrder: 'Tartiiba fe'aa jira...',
+    sunni: 'Sunni', shia: 'Shia', orderedBy: 'Buufataan',
+    allOn: 'Hundi', arabic: 'Arabicca', translit: 'Hiikkaa',
+    english: 'Ingiliffaa', tigrinya: 'Tigrinya', amharic: 'Amaariffa',
+    oromo: 'Oromoo', somali: 'Soomaali', german: 'Jarmanii', urdu: 'Urdu',
+    go: 'Deemi', sura: 'Suuraa', verse: 'Aayaa', send: 'Ergi', clearChat: 'Haasawa haquu',
+    askVerse: 'Waa'ee aayaa kanaatti gaafadhu...', verses: 'aayaa',
+    uiLang: '🌍 Afaan Marsariitii'
+  }
+};
+
+// Detect browser language
+function detectUILang() {
+  const saved = localStorage.getItem('uiLang');
+  if (saved && UI_TRANSLATIONS[saved]) return saved;
+  const bl = (navigator.language || navigator.userLanguage || 'en').split('-')[0].toLowerCase();
+  const map = { 'ar':'ar', 'ti':'ti', 'am':'am', 'de':'de', 'ur':'ur', 'so':'so', 'om':'om' };
+  return map[bl] || 'en';
+}
+
+window._uiLang = detectUILang();
+
+function t(key) {
+  return (UI_TRANSLATIONS[window._uiLang] || UI_TRANSLATIONS.en)[key] || UI_TRANSLATIONS.en[key] || key;
+}
+
+function setUILang(lang) {
+  window._uiLang = lang;
+  localStorage.setItem('uiLang', lang);
+  applyUITranslations();
+}
+
+function applyUITranslations() {
+  const ids = {
+    'tab-suras': 'suras', 'tab-chrono': 'chrono', 'tab-topics': 'topics',
+    'tab-lexicon': 'lexicon', 'tab-saved': 'saved'
+  };
+  Object.entries(ids).forEach(([id, key]) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = t(key);
+  });
+  const placeholders = {
+    'searchInput': 'searchSuras', 'globalSearch': 'searchWord',
+    'topicSearch': 'searchTopics', 'lexiconSearch': 'searchLexicon',
+    'gotoSura': 'sura', 'gotoAya': 'verse'
+  };
+  Object.entries(placeholders).forEach(([id, key]) => {
+    const el = document.getElementById(id);
+    if (el) el.placeholder = t(key);
+  });
+  const btns = {
+    'btn-arabic': 'arabic', 'btn-translit': 'translit', 'btn-english': 'english',
+    'btn-tigrinya': 'tigrinya', 'btn-amharic': 'amharic', 'btn-oromo': 'oromo',
+    'btn-somali': 'somali'
+  };
+  Object.entries(btns).forEach(([id, key]) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = t(key);
+  });
+  const subtitle = document.querySelector('.sidebar-subtitle');
+  if (subtitle) subtitle.textContent = t('subtitle');
+  // Update UI lang selector display
+  document.querySelectorAll('.ui-lang-selector').forEach(s => s.value = window._uiLang);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 function closeWordModal(e) {
   if (e.target === document.getElementById('wordModal')) {
     document.getElementById('wordModal').classList.remove('open');
