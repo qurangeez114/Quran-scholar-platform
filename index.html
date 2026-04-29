@@ -2469,30 +2469,27 @@ async function searchLexicon(q) {
     return;
   }
 
-  // Strip diacritics and common Arabic prefixes from pasted Quran text
-  const clean = raw
-    .replace(/[ً-ٰٟۖ-ۭٱ]/g, ''); // remove all diacritics + alef wasla
-
-  // Try progressively shorter forms by stripping prefixes
-  const forms = [clean];
-  // Strip ال prefix
-  if (clean.startsWith('ال') && clean.length > 4) forms.push(clean.slice(2));
-  // Strip لل prefix
-  if (clean.startsWith('لل') && clean.length > 4) forms.push(clean.slice(2));
-  // Strip single letter prefixes و ف ب ل ك — only if remaining word >= 3 chars
-  if (['و','ف','ب','ل','ك'].includes(clean[0]) && clean.length > 3) {
-    const afterPrefix = clean.slice(1);
-    forms.push(afterPrefix);
-    // Also strip ال after single prefix
-    if (afterPrefix.startsWith('ال') && afterPrefix.length > 4) forms.push(afterPrefix.slice(2));
+  // Strip ALL diacritics from typed/pasted Arabic
+  function stripArabic(s) {
+    return s
+      .replace(/[\u064B-\u065F\u0610-\u061A\u0670\u06D6-\u06ED\u0671]/g, '')
+      .replace(/[\u0622\u0623\u0625]/g, '\u0627')
+      .replace(/\u0624/g, '\u0648')
+      .replace(/\u0626/g, '\u064A')
+      .replace(/\u0629/g, '\u0647')
+      .trim();
   }
-
-  // Use the full clean form first (most accurate), fall back to stripped forms
-  const searchTerm = clean.length >= 2 ? clean : forms.find(f => f.length >= 2) || clean;
-
-  // 1) Try the lexicon (word_analysis) table first using variants
-  // Try all forms until we get results
-  const variants = searchVariants(searchTerm);
+  const clean = stripArabic(raw);
+  const allForms = new Set([clean]);
+  if (clean.startsWith('\u0627\u0644') && clean.length > 3) allForms.add(clean.slice(2));
+  if (clean.startsWith('\u0644\u0644') && clean.length > 3) allForms.add(clean.slice(2));
+  if (['\u0648','\u0641','\u0628','\u0644','\u0643'].includes(clean[0]) && clean.length > 3) {
+    const after = clean.slice(1);
+    allForms.add(after);
+    if (after.startsWith('\u0627\u0644') && after.length > 3) allForms.add(after.slice(2));
+  }
+  const searchTerm = clean;
+  const variants = [...new Set([...searchVariants(searchTerm), ...allForms])];
   const cols = 'id,sura_id,aya_number,word_position,arabic_word,original_meaning,root_word,modern_meaning,meaning_evolution,scholarly_explanation,lexicon_sources';
   let results = [];
   try {
