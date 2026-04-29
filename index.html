@@ -1106,7 +1106,7 @@ Answer questions about this verse with scholarly depth. Be concise but thorough.
 
   try {
     const messages = verseChats[num].map(m => ({ role: m.role, content: m.content }));
-    const response = await fetch('/claude', {
+    const response = await fetch('https://Qurangeez-quran-scholar-api.hf.space/claude', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -3128,10 +3128,36 @@ async function runCompareAI(topic, verses) {
   const btn = event.target;
   const result = document.getElementById('compareAIResult');
   btn.disabled = true;
-  btn.textContent = 'Analysis Ready';
-  const summary = buildCompareSummary(topic, verses || []);
-  const suraList = [...new Set((verses || []).map(v => v.sura_id))].join(', ');
-  result.innerHTML = `<strong>${escapeHtml(topic)}</strong><br><br>${escapeHtml(summary)}<br><br><strong>Displayed suras:</strong> ${escapeHtml(suraList || 'n/a')}<br><br><strong>How to compare:</strong> Read the shared phrases first, then check what each occurrence adds by surrounding context.`;
+  btn.textContent = 'Analyzing...';
+  result.innerHTML = '<span class="spinner"></span> Generating AI analysis...';
+
+  try {
+    const verseTexts = (verses || []).slice(0, 10).map(v =>
+      `${v.sura_id}:${v.aya_number} — ${v.arabic || ''} | ${v.english || v.aya_text || ''}`
+    ).join('\n');
+
+    const prompt = `You are a Quranic scholar. Analyze the theme "${topic}" across these verses:\n\n${verseTexts}\n\nProvide:\n1. What unifies these verses thematically\n2. Key similarities in language or imagery\n3. Notable differences in context or emphasis\n4. The overall Quranic message on this topic\n\nBe concise but scholarly. Plain text, no markdown.`;
+
+    const response = await fetch('https://Qurangeez-quran-scholar-api.hf.space/claude', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 800,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+    const data = await response.json();
+    if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+    const text = data.content?.[0]?.text || 'No response received.';
+    result.innerHTML = text.replace(/\n/g, '<br>');
+    btn.textContent = 'Analyze Similarities & Differences';
+    btn.disabled = false;
+  } catch(e) {
+    result.innerHTML = '<span style="color:red">Error: ' + e.message + '</span>';
+    btn.textContent = 'Analyze Similarities & Differences';
+    btn.disabled = false;
+  }
 }
 
 function buildStudyAnswer(question, ctx) {
