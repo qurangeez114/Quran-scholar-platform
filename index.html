@@ -913,11 +913,50 @@ function switchTab(num, tab, btn) {
   document.getElementById(`tp-${num}-${tab}`).classList.add('active');
 }
 
+// ============================================================
+// RIWAYAT DIFF HIGHLIGHTING (v2 — diacritic-aware)
+// ============================================================
+// Strips Arabic diacritics + minor orthographic variants before
+// comparing, so only REAL consonantal / lexical differences get
+// highlighted. Diacritic-only differences (fatha vs kasra, etc.)
+// are no longer flagged because they don't change the underlying
+// rasm (consonantal skeleton).
+//
+// Removes: fatha, kasra, damma, sukun, shadda, tanwins, maddah,
+// hamzah-above markers, alif-superscript, and similar marks.
+// Normalizes: alif variants (أ إ آ ا → ا), alif maqsura (ى → ي),
+// ta marbuta (ة → ه) for fairness in comparison.
+// ============================================================
+
+const ARABIC_DIACRITICS_RE = /[\u064B-\u065F\u0670\u0610-\u061A\u06D6-\u06ED\u08D3-\u08FF]/g;
+
+function stripDiacritics(word) {
+  if (!word) return '';
+  return word
+    .replace(ARABIC_DIACRITICS_RE, '')   // remove all harakat/tashkeel
+    .replace(/ـ/g, '')                    // tatweel
+    .replace(/[\u200C-\u200F\u202A-\u202E]/g, ''); // bidi marks
+}
+
+function normalizeForCompare(word) {
+  // Aggressive normalization for "is this the same letter?" question
+  // Used only for diff detection, NOT for display.
+  return stripDiacritics(word)
+    .replace(/[آأإٱ]/g, 'ا')   // alif variants → bare alif
+    .replace(/ى/g, 'ي')         // alif maqsura → ya
+    .replace(/ة/g, 'ه');        // ta marbuta → ha
+}
+
+function rasmEqual(a, b) {
+  // True if the consonantal skeleton (rasm) is identical
+  return normalizeForCompare(a) === normalizeForCompare(b);
+}
+
 function highlightDiffs(hafs, warsh, qalun, duri, suraId, ayaNum) {
-  const hafsWords = (hafs || '').split(' ');
-  const warshWords = (warsh || '').split(' ');
-  const qalunWords = (qalun || '').split(' ');
-  const duriWords = (duri || '').split(' ');
+  const hafsWords = (hafs || '').split(/\s+/).filter(Boolean);
+  const warshWords = (warsh || '').split(/\s+/).filter(Boolean);
+  const qalunWords = (qalun || '').split(/\s+/).filter(Boolean);
+  const duriWords = (duri || '').split(/\s+/).filter(Boolean);
   const maxLen = Math.max(hafsWords.length, warshWords.length, qalunWords.length, duriWords.length);
 
   let hafsHtml = '', warshHtml = '', qalunHtml = '', duriHtml = '';
@@ -927,29 +966,112 @@ function highlightDiffs(hafs, warsh, qalun, duri, suraId, ayaNum) {
     const ww = warshWords[i] || '';
     const qw = qalunWords[i] || '';
     const dw = duriWords[i] || '';
-    const allSame = hw === ww && ww === qw && qw === dw;
 
-    if (allSame) {
+    // Compare the RASM (consonantal skeleton) — diacritics ignored
+    const allSameRasm = rasmEqual(hw, ww) && rasmEqual(ww, qw) && rasmEqual(qw, dw);
+
+    if (allSameRasm) {
       hafsHtml += hw + ' ';
       warshHtml += ww + ' ';
       qalunHtml += qw + ' ';
       duriHtml += dw + ' ';
     } else {
-      // Build a single click handler call that carries everything explainWord needs
       const onClickArgs = `${suraId},${ayaNum},${i},'${hw.replace(/'/g, "\\'")}','${ww.replace(/'/g, "\\'")}','${qw.replace(/'/g, "\\'")}','${dw.replace(/'/g, "\\'")}'`;
-      // Each cell shows its own form but the click opens the same comparison modal
       const dataAttr = `data-rwa-pos="${suraId}-${ayaNum}-${i}"`;
-      const hDiff = hw !== ww || hw !== qw || hw !== dw;
-      const wDiff = ww !== hw || ww !== qw || ww !== dw;
-      const qDiff = qw !== hw || qw !== ww || qw !== dw;
-      const dDiff = dw !== hw || dw !== ww || dw !== qw;
-      hafsHtml += hDiff ? `<span class="word-diff-hafs" ${dataAttr} style="cursor:pointer" onclick="explainWord(${onClickArgs})" title="Click for meaning analysis">${hw}</span> ` : hw + ' ';
-      warshHtml += wDiff ? `<span class="word-diff-warsh" ${dataAttr} style="cursor:pointer" onclick="explainWord(${onClickArgs})" title="Click for meaning analysis">${ww}</span> ` : ww + ' ';
-      qalunHtml += qDiff ? `<span class="word-diff-qalun" ${dataAttr} style="cursor:pointer" onclick="explainWord(${onClickArgs})" title="Click for meaning analysis">${qw}</span> ` : qw + ' ';
-      duriHtml += dDiff ? `<span class="word-diff-duri" ${dataAttr} style="cursor:pointer" onclick="explainWord(${onClickArgs})" title="Click for meaning analysis">${dw}</span> ` : dw + ' ';
+      // Per-reading flag: only highlight if THIS reading's rasm differs from any other
+      const hDiff = !rasmEqual(hw, ww) || !rasmEqual(hw, qw) || !rasmEqual(hw, dw);
+      const wDiff = !rasmEqual(ww, hw) || !rasmEqual(ww, qw) || !rasmEqual(ww, dw);
+      const qDiff = !rasmEqual(qw, hw) || !rasmEqual(qw, ww) || !rasmEqual(qw, dw);
+      const dDiff = !rasmEqual(dw, hw) || !rasmEqual(dw, ww) || !rasmEqual(dw, qw);
+      hafsHtml += hDiff ? `<span class="word-diff-hafs" ${dataAttr} style="cursor:pointer" onclick="explainWord(${onClickArgs})" title="Click for technical analysis">${hw}</span> ` : hw + ' ';
+      warshHtml += wDiff ? `<span class="word-diff-warsh" ${dataAttr} style="cursor:pointer" onclick="explainWord(${onClickArgs})" title="Click for technical analysis">${ww}</span> ` : ww + ' ';
+      qalunHtml += qDiff ? `<span class="word-diff-qalun" ${dataAttr} style="cursor:pointer" onclick="explainWord(${onClickArgs})" title="Click for technical analysis">${qw}</span> ` : qw + ' ';
+      duriHtml += dDiff ? `<span class="word-diff-duri" ${dataAttr} style="cursor:pointer" onclick="explainWord(${onClickArgs})" title="Click for technical analysis">${dw}</span> ` : dw + ' ';
     }
   }
   return { hafsHtml: hafsHtml.trim(), warshHtml: warshHtml.trim(), qalunHtml: qalunHtml.trim(), duriHtml: duriHtml.trim() };
+}
+
+// ============================================================
+// RIWAYAT PANEL (v2 — with selector)
+// ============================================================
+// User chooses which transmissions to display. The 4 with full
+// text data (Hafs, Warsh, Qalun, Al-Duri ʿan Abi ʿAmr) are
+// active. The other 16 canonical riwayat are listed but disabled
+// because their text is not yet in the database.
+// ============================================================
+
+// Default: show the 4 we have data for. Persists per-aya in memory.
+const RIWAYAT_VIS_DEFAULT = { hafs: true, warsh: true, qalun: true, duri: true };
+window._riwayatVisibility = window._riwayatVisibility || {};
+
+function getRiwayatVisibility(suraId, ayaNum) {
+  const key = `${suraId}-${ayaNum}`;
+  if (!window._riwayatVisibility[key]) {
+    window._riwayatVisibility[key] = { ...RIWAYAT_VIS_DEFAULT };
+  }
+  return window._riwayatVisibility[key];
+}
+
+function toggleRiwayat(suraId, ayaNum, key) {
+  const vis = getRiwayatVisibility(suraId, ayaNum);
+  vis[key] = !vis[key];
+  // Re-render just the riwayat panel
+  const target = document.getElementById(`tp-${ayaNum}-riwayat`);
+  if (target && target._aya) {
+    target.innerHTML = buildRiwayatPanel(target._aya);
+  }
+}
+
+// Static catalog of all 20 canonical riwayat with metadata.
+// 'available' marks the 4 with text data in the DB.
+const ALL_RIWAYAT = [
+  { key: 'qalun_an_nafi',      reader: 'Nafiʿ al-Madani',      narrator: 'Qalun',         region: 'Libya, Tunisia',           available: true,  varKey: 'qalun' },
+  { key: 'warsh_an_nafi',      reader: 'Nafiʿ al-Madani',      narrator: 'Warsh',         region: 'North & West Africa',      available: true,  varKey: 'warsh' },
+  { key: 'al_bazzi',           reader: 'Ibn Kathir al-Makki',  narrator: 'Al-Bazzi',      region: 'Makkah (historical)',      available: false },
+  { key: 'qunbul',             reader: 'Ibn Kathir al-Makki',  narrator: 'Qunbul',        region: 'Makkah (historical)',      available: false },
+  { key: 'al_duri_abi_amr',    reader: 'Abu Amr al-Basri',     narrator: 'Al-Duri',       region: 'Sudan, West & East Africa', available: true,  varKey: 'duri' },
+  { key: 'al_susi',            reader: 'Abu Amr al-Basri',     narrator: 'Al-Susi',       region: 'Basra (historical)',       available: false },
+  { key: 'hisham',             reader: 'Ibn Amir al-Shami',    narrator: 'Hisham',        region: 'Damascus (historical)',    available: false },
+  { key: 'ibn_dhakwan',        reader: 'Ibn Amir al-Shami',    narrator: 'Ibn Dhakwan',   region: 'Damascus (historical)',    available: false },
+  { key: 'shubah',             reader: 'Asim al-Kufi',         narrator: 'Shuʿbah',       region: 'Kufa (historical)',        available: false },
+  { key: 'hafs',               reader: 'Asim al-Kufi',         narrator: 'Hafs',          region: 'Most common worldwide',    available: true,  varKey: 'hafs' },
+  { key: 'khalaf_hamzah',      reader: 'Hamzah al-Kufi',       narrator: 'Khalaf',        region: 'Kufa (historical)',        available: false },
+  { key: 'khallad',            reader: 'Hamzah al-Kufi',       narrator: 'Khallad',       region: 'Kufa (historical)',        available: false },
+  { key: 'abu_al_harith',      reader: 'Al-Kisai al-Kufi',     narrator: 'Abu al-Harith', region: 'Kufa (historical)',        available: false },
+  { key: 'al_duri_al_kisai',   reader: 'Al-Kisai al-Kufi',     narrator: 'Al-Duri',       region: 'Kufa (historical)',        available: false },
+  { key: 'ibn_wardan',         reader: 'Abu Jaʿfar al-Madani', narrator: 'Ibn Wardan',    region: 'Madinah (historical)',     available: false },
+  { key: 'ibn_jammaz',         reader: 'Abu Jaʿfar al-Madani', narrator: 'Ibn Jammaz',    region: 'Madinah (historical)',     available: false },
+  { key: 'ruways',             reader: 'Yaʿqub al-Hadrami',    narrator: 'Ruways',        region: 'Basra (historical)',       available: false },
+  { key: 'rawh',               reader: 'Yaʿqub al-Hadrami',    narrator: 'Rawh',          region: 'Basra (historical)',       available: false },
+  { key: 'ishaq',              reader: 'Khalaf al-Ashir',      narrator: 'Ishaq',         region: 'Baghdad (historical)',     available: false },
+  { key: 'idris',              reader: 'Khalaf al-Ashir',      narrator: 'Idris',         region: 'Baghdad (historical)',     available: false }
+];
+
+function buildRiwayatSelector(suraId, ayaNum) {
+  const vis = getRiwayatVisibility(suraId, ayaNum);
+  const chip = (r) => {
+    if (!r.available) {
+      return `<span style="display:inline-block;padding:4px 9px;margin:2px;border:1px dashed #CCC;border-radius:14px;font-size:10px;color:#AAA;background:#FAFAF7;cursor:not-allowed" title="Text not yet loaded for this riwayah">${r.narrator} ʿan ${r.reader.split(' ')[0]}</span>`;
+    }
+    const isOn = vis[r.varKey];
+    const bg = isOn ? '#4A3B28' : '#fff';
+    const fg = isOn ? '#fff' : '#4A3B28';
+    return `<span onclick="toggleRiwayat(${suraId},${ayaNum},'${r.varKey}')" style="display:inline-block;padding:4px 10px;margin:2px;border:1px solid #4A3B28;border-radius:14px;font-size:11px;font-weight:600;background:${bg};color:${fg};cursor:pointer;user-select:none">${r.narrator} ʿan ${r.reader.split(' ')[0]}</span>`;
+  };
+
+  const activeCount = Object.values(vis).filter(Boolean).length;
+
+  return `
+    <details style="margin-bottom:10px;border:1px solid #E8E4DC;border-radius:8px;background:#FDFBF5;padding:8px 10px">
+      <summary style="cursor:pointer;font-size:11px;font-weight:700;color:#4A3B28;letter-spacing:0.5px;text-transform:uppercase;outline:none">
+        🎚️ Riwayat selector  <span style="color:#8B7355;font-weight:500;text-transform:none;letter-spacing:0">(${activeCount} of 4 visible · 16 unavailable)</span>
+      </summary>
+      <div style="margin-top:8px;font-size:11px;color:#7A6644;line-height:1.5">
+        <div style="margin-bottom:6px">Tap a chip to show/hide. Dashed chips have no text data yet — they belong to the canonical 20 readings (al-Qirāʾāt al-ʿAshr × 2 rawīs).</div>
+        <div style="margin-top:6px">${ALL_RIWAYAT.map(chip).join('')}</div>
+      </div>
+    </details>`;
 }
 
 function buildRiwayatPanel(aya) {
@@ -962,35 +1084,53 @@ function buildRiwayatPanel(aya) {
     return `<div style="color:#BBB;font-style:italic;font-size:13px;padding:20px;text-align:center">Riwayat data not available for this verse.</div>`;
   }
 
+  const vis = getRiwayatVisibility(aya.sura_id, aya.aya_number);
   const { hafsHtml, warshHtml, qalunHtml, duriHtml } = highlightDiffs(hafs, warsh, qalun, duri, aya.sura_id, aya.aya_number);
 
-  // Asynchronously fetch saved classifications and re-color the spans accordingly.
-  // (Runs after this HTML is mounted; the data-rwa-pos attribute lets us find spans.)
-  setTimeout(() => applyRiwayatClassifications(aya.sura_id, aya.aya_number), 50);
+  // Stash the aya on the panel element so toggle can re-render
+  setTimeout(() => {
+    const target = document.getElementById(`tp-${aya.aya_number}-riwayat`);
+    if (target) target._aya = aya;
+    applyRiwayatClassifications(aya.sura_id, aya.aya_number);
+  }, 50);
+
+  const selector = buildRiwayatSelector(aya.sura_id, aya.aya_number);
+
+  const sections = [];
+  if (vis.hafs) sections.push(`
+    <div class="riwayat-section">
+      <div class="riwayat-label"><span class="riwayat-badge badge-hafs">Hafs ʿan ʿĀṣim</span> <span style="font-size:10px;color:#999">Most common worldwide</span></div>
+      <div class="riwayat-text">${hafsHtml}</div>
+    </div>`);
+  if (vis.warsh) sections.push(`
+    <div class="riwayat-section">
+      <div class="riwayat-label"><span class="riwayat-badge badge-warsh">Warsh ʿan Nāfiʿ</span> <span style="font-size:10px;color:#999">North & West Africa</span></div>
+      <div class="riwayat-text">${warshHtml}</div>
+    </div>`);
+  if (vis.qalun) sections.push(`
+    <div class="riwayat-section">
+      <div class="riwayat-label"><span class="riwayat-badge badge-qalun">Qālūn ʿan Nāfiʿ</span> <span style="font-size:10px;color:#999">Libya, Tunisia</span></div>
+      <div class="riwayat-text">${qalunHtml}</div>
+    </div>`);
+  if (vis.duri) sections.push(`
+    <div class="riwayat-section">
+      <div class="riwayat-label"><span class="riwayat-badge badge-duri">Al-Duri ʿan Abi ʿAmr</span> <span style="font-size:10px;color:#999">Sudan, West & East Africa</span></div>
+      <div class="riwayat-text">${duriHtml}</div>
+    </div>`);
+
+  if (sections.length === 0) {
+    sections.push(`<div style="color:#BBB;font-style:italic;font-size:13px;padding:14px;text-align:center;border:1px dashed #DDD;border-radius:6px">No riwayat selected. Open the selector above and choose at least one.</div>`);
+  }
 
   return `
-    <div style="margin-bottom:8px;font-size:12px;color:#8B7355;line-height:1.6">
-      <div style="margin-bottom:4px"><b>Click any colored word for a meaning analysis.</b> Words are color-coded by reading; once analyzed, they're re-colored by whether the meaning differs:</div>
+    ${selector}
+    <div style="margin-bottom:8px;font-size:11px;color:#8B7355;line-height:1.6">
+      <div style="margin-bottom:4px"><b>Highlighted = consonantal/orthographic difference between readings.</b> Diacritic-only differences (vowel signs) are not highlighted because they don't change the underlying rasm. Click any highlighted word for an objective technical analysis.</div>
       <span style="background:#EEE;padding:1px 6px;border-radius:3px;color:#666;font-size:11px;">○ pronunciation only</span>
       <span style="background:#FFF3CD;padding:1px 6px;border-radius:3px;color:#8B6914;font-size:11px;">◐ slight nuance</span>
       <span style="background:#FFD6D6;padding:1px 6px;border-radius:3px;color:#A02020;font-size:11px;">● meaning differs</span>
     </div>
-    <div class="riwayat-section">
-      <div class="riwayat-label"><span class="riwayat-badge badge-hafs">Hafs ʿan ʿĀṣim</span> <span style="font-size:10px;color:#999">Most common worldwide</span></div>
-      <div class="riwayat-text">${hafsHtml}</div>
-    </div>
-    <div class="riwayat-section">
-      <div class="riwayat-label"><span class="riwayat-badge badge-warsh">Warsh ʿan Nāfiʿ</span> <span style="font-size:10px;color:#999">North & West Africa</span></div>
-      <div class="riwayat-text">${warshHtml}</div>
-    </div>
-    <div class="riwayat-section">
-      <div class="riwayat-label"><span class="riwayat-badge badge-qalun">Qālūn ʿan Nāfiʿ</span> <span style="font-size:10px;color:#999">Libya, Tunisia</span></div>
-      <div class="riwayat-text">${qalunHtml}</div>
-    </div>
-    <div class="riwayat-section">
-      <div class="riwayat-label"><span class="riwayat-badge badge-duri">Al-Duri ʿan Abi ʿAmr</span> <span style="font-size:10px;color:#999">Sudan, West & East Africa</span></div>
-      <div class="riwayat-text">${duriHtml}</div>
-    </div>`;
+    ${sections.join('')}`;
 }
 
 // After buildRiwayatPanel renders, we look up any saved meaning_classification
@@ -1496,9 +1636,22 @@ async function explainWord(suraId, ayaNum, position, hafs, warsh, qalun, duri) {
       badge = `<div style="display:inline-block;padding:6px 14px;background:#FFD6D6;color:#A02020;border-radius:20px;font-size:12px;font-weight:700;letter-spacing:0.5px;border:1px solid #C03030">● Meaning differs — readings carry different senses</div>`;
     }
 
+    // Render the explanation with section headers (RASM, VOCALIZATION, MORPHOLOGY,
+    // SEMANTIC EFFECT) styled as labeled blocks for technical clarity.
+    const renderSection = (raw) => {
+      const m = raw.match(/^([A-Z][A-Z\s()/-]+):\n([\s\S]*)$/);
+      if (m) {
+        return `<div style="margin-bottom:12px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:1.2px;color:#7A6644;text-transform:uppercase;margin-bottom:4px">${escapeHtml(m[1].trim())}</div>
+          <div style="font-size:13px;color:#1a1a1a;line-height:1.65">${escapeHtml(m[2].trim())}</div>
+        </div>`;
+      }
+      return `<p style="margin:0 0 10px 0;font-size:14px;color:#1a1a1a;line-height:1.7">${escapeHtml(raw.trim())}</p>`;
+    };
     const explanationHtml = (saved.explanation || '')
       .split(/\n{2,}/)
-      .map(p => `<p style="margin:0 0 10px 0;font-size:14px;color:#1a1a1a;line-height:1.7">${escapeHtml(p.trim())}</p>`)
+      .filter(p => p.trim())
+      .map(renderSection)
       .join('');
 
     modalBody.innerHTML = `
@@ -1506,9 +1659,9 @@ async function explainWord(suraId, ayaNum, position, hafs, warsh, qalun, duri) {
       <div style="margin:14px 0 10px 0">${badge}</div>
       <div class="word-modal-section" style="margin-top:6px">${explanationHtml || '<i style="color:#999">No explanation text saved.</i>'}</div>
       ${saved.sources ? `<div style="margin-top:14px;padding-top:12px;border-top:1px solid #E8E4DC">
-        <div style="font-size:10px;font-weight:700;letter-spacing:1.2px;color:#7A6644;text-transform:uppercase;margin-bottom:4px">Lexicographic Tradition Referenced</div>
+        <div style="font-size:10px;font-weight:700;letter-spacing:1.2px;color:#7A6644;text-transform:uppercase;margin-bottom:4px">Documentary references (for which reading appears where)</div>
         <div style="font-size:12px;color:#555;font-style:italic;line-height:1.6">${escapeHtml(saved.sources)}</div>
-        <div style="font-size:10px;color:#999;margin-top:6px;line-height:1.5">Note: works named, not page-cited. For citable scholarship, consult the named sources directly.</div>
+        <div style="font-size:10px;color:#999;margin-top:6px;line-height:1.5">Note: works named to identify which reading is recorded in which compilation. The semantic analysis above is grounded in linguistic facts, not scholar authority.</div>
       </div>` : ''}
       <div style="margin-top:14px;text-align:center">
         <button onclick="generateRiwayatAnalysis(${suraId},${ayaNum},${position},'${hafs.replace(/'/g,"\\'")}','${warsh.replace(/'/g,"\\'")}','${qalun.replace(/'/g,"\\'")}','${duri.replace(/'/g,"\\'")}',this)" 
@@ -1520,11 +1673,11 @@ async function explainWord(suraId, ayaNum, position, hafs, warsh, qalun, duri) {
       ${comparisonHtml}
       <div style="background:linear-gradient(135deg,#FDFAF2,#F8F2DC);border:1px solid #D4A830;border-radius:10px;padding:14px;margin-top:14px;text-align:center">
         <div style="font-size:13px;color:#4A3B28;margin-bottom:10px;line-height:1.6">
-          No analysis saved yet for this word.<br>
-          <span style="font-size:11px;color:#8B7355">Generate an honest scholarly analysis focused on whether the meaning genuinely differs across these readings.</span>
+          No technical analysis saved yet for this word.<br>
+          <span style="font-size:11px;color:#8B7355">Generate an objective rasm + morphology + semantic analysis. No scholar-by-authority — only linguistic facts.</span>
         </div>
         <button id="rwa-gen-${suraId}-${ayaNum}-${position}" onclick="generateRiwayatAnalysis(${suraId},${ayaNum},${position},'${hafs.replace(/'/g,"\\'")}','${warsh.replace(/'/g,"\\'")}','${qalun.replace(/'/g,"\\'")}','${duri.replace(/'/g,"\\'")}',this)" 
-          style="padding:9px 18px;background:#B8902A;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">📚 Generate meaning analysis</button>
+          style="padding:9px 18px;background:#B8902A;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">📚 Generate technical analysis</button>
       </div>`;
   }
 }
@@ -1544,36 +1697,64 @@ async function generateRiwayatAnalysis(suraId, ayaNum, position, hafs, warsh, qa
   if (qalun) forms.push(`Qālūn ʿan Nāfiʿ: ${qalun}`);
   if (duri) forms.push(`Al-Duri ʿan Abi ʿAmr: ${duri}`);
 
-  const prompt = `You are an Islamic studies scholar of qirāʾāt (Quranic recitation traditions) committed to honest scholarship — neither apologetic nor polemical. The user is studying word #${position+1} of Sura ${suraId}, Verse ${ayaNum}, comparing its forms across these canonical readings:
+  const prompt = `You are a linguistic analyst examining a qirāʾāt variant. Your job is OBJECTIVE TECHNICAL ANALYSIS — facts about letters, morphology, and grammar — not theological commentary or scholarly opinions.
+
+The user is studying word #${position+1} of Sura ${suraId}, Verse ${ayaNum}. Here are the forms across canonical readings:
 
 ${forms.join('\n')}
 
-Your task: focus ONLY on whether the MEANING genuinely differs across these readings. Do NOT spend space describing pronunciation differences in detail — pronunciation differences are common; the user wants to know if the readings actually mean different things.
+ANALYSIS METHODOLOGY (follow this order strictly):
 
-Respond in this exact JSON format with no markdown fences, no preamble, no extra text:
+STEP 1 — RASM (consonantal skeleton) comparison.
+Identify whether the bare letters (ignoring all diacritics) are:
+(a) IDENTICAL — same letters in the same order
+(b) DIFFERENT BY ONE OR MORE LETTERS — list the exact letter-level change
+
+STEP 2 — DIACRITIC / VOCALIZATION comparison.
+If the rasm is identical, identify what the vocalization difference is:
+- Which exact diacritic (fatha / kasra / damma / sukun / shadda / tanwin) differs
+- On which letter
+- What grammatical category this changes (verb voice, verb tense, noun case, derivational form, etc.)
+
+STEP 3 — MORPHOLOGICAL effect.
+State the wazn (morphological pattern) of each form, e.g. fa'ala vs fu'ila, fā'il vs maf'ūl, mufa'il vs mufa''il. State what this morphological change does grammatically.
+
+STEP 4 — SEMANTIC effect.
+ONLY based on Steps 1–3, determine whether the meaning genuinely changes. Be honest:
+- If the change is voice (active ↔ passive) and both yield coherent meaning, the meanings are RELATED but DIFFERENT (nuance or substantive)
+- If the change is verb tense, the temporal sense changes (nuance or substantive)
+- If the change is case ending only, often the meaning is preserved (none) but sometimes the syntactic role changes (nuance)
+- If letters genuinely differ, the words may be different lexical items (substantive)
+
+STEP 5 — Classify on the technical evidence:
+- "none" — same rasm, same root, same morphology category; differences are purely phonetic
+- "nuance" — same root, but morphology / voice / tense / case shifts the sense without changing the lexical item
+- "substantive" — different rasm, OR different root, OR a morphological change that yields genuinely distinct lexical meaning
+
+GROUND RULES:
+- Do NOT cite scholars by way of authority ("Tabari said X"). Scholars are biased and disagree. Cite only LINGUISTIC FACTS.
+- You may name technical works of qirāʾāt scholarship (Ibn Mujāhid's Kitāb al-Sabʿa, al-Dānī's al-Taysīr, Ibn al-Jazarī's al-Nashr) ONLY to identify which reading appears in which canonical compilation — not to settle meaning disputes.
+- Do NOT default to "the meanings are the same" out of theological caution. If the morphology changes the sense, say so plainly.
+- Do NOT default to "the meanings differ dramatically" for sensational effect. Most qirāʾāt variants are vocalic.
+- If the variant is well-known to scholars (e.g., māliki vs maliki in 1:4, yakhda'ūna vs yukhādi'ūna in 2:9), describe the linguistic facts of that specific case.
+- If you don't have enough information to be certain, say so explicitly rather than speculating.
+
+Respond in this exact JSON format with no markdown fences, no preamble:
 {
   "classification": "none|nuance|substantive",
-  "explanation": "...",
+  "rasm_analysis": "...",
+  "vocalization_analysis": "...",
+  "morphology_analysis": "...",
+  "semantic_effect": "...",
   "sources": "..."
 }
 
 Where:
-- "classification" is exactly one of:
-   * "none" — the readings differ only in pronunciation/voweling; the meaning is identical
-   * "nuance" — the readings carry slightly different shades of the same core meaning (e.g. an active vs passive form, a slightly different intensity)
-   * "substantive" — the readings produce genuinely different senses or different words altogether
-
-- "explanation" is 2-4 paragraphs of honest scholarly prose. State plainly:
-   * What kind of variation this is (vocalic / consonantal / morphological / lexical)
-   * If classification is "none": briefly explain why the meaning is preserved despite the pronunciation difference
-   * If classification is "nuance" or "substantive": explain exactly what each reading means, and how the senses differ
-   * Reference what classical qirāʾāt scholarship says (Ibn Mujahid's Kitāb al-Sabʿa, al-Dānī's al-Taysīr, Ibn al-Jazarī's al-Nashr) by name only, no page numbers
-   * Where modern academic scholarship adds nuance, mention it briefly and mark it as "modern academic"
-   * Use \\n\\n between paragraphs
-
-- "sources" is a comma-separated short list of the works your analysis draws on.
-
-Important: Do NOT default to "all readings mean the same." If the readings really do produce different meanings or nuances, say so clearly. Be precise. Be honest.`;
+- "rasm_analysis" — 1-3 sentences stating whether the rasm is identical and exactly what differs at letter level
+- "vocalization_analysis" — 1-3 sentences naming the specific diacritic difference and on which letter (or "n/a" if rasm differs)
+- "morphology_analysis" — 1-3 sentences naming the wazn of each form and what grammatical category changes
+- "semantic_effect" — 2-4 sentences explaining what this means for the verse's sense, honestly
+- "sources" — comma-separated short list of works ONLY for documenting which reading appears where (not for resolving meaning)`;
 
   try {
     const response = await fetch('/claude', {
@@ -1594,7 +1775,16 @@ Important: Do NOT default to "all readings mean the same." If the readings reall
     catch(e) { throw new Error('AI response was not valid JSON: ' + text.slice(0, 100)); }
 
     const cls = parsed.classification || 'none';
-    const explanation = parsed.explanation || '';
+    // Compose a single explanation string from the 4 structured fields,
+    // formatted as labeled sections so the saved record stays readable.
+    const sections = [];
+    if (parsed.rasm_analysis) sections.push(`RASM (consonantal skeleton):\n${parsed.rasm_analysis}`);
+    if (parsed.vocalization_analysis) sections.push(`VOCALIZATION:\n${parsed.vocalization_analysis}`);
+    if (parsed.morphology_analysis) sections.push(`MORPHOLOGY:\n${parsed.morphology_analysis}`);
+    if (parsed.semantic_effect) sections.push(`SEMANTIC EFFECT:\n${parsed.semantic_effect}`);
+    // Fallback if older response shape is returned
+    if (sections.length === 0 && parsed.explanation) sections.push(parsed.explanation);
+    const explanation = sections.join('\n\n');
     const sources = parsed.sources || '';
 
     // Save (upsert) to Supabase
