@@ -941,10 +941,18 @@ function stripDiacritics(word) {
 function normalizeForCompare(word) {
   // Aggressive normalization for "is this the same letter?" question
   // Used only for diff detection, NOT for display.
-  return stripDiacritics(word)
-    .replace(/[آأإٱ]/g, 'ا')   // alif variants → bare alif
-    .replace(/ى/g, 'ي')         // alif maqsura → ya
-    .replace(/ة/g, 'ه');        // ta marbuta → ha
+  let s = stripDiacritics(word);
+  // Step 1: collapse multi-char alif-hamza sequences to bare alif.
+  // ء + ا  → ا   (hamza followed by alif)
+  // ا + ء  → ا   (alif followed by hamza)
+  // These are orthographic variants of آ in older mushaf conventions.
+  s = s.replace(/ءا/g, 'ا').replace(/اء/g, 'ا');
+  // Step 2: normalize remaining alif/ya/ta variants
+  s = s.replace(/[آأإٱٲٳ]/g, 'ا')   // all alif variants → bare alif
+       .replace(/ى/g, 'ي')          // alif maqsura → ya
+       .replace(/ة/g, 'ه')          // ta marbuta → ha
+       .replace(/ء/g, '');          // standalone hamza → drop (keeps consonants matching)
+  return s;
 }
 
 function rasmEqual(a, b) {
