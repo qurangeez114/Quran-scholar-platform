@@ -263,6 +263,7 @@ body { font-family: 'Lato', sans-serif; background: #F5F3EC; color: #111111; }
       <button id="tab-chrono" onclick="switchSidebarTab('chrono')" style="flex:1;padding:9px;font-size:10px;font-weight:700;text-transform:uppercase;border:none;background:#fff;color:#999;cursor:pointer;border-bottom:2px solid transparent;">Chrono</button>
       <button id="tab-topics" onclick="switchSidebarTab('topics')" style="flex:1;padding:9px;font-size:10px;font-weight:700;text-transform:uppercase;border:none;background:#fff;color:#999;cursor:pointer;border-bottom:2px solid transparent;">Topics</button>
       <button id="tab-lexicon" onclick="switchSidebarTab('lexicon')" style="flex:1;padding:9px;font-size:10px;font-weight:700;text-transform:uppercase;border:none;background:#fff;color:#999;cursor:pointer;border-bottom:2px solid transparent;">Lexicon</button>
+      <button id="tab-variants" onclick="switchSidebarTab('variants')" style="flex:1;padding:9px;font-size:10px;font-weight:700;text-transform:uppercase;border:none;background:#fff;color:#999;cursor:pointer;border-bottom:2px solid transparent;">Variants</button>
       <button id="tab-saved" onclick="switchSidebarTab('saved')" style="flex:1;padding:9px;font-size:10px;font-weight:700;text-transform:uppercase;border:none;background:#fff;color:#999;cursor:pointer;border-bottom:2px solid transparent;">Saved</button>
     </div>
     <div id="panel-suras" style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
@@ -289,6 +290,17 @@ body { font-family: 'Lato', sans-serif; background: #F5F3EC; color: #111111; }
     <div id="panel-lexicon" style="display:none;flex-direction:column;flex:1;overflow:hidden;">
       <input id="lexiconSearch" placeholder="Search Arabic, English..." oninput="searchLexicon(this.value)" style="margin:10px 12px;padding:8px 12px;border:1px solid #E8E4DC;border-radius:6px;font-size:13px;background:#FAFAF7;color:#1a1a1a;outline:none;width:calc(100% - 24px);">
       <div id="lexiconList" style="overflow-y:auto;flex:1;padding:4px 0;"><div class="loading"><span class="spinner"></span>Loading lexicon...</div></div>
+    </div>
+    <div id="panel-variants" style="display:none;flex-direction:column;flex:1;overflow:hidden;">
+      <div style="padding:10px 12px;border-bottom:1px solid #E8E4DC;background:#FDFBF5">
+        <div style="font-size:11px;color:#7A6644;line-height:1.5;margin-bottom:6px">
+          <b>Verses with riwayat differences.</b><br>
+          <span id="variantsCount" style="color:#8B7355">Loading…</span>
+        </div>
+        <div style="font-size:9px;font-weight:700;color:#7A6644;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">Filter</div>
+        <div id="variantsFilters" style="display:flex;gap:4px;flex-wrap:wrap"></div>
+      </div>
+      <div id="variantsList" style="overflow-y:auto;flex:1;padding:6px 10px;background:#FAFAF7"><div class="loading"><span class="spinner"></span>Loading variants...</div></div>
     </div>
     <div id="panel-saved" style="display:none;flex-direction:column;flex:1;overflow:hidden;">
       <div style="padding:10px 14px;border-bottom:1px solid #E8E4DC;display:flex;align-items:center;justify-content:space-between;">
@@ -1208,8 +1220,116 @@ function buildRiwayatSelector(suraId, ayaNum) {
 // ============================================================
 // VARIANT BROWSER — list of every verse with at least one
 // riwayat difference. Loaded from precomputed riwayat_variants
-// table for instant display.
+// table. Available as both:
+//   (a) sidebar panel (Variants tab), and
+//   (b) modal (📋 button next to riwayat selector)
+// Both share the same cache so we only fetch once per filter.
 // ============================================================
+
+const variantCache = {};   // key: filter string -> aggregated rows
+let variantPanelFilter = 'any';
+
+async function fetchVariantData(filter) {
+  if (variantCache[filter]) return variantCache[filter];
+
+  const filterClause = {
+    any:   {},
+    warsh: { warsh_differs: 'eq.true' },
+    qalun: { qalun_differs: 'eq.true' },
+    duri:  { duri_differs: 'eq.true' },
+    three: { warsh_differs: 'eq.true', qalun_differs: 'eq.true', duri_differs: 'eq.true' }
+  }[filter] || {};
+
+  // Fetch ALL matching variants (using paged fetch via Range header would be ideal,
+  // but with ~13K rows max this is fine in a single request when limit is high)
+  const rows = await sbFetch('riwayat_variants', {
+    select: 'sura_id,aya_number,word_position,warsh_differs,qalun_differs,duri_differs',
+    order: 'sura_id.asc,aya_number.asc,word_position.asc',
+    limit: '20000',
+    ...filterClause
+  });
+  if (!Array.isArray(rows)) {
+    variantCache[filter] = { rows: [], byVerse: [] };
+    return variantCache[filter];
+  }
+
+  // Aggregate by verse
+  const byVerseMap = new Map();
+  for (const r of rows) {
+    const key = `${r.sura_id}:${r.aya_number}`;
+    if (!byVerseMap.has(key)) {
+      byVerseMap.set(key, { sura: r.sura_id, aya: r.aya_number, count: 0, pairs: new Set() });
+    }
+    const v = byVerseMap.get(key);
+    v.count++;
+    if (r.warsh_differs) v.pairs.add('W');
+    if (r.qalun_differs) v.pairs.add('Q');
+    if (r.duri_differs) v.pairs.add('D');
+  }
+  const byVerse = Array.from(byVerseMap.values());
+  variantCache[filter] = { rows, byVerse };
+  return variantCache[filter];
+}
+
+function variantPairBadge(code) {
+  const map = {
+    W: { c: '#FDEBD0', fg: '#C0621A', label: 'W' },
+    Q: { c: '#D5F5E3', fg: '#1A7A48', label: 'Q' },
+    D: { c: '#E8DAEF', fg: '#6A2A9A', label: 'D' }
+  };
+  const x = map[code];
+  const tip = code === 'W' ? 'Warsh differs from Hafs' : code === 'Q' ? 'Qalun differs from Hafs' : 'Al-Duri differs from Hafs';
+  return `<span style="display:inline-block;width:18px;height:18px;line-height:18px;text-align:center;background:${x.c};color:${x.fg};border-radius:50%;font-size:10px;font-weight:700;margin-right:2px" title="${tip}">${x.label}</span>`;
+}
+
+async function loadVariantsPanel(filter = variantPanelFilter) {
+  variantPanelFilter = filter;
+
+  // Render filter chips
+  const filtersEl = document.getElementById('variantsFilters');
+  const filters = [
+    { key: 'any',   label: 'Any' },
+    { key: 'warsh', label: 'W ≠ H' },
+    { key: 'qalun', label: 'Q ≠ H' },
+    { key: 'duri',  label: 'D ≠ H' },
+    { key: 'three', label: 'All ≠ H' }
+  ];
+  if (filtersEl) {
+    filtersEl.innerHTML = filters.map(f => `
+      <span onclick="loadVariantsPanel('${f.key}')" style="display:inline-block;padding:4px 10px;border:1px solid #4A3B28;border-radius:14px;font-size:10px;font-weight:600;cursor:pointer;background:${f.key === filter ? '#4A3B28' : '#fff'};color:${f.key === filter ? '#fff' : '#4A3B28'};white-space:nowrap">${f.label}</span>`
+    ).join('');
+  }
+
+  const list = document.getElementById('variantsList');
+  const counter = document.getElementById('variantsCount');
+  if (list) list.innerHTML = '<div style="text-align:center;color:#8B7355;padding:20px"><span class="spinner"></span> Loading variants…</div>';
+
+  try {
+    const { rows, byVerse } = await fetchVariantData(filter);
+    if (!byVerse.length) {
+      if (list) list.innerHTML = `<div style="text-align:center;color:#8B7355;padding:30px;font-size:12px">No variants for this filter.</div>`;
+      if (counter) counter.textContent = '0 verses · 0 variant words';
+      return;
+    }
+    if (counter) counter.textContent = `${byVerse.length} verses · ${rows.length} variant words`;
+    if (list) {
+      list.innerHTML = byVerse.map(v => `
+        <div onclick="navToVerse(${v.sura},${v.aya});closeSidebar();" style="display:flex;align-items:center;justify-content:space-between;padding:9px 11px;background:#fff;border:1px solid #E8E4DC;border-radius:7px;margin-bottom:5px;cursor:pointer">
+          <div>
+            <div style="font-size:13px;font-weight:700;color:#4A3B28">${v.sura}:${v.aya}</div>
+            <div style="font-size:9px;color:#8B7355;margin-top:1px">${v.count} variant ${v.count === 1 ? 'word' : 'words'}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:2px">
+            ${Array.from(v.pairs).sort().map(variantPairBadge).join('')}
+            <span style="margin-left:4px;color:#B8902A;font-size:14px">›</span>
+          </div>
+        </div>
+      `).join('');
+    }
+  } catch (e) {
+    if (list) list.innerHTML = `<div style="text-align:center;color:#A02020;padding:20px;font-size:12px">Could not load: ${e.message}</div>`;
+  }
+}
 
 async function openVariantBrowser(initialFilter = 'any') {
   let modal = document.getElementById('variantBrowserModal');
@@ -2929,7 +3049,7 @@ function renderSavedList() {
 }
 
 function switchSidebarTab(tab) {
-  ['suras','topics','lexicon','chrono','saved'].forEach(t => {
+  ['suras','topics','lexicon','chrono','saved','variants'].forEach(t => {
     const isCurrent = t === tab;
     const panel = document.getElementById('panel-' + t);
     if (panel) panel.style.display = isCurrent ? 'flex' : 'none';
@@ -2944,6 +3064,7 @@ function switchSidebarTab(tab) {
   if (tab === 'lexicon') loadLexicon();
   if (tab === 'chrono') loadChrono();
   if (tab === 'saved') renderSavedList();
+  if (tab === 'variants') loadVariantsPanel();
 }
 
 let lexiconData = [];
