@@ -1240,22 +1240,34 @@ async function fetchVariantData(filter) {
     three: { warsh_differs: 'eq.true', qalun_differs: 'eq.true', duri_differs: 'eq.true' }
   }[filter] || {};
 
-  // Fetch ALL matching variants (using paged fetch via Range header would be ideal,
-  // but with ~13K rows max this is fine in a single request when limit is high)
-  const rows = await sbFetch('riwayat_variants', {
-    select: 'sura_id,aya_number,word_position,warsh_differs,qalun_differs,duri_differs',
-    order: 'sura_id.asc,aya_number.asc,word_position.asc',
-    limit: '20000',
-    ...filterClause
-  });
-  if (!Array.isArray(rows)) {
-    variantCache[filter] = { rows: [], byVerse: [] };
-    return variantCache[filter];
+  // Supabase / PostgREST hard-caps responses at 1000 rows by default,
+  // regardless of the limit param. We page through using offset until
+  // we get back fewer than the page size.
+  const PAGE = 1000;
+  let allRows = [];
+  let offset = 0;
+  const counter = document.getElementById('variantsCount');
+
+  while (true) {
+    const chunk = await sbFetch('riwayat_variants', {
+      select: 'sura_id,aya_number,word_position,warsh_differs,qalun_differs,duri_differs',
+      order: 'sura_id.asc,aya_number.asc,word_position.asc',
+      limit: String(PAGE),
+      offset: String(offset),
+      ...filterClause
+    });
+    if (!Array.isArray(chunk) || chunk.length === 0) break;
+    allRows = allRows.concat(chunk);
+    if (counter) counter.textContent = `Loading… ${allRows.length} variants so far`;
+    if (chunk.length < PAGE) break;
+    offset += PAGE;
+    // Safety stop in case something goes wrong
+    if (offset > 50000) break;
   }
 
   // Aggregate by verse
   const byVerseMap = new Map();
-  for (const r of rows) {
+  for (const r of allRows) {
     const key = `${r.sura_id}:${r.aya_number}`;
     if (!byVerseMap.has(key)) {
       byVerseMap.set(key, { sura: r.sura_id, aya: r.aya_number, count: 0, pairs: new Set() });
@@ -1267,7 +1279,7 @@ async function fetchVariantData(filter) {
     if (r.duri_differs) v.pairs.add('D');
   }
   const byVerse = Array.from(byVerseMap.values());
-  variantCache[filter] = { rows, byVerse };
+  variantCache[filter] = { rows: allRows, byVerse };
   return variantCache[filter];
 }
 
