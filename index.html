@@ -90,6 +90,8 @@ body { font-family: 'Lato', sans-serif; background: #F5F3EC; color: #111111; }
 .word-diff-hafs { background: #D6EAF8; border-radius: 3px; padding: 0 2px; border-bottom: 3px solid #1A6FA8; }
 .word-diff-warsh { background: #FDEBD0; border-radius: 3px; padding: 0 2px; border-bottom: 3px solid #C0621A; }
 .word-diff-qalun { background: #D5F5E3; border-radius: 3px; padding: 0 2px; border-bottom: 3px solid #1A7A48; }
+.word-variant { cursor: pointer; padding: 2px 5px !important; border-radius: 5px !important; box-shadow: 0 0 0 1px rgba(0,0,0,0.1), inset 0 0 0 1px rgba(255,255,255,0.4); transition: transform 0.1s; font-weight: 600; }
+.word-variant:hover { transform: scale(1.05); box-shadow: 0 2px 6px rgba(0,0,0,0.15); }
 .xref-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; }
 .xref-card { background: #F5F3EC; border: 2px solid #D4C9A8; border-radius: 8px; padding: 10px; cursor: pointer; }
 .xref-card:hover { border-color: #B8902A; background: #FDF5DE; }
@@ -955,9 +957,114 @@ function normalizeForCompare(word) {
   return s;
 }
 
+// True if the consonantal skeleton (rasm) is identical
 function rasmEqual(a, b) {
-  // True if the consonantal skeleton (rasm) is identical
   return normalizeForCompare(a) === normalizeForCompare(b);
+}
+
+// ============================================================
+// CHARACTER-LEVEL DIFF (Longest Common Subsequence)
+// ============================================================
+// Given a "primary" word and a "reference" word, returns the
+// primary word's chars marked with which ones are "extra"
+// (i.e. not part of the LCS with the reference). The marked
+// chars get colored red in the rendered output, making the
+// specific letter difference instantly visible.
+//
+// Example: charDiff('يخادعون', 'يخدعون')
+//   -> [{c:'ي',extra:false}, {c:'خ',extra:false},
+//       {c:'ا',extra:true },  {c:'د',extra:false},
+//       {c:'ع',extra:false}, {c:'و',extra:false},
+//       {c:'ن',extra:false}]
+// ============================================================
+
+function lcsLengthGrid(a, b) {
+  const m = a.length, n = b.length;
+  const dp = Array.from({ length: m + 1 }, () => new Int32Array(n + 1));
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = (a[i-1] === b[j-1])
+        ? dp[i-1][j-1] + 1
+        : Math.max(dp[i-1][j], dp[i][j-1]);
+    }
+  }
+  return dp;
+}
+
+function charDiff(primary, reference) {
+  // Strip diacritics from BOTH for the comparison, but display the
+  // original primary characters. We mark any primary char that is
+  // not part of the LCS as "extra".
+  const p = stripDiacritics(primary).split('');
+  const r = stripDiacritics(reference).split('');
+  if (!p.length) return [];
+  if (!r.length) return p.map(c => ({ c, extra: true }));
+
+  // Normalize alif variants for comparison (so أ matches ا) without
+  // changing what we actually display.
+  const normChar = (ch) => {
+    return ch.replace(/[آأإٱٲٳ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه');
+  };
+  const pNorm = p.map(normChar);
+  const rNorm = r.map(normChar);
+
+  // Walk the LCS dp grid backwards to identify matched chars in p
+  const dp = lcsLengthGrid(pNorm, rNorm);
+  const matched = new Array(p.length).fill(false);
+  let i = pNorm.length, j = rNorm.length;
+  while (i > 0 && j > 0) {
+    if (pNorm[i-1] === rNorm[j-1]) {
+      matched[i-1] = true;
+      i--; j--;
+    } else if (dp[i-1][j] >= dp[i][j-1]) {
+      i--;
+    } else {
+      j--;
+    }
+  }
+
+  // Build diff array — but we want to display the ORIGINAL chars
+  // (with diacritics), not the stripped ones. So we re-walk the
+  // original word, re-applying diacritics to the right positions.
+  const out = [];
+  let stripIdx = 0;
+  for (const ch of primary.split('')) {
+    if (ARABIC_DIACRITICS_RE.test(ch) || ch === 'ـ') {
+      // Diacritic / tatweel — attach to the previous letter's status
+      out.push({ c: ch, extra: out.length ? out[out.length - 1].extra : false });
+      ARABIC_DIACRITICS_RE.lastIndex = 0; // reset state of /g regex test
+    } else {
+      out.push({ c: ch, extra: !matched[stripIdx] });
+      stripIdx++;
+    }
+  }
+  return out;
+}
+
+function renderWordWithLetterDiff(primary, reference, baseClass) {
+  // baseClass = 'word-diff-hafs' | 'word-diff-warsh' | etc.
+  // The whole word gets baseClass (which provides the riwayat color).
+  // Individual extra letters get an additional inline style for red color.
+  const diff = charDiff(primary, reference);
+  if (!diff.length) return '';
+  const inner = diff.map(d => {
+    if (d.extra) {
+      return `<span style="color:#C0202C;font-weight:700">${d.c}</span>`;
+    }
+    return d.c;
+  }).join('');
+  return inner;
+}
+
+// Pick the best "reference" word for a given riwayat — the most common
+// alternative form among the OTHER three readings. This gives the cleanest
+// letter-diff (showing what's unique to this riwayat).
+function pickReference(thisWord, otherWords) {
+  const candidates = otherWords.filter(w => w && !rasmEqual(w, thisWord));
+  if (!candidates.length) return otherWords.find(w => w) || '';
+  // Prefer the one with the smallest stripped length difference
+  candidates.sort((a, b) => Math.abs(a.length - thisWord.length) - Math.abs(b.length - thisWord.length));
+  return candidates[0];
 }
 
 function highlightDiffs(hafs, warsh, qalun, duri, suraId, ayaNum) {
@@ -986,15 +1093,28 @@ function highlightDiffs(hafs, warsh, qalun, duri, suraId, ayaNum) {
     } else {
       const onClickArgs = `${suraId},${ayaNum},${i},'${hw.replace(/'/g, "\\'")}','${ww.replace(/'/g, "\\'")}','${qw.replace(/'/g, "\\'")}','${dw.replace(/'/g, "\\'")}'`;
       const dataAttr = `data-rwa-pos="${suraId}-${ayaNum}-${i}"`;
-      // Per-reading flag: only highlight if THIS reading's rasm differs from any other
+
+      // Per-reading flag: only highlight if THIS reading's rasm differs
+      // from any other
       const hDiff = !rasmEqual(hw, ww) || !rasmEqual(hw, qw) || !rasmEqual(hw, dw);
       const wDiff = !rasmEqual(ww, hw) || !rasmEqual(ww, qw) || !rasmEqual(ww, dw);
       const qDiff = !rasmEqual(qw, hw) || !rasmEqual(qw, ww) || !rasmEqual(qw, dw);
       const dDiff = !rasmEqual(dw, hw) || !rasmEqual(dw, ww) || !rasmEqual(dw, qw);
-      hafsHtml += hDiff ? `<span class="word-diff-hafs" ${dataAttr} style="cursor:pointer" onclick="explainWord(${onClickArgs})" title="Click for technical analysis">${hw}</span> ` : hw + ' ';
-      warshHtml += wDiff ? `<span class="word-diff-warsh" ${dataAttr} style="cursor:pointer" onclick="explainWord(${onClickArgs})" title="Click for technical analysis">${ww}</span> ` : ww + ' ';
-      qalunHtml += qDiff ? `<span class="word-diff-qalun" ${dataAttr} style="cursor:pointer" onclick="explainWord(${onClickArgs})" title="Click for technical analysis">${qw}</span> ` : qw + ' ';
-      duriHtml += dDiff ? `<span class="word-diff-duri" ${dataAttr} style="cursor:pointer" onclick="explainWord(${onClickArgs})" title="Click for technical analysis">${dw}</span> ` : dw + ' ';
+
+      // For each differing word, render with letter-level coloring against
+      // the closest "reference" reading.
+      const wrap = (word, isDiff, baseCls, refWord) => {
+        if (!isDiff) return word + ' ';
+        const inner = renderWordWithLetterDiff(word, refWord, baseCls);
+        // Strong underline + click handler. Inner already has red <span>s
+        // around extra letters.
+        return `<span class="${baseCls} word-variant" ${dataAttr} onclick="explainWord(${onClickArgs})" title="Click for technical analysis">${inner}</span> `;
+      };
+
+      hafsHtml += wrap(hw, hDiff, 'word-diff-hafs', pickReference(hw, [ww, qw, dw]));
+      warshHtml += wrap(ww, wDiff, 'word-diff-warsh', pickReference(ww, [hw, qw, dw]));
+      qalunHtml += wrap(qw, qDiff, 'word-diff-qalun', pickReference(qw, [hw, ww, dw]));
+      duriHtml += wrap(dw, dDiff, 'word-diff-duri', pickReference(dw, [hw, ww, qw]));
     }
   }
   return { hafsHtml: hafsHtml.trim(), warshHtml: warshHtml.trim(), qalunHtml: qalunHtml.trim(), duriHtml: duriHtml.trim() };
@@ -1071,15 +1191,149 @@ function buildRiwayatSelector(suraId, ayaNum) {
   const activeCount = Object.values(vis).filter(Boolean).length;
 
   return `
-    <details style="margin-bottom:10px;border:1px solid #E8E4DC;border-radius:8px;background:#FDFBF5;padding:8px 10px">
-      <summary style="cursor:pointer;font-size:11px;font-weight:700;color:#4A3B28;letter-spacing:0.5px;text-transform:uppercase;outline:none">
-        🎚️ Riwayat selector  <span style="color:#8B7355;font-weight:500;text-transform:none;letter-spacing:0">(${activeCount} of 4 visible · 16 unavailable)</span>
-      </summary>
-      <div style="margin-top:8px;font-size:11px;color:#7A6644;line-height:1.5">
-        <div style="margin-bottom:6px">Tap a chip to show/hide. Dashed chips have no text data yet — they belong to the canonical 20 readings (al-Qirāʾāt al-ʿAshr × 2 rawīs).</div>
-        <div style="margin-top:6px">${ALL_RIWAYAT.map(chip).join('')}</div>
+    <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
+      <details style="flex:1;min-width:240px;border:1px solid #E8E4DC;border-radius:8px;background:#FDFBF5;padding:8px 10px">
+        <summary style="cursor:pointer;font-size:11px;font-weight:700;color:#4A3B28;letter-spacing:0.5px;text-transform:uppercase;outline:none">
+          🎚️ Riwayat selector  <span style="color:#8B7355;font-weight:500;text-transform:none;letter-spacing:0">(${activeCount} of 4 visible · 16 unavailable)</span>
+        </summary>
+        <div style="margin-top:8px;font-size:11px;color:#7A6644;line-height:1.5">
+          <div style="margin-bottom:6px">Tap a chip to show/hide. Dashed chips have no text data yet — they belong to the canonical 20 readings (al-Qirāʾāt al-ʿAshr × 2 rawīs).</div>
+          <div style="margin-top:6px">${ALL_RIWAYAT.map(chip).join('')}</div>
+        </div>
+      </details>
+      <button onclick="openVariantBrowser()" style="border:1px solid #4A3B28;background:#fff;color:#4A3B28;border-radius:8px;padding:8px 14px;font-size:11px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;cursor:pointer;white-space:nowrap;align-self:flex-start">📋 Verses with variants</button>
+    </div>`;
+}
+
+// ============================================================
+// VARIANT BROWSER — list of every verse with at least one
+// riwayat difference. Loaded from precomputed riwayat_variants
+// table for instant display.
+// ============================================================
+
+async function openVariantBrowser(initialFilter = 'any') {
+  let modal = document.getElementById('variantBrowserModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'variantBrowserModal';
+    modal.className = 'word-modal';
+    modal.innerHTML = `
+      <div class="word-modal-content" style="max-width:560px;max-height:85vh;display:flex;flex-direction:column">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid #E8E4DC">
+          <div>
+            <div style="font-size:14px;font-weight:700;color:#4A3B28;letter-spacing:0.5px">Verses with Riwayat Variants</div>
+            <div id="vbCount" style="font-size:11px;color:#8B7355;margin-top:2px">Loading…</div>
+          </div>
+          <button onclick="document.getElementById('variantBrowserModal').classList.remove('open')" style="border:none;background:#fff;color:#888;font-size:24px;cursor:pointer;line-height:1">×</button>
+        </div>
+        <div style="padding:10px 16px;border-bottom:1px solid #E8E4DC;background:#FDFBF5">
+          <div style="font-size:10px;font-weight:700;color:#7A6644;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">Filter</div>
+          <div id="vbFilters" style="display:flex;gap:5px;flex-wrap:wrap"></div>
+        </div>
+        <div id="vbList" style="overflow-y:auto;flex:1;padding:8px 12px;background:#FAFAF7"></div>
+      </div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) modal.classList.remove('open');
+    });
+  }
+  modal.classList.add('open');
+
+  // Build filter chips
+  const filters = [
+    { key: 'any',   label: 'Any difference' },
+    { key: 'warsh', label: 'Warsh ≠ Hafs' },
+    { key: 'qalun', label: 'Qalun ≠ Hafs' },
+    { key: 'duri',  label: 'Al-Duri ≠ Hafs' },
+    { key: 'three', label: 'All 3 differ from Hafs' }
+  ];
+  const filterEl = document.getElementById('vbFilters');
+  filterEl.innerHTML = filters.map(f => `
+    <span onclick="loadVariantBrowser('${f.key}')" data-vb-filter="${f.key}" style="display:inline-block;padding:4px 10px;border:1px solid #4A3B28;border-radius:14px;font-size:11px;font-weight:600;cursor:pointer;background:${f.key === initialFilter ? '#4A3B28' : '#fff'};color:${f.key === initialFilter ? '#fff' : '#4A3B28'}">${f.label}</span>`
+  ).join('');
+
+  loadVariantBrowser(initialFilter);
+}
+
+async function loadVariantBrowser(filter) {
+  // Update active filter chip styling
+  document.querySelectorAll('[data-vb-filter]').forEach(el => {
+    const isActive = el.getAttribute('data-vb-filter') === filter;
+    el.style.background = isActive ? '#4A3B28' : '#fff';
+    el.style.color = isActive ? '#fff' : '#4A3B28';
+  });
+
+  const list = document.getElementById('vbList');
+  const counter = document.getElementById('vbCount');
+  list.innerHTML = '<div style="text-align:center;color:#8B7355;padding:20px"><span class="spinner"></span> Loading variants…</div>';
+
+  // Build the filter clause
+  const filterClause = {
+    any:   {},
+    warsh: { warsh_differs: 'eq.true' },
+    qalun: { qalun_differs: 'eq.true' },
+    duri:  { duri_differs: 'eq.true' },
+    three: { warsh_differs: 'eq.true', qalun_differs: 'eq.true', duri_differs: 'eq.true' }
+  }[filter] || {};
+
+  try {
+    // Fetch distinct (sura_id, aya_number) pairs that match the filter
+    const rows = await sbFetch('riwayat_variants', {
+      select: 'sura_id,aya_number,word_position,hafs_word,warsh_word,qalun_word,duri_word,warsh_differs,qalun_differs,duri_differs',
+      order: 'sura_id.asc,aya_number.asc,word_position.asc',
+      ...filterClause
+    });
+
+    if (!Array.isArray(rows) || !rows.length) {
+      list.innerHTML = `<div style="text-align:center;color:#8B7355;padding:30px;font-size:13px">
+        <div style="font-size:28px;margin-bottom:10px">📋</div>
+        No variants found for this filter.<br>
+        <span style="font-size:11px;color:#AAA;margin-top:8px;display:block">If this is the first time you're using the browser, the variant index may not be built yet. Run the variant detector script on your tablet to populate the data.</span>
+      </div>`;
+      counter.textContent = '0 verses · 0 variants';
+      return;
+    }
+
+    // Aggregate by verse: count variants and gather riwayat-pair badges per verse
+    const byVerse = new Map();
+    for (const r of rows) {
+      const key = `${r.sura_id}:${r.aya_number}`;
+      if (!byVerse.has(key)) byVerse.set(key, { sura: r.sura_id, aya: r.aya_number, count: 0, pairs: new Set() });
+      const v = byVerse.get(key);
+      v.count++;
+      if (r.warsh_differs) v.pairs.add('W');
+      if (r.qalun_differs) v.pairs.add('Q');
+      if (r.duri_differs) v.pairs.add('D');
+    }
+
+    const verseList = Array.from(byVerse.values());
+    counter.textContent = `${verseList.length} verses · ${rows.length} variant words`;
+
+    const pairBadge = (code) => {
+      const map = {
+        W: { c: '#FDEBD0', fg: '#C0621A', label: 'W' },
+        Q: { c: '#D5F5E3', fg: '#1A7A48', label: 'Q' },
+        D: { c: '#E8DAEF', fg: '#6A2A9A', label: 'D' }
+      };
+      const x = map[code];
+      return `<span style="display:inline-block;width:18px;height:18px;line-height:18px;text-align:center;background:${x.c};color:${x.fg};border-radius:50%;font-size:10px;font-weight:700;margin-right:2px" title="${code === 'W' ? 'Warsh' : code === 'Q' ? 'Qalun' : 'Al-Duri'} differs from Hafs">${x.label}</span>`;
+    };
+
+    list.innerHTML = verseList.map(v => `
+      <div onclick="jumpToVerse(${v.sura},${v.aya});document.getElementById('variantBrowserModal').classList.remove('open')" style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:#fff;border:1px solid #E8E4DC;border-radius:8px;margin-bottom:6px;cursor:pointer;transition:background 0.1s" onmouseover="this.style.background='#FDFBF5'" onmouseout="this.style.background='#fff'">
+        <div>
+          <div style="font-size:14px;font-weight:700;color:#4A3B28">${v.sura}:${v.aya}</div>
+          <div style="font-size:10px;color:#8B7355;margin-top:2px">${v.count} variant ${v.count === 1 ? 'word' : 'words'}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:4px">
+          ${Array.from(v.pairs).sort().map(pairBadge).join('')}
+          <span style="margin-left:6px;color:#B8902A;font-size:18px">›</span>
+        </div>
       </div>
-    </details>`;
+    `).join('');
+  } catch (e) {
+    list.innerHTML = `<div style="text-align:center;color:#A02020;padding:20px;font-size:12px">Could not load variants: ${e.message}</div>`;
+  }
 }
 
 function buildRiwayatPanel(aya) {
