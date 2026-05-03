@@ -246,6 +246,23 @@ body { font-family: 'Lato', sans-serif; background: #F5F3EC; color: #111111; }
   #compareVerses { flex-direction: column !important; }
   #compareVerses > div { min-width: 0 !important; }
 }
+
+/* ── HIGHLIGHT PICKER ── */
+.hl-picker-popup {
+  display:none;position:fixed;z-index:2000;
+  background:#fff;border:2px solid #D4A830;border-radius:14px;
+  padding:10px 12px;box-shadow:0 6px 24px rgba(0,0,0,0.18);
+  flex-direction:column;gap:8px;min-width:160px;
+}
+.hl-picker-popup.open { display:flex; }
+.hl-picker-title { font-size:10px;font-weight:700;color:#8B7355;text-transform:uppercase;letter-spacing:0.5px; }
+.hl-colors { display:flex;gap:6px; }
+.hl-dot { width:28px;height:28px;border-radius:50%;cursor:pointer;border:2px solid rgba(0,0,0,0.1);flex-shrink:0; }
+.hl-dot:hover { transform:scale(1.1); }
+.hl-remove { font-size:11px;color:#E74C3C;background:none;border:none;cursor:pointer;padding:0;font-weight:700;text-align:left; }
+mark.hl-yellow { background:#FFE066;border-radius:2px;padding:0 1px; }
+mark.hl-pink   { background:#FFB3BA;border-radius:2px;padding:0 1px; }
+mark.hl-green  { background:#BAFFC9;border-radius:2px;padding:0 1px; }
 </style>
 </head>
 <body>
@@ -741,6 +758,7 @@ async function loadSura(id) {
     document.getElementById('topMeta').innerHTML = `<span>${info?.number_of_ayas || ayas.length} verses</span>`;
     renderVerses(ayas, id);
     applyLangState();
+    setTimeout(restoreVerseHighlights, 100);
   } catch(e) {
     document.getElementById('verseArea').innerHTML = `<div class="error-box">⚠️ Failed to load sura ${id}. ${e.message}</div>`;
   }
@@ -764,6 +782,7 @@ function renderVerses(ayas, suraId) {
         <div class="verse-body">
           <div class="verse-actions" style="display:flex;gap:4px;justify-content:flex-end;margin-bottom:10px;flex-wrap:wrap;">
             <button id="bm-${aya.aya_number}" onclick="event.stopPropagation();toggleBookmark(${aya.aya_number},${suraId},'${arabic.replace(/'/g,"\\'")}','${english.replace(/'/g,"\\'")}','${tigrinya.replace(/'/g,"\\'")}' )" title="Bookmark" style="background:#FDF8EE;border:1px solid #E8C97B;border-radius:6px;width:32px;height:30px;font-size:14px;cursor:pointer;padding:0;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;">${isBookmarked(aya.aya_number,suraId)?'🔖':'🏷️'}</button>
+            <button onclick="event.stopPropagation();showVerseHlPicker(${aya.aya_number},${suraId},this)" title="Highlight text" style="background:#FDF8EE;border:1px solid #E8C97B;border-radius:6px;width:32px;height:30px;font-size:14px;cursor:pointer;padding:0;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;">🖊</button>
             <button onclick="event.stopPropagation();openNote(${aya.aya_number},${suraId})" title="Add note" style="background:#FDF8EE;border:1px solid #E8C97B;border-radius:6px;width:32px;height:30px;font-size:14px;cursor:pointer;padding:0;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;">📝</button>
             <button id="copy-${aya.aya_number}" onclick="event.stopPropagation();copyVerse(${aya.aya_number},${suraId})" title="Copy visible languages" style="background:#FDF8EE;border:1px solid #E8C97B;border-radius:6px;width:32px;height:30px;font-size:14px;cursor:pointer;padding:0;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;">📋</button>
             <button onclick="event.stopPropagation();shareVerse(${aya.aya_number},${suraId})" title="Share verse" style="background:#FDF8EE;border:1px solid #E8C97B;border-radius:6px;width:32px;height:30px;font-size:14px;cursor:pointer;padding:0;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;">📤</button>
@@ -3884,6 +3903,93 @@ document.addEventListener('keydown', function(e) {
 });
 
 init();
+
+// ── VERSE HIGHLIGHT SYSTEM ──────────────────────────────────────
+let _hlVerseNum = null;
+let _hlSuraId = null;
+
+function showVerseHlPicker(ayaNum, suraId, btn) {
+  _hlVerseNum = ayaNum;
+  _hlSuraId = suraId;
+  const picker = document.getElementById('verseHlPicker');
+  const rect = btn.getBoundingClientRect();
+  picker.style.top = (rect.bottom + window.scrollY + 6) + 'px';
+  picker.style.left = Math.min(rect.left, window.innerWidth - 180) + 'px';
+  picker.classList.add('open');
+  setTimeout(() => document.addEventListener('click', _closeHlPicker, { once: true }), 10);
+}
+
+function _closeHlPicker(e) {
+  const picker = document.getElementById('verseHlPicker');
+  if (picker && !picker.contains(e.target)) picker.classList.remove('open');
+}
+
+function applyVerseHighlight(cls) {
+  document.getElementById('verseHlPicker').classList.remove('open');
+  const card = document.getElementById('vc-' + _hlVerseNum);
+  if (!card) return;
+
+  const sel = window.getSelection();
+  const hasSelection = sel && !sel.isCollapsed && card.contains(sel.anchorNode);
+
+  if (cls === 'remove') {
+    // Remove all highlights in this verse
+    card.querySelectorAll('mark.hl-yellow, mark.hl-pink, mark.hl-green').forEach(m => {
+      m.replaceWith(...m.childNodes);
+    });
+    // Also remove stored highlights
+    const stored = JSON.parse(localStorage.getItem('verse_highlights') || '{}');
+    delete stored[_hlSuraId + ':' + _hlVerseNum];
+    localStorage.setItem('verse_highlights', JSON.stringify(stored));
+    return;
+  }
+
+  if (hasSelection) {
+    // Highlight selected text only
+    try {
+      const range = sel.getRangeAt(0);
+      const mark = document.createElement('mark');
+      mark.className = cls;
+      range.surroundContents(mark);
+      sel.removeAllRanges();
+    } catch(e) {}
+  } else {
+    // Highlight entire verse Arabic + English text
+    const targets = card.querySelectorAll('.verse-arabic, .verse-english, .verse-tigrinya');
+    targets.forEach(el => {
+      const mark = document.createElement('mark');
+      mark.className = cls;
+      mark.innerHTML = el.innerHTML;
+      el.innerHTML = '';
+      el.appendChild(mark);
+    });
+  }
+
+  // Save to localStorage
+  saveVerseHighlight(_hlSuraId, _hlVerseNum, card);
+}
+
+function saveVerseHighlight(suraId, ayaNum, card) {
+  const stored = JSON.parse(localStorage.getItem('verse_highlights') || '{}');
+  const key = suraId + ':' + ayaNum;
+  // Save the HTML of the verse body
+  const body = card.querySelector('.verse-body');
+  if (body) stored[key] = body.innerHTML;
+  localStorage.setItem('verse_highlights', JSON.stringify(stored));
+}
+
+function restoreVerseHighlights() {
+  const stored = JSON.parse(localStorage.getItem('verse_highlights') || '{}');
+  Object.entries(stored).forEach(([key, html]) => {
+    const [sura, aya] = key.split(':');
+    const card = document.getElementById('vc-' + aya);
+    if (card) {
+      const body = card.querySelector('.verse-body');
+      if (body) body.innerHTML = html;
+    }
+  });
+}
+
 </script>
 
 <!-- ============================================================
@@ -4255,6 +4361,19 @@ async function runResearch() {
       <div id="compareAI"></div>
     </div>
   </div>
+</div>
+
+
+<!-- VERSE HIGHLIGHT PICKER -->
+<div class="hl-picker-popup" id="verseHlPicker">
+  <div class="hl-picker-title">Highlight color</div>
+  <div class="hl-colors">
+    <div class="hl-dot" style="background:#FFE066" onclick="applyVerseHighlight('hl-yellow')" title="Yellow"></div>
+    <div class="hl-dot" style="background:#FFB3BA" onclick="applyVerseHighlight('hl-pink')" title="Pink"></div>
+    <div class="hl-dot" style="background:#BAFFC9" onclick="applyVerseHighlight('hl-green')" title="Green"></div>
+    <div class="hl-dot" style="background:#fff;border:2px solid #DDD" onclick="applyVerseHighlight('remove')" title="Remove">✕</div>
+  </div>
+  <button class="hl-remove" onclick="applyVerseHighlight('remove')">✕ Remove highlight</button>
 </div>
 
 </body>
