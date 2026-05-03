@@ -1736,12 +1736,21 @@ async function runWordSearch(query) {
     if (!safeQuery) return;
     const fields = 'sura_id,aya_number,arabic,english,aya_text,amharic,oromo,somali';
 
-    // For multi-word queries, search the full phrase AND each word separately
-    const variants = searchVariants(safeQuery);
-    // Add the full phrase itself as the first variant for multi-word searches
-    if (safeQuery.includes(' ') && !variants.includes(safeQuery)) {
-      variants.unshift(safeQuery);
+    // For multi-word queries, search each word independently then combine
+    let searchTerms = [];
+    if (safeQuery.includes(' ')) {
+      // Add individual words (3+ chars) as separate searches
+      const words = safeQuery.split(/\s+/).filter(w => w.length >= 3);
+      words.forEach(w => {
+        const wVariants = searchVariants(w);
+        wVariants.forEach(v => { if (!searchTerms.includes(v)) searchTerms.push(v); });
+      });
+      // Also try full phrase
+      if (!searchTerms.includes(safeQuery)) searchTerms.unshift(safeQuery);
+    } else {
+      searchTerms = searchVariants(safeQuery);
     }
+    const variants = searchTerms;
 
     const searchOne = async (col, term) => {
       try {
