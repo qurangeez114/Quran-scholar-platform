@@ -742,6 +742,7 @@ function buildCard(r, q) {
       <button class="action-btn" onclick="showHlPicker('${id}',this)">🖊 Highlight</button>
       <button class="action-btn" onclick="openNote('${id}',this)">📝 Note</button>
       <button class="action-btn ${bm?'active':''}" id="bm-${id}" onclick="toggleBookmark('${id}',this)">🔖 ${bm?'Saved':'Save'}</button>
+      <button class="action-btn" onclick="copyCard('${id}',this)">📋 Copy</button>
       <button class="action-btn" onclick="shareCard('${id}')">📤 Share</button>
     </div>
   </div>`;
@@ -904,6 +905,38 @@ function renderBookmarks() {
 }
 
 // ── SHARE ────────────────────────────────────────────────────────
+function copyCard(id, btn) {
+  const r = allResults.find(x => `${x.type}-${x.id}` === id);
+  if (!r) return;
+  const text = [
+    `[${r.type.toUpperCase()}] Quran ${r.sura_id}:${r.aya_number}`,
+    r.type === 'hadith' ? `${r.collection||''} — ${r.reference||''}` :
+    r.type === 'tafsir' ? `${r.source_name||r.author||''}` : `Asbāb — ${r.scholar||''}`,
+    '',
+    r.arabic_text ? r.arabic_text + '\n' : '',
+    r.hadith_text || r.tafsir_text || r.reason_text || '',
+    getNote(id) ? '\nNote: ' + getNote(id) : ''
+  ].filter(Boolean).join('\n').trim();
+
+  const orig = btn.textContent;
+  navigator.clipboard?.writeText(text).then(() => {
+    btn.textContent = '✓ Copied';
+    setTimeout(() => { btn.textContent = orig; }, 1200);
+  }).catch(() => {
+    // fallback
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    btn.textContent = '✓ Copied';
+    setTimeout(() => { btn.textContent = orig; }, 1200);
+  });
+}
+
 function shareCard(id) {
   const r = allResults.find(x => `${x.type}-${x.id}` === id);
   if (!r) return;
