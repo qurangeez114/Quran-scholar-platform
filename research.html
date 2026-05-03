@@ -688,8 +688,38 @@ function esc(s) {
 
 function highlight(text, q) {
   if (!text || !q) return esc(text);
-  const escaped = q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
-  return esc(text).replace(new RegExp(`(${escaped})`, 'gi'), '<mark class="hl-yellow">$1</mark>');
+  let result = esc(text);
+  const plainText = text.toLowerCase();
+  const plainQ = q.toLowerCase();
+
+  // Check if full phrase appears literally in text
+  const phraseFound = plainText.includes(plainQ);
+
+  if (phraseFound) {
+    // Highlight exact phrase only
+    const escaped = q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+    result = result.replace(new RegExp(`(${escaped})`, 'gi'), '<mark class="hl-yellow">$1</mark>');
+  } else if (q.includes(' ')) {
+    // Multi-word: highlight only words that literally appear in text
+    const words = q.split(/\s+/).filter(w => w.length >= 3);
+    const anyWordFound = words.some(w => plainText.includes(w.toLowerCase()));
+    if (anyWordFound) {
+      words.forEach(word => {
+        if (plainText.includes(word.toLowerCase())) {
+          const escaped = word.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+          result = result.replace(new RegExp(`(${escaped})`, 'gi'), '<mark class="hl-yellow">$1</mark>');
+        }
+      });
+    }
+    // If no words found literally = conceptual match, return plain text (no highlight)
+  } else {
+    // Single word — highlight if it appears literally
+    if (plainText.includes(plainQ)) {
+      const escaped = q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+      result = result.replace(new RegExp(`(${escaped})`, 'gi'), '<mark class="hl-yellow">$1</mark>');
+    }
+  }
+  return result;
 }
 
 function renderResults(results, q) {
