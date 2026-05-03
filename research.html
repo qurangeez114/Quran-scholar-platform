@@ -230,6 +230,271 @@ mark.hl-green{background:#BAFFC9;}
   </div>
 </div>
 
+<!-- ── AI RESEARCH SECTION ── -->
+<div style="background:#fff;border-bottom:2px solid #E8C97B;padding:16px 20px;">
+  <div style="max-width:900px;margin:0 auto;">
+
+    <!-- Toggle button -->
+    <button onclick="toggleAIResearch()" id="aiToggleBtn"
+      style="display:flex;align-items:center;gap:8px;padding:10px 18px;border:2px solid #B8902A;border-radius:24px;background:#FDF5DE;color:#B8902A;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:0;">
+      🤖 AI Deep Research <span id="aiToggleArrow">▼</span>
+    </button>
+    <div style="font-size:11px;color:#888;margin-top:4px;margin-left:4px;">Upload a handwritten note or type any topic — get a full scholarly report in 7 languages</div>
+
+    <!-- AI panel (collapsible) -->
+    <div id="aiResearchPanel" style="display:none;margin-top:14px;border:2px solid #D4A830;border-radius:12px;overflow:hidden;">
+
+      <!-- Input area -->
+      <div style="padding:16px;background:linear-gradient(135deg,#FDFAF2,#F8F2DC);">
+
+        <!-- Photo upload -->
+        <div style="margin-bottom:12px;">
+          <div style="font-size:11px;font-weight:800;color:#B8902A;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">📸 Upload Handwritten Note (optional)</div>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+            <label for="aiImageInput" style="padding:7px 16px;border:2px solid #B8902A;border-radius:20px;background:#fff;font-size:12px;font-weight:700;color:#B8902A;cursor:pointer;">Choose Photo</label>
+            <input type="file" id="aiImageInput" accept="image/*" style="display:none" onchange="onAIImageChange(event)">
+            <span id="aiImageName" style="font-size:12px;color:#888;font-style:italic;">No image selected</span>
+            <button id="aiImageClear" onclick="clearAIImage()" style="display:none;padding:3px 10px;border:1px solid #E74C3C;border-radius:20px;background:#fff;font-size:11px;color:#E74C3C;cursor:pointer;font-weight:700;">✕</button>
+          </div>
+          <div id="aiImagePreview" style="margin-top:8px;display:none;">
+            <img id="aiThumb" style="max-height:70px;border-radius:6px;border:2px solid #D4C9A8;" src="" alt="preview">
+          </div>
+        </div>
+
+        <!-- Text input -->
+        <div style="margin-bottom:12px;">
+          <div style="font-size:11px;font-weight:800;color:#B8902A;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">✏️ Or Type Verse / Topic / Concept</div>
+          <textarea id="aiTextInput" placeholder="e.g. 'Al-Baqarah 2:255' or 'patience in hardship' or 'the story of Moses'"
+            style="width:100%;min-height:70px;padding:10px 12px;border:2px solid #D4A830;border-radius:8px;font-size:14px;background:#fff;outline:none;color:#111;resize:vertical;font-family:'Crimson Pro',serif;line-height:1.6;"></textarea>
+        </div>
+
+        <!-- Language selector -->
+        <div style="margin-bottom:12px;">
+          <div style="font-size:11px;font-weight:800;color:#B8902A;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">🌍 Output Language</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;" id="aiLangBtns">
+            <button class="ai-lang-btn active" data-lang="English" onclick="selectAILang(this)">English</button>
+            <button class="ai-lang-btn" data-lang="Arabic" onclick="selectAILang(this)">Arabic</button>
+            <button class="ai-lang-btn" data-lang="Tigrinya" onclick="selectAILang(this)">Tigrinya</button>
+            <button class="ai-lang-btn" data-lang="Amharic" onclick="selectAILang(this)">Amharic</button>
+            <button class="ai-lang-btn" data-lang="Oromo" onclick="selectAILang(this)">Oromo</button>
+            <button class="ai-lang-btn" data-lang="Somali" onclick="selectAILang(this)">Somali</button>
+            <button class="ai-lang-btn" data-lang="Turkish" onclick="selectAILang(this)">Turkish</button>
+          </div>
+        </div>
+
+        <!-- All languages checkbox -->
+        <div style="margin-bottom:14px;">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600;color:#4A3B28;">
+            <input type="checkbox" id="aiTranslateAll" style="width:16px;height:16px;accent-color:#B8902A;">
+            Also show all 7 language translations at the end
+          </label>
+        </div>
+
+        <!-- Run button -->
+        <button id="aiRunBtn" onclick="runAIResearch()"
+          style="width:100%;padding:12px;background:#B8902A;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;">
+          🔬 Research Now
+        </button>
+      </div>
+
+      <!-- Loading -->
+      <div id="aiLoading" style="display:none;padding:30px;text-align:center;background:#fff;">
+        <span class="spinner"></span>
+        <span id="aiLoadingMsg" style="font-size:14px;color:#888;font-style:italic;">Researching...</span>
+      </div>
+
+      <!-- Error -->
+      <div id="aiError" style="display:none;padding:14px 16px;background:#FFF0F0;border-top:2px solid #E08080;color:#A00000;font-size:14px;font-weight:600;"></div>
+
+      <!-- Output -->
+      <div id="aiOutput" style="display:none;background:#fff;border-top:2px solid #E8C97B;">
+        <div style="padding:12px 16px;border-bottom:1px solid #F0EDE6;display:flex;align-items:center;justify-content:space-between;">
+          <div style="font-size:12px;font-weight:800;color:#B8902A;letter-spacing:1px;text-transform:uppercase;">Research Report</div>
+          <div style="display:flex;gap:6px;">
+            <button onclick="copyAIReport()" style="padding:5px 12px;border:1px solid #D4A830;border-radius:16px;background:#fff;font-size:11px;font-weight:700;color:#B8902A;cursor:pointer;">📋 Copy</button>
+            <button onclick="clearAIOutput()" style="padding:5px 12px;border:1px solid #ccc;border-radius:16px;background:#fff;font-size:11px;font-weight:700;color:#888;cursor:pointer;">✕ Clear</button>
+          </div>
+        </div>
+        <div id="aiReportBody" style="padding:16px;font-size:14px;color:#1a1a1a;line-height:1.85;white-space:pre-wrap;font-family:'Crimson Pro',serif;"></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<style>
+.ai-lang-btn { padding:5px 13px;border:2px solid #D4C9A8;border-radius:20px;background:#fff;cursor:pointer;font-size:12px;font-weight:700;color:#666; }
+.ai-lang-btn.active { background:#B8902A;color:#fff;border-color:#B8902A; }
+.ai-lang-btn:hover { border-color:#B8902A;color:#B8902A; }
+</style>
+
+<script>
+// ── AI RESEARCH STATE ──────────────────────────────────────────
+const AI_KEY = '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';
+let aiImageBase64 = null;
+let aiImageMime = null;
+let aiLang = 'English';
+
+function toggleAIResearch() {
+  const panel = document.getElementById('aiResearchPanel');
+  const arrow = document.getElementById('aiToggleArrow');
+  const open = panel.style.display === 'none';
+  panel.style.display = open ? 'block' : 'none';
+  arrow.textContent = open ? '▲' : '▼';
+}
+function selectAILang(btn) {
+  document.querySelectorAll('.ai-lang-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  aiLang = btn.dataset.lang;
+}
+function onAIImageChange(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  aiImageMime = file.type || 'image/jpeg';
+  document.getElementById('aiImageName').textContent = file.name;
+  document.getElementById('aiImageClear').style.display = 'inline-block';
+  const reader = new FileReader();
+  reader.onload = ev => {
+    aiImageBase64 = ev.target.result.split(',')[1];
+    const thumb = document.getElementById('aiThumb');
+    thumb.src = ev.target.result;
+    document.getElementById('aiImagePreview').style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+}
+function clearAIImage() {
+  aiImageBase64 = null; aiImageMime = null;
+  document.getElementById('aiImageInput').value = '';
+  document.getElementById('aiImageName').textContent = 'No image selected';
+  document.getElementById('aiImageClear').style.display = 'none';
+  document.getElementById('aiImagePreview').style.display = 'none';
+}
+function clearAIOutput() {
+  document.getElementById('aiOutput').style.display = 'none';
+  document.getElementById('aiReportBody').textContent = '';
+}
+function copyAIReport() {
+  const text = document.getElementById('aiReportBody').textContent;
+  if (!text) return;
+  navigator.clipboard.writeText(text).catch(() => {
+    const ta = document.createElement('textarea');
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); document.body.removeChild(ta);
+  });
+  alert('Report copied!');
+}
+
+async function extractNoteFromImage(base64, mime) {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-api-key': AI_KEY, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514', max_tokens: 1000,
+      messages: [{ role: 'user', content: [
+        { type: 'image', source: { type: 'base64', media_type: mime, data: base64 } },
+        { type: 'text', text: 'This is a handwritten note about the Quran. Extract all the text exactly as written. Return only the extracted text.' }
+      ]}]
+    })
+  });
+  const data = await res.json();
+  if (data.error) throw new Error(data.error.message);
+  return data.content.map(c => c.text||'').join('').trim();
+}
+
+async function fetchDBContext(query) {
+  const ctx = {};
+  try {
+    const hdrs = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY };
+    const ref = query.match(/(\d+)\s*[:\s,]\s*(\d+)/);
+    if (ref) {
+      const s = parseInt(ref[1]), a = parseInt(ref[2]);
+      const [aya, xref, words, hadith, tafsir, asbab] = await Promise.all([
+        fetch(`${SB_URL}/rest/v1/ayas?sura_id=eq.${s}&aya_number=eq.${a}&select=arabic,english,aya_text,amharic,oromo,somali`, {headers:hdrs}).then(r=>r.json()),
+        fetch(`${SB_URL}/rest/v1/cross_references?sura_id=eq.${s}&aya_number=eq.${a}&select=ref_sura,ref_aya,theme&limit=8`, {headers:hdrs}).then(r=>r.json()),
+        fetch(`${SB_URL}/rest/v1/word_analysis?sura_id=eq.${s}&aya_number=eq.${a}&select=word_arabic,root,meaning_english,language_origin&limit=15`, {headers:hdrs}).then(r=>r.json()),
+        fetch(`${SB_URL}/rest/v1/hadith_connections?sura_id=eq.${s}&aya_number=eq.${a}&select=hadith_text,source,narrator,relevance&limit=5`, {headers:hdrs}).then(r=>r.json()),
+        fetch(`${SB_URL}/rest/v1/tafsir?sura_id=eq.${s}&aya_number=eq.${a}&select=scholar_name,tafsir_text,tradition&limit=5`, {headers:hdrs}).then(r=>r.json()),
+        fetch(`${SB_URL}/rest/v1/asbab_al_nuzul?sura_id=eq.${s}&aya_number=eq.${a}&select=*&limit=3`, {headers:hdrs}).then(r=>r.json()),
+      ]);
+      if (aya?.length) ctx.verse = aya[0];
+      if (xref?.length) ctx.crossrefs = xref;
+      if (words?.length) ctx.words = words;
+      if (hadith?.length) ctx.hadith = hadith;
+      if (tafsir?.length) ctx.tafsir = tafsir;
+      if (asbab?.length) ctx.asbab = asbab;
+    }
+  } catch(e) { ctx.dbError = e.message; }
+  return ctx;
+}
+
+async function generateReport(query, ctx, lang, translateAll) {
+  const langNote = translateAll
+    ? `Write the full report in ${lang}. Then add a final section "ALL LANGUAGE TRANSLATIONS" with key findings translated into all 7 languages: Arabic, English, Tigrinya, Amharic, Oromo, Somali, Turkish — each clearly labeled.`
+    : `Write the entire report in ${lang}.`;
+
+  const prompt = `You are a world-class Quran scholar. Produce a comprehensive research report for:
+
+QUERY: ${query}
+
+DATABASE CONTEXT:
+${JSON.stringify(ctx, null, 2).substring(0, 4000)}
+
+Include these sections:
+1. VERSE IDENTIFICATION — Arabic text and meaning
+2. CROSS-REFERENCES — Related verses from DB plus additional key ones
+3. WORD ANALYSIS — Key Arabic roots, meanings, linguistic origins
+4. TAFSIR & SCHOLARLY COMMENTARY — Classical and contemporary scholars (Sunni & Shia)
+5. HADITH CONNECTIONS — Related hadiths
+6. ASBAB AL-NUZUL — Context of revelation
+7. THEMATIC ANALYSIS — Deeper themes and spiritual lessons
+8. COMPARATIVE INSIGHTS — How this appears across the Quran
+
+${langNote}`;
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-api-key': AI_KEY, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+    body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 4000, messages: [{ role: 'user', content: prompt }] })
+  });
+  const data = await res.json();
+  if (data.error) throw new Error(data.error.message);
+  return data.content.map(c => c.text||'').join('').trim();
+}
+
+async function runAIResearch() {
+  const textInput = document.getElementById('aiTextInput').value.trim();
+  const translateAll = document.getElementById('aiTranslateAll').checked;
+  if (!aiImageBase64 && !textInput) { alert('Please upload a photo or type a verse/topic.'); return; }
+
+  document.getElementById('aiOutput').style.display = 'none';
+  document.getElementById('aiError').style.display = 'none';
+  document.getElementById('aiLoading').style.display = 'block';
+  document.getElementById('aiRunBtn').disabled = true;
+
+  try {
+    let query = textInput;
+    if (aiImageBase64) {
+      document.getElementById('aiLoadingMsg').textContent = '📸 Reading handwritten note...';
+      const extracted = await extractNoteFromImage(aiImageBase64, aiImageMime);
+      query = extracted + (textInput ? '\n\nAdditional context: ' + textInput : '');
+    }
+    document.getElementById('aiLoadingMsg').textContent = '📚 Querying Quran database...';
+    const ctx = await fetchDBContext(query);
+    document.getElementById('aiLoadingMsg').textContent = `🔬 Generating report in ${aiLang}...`;
+    const report = await generateReport(query, ctx, aiLang, translateAll);
+    document.getElementById('aiLoading').style.display = 'none';
+    document.getElementById('aiReportBody').textContent = report;
+    document.getElementById('aiOutput').style.display = 'block';
+  } catch(err) {
+    document.getElementById('aiLoading').style.display = 'none';
+    document.getElementById('aiError').style.display = 'block';
+    document.getElementById('aiError').textContent = 'Error: ' + err.message;
+  } finally {
+    document.getElementById('aiRunBtn').disabled = false;
+  }
+}
+</script>
+
 <!-- RESULTS -->
 <div class="results-area">
   <div id="resultsHeader" class="results-header" style="display:none">
