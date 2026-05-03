@@ -593,14 +593,32 @@ async function sbFetch(table, params) {
 }
 
 async function sbSearch(table, select, column, q, extra) {
-  const url = new URL(`${SB_URL}/rest/v1/${table}`);
-  url.searchParams.set('select', select);
-  url.searchParams.set(column, `ilike.*${q}*`);
-  url.searchParams.set('limit', '50');
-  if (extra) Object.entries(extra).forEach(([k,v]) => url.searchParams.set(k, v));
-  const r = await fetch(url, { headers: HDRS });
-  if (!r.ok) return [];
-  return r.json();
+  // For multi-word queries, try full phrase first then individual words
+  const queries = [q];
+  if (q.includes(' ')) {
+    q.split(/\s+/).filter(w => w.length >= 3).forEach(w => {
+      if (!queries.includes(w)) queries.push(w);
+    });
+  }
+  const seen = new Set();
+  const results = [];
+  for (const term of queries) {
+    const url = new URL(`${SB_URL}/rest/v1/${table}`);
+    url.searchParams.set('select', select);
+    url.searchParams.set(column, `ilike.*${term}*`);
+    url.searchParams.set('limit', '50');
+    if (extra) Object.entries(extra).forEach(([k,v]) => url.searchParams.set(k, v));
+    try {
+      const r = await fetch(url, { headers: HDRS });
+      if (!r.ok) continue;
+      const rows = await r.json();
+      rows.forEach(row => {
+        const key = row.id || JSON.stringify(row);
+        if (!seen.has(key)) { seen.add(key); results.push(row); }
+      });
+    } catch {}
+  }
+  return results;
 }
 
 // ── SEARCH ───────────────────────────────────────────────────────
