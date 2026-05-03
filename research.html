@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quran Scholar — Research Library</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Crimson+Pro:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --gold:#B8902A;--gold-light:#D4A830;--gold-pale:#FDF5DE;--gold-border:#E8C97B;
+  --ink:#1a1a1a;--ink2:#3a3a3a;--ink3:#6B5A3E;--ink4:#999;
+  --bg:#F5F3EC;--bg2:#FDFBF5;--bg3:#fff;
+  --sunni:#1A6FA8;--sunni-bg:#E8F4FD;--sunni-border:#7AB8D8;
+  --shia:#C0621A;--shia-bg:#FDEBD0;--shia-border:#E0A060;
+  --hadith:#2E7D32;--hadith-bg:#E8F5E9;--hadith-border:#81C784;
+  --tafsir:#6A1B9A;--tafsir-bg:#F3E5F5;--tafsir-border:#CE93D8;
+  --asbab:#00838F;--asbab-bg:#E0F7FA;--asbab-border:#80DEEA;
+}
+body{font-family:'Crimson Pro',serif;background:var(--bg);color:var(--ink);min-height:100vh;}
+
+/* ── TOP BAR ── */
+.topbar{background:var(--bg3);border-bottom:2px solid var(--gold-border);padding:12px 20px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(184,144,42,0.08);}
+.topbar-logo{font-family:'Amiri',serif;font-size:22px;color:var(--ink);font-weight:700;white-space:nowrap;}
+.topbar-sub{font-size:11px;color:var(--gold);font-weight:700;letter-spacing:0.08em;text-transform:uppercase;}
+.topbar-home{padding:7px 14px;border:2px solid var(--gold-border);border-radius:20px;background:var(--gold-pale);color:var(--gold);font-size:12px;font-weight:700;cursor:pointer;text-decoration:none;white-space:nowrap;}
+.topbar-home:hover{background:var(--gold);color:#fff;}
+
+/* ── SEARCH HERO ── */
+.hero{background:linear-gradient(135deg,#FDFAF2,#F8F2DC);border-bottom:2px solid var(--gold-border);padding:24px 20px 20px;}
+.hero-title{font-family:'Amiri',serif;font-size:26px;color:var(--ink);margin-bottom:4px;}
+.hero-desc{font-size:14px;color:var(--ink3);margin-bottom:16px;}
+
+/* Source tabs */
+.source-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;}
+.source-tab{display:flex;align-items:center;gap:6px;padding:8px 16px;border-radius:24px;border:2px solid transparent;cursor:pointer;font-size:13px;font-weight:700;transition:all 0.15s;}
+.source-tab.hadith{border-color:var(--hadith-border);background:var(--bg3);color:var(--hadith);}
+.source-tab.hadith.active{background:var(--hadith);color:#fff;border-color:var(--hadith);}
+.source-tab.tafsir{border-color:var(--tafsir-border);background:var(--bg3);color:var(--tafsir);}
+.source-tab.tafsir.active{background:var(--tafsir);color:#fff;border-color:var(--tafsir);}
+.source-tab.asbab{border-color:var(--asbab-border);background:var(--bg3);color:var(--asbab);}
+.source-tab.asbab.active{background:var(--asbab);color:#fff;border-color:var(--asbab);}
+.source-tab.all{border-color:var(--gold-border);background:var(--bg3);color:var(--gold);}
+.source-tab.all.active{background:var(--gold);color:#fff;border-color:var(--gold);}
+
+/* Search bar */
+.search-row{display:flex;gap:8px;}
+.search-input{flex:1;padding:12px 16px;border:2px solid var(--gold-border);border-radius:10px;font-size:15px;font-family:'Crimson Pro',serif;background:var(--bg3);color:var(--ink);outline:none;}
+.search-input:focus{border-color:var(--gold);}
+.search-btn{padding:12px 20px;background:var(--gold);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap;}
+.search-btn:hover{background:#8B6F1F;}
+
+/* Filters */
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;}
+.filter-select{padding:6px 10px;border:1px solid var(--gold-border);border-radius:8px;font-size:12px;background:var(--bg3);color:var(--ink);outline:none;font-family:'Crimson Pro',serif;}
+.trad-toggle{display:flex;gap:4px;}
+.trad-btn{padding:6px 14px;border:1px solid var(--gold-border);border-radius:20px;background:var(--bg3);font-size:12px;font-weight:700;cursor:pointer;color:var(--ink3);}
+.trad-btn.active{background:var(--gold);color:#fff;border-color:var(--gold);}
+
+/* Topic chips */
+.topics-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;}
+.topic-chip{padding:4px 12px;border:1px solid var(--gold-border);border-radius:20px;font-size:11px;font-weight:700;color:var(--gold);background:var(--bg3);cursor:pointer;}
+.topic-chip:hover{background:var(--gold-pale);}
+
+/* ── RESULTS ── */
+.results-area{padding:16px 20px;max-width:900px;margin:0 auto;}
+.results-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+.results-count{font-size:13px;font-weight:700;color:var(--ink3);}
+.loading-msg{text-align:center;padding:40px;color:var(--ink4);font-style:italic;font-size:15px;}
+.spinner{display:inline-block;width:20px;height:20px;border:3px solid var(--gold-border);border-top-color:var(--gold);border-radius:50%;animation:spin 0.7s linear infinite;vertical-align:middle;margin-right:8px;}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Result card */
+.result-card{background:var(--bg3);border:1px solid #E8E4DC;border-radius:12px;margin-bottom:12px;overflow:hidden;transition:box-shadow 0.15s;}
+.result-card:hover{box-shadow:0 4px 16px rgba(184,144,42,0.12);}
+.card-header{padding:10px 14px;display:flex;align-items:center;gap:10px;border-bottom:1px solid #F0EDE6;}
+.source-pill{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:12px;font-size:10px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;}
+.pill-hadith{background:var(--hadith-bg);color:var(--hadith);border:1px solid var(--hadith-border);}
+.pill-tafsir{background:var(--tafsir-bg);color:var(--tafsir);border:1px solid var(--tafsir-border);}
+.pill-asbab{background:var(--asbab-bg);color:var(--asbab);border:1px solid var(--asbab-border);}
+.trad-pill{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;}
+.pill-sunni{background:var(--sunni-bg);color:var(--sunni);}
+.pill-shia{background:var(--shia-bg);color:var(--shia);}
+.verse-ref{margin-left:auto;font-size:11px;font-weight:700;color:var(--gold);background:var(--gold-pale);border:1px solid var(--gold-border);border-radius:10px;padding:2px 8px;cursor:pointer;text-decoration:none;white-space:nowrap;}
+.verse-ref:hover{background:var(--gold);color:#fff;}
+.card-body{padding:12px 14px;}
+.card-scholar{font-size:12px;font-weight:700;color:var(--gold);margin-bottom:6px;}
+.card-arabic{font-family:'Amiri',serif;font-size:20px;direction:rtl;text-align:right;line-height:1.9;color:var(--ink);margin-bottom:8px;padding:8px 10px;background:#FAFAF7;border-radius:6px;}
+.card-text{font-size:15px;color:var(--ink2);line-height:1.75;}
+.card-meta{font-size:11px;color:var(--ink4);margin-top:8px;font-style:italic;}
+.card-notes{margin-top:8px;padding:8px 10px;background:var(--gold-pale);border-left:3px solid var(--gold);border-radius:0 6px 6px 0;font-size:13px;color:var(--ink2);line-height:1.6;}
+
+/* Action bar */
+.card-actions{display:flex;gap:6px;padding:8px 14px;border-top:1px solid #F0EDE6;background:#FAFAF7;flex-wrap:wrap;}
+.action-btn{display:inline-flex;align-items:center;gap:4px;padding:5px 11px;border-radius:16px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid var(--gold-border);background:var(--bg3);color:var(--ink3);}
+.action-btn:hover{background:var(--gold-pale);border-color:var(--gold);color:var(--gold);}
+.action-btn.active{background:var(--gold);color:#fff;border-color:var(--gold);}
+
+/* Highlight colors */
+.hl-yellow{background:#FFE066;border-radius:3px;padding:0 2px;}
+.hl-pink{background:#FFB3BA;border-radius:3px;padding:0 2px;}
+.hl-green{background:#BAFFC9;border-radius:3px;padding:0 2px;}
+
+/* Note modal */
+.modal-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.55);z-index:500;align-items:center;justify-content:center;padding:16px;}
+.modal-overlay.open{display:flex;}
+.modal-box{background:#fff;border-radius:14px;padding:20px;width:100%;max-width:480px;box-shadow:0 20px 60px rgba(0,0,0,0.3);}
+.modal-title{font-size:14px;font-weight:700;color:var(--gold);margin-bottom:12px;}
+.note-toolbar{display:flex;gap:4px;flex-wrap:wrap;padding:6px;background:var(--gold-pale);border:1px solid var(--gold-border);border-bottom:none;border-radius:8px 8px 0 0;}
+.note-toolbar button{width:30px;height:30px;border:1px solid var(--gold-border);background:#fff;border-radius:6px;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;}
+.note-editor{width:100%;min-height:110px;max-height:220px;overflow-y:auto;padding:10px;border:1px solid var(--gold-border);border-radius:0 0 8px 8px;font-size:14px;outline:none;font-family:'Crimson Pro',serif;line-height:1.6;background:#fff;}
+.note-editor:empty::before{content:attr(data-placeholder);color:#BBB;font-style:italic;pointer-events:none;}
+.modal-btns{display:flex;gap:8px;margin-top:12px;}
+.modal-btn{flex:1;padding:9px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;border:none;}
+.btn-save{background:var(--gold);color:#fff;}
+.btn-del{background:#fff;color:#E74C3C;border:1px solid #E74C3C!important;}
+.btn-share{background:#fff;color:var(--sunni);border:1px solid var(--sunni)!important;}
+
+/* Highlight picker */
+.hl-picker{display:none;position:absolute;background:#fff;border:1px solid var(--gold-border);border-radius:10px;padding:8px;gap:6px;box-shadow:0 4px 20px rgba(0,0,0,0.15);z-index:200;}
+.hl-picker.open{display:flex;}
+.hl-dot{width:26px;height:26px;border-radius:50%;cursor:pointer;border:2px solid rgba(0,0,0,0.1);}
+
+mark.hl-yellow{background:#FFE066;}
+mark.hl-pink{background:#FFB3BA;}
+mark.hl-green{background:#BAFFC9;}
+
+/* Bookmarks panel */
+.bm-panel{display:none;position:fixed;right:0;top:0;height:100%;width:320px;background:#fff;border-left:2px solid var(--gold-border);z-index:300;box-shadow:-4px 0 20px rgba(0,0,0,0.1);flex-direction:column;}
+.bm-panel.open{display:flex;}
+.bm-header{padding:14px 16px;border-bottom:1px solid var(--gold-border);display:flex;align-items:center;justify-content:space-between;}
+.bm-title{font-size:14px;font-weight:700;color:var(--gold);}
+.bm-list{overflow-y:auto;flex:1;padding:8px 12px;}
+.bm-item{padding:10px;border:1px solid #E8E4DC;border-radius:8px;margin-bottom:8px;cursor:pointer;}
+.bm-item:hover{background:var(--gold-pale);}
+.bm-ref{font-size:11px;font-weight:700;color:var(--gold);margin-bottom:4px;}
+.bm-preview{font-size:12px;color:var(--ink3);line-height:1.5;}
+
+/* Empty state */
+.empty-state{text-align:center;padding:50px 20px;color:var(--ink4);}
+.empty-icon{font-size:48px;margin-bottom:12px;}
+.empty-title{font-size:18px;font-weight:700;color:var(--ink3);margin-bottom:6px;}
+.empty-desc{font-size:13px;line-height:1.6;}
+
+@media(max-width:600px){
+  .hero{padding:16px 14px 14px;}
+  .results-area{padding:12px 14px;}
+  .source-tab{font-size:11px;padding:6px 12px;}
+  .card-arabic{font-size:17px;}
+  .card-text{font-size:14px;}
+  .bm-panel{width:100%;}
+}
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div>
+    <div class="topbar-logo">القرآن الكريم</div>
+    <div class="topbar-sub">Research Library</div>
+  </div>
+  <div style="flex:1"></div>
+  <a href="https://fascinating-sunburst-516df8.netlify.app" class="topbar-home">📖 Quran Platform</a>
+  <button onclick="toggleBookmarks()" style="padding:7px 14px;border:2px solid var(--gold-border);border-radius:20px;background:var(--gold-pale);color:var(--gold);font-size:12px;font-weight:700;cursor:pointer;" id="bmToggleBtn">🔖 Saved</button>
+</div>
+
+<!-- HERO SEARCH -->
+<div class="hero">
+  <div class="hero-title">Scholarly Research</div>
+  <div class="hero-desc">Search across Hadith, Tafsir, and Asbāb al-Nuzūl</div>
+
+  <!-- Source selector -->
+  <div class="source-tabs">
+    <div class="source-tab all active" onclick="setSource('all',this)">🔍 All Sources</div>
+    <div class="source-tab hadith" onclick="setSource('hadith',this)">📜 Hadith</div>
+    <div class="source-tab tafsir" onclick="setSource('tafsir',this)">📚 Tafsir</div>
+    <div class="source-tab asbab" onclick="setSource('asbab',this)">🕰 Asbāb al-Nuzūl</div>
+  </div>
+
+  <!-- Search input -->
+  <div class="search-row">
+    <input class="search-input" id="searchInput" placeholder="Search by word, topic, concept, scholar..." onkeydown="if(event.key==='Enter')doSearch()">
+    <button class="search-btn" onclick="doSearch()">Search</button>
+  </div>
+
+  <!-- Filters -->
+  <div class="filters">
+    <div class="trad-toggle">
+      <button class="trad-btn active" id="trad-all" onclick="setTrad('all',this)">All</button>
+      <button class="trad-btn" id="trad-sunni" onclick="setTrad('sunni',this)">Sunni</button>
+      <button class="trad-btn" id="trad-shia" onclick="setTrad('shia',this)">Shia</button>
+    </div>
+    <select class="filter-select" id="collectionFilter">
+      <option value="">All Collections</option>
+      <option>Sahih al-Bukhari</option>
+      <option>Sahih Muslim</option>
+      <option>Sunan Abu Dawud</option>
+      <option>Sunan al-Tirmidhi</option>
+      <option>Al-Kafi (al-Kulayni)</option>
+      <option>Bihar al-Anwar (al-Majlisi)</option>
+    </select>
+    <select class="filter-select" id="scholarFilter" style="display:none">
+      <option value="">All Scholars</option>
+      <option>Tafsir Ibn Kathir (abridged)</option>
+      <option>Tafsir al-Jalalayn</option>
+      <option>Tafsir al-Tabari</option>
+      <option>Tafsir al-Qurtubi</option>
+      <option>Tanwir al-Miqbas (Ibn Abbas)</option>
+      <option>Tafsir al-Sa'di</option>
+    </select>
+  </div>
+
+  <!-- Topic chips -->
+  <div class="topics-row" id="topicsRow">
+    <span style="font-size:11px;color:var(--ink4);align-self:center;font-weight:700;">Quick topics:</span>
+    <div class="topic-chip" onclick="quickSearch('prayer')">Prayer</div>
+    <div class="topic-chip" onclick="quickSearch('women')">Women</div>
+    <div class="topic-chip" onclick="quickSearch('jihad')">Jihad</div>
+    <div class="topic-chip" onclick="quickSearch('marriage')">Marriage</div>
+    <div class="topic-chip" onclick="quickSearch('forgiveness')">Forgiveness</div>
+    <div class="topic-chip" onclick="quickSearch('paradise')">Paradise</div>
+    <div class="topic-chip" onclick="quickSearch('judgment day')">Judgment Day</div>
+    <div class="topic-chip" onclick="quickSearch('charity')">Charity</div>
+    <div class="topic-chip" onclick="quickSearch('fasting')">Fasting</div>
+    <div class="topic-chip" onclick="quickSearch('Moses')">Moses</div>
+    <div class="topic-chip" onclick="quickSearch('Jesus')">Jesus</div>
+    <div class="topic-chip" onclick="quickSearch('revelation')">Revelation</div>
+  </div>
+</div>
+
+<!-- RESULTS -->
+<div class="results-area">
+  <div id="resultsHeader" class="results-header" style="display:none">
+    <div class="results-count" id="resultsCount"></div>
+    <button onclick="exportResults()" style="padding:5px 12px;border:1px solid var(--gold-border);border-radius:16px;background:var(--bg3);font-size:11px;font-weight:700;color:var(--gold);cursor:pointer;">📤 Export</button>
+  </div>
+  <div id="resultsContainer">
+    <div class="empty-state">
+      <div class="empty-icon">📚</div>
+      <div class="empty-title">Start your research</div>
+      <div class="empty-desc">Search across Hadith, Tafsir, and Asbāb al-Nuzūl.<br>Use the topic chips above for quick access.</div>
+    </div>
+  </div>
+</div>
+
+<!-- NOTE MODAL -->
+<div class="modal-overlay" id="noteModal" onclick="if(event.target===this)closeNoteModal()">
+  <div class="modal-box">
+    <div class="modal-title">📝 Note for <span id="noteLabel"></span></div>
+    <div class="note-toolbar">
+      <button onmousedown="event.preventDefault()" onclick="nCmd('bold')" title="Bold"><b>B</b></button>
+      <button onmousedown="event.preventDefault()" onclick="nCmd('italic')" title="Italic"><i>I</i></button>
+      <button onmousedown="event.preventDefault()" onclick="nCmd('underline')" title="Underline" style="text-decoration:underline">U</button>
+      <button onmousedown="event.preventDefault()" onclick="nHL('#FFE066')" style="background:#FFE066" title="Yellow">A</button>
+      <button onmousedown="event.preventDefault()" onclick="nHL('#FFB3BA')" style="background:#FFB3BA" title="Pink">A</button>
+      <button onmousedown="event.preventDefault()" onclick="nHL('#BAFFC9')" style="background:#BAFFC9" title="Green">A</button>
+      <button onmousedown="event.preventDefault()" onclick="nHL('transparent')" title="Clear highlight">⌀</button>
+    </div>
+    <div id="noteEditor" class="note-editor" contenteditable="true" data-placeholder="Write your note..."></div>
+    <div class="modal-btns">
+      <button class="modal-btn btn-save" onclick="saveNote()">Save</button>
+      <button class="modal-btn btn-share" style="border:1px solid" onclick="shareNote()">📤 Share</button>
+      <button class="modal-btn btn-del" style="border:1px solid" onclick="deleteNote()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- BOOKMARKS PANEL -->
+<div class="bm-panel" id="bmPanel">
+  <div class="bm-header">
+    <div class="bm-title">🔖 Saved Items</div>
+    <button onclick="toggleBookmarks()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#999">✕</button>
+  </div>
+  <div style="padding:8px 12px;border-bottom:1px solid #F0EDE6;display:flex;justify-content:space-between;align-items:center;">
+    <span style="font-size:11px;color:var(--ink4)" id="bmCountLabel">0 saved</span>
+    <button onclick="clearAllBookmarks()" style="font-size:10px;color:#E74C3C;background:none;border:none;cursor:pointer;">Clear all</button>
+  </div>
+  <div class="bm-list" id="bmList"></div>
+</div>
+
+<!-- HIGHLIGHT PICKER (floating) -->
+<div class="hl-picker" id="hlPicker">
+  <div class="hl-dot" style="background:#FFE066" onclick="applyHighlight('hl-yellow')" title="Yellow"></div>
+  <div class="hl-dot" style="background:#FFB3BA" onclick="applyHighlight('hl-pink')" title="Pink"></div>
+  <div class="hl-dot" style="background:#BAFFC9" onclick="applyHighlight('hl-green')" title="Green"></div>
+  <div class="hl-dot" style="background:#fff;border:2px solid #DDD" onclick="removeHighlight()" title="Remove">✕</div>
+</div>
+
+<script>
+const SB_URL = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
+const HDRS = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY };
+
+let currentSource = 'all';
+let currentTrad = 'all';
+let currentNoteId = null;
+let allResults = [];
+
+// ── SOURCE & FILTER ──────────────────────────────────────────────
+function setSource(src, el) {
+  currentSource = src;
+  document.querySelectorAll('.source-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('collectionFilter').style.display = (src === 'hadith' || src === 'all') ? '' : 'none';
+  document.getElementById('scholarFilter').style.display = (src === 'tafsir') ? '' : 'none';
+}
+
+function setTrad(t, el) {
+  currentTrad = t;
+  document.querySelectorAll('.trad-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+}
+
+function quickSearch(term) {
+  document.getElementById('searchInput').value = term;
+  doSearch();
+}
+
+// ── SUPABASE FETCH ───────────────────────────────────────────────
+async function sbFetch(table, params) {
+  const url = new URL(`${SB_URL}/rest/v1/${table}`);
+  Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+  const r = await fetch(url, { headers: HDRS });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.json();
+}
+
+// ── SEARCH ───────────────────────────────────────────────────────
+async function doSearch() {
+  const q = document.getElementById('searchInput').value.trim();
+  if (!q) return;
+  const container = document.getElementById('resultsContainer');
+  container.innerHTML = '<div class="loading-msg"><span class="spinner"></span>Searching...</div>';
+  document.getElementById('resultsHeader').style.display = 'none';
+
+  try {
+    const results = [];
+    const tradFilter = currentTrad !== 'all' ? { tradition: `eq.${currentTrad}` } : {};
+    const collection = document.getElementById('collectionFilter').value;
+    const scholar = document.getElementById('scholarFilter').value;
+
+    // HADITH
+    if (currentSource === 'all' || currentSource === 'hadith') {
+      const params = {
+        select: 'id,sura_id,aya_number,hadith_text,arabic_text,narrator,collection,reference,tradition,similarity_note,hadith_grade',
+        or: `hadith_text.ilike.*${q}*,arabic_text.ilike.*${q}*,narrator.ilike.*${q}*,collection.ilike.*${q}*`,
+        limit: '50',
+        ...tradFilter
+      };
+      if (collection) params.collection = `eq.${collection}`;
+      const rows = await sbFetch('hadith_connections', params);
+      rows.forEach(r => results.push({ type: 'hadith', ...r }));
+    }
+
+    // TAFSIR
+    if (currentSource === 'all' || currentSource === 'tafsir') {
+      const params = {
+        select: 'id,sura_id,aya_number,tafsir_text,source_name,author,tradition,language,era',
+        or: `tafsir_text.ilike.*${q}*,source_name.ilike.*${q}*,author.ilike.*${q}*`,
+        language: 'eq.en',
+        limit: '30',
+        ...tradFilter
+      };
+      if (scholar) params.source_name = `eq.${scholar}`;
+      const rows = await sbFetch('tafsir', params);
+      rows.forEach(r => results.push({ type: 'tafsir', ...r }));
+    }
+
+    // ASBAB
+    if (currentSource === 'all' || currentSource === 'asbab') {
+      const params = {
+        select: 'id,sura_id,aya_number,reason_text,scholar,tradition,source',
+        or: `reason_text.ilike.*${q}*,scholar.ilike.*${q}*`,
+        limit: '20',
+        ...tradFilter
+      };
+      const rows = await sbFetch('asbab_al_nuzul', params);
+      rows.forEach(r => results.push({ type: 'asbab', ...r }));
+    }
+
+    allResults = results;
+    renderResults(results, q);
+  } catch(e) {
+    container.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-title">Search error</div><div class="empty-desc">${e.message}</div></div>`;
+  }
+}
+
+// ── RENDER ───────────────────────────────────────────────────────
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function highlight(text, q) {
+  if (!text || !q) return esc(text);
+  const escaped = q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  return esc(text).replace(new RegExp(`(${escaped})`, 'gi'), '<mark class="hl-yellow">$1</mark>');
+}
+
+function renderResults(results, q) {
+  const container = document.getElementById('resultsContainer');
+  const header = document.getElementById('resultsHeader');
+  document.getElementById('resultsCount').textContent = `${results.length} result${results.length===1?'':'s'} for "${q}"`;
+  header.style.display = results.length ? 'flex' : 'none';
+
+  if (!results.length) {
+    container.innerHTML = `<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-title">No results found</div><div class="empty-desc">Try different keywords or broaden your search.</div></div>`;
+    return;
+  }
+
+  container.innerHTML = results.map(r => buildCard(r, q)).join('');
+}
+
+function buildCard(r, q) {
+  const id = `${r.type}-${r.id}`;
+  const bm = isBookmarked(id);
+  const noteText = getNote(id);
+  const verseUrl = `https://fascinating-sunburst-516df8.netlify.app`;
+
+  let typePill = '', scholarLine = '', arabicBlock = '', textBlock = '', metaLine = '';
+
+  if (r.type === 'hadith') {
+    typePill = `<span class="source-pill pill-hadith">📜 Hadith</span>`;
+    scholarLine = `<div class="card-scholar">${esc(r.collection||'Hadith')}${r.hadith_grade ? ` <span style="font-size:10px;color:var(--ink4)">(${esc(r.hadith_grade)})</span>` : ''}</div>`;
+    if (r.arabic_text) arabicBlock = `<div class="card-arabic">${esc(r.arabic_text)}</div>`;
+    textBlock = `<div class="card-text" id="text-${id}">${highlight(r.hadith_text, q)}</div>`;
+    const meta = [];
+    if (r.narrator) meta.push(`Narrator: ${r.narrator}`);
+    if (r.reference) meta.push(`📖 ${r.reference}`);
+    if (r.similarity_note) meta.push(`Similarity: ${r.similarity_note}`);
+    metaLine = meta.length ? `<div class="card-meta">${meta.map(esc).join(' · ')}</div>` : '';
+  } else if (r.type === 'tafsir') {
+    typePill = `<span class="source-pill pill-tafsir">📚 Tafsir</span>`;
+    scholarLine = `<div class="card-scholar">${esc(r.source_name||r.author||'')}</div>`;
+    textBlock = `<div class="card-text" id="text-${id}">${highlight(r.tafsir_text, q)}</div>`;
+    const meta = [];
+    if (r.author) meta.push(r.author);
+    if (r.era) meta.push(r.era);
+    metaLine = meta.length ? `<div class="card-meta">${meta.map(esc).join(' · ')}</div>` : '';
+  } else if (r.type === 'asbab') {
+    typePill = `<span class="source-pill pill-asbab">🕰 Asbāb</span>`;
+    scholarLine = `<div class="card-scholar">${esc(r.scholar||'Classical narration')}</div>`;
+    textBlock = `<div class="card-text" id="text-${id}">${highlight(r.reason_text, q)}</div>`;
+    if (r.source) metaLine = `<div class="card-meta">${esc(r.source)}</div>`;
+  }
+
+  const tradPill = r.tradition ? `<span class="trad-pill pill-${r.tradition}">${r.tradition}</span>` : '';
+
+  return `<div class="result-card" id="card-${id}">
+    <div class="card-header">
+      ${typePill}
+      ${tradPill}
+      <a class="verse-ref" href="${verseUrl}" target="_blank" title="Open verse in Quran platform">
+        ${r.sura_id}:${r.aya_number} ↗
+      </a>
+    </div>
+    <div class="card-body">
+      ${scholarLine}
+      ${arabicBlock}
+      ${textBlock}
+      ${metaLine}
+      ${noteText ? `<div class="card-notes">📝 ${esc(noteText)}</div>` : ''}
+    </div>
+    <div class="card-actions">
+      <button class="action-btn" onclick="showHlPicker('${id}',this)">🖊 Highlight</button>
+      <button class="action-btn" onclick="openNote('${id}',this)">📝 Note</button>
+      <button class="action-btn ${bm?'active':''}" id="bm-${id}" onclick="toggleBookmark('${id}',this)">🔖 ${bm?'Saved':'Save'}</button>
+      <button class="action-btn" onclick="shareCard('${id}')">📤 Share</button>
+    </div>
+  </div>`;
+}
+
+// ── HIGHLIGHT ────────────────────────────────────────────────────
+let hlTargetId = null;
+function showHlPicker(id, btn) {
+  hlTargetId = id;
+  const picker = document.getElementById('hlPicker');
+  const rect = btn.getBoundingClientRect();
+  picker.style.top = (rect.bottom + window.scrollY + 4) + 'px';
+  picker.style.left = rect.left + 'px';
+  picker.classList.add('open');
+  document.addEventListener('click', hideHlPicker, { once: true, capture: true });
+}
+function hideHlPicker(e) {
+  const picker = document.getElementById('hlPicker');
+  if (!picker.contains(e.target)) picker.classList.remove('open');
+}
+function applyHighlight(cls) {
+  if (!hlTargetId) return;
+  const el = document.getElementById('text-' + hlTargetId);
+  if (!el) return;
+  // Wrap selected text or entire text
+  const sel = window.getSelection();
+  if (sel && !sel.isCollapsed && el.contains(sel.anchorNode)) {
+    const range = sel.getRangeAt(0);
+    const mark = document.createElement('mark');
+    mark.className = cls;
+    range.surroundContents(mark);
+    sel.removeAllRanges();
+  } else {
+    // Highlight entire text element
+    el.innerHTML = `<mark class="${cls}">${el.innerHTML}</mark>`;
+  }
+  saveHighlight(hlTargetId, el.innerHTML);
+  document.getElementById('hlPicker').classList.remove('open');
+}
+function removeHighlight() {
+  if (!hlTargetId) return;
+  const el = document.getElementById('text-' + hlTargetId);
+  if (!el) return;
+  el.querySelectorAll('mark').forEach(m => {
+    m.replaceWith(...m.childNodes);
+  });
+  saveHighlight(hlTargetId, el.innerHTML);
+  document.getElementById('hlPicker').classList.remove('open');
+}
+function saveHighlight(id, html) {
+  const stored = JSON.parse(localStorage.getItem('research_hl') || '{}');
+  stored[id] = html;
+  localStorage.setItem('research_hl', JSON.stringify(stored));
+}
+function loadHighlights() {
+  const stored = JSON.parse(localStorage.getItem('research_hl') || '{}');
+  Object.entries(stored).forEach(([id, html]) => {
+    const el = document.getElementById('text-' + id);
+    if (el) el.innerHTML = html;
+  });
+}
+
+// ── NOTES ────────────────────────────────────────────────────────
+function openNote(id, btn) {
+  currentNoteId = id;
+  const r = allResults.find(x => `${x.type}-${x.id}` === id);
+  document.getElementById('noteLabel').textContent = r ? `${r.sura_id}:${r.aya_number}` : id;
+  document.getElementById('noteEditor').innerHTML = getNote(id) || '';
+  document.getElementById('noteModal').classList.add('open');
+}
+function closeNoteModal() { document.getElementById('noteModal').classList.remove('open'); }
+function saveNote() {
+  if (!currentNoteId) return;
+  const html = document.getElementById('noteEditor').innerHTML.trim();
+  const plain = document.getElementById('noteEditor').innerText.trim();
+  const stored = JSON.parse(localStorage.getItem('research_notes') || '{}');
+  if (plain) stored[currentNoteId] = plain;
+  else delete stored[currentNoteId];
+  localStorage.setItem('research_notes', JSON.stringify(stored));
+  // Update note display on card
+  const noteDiv = document.querySelector(`#card-${currentNoteId} .card-notes`);
+  if (noteDiv && plain) noteDiv.innerHTML = '📝 ' + esc(plain);
+  else if (!noteDiv && plain) {
+    const body = document.querySelector(`#card-${currentNoteId} .card-body`);
+    if (body) body.insertAdjacentHTML('beforeend', `<div class="card-notes">📝 ${esc(plain)}</div>`);
+  }
+  closeNoteModal();
+  renderBookmarks();
+}
+function deleteNote() {
+  if (!currentNoteId) return;
+  const stored = JSON.parse(localStorage.getItem('research_notes') || '{}');
+  delete stored[currentNoteId];
+  localStorage.setItem('research_notes', JSON.stringify(stored));
+  const noteDiv = document.querySelector(`#card-${currentNoteId} .card-notes`);
+  if (noteDiv) noteDiv.remove();
+  closeNoteModal();
+  renderBookmarks();
+}
+function shareNote() {
+  const text = document.getElementById('noteEditor').innerText.trim();
+  if (!text) return;
+  if (navigator.share) navigator.share({ title: 'Research Note', text });
+  else navigator.clipboard?.writeText(text).then(() => alert('Note copied to clipboard.'));
+}
+function getNote(id) {
+  const stored = JSON.parse(localStorage.getItem('research_notes') || '{}');
+  return stored[id] || '';
+}
+function nCmd(cmd) { document.getElementById('noteEditor').focus(); document.execCommand(cmd); }
+function nHL(color) {
+  document.getElementById('noteEditor').focus();
+  try { document.execCommand('styleWithCSS', false, true); } catch(e) {}
+  document.execCommand('hiliteColor', false, color);
+}
+
+// ── BOOKMARKS ────────────────────────────────────────────────────
+function isBookmarked(id) {
+  const stored = JSON.parse(localStorage.getItem('research_bm') || '{}');
+  return !!stored[id];
+}
+function toggleBookmark(id, btn) {
+  const stored = JSON.parse(localStorage.getItem('research_bm') || '{}');
+  if (stored[id]) {
+    delete stored[id];
+    btn.textContent = '🔖 Save';
+    btn.classList.remove('active');
+  } else {
+    const r = allResults.find(x => `${x.type}-${x.id}` === id);
+    if (r) stored[id] = { id, type: r.type, sura_id: r.sura_id, aya_number: r.aya_number, preview: (r.hadith_text || r.tafsir_text || r.reason_text || '').slice(0, 120), savedAt: new Date().toISOString() };
+    btn.textContent = '🔖 Saved';
+    btn.classList.add('active');
+  }
+  localStorage.setItem('research_bm', JSON.stringify(stored));
+  renderBookmarks();
+}
+function clearAllBookmarks() {
+  if (!confirm('Clear all saved items?')) return;
+  localStorage.removeItem('research_bm');
+  renderBookmarks();
+}
+function toggleBookmarks() {
+  const panel = document.getElementById('bmPanel');
+  panel.classList.toggle('open');
+  renderBookmarks();
+}
+function renderBookmarks() {
+  const stored = JSON.parse(localStorage.getItem('research_bm') || '{}');
+  const items = Object.values(stored);
+  document.getElementById('bmCountLabel').textContent = `${items.length} saved`;
+  document.getElementById('bmToggleBtn').textContent = `🔖 Saved${items.length ? ' (' + items.length + ')' : ''}`;
+  const list = document.getElementById('bmList');
+  if (!items.length) { list.innerHTML = '<div style="color:#BBB;font-style:italic;font-size:12px;padding:16px;text-align:center">No saved items yet.</div>'; return; }
+  list.innerHTML = items.sort((a,b) => new Date(b.savedAt)-new Date(a.savedAt)).map(item => `
+    <div class="bm-item">
+      <div class="bm-ref">${item.type.toUpperCase()} · ${item.sura_id}:${item.aya_number}</div>
+      <div class="bm-preview">${esc(item.preview)}${item.preview.length >= 120 ? '…' : ''}</div>
+      ${getNote(item.id) ? `<div style="font-size:11px;color:var(--gold);margin-top:4px">📝 Has note</div>` : ''}
+    </div>`).join('');
+}
+
+// ── SHARE ────────────────────────────────────────────────────────
+function shareCard(id) {
+  const r = allResults.find(x => `${x.type}-${x.id}` === id);
+  if (!r) return;
+  const text = [
+    `Quran ${r.sura_id}:${r.aya_number}`,
+    r.type === 'hadith' ? `Hadith — ${r.collection||''}` : r.type === 'tafsir' ? `Tafsir — ${r.source_name||''}` : 'Asbāb al-Nuzūl',
+    '',
+    r.hadith_text || r.tafsir_text || r.reason_text || '',
+    r.reference ? `📖 ${r.reference}` : '',
+    '',
+    'https://fascinating-sunburst-516df8.netlify.app'
+  ].filter(Boolean).join('\n');
+  if (navigator.share) navigator.share({ title: `Quran ${r.sura_id}:${r.aya_number}`, text });
+  else navigator.clipboard?.writeText(text).then(() => alert('Copied to clipboard.'));
+}
+
+// ── EXPORT ───────────────────────────────────────────────────────
+function exportResults() {
+  if (!allResults.length) return;
+  const lines = allResults.map(r => [
+    `[${r.type.toUpperCase()}] ${r.sura_id}:${r.aya_number}`,
+    r.type === 'hadith' ? `Collection: ${r.collection||''} | Ref: ${r.reference||''} | Narrator: ${r.narrator||''}` :
+    r.type === 'tafsir' ? `Scholar: ${r.source_name||r.author||''}` : `Scholar: ${r.scholar||''}`,
+    r.hadith_text || r.tafsir_text || r.reason_text || '',
+    '---'
+  ].join('\n'));
+  const blob = new Blob([lines.join('\n\n')], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'quran-research-results.txt';
+  a.click();
+}
+
+// ── INIT ─────────────────────────────────────────────────────────
+renderBookmarks();
+</script>
+</body>
+</html>
