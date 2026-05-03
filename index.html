@@ -330,7 +330,13 @@ body { font-family: 'Lato', sans-serif; background: #F5F3EC; color: #111111; }
     </div>
     <div style="background:#F8F6F0;border-bottom:1px solid #E8E4DC;padding:8px 24px;display:flex;gap:8px;align-items:center;flex-shrink:0;flex-wrap:wrap;">
       
-      <div id="langButtonsRow" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+      <button class="lang-btn active" id="btn-arabic" onclick="toggleLang('arabic')">Arabic</button>
+      <button class="lang-btn active" id="btn-translit" onclick="toggleLang('translit')">Transliteration</button>
+      <button class="lang-btn active" id="btn-english" onclick="toggleLang('english')">English</button>
+      <button class="lang-btn active" id="btn-tigrinya" onclick="toggleLang('tigrinya')">Tigrinya</button>
+      <button class="lang-btn active" id="btn-amharic" onclick="toggleLang('amharic')">Amharic</button>
+      <button class="lang-btn active" id="btn-oromo" onclick="toggleLang('oromo')">Oromo</button>
+      <button class="lang-btn active" id="btn-somali" onclick="toggleLang('somali')">Somali</button>
       <button onclick="resetLangs()" style="padding:4px 10px;border:1px solid #E74C3C;border-radius:20px;background:#fff;cursor:pointer;font-size:11px;font-weight:700;color:#E74C3C;">All On</button>
     </div>
 
@@ -629,7 +635,6 @@ async function sbSearch(table, select, column, query) {
 }
 
 async function init() {
-  buildLangButtons();
   try {
     const suras = await sbFetch('suras', { select: '*,sura_name_english,sura_name_tigrinya,sura_name_amharic', order: 'sura_id' });
     allSuras = suras;
@@ -716,7 +721,7 @@ async function loadSura(id) {
   try {
     const [ayas, translitData] = await Promise.all([
       sbFetch('ayas', {
-        select: AYA_SELECT,
+        select: 'sura_id,aya_number,arabic,aya_text,arabic_transliteration,arabic_warsh,arabic_qalun,arabic_duri,english,amharic,oromo,somali',
         sura_id: `eq.${id}`,
         order: 'aya_number'
       }),
@@ -762,7 +767,49 @@ function renderVerses(ayas, suraId) {
             <button id="copy-${aya.aya_number}" onclick="event.stopPropagation();copyVerse(${aya.aya_number},${suraId})" title="Copy visible languages" style="background:#FDF8EE;border:1px solid #E8C97B;border-radius:6px;width:32px;height:30px;font-size:14px;cursor:pointer;padding:0;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;">📋</button>
             <button onclick="event.stopPropagation();shareVerse(${aya.aya_number},${suraId})" title="Share verse" style="background:#FDF8EE;border:1px solid #E8C97B;border-radius:6px;width:32px;height:30px;font-size:14px;cursor:pointer;padding:0;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;">📤</button>
           </div>
-          ${renderAllLangBlocks({ ...aya, arabic_transliteration: translit })}
+          <div class="verse-arabic lang-arabic" style="${!langState.arabic?'display:none':''}">${arabic}</div>
+          ${translit ? `<div class="lang-translit" style="margin-top:14px;padding-bottom:12px;border-bottom:1px solid #E8DDC0;${!langState.translit?'display:none':''}">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">
+              <div style="width:24px;height:24px;border-radius:50%;background:#FDF8EE;border:1.5px solid #C9A84C;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#A88840;font-style:normal;letter-spacing:0;flex-shrink:0;">Aa</div>
+              <div style="font-size:10px;font-weight:700;letter-spacing:1.2px;color:#A88840;text-transform:uppercase;font-style:normal;">Transliteration</div>
+            </div>
+            <div style="font-size:15px;color:#1a1a1a;line-height:1.7;font-style:italic;letter-spacing:0.2px;font-weight:500;">${translit}</div>
+          </div>` : ''}
+          ${english ? `<div class="verse-english lang-english" style="margin-top:14px;padding-bottom:12px;border-bottom:1px solid #E8DDC0;font-style:normal;${!langState.english?'display:none':''}">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">
+              <div style="width:24px;height:24px;border-radius:50%;background:#E8F4FD;border:1.5px solid #1A6FA8;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#1A6FA8;font-style:normal;flex-shrink:0;">A</div>
+              <div style="font-size:10px;font-weight:700;letter-spacing:1.2px;color:#1A6FA8;text-transform:uppercase;font-style:normal;">English</div>
+            </div>
+            <div style="font-size:16px;color:#0d2840;line-height:1.7;font-weight:600;">${english}</div>
+          </div>` : ''}
+          ${tigrinya ? `<div class="verse-tigrinya lang-tigrinya" style="margin-top:14px;padding-bottom:12px;border-bottom:1px solid #E8DDC0;${!langState.tigrinya?'display:none':''}">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">
+              <div style="width:24px;height:24px;border-radius:50%;background:#F8F0E5;border:1.5px solid #8B5A2B;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#8B5A2B;font-style:normal;font-family:'Noto Sans Ethiopic',serif;flex-shrink:0;">ት</div>
+              <div style="font-size:10px;font-weight:700;letter-spacing:1.2px;color:#8B5A2B;text-transform:uppercase;font-style:normal;">Tigrinya · ትግርኛ</div>
+            </div>
+            <div style="font-size:15px;color:#5A3818;line-height:1.75;font-weight:600;">${tigrinya}</div>
+          </div>` : ''}
+          ${amharic ? `<div class="lang-amharic" style="margin-top:14px;padding-bottom:12px;border-bottom:1px solid #E8DDC0;${!langState.amharic?'display:none':''}">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">
+              <div style="width:24px;height:24px;border-radius:50%;background:#EFF5E5;border:1.5px solid #5C7A3A;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#5C7A3A;font-style:normal;font-family:'Noto Sans Ethiopic',serif;flex-shrink:0;">አ</div>
+              <div style="font-size:10px;font-weight:700;letter-spacing:1.2px;color:#5C7A3A;text-transform:uppercase;font-style:normal;">Amharic · አማርኛ</div>
+            </div>
+            <div style="font-size:15px;color:#2D5A1A;line-height:1.75;font-weight:600;">${amharic}</div>
+          </div>` : ''}
+          ${oromo ? `<div class="lang-oromo" style="margin-top:14px;padding-bottom:12px;border-bottom:1px solid #E8DDC0;${!langState.oromo?'display:none':''}">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">
+              <div style="width:24px;height:24px;border-radius:50%;background:#F5EDE2;border:1.5px solid #7A4F2B;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#7A4F2B;font-style:normal;flex-shrink:0;">O</div>
+              <div style="font-size:10px;font-weight:700;letter-spacing:1.2px;color:#7A4F2B;text-transform:uppercase;font-style:normal;">Afaan Oromoo</div>
+            </div>
+            <div style="font-size:15px;color:#7A3A14;line-height:1.7;font-weight:600;">${escapeHtml(oromo)}</div>
+          </div>` : ''}
+          ${somali ? `<div class="lang-somali" style="margin-top:14px;padding-bottom:0;${!langState.somali?'display:none':''}">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">
+              <div style="width:24px;height:24px;border-radius:50%;background:#E5EEF5;border:1.5px solid #2F5C7A;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#2F5C7A;font-style:normal;flex-shrink:0;">S</div>
+              <div style="font-size:10px;font-weight:700;letter-spacing:1.2px;color:#2F5C7A;text-transform:uppercase;font-style:normal;">Soomaali</div>
+            </div>
+            <div style="font-size:15px;color:#1A4570;line-height:1.7;font-weight:600;">${escapeHtml(somali)}</div>
+          </div>` : ''}
         </div>
         <button class="expand-btn">▼ Study</button>
       </div>
@@ -1886,48 +1933,7 @@ function toggleReadMode() {
   }
 }
 
-// ============================================================
-// LANGUAGE REGISTRY (dynamic — add a language by adding an entry)
-// ============================================================
-// Each entry describes a language column in the `ayas` table.
-// To add a NEW language:
-//   1. Add a column to `ayas` (e.g., ALTER TABLE ayas ADD COLUMN urdu TEXT)
-//   2. Populate it
-//   3. Add ONE entry below — that's it. Buttons, verse blocks, copy
-//      logic, cross-ref display, and the SELECT all update automatically.
-//
-// Fields:
-//   key:        column name in ayas + identifier in code (lowercase, no spaces)
-//   label:      what shows in the toggle button
-//   native_label: optional native-script label appended to header (e.g., "ትግርኛ")
-//   badge:      single character shown in the round colored badge
-//   color:      header text + badge border color
-//   bg:         badge background color
-//   text_color: body text color (defaults to #1a1a1a)
-//   font:       optional CSS font-family override
-//   special:    'arabic' | 'translit' | undefined  (see render path)
-//   field:      optional override for the field name on aya objects
-//               (defaults to key). e.g., translit reads aya.arabic_transliteration
-// ============================================================
-
-const LANGUAGES = [
-  { key: 'arabic',   label: 'Arabic',          badge: 'ا', color: '#1a1a1a', bg: '#FDF8EE', special: 'arabic',   field: 'arabic',                  font: "'Amiri',serif" },
-  { key: 'translit', label: 'Transliteration', badge: 'Aa', color: '#A88840', bg: '#FDF8EE', special: 'translit', field: 'arabic_transliteration', native_label: '' },
-  { key: 'english',  label: 'English',         badge: 'A',  color: '#1A6FA8', bg: '#E8F4FD', text_color: '#0d2840' },
-  { key: 'tigrinya', label: 'Tigrinya',        badge: 'ት', color: '#8B5A2B', bg: '#F8F0E5', native_label: 'ትግርኛ', text_color: '#5A3818', font: "'Noto Sans Ethiopic',serif" },
-  { key: 'amharic',  label: 'Amharic',         badge: 'አ', color: '#5C7A3A', bg: '#EFF5E5', native_label: 'አማርኛ', text_color: '#2D5A1A', font: "'Noto Sans Ethiopic',serif" },
-  { key: 'oromo',    label: 'Oromo',           badge: 'O',  color: '#7A4F2B', bg: '#F5EDE2', native_label: 'Afaan Oromoo', text_color: '#7A3A14' },
-  { key: 'somali',   label: 'Somali',          badge: 'S',  color: '#2F5C7A', bg: '#E5EEF5', native_label: 'Soomaali', text_color: '#0d2840' }
-];
-
-// The list of database column names to include in the ayas SELECT,
-// computed from the registry plus the always-needed columns.
-const AYA_BASE_COLS = ['sura_id', 'aya_number', 'aya_text', 'arabic_warsh', 'arabic_qalun', 'arabic_duri'];
-const AYA_LANG_COLS = LANGUAGES.map(l => l.field || l.key).filter((c, i, a) => a.indexOf(c) === i);
-const AYA_SELECT = [...new Set([...AYA_BASE_COLS, ...AYA_LANG_COLS])].join(',');
-
-// Default visibility — all languages on
-const langStateDefault = LANGUAGES.reduce((acc, l) => { acc[l.key] = true; return acc; }, {});
+const langStateDefault = { arabic: true, translit: true, english: true, tigrinya: true, amharic: true, oromo: true, somali: true };
 const langState = (() => {
   try {
     const saved = JSON.parse(localStorage.getItem('langState'));
@@ -1949,81 +1955,6 @@ function toggleLang(lang) {
   applyLangState();
 }
 
-// Populate the row of language toggle buttons from the LANGUAGES registry.
-// Called once on page load.
-function buildLangButtons() {
-  const row = document.getElementById('langButtonsRow');
-  if (!row) return;
-  row.innerHTML = LANGUAGES.map(l => {
-    const isOn = langState[l.key];
-    return `<button class="lang-btn${isOn ? ' active' : ''}" id="btn-${l.key}" onclick="toggleLang('${l.key}')">${l.label}</button>`;
-  }).join('');
-  // Add the "All On" button after them
-  row.innerHTML += `<button class="lang-btn lang-btn-allon" id="btn-allon" onclick="enableAllLangs()" style="background:#fff;color:#C9A84C;border:1px solid #C9A84C">All On</button>`;
-}
-
-// Render a single language block for one verse, given the language registry
-// entry and the text. Returns HTML string. Shared by verse-card render and
-// cross-ref display.
-function renderLangBlock(lang, text, opts = {}) {
-  if (!text) return '';
-  const visible = langState[lang.key] ? '' : 'display:none;';
-  const cls = `lang-${lang.key}`;
-  const trailingBorder = opts.noBorder ? 'padding-bottom:0;' : 'padding-bottom:12px;border-bottom:1px solid #E8DDC0;';
-
-  // Special render: bare Arabic (no header, just the text in big serif)
-  if (lang.special === 'arabic') {
-    return `<div class="verse-arabic ${cls}" style="${visible}">${text}</div>`;
-  }
-
-  const nativeLabel = lang.native_label ? ` · ${lang.native_label}` : '';
-  const headerLabel = `${lang.label.toUpperCase()}${nativeLabel ? ' · ' + lang.native_label : ''}`;
-
-  const fontFam = lang.font ? `font-family:${lang.font};` : '';
-  const textColor = lang.text_color || '#1a1a1a';
-
-  // Special render: transliteration (italic, slightly different look)
-  if (lang.special === 'translit') {
-    return `<div class="${cls}" style="margin-top:14px;${trailingBorder}${visible}">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">
-        <div style="width:24px;height:24px;border-radius:50%;background:${lang.bg};border:1.5px solid ${lang.color};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:${lang.color};flex-shrink:0;">${lang.badge}</div>
-        <div style="font-size:10px;font-weight:700;letter-spacing:1.2px;color:${lang.color};text-transform:uppercase;">Transliteration</div>
-      </div>
-      <div style="font-size:15px;color:#1a1a1a;line-height:1.7;font-style:italic;letter-spacing:0.2px;font-weight:500;">${text}</div>
-    </div>`;
-  }
-
-  // Standard render for any other language
-  return `<div class="${cls}" style="margin-top:14px;${trailingBorder}${visible}">
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">
-      <div style="width:24px;height:24px;border-radius:50%;background:${lang.bg};border:1.5px solid ${lang.color};display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:${lang.color};${fontFam}flex-shrink:0;">${lang.badge}</div>
-      <div style="font-size:10px;font-weight:700;letter-spacing:1.2px;color:${lang.color};text-transform:uppercase;">${lang.label}${lang.native_label ? ' · ' + lang.native_label : ''}</div>
-    </div>
-    <div style="font-size:15px;color:${textColor};line-height:1.75;font-weight:600;${fontFam}">${escapeHtml(text)}</div>
-  </div>`;
-}
-
-// Render all language blocks for an aya in registry order.
-function renderAllLangBlocks(aya) {
-  return LANGUAGES.map((lang, i) => {
-    const field = lang.field || lang.key;
-    let text = aya[field] || '';
-    // Tigrinya falls back to aya_text when tigrinya column is empty
-    if (lang.key === 'tigrinya' && !text) text = aya.aya_text || '';
-    const isLast = i === LANGUAGES.length - 1;
-    return renderLangBlock(lang, text, { noBorder: isLast });
-  }).join('');
-}
-
-function applyLangState() {
-  Object.keys(langState).forEach(lang => {
-    const btn = document.getElementById('btn-' + lang);
-    if (btn) btn.classList.toggle('active', langState[lang]);
-    document.querySelectorAll('.lang-' + lang).forEach(el => {
-      el.style.display = langState[lang] ? '' : 'none';
-    });
-  });
-}
 
 function closeWordModal(e) {
   if (e.target === document.getElementById('wordModal')) {
@@ -3691,7 +3622,7 @@ async function loadTopicVerses(t) {
 
     const promises = Object.entries(bySura).map(([suraNum, ayas]) =>
       sbFetch('ayas', {
-        select: AYA_SELECT,
+        select: 'sura_id,aya_number,arabic,arabic_transliteration,english,aya_text,amharic,oromo,somali',
         sura_id: `eq.${suraNum}`,
         aya_number: `in.(${ayas.join(',')})`,
         order: 'aya_number'
