@@ -1819,12 +1819,17 @@ async function runWordSearch(query) {
       const so = highlightAll(v.somali || '');
       return `
       <div style="background:#fff;border:1px solid #E8E4DC;border-radius:10px;margin-bottom:10px;overflow:hidden;cursor:pointer;" onclick="gotoResult(${v.sura_id},${v.aya_number},event)">
-        <div style="background:#FDF8EE;border-bottom:1px solid #E8C97B;padding:8px 14px;display:flex;align-items:center;gap:10px;">
-          <div style="width:22px;height:22px;border-radius:50%;background:#C9A84C;color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0">${v.sura_id}</div>
-          <div style="font-family:'Amiri',serif;font-size:14px;color:#1a1a1a">${ARABIC_NAMES[v.sura_id]||''}</div>
-          <div style="font-size:11px;color:#8B7355">${suraInfo?.sura_name_english || suraInfo?.sura_name_translated || ''}</div>
-          <div style="margin-left:auto;font-size:11px;font-weight:700;color:#C9A84C">${v.sura_id}:${v.aya_number}</div>
-          <div style="font-size:10px;color:#999">↗ Go</div>
+        <div style="background:#FDF8EE;border-bottom:1px solid #E8C97B;padding:8px 14px;display:flex;align-items:center;gap:8px;">
+          <div style="width:24px;height:24px;border-radius:50%;background:#C9A84C;color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0">${v.sura_id}</div>
+          <div style="flex:1;min-width:0;">
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+              <span style="font-family:'Amiri',serif;font-size:15px;color:#1a1a1a;font-weight:700">${ARABIC_NAMES[v.sura_id]||''}</span>
+              <span style="font-size:12px;color:#B8902A;font-weight:700">${suraInfo?.sura_name_english || suraInfo?.sura_name_translated || ''}</span>
+            </div>
+            <div style="font-size:11px;color:#8B7355;margin-top:1px">Surah ${v.sura_id}, Verse ${v.aya_number}</div>
+          </div>
+          <div style="font-size:12px;font-weight:700;color:#fff;background:#B8902A;border-radius:10px;padding:2px 8px;flex-shrink:0">${v.sura_id}:${v.aya_number}</div>
+          <div style="font-size:10px;color:#999;flex-shrink:0">↗</div>
         </div>
         <div style="padding:12px 14px;">
           ${v.arabic ? `<div class="lang-arabic" style="font-family:'Amiri',serif;font-size:20px;direction:rtl;text-align:right;line-height:1.8;margin-bottom:6px;${!langState.arabic?'display:none;':''}">${ar}</div>` : ''}
@@ -3155,21 +3160,23 @@ async function loadLexicon() {
   if (inp) inp.placeholder = 'Type Arabic word or English meaning...';
 }
 
+// Global store for lexicon words currently displayed
+let _currentLexWords = [];
+
 function renderLexicon(words) {
   const list = document.getElementById('lexiconList');
   if (!words.length) { list.innerHTML = '<div style="color:#BBB;padding:16px;font-size:13px;text-align:center">No words found.</div>'; return; }
-  // Store current render set for click lookup
-  list._lexWords = words;
+  _currentLexWords = words;
   list.innerHTML = words.map((w, idx) => `
-    <div style="border-bottom:1px solid #F0EDE5;cursor:pointer;" data-lex-idx="${idx}" onclick="onLexiconClick(this)">
+    <div style="border-bottom:1px solid #F0EDE5;cursor:pointer;background:#fff;" data-lex-idx="${idx}" onclick="onLexiconClick(this)">
       <div style="padding:10px 16px;display:flex;align-items:center;gap:10px;">
-        <div style="font-family:'Amiri',serif;font-size:20px;color:#1a1a1a;direction:rtl;min-width:50px;text-align:right">${w.word||''}</div>
+        <div style="font-family:'Amiri',serif;font-size:22px;color:#1a1a1a;direction:rtl;min-width:60px;text-align:right">${w.word||''}</div>
         <div style="flex:1;">
           <div style="font-size:12px;font-weight:700;color:#C9A84C">${w.transliteration||''}</div>
           <div style="font-size:11px;color:#8B7355;margin-top:1px">${w.root||''}</div>
-          <div style="font-size:11px;color:#444;margin-top:1px">${w.quranic_meaning||''}</div>
+          <div style="font-size:11px;color:#444;margin-top:1px;line-height:1.4">${w.quranic_meaning ? w.quranic_meaning.slice(0,60) + (w.quranic_meaning.length>60?'…':'') : ''}</div>
         </div>
-        <div style="font-size:10px;color:#BBB">${w.surah_number||''}:${w.ayah_number||''}</div>
+        <div style="font-size:10px;color:#BBB;flex-shrink:0">${w.surah_number||''}:${w.ayah_number||''}</div>
       </div>
     </div>`).join('');
 }
@@ -3253,17 +3260,10 @@ async function showLexiconConcordanceOnly(w) {
 }
 
 function onLexiconClick(el) {
-  const list = document.getElementById('lexiconList');
   const idx = parseInt(el.getAttribute('data-lex-idx'));
-  const words = list._lexWords || lexiconData;
-  const w = words[idx];
+  const w = _currentLexWords[idx];
   if (!w) return;
-  if (w.id) {
-    showLexiconDetail(w.id);
-  } else {
-    // No id — show detail directly with word object
-    showLexiconDetailByWord(w);
-  }
+  showLexiconDetailByWord(w);
 }
 
 async function showLexiconDetailByWord(word) {
@@ -3465,12 +3465,17 @@ async function loadLexiconConcordance(word) {
       const translit = transliterateArabic(v.arabic || '');
       return `
       <div style="background:#fff;border:1px solid #E8E4DC;border-radius:10px;margin-bottom:10px;overflow:hidden;cursor:pointer;" onclick="gotoResult(${v.sura_id},${v.aya_number},event)">
-        <div style="background:#FDF8EE;border-bottom:1px solid #E8C97B;padding:8px 14px;display:flex;align-items:center;gap:10px;">
-          <div style="width:22px;height:22px;border-radius:50%;background:#C9A84C;color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0">${v.sura_id}</div>
-          <div style="font-family:'Amiri',serif;font-size:14px;color:#1a1a1a">${ARABIC_NAMES[v.sura_id]||''}</div>
-          <div style="font-size:11px;color:#8B7355">${suraInfo?.sura_name_english || suraInfo?.sura_name_translated || ''}</div>
-          <div style="margin-left:auto;font-size:11px;font-weight:700;color:#C9A84C">${v.sura_id}:${v.aya_number}</div>
-          <div style="font-size:10px;color:#999">↗ Go</div>
+        <div style="background:#FDF8EE;border-bottom:1px solid #E8C97B;padding:8px 14px;display:flex;align-items:center;gap:8px;">
+          <div style="width:24px;height:24px;border-radius:50%;background:#C9A84C;color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0">${v.sura_id}</div>
+          <div style="flex:1;min-width:0;">
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+              <span style="font-family:'Amiri',serif;font-size:15px;color:#1a1a1a;font-weight:700">${ARABIC_NAMES[v.sura_id]||''}</span>
+              <span style="font-size:12px;color:#B8902A;font-weight:700">${suraInfo?.sura_name_english || suraInfo?.sura_name_translated || ''}</span>
+            </div>
+            <div style="font-size:11px;color:#8B7355;margin-top:1px">Surah ${v.sura_id}, Verse ${v.aya_number}</div>
+          </div>
+          <div style="font-size:12px;font-weight:700;color:#fff;background:#B8902A;border-radius:10px;padding:2px 8px;flex-shrink:0">${v.sura_id}:${v.aya_number}</div>
+          <div style="font-size:10px;color:#999;flex-shrink:0">↗</div>
         </div>
         <div style="padding:12px 14px;">
           ${v.arabic ? `<div class="lang-arabic" style="font-family:'Amiri',serif;font-size:20px;direction:rtl;text-align:right;line-height:1.8;margin-bottom:6px;${!langState.arabic?'display:none;':''}">${hl(v.arabic)}</div>` : ''}
@@ -3725,12 +3730,17 @@ async function loadTopicVerses(t) {
       const translit = v.arabic_transliteration || transliterateArabic(v.arabic || '');
       return `
       <div style="background:#fff;border:1px solid #E8E4DC;border-radius:10px;margin-bottom:10px;overflow:hidden;cursor:pointer;" onclick="gotoResult(${v.sura_id},${v.aya_number},event)">
-        <div style="background:#FDF8EE;border-bottom:1px solid #E8C97B;padding:8px 14px;display:flex;align-items:center;gap:10px;">
-          <div style="width:22px;height:22px;border-radius:50%;background:#C9A84C;color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0">${v.sura_id}</div>
-          <div style="font-family:'Amiri',serif;font-size:14px;color:#1a1a1a">${ARABIC_NAMES[v.sura_id]||''}</div>
-          <div style="font-size:11px;color:#8B7355">${suraInfo?.sura_name_english || suraInfo?.sura_name_translated || ''}</div>
-          <div style="margin-left:auto;font-size:11px;font-weight:700;color:#C9A84C">${v.sura_id}:${v.aya_number}</div>
-          <div style="font-size:10px;color:#999">↗ Go</div>
+        <div style="background:#FDF8EE;border-bottom:1px solid #E8C97B;padding:8px 14px;display:flex;align-items:center;gap:8px;">
+          <div style="width:24px;height:24px;border-radius:50%;background:#C9A84C;color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0">${v.sura_id}</div>
+          <div style="flex:1;min-width:0;">
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+              <span style="font-family:'Amiri',serif;font-size:15px;color:#1a1a1a;font-weight:700">${ARABIC_NAMES[v.sura_id]||''}</span>
+              <span style="font-size:12px;color:#B8902A;font-weight:700">${suraInfo?.sura_name_english || suraInfo?.sura_name_translated || ''}</span>
+            </div>
+            <div style="font-size:11px;color:#8B7355;margin-top:1px">Surah ${v.sura_id}, Verse ${v.aya_number}</div>
+          </div>
+          <div style="font-size:12px;font-weight:700;color:#fff;background:#B8902A;border-radius:10px;padding:2px 8px;flex-shrink:0">${v.sura_id}:${v.aya_number}</div>
+          <div style="font-size:10px;color:#999;flex-shrink:0">↗</div>
         </div>
         <div style="padding:12px 14px;">
           ${v.arabic ? `<div class="lang-arabic" style="font-family:'Amiri',serif;font-size:20px;direction:rtl;text-align:right;line-height:1.8;margin-bottom:6px;${!langState.arabic?'display:none;':''}">${hlAll(v.arabic)}</div>` : ''}
