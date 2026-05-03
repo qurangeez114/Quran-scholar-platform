@@ -3131,42 +3131,37 @@ function buildFallbackLexicon() {
 
 
 async function loadLexicon() {
-  if (lexiconLoaded) { renderLexicon(lexiconData); return; }
-  document.getElementById('lexiconList').innerHTML = '<div class="loading"><span class="spinner"></span>Loading lexicon...</div>';
-  try {
-    const rows = await sbFetch('word_analysis', {
-      select: 'id,sura_id,aya_number,word_position,arabic_word,original_meaning,root_word,modern_meaning,meaning_evolution,scholarly_explanation,lexicon_sources',
-      order: 'id',
-      limit: '500'
-    });
-    if (!Array.isArray(rows) || !rows.length) throw new Error('empty');
-    lexiconData = rows.map(r => ({
-      id: r.id,
-      word: r.arabic_word,
-      transliteration: '',
-      root: r.root_word || '',
-      quranic_meaning: r.original_meaning || '',
-      modern_meaning: r.modern_meaning || '',
-      meaning_evolution: r.meaning_evolution || '',
-      scholarly_explanation: r.scholarly_explanation || '',
-      lexicon_sources: r.lexicon_sources || '',
-      surah_number: r.sura_id,
-      ayah_number: r.aya_number,
-      position: r.word_position
-    }));
-    lexiconLoaded = true;
-    renderLexicon(lexiconData);
-  } catch(e) {
-    lexiconData = buildFallbackLexicon();
-    renderLexicon(lexiconData);
-  }
+  // Don't preload — 82,627 words is too large to preload
+  // Show a search prompt instead; search queries Supabase directly
+  const list = document.getElementById('lexiconList');
+  if (list) list.innerHTML = `
+    <div style="padding:20px 16px;text-align:center;color:#8B7355;">
+      <div style="font-family:'Amiri',serif;font-size:28px;margin-bottom:10px;">القرآن الكريم</div>
+      <div style="font-size:13px;font-weight:700;color:#C9A84C;margin-bottom:6px;">82,627 word entries</div>
+      <div style="font-size:12px;color:#999;line-height:1.6;">Type or paste any Arabic word above to search the full lexicon. You can search by Arabic word, root, or English meaning.</div>
+      <div style="margin-top:14px;display:flex;flex-wrap:wrap;gap:6px;justify-content:center;">
+        <span onclick="searchLexicon('الله')" style="font-family:'Amiri',serif;font-size:16px;padding:4px 12px;border:1px solid #E8C97B;border-radius:16px;cursor:pointer;background:#FDF8EE;color:#C9A84C;">الله</span>
+        <span onclick="searchLexicon('رحمن')" style="font-family:'Amiri',serif;font-size:16px;padding:4px 12px;border:1px solid #E8C97B;border-radius:16px;cursor:pointer;background:#FDF8EE;color:#C9A84C;">رحمن</span>
+        <span onclick="searchLexicon('صلاة')" style="font-family:'Amiri',serif;font-size:16px;padding:4px 12px;border:1px solid #E8C97B;border-radius:16px;cursor:pointer;background:#FDF8EE;color:#C9A84C;">صلاة</span>
+        <span onclick="searchLexicon('جنة')" style="font-family:'Amiri',serif;font-size:16px;padding:4px 12px;border:1px solid #E8C97B;border-radius:16px;cursor:pointer;background:#FDF8EE;color:#C9A84C;">جنة</span>
+        <span onclick="searchLexicon('نور')" style="font-family:'Amiri',serif;font-size:16px;padding:4px 12px;border:1px solid #E8C97B;border-radius:16px;cursor:pointer;background:#FDF8EE;color:#C9A84C;">نور</span>
+        <span onclick="searchLexicon('mercy')" style="font-size:13px;padding:4px 12px;border:1px solid #E8C97B;border-radius:16px;cursor:pointer;background:#FDF8EE;color:#C9A84C;">mercy</span>
+        <span onclick="searchLexicon('prayer')" style="font-size:13px;padding:4px 12px;border:1px solid #E8C97B;border-radius:16px;cursor:pointer;background:#FDF8EE;color:#C9A84C;">prayer</span>
+        <span onclick="searchLexicon('paradise')" style="font-size:13px;padding:4px 12px;border:1px solid #E8C97B;border-radius:16px;cursor:pointer;background:#FDF8EE;color:#C9A84C;">paradise</span>
+      </div>
+    </div>`;
+  // Also update the search input placeholder
+  const inp = document.getElementById('lexiconSearch');
+  if (inp) inp.placeholder = 'Type Arabic word or English meaning...';
 }
 
 function renderLexicon(words) {
   const list = document.getElementById('lexiconList');
   if (!words.length) { list.innerHTML = '<div style="color:#BBB;padding:16px;font-size:13px;text-align:center">No words found.</div>'; return; }
-  list.innerHTML = words.map(w => `
-    <div style="border-bottom:1px solid #F0EDE5;cursor:pointer;" onclick="showLexiconDetail(${w.id})">
+  // Store current render set for click lookup
+  list._lexWords = words;
+  list.innerHTML = words.map((w, idx) => `
+    <div style="border-bottom:1px solid #F0EDE5;cursor:pointer;" data-lex-idx="${idx}" onclick="onLexiconClick(this)">
       <div style="padding:10px 16px;display:flex;align-items:center;gap:10px;">
         <div style="font-family:'Amiri',serif;font-size:20px;color:#1a1a1a;direction:rtl;min-width:50px;text-align:right">${w.word||''}</div>
         <div style="flex:1;">
@@ -3182,7 +3177,6 @@ function renderLexicon(words) {
 async function searchLexicon(q) {
   const raw = (q || '').trim();
   if (!raw) {
-    // Empty: restore lexicon list, hide concordance
     renderLexicon(lexiconData);
     const sp = document.getElementById('searchResultsPanel');
     if (sp) sp.style.display = 'none';
@@ -3191,15 +3185,24 @@ async function searchLexicon(q) {
     return;
   }
 
-  // 1) Try the lexicon (word_analysis) table first using variants
-  const variants = searchVariants(raw);
+  // Show loading in lexicon list
+  const list = document.getElementById('lexiconList');
+  if (list) list.innerHTML = '<div class="loading"><span class="spinner"></span>Searching...</div>';
+
+  // Always query Supabase directly — don't limit to preloaded 500
   const cols = 'id,sura_id,aya_number,word_position,arabic_word,original_meaning,root_word,modern_meaning,meaning_evolution,scholarly_explanation,lexicon_sources';
   let results = [];
   try {
-    const tasks = [];
-    for (const v of variants) {
-      tasks.push(sbSearch('word_analysis', cols, 'original_meaning', v).catch(() => []));
-      tasks.push(sbSearch('word_analysis', cols, 'arabic_word', v).catch(() => []));
+    // Search arabic_word, root_word, and original_meaning in parallel
+    const tasks = [
+      sbSearch('word_analysis', cols, 'arabic_word', raw).catch(() => []),
+      sbSearch('word_analysis', cols, 'root_word', raw).catch(() => []),
+      sbSearch('word_analysis', cols, 'original_meaning', raw).catch(() => [])
+    ];
+    // Also try stripping diacritics for Arabic searches
+    const stripped = raw.replace(/[ً-ٰٟۖ-ۭ]/g, '');
+    if (stripped !== raw && stripped.length >= 2) {
+      tasks.push(sbSearch('word_analysis', cols, 'arabic_word', stripped).catch(() => []));
     }
     const all = (await Promise.all(tasks)).flat();
     const seen = new Set();
@@ -3219,7 +3222,7 @@ async function searchLexicon(q) {
     results = [];
   }
 
-  // 2) Fall back to local-data filter if Supabase returned nothing
+  // Fall back to local data if nothing found
   if (!results.length) {
     results = lexiconData.filter(w =>
       (w.word||'').includes(raw) || (w.quranic_meaning||'').toLowerCase().includes(raw.toLowerCase())
@@ -3246,46 +3249,71 @@ async function searchLexicon(q) {
 }
 
 async function showLexiconConcordanceOnly(w) {
+  showLexiconDetailByWord(w);
+}
+
+function onLexiconClick(el) {
+  const list = document.getElementById('lexiconList');
+  const idx = parseInt(el.getAttribute('data-lex-idx'));
+  const words = list._lexWords || lexiconData;
+  const w = words[idx];
+  if (!w) return;
+  if (w.id) {
+    showLexiconDetail(w.id);
+  } else {
+    // No id — show detail directly with word object
+    showLexiconDetailByWord(w);
+  }
+}
+
+async function showLexiconDetailByWord(word) {
   const panel = document.getElementById('searchResultsPanel');
   const resultsDiv = document.getElementById('searchResults');
   const countDiv = document.getElementById('searchCount');
   panel.style.display = 'flex';
   document.getElementById('verseArea').style.display = 'none';
-  countDiv.textContent = 'Concordance: ' + (w.word || '');
-  resultsDiv.innerHTML = '<div style="padding:20px;text-align:center;color:#BBB;font-style:italic"><span class="spinner"></span> Searching all verses...</div>';
-  loadLexiconConcordance(w);
+  countDiv.textContent = `Lexicon: ${word.word||''}`;
+
+  const dictHtml = renderLexiconDictionary(word);
+  const dictId = word.id ? `lexiconDictionary-${word.id}` : 'lexiconDictionary-inline';
+
+  // Side-by-side on desktop, stacked on mobile
+  resultsDiv.innerHTML = `
+    <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;">
+
+      <!-- LEFT: Word detail card (sticky on desktop) -->
+      <div style="flex:0 0 300px;min-width:260px;max-width:340px;position:sticky;top:8px;">
+        <div style="background:#fff;border:2px solid #E8C97B;border-radius:12px;padding:16px;">
+          <div style="text-align:center;padding-bottom:12px;border-bottom:1px solid #F0EDE5;margin-bottom:12px;">
+            <div style="font-family:'Amiri',serif;font-size:38px;color:#1a1a1a;direction:rtl;line-height:1.5">${escapeHtml(word.word||'')}</div>
+            ${word.transliteration ? `<div style="font-size:12px;color:#C9A84C;font-weight:700;margin-top:4px">${escapeHtml(word.transliteration)}</div>` : ''}
+            <div style="font-size:11px;color:#8B7355;margin-top:4px">${word.surah_number||''}:${word.ayah_number||''}</div>
+          </div>
+          <div id="${dictId}">${dictHtml}</div>
+        </div>
+      </div>
+
+      <!-- RIGHT: Concordance (all verses) -->
+      <div style="flex:1;min-width:240px;">
+        <div style="font-size:12px;color:#8B7355;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:8px;">
+          📖 Concordance
+          <span id="concordanceCount" style="font-size:11px;color:#C9A84C;font-weight:600;background:#FDF5DE;border:1px solid #E8C97B;border-radius:10px;padding:1px 8px;"></span>
+        </div>
+        <div id="lexiconConcordance">
+          <div style="padding:20px;text-align:center;color:#BBB;font-style:italic"><span class="spinner"></span> Loading concordance...</div>
+        </div>
+      </div>
+
+    </div>`;
+
+  // Load concordance immediately in parallel — don't wait
+  loadLexiconConcordance(word);
 }
 
 async function showLexiconDetail(id) {
   const word = lexiconData.find(w => w.id === id);
   if (!word) return;
-  const panel = document.getElementById('searchResultsPanel');
-  const resultsDiv = document.getElementById('searchResults');
-  const countDiv = document.getElementById('searchCount');
-  panel.style.display = 'flex';
-  document.getElementById('verseArea').style.display = 'none';
-  countDiv.textContent = `Lexicon: ${word.word}`;
-
-  // Build the dictionary panel (root, original meaning, modern meaning, evolution).
-  // Uses stored columns when available; otherwise shows "Generate with AI" buttons.
-  const dictHtml = renderLexiconDictionary(word);
-
-  // Layout: dictionary on top (acts like a left/sidebar card), concordance below
-  resultsDiv.innerHTML = `
-    <div style="background:#fff;border:1px solid #E8C97B;border-radius:12px;padding:18px;margin-bottom:14px;">
-      <div style="text-align:center;padding-bottom:12px;border-bottom:1px solid #F0EDE5;margin-bottom:12px;">
-        <div style="font-family:'Amiri',serif;font-size:38px;color:#1a1a1a;direction:rtl;margin-bottom:4px">${escapeHtml(word.word||'')}</div>
-        <div style="font-size:12px;color:#C9A84C;font-weight:700">${escapeHtml(word.transliteration||'')}</div>
-      </div>
-      <div id="lexiconDictionary-${word.id}">${dictHtml}</div>
-    </div>
-    <div style="font-size:12px;color:#8B7355;font-weight:700;letter-spacing:0.5px;margin:14px 0 8px;text-transform:uppercase">📖 Concordance — Every verse containing this word</div>
-    <div id="lexiconConcordance">
-      <div style="padding:20px;text-align:center;color:#BBB;font-style:italic"><span class="spinner"></span> Searching all verses...</div>
-    </div>`;
-
-  // Now run the concordance — find every verse where this word appears in any of the 7 languages
-  loadLexiconConcordance(word);
+  showLexiconDetailByWord(word);
 }
 
 function renderLexiconDictionary(word) {
@@ -3428,7 +3456,9 @@ async function loadLexiconConcordance(word) {
       return out;
     }
 
-    const headerCount = `<div style="font-size:12px;color:#C9A84C;font-weight:700;margin-bottom:10px;">${all.length} verse${all.length===1?'':'s'} found</div>`;
+    const countEl = document.getElementById('concordanceCount');
+    if (countEl) countEl.textContent = all.length + ' verse' + (all.length===1?'':'s');
+    const headerCount = '';
 
     box.innerHTML = headerCount + all.map(v => {
       const suraInfo = allSuras.find(s => (s.sura_id||s.id) === v.sura_id);
