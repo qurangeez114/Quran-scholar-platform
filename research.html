@@ -327,6 +327,17 @@ async function sbFetch(table, params) {
   return r.json();
 }
 
+async function sbSearch(table, select, column, q, extra) {
+  const url = new URL(`${SB_URL}/rest/v1/${table}`);
+  url.searchParams.set('select', select);
+  url.searchParams.set(column, `ilike.*${q}*`);
+  url.searchParams.set('limit', '50');
+  if (extra) Object.entries(extra).forEach(([k,v]) => url.searchParams.set(k, v));
+  const r = await fetch(url, { headers: HDRS });
+  if (!r.ok) return [];
+  return r.json();
+}
+
 // ── SEARCH ───────────────────────────────────────────────────────
 async function doSearch() {
   const q = document.getElementById('searchInput').value.trim();
@@ -341,43 +352,43 @@ async function doSearch() {
     const collection = document.getElementById('collectionFilter').value;
     const scholar = document.getElementById('scholarFilter').value;
 
-    // HADITH
+    // HADITH — search text, narrator, collection separately then dedupe
     if (currentSource === 'all' || currentSource === 'hadith') {
-      const params = {
-        select: 'id,sura_id,aya_number,hadith_text,arabic_text,narrator,collection,reference,tradition,similarity_note,hadith_grade',
-        or: `hadith_text.ilike.*${q}*,arabic_text.ilike.*${q}*,narrator.ilike.*${q}*,collection.ilike.*${q}*`,
-        limit: '50',
-        ...tradFilter
-      };
-      if (collection) params.collection = `eq.${collection}`;
-      const rows = await sbFetch('hadith_connections', params);
-      rows.forEach(r => results.push({ type: 'hadith', ...r }));
+      const hSelect = 'id,sura_id,aya_number,hadith_text,arabic_text,narrator,collection,reference,tradition,similarity_note,hadith_grade';
+      const hExtra = { ...tradFilter };
+      if (collection) hExtra.collection = `eq.${collection}`;
+      const [h1, h2, h3] = await Promise.all([
+        sbSearch('hadith_connections', hSelect, 'hadith_text', q, hExtra),
+        sbSearch('hadith_connections', hSelect, 'narrator', q, hExtra),
+        sbSearch('hadith_connections', hSelect, 'collection', q, hExtra)
+      ]);
+      const hSeen = new Set();
+      [...h1, ...h2, ...h3].forEach(r => { if (!hSeen.has(r.id)) { hSeen.add(r.id); results.push({ type: 'hadith', ...r }); } });
     }
 
     // TAFSIR
     if (currentSource === 'all' || currentSource === 'tafsir') {
-      const params = {
-        select: 'id,sura_id,aya_number,tafsir_text,source_name,author,tradition,language,era',
-        or: `tafsir_text.ilike.*${q}*,source_name.ilike.*${q}*,author.ilike.*${q}*`,
-        language: 'eq.en',
-        limit: '30',
-        ...tradFilter
-      };
-      if (scholar) params.source_name = `eq.${scholar}`;
-      const rows = await sbFetch('tafsir', params);
-      rows.forEach(r => results.push({ type: 'tafsir', ...r }));
+      const tSelect = 'id,sura_id,aya_number,tafsir_text,source_name,author,tradition,language,era';
+      const tExtra = { language: 'eq.en', ...tradFilter };
+      if (scholar) tExtra.source_name = `eq.${scholar}`;
+      const [t1, t2] = await Promise.all([
+        sbSearch('tafsir', tSelect, 'tafsir_text', q, tExtra),
+        sbSearch('tafsir', tSelect, 'source_name', q, tExtra)
+      ]);
+      const tSeen = new Set();
+      [...t1, ...t2].forEach(r => { if (!tSeen.has(r.id)) { tSeen.add(r.id); results.push({ type: 'tafsir', ...r }); } });
     }
 
     // ASBAB
     if (currentSource === 'all' || currentSource === 'asbab') {
-      const params = {
-        select: 'id,sura_id,aya_number,reason_text,scholar,tradition,source',
-        or: `reason_text.ilike.*${q}*,scholar.ilike.*${q}*`,
-        limit: '20',
-        ...tradFilter
-      };
-      const rows = await sbFetch('asbab_al_nuzul', params);
-      rows.forEach(r => results.push({ type: 'asbab', ...r }));
+      const aSelect = 'id,sura_id,aya_number,reason_text,scholar,tradition,source';
+      const aExtra = { ...tradFilter };
+      const [a1, a2] = await Promise.all([
+        sbSearch('asbab_al_nuzul', aSelect, 'reason_text', q, aExtra),
+        sbSearch('asbab_al_nuzul', aSelect, 'scholar', q, aExtra)
+      ]);
+      const aSeen = new Set();
+      [...a1, ...a2].forEach(r => { if (!aSeen.has(r.id)) { aSeen.add(r.id); results.push({ type: 'asbab', ...r }); } });
     }
 
     allResults = results;
