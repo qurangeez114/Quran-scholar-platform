@@ -281,6 +281,10 @@ mark.hl-green  { background:#BAFFC9;border-radius:2px;padding:0 1px; }
   font-size:11px;font-weight:700;color:#B8902A;
   white-space:nowrap;flex-shrink:0;
 }
+
+/* ── TTS ── */
+.verse-tts-btn { padding:5px 10px;border:1px solid #D4C9A8;border-radius:16px;background:#FDF8EE;color:#B8902A;font-size:11px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:4px; }
+.verse-tts-btn.playing { background:#B8902A;color:#fff; }
 </style>
 </head>
 <body>
@@ -861,6 +865,7 @@ function renderVerses(ayas, suraId) {
         <div class="verse-num">${suraId}:${aya.aya_number}</div>
         <div class="verse-body">
           <div class="verse-actions" style="display:flex;gap:4px;justify-content:flex-end;margin-bottom:10px;flex-wrap:wrap;">
+            <button onclick="event.stopPropagation();speakVerse(${aya.aya_number},${suraId},'english',this)" class="verse-tts-btn" title="Listen">🔊</button>
             <button id="bm-${aya.aya_number}" onclick="event.stopPropagation();toggleBookmark(${aya.aya_number},${suraId},'${arabic.replace(/'/g,"\\'")}','${english.replace(/'/g,"\\'")}','${tigrinya.replace(/'/g,"\\'")}' )" title="Bookmark" style="background:#FDF8EE;border:1px solid #E8C97B;border-radius:6px;width:32px;height:30px;font-size:14px;cursor:pointer;padding:0;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;">${isBookmarked(aya.aya_number,suraId)?'🔖':'🏷️'}</button>
             <button onclick="event.stopPropagation();showVerseHlPicker(${aya.aya_number},${suraId},this)" title="Highlight text" style="background:#FDF8EE;border:1px solid #E8C97B;border-radius:6px;width:32px;height:30px;font-size:14px;cursor:pointer;padding:0;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;">🖊</button>
             <button onclick="event.stopPropagation();openNote(${aya.aya_number},${suraId})" title="Add note" style="background:#FDF8EE;border:1px solid #E8C97B;border-radius:6px;width:32px;height:30px;font-size:14px;cursor:pointer;padding:0;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;">📝</button>
@@ -4055,6 +4060,41 @@ document.addEventListener('keydown', function(e) {
   }
 });
 
+
+
+// ── VERSE TTS ────────────────────────────────────────────────────
+const LANG_TTS_MAP = {
+  arabic:'ar-SA', english:'en-US', tigrinya:'', amharic:'am-ET',
+  oromo:'', somali:'so-SO', german:'de-DE', urdu:'ur-PK', translit:'en-US'
+};
+
+let _verseTtsSpeaking = false;
+let _verseTtsBtn = null;
+
+function speakVerse(ayaNum, suraId, lang, btn) {
+  if (!('speechSynthesis' in window)) return;
+  if (_verseTtsSpeaking) {
+    window.speechSynthesis.cancel();
+    if (_verseTtsBtn) { _verseTtsBtn.classList.remove('playing'); _verseTtsBtn.textContent = '🔊'; }
+    _verseTtsSpeaking = false;
+    if (_verseTtsBtn === btn) return;
+  }
+  const card = document.getElementById('vc-' + ayaNum);
+  if (!card) return;
+  const langEl = card.querySelector('.lang-' + lang);
+  if (!langEl) return;
+  const text = langEl.innerText.trim();
+  if (!text) return;
+  const ttsCode = LANG_TTS_MAP[lang] || 'en-US';
+  if (!ttsCode) { alert('TTS not available for ' + lang); return; }
+  const utt = new SpeechSynthesisUtterance(text);
+  utt.lang = ttsCode;
+  utt.rate = 0.85;
+  utt.onstart = () => { _verseTtsSpeaking = true; _verseTtsBtn = btn; btn.classList.add('playing'); btn.textContent = '⏹'; };
+  utt.onend = () => { _verseTtsSpeaking = false; btn.classList.remove('playing'); btn.textContent = '🔊'; };
+  utt.onerror = () => { _verseTtsSpeaking = false; btn.classList.remove('playing'); btn.textContent = '🔊'; };
+  window.speechSynthesis.speak(utt);
+}
 
 // ── LANGUAGE PICKER ─────────────────────────────────────────────
 const LANG_LABELS = {

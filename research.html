@@ -151,6 +151,22 @@ mark.hl-green{background:#BAFFC9;}
   .card-text{font-size:14px;}
   .bm-panel{width:100%;}
 }
+
+/* ── TTS & AI CHAT ── */
+.tts-btn { display:inline-flex;align-items:center;gap:4px;padding:5px 11px;border-radius:16px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid var(--gold-border);background:var(--bg3);color:var(--ink3); }
+.tts-btn:hover { background:var(--gold-pale);border-color:var(--gold);color:var(--gold); }
+.tts-btn.playing { background:var(--gold);color:#fff;border-color:var(--gold); }
+.tts-lang-select { padding:4px 8px;border:1px solid var(--gold-border);border-radius:8px;font-size:11px;background:var(--bg3);color:var(--ink);outline:none;cursor:pointer; }
+.chat-panel { display:none;border-top:1px solid #F0EDE6;padding:12px 14px;background:#FAFAF7; }
+.chat-panel.open { display:block; }
+.chat-messages { max-height:260px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;margin-bottom:10px; }
+.chat-bubble { padding:8px 12px;border-radius:12px;font-size:13px;line-height:1.6;max-width:90%; }
+.chat-bubble.user { background:var(--gold);color:#fff;align-self:flex-end;border-radius:12px 12px 4px 12px; }
+.chat-bubble.ai { background:#F5F3EC;border:1px solid #E8E4DC;color:var(--ink);align-self:flex-start;border-radius:12px 12px 12px 4px; }
+.chat-input-row { display:flex;gap:6px; }
+.chat-input { flex:1;padding:8px 12px;border:1px solid var(--gold-border);border-radius:20px;font-size:13px;outline:none;font-family:'Crimson Pro',serif; }
+.chat-send { padding:8px 14px;background:var(--gold);color:#fff;border:none;border-radius:20px;font-size:12px;font-weight:700;cursor:pointer; }
+.lang-select-row { display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap; }
 </style>
 </head>
 <body>
@@ -803,12 +819,25 @@ function buildCard(r, q) {
       ${noteText ? `<div class="card-notes">📝 ${esc(noteText)}</div>` : ''}
     </div>
     <div class="card-actions">
+      <button class="tts-btn" onclick="speakEntry('${id}',this)">🔊 Listen</button>
+      <select class="tts-lang-select" id="tts-lang-${id}" title="Select language">
+        ${LANG_REGISTRY.filter(l=>l.tts).map(l=>`<option value="${l.code}">${l.native}</option>`).join('')}
+      </select>
+      <button class="action-btn" onclick="toggleChat('${id}')">💬 Ask AI</button>
       <button class="action-btn" onclick="showHlPicker('${id}',this)">🖊 Highlight</button>
       <button class="action-btn" onclick="openNote('${id}',this)">📝 Note</button>
       <button class="action-btn ${bm?'active':''}" id="bm-${id}" onclick="toggleBookmark('${id}',this)">🔖 ${bm?'Saved':'Save'}</button>
       <button class="action-btn" onclick="copyCard('${id}',this)">📋 Copy</button>
       <button class="action-btn" onclick="shareCard('${id}')">📤 Share</button>
     </div>
+  <div class="chat-panel" id="chat-${id}">
+    <div style="font-size:11px;font-weight:700;color:var(--gold);margin-bottom:8px;">💬 Ask AI about this ${r.type}</div>
+    <div class="chat-messages" id="chat-msgs-${id}"></div>
+    <div class="chat-input-row">
+      <input class="chat-input" id="chat-input-${id}" placeholder="Ask a scholarly question..." onkeydown="if(event.key==='Enter')sendEntryChat('${id}')">
+      <button class="chat-send" onclick="sendEntryChat('${id}')">Send</button>
+    </div>
+  </div>
   </div>`;
 }
 
