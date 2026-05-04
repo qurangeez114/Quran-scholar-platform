@@ -4006,6 +4006,63 @@ document.addEventListener('keydown', function(e) {
   }
 });
 
+
+// ── LANGUAGE PICKER ─────────────────────────────────────────────
+const LANG_LABELS = {
+  arabic:'Arabic', translit:'Transliteration', english:'English',
+  tigrinya:'Tigrinya', amharic:'Amharic', oromo:'Oromo',
+  somali:'Somali', german:'German', urdu:'Urdu'
+};
+
+function toggleLangPicker() {
+  const panel = document.getElementById('langPickerPanel');
+  const overlay = document.getElementById('langPickerOverlay');
+  const isOpen = panel.style.display !== 'none';
+  panel.style.display = isOpen ? 'none' : 'block';
+  overlay.style.display = isOpen ? 'none' : 'block';
+  if (!isOpen) syncChips();
+}
+
+function closeLangPicker() {
+  document.getElementById('langPickerPanel').style.display = 'none';
+  document.getElementById('langPickerOverlay').style.display = 'none';
+}
+
+function syncChips() {
+  Object.keys(LANG_LABELS).forEach(lang => {
+    const chip = document.getElementById('chip-' + lang);
+    if (chip) chip.classList.toggle('active', !!langState[lang]);
+  });
+}
+
+function toggleLangChip(lang) {
+  langState[lang] = !langState[lang];
+  syncChips();
+  try { localStorage.setItem('langState', JSON.stringify(langState)); } catch {}
+  applyLangState();
+  updateLangBar();
+}
+
+function setAllLangs(on) {
+  Object.keys(langState).forEach(k => { langState[k] = on; });
+  try { localStorage.setItem('langState', JSON.stringify(langState)); } catch {}
+  syncChips();
+  applyLangState();
+  updateLangBar();
+}
+
+function updateLangBar() {
+  const active = Object.keys(LANG_LABELS).filter(k => langState[k]);
+  const count = document.getElementById('langCount');
+  if (count) count.textContent = active.length;
+  const pills = document.getElementById('activeLangPills');
+  if (pills) {
+    pills.innerHTML = active.map(l =>
+      `<span class="lang-pill" onclick="toggleLangChip('${l}')">${LANG_LABELS[l]} ✕</span>`
+    ).join('');
+  }
+}
+
 init();
 
 // ── VERSE HIGHLIGHT SYSTEM ──────────────────────────────────────
