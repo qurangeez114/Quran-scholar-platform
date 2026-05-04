@@ -1083,6 +1083,65 @@ function exportResults() {
   a.click();
 }
 
+
+// ── VOICE INPUT ──────────────────────────────────────────────────
+let _recognition = null;
+
+function startVoiceInput(id) {
+  const btn = document.getElementById('mic-' + id);
+  const input = document.getElementById('chat-input-' + id);
+
+  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+    alert('Voice input not supported in this browser. Please use Chrome on Android.');
+    return;
+  }
+
+  // Stop if already listening
+  if (_recognition) {
+    _recognition.stop();
+    _recognition = null;
+    if (btn) btn.textContent = '🎤';
+    return;
+  }
+
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  _recognition = new SR();
+  _recognition.lang = 'en-US';
+  _recognition.continuous = false;
+  _recognition.interimResults = false;
+
+  if (btn) { btn.textContent = '🔴'; btn.style.background = '#FFE0E0'; }
+
+  _recognition.onresult = (e) => {
+    const transcript = e.results[0][0].transcript;
+    if (input) input.value = transcript;
+    if (btn) { btn.textContent = '🎤'; btn.style.background = ''; }
+    _recognition = null;
+    // Auto-send after voice input
+    setTimeout(() => sendEntryChat(id), 300);
+  };
+
+  _recognition.onerror = (e) => {
+    if (btn) { btn.textContent = '🎤'; btn.style.background = ''; }
+    _recognition = null;
+    if (e.error !== 'aborted') alert('Voice error: ' + e.error + '. Make sure microphone is allowed.');
+  };
+
+  _recognition.onend = () => {
+    if (btn) { btn.textContent = '🎤'; btn.style.background = ''; }
+    _recognition = null;
+  };
+
+  _recognition.start();
+}
+
+// Read AI response aloud option
+function readAIResponse(text) {
+  if (!text || !_ttsSpeaking) {
+    speakText(text, 'en', null);
+  }
+}
+
 // ── INIT ─────────────────────────────────────────────────────────
 renderBookmarks();
 </script>

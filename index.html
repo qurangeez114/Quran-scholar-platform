@@ -1693,7 +1693,8 @@ function buildAIPanel(num, arabic, english, tigrinya) {
     </div>
     <div id="chat-messages-${num}" style="max-height:320px;overflow-y:auto;margin-bottom:10px;display:flex;flex-direction:column;gap:8px;"></div>
     <div class="ai-input-row">
-      <input class="ai-input" id="ai-input-${num}" placeholder="Ask anything about this verse..." onkeydown="if(event.key==='Enter')sendChat(${num})">
+      <input class="ai-input" id="ai-input-${num}" placeholder="Type or 🎤 speak your question..." onkeydown="if(event.key==='Enter')sendChat(${num})">
+      <button id="verse-mic-${num}" onclick="startVerseVoice(${num})" style="padding:9px 12px;background:#FDF8EE;border:2px solid #D4A830;border-radius:6px;font-size:15px;cursor:pointer;flex-shrink:0;" title="Speak your question">🎤</button>
       <button class="ai-btn" id="ai-btn-${num}" onclick="sendChat(${num})">Send</button>
     </div>
     <div style="display:flex;justify-content:flex-end;margin-top:4px;">
@@ -1709,9 +1710,11 @@ function renderChatMessages(num) {
   if (!msgs.length) { container.innerHTML = ''; return; }
   container.innerHTML = msgs.map(m => {
     const isUser = m.role === 'user';
+    const readBtn = !isUser ? `<div style="margin-top:6px;"><button onclick="speakText('${escapeHtml(m.content).replace(/'/g,"\\'").replace(/\`/g,'\\`')}','en',this)" style="font-size:10px;padding:2px 8px;border:1px solid #D4C9A8;border-radius:10px;background:#fff;color:#B8902A;cursor:pointer;">🔊 Read</button></div>` : '';
     return `<div style="display:flex;justify-content:${isUser?'flex-end':'flex-start'};">
       <div style="max-width:85%;padding:10px 14px;border-radius:${isUser?'16px 16px 4px 16px':'16px 16px 16px 4px'};background:${isUser?'#B8902A':'#F5F3EC'};color:${isUser?'#fff':'#1a1a1a'};font-size:14px;line-height:1.6;font-weight:${isUser?'600':'500'};border:${isUser?'none':'2px solid #D4C9A8'};">
         ${escapeHtml(m.content)}
+        ${readBtn}
       </div>
     </div>`;
   }).join('');
@@ -4114,6 +4117,56 @@ function speakVerse(ayaNum, suraId, lang, btn) {
   utt.onend = () => { _verseTtsSpeaking = false; btn.classList.remove('playing'); btn.textContent = '🔊'; };
   utt.onerror = () => { _verseTtsSpeaking = false; btn.classList.remove('playing'); btn.textContent = '🔊'; };
   window.speechSynthesis.speak(utt);
+}
+
+
+// ── VOICE INPUT FOR VERSE CHAT ───────────────────────────────────
+let _verseRecognition = null;
+
+function startVerseVoice(num) {
+  const btn = document.getElementById('verse-mic-' + num);
+  const input = document.getElementById('ai-input-' + num);
+
+  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+    alert('Voice input not supported. Please use Chrome on Android.');
+    return;
+  }
+
+  if (_verseRecognition) {
+    _verseRecognition.stop();
+    _verseRecognition = null;
+    if (btn) { btn.textContent = '🎤'; btn.style.background = '#FDF8EE'; }
+    return;
+  }
+
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  _verseRecognition = new SR();
+  _verseRecognition.lang = 'en-US';
+  _verseRecognition.continuous = false;
+  _verseRecognition.interimResults = false;
+
+  if (btn) { btn.textContent = '🔴'; btn.style.background = '#FFE0E0'; }
+
+  _verseRecognition.onresult = (e) => {
+    const transcript = e.results[0][0].transcript;
+    if (input) input.value = transcript;
+    if (btn) { btn.textContent = '🎤'; btn.style.background = '#FDF8EE'; }
+    _verseRecognition = null;
+    setTimeout(() => sendChat(num), 300);
+  };
+
+  _verseRecognition.onerror = (e) => {
+    if (btn) { btn.textContent = '🎤'; btn.style.background = '#FDF8EE'; }
+    _verseRecognition = null;
+    if (e.error !== 'aborted') alert('Voice error: ' + e.error);
+  };
+
+  _verseRecognition.onend = () => {
+    if (btn) { btn.textContent = '🎤'; btn.style.background = '#FDF8EE'; }
+    _verseRecognition = null;
+  };
+
+  _verseRecognition.start();
 }
 
 // ── LANGUAGE PICKER ─────────────────────────────────────────────
