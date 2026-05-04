@@ -772,6 +772,12 @@ function renderResults(results, q) {
   container.innerHTML = results.map(r => buildCard(r, q)).join('');
 }
 
+// Pre-compute lang options once
+function getLangOptions() {
+  if (!window.LANG_REGISTRY) return '<option value="en">English</option>';
+  return LANG_REGISTRY.filter(l=>l.tts).map(l=>`<option value="${l.code}">${l.native}</option>`).join('');
+}
+
 function buildCard(r, q) {
   const id = `${r.type}-${r.id}`;
   const bm = isBookmarked(id);
@@ -841,7 +847,7 @@ function buildCard(r, q) {
     <div class="card-actions">
       <button class="tts-btn" onclick="speakEntry('${id}',this)">🔊 Listen</button>
       <select class="tts-lang-select" id="tts-lang-${id}" title="Select language">
-        ${LANG_REGISTRY.filter(l=>l.tts).map(l=>`<option value="${l.code}">${l.native}</option>`).join('')}
+        ${getLangOptions()}
       </select>
       <button class="action-btn" onclick="toggleChat('${id}')">💬 Ask AI</button>
       <button class="action-btn" onclick="showHlPicker('${id}',this)">🖊 Highlight</button>
@@ -1247,7 +1253,6 @@ function renderChatMsgs(id) {
 }
 
 // ── VOICE INPUT ──────────────────────────────────────────────────
-let _recognition = null;
 
 function startVoiceInput(id) {
   const btn = document.getElementById('mic-' + id);
@@ -1287,6 +1292,113 @@ function startVoiceInput(id) {
 
 // ── INIT ─────────────────────────────────────────────────────────
 renderBookmarks();
+</script>
+
+
+
+<script>
+/* ===== FULL TTS UPGRADE: Hadith + Tafsir + Asbab + Verse ===== */
+
+let QG_TTS_ACTIVE_BTN = null;
+
+function qgStopTTS() {
+  if ('speechSynthesis' in window) {
+    window.speechSynthesis.cancel();
+  }
+  if (QG_TTS_ACTIVE_BTN) {
+    QG_TTS_ACTIVE_BTN.classList.remove('playing');
+    QG_TTS_ACTIVE_BTN.textContent = '🔊';
+  }
+  QG_TTS_ACTIVE_BTN = null;
+}
+
+function qgDetectLang(text, fallback) {
+  fallback = fallback || 'en-US';
+  if (!text) return fallback;
+  if (/[\u0600-\u06FF]/.test(text)) return 'ar-SA';
+  if (/[\u1200-\u137F]/.test(text)) return 'am-ET';
+  if (/[\u0750-\u077F]/.test(text)) return 'ar-SA';
+  return fallback;
+}
+
+function qgSpeakText(text, btn, lang) {
+  btn = btn || null;
+  lang = lang || null;
+  if (!('speechSynthesis' in window)) {
+    alert('Audio reading is not supported on this browser. Use Chrome on Android.');
+    return;
+  }
+  if (QG_TTS_ACTIVE_BTN === btn) { qgStopTTS(); return; }
+  qgStopTTS();
+  text = (text || '').replace(/\s+/g, ' ').trim();
+  if (!text) { alert('No text found to read.'); return; }
+  const chunks = text.match(/.{1,180}(\s|$)/g) || [text];
+  let index = 0;
+  const ttsLang = lang || qgDetectLang(text);
+  function speakNext() {
+    if (index >= chunks.length) { qgStopTTS(); return; }
+    const utter = new SpeechSynthesisUtterance(chunks[index]);
+    utter.lang = ttsLang;
+    utter.rate = 0.85;
+    utter.pitch = 1;
+    utter.onend = () => { index++; speakNext(); };
+    utter.onerror = () => { qgStopTTS(); };
+    window.speechSynthesis.speak(utter);
+  }
+  if (btn) {
+    QG_TTS_ACTIVE_BTN = btn;
+    btn.classList.add('playing');
+    btn.textContent = '\u23F9';
+  }
+  speakNext();
+}
+
+function speakScholarEntry(btn) {
+  const entry = btn.closest('.scholar-entry');
+  if (!entry) return;
+  const title = entry.querySelector('.scholar-name')?.innerText || '';
+  const body = entry.querySelector('.scholar-body')?.innerText || '';
+  const meta = entry.querySelector('.scholar-meta')?.innerText || '';
+  qgSpeakText(title + '. ' + body + '. ' + meta, btn);
+}
+
+function speakEntry(id, btn) {
+  const card = document.getElementById('card-' + id);
+  if (!card) return;
+  const arabic = card.querySelector('.card-arabic')?.innerText || '';
+  const text = document.getElementById('text-' + id)?.innerText || '';
+  const meta = card.querySelector('.card-meta')?.innerText || '';
+  const select = document.getElementById('tts-lang-' + id);
+  let lang = 'en-US';
+  if (select && select.value) {
+    const map = {ar:'ar-SA',en:'en-US',ti:'am-ET',am:'am-ET',so:'so-SO',de:'de-DE',ur:'ur-PK',fr:'fr-FR',tr:'tr-TR',id:'id-ID',fa:'fa-IR',sw:'sw-KE',bn:'bn-BD'};
+    lang = map[select.value] || 'en-US';
+  }
+  const content = (arabic ? arabic + '. ' : '') + text + (meta ? '. ' + meta : '');
+  qgSpeakText(content, btn, lang);
+}
+
+function speakVerseSelected(ayaNum, suraId, btn) {
+  const sel = document.getElementById('tts-lang-' + ayaNum);
+  const lang = sel ? sel.value : 'english';
+  const langMap = {arabic:'ar-SA',english:'en-US',german:'de-DE',urdu:'ur-PK',amharic:'am-ET',somali:'so-SO',tigrinya:'am-ET',oromo:'en-US',translit:'en-US'};
+  const card = document.getElementById('vc-' + ayaNum);
+  if (!card) return;
+  const langEl = card.querySelector('.lang-' + lang);
+  if (!langEl) { alert('No ' + lang + ' text available.'); return; }
+  const divs = langEl.querySelectorAll('div');
+  const textEl = divs.length ? divs[divs.length-1] : langEl;
+  qgSpeakText(textEl.innerText.trim(), btn, langMap[lang] || 'en-US');
+}
+
+function speakText(text, langCode, btn) {
+  langCode = langCode || 'en';
+  btn = btn || null;
+  const map = {ar:'ar-SA',en:'en-US',ti:'am-ET',am:'am-ET',so:'so-SO',de:'de-DE',ur:'ur-PK'};
+  qgSpeakText(text, btn, map[langCode] || langCode || null);
+}
+
+window.addEventListener('beforeunload', qgStopTTS);
 </script>
 </body>
 </html>
