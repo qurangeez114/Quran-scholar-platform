@@ -741,17 +741,26 @@ function buildCard(r, q) {
   const bm = isBookmarked(id);
   const noteText = getNote(id);
   const verseUrl = `https://fascinating-sunburst-516df8.netlify.app`;
+  // Build direct link with sura and aya as hash
+  const directUrl = `https://fascinating-sunburst-516df8.netlify.app?sura=${r.sura_id}&aya=${r.aya_number}`;
 
   let typePill = '', scholarLine = '', arabicBlock = '', textBlock = '', metaLine = '';
 
   if (r.type === 'hadith') {
     typePill = `<span class="source-pill pill-hadith">📜 Hadith</span>`;
-    const g = (r.hadith_grade||'').toLowerCase();
+    // Infer grade from hadith_grade column OR collection name
+    const rawGrade = r.hadith_grade && r.hadith_grade !== 'ai_synthesis' ? r.hadith_grade : '';
+    const collLower = (r.collection||'').toLowerCase();
+    const inferredGrade = rawGrade ||
+      (collLower.includes('sahih') ? 'Sahih' :
+       collLower.includes('hasan') ? 'Hasan' :
+       collLower.includes('daif') ? "Da'if" : '');
     let gradeBadge = '';
-    if (r.hadith_grade && r.hadith_grade !== 'ai_synthesis') {
+    if (inferredGrade) {
+      const g = inferredGrade.toLowerCase();
       const gradeColor = g.includes('sahih') ? '#1A7A48' : g.includes('hasan') ? '#1A6FA8' : g.includes('daif')||g.includes('weak') ? '#C0621A' : '#666';
       const gradeBg = g.includes('sahih') ? '#D5F5E3' : g.includes('hasan') ? '#D6EAF8' : g.includes('daif')||g.includes('weak') ? '#FDEBD0' : '#F0F0F0';
-      gradeBadge = `<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:${gradeBg};color:${gradeColor};border:1px solid ${gradeColor};margin-left:6px;">${esc(r.hadith_grade)}</span>`;
+      gradeBadge = `<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:${gradeBg};color:${gradeColor};border:1px solid ${gradeColor};margin-left:6px;">${esc(inferredGrade)}</span>`;
     }
     scholarLine = `<div class="card-scholar">${esc(r.collection||'Hadith')}${gradeBadge}</div>`;
     if (r.arabic_text) arabicBlock = `<div class="card-arabic">${esc(r.arabic_text)}</div>`;
@@ -782,7 +791,7 @@ function buildCard(r, q) {
     <div class="card-header">
       ${typePill}
       ${tradPill}
-      <a class="verse-ref" href="${verseUrl}" target="_blank" title="Open verse in Quran platform">
+      <a class="verse-ref" href="${directUrl}" target="_blank" title="Open verse in Quran platform">
         ${r.sura_id}:${r.aya_number} ↗
       </a>
     </div>

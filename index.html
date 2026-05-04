@@ -705,11 +705,25 @@ async function sbSearch(table, select, column, query) {
 }
 
 async function init() {
+  // Handle direct URL params e.g. ?sura=2&aya=218
+  const urlParams = new URLSearchParams(window.location.search);
+  const urlSura = parseInt(urlParams.get('sura'));
+  const urlAya = parseInt(urlParams.get('aya'));
   try {
     const suras = await sbFetch('suras', { select: '*,sura_name_english,sura_name_tigrinya,sura_name_amharic', order: 'sura_id' });
     allSuras = suras;
     renderSuraList(allSuras);
-    if (allSuras.length > 0) loadSura(allSuras[0].sura_id || 1);
+    if (urlSura && urlSura >= 1 && urlSura <= 114) {
+      await loadSura(urlSura);
+      if (urlAya) {
+        setTimeout(() => {
+          const card = document.getElementById('vc-' + urlAya);
+          if (card) { card.scrollIntoView({ behavior: 'smooth', block: 'center' }); highlightVerse(card); }
+        }, 800);
+      }
+    } else if (allSuras.length > 0) {
+      loadSura(allSuras[0].sura_id || 1);
+    }
   } catch(e) {
     document.getElementById('suraList').innerHTML = '';
     document.getElementById('verseArea').innerHTML = `<div class="error-box">⚠️ Cannot connect to Supabase.<br><br>${e.message}</div>`;
@@ -2509,17 +2523,20 @@ function rowToHadithEntry(r) {
   if (r.collection) metaParts.push(r.collection);
   if (r.reference) metaParts.push('📖 ' + r.reference);
 
-  // Grade badge — skip ai_synthesis as a grade
+  // Grade badge — infer from hadith_grade or collection name
+  const inferredGrade = (r.hadith_grade && r.hadith_grade !== 'ai_synthesis') ? r.hadith_grade :
+    (r.collection||'').toLowerCase().includes('sahih') ? 'Sahih' :
+    (r.collection||'').toLowerCase().includes('hasan') ? 'Hasan' : '';
   let gradeBadge = '';
-  if (r.hadith_grade && r.hadith_grade !== 'ai_synthesis') {
-    const g = r.hadith_grade.toLowerCase();
+  if (inferredGrade) {
+    const g = inferredGrade.toLowerCase();
     const gradeColor = g.includes('sahih') ? '#1A7A48' :
                        g.includes('hasan') ? '#1A6FA8' :
                        g.includes('daif') || g.includes('weak') ? '#C0621A' : '#666';
     const gradeBg = g.includes('sahih') ? '#D5F5E3' :
                     g.includes('hasan') ? '#D6EAF8' :
                     g.includes('daif') || g.includes('weak') ? '#FDEBD0' : '#F0F0F0';
-    gradeBadge = `<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:${gradeBg};color:${gradeColor};border:1px solid ${gradeColor};margin-left:6px;">${r.hadith_grade}</span>`;
+    gradeBadge = `<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:${gradeBg};color:${gradeColor};border:1px solid ${gradeColor};margin-left:6px;">${inferredGrade}</span>`;
   }
 
   // Mark AI-generated hadiths clearly
