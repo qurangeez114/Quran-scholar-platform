@@ -2445,34 +2445,34 @@ function formatScholarlyText(raw) {
   if (!raw) return '';
   let t = raw.trim();
 
-  // Break before "X said" patterns (single scholar)
+  // 1. Break before single scholar "X said" patterns
   t = t.replace(/\s+((?:Ibn|Abu|Al-|As-|At-|Imam|Prophet|Allah|`[A-Z])[^\n.]{2,60}?(?:said|narrated|reported|stated|mentioned|explained|commented)[,.]?)/g,
     '<br><br><strong>$1</strong>');
 
-  // Break before multi-scholar lists ending in "said that..."
-  // e.g. "Mujahid, `Amr bin Shu`ayb, Muhammad bin Ishaq... said that"
-  t = t.replace(/([A-Z][a-z]+(?:,\s[`A-Z][^\n]{3,40}){2,})\s+(said that|said,|reported that)/g,
+  // 2. Break before multi-scholar lists: "Name, Name, Name said that"
+  t = t.replace(/([A-Z][a-z`']+(?:,\s[`A-Z][^\n.]{2,40}){2,})\s+(said that|said,|reported that)/g,
     '<br><br><strong>$1 $2</strong>');
 
-  // Break before verse references e.g. (6:153) or 16:48
+  // 3. Break before verse references e.g. (9:5) or 16:48
   t = t.replace(/\s+(\(\d+:\d+\)|\b\d+:\d+\b)/g,
     '<br><br><em>$1</em>\u00a0');
 
-  // Break before parenthetical translations like (So travel freely...)
-  t = t.replace(/\s+(\([A-Z][^)]{10,200}\))/g, '<br><em>$1</em>');
+  // 4. Break before parenthetical English translations (Al-Hamdu Lillah) or (So travel...)
+  t = t.replace(/\s+(\([A-Z`][^)]{6,200}\))/g, '<br><em>$1</em>\u00a0');
 
-  // Break before common scholarly transition phrases
+  // 5. Break before common transition phrases
   t = t.replace(/\s+(In this Ayah|In other Ayat|[Mm]eaning[,]|Near the end|This refers|[Rr]eferring to|This means|The word|The verse|According to|This is because|Therefore,|Thus,|However,|Furthermore,|Additionally,|Allah said next,|Allah then said,|Allah also said,)/g,
     '<br><br>$1');
 
-  // Break after Arabic text block — put Arabic on its own line
-  t = t.replace(/([^\u0600-\u06FF])([\u0600-\u06FF][\u0600-\u06FF\s\u064B-\u065F]{5,})/g,
-    '$1<br><span dir="rtl" style="font-family:\'Amiri\',serif;font-size:16px;color:#1a1a1a;display:block;text-align:right;margin:6px 0;">$2</span>');
+  // 6. Arabic-only lines: only break Arabic to its own line when it appears
+  //    at a sentence boundary (after period or at start), NOT mid-quote
+  t = t.replace(/([.،])\s*([\u0600-\u06FF][\u0600-\u06FF\s\u064B-\u065F]{8,})/g,
+    '$1<br><span dir="rtl" style="font-family:\'Amiri\',serif;font-size:17px;color:#1a1a1a;display:block;text-align:right;margin:8px 0 4px;">$2</span>');
 
-  // Paragraph break at period followed by two+ spaces then capital
-  t = t.replace(/\.\s{2,}([A-Z])/g, '.<br><br>$1');
+  // 7. Clean up leading breaks
+  t = t.replace(/^(<br>)+/, '');
 
-  // Clean up excessive breaks
+  // 8. Clean up excessive breaks
   t = t.replace(/(<br><br>){3,}/g, '<br><br>');
 
   return t;
@@ -4832,12 +4832,7 @@ async function qgSpeakText(text, btn, lang) {
   const voice = qgPickBestVoice(voices, ttsLang);
 
   if (!voice) {
-    // Show install guide
-    const notify = document.createElement('div');
-    notify.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#1a1a1a;color:#fff;padding:10px 18px;border-radius:20px;font-size:12px;z-index:9999;text-align:center;max-width:80%;';
-    notify.textContent = 'Voice not found. Go to Android Settings → Language → Text-to-Speech → Install voice data.';
-    document.body.appendChild(notify);
-    setTimeout(() => notify.remove(), 4000);
+    // Silently skip — no voice installed for this language
     return;
   }
 
