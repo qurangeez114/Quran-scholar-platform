@@ -263,6 +263,24 @@ body { font-family: 'Lato', sans-serif; background: #F5F3EC; color: #111111; }
 mark.hl-yellow { background:#FFE066;border-radius:2px;padding:0 1px; }
 mark.hl-pink   { background:#FFB3BA;border-radius:2px;padding:0 1px; }
 mark.hl-green  { background:#BAFFC9;border-radius:2px;padding:0 1px; }
+
+.lang-chip {
+  display:inline-flex;align-items:center;gap:4px;
+  padding:8px 14px;border-radius:20px;
+  border:2px solid #D4C9A8;background:#fff;
+  font-size:13px;font-weight:700;color:#666;
+  cursor:pointer;user-select:none;transition:all 0.15s;
+}
+.lang-chip.active {
+  background:#B8902A;color:#fff;border-color:#B8902A;
+}
+.lang-pill {
+  display:inline-flex;align-items:center;gap:3px;
+  padding:3px 10px;border-radius:12px;
+  background:#FDF5DE;border:1px solid #D4A830;
+  font-size:11px;font-weight:700;color:#B8902A;
+  white-space:nowrap;flex-shrink:0;
+}
 </style>
 </head>
 <body>
@@ -346,18 +364,50 @@ mark.hl-green  { background:#BAFFC9;border-radius:2px;padding:0 1px; }
       <button onclick="document.getElementById('searchResultsPanel').style.display='none';document.getElementById('globalSearch').value=''" 
         id="clearSearch" style="display:none;padding:5px 12px;border:1px solid #E8E4DC;border-radius:20px;background:#fff;font-size:12px;color:#999;cursor:pointer;">✕ Clear</button>
     </div>
-    <div style="background:#F8F6F0;border-bottom:1px solid #E8E4DC;padding:8px 24px;display:flex;gap:8px;align-items:center;flex-shrink:0;flex-wrap:wrap;">
-      
-      <button class="lang-btn active" id="btn-arabic" onclick="toggleLang('arabic')">Arabic</button>
-      <button class="lang-btn active" id="btn-translit" onclick="toggleLang('translit')">Transliteration</button>
-      <button class="lang-btn active" id="btn-english" onclick="toggleLang('english')">English</button>
-      <button class="lang-btn active" id="btn-tigrinya" onclick="toggleLang('tigrinya')">Tigrinya</button>
-      <button class="lang-btn active" id="btn-amharic" onclick="toggleLang('amharic')">Amharic</button>
-      <button class="lang-btn active" id="btn-oromo" onclick="toggleLang('oromo')">Oromo</button>
-      <button class="lang-btn active" id="btn-somali" onclick="toggleLang('somali')">Somali</button>
-      <button class="lang-btn active" id="btn-german" onclick="toggleLang('german')">German</button>
-      <button class="lang-btn active" id="btn-urdu" onclick="toggleLang('urdu')">اردو</button>
-      <button onclick="resetLangs()" style="padding:4px 10px;border:1px solid #E74C3C;border-radius:20px;background:#fff;cursor:pointer;font-size:11px;font-weight:700;color:#E74C3C;">All On</button>
+    <div style="background:#F8F6F0;border-bottom:1px solid #E8E4DC;padding:8px 16px;display:flex;gap:8px;align-items:center;flex-shrink:0;">
+      <button onclick="toggleLangPicker()" id="langPickerBtn" style="display:flex;align-items:center;gap:6px;padding:7px 14px;border:2px solid #D4A830;border-radius:20px;background:#FDF5DE;color:#B8902A;font-size:13px;font-weight:700;cursor:pointer;flex-shrink:0;">
+        🌐 Languages <span id="langCount" style="background:#B8902A;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:2px;">9</span> <span style="font-size:10px;">▾</span>
+      </button>
+      <div id="activeLangPills" style="display:flex;gap:4px;flex-wrap:nowrap;overflow-x:auto;flex:1;-webkit-overflow-scrolling:touch;padding-bottom:2px;"></div>
+    </div>
+
+    <!-- Language Picker Overlay -->
+    <div id="langPickerOverlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.4);z-index:400;" onclick="closeLangPicker()"></div>
+    <div id="langPickerPanel" style="display:none;position:fixed;bottom:0;left:0;width:100%;background:#fff;border-radius:16px 16px 0 0;z-index:401;padding:16px 16px 32px;box-shadow:0 -4px 24px rgba(0,0,0,0.15);max-height:80vh;overflow-y:auto;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <div style="font-size:15px;font-weight:700;color:#1a1a1a;">Display Languages</div>
+        <div style="display:flex;gap:8px;">
+          <button onclick="setAllLangs(true)" style="padding:5px 12px;border:1px solid #B8902A;border-radius:16px;background:#FDF5DE;color:#B8902A;font-size:11px;font-weight:700;cursor:pointer;">All On</button>
+          <button onclick="setAllLangs(false)" style="padding:5px 12px;border:1px solid #999;border-radius:16px;background:#fff;color:#666;font-size:11px;font-weight:700;cursor:pointer;">All Off</button>
+          <button onclick="closeLangPicker()" style="padding:5px 12px;border:1px solid #E8E4DC;border-radius:16px;background:#fff;color:#999;font-size:12px;cursor:pointer;">✕ Done</button>
+        </div>
+      </div>
+
+      <!-- Arabic Script -->
+      <div style="font-size:10px;font-weight:700;color:#B8902A;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">Arabic Script</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
+        <div class="lang-chip" id="chip-arabic" onclick="toggleLangChip('arabic')">🔤 Arabic</div>
+        <div class="lang-chip" id="chip-translit" onclick="toggleLangChip('translit')">Aa Transliteration</div>
+        <div class="lang-chip" id="chip-urdu" onclick="toggleLangChip('urdu')">اردو Urdu</div>
+      </div>
+
+      <!-- African Languages -->
+      <div style="font-size:10px;font-weight:700;color:#B8902A;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">African Languages</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
+        <div class="lang-chip" id="chip-tigrinya" onclick="toggleLangChip('tigrinya')">ት Tigrinya</div>
+        <div class="lang-chip" id="chip-amharic" onclick="toggleLangChip('amharic')">አ Amharic</div>
+        <div class="lang-chip" id="chip-oromo" onclick="toggleLangChip('oromo')">O Oromo</div>
+        <div class="lang-chip" id="chip-somali" onclick="toggleLangChip('somali')">S Somali</div>
+      </div>
+
+      <!-- European Languages -->
+      <div style="font-size:10px;font-weight:700;color:#B8902A;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">European Languages</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
+        <div class="lang-chip" id="chip-english" onclick="toggleLangChip('english')">A English</div>
+        <div class="lang-chip" id="chip-german" onclick="toggleLangChip('german')">DE German</div>
+      </div>
+
+      <div style="font-size:11px;color:#999;text-align:center;margin-top:8px;">More languages coming soon</div>
     </div>
 
     <!-- Search Results Panel (overlays verse area) -->
@@ -686,7 +736,7 @@ function renderSuraList(suras) {
       <div class="sura-ayas">${s.number_of_ayas || ''}v</div>
     </div>`;
   }).join('');
-  applyLangState();
+  applyLangState(); updateLangBar();
 }
 
 function filterSuras() {
