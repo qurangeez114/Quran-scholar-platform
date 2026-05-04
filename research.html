@@ -1312,101 +1312,170 @@ renderBookmarks();
 
 
 
+
 <script>
-/* ===== FULL TTS UPGRADE: Hadith + Tafsir + Asbab + Verse ===== */
+/* ===== IMPROVED NATURAL TTS ===== */
 
 let QG_TTS_ACTIVE_BTN = null;
+let QG_VOICES_LOADED = false;
+let QG_VOICE_CACHE = {};
 
 function qgStopTTS() {
-  if ('speechSynthesis' in window) {
-    window.speechSynthesis.cancel();
-  }
+  if ('speechSynthesis' in window) window.speechSynthesis.cancel();
   if (QG_TTS_ACTIVE_BTN) {
     QG_TTS_ACTIVE_BTN.classList.remove('playing');
-    QG_TTS_ACTIVE_BTN.textContent = '🔊';
+    QG_TTS_ACTIVE_BTN.textContent = QG_TTS_ACTIVE_BTN.dataset.origText || '🔊';
   }
   QG_TTS_ACTIVE_BTN = null;
+}
+
+function qgLoadVoices() {
+  return new Promise(resolve => {
+    const voices = window.speechSynthesis.getVoices();
+    if (voices.length) { resolve(voices); return; }
+    window.speechSynthesis.onvoiceschanged = () => resolve(window.speechSynthesis.getVoices());
+    setTimeout(() => resolve(window.speechSynthesis.getVoices()), 1000);
+  });
+}
+
+function qgPickBestVoice(voices, langCode) {
+  if (QG_VOICE_CACHE[langCode]) return QG_VOICE_CACHE[langCode];
+  const lang2 = langCode.split('-')[0].toLowerCase();
+
+  // Priority: neural/enhanced > female > any match
+  const scored = voices
+    .filter(v => v.lang.toLowerCase().startsWith(lang2))
+    .map(v => {
+      const name = v.name.toLowerCase();
+      let score = 0;
+      if (name.includes('neural') || name.includes('enhanced') || name.includes('premium')) score += 10;
+      if (name.includes('female') || name.includes('woman') || name.includes('girl')) score += 3;
+      if (name.includes('natural') || name.includes('wavenet') || name.includes('studio')) score += 8;
+      if (name.includes('compact') || name.includes('legacy')) score -= 5;
+      if (v.localService) score += 2; // local voices tend to be better on Android
+      return { voice: v, score };
+    })
+    .sort((a, b) => b.score - a.score);
+
+  const best = scored.length ? scored[0].voice : null;
+  if (best) QG_VOICE_CACHE[langCode] = best;
+  return best;
 }
 
 function qgDetectLang(text, fallback) {
   fallback = fallback || 'en-US';
   if (!text) return fallback;
-  if (/[\u0600-\u06FF]/.test(text)) return 'ar-SA';
-  if (/[\u1200-\u137F]/.test(text)) return 'am-ET';
-  if (/[\u0750-\u077F]/.test(text)) return 'ar-SA';
+  if (/[؀-ۿ]/.test(text)) return 'ar-SA';
+  if (/[ሀ-፿]/.test(text)) return 'am-ET';
   return fallback;
 }
 
-function qgGetBestVoice(langCode) {
-  const voices = window.speechSynthesis.getVoices();
-  if (!voices.length) return null;
-  // Try exact match
-  let v = voices.find(v => v.lang.toLowerCase() === langCode.toLowerCase());
-  // Try prefix match (e.g. 'ar' matches 'ar-SA', 'ar-EG')
-  if (!v) v = voices.find(v => v.lang.toLowerCase().startsWith(langCode.split('-')[0].toLowerCase()));
-  return v || null;
-}
-
-function qgGetAvailableLangs() {
-  const voices = window.speechSynthesis.getVoices();
-  return voices.map(v => v.lang);
-}
-
-function qgSpeakText(text, btn, lang) {
+async function qgSpeakText(text, btn, lang) {
   btn = btn || null;
   lang = lang || null;
+
   if (!('speechSynthesis' in window)) {
-    alert('Audio reading is not supported on this browser. Use Chrome on Android.');
+    alert('Audio not supported. Use Chrome on Android.');
     return;
   }
+
   if (QG_TTS_ACTIVE_BTN === btn) { qgStopTTS(); return; }
   qgStopTTS();
+
   text = (text || '').replace(/\s+/g, ' ').trim();
-  if (!text) { alert('No text found to read.'); return; }
-  const chunks = text.match(/.{1,180}(\s|$)/g) || [text];
-  let index = 0;
+  if (!text) { alert('No text to read.'); return; }
+
   const ttsLang = lang || qgDetectLang(text);
+
+  // Load voices
+  const voices = await qgLoadVoices();
+  const voice = qgPickBestVoice(voices, ttsLang);
+
+  if (!voice) {
+    // Show install guide
+    const notify = document.createElement('div');
+    notify.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#1a1a1a;color:#fff;padding:10px 18px;border-radius:20px;font-size:12px;z-index:9999;text-align:center;max-width:80%;';
+    notify.textContent = 'Voice not found. Go to Android Settings → Language → Text-to-Speech → Install voice data.';
+    document.body.appendChild(notify);
+    setTimeout(() => notify.remove(), 4000);
+    return;
+  }
+
+  // Split into natural sentence chunks
+  const sentences = text.match(/[^.!?؟。]+[.!?؟。]+/g) || [text];
+  const chunks = [];
+  sentences.forEach(s => {
+    s = s.trim();
+    if (!s) return;
+    if (s.length <= 220) chunks.push(s);
+    else (s.match(/.{1,220}(\s|$)/g)||[s]).forEach(c => { if(c.trim()) chunks.push(c.trim()); });
+  });
+
+  let index = 0;
+
   function speakNext() {
     if (index >= chunks.length) { qgStopTTS(); return; }
+
     const utter = new SpeechSynthesisUtterance(chunks[index]);
+    utter.voice = voice;
     utter.lang = ttsLang;
-    utter.rate = 0.85;
-    utter.pitch = 1;
-    utter.onend = () => { index++; speakNext(); };
-    utter.onerror = () => { qgStopTTS(); };
+
+    // Natural speech settings
+    if (ttsLang.startsWith('ar')) {
+      utter.rate = 0.78;   // Arabic reads better slower
+      utter.pitch = 1.0;
+      utter.volume = 1.0;
+    } else if (ttsLang.startsWith('am') || ttsLang.startsWith('ti')) {
+      utter.rate = 0.80;
+      utter.pitch = 1.0;
+      utter.volume = 1.0;
+    } else {
+      utter.rate = 0.88;   // English/German/etc
+      utter.pitch = 1.0;
+      utter.volume = 1.0;
+    }
+
+    utter.onend = () => {
+      // Small pause between sentences for natural flow
+      setTimeout(() => { index++; speakNext(); }, 120);
+    };
+    utter.onerror = (e) => {
+      if (e.error !== 'interrupted') console.log('TTS error:', e.error);
+      qgStopTTS();
+    };
+
     window.speechSynthesis.speak(utter);
   }
+
   if (btn) {
+    btn.dataset.origText = btn.textContent;
     QG_TTS_ACTIVE_BTN = btn;
     btn.classList.add('playing');
-    btn.textContent = '\u23F9';
+    btn.textContent = '⏹';
   }
+
   speakNext();
 }
 
+// Wrappers
 function speakScholarEntry(btn) {
   const entry = btn.closest('.scholar-entry');
   if (!entry) return;
-  const title = entry.querySelector('.scholar-name')?.innerText || '';
   const body = entry.querySelector('.scholar-body')?.innerText || '';
   const meta = entry.querySelector('.scholar-meta')?.innerText || '';
-  qgSpeakText(title + '. ' + body + '. ' + meta, btn);
+  qgSpeakText(body + (meta ? '. ' + meta : ''), btn);
 }
 
 function speakEntry(id, btn) {
   const card = document.getElementById('card-' + id);
   if (!card) return;
-  const arabic = card.querySelector('.card-arabic')?.innerText || '';
-  const text = document.getElementById('text-' + id)?.innerText || '';
-  const meta = card.querySelector('.card-meta')?.innerText || '';
   const select = document.getElementById('tts-lang-' + id);
-  let lang = 'en-US';
-  if (select && select.value) {
-    const map = {ar:'ar-SA',en:'en-US',ti:'am-ET',am:'am-ET',so:'so-SO',de:'de-DE',ur:'ur-PK',fr:'fr-FR',tr:'tr-TR',id:'id-ID',fa:'fa-IR',sw:'sw-KE',bn:'bn-BD'};
-    lang = map[select.value] || 'en-US';
-  }
-  const content = (arabic ? arabic + '. ' : '') + text + (meta ? '. ' + meta : '');
-  qgSpeakText(content, btn, lang);
+  const langMap = {ar:'ar-SA',en:'en-US',ti:'am-ET',am:'am-ET',so:'so-SO',de:'de-DE',ur:'ur-PK',fr:'fr-FR',tr:'tr-TR',id:'id-ID',fa:'fa-IR',sw:'sw-KE',bn:'bn-BD'};
+  const lang = select ? (langMap[select.value] || 'en-US') : 'en-US';
+  let text = '';
+  if (select && select.value === 'ar') text = card.querySelector('.card-arabic')?.innerText || '';
+  if (!text) text = document.getElementById('text-' + id)?.innerText || '';
+  qgSpeakText(text, btn, lang);
 }
 
 function speakVerseSelected(ayaNum, suraId, btn) {
@@ -1426,7 +1495,7 @@ function speakText(text, langCode, btn) {
   langCode = langCode || 'en';
   btn = btn || null;
   const map = {ar:'ar-SA',en:'en-US',ti:'am-ET',am:'am-ET',so:'so-SO',de:'de-DE',ur:'ur-PK'};
-  qgSpeakText(text, btn, map[langCode] || langCode || null);
+  qgSpeakText(text, btn, map[langCode] || 'en-US');
 }
 
 window.addEventListener('beforeunload', qgStopTTS);
