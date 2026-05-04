@@ -115,8 +115,10 @@ body { font-family: 'Lato', sans-serif; background: #F5F3EC; color: #111111; }
 .tradition-btn.active { background:#B8902A; color:#fff; border-color:#B8902A; }
 .scholar-entry { background:#F5F3EC; border:2px solid #D4C9A8; border-radius:8px; padding:12px 14px; margin-bottom:10px; }
 .scholar-name { font-size:13px; font-weight:700; color:#B8902A; margin-bottom:6px; }
-.scholar-body { font-size:14px; color:#1a1a1a; line-height:1.7; font-weight:500; }
-.scholar-meta { font-size:11px; color:#666; margin-top:6px; font-style:italic; font-weight:600; }
+.scholar-body { font-size:14px; color:#1a1a1a; line-height:1.9; font-weight:500; text-align:justify; }
+.scholar-body strong { color:#8B5E1A; font-weight:700; }
+.scholar-body em { color:#666; font-style:italic; }
+.scholar-meta { font-size:11px; color:#666; margin-top:8px; font-style:italic; font-weight:600; border-top:1px solid #E8E4DC; padding-top:6px; }
 .hadith-section-divider { display:flex; align-items:center; gap:10px; margin:18px 0 10px; }
 .hadith-section-divider::before, .hadith-section-divider::after { content:''; flex:1; height:2px; background:linear-gradient(90deg, transparent, #D4C9A8, transparent); }
 .hadith-section-title { font-size:12px; font-weight:800; color:#8B6F1F; letter-spacing:1px; text-transform:uppercase; white-space:nowrap; }
@@ -2438,6 +2440,36 @@ const TOPIC_INDEX = [
 
 let allTopics = TOPIC_INDEX.map((t, idx) => ({ ...t, _idx: idx }));
 
+// ============ Scholarly text formatter ============
+function formatScholarlyText(raw) {
+  if (!raw) return '';
+  let t = raw.trim();
+
+  // Break before narrator/scholar phrases
+  t = t.replace(/\s+((?:Ibn|Abu|Al-|As-|At-|Imam|Prophet|Allah|He|It)\s[\w\s`''-]+?(?:said|narrated|reported|stated|mentioned|explained|commented)[,.]?)/g,
+    '<br><br><strong>$1</strong>');
+
+  // Break before verse references e.g. (6:153) or 16:48
+  t = t.replace(/\s+(\(\d+:\d+\)|\b\d+:\d+\b)/g,
+    '<br><br><em>$1</em>\u00a0');
+
+  // Break before common scholarly transition phrases
+  t = t.replace(/\s+(In this Ayah|In other Ayat|[Mm]eaning[,]|Near the end|This refers|[Rr]eferring to|This means|The word|The verse|According to|This is because|Therefore,|Thus,|However,|Furthermore,|Additionally,)/g,
+    '<br><br>$1');
+
+  // Break after Arabic text block followed by translation marker
+  t = t.replace(/([\u0600-\u06FF][^<]{2,30})\s+(which means|meaning|i\.e\.|that is)/gi,
+    '$1<br><em>$2</em>\u00a0');
+
+  // Paragraph break at period followed by capital (new sentence starting new thought)
+  t = t.replace(/\.\s{2,}([A-Z])/g, '.<br><br>$1');
+
+  // Clean up excessive breaks
+  t = t.replace(/(<br><br>){3,}/g, '<br><br>');
+
+  return t;
+}
+
 // ============ Tafsir / Asbab / Hadith loaders ============
 const traditionState = {}; // { "sura-aya-tafsir": "sunni", ... }
 
@@ -2454,7 +2486,7 @@ function renderScholarEntries(entries, tradition, fallbackMsg) {
         <span class="source-badge ${e.isAI ? 'source-ai' : 'source-sourced'}">${e.isAI ? 'AI Synthesis' : 'Sourced'}</span>
         <button onclick="speakScholarEntry(this)" data-text="${escapeHtml(e.text).replace(/"/g,'&quot;')}" style="padding:3px 8px;border:1px solid #D4C9A8;border-radius:12px;background:#FDF8EE;color:#B8902A;font-size:10px;font-weight:700;cursor:pointer;flex-shrink:0;">🔊</button>
       </div>
-      <div class="scholar-body">${escapeHtml(e.text)}</div>
+      <div class="scholar-body">${formatScholarlyText(escapeHtml(e.text)).replace(/\n/g,'<br><br>')}</div>
       ${e.meta ? `<div class="scholar-meta">${escapeHtml(e.meta)}</div>` : ''}
     </div>
   `).join('');
