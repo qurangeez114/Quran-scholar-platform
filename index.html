@@ -2403,7 +2403,7 @@ function renderScholarEntries(entries, tradition, fallbackMsg) {
   }
   return entries.map(e => `
     <div class="scholar-entry" data-tradition="${e.tradition || ''}" style="${e.tradition && e.tradition !== tradition ? 'display:none' : ''}">
-      <div class="scholar-name">${escapeHtml(e.scholar || 'Unknown')}<span class="source-badge ${e.isAI ? 'source-ai' : 'source-sourced'}">${e.isAI ? 'AI Synthesis' : 'Sourced'}</span></div>
+      <div class="scholar-name">${e.scholar || 'Unknown'}<span class="source-badge ${e.isAI ? 'source-ai' : 'source-sourced'}">${e.isAI ? 'AI Synthesis' : 'Sourced'}</span></div>
       <div class="scholar-body">${escapeHtml(e.text)}</div>
       ${e.meta ? `<div class="scholar-meta">${escapeHtml(e.meta)}</div>` : ''}
     </div>
@@ -2508,13 +2508,28 @@ function rowToHadithEntry(r) {
   if (r.narrator) metaParts.push(`Narrator: ${r.narrator}`);
   if (r.collection) metaParts.push(r.collection);
   if (r.reference) metaParts.push('📖 ' + r.reference);
+
+  // Grade badge
+  let gradeBadge = '';
+  if (r.hadith_grade) {
+    const g = r.hadith_grade.toLowerCase();
+    const gradeColor = g.includes('sahih') ? '#1A7A48' :
+                       g.includes('hasan') ? '#1A6FA8' :
+                       g.includes('daif') || g.includes('weak') ? '#C0621A' : '#666';
+    const gradeBg = g.includes('sahih') ? '#D5F5E3' :
+                    g.includes('hasan') ? '#D6EAF8' :
+                    g.includes('daif') || g.includes('weak') ? '#FDEBD0' : '#F0F0F0';
+    gradeBadge = `<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:${gradeBg};color:${gradeColor};border:1px solid ${gradeColor};margin-left:6px;">${r.hadith_grade}</span>`;
+  }
+
   return {
-    scholar: r.collection || 'Hadith',
+    scholar: (r.collection || 'Hadith') + (gradeBadge ? ' ' + gradeBadge : ''),
     tradition: r.tradition,
     text: body,
     meta: metaParts.join(' · ') || null,
     isAI: false,
-    aya_number: r.aya_number
+    aya_number: r.aya_number,
+    gradeBadge
   };
 }
 
@@ -2552,7 +2567,7 @@ async function loadHadithPanel(sura, aya) {
 
   try {
     const rows = await sbFetch('hadith_connections', {
-      select: 'hadith_text,narrator,collection,reference,tradition,similarity_note,difference_note,aya_number',
+      select: 'hadith_text,narrator,collection,reference,hadith_grade,tradition,similarity_note,difference_note,aya_number',
       sura_id: `eq.${sura}`,
       aya_number: `eq.${aya}`
     });
@@ -2562,7 +2577,7 @@ async function loadHadithPanel(sura, aya) {
   if (directEntries.length === 0) {
     try {
       const rows = await sbFetch('hadith_connections', {
-        select: 'hadith_text,narrator,collection,reference,tradition,similarity_note,difference_note,aya_number',
+        select: 'hadith_text,narrator,collection,reference,hadith_grade,tradition,similarity_note,difference_note,aya_number',
         sura_id: `eq.${sura}`,
         order: 'aya_number',
         limit: 50
