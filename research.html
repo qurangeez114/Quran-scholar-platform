@@ -72,7 +72,7 @@ body{font-family:'Crimson Pro',serif;background:var(--bg);color:var(--ink);min-h
 @keyframes spin{to{transform:rotate(360deg)}}
 
 /* Result card */
-.result-card{background:var(--bg3);border:1px solid #E8E4DC;border-radius:12px;margin-bottom:12px;overflow:hidden;transition:box-shadow 0.15s;}
+.result-card{background:var(--bg3);border:1px solid #E8E4DC;border-radius:12px;margin-bottom:12px;overflow:visible;transition:box-shadow 0.15s;}
 .result-card:hover{box-shadow:0 4px 16px rgba(184,144,42,0.12);}
 .card-header{padding:10px 14px;display:flex;align-items:center;gap:10px;border-bottom:1px solid #F0EDE6;}
 .source-pill{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:12px;font-size:10px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;}
@@ -849,7 +849,7 @@ function buildCard(r, q) {
       <select class="tts-lang-select" id="tts-lang-${id}" title="Select language">
         ${getLangOptions()}
       </select>
-      <button class="action-btn" onclick="toggleChat('${id}')">💬 Ask AI</button>
+      <button class="action-btn" id="chat-btn-${id}" onclick="toggleChatBtn('${id}',this)">💬 Ask AI</button>
       <button class="action-btn" onclick="showHlPicker('${id}',this)">🖊 Highlight</button>
       <button class="action-btn" onclick="openNote('${id}',this)">📝 Note</button>
       <button class="action-btn ${bm?'active':''}" id="bm-${id}" onclick="toggleBookmark('${id}',this)">🔖 ${bm?'Saved':'Save'}</button>
@@ -1193,6 +1193,22 @@ function toggleChat(id) {
   if (!isOpen && !entryChats[id]) entryChats[id] = [];
 }
 
+function toggleChatBtn(id, btn) {
+  toggleChat(id);
+  const panel = document.getElementById('chat-' + id);
+  const isNowOpen = panel && panel.classList.contains('open');
+  if (btn) {
+    btn.textContent = isNowOpen ? '✕ Close AI' : '💬 Ask AI';
+    btn.classList.toggle('active', isNowOpen);
+  }
+  if (isNowOpen) {
+    setTimeout(() => {
+      const input = document.getElementById('chat-input-' + id);
+      if (input) input.focus();
+    }, 100);
+  }
+}
+
 async function sendEntryChat(id) {
   const input = document.getElementById('chat-input-' + id);
   const q = (input ? input.value : '').trim();
@@ -1319,6 +1335,21 @@ function qgDetectLang(text, fallback) {
   if (/[\u1200-\u137F]/.test(text)) return 'am-ET';
   if (/[\u0750-\u077F]/.test(text)) return 'ar-SA';
   return fallback;
+}
+
+function qgGetBestVoice(langCode) {
+  const voices = window.speechSynthesis.getVoices();
+  if (!voices.length) return null;
+  // Try exact match
+  let v = voices.find(v => v.lang.toLowerCase() === langCode.toLowerCase());
+  // Try prefix match (e.g. 'ar' matches 'ar-SA', 'ar-EG')
+  if (!v) v = voices.find(v => v.lang.toLowerCase().startsWith(langCode.split('-')[0].toLowerCase()));
+  return v || null;
+}
+
+function qgGetAvailableLangs() {
+  const voices = window.speechSynthesis.getVoices();
+  return voices.map(v => v.lang);
 }
 
 function qgSpeakText(text, btn, lang) {
