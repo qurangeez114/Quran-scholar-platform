@@ -854,7 +854,8 @@ function buildCard(r, q) {
     <div style="font-size:11px;font-weight:700;color:var(--gold);margin-bottom:8px;">💬 Ask AI about this ${r.type}</div>
     <div class="chat-messages" id="chat-msgs-${id}"></div>
     <div class="chat-input-row">
-      <input class="chat-input" id="chat-input-${id}" placeholder="Ask a scholarly question..." onkeydown="if(event.key==='Enter')sendEntryChat('${id}')">
+      <button id="mic-${id}" onclick="startVoiceInput('${id}')" style="padding:8px 10px;border:1px solid var(--gold-border);border-radius:20px;background:var(--bg3);font-size:14px;cursor:pointer;flex-shrink:0;" title="Speak">🎤</button>
+      <input class="chat-input" id="chat-input-${id}" placeholder="Type or 🎤 speak..." onkeydown="if(event.key==='Enter')sendEntryChat('${id}')">
       <button class="chat-send" onclick="sendEntryChat('${id}')">Send</button>
     </div>
   </div>
@@ -1140,6 +1141,148 @@ function readAIResponse(text) {
   if (!text || !_ttsSpeaking) {
     speakText(text, 'en', null);
   }
+}
+
+
+// ── TTS SPEAK ENTRY ──────────────────────────────────────────────
+async function speakEntry(id, btn) {
+  const r = allResults.find(x => `${x.type}-${x.id}` === id);
+  if (!r) return;
+  const langSelect = document.getElementById('tts-lang-' + id);
+  const langCode = langSelect ? langSelect.value : 'en';
+  let text = '';
+  if (langCode === 'ar' && r.arabic_text) text = r.arabic_text;
+  else text = r.hadith_text || r.tafsir_text || r.reason_text || '';
+  if (!text) { alert('No text available.'); return; }
+  // If non-English/Arabic and no stored translation, translate with AI
+  if (!['en','ar'].includes(langCode)) {
+    const langName = LANG_REGISTRY.find(l => l.code === langCode)?.name || langCode;
+    btn.textContent = '⏳ Translating...';
+    btn.disabled = true;
+    try {
+      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method:'POST',
+        headers:{'Content-Type':'application/json','anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+        body: JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:500,messages:[{role:'user',content:`Translate to ${langName}. Return ONLY the translation:
+
+${text.slice(0,600)}`}]})
+      });
+      const data = await resp.json();
+      text = data.content?.[0]?.text || text;
+    } catch(e) {}
+    btn.disabled = false;
+    btn.textContent = '🔊 Listen';
+  }
+  speakText(text, langCode, btn);
+}
+
+// ── AI CHAT PER ENTRY ────────────────────────────────────────────
+const entryChats = {};
+
+function toggleChat(id) {
+  const panel = document.getElementById('chat-' + id);
+  if (!panel) return;
+  const isOpen = panel.classList.contains('open');
+  panel.classList.toggle('open');
+  if (!isOpen && !entryChats[id]) entryChats[id] = [];
+}
+
+async function sendEntryChat(id) {
+  const input = document.getElementById('chat-input-' + id);
+  const q = (input ? input.value : '').trim();
+  if (!q) return;
+  if (input) input.value = '';
+  const r = allResults.find(x => `${x.type}-${x.id}` === id);
+  if (!r) return;
+  if (!entryChats[id]) entryChats[id] = [];
+  entryChats[id].push({ role:'user', content: q });
+  renderChatMsgs(id);
+
+  const context = r.type === 'hadith'
+    ? `Hadith from ${r.collection||''}: "${(r.hadith_text||'').slice(0,500)}"`
+    : r.type === 'tafsir'
+    ? `Tafsir by ${r.source_name||r.author||''}: "${(r.tafsir_text||'').slice(0,500)}"`
+    : `Asbab al-Nuzul by ${r.scholar||''}: "${(r.reason_text||'').slice(0,500)}"`;
+
+  const msgEl = document.getElementById('chat-msgs-' + id);
+  if (msgEl) {
+    const loading = document.createElement('div');
+    loading.className = 'chat-bubble ai';
+    loading.innerHTML = '<span class="spinner"></span>';
+    msgEl.appendChild(loading);
+    msgEl.scrollTop = msgEl.scrollHeight;
+  }
+
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method:'POST',
+      headers:{'Content-Type':'application/json','anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body: JSON.stringify({
+        model:'claude-sonnet-4-20250514', max_tokens:600,
+        system:`You are a Quranic scholar. The user is studying Quran ${r.sura_id}:${r.aya_number}. ${context}. Answer questions concisely and accurately.`,
+        messages: entryChats[id]
+      })
+    });
+    const data = await resp.json();
+    const answer = data.content?.[0]?.text || 'Could not get response.';
+    entryChats[id].push({ role:'assistant', content: answer });
+  } catch(e) {
+    entryChats[id].push({ role:'assistant', content: 'Connection error. Please try again.' });
+  }
+  renderChatMsgs(id);
+}
+
+function renderChatMsgs(id) {
+  const messages = document.getElementById('chat-msgs-' + id);
+  if (!messages) return;
+  // Remove loading spinner
+  const spinner = messages.querySelector('.spinner');
+  if (spinner) spinner.closest('.chat-bubble')?.remove();
+  messages.innerHTML = (entryChats[id]||[]).map(m => `
+    <div class="chat-bubble ${m.role === 'user' ? 'user' : 'ai'}">
+      ${esc(m.content)}
+      ${m.role === 'assistant' ? `<div style="margin-top:6px;"><button onclick="speakText(this.closest('.chat-bubble').innerText.split('🔊')[0].trim(),'en',this)" style="font-size:10px;padding:2px 8px;border:1px solid #D4C9A8;border-radius:10px;background:#fff;color:#B8902A;cursor:pointer;">🔊 Read</button></div>` : ''}
+    </div>`).join('');
+  messages.scrollTop = messages.scrollHeight;
+}
+
+// ── VOICE INPUT ──────────────────────────────────────────────────
+let _recognition = null;
+
+function startVoiceInput(id) {
+  const btn = document.getElementById('mic-' + id);
+  const input = document.getElementById('chat-input-' + id);
+  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+    alert('Voice input not supported. Please use Chrome on Android.');
+    return;
+  }
+  if (_recognition) {
+    _recognition.stop(); _recognition = null;
+    if (btn) { btn.textContent = '🎤'; btn.style.background = ''; }
+    return;
+  }
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  _recognition = new SR();
+  _recognition.lang = 'en-US';
+  _recognition.continuous = false;
+  _recognition.interimResults = false;
+  if (btn) { btn.textContent = '🔴'; btn.style.background = '#FFE0E0'; }
+  _recognition.onresult = (e) => {
+    const transcript = e.results[0][0].transcript;
+    if (input) input.value = transcript;
+    if (btn) { btn.textContent = '🎤'; btn.style.background = ''; }
+    _recognition = null;
+    setTimeout(() => sendEntryChat(id), 300);
+  };
+  _recognition.onerror = () => {
+    if (btn) { btn.textContent = '🎤'; btn.style.background = ''; }
+    _recognition = null;
+  };
+  _recognition.onend = () => {
+    if (btn) { btn.textContent = '🎤'; btn.style.background = ''; }
+    _recognition = null;
+  };
+  _recognition.start();
 }
 
 // ── INIT ─────────────────────────────────────────────────────────
