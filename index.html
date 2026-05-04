@@ -2509,9 +2509,9 @@ function rowToHadithEntry(r) {
   if (r.collection) metaParts.push(r.collection);
   if (r.reference) metaParts.push('📖 ' + r.reference);
 
-  // Grade badge
+  // Grade badge — skip ai_synthesis as a grade
   let gradeBadge = '';
-  if (r.hadith_grade) {
+  if (r.hadith_grade && r.hadith_grade !== 'ai_synthesis') {
     const g = r.hadith_grade.toLowerCase();
     const gradeColor = g.includes('sahih') ? '#1A7A48' :
                        g.includes('hasan') ? '#1A6FA8' :
@@ -2522,12 +2522,15 @@ function rowToHadithEntry(r) {
     gradeBadge = `<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:${gradeBg};color:${gradeColor};border:1px solid ${gradeColor};margin-left:6px;">${r.hadith_grade}</span>`;
   }
 
+  // Mark AI-generated hadiths clearly
+  const isAIGenerated = r.hadith_grade === 'ai_synthesis' || r.is_ai_generated;
+
   return {
     scholar: (r.collection || 'Hadith') + (gradeBadge ? ' ' + gradeBadge : ''),
     tradition: r.tradition,
     text: body,
     meta: metaParts.join(' · ') || null,
-    isAI: false,
+    isAI: isAIGenerated,
     aya_number: r.aya_number,
     gradeBadge
   };
