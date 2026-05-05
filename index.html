@@ -1095,12 +1095,12 @@ async function loadSiraPanel(aya, sura) {
       const [vmaps, tafsirRows, asbabRows, hadithRows] = await Promise.all([
         // All verse maps for this event
         fetch(`${SUPABASE_URL}/rest/v1/sira_verse_map?sira_id=eq.${ev.id}&select=sura,aya,applies_to_full_sura`, { headers: HEADERS }).then(r => r.json()),
-        // Tafsir for the current verse
+        // Tafsir for the current verse — correct columns: sura, aya
         fetch(`${SUPABASE_URL}/rest/v1/tafsir_entries?sura=eq.${sura}&aya=eq.${aya}&language=eq.en&select=scholar_name,source_name,content&limit=3`, { headers: HEADERS }).then(r => r.json()),
-        // Asbab for the current verse
-        fetch(`${SUPABASE_URL}/rest/v1/asbab_al_nuzul?sura_number=eq.${sura}&aya_number=eq.${aya}&select=narrative,source&limit=2`, { headers: HEADERS }).then(r => r.json()),
-        // Hadith connections for the current verse
-        fetch(`${SUPABASE_URL}/rest/v1/hadith_connections?sura_id=eq.${sura}&aya_number=eq.${aya}&select=hadith_text,collection,hadith_number&limit=3`, { headers: HEADERS }).then(r => r.json())
+        // Asbab for the current verse — correct columns: sura_id, aya_number, reason_text
+        fetch(`${SUPABASE_URL}/rest/v1/asbab_al_nuzul?sura_id=eq.${sura}&aya_number=eq.${aya}&select=scholar,reason_text,source&limit=2`, { headers: HEADERS }).then(r => r.json()),
+        // Hadith connections — correct columns: sura_id, aya_number
+        fetch(`${SUPABASE_URL}/rest/v1/hadith_connections?sura_id=eq.${sura}&aya_number=eq.${aya}&select=hadith_text,collection,hadith_number,reference,narrator&limit=3`, { headers: HEADERS }).then(r => r.json())
       ]);
       return { ...ev, vmaps, tafsirRows, asbabRows, hadithRows };
     }));
@@ -1129,8 +1129,8 @@ async function loadSiraPanel(aya, sura) {
         <div class="sira-section-label">🕰 Asbāb al-Nuzūl</div>
         ${ev.asbabRows.map(a => `
           <div class="sira-ref-item">
-            ${a.source ? `<strong>${a.source}:</strong>` : ''}
-            <div style="margin-top:4px;font-size:12px;line-height:1.7;">${(a.narrative||'').slice(0,400)}${(a.narrative||'').length>400?'…':''}</div>
+            ${a.scholar ? `<strong>${a.scholar}:</strong>` : ''}
+            <div style="margin-top:4px;font-size:12px;line-height:1.7;">${(a.reason_text||'').slice(0,400)}${(a.reason_text||'').length>400?'…':''}</div>
           </div>`).join('')}` : '';
 
       // Hadith section
@@ -1138,8 +1138,10 @@ async function loadSiraPanel(aya, sura) {
         <div class="sira-section-label">📜 Hadith</div>
         ${ev.hadithRows.map(h => `
           <div class="sira-ref-item">
-            <strong>${h.collection||''} ${h.hadith_number||''}</strong>
+            <strong>${h.collection||'Hadith'}${h.hadith_number?' #'+h.hadith_number:''}</strong>
+            ${h.narrator?`<span style="font-size:11px;color:#888;margin-left:6px;">— ${h.narrator}</span>`:''}
             <div style="margin-top:4px;font-size:12px;line-height:1.7;">${(h.hadith_text||'').slice(0,400)}${(h.hadith_text||'').length>400?'…':''}</div>
+            ${h.reference?`<div style="font-size:10px;color:#B8902A;margin-top:4px;">📖 ${h.reference}</div>`:''}
           </div>`).join('')}` : '';
 
       return `
