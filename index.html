@@ -314,6 +314,7 @@ mark.hl-green  { background:#BAFFC9;border-radius:2px;padding:0 1px; }
       <button id="tab-topics" onclick="switchSidebarTab('topics')" style="flex:1;padding:9px;font-size:10px;font-weight:700;text-transform:uppercase;border:none;background:#fff;color:#999;cursor:pointer;border-bottom:2px solid transparent;">Topics</button>
       <button id="tab-lexicon" onclick="switchSidebarTab('lexicon')" style="flex:1;padding:9px;font-size:10px;font-weight:700;text-transform:uppercase;border:none;background:#fff;color:#999;cursor:pointer;border-bottom:2px solid transparent;">Lexicon</button>
       <button id="tab-variants" onclick="switchSidebarTab('variants')" style="flex:1;padding:9px;font-size:10px;font-weight:700;text-transform:uppercase;border:none;background:#fff;color:#999;cursor:pointer;border-bottom:2px solid transparent;">Variants</button>
+      <button id="tab-sira" onclick="switchSidebarTab('sira');loadSiraSidebar()" style="flex:1;padding:9px;font-size:10px;font-weight:700;text-transform:uppercase;border:none;background:#fff;color:#999;cursor:pointer;border-bottom:2px solid transparent;">Sīra</button>
       <button id="tab-saved" onclick="switchSidebarTab('saved')" style="flex:1;padding:9px;font-size:10px;font-weight:700;text-transform:uppercase;border:none;background:#fff;color:#999;cursor:pointer;border-bottom:2px solid transparent;">Saved</button>
     </div>
     <div id="panel-suras" style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
@@ -358,6 +359,15 @@ mark.hl-green  { background:#BAFFC9;border-radius:2px;padding:0 1px; }
         <button onclick="clearAllBookmarks()" style="font-size:10px;color:#E74C3C;background:none;border:none;cursor:pointer;">Clear all</button>
       </div>
       <div id="savedList" style="overflow-y:auto;flex:1;padding:4px 0;"><div style="color:#BBB;font-style:italic;font-size:12px;padding:20px;text-align:center">No saved verses yet.<br>Tap 🔖 on any verse to bookmark it.</div></div>
+    </div>
+
+    <div id="panel-sira" style="display:none;flex-direction:column;flex:1;overflow:hidden;">
+      <div style="padding:10px 14px;border-bottom:1px solid #E8E4DC;">
+        <span style="font-size:11px;font-weight:700;color:#8B7355;letter-spacing:0.5px;">📜 SĪRA — PROPHET'S BIOGRAPHY</span>
+      </div>
+      <div id="siraSidebarList" style="overflow-y:auto;flex:1;padding:4px 0;">
+        <div style="color:#BBB;font-style:italic;font-size:12px;padding:20px;text-align:center;">Loading...</div>
+      </div>
     </div>
   </div>
   <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
@@ -2515,6 +2525,82 @@ const TOPIC_INDEX = [
 
 let allTopics = TOPIC_INDEX.map((t, idx) => ({ ...t, _idx: idx }));
 
+// ============================================================
+// SIRA SIDEBAR
+// ============================================================
+let siraSidebarLoaded = false;
+
+async function loadSiraSidebar() {
+  if (siraSidebarLoaded) return;
+  siraSidebarLoaded = true;
+  const list = document.getElementById('siraSidebarList');
+  try {
+    const events = await fetch(
+      `${SUPABASE_URL}/rest/v1/sira_events?select=id,title_en,title_ar,period,year_ce,location&order=year_ce.asc`,
+      { headers: HEADERS }
+    ).then(r => r.json());
+
+    const maps = await fetch(
+      `${SUPABASE_URL}/rest/v1/sira_verse_map?select=sira_id,sura,aya,applies_to_full_sura`,
+      { headers: HEADERS }
+    ).then(r => r.json());
+
+    const mapsBySira = {};
+    maps.forEach(m => {
+      if (!mapsBySira[m.sira_id]) mapsBySira[m.sira_id] = [];
+      mapsBySira[m.sira_id].push(m);
+    });
+
+    const periodOrder = ['Pre-Islamic','Pre-Prophethood','Early Meccan','Late Meccan','Medinan','Other'];
+    const grouped = {};
+    events.forEach(ev => {
+      const p = ev.period || 'Other';
+      if (!grouped[p]) grouped[p] = [];
+      grouped[p].push(ev);
+    });
+
+    let html = '';
+    periodOrder.forEach(period => {
+      if (!grouped[period]) return;
+      html += `<div style="padding:6px 14px;background:#F5F0E8;font-size:10px;font-weight:700;color:#8B7355;letter-spacing:0.06em;text-transform:uppercase;">${period}</div>`;
+      grouped[period].forEach(ev => {
+        const vms = mapsBySira[ev.id] || [];
+        const firstVm = vms[0];
+        const verseRef = firstVm ? `${firstVm.sura}:${firstVm.applies_to_full_sura ? 'all' : firstVm.aya}` : '';
+        html += `
+          <div style="padding:10px 14px;border-bottom:1px solid #F0EDE6;cursor:pointer;"
+               onclick="openSiraDetail('${ev.id}')">
+            <div style="font-size:12px;font-weight:700;color:#1a1a1a;margin-bottom:2px;">${ev.title_en}</div>
+            ${ev.title_ar ? `<div style="font-family:'Amiri',serif;font-size:12px;color:#8B7355;direction:rtl;text-align:right;margin-bottom:4px;">${ev.title_ar}</div>` : ''}
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              ${ev.year_ce ? `<span style="font-size:10px;color:#888;">📅 ${ev.year_ce} CE</span>` : ''}
+              ${ev.location ? `<span style="font-size:10px;color:#888;">📍 ${ev.location}</span>` : ''}
+              ${verseRef ? `<span style="font-size:10px;color:#B8902A;font-weight:700;">📖 ${verseRef}</span>` : ''}
+            </div>
+          </div>`;
+      });
+    });
+
+    list.innerHTML = html;
+    window._siraEvents = events;
+    window._siraVerseMaps = mapsBySira;
+
+  } catch(err) {
+    list.innerHTML = `<div style="padding:20px;color:red;font-size:12px;">Error: ${err.message}</div>`;
+  }
+}
+
+function openSiraDetail(siraId) {
+  const vms = (window._siraVerseMaps || {})[siraId] || [];
+  if (vms.length > 0 && !vms[0].applies_to_full_sura) {
+    navToVerse(vms[0].sura, vms[0].aya);
+    closeSidebar();
+  } else if (vms.length > 0) {
+    selectSura(vms[0].sura);
+    switchSidebarTab('suras');
+  }
+}
+
 // ============ Scholarly text formatter ============
 function formatScholarlyText(raw) {
   if (!raw) return '';
@@ -3334,7 +3420,7 @@ function renderSavedList() {
 }
 
 function switchSidebarTab(tab) {
-  ['suras','topics','lexicon','chrono','saved','variants'].forEach(t => {
+  ['suras','topics','lexicon','chrono','saved','variants','sira'].forEach(t => {
     const isCurrent = t === tab;
     const panel = document.getElementById('panel-' + t);
     if (panel) panel.style.display = isCurrent ? 'flex' : 'none';
