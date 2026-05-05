@@ -437,7 +437,7 @@ async function fetchDBContext(query) {
         fetch(`${SB_URL}/rest/v1/cross_references?sura_id=eq.${s}&aya_number=eq.${a}&select=ref_sura,ref_aya,theme&limit=8`, {headers:hdrs}).then(r=>r.json()),
         fetch(`${SB_URL}/rest/v1/word_analysis?sura_id=eq.${s}&aya_number=eq.${a}&select=word_arabic,root,meaning_english,language_origin&limit=15`, {headers:hdrs}).then(r=>r.json()),
         fetch(`${SB_URL}/rest/v1/hadith_connections?sura_id=eq.${s}&aya_number=eq.${a}&select=hadith_text,source,narrator,relevance&limit=5`, {headers:hdrs}).then(r=>r.json()),
-        fetch(`${SB_URL}/rest/v1/tafsir?sura_id=eq.${s}&aya_number=eq.${a}&select=scholar_name,tafsir_text,tradition&limit=5`, {headers:hdrs}).then(r=>r.json()),
+        fetch(`${SB_URL}/rest/v1/tafsir_entries?sura=eq.${s}&aya=eq.${a}&select=scholar_name,content,tradition&limit=5`, {headers:hdrs}).then(r=>r.json()),
         fetch(`${SB_URL}/rest/v1/asbab_al_nuzul?sura_id=eq.${s}&aya_number=eq.${a}&select=*&limit=3`, {headers:hdrs}).then(r=>r.json()),
       ]);
       if (aya?.length) ctx.verse = aya[0];
@@ -690,7 +690,7 @@ async function doSearch() {
 
     // TAFSIR
     if (currentSource === 'all' || currentSource === 'tafsir') {
-      const tSelect = 'id,sura_id,aya_number,tafsir_text,source_name,author,tradition,language,era';
+      const tSelect = 'id,sura,aya,content,source_name,scholar_name,tradition,language';
       const tExtra = { language: 'eq.en', ...tradFilter };
       if (scholar) tExtra.source_name = `eq.${scholar}`;
       const [t1, t2] = await Promise.all([
@@ -1109,7 +1109,7 @@ async function loadSiraResearch() {
         const verseChips = vms.map(vm =>
           vm.applies_to_full_sura
             ? `<span class="sira-verse-chip" title="Full Surah">📖 ${vm.sura}:all</span>`
-            : `<span class="sira-verse-chip" onclick="window.open('https://fascinating-sunburst-516df8.netlify.app#${vm.sura}:${vm.aya}','_blank')">📖 ${vm.sura}:${vm.aya}</span>`
+            : `<span class="sira-verse-chip" onclick="window.open('https://fascinating-sunburst-516df8.netlify.app?sura=${vm.sura}&aya=${vm.aya}','_blank')">📖 ${vm.sura}:${vm.aya}</span>`
         ).join('');
 
         html += `
