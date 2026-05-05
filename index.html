@@ -2528,17 +2528,17 @@ async function loadTafsirPanel(sura, aya) {
   const current = traditionState[tradKey(sura, aya, 'tafsir')] || 'sunni';
   let entries = [];
   try {
-    const rows = await sbFetch('tafsir', {
-      select: 'source_name,author,tradition,tafsir_text,source_key,language',
-      sura_id: `eq.${sura}`,
-      aya_number: `eq.${aya}`,
+    const rows = await sbFetch('tafsir_entries', {
+      select: 'source_name,scholar_name,tradition,content,scholar_key,language',
+      sura: `eq.${sura}`,
+      aya: `eq.${aya}`,
       language: `eq.en`
     });
     entries = rows.map(r => ({
-      scholar: r.source_name || r.author,
+      scholar: r.source_name || r.scholar_name,
       tradition: r.tradition,
-      text: r.tafsir_text,
-      meta: r.author || null,
+      text: r.content,
+      meta: r.scholar_name || null,
       isAI: false
     }));
   } catch {}
@@ -4588,7 +4588,7 @@ async function fetchSupabaseContext(query) {
 
       // Tafsir
       const tafsirRes = await fetch(
-        `${SUPABASE_URL}/rest/v1/tafsir?sura_id=eq.${sura}&aya_number=eq.${aya}&select=scholar_name,tafsir_text,tradition,language&limit=5`,
+        `${SUPABASE_URL}/rest/v1/tafsir_entries?sura=eq.${sura}&aya=eq.${aya}&select=scholar_name,content,tradition,language&limit=5`,
         { headers: HEADERS }
       );
       const tafsirData = await tafsirRes.json();
