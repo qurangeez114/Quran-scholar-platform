@@ -306,6 +306,7 @@ mark.hl-green  { background:#BAFFC9;border-radius:2px;padding:0 1px; }
       <button id="tab-lexicon" onclick="switchSidebarTab('lexicon')" style="flex:1;padding:9px;font-size:10px;font-weight:700;text-transform:uppercase;border:none;background:#fff;color:#999;cursor:pointer;border-bottom:2px solid transparent;">Lexicon</button>
       <button id="tab-variants" onclick="switchSidebarTab('variants')" style="flex:1;padding:9px;font-size:10px;font-weight:700;text-transform:uppercase;border:none;background:#fff;color:#999;cursor:pointer;border-bottom:2px solid transparent;">Variants</button>
       <button id="tab-saved" onclick="switchSidebarTab('saved')" style="flex:1;padding:9px;font-size:10px;font-weight:700;text-transform:uppercase;border:none;background:#fff;color:#999;cursor:pointer;border-bottom:2px solid transparent;">Saved</button>
+      <button id="tab-sira" onclick="switchSidebarTab('sira')" style="flex:1;padding:9px;font-size:10px;font-weight:700;text-transform:uppercase;border:none;background:#fff;color:#999;cursor:pointer;border-bottom:2px solid transparent;">Sira</button>
     </div>
     <div id="panel-suras" style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
       <input class="sidebar-search" id="searchInput" placeholder="Search suras..." oninput="filterSuras()">
@@ -348,6 +349,12 @@ mark.hl-green  { background:#BAFFC9;border-radius:2px;padding:0 1px; }
         <span style="font-size:11px;font-weight:700;color:#8B7355;letter-spacing:0.5px;">BOOKMARKED VERSES</span>
         <button onclick="clearAllBookmarks()" style="font-size:10px;color:#E74C3C;background:none;border:none;cursor:pointer;">Clear all</button>
       </div>
+<div id="panel-sira" style="display:none;flex-direction:column;height:100%;overflow:hidden;">
+  <div style="padding:10px 14px;border-bottom:1px solid #E8DDC0;">
+    <input id="sira-search" type="text" placeholder="Search Sira events..." oninput="filterSira(this.value)" style="width:100%;padding:7px 10px;border:1px solid #D4C9A8;border-radius:8px;font-size:13px;background:#FDF8EE;outline:none;color:#333;">
+  </div>
+  <div id="sira-list" style="flex:1;overflow-y:auto;"></div>
+</div>
       <div id="savedList" style="overflow-y:auto;flex:1;padding:4px 0;"><div style="color:#BBB;font-style:italic;font-size:12px;padding:20px;text-align:center">No saved verses yet.<br>Tap 🔖 on any verse to bookmark it.</div></div>
     </div>
   </div>
@@ -3254,7 +3261,7 @@ function renderSavedList() {
 }
 
 function switchSidebarTab(tab) {
-  ['suras','topics','lexicon','chrono','saved','variants'].forEach(t => {
+  ['suras','topics','lexicon','chrono','saved','variants','sira'].forEach(t => {
     const isCurrent = t === tab;
     const panel = document.getElementById('panel-' + t);
     if (panel) panel.style.display = isCurrent ? 'flex' : 'none';
@@ -3270,6 +3277,7 @@ function switchSidebarTab(tab) {
   if (tab === 'chrono') loadChrono();
   if (tab === 'saved') renderSavedList();
   if (tab === 'variants') loadVariantsPanel();
+  if (tab === 'sira') loadSiraPanel();
 }
 
 let lexiconData = [];
@@ -4929,6 +4937,45 @@ function speakText(text, langCode, btn) {
 }
 
 window.addEventListener('beforeunload', qgStopTTS);
+
+async function loadSiraPanel() {
+  var list = document.getElementById('sira-list');
+  if (!list || list.dataset.loaded) return;
+  list.innerHTML = '<div style="padding:20px;text-align:center;color:#999;">Loading Sira...</div>';
+  try {
+    var res = await fetch('https://qurangeez-quran-scholar-api.hf.space/sira');
+    var data = await res.json();
+    window._siraData = data.events || data || [];
+    renderSiraList(window._siraData);
+    list.dataset.loaded = '1';
+  } catch(e) {
+    list.innerHTML = '<div style="padding:20px;color:#999;text-align:center;">Could not load Sira data.</div>';
+  }
+}
+
+function filterSira(q) {
+  if (!window._siraData) return;
+  var filtered = q.length < 2 ? window._siraData : window._siraData.filter(function(e) {
+    return (e.title||'').toLowerCase().indexOf(q.toLowerCase()) >= 0 ||
+           (e.title_ar||'').indexOf(q) >= 0;
+  });
+  renderSiraList(filtered);
+}
+
+function renderSiraList(events) {
+  var list = document.getElementById('sira-list');
+  if (!list) return;
+  if (!events || events.length === 0) {
+    list.innerHTML = '<div style="padding:20px;color:#999;text-align:center;">No events found.</div>';
+    return;
+  }
+  list.innerHTML = events.map(function(e) {
+    return '<div style="padding:10px 14px;border-bottom:1px solid #F0EDE6;cursor:pointer;" onclick="window.open('research.html?sira=' + encodeURIComponent(e.title||'') + '','_blank')">' +
+      '<div style="font-size:10px;color:#B8902A;font-weight:700;margin-bottom:2px;">' + (e.year_ce||'') + (e.hijri_year ? ' - '+e.hijri_year+' AH' : '') + '</div>' +
+      '<div style="font-size:13px;font-weight:700;color:#2C1810;">' + (e.title||'') + '</div>' +
+      '</div>';
+  }).join('');
+}
 </script>
 </body>
 </html>
