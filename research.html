@@ -815,10 +815,12 @@ function buildCard(r, q) {
     typePill = `<span class="source-pill pill-tafsir">📚 Tafsir</span>`;
     scholarLine = `<div class="card-scholar">${esc(r.source_name||r.scholar_name||'')}</div>`;
     const fullText = r.content || r.tafsir_text || '';
-    const shortText = fullText.length > 300 ? fullText.slice(0, 300) + '...' : fullText;
-    textBlock = `<div class="card-text" id="text-${id}">${highlight(shortText, q)}</div>` +
-      (fullText.length > 300 ? `<button onclick="document.getElementById('text-${id}').innerHTML=\`${fullText.replace(/`/g,"'").replace(/
-/g,' ')}\`;this.style.display='none'" style="font-size:11px;color:var(--gold);background:none;border:none;cursor:pointer;padding:2px 0;">Show more ▼</button>` : '');
+    const isLong = fullText.length > 300;
+    const shortText = isLong ? fullText.slice(0, 300) + '...' : fullText;
+    if (!window._cardData) window._cardData = {};
+    window._cardData[id] = fullText;
+    textBlock = '<div class="card-text" id="text-' + id + '">' + highlight(shortText, q) + '</div>';
+    if (isLong) textBlock += '<button onclick="expandCard(\'' + id + '\')" style="font-size:11px;color:var(--gold);background:none;border:none;cursor:pointer;padding:2px 0;">Show more ▼</button>';
     const suraNum = r.sura || r.sura_id;
     const ayaNum = r.aya || r.aya_number;
     metaLine = suraNum ? `<div class="card-meta">Verse ${suraNum}:${ayaNum} · ${esc(r.tradition||'')}</div>` : '';
@@ -1014,6 +1016,14 @@ function renderBookmarks() {
 }
 
 // ── SHARE ────────────────────────────────────────────────────────
+function expandCard(id) {
+  const el = document.getElementById('text-' + id);
+  if (el && window._cardData && window._cardData[id]) {
+    el.textContent = window._cardData[id];
+    if (el.nextElementSibling) el.nextElementSibling.style.display = 'none';
+  }
+}
+
 function speakCard(id) {
   const el = document.getElementById('text-' + id);
   if (!el) return;
