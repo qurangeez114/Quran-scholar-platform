@@ -734,11 +734,7 @@ async function init() {
         backBtn.style.display = 'block';
         backBtn.textContent = '← Research';
         backBtn.onclick = () => {
-          if (document.referrer && document.referrer.includes('research')) {
-            window.history.back();
-          } else {
-            window.location.href = 'research.html';
-          }
+          window.location.href = 'research.html';
         };
       }
       await loadSura(urlSura);
@@ -4943,9 +4939,9 @@ async function loadSiraPanel() {
   if (!list || list.dataset.loaded) return;
   list.innerHTML = '<div style="padding:20px;text-align:center;color:#999;">Loading Sira...</div>';
   try {
-    var res = await fetch('https://qurangeez-quran-scholar-api.hf.space/sira');
+    var res = await fetch(SUPABASE_URL + '/rest/v1/sira_events?select=*&order=year_ce.asc', {headers: HEADERS});
     var data = await res.json();
-    window._siraData = data.events || data || [];
+    window._siraData = Array.isArray(data) ? data : [];
     renderSiraList(window._siraData);
     list.dataset.loaded = '1';
   } catch(e) {
@@ -4970,7 +4966,8 @@ function renderSiraList(events) {
     return;
   }
   list.innerHTML = events.map(function(e) {
-    return '<div style="padding:10px 14px;border-bottom:1px solid #F0EDE6;cursor:pointer;" onclick="window.open('research.html?sira=' + encodeURIComponent(e.title||'') + '','_blank')">' +
+    var url = 'research.html?sira=' + encodeURIComponent(e.title||'');
+    return '<div style="padding:10px 14px;border-bottom:1px solid #F0EDE6;cursor:pointer;" onclick="window.open(\'' + url + '\',\'_blank\')">' +
       '<div style="font-size:10px;color:#B8902A;font-weight:700;margin-bottom:2px;">' + (e.year_ce||'') + (e.hijri_year ? ' - '+e.hijri_year+' AH' : '') + '</div>' +
       '<div style="font-size:13px;font-weight:700;color:#2C1810;">' + (e.title||'') + '</div>' +
       '</div>';
