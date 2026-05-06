@@ -1030,14 +1030,20 @@ function expandCard(id) {
 }
 
 function speakCard(id) {
-  const el = document.getElementById('text-' + id);
-  if (!el) return;
-  const text = el.innerText || el.textContent;
   if ('speechSynthesis' in window) {
-    window.speechSynthesis.cancel();
+    if (window.speechSynthesis.speaking) {
+      window.speechSynthesis.cancel();
+      window._speakingId = null;
+      return;
+    }
+    const el = document.getElementById('text-' + id);
+    if (!el) return;
+    const text = el.innerText || el.textContent;
     const utt = new SpeechSynthesisUtterance(text);
     utt.lang = 'en-US';
     utt.rate = 0.9;
+    utt.onend = () => { window._speakingId = null; };
+    window._speakingId = id;
     window.speechSynthesis.speak(utt);
   }
 }
