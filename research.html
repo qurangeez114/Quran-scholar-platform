@@ -790,7 +790,9 @@ function buildCard(r, q) {
   const id = `${r.type}-${r.id}`;
   const bm = isBookmarked(id);
   const noteText = getNote(id);
-  const verseUrl = `https://fascinating-sunburst-516df8.netlify.app`;
+  const suraRef = r.sura || r.sura_id;
+  const ayaRef = r.aya || r.aya_number;
+  const verseUrl = suraRef ? `https://fascinating-sunburst-516df8.netlify.app?sura=${suraRef}&aya=${ayaRef}` : `https://fascinating-sunburst-516df8.netlify.app`;
 
   let typePill = '', scholarLine = '', arabicBlock = '', textBlock = '', metaLine = '';
 
@@ -811,12 +813,15 @@ function buildCard(r, q) {
     refPill = `<span class="ref-pill" onclick="window.open('research.html?sira='+encodeURIComponent('${(r.title||'').replace(/'/g,"\'")}'),'_blank')" style="cursor:pointer;">📖 View Event</span>`;
   } else if (r.type === 'tafsir') {
     typePill = `<span class="source-pill pill-tafsir">📚 Tafsir</span>`;
-    scholarLine = `<div class="card-scholar">${esc(r.source_name||r.author||'')}</div>`;
-    textBlock = `<div class="card-text" id="text-${id}">${highlight(r.content || r.tafsir_text || '', q)}</div>`;
-    const meta = [];
-    if (r.author) meta.push(r.author);
-    if (r.era) meta.push(r.era);
-    metaLine = meta.length ? `<div class="card-meta">${meta.map(esc).join(' · ')}</div>` : '';
+    scholarLine = `<div class="card-scholar">${esc(r.source_name||r.scholar_name||'')}</div>`;
+    const fullText = r.content || r.tafsir_text || '';
+    const shortText = fullText.length > 300 ? fullText.slice(0, 300) + '...' : fullText;
+    textBlock = `<div class="card-text" id="text-${id}">${highlight(shortText, q)}</div>` +
+      (fullText.length > 300 ? `<button onclick="document.getElementById('text-${id}').innerHTML=\`${fullText.replace(/`/g,"'").replace(/
+/g,' ')}\`;this.style.display='none'" style="font-size:11px;color:var(--gold);background:none;border:none;cursor:pointer;padding:2px 0;">Show more ▼</button>` : '');
+    const suraNum = r.sura || r.sura_id;
+    const ayaNum = r.aya || r.aya_number;
+    metaLine = suraNum ? `<div class="card-meta">Verse ${suraNum}:${ayaNum} · ${esc(r.tradition||'')}</div>` : '';
   } else if (r.type === 'asbab') {
     typePill = `<span class="source-pill pill-asbab">🕰 Asbāb</span>`;
     scholarLine = `<div class="card-scholar">${esc(r.scholar||'Classical narration')}</div>`;
@@ -842,6 +847,7 @@ function buildCard(r, q) {
       ${noteText ? `<div class="card-notes">📝 ${esc(noteText)}</div>` : ''}
     </div>
     <div class="card-actions">
+      <button class="action-btn" onclick="speakCard('${id}')">🔊 Read</button>
       <button class="action-btn" onclick="showHlPicker('${id}',this)">🖊 Highlight</button>
       <button class="action-btn" onclick="openNote('${id}',this)">📝 Note</button>
       <button class="action-btn ${bm?'active':''}" id="bm-${id}" onclick="toggleBookmark('${id}',this)">🔖 ${bm?'Saved':'Save'}</button>
@@ -1008,6 +1014,19 @@ function renderBookmarks() {
 }
 
 // ── SHARE ────────────────────────────────────────────────────────
+function speakCard(id) {
+  const el = document.getElementById('text-' + id);
+  if (!el) return;
+  const text = el.innerText || el.textContent;
+  if ('speechSynthesis' in window) {
+    window.speechSynthesis.cancel();
+    const utt = new SpeechSynthesisUtterance(text);
+    utt.lang = 'en-US';
+    utt.rate = 0.9;
+    window.speechSynthesis.speak(utt);
+  }
+}
+
 function copyCard(id, btn) {
   const r = allResults.find(x => `${x.type}-${x.id}` === id);
   if (!r) return;
