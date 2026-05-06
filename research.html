@@ -703,10 +703,10 @@ async function doSearch() {
 
     // SIRA
     if (currentSource === 'all' || currentSource === 'sira') {
-      const sSelect = 'id,title,title_ar,description,description_ar,year_ce,hijri_year,location,period';
+      const sSelect = 'id,title_en,title_ar,story_en,story_ar,year_ce,year_ah,location,period,key_figures,hadith_ref,tafsir_ref';
       const [s1, s2] = await Promise.all([
-        sbSearch('sira_events', sSelect, 'title', q, {}),
-        sbSearch('sira_events', sSelect, 'description', q, {})
+        sbSearch('sira_events', sSelect, 'title_en', q, {}),
+        sbSearch('sira_events', sSelect, 'story_en', q, {})
       ]);
       const sSeen = new Set();
       [...s1, ...s2].forEach(r => { if (!sSeen.has(r.id)) { sSeen.add(r.id); results.push({ type: 'sira', ...r }); } });
@@ -808,9 +808,14 @@ function buildCard(r, q) {
     metaLine = meta.length ? `<div class="card-meta">${meta.map(esc).join(' · ')}</div>` : '';
   } else if (r.type === 'sira') {
     typePill = `<span class="source-pill pill-sira" style="background:#7B4F2E;color:#fff;padding:2px 8px;border-radius:10px;font-size:10px;">📖 Sīra</span>`;
-    meta = `${r.year_ce||''} ${r.hijri_year ? '· '+r.hijri_year+' AH' : ''} ${r.location ? '· '+r.location : ''}`;
-    textBlock = `<div class="card-text" id="text-${id}">${highlight(r.description || r.title || '', q)}</div>`;
-    refPill = `<span class="ref-pill" onclick="window.open('research.html?sira='+encodeURIComponent('${(r.title||'').replace(/'/g,"\'")}'),'_blank')" style="cursor:pointer;">📖 View Event</span>`;
+    scholarLine = `<div class="card-scholar">${esc(r.title_en||'')}</div>`;
+    if (r.title_ar) arabicBlock = `<div class="card-arabic">${esc(r.title_ar)}</div>`;
+    textBlock = `<div class="card-text" id="text-${id}">${highlight(r.story_en || r.title_en || '', q)}</div>`;
+    const smeta = [];
+    if (r.year_ce) smeta.push(r.year_ce + ' CE');
+    if (r.year_ah) smeta.push(r.year_ah + ' AH');
+    if (r.location) smeta.push(r.location);
+    metaLine = smeta.length ? `<div class="card-meta">${smeta.map(esc).join(' · ')}</div>` : '';
   } else if (r.type === 'tafsir') {
     typePill = `<span class="source-pill pill-tafsir">📚 Tafsir</span>`;
     scholarLine = `<div class="card-scholar">${esc(r.source_name||r.scholar_name||'')}</div>`;
