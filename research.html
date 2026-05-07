@@ -703,10 +703,11 @@ async function doSearch() {
 
     // SIRA
     if (currentSource === 'all' || currentSource === 'sira') {
-      const sSelect = 'id,title_en,title_ar,story_en,story_ar,year_ce,year_ah,location,period,key_figures,hadith_ref,tafsir_ref';
+      const sSelect = 'id,title_en,title_ar,story_en,story_ar,year_ce,year_ah,location,period,key_figures,hadith_ref,tafsir_ref,themes,source_ref,quran_verses';
       const [s1, s2] = await Promise.all([
         sbSearch('sira_events', sSelect, 'title_en', q, {}),
-        sbSearch('sira_events', sSelect, 'story_en', q, {})
+        sbSearch('sira_events', sSelect, 'story_en', q, {}),
+        sbSearch('sira_events', sSelect, 'location', q, {})
       ]);
       const sSeen = new Set();
       [...s1, ...s2].forEach(r => { if (!sSeen.has(r.id)) { sSeen.add(r.id); results.push({ type: 'sira', ...r }); } });
@@ -1127,7 +1128,7 @@ async function loadSiraResearch() {
   try {
     // Fetch all events ordered by year
     const events = await fetch(
-      `${SB_URL}/rest/v1/sira_events?select=*&order=year_ce.asc`,
+      `${SB_URL}/rest/v1/sira_events?select=id,title_en,title_ar,story_en,story_ar,year_ce,year_ah,location,period,key_figures,hadith_ref,tafsir_ref,themes,source_ref,quran_verses&order=year_ce.asc`,
       { headers: HDRS }
     ).then(r => r.json());
 
@@ -1152,13 +1153,21 @@ async function loadSiraResearch() {
       periods[p].push(ev);
     });
 
-    const periodOrder = ['Pre-Islamic','Pre-Prophethood','Early Meccan','Late Meccan','Medinan','Other'];
+    const periodOrder = ['pre-islamic','meccan-early','meccan-middle','meccan-late','medinan','other'];
+    const periodLabels = {
+      'pre-islamic': '🌙 Pre-Islamic Period',
+      'meccan-early': '🕌 Early Meccan Period',
+      'meccan-middle': '📖 Middle Meccan Period',
+      'meccan-late': '✈️ Late Meccan Period',
+      'medinan': '🏙️ Medinan Period',
+      'other': '📜 Other'
+    };
 
     let html = '<div class="sira-timeline">';
 
     periodOrder.forEach(period => {
       if (!periods[period]) return;
-      html += `<div class="sira-period-header">📅 ${period} Period</div>`;
+      html += `<div class="sira-period-header">${periodLabels[period] || period}</div>`;
 
       periods[period].forEach(ev => {
         const vms = mapsBySira[ev.id] || [];
@@ -1212,6 +1221,30 @@ async function loadSiraResearch() {
               <div class="sira-section-label">📚 Tafsir Reference</div>
               <div class="sira-ref-item"><strong>Ref:</strong> ${ev.tafsir_ref}</div>
             ` : ''}
+
+            ${ev.themes && ev.themes.length ? `
+              <div class="sira-section-label">🏷️ Themes</div>
+              <div class="sira-meta-row">${ev.themes.map(t => `<span class="sira-meta-chip">${t}</span>`).join('')}</div>
+            ` : ''}
+
+            ${ev.quran_verses && ev.quran_verses.length ? `
+              <div class="sira-section-label">📖 Related Quran Verses</div>
+              <div style="margin-bottom:8px;">${ev.quran_verses.map(v =>
+                `<span class="sira-verse-chip" onclick="window.open('https://fascinating-sunburst-516df8.netlify.app?sura=${v.sura}&aya=${v.aya}&from=research','_blank')" title="${v.note||''}">📖 ${v.sura}:${v.aya}</span>`
+              ).join('')}</div>
+            ` : ''}
+
+            ${ev.source_ref ? `
+              <div class="sira-section-label">📔 Source</div>
+              <div class="sira-ref-item" style="font-size:12px;color:var(--ink4);">${ev.source_ref}</div>
+            ` : ''}
+
+            <div class="sira-section-label" style="margin-top:12px;"></div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;padding-bottom:4px;">
+              <button class="action-btn" onclick="event.stopPropagation();speakSira(this)" data-text="${(ev.story_en||'').replace(/"/g,'&quot;')}">🔊 Read</button>
+              <button class="action-btn" onclick="event.stopPropagation();copySira('${(ev.title_en||'').replace(/'/g,'\'')}','${(ev.story_en||'').slice(0,500).replace(/'/g,'\'')}')">📋 Copy</button>
+              <button class="action-btn" onclick="event.stopPropagation();shareSira('${(ev.title_en||'').replace(/'/g,'\'')}')">📤 Share</button>
+            </div>
           </div>
         </div>`;
       });
@@ -1222,6 +1255,24 @@ async function loadSiraResearch() {
 
   } catch(err) {
     panel.innerHTML = `<div style="padding:20px;color:red;">Error loading Sīra: ${err.message}</div>`;
+  }
+}
+
+function speakSira(btn) {
+  const text = btn.getAttribute('data-text');
+  if ('speechSynthesis' in window) {
+    if (window.speechSynthesis.speaking) { window.speechSynthesis.cancel(); return; }
+    const utt = new SpeechSynthesisUtterance(text);
+    utt.lang = 'en-US'; utt.rate = 0.9;
+    window.speechSynthesis.speak(utt);
+  }
+}
+function copySira(title, text) {
+  navigator.clipboard.writeText(title + '\n\n' + text).then(() => alert('Copied!'));
+}
+function shareSira(title) {
+  if (navigator.share) {
+    navigator.share({title: title, url: window.location.href});
   }
 }
 
