@@ -67,6 +67,9 @@ body{font-family:'Crimson Pro',serif;background:var(--bg);color:var(--ink);min-h
 .mode-btn:hover{border-color:var(--gold);color:var(--gold);background:var(--gold-pale);}
 .mode-btn.active{background:var(--gold);color:#fff;border-color:var(--gold);}
 .mode-btn.active:hover{background:var(--gold);color:#fff;}
+.book-chip{padding:5px 13px;border:1.5px solid var(--gold-border);border-radius:20px;background:var(--bg3);font-size:12px;font-weight:700;color:var(--ink4);cursor:pointer;white-space:nowrap;transition:all 0.15s;flex-shrink:0;}
+.book-chip:hover{border-color:var(--gold);color:var(--gold);background:var(--gold-pale);}
+.book-chip.active{background:#2E7D32;color:#fff;border-color:#2E7D32;}
 
 /* ── RESULTS ── */
 .results-area{padding:16px 20px;max-width:900px;margin:0 auto;}
@@ -230,21 +233,34 @@ mark.hl-green{background:#BAFFC9;}
   </div>
   <div id="modeHint" style="font-size:11px;color:var(--ink4);margin-top:5px;font-style:italic;min-height:16px;padding-left:2px;"></div>
 
-  <!-- Filters -->
-  <div class="filters">
+  <!-- Filters row: tradition + hidden selects -->
+  <div class="filters" style="margin-top:10px;">
     <div class="trad-toggle">
-      <button class="trad-btn active" id="trad-all" onclick="setTrad('all',this)">All</button>
-      <button class="trad-btn" id="trad-sunni" onclick="setTrad('sunni',this)">Sunni</button>
-      <button class="trad-btn" id="trad-shia" onclick="setTrad('shia',this)">Shia</button>
+      <button class="trad-btn active" id="trad-all"   onclick="setTrad('all',this)">All</button>
+      <button class="trad-btn"        id="trad-sunni" onclick="setTrad('sunni',this)">Sunni</button>
+      <button class="trad-btn"        id="trad-shia"  onclick="setTrad('shia',this)">Shia</button>
     </div>
-    <select class="filter-select" id="collectionFilter">
+    <!-- hidden selects used by doSearch — values set by book chips / scholar chips -->
+    <select class="filter-select" id="collectionFilter" style="display:none">
       <option value="">All Collections</option>
       <option>Sahih al-Bukhari</option>
       <option>Sahih Muslim</option>
       <option>Sunan Abu Dawud</option>
       <option>Sunan al-Tirmidhi</option>
+      <option value="Sunan al-Nasai">Sunan al-Nasai</option>
+      <option>Sunan Ibn Majah</option>
+      <option>Muwatta Malik</option>
+      <option>Musnad Ahmad</option>
+      <option>Sunan al-Darimi</option>
+      <option>Riyad al-Salihin</option>
+      <option>Bulugh al-Maram</option>
+      <option>Al-Adab al-Mufrad</option>
       <option>Al-Kafi (al-Kulayni)</option>
       <option>Bihar al-Anwar (al-Majlisi)</option>
+      <option>Man La Yahduruhu al-Faqih</option>
+      <option>Tahdhib al-Ahkam</option>
+      <option>Al-Istibsar</option>
+      <option>Nahj al-Balagha</option>
     </select>
     <select class="filter-select" id="scholarFilter" style="display:none">
       <option value="">All Scholars</option>
@@ -253,8 +269,58 @@ mark.hl-green{background:#BAFFC9;}
       <option>Tafsir al-Tabari</option>
       <option>Tafsir al-Qurtubi</option>
       <option>Tanwir al-Miqbas (Ibn Abbas)</option>
+      <option>Tafsir al-Baghawi</option>
+      <option>Tafsir al-Zamakhshari</option>
+      <option>Tafsir al-Muyassar</option>
+      <option>Fi Zilal al-Quran (Qutb)</option>
       <option>Tafsir al-Sa'di</option>
     </select>
+  </div>
+
+  <!-- Book selector: label + scrollable chips -->
+  <div id="bookChipsRow" style="margin-top:10px;">
+    <div style="font-size:11px;font-weight:700;color:var(--ink4);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">📚 Filter by Book:</div>
+
+    <!-- Sunni row -->
+    <div style="font-size:10px;font-weight:700;color:var(--sunni);margin-bottom:4px;letter-spacing:0.5px;">SUNNI HADITH</div>
+    <div style="display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:6px;scrollbar-width:none;">
+      <button class="book-chip active" id="book-all"      onclick="setBook('',this)"                    style="flex-shrink:0;">All</button>
+      <button class="book-chip"        id="book-bukhari"  onclick="setBook('Sahih al-Bukhari',this)"     style="flex-shrink:0;">Bukhari</button>
+      <button class="book-chip"        id="book-muslim"   onclick="setBook('Sahih Muslim',this)"         style="flex-shrink:0;">Muslim</button>
+      <button class="book-chip"        id="book-abudawud" onclick="setBook('Sunan Abu Dawud',this)"      style="flex-shrink:0;">Abu Dawud</button>
+      <button class="book-chip"        id="book-tirmidhi" onclick="setBook('Sunan al-Tirmidhi',this)"    style="flex-shrink:0;">Tirmidhi</button>
+      <button class="book-chip"        id="book-nasai"    onclick="setBook('Sunan al-Nasai',this)"       style="flex-shrink:0;">Nasa&#x2019;i</button>
+      <button class="book-chip"        id="book-ibnmajah" onclick="setBook('Sunan Ibn Majah',this)"      style="flex-shrink:0;">Ibn Majah</button>
+      <button class="book-chip"        id="book-malik"    onclick="setBook('Muwatta Malik',this)"        style="flex-shrink:0;">Muwatta Malik</button>
+      <button class="book-chip"        id="book-ahmad"    onclick="setBook('Musnad Ahmad',this)"         style="flex-shrink:0;">Musnad Ahmad</button>
+      <button class="book-chip"        id="book-riyad"    onclick="setBook('Riyad al-Salihin',this)"     style="flex-shrink:0;">Riyad al-Salihin</button>
+      <button class="book-chip"        id="book-bulugh"   onclick="setBook('Bulugh al-Maram',this)"      style="flex-shrink:0;">Bulugh al-Maram</button>
+      <button class="book-chip"        id="book-darimi"   onclick="setBook('Sunan al-Darimi',this)"      style="flex-shrink:0;">Al-Darimi</button>
+      <button class="book-chip"        id="book-adab"     onclick="setBook('Al-Adab al-Mufrad',this)"    style="flex-shrink:0;">Al-Adab al-Mufrad</button>
+    </div>
+
+    <!-- Shia row -->
+    <div style="font-size:10px;font-weight:700;color:var(--shia);margin:6px 0 4px;letter-spacing:0.5px;">SHIA HADITH</div>
+    <div style="display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:6px;scrollbar-width:none;">
+      <button class="book-chip"  id="book-kafi"    onclick="setBook('Al-Kafi (al-Kulayni)',this)"          style="flex-shrink:0;">Al-Kafi</button>
+      <button class="book-chip"  id="book-bihar"   onclick="setBook('Bihar al-Anwar (al-Majlisi)',this)"   style="flex-shrink:0;">Bihar al-Anwar</button>
+      <button class="book-chip"  id="book-faqih"   onclick="setBook('Man La Yahduruhu al-Faqih',this)"     style="flex-shrink:0;">Man La Yahduruhu</button>
+      <button class="book-chip"  id="book-tahdhib" onclick="setBook('Tahdhib al-Ahkam',this)"              style="flex-shrink:0;">Tahdhib al-Ahkam</button>
+      <button class="book-chip"  id="book-istibsar"onclick="setBook('Al-Istibsar',this)"                   style="flex-shrink:0;">Al-Istibsar</button>
+      <button class="book-chip"  id="book-nahj"    onclick="setBook('Nahj al-Balagha',this)"               style="flex-shrink:0;">Nahj al-Balagha</button>
+    </div>
+
+    <!-- Tafsir row -->
+    <div style="font-size:10px;font-weight:700;color:var(--tafsir);margin:6px 0 4px;letter-spacing:0.5px;">TAFSIR</div>
+    <div style="display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:4px;scrollbar-width:none;">
+      <button class="book-chip" id="book-ibnkathir"  onclick="setScholar('Tafsir Ibn Kathir (abridged)',this)"  style="flex-shrink:0;">Ibn Kathir</button>
+      <button class="book-chip" id="book-tabari"     onclick="setScholar('Tafsir al-Tabari',this)"              style="flex-shrink:0;">Al-Tabari</button>
+      <button class="book-chip" id="book-qurtubi"    onclick="setScholar('Tafsir al-Qurtubi',this)"             style="flex-shrink:0;">Al-Qurtubi</button>
+      <button class="book-chip" id="book-jalalayn"   onclick="setScholar('Tafsir al-Jalalayn',this)"            style="flex-shrink:0;">Al-Jalalayn</button>
+      <button class="book-chip" id="book-ibnabbas"   onclick="setScholar('Tanwir al-Miqbas (Ibn Abbas)',this)"  style="flex-shrink:0;">Ibn Abbas</button>
+      <button class="book-chip" id="book-saadi"      onclick="setScholar('Tafsir al-Sa'di',this)"              style="flex-shrink:0;">Al-Sa&#x2019;di</button>
+      <button class="book-chip" id="book-zilal"      onclick="setScholar('Fi Zilal al-Quran (Qutb)',this)"      style="flex-shrink:0;">Fi Zilal (Qutb)</button>
+    </div>
   </div>
 
   <!-- Topic chips -->
@@ -650,12 +716,15 @@ function setSource(src, el) {
   const siraPanel = document.getElementById('siraPanel');
   const resultsArea = document.querySelector('.results-area');
   const aiSection = document.querySelector('.results-area')?.previousElementSibling;
+  const bookRow = document.getElementById('bookChipsRow');
   if (src === 'sira') {
     siraPanel.classList.add('active');
     if (resultsArea) { resultsArea.style.display = 'none'; resultsArea.style.visibility = 'hidden'; }
+    if (bookRow) bookRow.style.display = 'none';
   } else {
     siraPanel.classList.remove('active');
     if (resultsArea) { resultsArea.style.display = ''; resultsArea.style.visibility = ''; }
+    if (bookRow) bookRow.style.display = 'flex';
   }
 }
 
@@ -663,6 +732,38 @@ function setTrad(t, el) {
   currentTrad = t;
   document.querySelectorAll('.trad-btn').forEach(b => b.classList.remove('active'));
   el.classList.add('active');
+}
+
+function setBook(book, btn) {
+  const sel = document.getElementById('collectionFilter');
+  if (sel) sel.value = book;
+  // Clear scholar filter when switching to a hadith book
+  const sch = document.getElementById('scholarFilter');
+  if (sch) sch.value = '';
+  document.querySelectorAll('.book-chip').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  // Switch source to hadith if on tafsir
+  if (currentSource === 'tafsir') {
+    const allTab = document.querySelector('.source-tab.all');
+    if (allTab) setSource('all', allTab);
+  }
+  const q = document.getElementById('searchInput').value.trim();
+  if (q) doSearch();
+}
+
+function setScholar(scholar, btn) {
+  const sch = document.getElementById('scholarFilter');
+  if (sch) sch.value = scholar;
+  // Clear collection filter when switching to tafsir
+  const sel = document.getElementById('collectionFilter');
+  if (sel) sel.value = '';
+  document.querySelectorAll('.book-chip').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  // Switch source to tafsir automatically
+  const tafsirTab = document.querySelector('.source-tab.tafsir');
+  if (tafsirTab) setSource('tafsir', tafsirTab);
+  const q = document.getElementById('searchInput').value.trim();
+  if (q) doSearch();
 }
 
 function quickSearch(term) {
