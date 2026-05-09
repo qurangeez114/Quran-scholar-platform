@@ -752,15 +752,27 @@ async function doSearch() {
       [...t1, ...t2].forEach(r => { if (!tSeen.has(r.id)) { tSeen.add(r.id); results.push({ type: 'tafsir', ...r }); } });
     }
 
-    // SIRA
+    // SIRA — search full book: title, story, key figures, location
     if (currentSource === 'all' || currentSource === 'sira') {
       const sSelect = 'id,title_en,title_ar,story_en,story_ar,year_ce,year_ah,location,period,key_figures,hadith_ref,tafsir_ref';
-      const [s1, s2] = await Promise.all([
+      const [s1, s2, s3, s4] = await Promise.all([
         sbSearch('sira_events', sSelect, 'title_en', q, {}),
-        sbSearch('sira_events', sSelect, 'story_en', q, {})
+        sbSearch('sira_events', sSelect, 'story_en', q, {}),
+        sbSearch('sira_events', sSelect, 'location', q, {}),
+        sbSearch('sira_events', sSelect, 'hadith_ref', q, {})
       ]);
       const sSeen = new Set();
-      [...s1, ...s2].forEach(r => { if (!sSeen.has(r.id)) { sSeen.add(r.id); results.push({ type: 'sira', ...r }); } });
+      [...s1, ...s2, ...s3, ...s4].forEach(r => {
+        if (!sSeen.has(r.id)) { sSeen.add(r.id); results.push({ type: 'sira', ...r }); }
+      });
+      // If Sira-only mode, render into timeline
+      if (currentSource === 'sira') {
+        const siraResults = results.filter(r => r.type === 'sira');
+        _siraEvents = siraResults;
+        renderSiraTimeline(siraResults, q);
+        allResults = results;
+        return;
+      }
     }
 
     // ASBAB
@@ -845,7 +857,9 @@ function buildCard(r, q) {
   const noteText = getNote(id);
   const suraRef = r.sura || r.sura_id;
   const ayaRef = r.aya || r.aya_number;
-  const verseUrl = suraRef ? `https://fascinating-sunburst-516df8.netlify.app?sura=${suraRef}&aya=${ayaRef}&from=research` : `https://fascinating-sunburst-516df8.netlify.app`;
+  const verseUrl = (r.type === 'sira')
+    ? `https://fascinating-sunburst-516df8.netlify.app/research.html?sira=${encodeURIComponent(r.title_en||'')}`
+    : suraRef ? `https://fascinating-sunburst-516df8.netlify.app?sura=${suraRef}&aya=${ayaRef}&from=research` : `https://fascinating-sunburst-516df8.netlify.app`;
 
   let typePill = '', scholarLine = '', arabicBlock = '', textBlock = '', metaLine = '';
 
@@ -895,9 +909,10 @@ function buildCard(r, q) {
     <div class="card-header">
       ${typePill}
       ${tradPill}
-      <a class="verse-ref" href="${verseUrl}" target="_blank" title="Open verse in Quran platform">
-        ${r.sura_id}:${r.aya_number} ↗
-      </a>
+      ${r.type === 'sira'
+        ? `<a class="verse-ref" href="${verseUrl}" target="_blank" title="Open in Research">📖 Sīra ↗</a>`
+        : suraRef ? `<a class="verse-ref" href="${verseUrl}" target="_blank" title="Open verse in Quran platform">${suraRef}:${ayaRef} ↗</a>` : ''
+      }
     </div>
     <div class="card-body">
       ${scholarLine}
@@ -1197,13 +1212,86 @@ async function loadSiraResearch() {
     });
 
     _siraEvents = events || [];
+
+    if (_siraEvents.length === 0) {
+      // DB is empty — use AI to generate timeline
+      console.log('No Sira events in DB, using AI fallback...');
+      await loadSiraFromAI();
+      return;
+    }
+
     renderSiraTimeline(_siraEvents);
+    // Also seed the search input with all events so filter works
+    window._siraAllEvents = _siraEvents;
+    const si = document.getElementById('siraSearchInput');
+    if (si) si.value = '';
 
   } catch(err) {
     console.error('Sira load error:', err);
     const w = document.getElementById('siraTimelineWrap');
     if (w) w.innerHTML = `<div style="padding:20px;color:red;font-weight:700;">Error loading Sīra: ${err.message}</div>`;
     siraLoaded = false; // allow retry
+  }
+}
+
+async function loadSiraFromAI() {
+  const wrap = document.getElementById('siraTimelineWrap');
+  if (wrap) wrap.innerHTML = '<div style="text-align:center;padding:30px;color:#888;"><span class="spinner"></span> Generating Sīra timeline with AI...</div>';
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': AI_KEY,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 4000,
+        messages: [{
+          role: 'user',
+          content: `Generate a JSON array of 30 key events from the Sīra (life of Prophet Muhammad ﷺ). Return ONLY valid JSON, no markdown, no explanation.
+
+Each object must have these exact fields:
+{
+  "id": number (1-30),
+  "title_en": "Event title in English",
+  "title_ar": "Event title in Arabic",
+  "story_en": "2-3 sentence description in English",
+  "year_ce": "e.g. 610 CE",
+  "year_ah": "e.g. 1 AH or null",
+  "location": "City or place",
+  "period": one of ["Pre-Islamic","Pre-Prophethood","Early Meccan","Late Meccan","Medinan"],
+  "key_figures": ["name1", "name2"]
+}
+
+Include events from birth to death, covering all periods. Return only the JSON array.`
+        }]
+      })
+    });
+
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message);
+
+    const text = data.content.map(c => c.text || '').join('').trim();
+    const clean = text.replace(/```json|```/g, '').trim();
+    const events = JSON.parse(clean);
+
+    _siraEvents = events;
+    renderSiraTimeline(_siraEvents);
+
+  } catch(err) {
+    console.error('AI Sira fallback error:', err);
+    const w = document.getElementById('siraTimelineWrap');
+    if (w) w.innerHTML = `
+      <div style="text-align:center;padding:30px;">
+        <div style="font-size:36px;margin-bottom:12px;">📚</div>
+        <div style="font-size:15px;font-weight:700;color:#7B4F2E;margin-bottom:8px;">Sīra data not seeded yet</div>
+        <div style="font-size:13px;color:#888;line-height:1.7;">Run the SQL seed file in your Supabase dashboard to populate the timeline.<br>
+        <a href="https://supabase.com/dashboard" target="_blank" style="color:#B8902A;font-weight:700;">Open Supabase →</a></div>
+      </div>`;
   }
 }
 
@@ -1241,12 +1329,20 @@ function renderSiraTimeline(events, q) {
     periods[p].push(ev);
   });
 
-  const periodOrder = ['Pre-Islamic','Pre-Prophethood','Early Meccan','Late Meccan','Medinan','Other'];
+  const periodOrder = [
+    'pre-islamic','Pre-Islamic','Pre-Prophethood',
+    'meccan-early','Early Meccan',
+    'meccan-middle','Middle Meccan',
+    'meccan-late','Late Meccan',
+    'medinan','Medinan',
+    'Other'
+  ];
   let html = `<div style="font-size:12px;color:var(--ink4);margin-bottom:12px;font-weight:700;">${events.length} event${events.length===1?'':'s'}</div><div class="sira-timeline">`;
 
   periodOrder.forEach(period => {
     if (!periods[period]) return;
-    html += `<div class="sira-period-header">📅 ${period} Period <span style="font-weight:400;opacity:0.8;font-size:11px;">(${periods[period].length})</span></div>`;
+    const label = period.replace(/-/g,' ').replace(/\b\w/g, c => c.toUpperCase());
+    html += `<div class="sira-period-header">📅 ${label} Period <span style="font-weight:400;opacity:0.8;font-size:11px;">(${periods[period].length})</span></div>`;
 
     periods[period].forEach(ev => {
       const vms = _siraMapsBySira[ev.id] || [];
