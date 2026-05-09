@@ -4964,7 +4964,11 @@ window.addEventListener('beforeunload', qgStopTTS);
 // Uses api.alquran.cloud CDN — free, no key needed.
 // Verse global number = cumulative ayah count across all suras.
 
-const SURA_AYA_COUNTS = [7,286,200,176,120,165,206,75,129,109,123,111,43,52,99,128,111,110,98,135,112,78,118,64,77,227,93,88,69,60,34,30,73,54,45,83,182,88,75,85,54,53,89,59,37,35,38,29,18,45,60,49,62,55,78,96,29,22,24,13,14,11,11,18,12,12,30,52,52,44,28,28,20,56,40,31,50,45,33,27,83,30,29,22,17,19,26,30,20,20,28,18,31,31,19,37,20,14,18,7,12,8,11,11,8,3,9,5,4,7,3,6,3,5,4,5,6];
+// Canonical ayah counts per sura (1-indexed). Sums to 6236, matches al-Quran Cloud
+// CDN's global ayah index (1..6236) used in audio URLs. The previous version of this
+// array had 117 entries and bad values from sura 78 onward — that broke audio for the
+// last juz'. Verified: Fatiha 1:1→#1, Ayat al-Kursi 2:255→#262, An-Nas 114:6→#6236.
+const SURA_AYA_COUNTS = [7,286,200,176,120,165,206,75,129,109,123,111,43,52,99,128,111,110,98,135,112,78,118,64,77,227,93,88,69,60,34,30,73,54,45,83,182,88,75,85,54,53,89,59,37,35,38,29,18,45,60,49,62,55,78,96,29,22,24,13,14,11,11,18,12,12,30,52,52,44,28,28,20,56,40,31,50,40,46,42,29,19,36,25,22,17,19,26,30,20,15,21,11,8,8,19,5,8,8,11,11,8,3,9,5,4,7,3,6,3,5,4,5,6];
 
 function verseGlobalNumber(surahNum, ayahNum) {
   let total = 0;
@@ -5087,6 +5091,24 @@ function wireAudioEvents(ayaNum, state) {
   });
 
   audio.addEventListener('error', () => {
+    // Log the actual failure so we can debug from the console instead of guessing.
+    // MediaError codes: 1=ABORTED, 2=NETWORK, 3=DECODE, 4=SRC_NOT_SUPPORTED.
+    const err = audio.error;
+    const code = err ? err.code : 'unknown';
+    const msg  = err ? err.message : '';
+    console.error('[QuranAudio] error on', audio.src, '— code:', code, msg);
+
+    // Try a lower-bitrate fallback once before giving up. cdn.islamic.network
+    // serves 128/64/48/40/32 kbps; if 128 errors, 64 often works.
+    if (audio.src.includes('/audio/128/') && !audio.dataset.triedFallback) {
+      audio.dataset.triedFallback = '1';
+      const fallback = audio.src.replace('/audio/128/', '/audio/64/');
+      console.warn('[QuranAudio] retrying at 64kbps:', fallback);
+      audio.src = fallback;
+      audio.load();
+      return;
+    }
+
     document.getElementById('audio-loading-' + ayaNum).style.display = 'none';
     document.getElementById('audio-main-' + ayaNum).style.display = 'none';
     document.getElementById('audio-error-' + ayaNum).style.display = '';
@@ -5106,6 +5128,7 @@ function loadAudioVerse(ayaNum, state) {
   if (errEl) errEl.style.display = 'none';
 
   state.audio.pause();
+  delete state.audio.dataset.triedFallback;  // fresh attempt at 128kbps
   state.audio.src = url;
   state.audio.load();
 }
