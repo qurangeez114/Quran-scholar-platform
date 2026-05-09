@@ -278,11 +278,11 @@ mark.hl-green{background:#BAFFC9;}
   </div>
 
   <!-- Book selector: label + scrollable chips -->
-  <div id="bookChipsRow" style="margin-top:10px;">
-    <div style="font-size:11px;font-weight:700;color:var(--ink4);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">📚 Filter by Book:</div>
+  <div id="bookChipsRow" style="margin-top:12px;border-top:1px solid var(--gold-border);padding-top:10px;">
+    <div style="font-size:11px;font-weight:700;color:var(--ink4);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">📚 Filter by Book:</div>
 
     <!-- Sunni row -->
-    <div style="font-size:10px;font-weight:700;color:var(--sunni);margin-bottom:4px;letter-spacing:0.5px;">SUNNI HADITH</div>
+    <div style="font-size:10px;font-weight:700;color:var(--sunni);margin-bottom:5px;letter-spacing:0.5px;">SUNNI HADITH</div>
     <div style="display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:6px;scrollbar-width:none;">
       <button class="book-chip active" id="book-all"      onclick="setBook('',this)"                    style="flex-shrink:0;">All</button>
       <button class="book-chip"        id="book-bukhari"  onclick="setBook('Sahih al-Bukhari',this)"     style="flex-shrink:0;">Bukhari</button>
@@ -318,7 +318,7 @@ mark.hl-green{background:#BAFFC9;}
       <button class="book-chip" id="book-qurtubi"    onclick="setScholar('Tafsir al-Qurtubi',this)"             style="flex-shrink:0;">Al-Qurtubi</button>
       <button class="book-chip" id="book-jalalayn"   onclick="setScholar('Tafsir al-Jalalayn',this)"            style="flex-shrink:0;">Al-Jalalayn</button>
       <button class="book-chip" id="book-ibnabbas"   onclick="setScholar('Tanwir al-Miqbas (Ibn Abbas)',this)"  style="flex-shrink:0;">Ibn Abbas</button>
-      <button class="book-chip" id="book-saadi"      onclick="setScholar('Tafsir al-Sa'di',this)"              style="flex-shrink:0;">Al-Sa&#x2019;di</button>
+      <button class="book-chip" id="book-saadi"      onclick="setScholar('Tafsir al-Saadi',this)"              style="flex-shrink:0;">Al-Sa&#x2019;di</button>
       <button class="book-chip" id="book-zilal"      onclick="setScholar('Fi Zilal al-Quran (Qutb)',this)"      style="flex-shrink:0;">Fi Zilal (Qutb)</button>
     </div>
   </div>
@@ -338,12 +338,12 @@ mark.hl-green{background:#BAFFC9;}
     <div class="topic-chip" onclick="quickSearch('Moses')">Moses</div>
     <div class="topic-chip" onclick="quickSearch('Jesus')">Jesus</div>
     <div class="topic-chip" onclick="quickSearch('revelation')">Revelation</div>
-    <div class="topic-chip" onclick="setMode('topic',document.getElementById('mode-topic'));quickSearch('tawhid')">Tawhid</div>
-    <div class="topic-chip" onclick="setMode('topic',document.getElementById('mode-topic'));quickSearch('tawbah')">Repentance</div>
-    <div class="topic-chip" onclick="setMode('topic',document.getElementById('mode-topic'));quickSearch('akhira')">Afterlife</div>
-    <div class="topic-chip" onclick="setMode('topic',document.getElementById('mode-topic'));quickSearch('dua')">Supplication</div>
-    <div class="topic-chip" onclick="setMode('topic',document.getElementById('mode-topic'));quickSearch('taqwa')">Taqwa</div>
-    <div class="topic-chip" onclick="setMode('topic',document.getElementById('mode-topic'));quickSearch('iman')">Iman</div>
+    <div class="topic-chip" onclick="siraOrSearch('tawhid','topic')">Tawhid</div>
+    <div class="topic-chip" onclick="siraOrSearch('tawbah','topic')">Repentance</div>
+    <div class="topic-chip" onclick="siraOrSearch('akhira','topic')">Afterlife</div>
+    <div class="topic-chip" onclick="siraOrSearch('dua','topic')">Supplication</div>
+    <div class="topic-chip" onclick="siraOrSearch('taqwa','topic')">Taqwa</div>
+    <div class="topic-chip" onclick="siraOrSearch('iman','topic')">Iman</div>
   </div>
 </div>
 
@@ -710,8 +710,8 @@ function setSource(src, el) {
   currentSource = src;
   document.querySelectorAll('.source-tab').forEach(t => t.classList.remove('active'));
   el.classList.add('active');
-  document.getElementById('collectionFilter').style.display = (src === 'hadith' || src === 'all') ? '' : 'none';
-  document.getElementById('scholarFilter').style.display = (src === 'tafsir') ? '' : 'none';
+  // collectionFilter and scholarFilter are now hidden — values set by book/scholar chips
+  // document.getElementById('collectionFilter').style.display = ...  (removed)
   // Toggle Sira panel vs results area
   const siraPanel = document.getElementById('siraPanel');
   const resultsArea = document.querySelector('.results-area');
@@ -766,6 +766,12 @@ function setScholar(scholar, btn) {
   if (q) doSearch();
 }
 
+function siraOrSearch(term, mode) {
+  const btn = document.getElementById('mode-' + mode);
+  if (btn) setMode(mode, btn);
+  document.getElementById('searchInput').value = term;
+  doSearch();
+}
 function quickSearch(term) {
   document.getElementById('searchInput').value = term;
   doSearch();
@@ -885,6 +891,14 @@ const CONCEPT_MAP = {
   mercy:       ['rahma','compassion','forgiveness','god','allah','gentle','kind'],
   women:       ['marriage','wife','mother','daughter','rights','hijab','honor'],
   children:    ['offspring','sons','daughters','family','orphan','upbringing'],
+  // Fiqh / intimate topics — mapped to proper Islamic terminology
+  dog:         ['animal','companion','guard','hunting','hound','saluki','impure','ruling','fiqh','halal','haram','permissible'],
+  fuck:        ['intercourse','intimacy','nikah','marriage','zina','fornication','adultery','halal','haram','fiqh','ruling','husband','wife','mahram'],
+  sex:         ['intercourse','intimacy','nikah','marriage','zina','fornication','adultery','halal','haram','fiqh','ruling'],
+  intercourse: ['nikah','intimacy','marriage','zina','fornication','halal','haram','fiqh','ruling','husband','wife'],
+  zina:        ['fornication','adultery','intercourse','intimacy','punishment','hadd','prohibition','sin'],
+  rape:        ['assault','coercion','zina','prohibition','punishment','hadd','justice','oppression'],
+  nudity:      ['awrah','covering','hijab','modesty','prohibition','haram'],
   // Islamic topics / pillars
   prayer:      ['salah','salat','worship','five pillars','obligatory','ruku','sujud','wudu','qibla'],
   fasting:     ['sawm','ramadan','fast','month','iftar','suhoor','hunger','night'],
