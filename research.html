@@ -17,6 +17,7 @@
   --hadith:#2E7D32;--hadith-bg:#E8F5E9;--hadith-border:#81C784;
   --tafsir:#6A1B9A;--tafsir-bg:#F3E5F5;--tafsir-border:#CE93D8;
   --sira:#7B4F2E;--sira-bg:#FDF5EB;--sira-border:#D4A87A;
+}
 
 body{font-family:'Crimson Pro',serif;background:var(--bg);color:var(--ink);min-height:100vh;}
 
@@ -536,7 +537,27 @@ async function runAIResearch() {
 
 <!-- SIRA RESEARCH PANEL -->
 <div id="siraPanel">
-  <div style="text-align:center;padding:30px;color:#aaa;font-style:italic;">Loading Sīra timeline...</div>
+  <div style="max-width:900px;margin:0 auto;">
+    <div style="display:flex;gap:8px;margin-bottom:16px;padding-top:4px;">
+      <input id="siraSearchInput" class="search-input" placeholder="Search Sīra events, figures, locations..." oninput="filterSiraTimeline(this.value)" style="flex:1;font-size:15px;padding:10px 14px;">
+      <button onclick="filterSiraTimeline(document.getElementById('siraSearchInput').value)" class="search-btn">Search</button>
+    </div>
+    <!-- Quick topic chips for Sira -->
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;">
+      <span style="font-size:11px;color:var(--ink4);align-self:center;font-weight:700;">Quick:</span>
+      <div class="topic-chip" onclick="siraQuick('Hijra')">Hijra</div>
+      <div class="topic-chip" onclick="siraQuick('Battle of Badr')">Badr</div>
+      <div class="topic-chip" onclick="siraQuick('Uhud')">Uhud</div>
+      <div class="topic-chip" onclick="siraQuick('Khadijah')">Khadijah</div>
+      <div class="topic-chip" onclick="siraQuick('Abu Bakr')">Abu Bakr</div>
+      <div class="topic-chip" onclick="siraQuick('revelation')">Revelation</div>
+      <div class="topic-chip" onclick="siraQuick('Mecca')">Mecca</div>
+      <div class="topic-chip" onclick="siraQuick('Medina')">Medina</div>
+    </div>
+    <div id="siraTimelineWrap">
+      <div style="text-align:center;padding:30px;color:#aaa;font-style:italic;"><span class="spinner"></span> Loading Sīra timeline...</div>
+    </div>
+  </div>
 </div>
 
 <!-- NOTE MODAL -->
@@ -1149,111 +1170,137 @@ renderBookmarks();
 
 // ── SIRA RESEARCH ────────────────────────────────────────────────
 let siraLoaded = false;
+let _siraEvents = [];
+let _siraMapsBySira = {};
 
 async function loadSiraResearch() {
   if (siraLoaded) return;
   siraLoaded = true;
-  const panel = document.getElementById('siraPanel');
+  const wrap = document.getElementById('siraTimelineWrap');
 
   try {
-    // Fetch all events ordered by year
-    const events = await fetch(
-      `${SB_URL}/rest/v1/sira_events?select=*&order=year_ce.asc`,
-      { headers: HDRS }
-    ).then(r => r.json());
+    const [events, maps] = await Promise.all([
+      fetch(`${SB_URL}/rest/v1/sira_events?select=*&order=year_ce.asc`, { headers: HDRS }).then(r => r.json()),
+      fetch(`${SB_URL}/rest/v1/sira_verse_map?select=*`, { headers: HDRS }).then(r => r.json())
+    ]);
 
-    // Fetch all verse maps
-    const maps = await fetch(
-      `${SB_URL}/rest/v1/sira_verse_map?select=*`,
-      { headers: HDRS }
-    ).then(r => r.json());
-
-    // Group maps by sira_id
-    const mapsBySira = {};
-    maps.forEach(m => {
-      if (!mapsBySira[m.sira_id]) mapsBySira[m.sira_id] = [];
-      mapsBySira[m.sira_id].push(m);
+    _siraMapsBySira = {};
+    (maps || []).forEach(m => {
+      if (!_siraMapsBySira[m.sira_id]) _siraMapsBySira[m.sira_id] = [];
+      _siraMapsBySira[m.sira_id].push(m);
     });
 
-    // Group events by period
-    const periods = {};
-    events.forEach(ev => {
-      const p = ev.period || 'Other';
-      if (!periods[p]) periods[p] = [];
-      periods[p].push(ev);
-    });
-
-    const periodOrder = ['Pre-Islamic','Pre-Prophethood','Early Meccan','Late Meccan','Medinan','Other'];
-
-    let html = '<div class="sira-timeline">';
-
-    periodOrder.forEach(period => {
-      if (!periods[period]) return;
-      html += `<div class="sira-period-header">📅 ${period} Period</div>`;
-
-      periods[period].forEach(ev => {
-        const vms = mapsBySira[ev.id] || [];
-        const verseChips = vms.map(vm =>
-          vm.applies_to_full_sura
-            ? `<span class="sira-verse-chip" onclick="window.open('https://fascinating-sunburst-516df8.netlify.app?sura=${vm.sura}&from=research','_blank')">📖 ${vm.sura}:all</span>`
-            : `<span class="sira-verse-chip" onclick="window.open('https://fascinating-sunburst-516df8.netlify.app?sura=${vm.sura}&from=research&aya=${vm.aya}&from=research','_blank')">📖 ${vm.sura}:${vm.aya}</span>`
-        ).join('');
-
-        html += `
-        <div class="sira-event-card" onclick="toggleSiraEvent(this)">
-          <div class="sira-event-header">
-            <div class="sira-event-year">
-              ${ev.year_ce ? ev.year_ce + ' CE' : ''}
-              ${ev.year_ah && ev.year_ah > 0 ? '<br>' + ev.year_ah + ' AH' : ''}
-            </div>
-            <div class="sira-event-titles">
-              <div class="sira-event-title-en">${ev.title_en || ''}</div>
-              ${ev.title_ar ? `<div class="sira-event-title-ar">${ev.title_ar}</div>` : ''}
-            </div>
-            <div style="font-size:18px;color:#ccc;padding-top:2px;">›</div>
-          </div>
-          <div class="sira-event-body">
-            ${ev.story_en ? `<div class="sira-story-text">${ev.story_en}</div>` : ''}
-            ${ev.story_ar ? `
-              <div class="sira-section-label">بالعربية</div>
-              <div class="sira-ref-item" style="font-family:'Amiri',serif;font-size:15px;direction:rtl;text-align:right;">${ev.story_ar}</div>
-            ` : ''}
-
-            ${vms.length ? `
-              <div class="sira-section-label">📖 Quran Verses</div>
-              <div style="margin-bottom:8px;">${verseChips}</div>
-            ` : ''}
-
-            ${ev.location ? `
-              <div class="sira-section-label">📍 Location</div>
-              <div class="sira-ref-item">${ev.location}</div>
-            ` : ''}
-
-            ${ev.key_figures && ev.key_figures.length ? `
-              <div class="sira-section-label">👥 Key Figures</div>
-              <div class="sira-meta-row">${ev.key_figures.map(f => `<span class="sira-meta-chip">${f}</span>`).join('')}</div>
-            ` : ''}
-
-            ${ev.hadith_ref ? `
-              <div class="sira-section-label">📜 Hadith Reference</div>
-              <div class="sira-ref-item"><strong>Ref:</strong> ${ev.hadith_ref}</div>
-            ` : ''}
-
-            ${ev.tafsir_ref ? `
-              <div class="sira-section-label">📚 Tafsir Reference</div>
-              <div class="sira-ref-item"><strong>Ref:</strong> ${ev.tafsir_ref}</div>
-            ` : ''}
-          </div>
-        </div>`;
-      });
-    });
-
-    html += '</div>';
-    panel.innerHTML = html;
+    _siraEvents = events || [];
+    renderSiraTimeline(_siraEvents);
 
   } catch(err) {
-    panel.innerHTML = `<div style="padding:20px;color:red;">Error loading Sīra: ${err.message}</div>`;
+    wrap.innerHTML = `<div style="padding:20px;color:red;">Error loading Sīra: ${err.message}</div>`;
   }
+}
+
+function siraQuick(term) {
+  document.getElementById('siraSearchInput').value = term;
+  filterSiraTimeline(term);
+}
+
+function filterSiraTimeline(q) {
+  if (!_siraEvents.length) return;
+  const term = q.trim().toLowerCase();
+  if (!term) { renderSiraTimeline(_siraEvents); return; }
+  const filtered = _siraEvents.filter(ev => {
+    return (ev.title_en||'').toLowerCase().includes(term)
+      || (ev.story_en||'').toLowerCase().includes(term)
+      || (ev.location||'').toLowerCase().includes(term)
+      || (ev.period||'').toLowerCase().includes(term)
+      || (Array.isArray(ev.key_figures) ? ev.key_figures.join(' ') : '').toLowerCase().includes(term);
+  });
+  renderSiraTimeline(filtered, q);
+}
+
+function renderSiraTimeline(events, q) {
+  const wrap = document.getElementById('siraTimelineWrap');
+  if (!events.length) {
+    wrap.innerHTML = `<div style="text-align:center;padding:40px;color:#888;"><div style="font-size:40px;margin-bottom:12px">🔍</div><div style="font-size:16px;font-weight:700;">No events found</div><div style="font-size:13px;margin-top:6px;">Try different keywords</div></div>`;
+    return;
+  }
+
+  const periods = {};
+  events.forEach(ev => {
+    const p = ev.period || 'Other';
+    if (!periods[p]) periods[p] = [];
+    periods[p].push(ev);
+  });
+
+  const periodOrder = ['Pre-Islamic','Pre-Prophethood','Early Meccan','Late Meccan','Medinan','Other'];
+  let html = `<div style="font-size:12px;color:var(--ink4);margin-bottom:12px;font-weight:700;">${events.length} event${events.length===1?'':'s'}</div><div class="sira-timeline">`;
+
+  periodOrder.forEach(period => {
+    if (!periods[period]) return;
+    html += `<div class="sira-period-header">📅 ${period} Period <span style="font-weight:400;opacity:0.8;font-size:11px;">(${periods[period].length})</span></div>`;
+
+    periods[period].forEach(ev => {
+      const vms = _siraMapsBySira[ev.id] || [];
+      const verseChips = vms.map(vm =>
+        vm.applies_to_full_sura
+          ? `<span class="sira-verse-chip" onclick="window.open('https://fascinating-sunburst-516df8.netlify.app?sura=${vm.sura}&from=research','_blank')">📖 ${vm.sura}:all</span>`
+          : `<span class="sira-verse-chip" onclick="window.open('https://fascinating-sunburst-516df8.netlify.app?sura=${vm.sura}&from=research&aya=${vm.aya}','_blank')">📖 ${vm.sura}:${vm.aya}</span>`
+      ).join('');
+
+      const titleEn = q ? highlightSira(ev.title_en||'', q) : (ev.title_en||'');
+      const storyEn = q ? highlightSira((ev.story_en||'').slice(0,600), q) : (ev.story_en||'').slice(0,600);
+
+      html += `
+      <div class="sira-event-card" onclick="toggleSiraEvent(this)">
+        <div class="sira-event-header">
+          <div class="sira-event-year">
+            ${ev.year_ce ? ev.year_ce + ' CE' : ''}
+            ${ev.year_ah && ev.year_ah > 0 ? '<br>' + ev.year_ah + ' AH' : ''}
+          </div>
+          <div class="sira-event-titles">
+            <div class="sira-event-title-en">${titleEn}</div>
+            ${ev.title_ar ? `<div class="sira-event-title-ar">${ev.title_ar}</div>` : ''}
+          </div>
+          <div style="font-size:18px;color:#ccc;padding-top:2px;transition:transform 0.2s;">›</div>
+        </div>
+        <div class="sira-event-body">
+          ${ev.story_en ? `<div class="sira-story-text">${storyEn}${ev.story_en.length > 600 ? '…' : ''}</div>` : ''}
+          ${ev.story_ar ? `
+            <div class="sira-section-label">بالعربية</div>
+            <div class="sira-ref-item" style="font-family:'Amiri',serif;font-size:15px;direction:rtl;text-align:right;">${ev.story_ar}</div>
+          ` : ''}
+          ${vms.length ? `
+            <div class="sira-section-label">📖 Related Quran Verses</div>
+            <div style="margin-bottom:8px;">${verseChips}</div>
+          ` : ''}
+          ${ev.location ? `
+            <div class="sira-section-label">📍 Location</div>
+            <div class="sira-ref-item">${ev.location}</div>
+          ` : ''}
+          ${ev.key_figures && ev.key_figures.length ? `
+            <div class="sira-section-label">👥 Key Figures</div>
+            <div class="sira-meta-row">${ev.key_figures.map(f => `<span class="sira-meta-chip">${f}</span>`).join('')}</div>
+          ` : ''}
+          ${ev.hadith_ref ? `
+            <div class="sira-section-label">📜 Hadith Reference</div>
+            <div class="sira-ref-item"><strong>Ref:</strong> ${ev.hadith_ref}</div>
+          ` : ''}
+          ${ev.tafsir_ref ? `
+            <div class="sira-section-label">📚 Tafsir Reference</div>
+            <div class="sira-ref-item"><strong>Ref:</strong> ${ev.tafsir_ref}</div>
+          ` : ''}
+        </div>
+      </div>`;
+    });
+  });
+
+  html += '</div>';
+  wrap.innerHTML = html;
+}
+
+function highlightSira(text, q) {
+  if (!text || !q) return text;
+  const escaped = q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  return text.replace(new RegExp(`(${escaped})`, 'gi'), '<mark class="hl-yellow">$1</mark>');
 }
 
 function toggleSiraEvent(card) {
