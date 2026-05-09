@@ -781,30 +781,50 @@ async function sbFetch(table, params) {
 }
 
 async function sbSearch(table, select, column, q, extra) {
-  // For multi-word queries, try full phrase first then individual words
-  const queries = [q];
+  // Build list of terms: full phrase + individual words for multi-word queries
+  const terms = [q];
   if (q.includes(' ')) {
     q.split(/\s+/).filter(w => w.length >= 3).forEach(w => {
-      if (!queries.includes(w)) queries.push(w);
+      if (!terms.includes(w)) terms.push(w);
     });
   }
   const seen = new Set();
   const results = [];
-  for (const term of queries) {
+  for (const term of terms) {
+    const enc = encodeURIComponent(term);
+    // Use PostgREST OR filter to search ALL relevant text columns at once
+    // This means one request covers every field, not just the one passed in
+    let filterParam;
+    if (table === 'sira_events') {
+      // Search every text field in sira_events in one shot
+      filterParam = `title_en.ilike.*${enc}*,title_ar.ilike.*${enc}*,story_en.ilike.*${enc}*,story_ar.ilike.*${enc}*,location.ilike.*${enc}*,period.ilike.*${enc}*,hadith_ref.ilike.*${enc}*,tafsir_ref.ilike.*${enc}*`;
+    } else if (table === 'hadith_connections') {
+      filterParam = `hadith_text.ilike.*${enc}*,narrator.ilike.*${enc}*,collection.ilike.*${enc}*,similarity_note.ilike.*${enc}*`;
+    } else if (table === 'hadith_corpus') {
+      filterParam = `text_english.ilike.*${enc}*,narrator.ilike.*${enc}*,collection.ilike.*${enc}*`;
+    } else if (table === 'tafsir_entries') {
+      filterParam = `content.ilike.*${enc}*,source_name.ilike.*${enc}*,scholar_name.ilike.*${enc}*`;
+    } else if (table === 'asbab_al_nuzul') {
+      filterParam = `reason_text.ilike.*${enc}*,scholar.ilike.*${enc}*,source.ilike.*${enc}*`;
+    } else {
+      // Fallback: single column as before
+      filterParam = `${column}.ilike.*${enc}*`;
+    }
     const url = new URL(`${SB_URL}/rest/v1/${table}`);
     url.searchParams.set('select', select);
-    url.searchParams.set(column, `ilike.*${term}*`);
-    url.searchParams.set('limit', '50');
+    url.searchParams.set('or', `(${filterParam})`);
+    url.searchParams.set('limit', '100');
     if (extra) Object.entries(extra).forEach(([k,v]) => url.searchParams.set(k, v));
     try {
       const r = await fetch(url, { headers: HDRS });
       if (!r.ok) continue;
       const rows = await r.json();
+      if (!Array.isArray(rows)) continue;
       rows.forEach(row => {
         const key = row.id || JSON.stringify(row);
         if (!seen.has(key)) { seen.add(key); results.push(row); }
       });
-    } catch {}
+    } catch(e) { console.warn('sbSearch error', table, term, e); }
   }
   return results;
 }
@@ -1006,16 +1026,14 @@ async function fetchAllSources(q, tradFilter, collection, scholar) {
     const corpSel = 'id,sura_id,aya_number,hadith_text:text_english,arabic_text:text_arabic,narrator,collection,reference:hadith_number,tradition,hadith_grade:grade';
     const corpExtra = {...tradFilter};
     if (collection) corpExtra.collection = 'eq.' + collection;
-    const [h1,h2,h3,c1,c2] = await Promise.all([
-      sbSearch('hadith_connections', hSelect,  'hadith_text',  q, hExtra),
-      sbSearch('hadith_connections', hSelect,  'narrator',     q, hExtra),
-      sbSearch('hadith_connections', hSelect,  'collection',   q, hExtra),
-      sbSearch('hadith_corpus',      corpSel,  'text_english', q, corpExtra),
-      sbSearch('hadith_corpus',      corpSel,  'narrator',     q, corpExtra),
+    // sbSearch now searches all hadith columns via OR in one request each
+    const [hRows, cRows] = await Promise.all([
+      sbSearch('hadith_connections', hSelect, 'hadith_text', q, hExtra),
+      sbSearch('hadith_corpus',      corpSel, 'text_english', q, corpExtra),
     ]);
     const tagged = [
-      ...h1.map(r=>({...r,_tbl:'hc'})), ...h2.map(r=>({...r,_tbl:'hc'})), ...h3.map(r=>({...r,_tbl:'hc'})),
-      ...c1.map(r=>({...r,_tbl:'corpus',similarity_note:null})), ...c2.map(r=>({...r,_tbl:'corpus',similarity_note:null}))
+      ...hRows.map(r=>({...r,_tbl:'hc'})),
+      ...cRows.map(r=>({...r,_tbl:'corpus',similarity_note:null}))
     ];
     const seen = new Set();
     tagged.forEach(r => { const k='hc:'+r._tbl+':'+r.id; if(!seen.has(k)){seen.add(k);results.push({type:'hadith',...r});} });
@@ -1025,35 +1043,25 @@ async function fetchAllSources(q, tradFilter, collection, scholar) {
     const tSel   = 'id,sura,aya,content,source_name,scholar_name,tradition,language';
     const tExtra = {language:'eq.en',...tradFilter};
     if (scholar) tExtra.source_name = 'eq.' + scholar;
-    const [t1,t2] = await Promise.all([
-      sbSearch('tafsir_entries', tSel, 'content',     q, tExtra),
-      sbSearch('tafsir_entries', tSel, 'source_name', q, tExtra),
-    ]);
+    const tRows = await sbSearch('tafsir_entries', tSel, 'content', q, tExtra);
     const seen = new Set();
-    [...t1,...t2].forEach(r => { if(!seen.has(r.id)){seen.add(r.id);results.push({type:'tafsir',...r});} });
+    tRows.forEach(r => { if(!seen.has(r.id)){seen.add(r.id);results.push({type:'tafsir',...r});} });
   }
 
   if (currentSource === 'all' || currentSource === 'sira') {
     const sSel = 'id,title_en,title_ar,story_en,story_ar,year_ce,year_ah,location,period,key_figures,hadith_ref,tafsir_ref';
-    const [s1,s2,s3,s4] = await Promise.all([
-      sbSearch('sira_events', sSel, 'title_en',   q, {}),
-      sbSearch('sira_events', sSel, 'story_en',   q, {}),
-      sbSearch('sira_events', sSel, 'location',   q, {}),
-      sbSearch('sira_events', sSel, 'hadith_ref', q, {}),
-    ]);
+    // sbSearch now uses OR across ALL sira_events columns in one request
+    const sRows = await sbSearch('sira_events', sSel, 'title_en', q, {});
     const seen = new Set();
-    [...s1,...s2,...s3,...s4].forEach(r => { if(!seen.has(r.id)){seen.add(r.id);results.push({type:'sira',...r});} });
+    sRows.forEach(r => { if(!seen.has(r.id)){seen.add(r.id);results.push({type:'sira',...r});} });
   }
 
   if (currentSource === 'all' || currentSource === 'asbab') {
     const aSel   = 'id,sura_id,aya_number,reason_text,scholar,tradition,source';
     const aExtra = {...tradFilter};
-    const [a1,a2] = await Promise.all([
-      sbSearch('asbab_al_nuzul', aSel, 'reason_text', q, aExtra),
-      sbSearch('asbab_al_nuzul', aSel, 'scholar',     q, aExtra),
-    ]);
+    const aRows  = await sbSearch('asbab_al_nuzul', aSel, 'reason_text', q, aExtra);
     const seen = new Set();
-    [...a1,...a2].forEach(r => { if(!seen.has(r.id)){seen.add(r.id);results.push({type:'asbab',...r});} });
+    aRows.forEach(r => { if(!seen.has(r.id)){seen.add(r.id);results.push({type:'asbab',...r});} });
   }
 
   return results;
@@ -1464,7 +1472,7 @@ async function loadSiraResearch() {
     wrap.innerHTML = '<div style="text-align:center;padding:30px;color:#aaa;"><span class="spinner"></span> Loading Sīra timeline...</div>';
 
     const [events, maps] = await Promise.all([
-      fetch(`${SB_URL}/rest/v1/sira_events?select=*&order=year_ce.asc`, { headers: HDRS }).then(r => r.json()),
+      fetch(`${SB_URL}/rest/v1/sira_events?select=*&order=year_ce.asc&limit=2000`, { headers: HDRS }).then(r => r.json()),
       fetch(`${SB_URL}/rest/v1/sira_verse_map?select=*`, { headers: HDRS }).then(r => r.json())
     ]);
 
@@ -1565,30 +1573,39 @@ function siraQuick(term) {
   filterSiraTimeline(term);
 }
 
+function getEvHaystack(ev) {
+  // Safely flatten all searchable text from a sira event into one lowercase string
+  let kf = '';
+  if (Array.isArray(ev.key_figures))       kf = ev.key_figures.join(' ');
+  else if (typeof ev.key_figures === 'string') kf = ev.key_figures;
+  else if (ev.key_figures)                     kf = JSON.stringify(ev.key_figures);
+  return [
+    ev.title_en || '', ev.title_ar || '',
+    ev.story_en || '', ev.story_ar || '',
+    ev.location || '', ev.period   || '',
+    ev.hadith_ref || '', ev.tafsir_ref || '',
+    kf
+  ].join(' ').toLowerCase();
+}
+
 function filterSiraTimeline(q) {
-  if (!_siraEvents.length) return;
+  const pool = window._siraAllEvents || _siraEvents;
+  if (!pool.length) return;
   const term = q.trim().toLowerCase();
-  if (!term) { renderSiraTimeline(_siraEvents, [], '', []); return; }
+  if (!term) { renderSiraTimeline(pool, [], '', []); return; }
 
-  // Section 1: exact word-boundary match across all fields
-  const re = new RegExp('(^|\\s|[^a-zA-Z])' + term.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + '($|\\s|[^a-zA-Z])', 'i');
-  const exact = _siraEvents.filter(ev =>
-    re.test(ev.title_en||'') || re.test(ev.story_en||'') ||
-    re.test(ev.location||'') || re.test(ev.period||'') ||
-    re.test(Array.isArray(ev.key_figures) ? ev.key_figures.join(' ') : (ev.key_figures||''))
-  );
+  // Section 1: any field contains the term (simple substring — catches mid-story mentions)
+  const exact = pool.filter(ev => getEvHaystack(ev).includes(term));
 
-  // Section 2: related/conceptual — terms from concept map, soft match
+  // Section 2: related/conceptual via concept map
   const relatedTerms = getRelatedTerms(term);
   const exactIds = new Set(exact.map(ev => ev.id));
   const related = [];
   if (relatedTerms.length) {
-    _siraEvents.forEach(ev => {
+    pool.forEach(ev => {
       if (exactIds.has(ev.id)) return;
-      const haystack = [ev.title_en, ev.story_en, ev.location, ev.period,
-        Array.isArray(ev.key_figures) ? ev.key_figures.join(' ') : (ev.key_figures||'')
-      ].join(' ').toLowerCase();
-      if (relatedTerms.some(t => haystack.includes(t))) related.push(ev);
+      const hay = getEvHaystack(ev);
+      if (relatedTerms.some(t => hay.includes(t))) related.push(ev);
     });
   }
 
