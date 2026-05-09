@@ -142,8 +142,8 @@ mark.hl-green{background:#BAFFC9;}
 .source-tab.sira.active{background:var(--sira);color:#fff;border-color:var(--sira);}
 
 /* Sira Research Panel */
-#siraPanel{display:none;padding:16px;}
-#siraPanel.active{display:block;}
+#siraPanel{display:none;padding:16px;width:100%;}
+#siraPanel.active{display:block;min-height:60vh;}
 .sira-timeline{display:flex;flex-direction:column;gap:0;}
 .sira-period-header{background:var(--sira);color:#fff;padding:10px 16px;font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;border-radius:8px;margin:16px 0 8px;cursor:default;}
 .sira-event-card{background:var(--bg3);border:1.5px solid var(--sira-border);border-radius:10px;margin-bottom:10px;overflow:hidden;cursor:pointer;transition:box-shadow 0.15s;}
@@ -554,7 +554,7 @@ async function runAIResearch() {
       <div class="topic-chip" onclick="siraQuick('Mecca')">Mecca</div>
       <div class="topic-chip" onclick="siraQuick('Medina')">Medina</div>
     </div>
-    <div id="siraTimelineWrap">
+    <div id="siraTimelineWrap" style="width:100%;">
       <div style="text-align:center;padding:30px;color:#aaa;font-style:italic;"><span class="spinner"></span> Loading Sīra timeline...</div>
     </div>
   </div>
@@ -623,12 +623,13 @@ function setSource(src, el) {
   // Toggle Sira panel vs results area
   const siraPanel = document.getElementById('siraPanel');
   const resultsArea = document.querySelector('.results-area');
+  const aiSection = document.querySelector('.results-area')?.previousElementSibling;
   if (src === 'sira') {
     siraPanel.classList.add('active');
-    if (resultsArea) resultsArea.style.display = 'none';
+    if (resultsArea) { resultsArea.style.display = 'none'; resultsArea.style.visibility = 'hidden'; }
   } else {
     siraPanel.classList.remove('active');
-    if (resultsArea) resultsArea.style.display = '';
+    if (resultsArea) { resultsArea.style.display = ''; resultsArea.style.visibility = ''; }
   }
 }
 
@@ -1177,12 +1178,17 @@ async function loadSiraResearch() {
   if (siraLoaded) return;
   siraLoaded = true;
   const wrap = document.getElementById('siraTimelineWrap');
+  if (!wrap) { console.error('siraTimelineWrap missing'); return; }
 
   try {
+    wrap.innerHTML = '<div style="text-align:center;padding:30px;color:#aaa;"><span class="spinner"></span> Loading Sīra timeline...</div>';
+
     const [events, maps] = await Promise.all([
       fetch(`${SB_URL}/rest/v1/sira_events?select=*&order=year_ce.asc`, { headers: HDRS }).then(r => r.json()),
       fetch(`${SB_URL}/rest/v1/sira_verse_map?select=*`, { headers: HDRS }).then(r => r.json())
     ]);
+
+    console.log('Sira events loaded:', events?.length, 'maps:', maps?.length);
 
     _siraMapsBySira = {};
     (maps || []).forEach(m => {
@@ -1194,7 +1200,10 @@ async function loadSiraResearch() {
     renderSiraTimeline(_siraEvents);
 
   } catch(err) {
-    wrap.innerHTML = `<div style="padding:20px;color:red;">Error loading Sīra: ${err.message}</div>`;
+    console.error('Sira load error:', err);
+    const w = document.getElementById('siraTimelineWrap');
+    if (w) w.innerHTML = `<div style="padding:20px;color:red;font-weight:700;">Error loading Sīra: ${err.message}</div>`;
+    siraLoaded = false; // allow retry
   }
 }
 
@@ -1219,7 +1228,8 @@ function filterSiraTimeline(q) {
 
 function renderSiraTimeline(events, q) {
   const wrap = document.getElementById('siraTimelineWrap');
-  if (!events.length) {
+  if (!wrap) { console.error('siraTimelineWrap not found'); return; }
+  if (!events || !events.length) {
     wrap.innerHTML = `<div style="text-align:center;padding:40px;color:#888;"><div style="font-size:40px;margin-bottom:12px">🔍</div><div style="font-size:16px;font-weight:700;">No events found</div><div style="font-size:13px;margin-top:6px;">Try different keywords</div></div>`;
     return;
   }
