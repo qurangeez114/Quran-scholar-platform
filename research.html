@@ -63,6 +63,9 @@ body{font-family:'Crimson Pro',serif;background:var(--bg);color:var(--ink);min-h
 .topics-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;}
 .topic-chip{padding:6px 14px;border:1px solid var(--gold-border);border-radius:20px;font-size:14px;font-weight:700;color:var(--gold);background:var(--bg3);cursor:pointer;}
 .topic-chip:hover{background:var(--gold-pale);}
+.mode-btn{padding:5px 12px;border:1.5px solid var(--gold-border);border-radius:20px;background:var(--bg3);font-size:12px;font-weight:700;color:var(--ink4);cursor:pointer;transition:all 0.15s;}
+.mode-btn:hover{border-color:var(--gold);color:var(--gold);background:var(--gold-pale);}
+.mode-btn.active{background:var(--gold);color:#fff;border-color:var(--gold);}
 
 /* ── RESULTS ── */
 .results-area{padding:16px 20px;max-width:900px;margin:0 auto;}
@@ -210,6 +213,20 @@ mark.hl-green{background:#BAFFC9;}
     <button class="search-btn" onclick="doSearch()">Search</button>
   </div>
 
+  <!-- Search mode selector -->
+  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;align-items:center;">
+    <span style="font-size:11px;color:var(--ink4);font-weight:700;white-space:nowrap;">Search by:</span>
+    <button class="mode-btn active" id="mode-word"    onclick="setMode('word',this)"    >🔤 Word</button>
+    <button class="mode-btn"        id="mode-who"     onclick="setMode('who',this)"     >👤 Who (Person)</button>
+    <button class="mode-btn"        id="mode-what"    onclick="setMode('what',this)"    >📋 What (Event)</button>
+    <button class="mode-btn"        id="mode-where"   onclick="setMode('where',this)"   >📍 Where (Place)</button>
+    <button class="mode-btn"        id="mode-when"    onclick="setMode('when',this)"    >🕐 When (Time)</button>
+    <button class="mode-btn"        id="mode-why"     onclick="setMode('why',this)"     >💡 Why (Reason)</button>
+    <button class="mode-btn"        id="mode-concept" onclick="setMode('concept',this)" >🔗 Concept</button>
+    <button class="mode-btn"        id="mode-topic"   onclick="setMode('topic',this)"   >📌 Topic</button>
+  </div>
+  <div id="modeHint" style="font-size:11px;color:var(--ink4);margin-top:5px;font-style:italic;min-height:16px;padding-left:2px;"></div>
+
   <!-- Filters -->
   <div class="filters">
     <div class="trad-toggle">
@@ -252,6 +269,12 @@ mark.hl-green{background:#BAFFC9;}
     <div class="topic-chip" onclick="quickSearch('Moses')">Moses</div>
     <div class="topic-chip" onclick="quickSearch('Jesus')">Jesus</div>
     <div class="topic-chip" onclick="quickSearch('revelation')">Revelation</div>
+    <div class="topic-chip" onclick="setMode('topic',document.getElementById('mode-topic'));quickSearch('tawhid')">Tawhid</div>
+    <div class="topic-chip" onclick="setMode('topic',document.getElementById('mode-topic'));quickSearch('tawbah')">Repentance</div>
+    <div class="topic-chip" onclick="setMode('topic',document.getElementById('mode-topic'));quickSearch('akhira')">Afterlife</div>
+    <div class="topic-chip" onclick="setMode('topic',document.getElementById('mode-topic'));quickSearch('dua')">Supplication</div>
+    <div class="topic-chip" onclick="setMode('topic',document.getElementById('mode-topic'));quickSearch('taqwa')">Taqwa</div>
+    <div class="topic-chip" onclick="setMode('topic',document.getElementById('mode-topic'));quickSearch('iman')">Iman</div>
   </div>
 </div>
 
@@ -682,6 +705,149 @@ async function sbSearch(table, select, column, q, extra) {
   return results;
 }
 
+// ── CONCEPT MAP ─────────────────────────────────────────────────
+const CONCEPT_MAP = {
+  khadijah:    ['wife','marriage','prophet','first believer','merchant','widow','married','khuwaylid'],
+  muhammad:    ['prophet','messenger','nabi','rasul','apostle','seal','pbuh'],
+  aisha:       ['wife','mother of believers','abu bakr','daughter'],
+  'abu bakr':  ['caliph','companion','siddiq','first caliph','father of aisha'],
+  umar:        ['second caliph','khattab','companion','farouq','omar'],
+  uthman:      ['third caliph','affan','companion','quran compilation'],
+  ali:         ['fourth caliph','imam','cousin','son-in-law','fatima','murtada'],
+  fatima:      ['daughter prophet','zahra','ali','household','ahlul bayt'],
+  hamza:       ['uncle','lion','uhud','martyr','asadullah'],
+  bilal:       ['muezzin','slave','ethiopia','adhan','freed'],
+  musa:        ['moses','pharaoh','exodus','torah','israelites','staff','miracles'],
+  moses:       ['musa','pharaoh','exodus','torah','israelites','staff','miracles'],
+  isa:         ['jesus','mary','maryam','gospel','injeel','messiah','miracles'],
+  jesus:       ['isa','mary','maryam','gospel','injeel','messiah','miracles'],
+  ibrahim:     ['abraham','kaaba','ismail','fire','nation','idol','khalilullah'],
+  abraham:     ['ibrahim','kaaba','ismail','fire','nation','idol'],
+  ismail:      ['ishmael','ibrahim','sacrifice','kaaba','mecca','zamzam'],
+  nuh:         ['noah','flood','ark','people','disbelievers'],
+  noah:        ['nuh','flood','ark','people'],
+  adam:        ['creation','paradise','jannah','eve','hawwa','first human','clay'],
+  yusuf:       ['joseph','egypt','brothers','prison','beauty','dream'],
+  joseph:      ['yusuf','egypt','brothers','prison','beauty','dream'],
+  badr:        ['battle','victory','muslims','first battle','angels','quraish','313'],
+  uhud:        ['battle','defeat','hamza','archers','mountain','quraish','companions'],
+  hijra:       ['migration','medina','mecca','yathrib','emigration','companions','622'],
+  khandaq:     ['trench','battle','medina','confederates','ahzab','ditch'],
+  isra:        ['night journey','miraj','jerusalem','al-aqsa','ascension','buraq'],
+  miraj:       ['ascension','night journey','heavens','prayer','obligatory','isra'],
+  revelation:  ['wahy','jibreel','gabriel','quran','nuzul','first','iqra','hira'],
+  conquest:    ['fath','mecca','victory','army','quraish','surrender','idol'],
+  mecca:       ['kaaba','quraish','holy city','haram','fath','birth','conquest'],
+  medina:      ['yathrib','migration','hijra','ansar','mosque','prophet'],
+  jerusalem:   ['quds','al-aqsa','isra','masjid','qibla','night journey'],
+  hira:        ['cave','revelation','first','angel','gabriel','iqra'],
+  prayer:      ['salah','salat','worship','ibadah','five pillars','qiblah','prostration'],
+  fasting:     ['sawm','ramadan','fast','abstain','iftar','suhoor'],
+  charity:     ['zakat','sadaqah','giving','poor','wealth','obligatory','alms'],
+  pilgrimage:  ['hajj','umrah','kaaba','mecca','ihram','tawaf','ritual'],
+  paradise:    ['jannah','garden','heaven','reward','afterlife','eternal','rivers'],
+  hell:        ['jahannam','hellfire','punishment','fire','eternal','torment'],
+  hellfire:    ['jahannam','hell','punishment','fire','eternal','torment'],
+  judgment:    ['qiyamah','resurrection','accountability','hisab','akhira','day'],
+  kill:        ['murder','slay','fight','battle','martyr','qatl','war','execute','death','slain'],
+  war:         ['battle','fight','jihad','ghazwa','military','army','expedition','qital'],
+  death:       ['die','killed','martyr','shaheed','burial','funeral','wafat'],
+  marriage:    ['nikah','wedding','wife','husband','spouse','khadijah','aisha','mahr'],
+  miracle:     ['ayah','sign','karama','supernatural','musa','isa','prophet','staff'],
+  companion:   ['sahabi','sahabah','disciple','follower','abu bakr','umar','ali'],
+  jihad:       ['struggle','war','battle','effort','fight','defend','path of allah'],
+  patience:    ['sabr','endurance','hardship','trial','reward','steadfast'],
+  forgiveness: ['tawba','repentance','mercy','maghfira','pardon','sins'],
+  mercy:       ['rahma','compassion','forgiveness','god','allah','gentle','kind'],
+  women:       ['marriage','wife','mother','daughter','rights','hijab','honor'],
+  children:    ['offspring','sons','daughters','family','orphan','upbringing'],
+  // Islamic topics / pillars
+  prayer:      ['salah','salat','worship','five pillars','obligatory','ruku','sujud','wudu','qibla'],
+  fasting:     ['sawm','ramadan','fast','month','iftar','suhoor','hunger','night'],
+  zakat:       ['charity','alms','poor','wealth','obligatory','giving','sadaqah','purification'],
+  hajj:        ['pilgrimage','kaaba','mecca','ihram','tawaf','stoning','zamzam','arafat'],
+  shahada:     ['testimony','faith','declaration','la ilaha','muhammad','witness'],
+  tawhid:      ['oneness','monotheism','god','allah','unity','shirk','idol'],
+  shirk:       ['polytheism','idol','associate','partners','disbelief','kufr'],
+  tawbah:      ['repentance','forgiveness','return','sins','mercy','regret'],
+  zuhd:        ['asceticism','detachment','world','simple','piety','worship'],
+  akhira:      ['afterlife','hereafter','death','judgment','paradise','hellfire','soul'],
+  dua:         ['supplication','prayer','request','ask','allah','invoke','beg'],
+  dhikr:       ['remembrance','glorify','tasbih','subhanallah','alhamdulillah','god'],
+  quran:       ['book','revelation','recite','verses','suras','ayah','hafiz','tajweed'],
+  sunnah:      ['hadith','prophet','tradition','practice','way','example'],
+  sharia:      ['law','islamic','ruling','halal','haram','fiqh','jurisprudence'],
+  halal:       ['permissible','lawful','allowed','food','drink','slaughter'],
+  haram:       ['forbidden','prohibited','unlawful','sin','avoid'],
+  taqwa:       ['piety','god-consciousness','fear','righteousness','devout'],
+  iman:        ['faith','belief','pillars','six','angels','books','prophets','day'],
+  islam:       ['submission','religion','five pillars','prophet','quran','ummah'],
+  ummah:       ['community','nation','muslims','believers','people','together'],
+  dawah:       ['call','invite','propagate','spread','preach','non-muslim'],
+  jihad:       ['struggle','effort','fight','defend','self','path','greater','lesser'],
+  sabr:        ['patience','endurance','hardship','trial','steadfast','reward'],
+  shukr:       ['gratitude','thankfulness','blessings','praise','allah'],
+  tawakkul:    ['trust','reliance','allah','depend','accept','outcome'],
+  ikhlas:      ['sincerity','pure','intention','allah','show off','riya'],
+  ihsan:       ['excellence','perfection','worship','as if','see','best'],
+};
+
+
+// ── SEARCH MODE ───────────────────────────────────────────────────
+let currentMode = 'word';
+const MODE_HINTS = {
+  word:    'Searches for exact word or phrase in all texts',
+  who:     'Searches for people — prophets, companions, figures. e.g. Khadijah, Moses, Abu Bakr',
+  what:    'Searches for events and actions. e.g. Battle of Badr, revelation, conquest',
+  where:   'Searches by place or location. e.g. Mecca, Medina, Jerusalem, cave of Hira',
+  when:    'Searches by time period or year. e.g. 622 CE, Meccan period, early Islam',
+  why:     'Searches for reasons and context of revelation (Asbab al-Nuzul)',
+  concept: 'Searches by theme or concept. e.g. patience, mercy, judgment day, miracle',
+  topic:   'Searches by Islamic topic — prayer, fasting, hajj, zakat, marriage, afterlife...',
+};
+
+function setMode(mode, btn) {
+  currentMode = mode;
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const hint = document.getElementById('modeHint');
+  if (hint) hint.textContent = MODE_HINTS[mode] || '';
+  const input = document.getElementById('searchInput');
+  if (!input) return;
+  const placeholders = {
+    word:    'Enter a word or phrase...',
+    who:     'Enter a person\'s name — e.g. Khadijah, Moses, Abu Bakr...',
+    what:    'Enter an event or action — e.g. Battle of Badr, revelation...',
+    where:   'Enter a place — e.g. Mecca, Medina, Jerusalem, cave of Hira...',
+    when:    'Enter a time or period — e.g. 622 CE, Meccan period...',
+    why:     'Enter a topic to find context of revelation...',
+    concept: 'Enter a concept or theme — e.g. patience, mercy, judgment...',
+    topic:   'Enter an Islamic topic — e.g. prayer, fasting, zakat, hajj, marriage...',
+  };
+  input.placeholder = placeholders[mode] || 'Search...';
+}
+
+// ── HELPERS ───────────────────────────────────────────────────────
+function getRelatedTerms(q) {
+  const lower = q.toLowerCase().trim();
+  const related = new Set();
+  if (CONCEPT_MAP[lower]) CONCEPT_MAP[lower].forEach(t => related.add(t));
+  Object.keys(CONCEPT_MAP).forEach(key => {
+    if (key !== lower && (key.includes(lower) || lower.includes(key))) {
+      CONCEPT_MAP[key].forEach(t => related.add(t));
+      related.add(key);
+    }
+  });
+  Object.entries(CONCEPT_MAP).forEach(([key, vals]) => {
+    if (vals.some(v => v === lower || v.includes(lower) || lower.includes(v))) {
+      related.add(key);
+      CONCEPT_MAP[key].forEach(t => related.add(t));
+    }
+  });
+  related.delete(lower);
+  return Array.from(related).slice(0, 10);
+}
+
 // ── SEARCH ───────────────────────────────────────────────────────
 async function doSearch() {
   const q = document.getElementById('searchInput').value.trim();
@@ -691,107 +857,102 @@ async function doSearch() {
   document.getElementById('resultsHeader').style.display = 'none';
 
   try {
-    const results = [];
-    const tradFilter = currentTrad !== 'all' ? { tradition: `eq.${currentTrad}` } : {};
+    const tradFilter = currentTrad !== 'all' ? { tradition: 'eq.' + currentTrad } : {};
     const collection = document.getElementById('collectionFilter').value;
-    const scholar = document.getElementById('scholarFilter').value;
+    const scholar    = document.getElementById('scholarFilter').value;
+    const relatedTerms = getRelatedTerms(q);
 
-    // HADITH — search BOTH hadith_connections (verse-linked) AND hadith_corpus (full library)
-    // Aliases on hadith_corpus map its columns to the names the renderer already expects:
-    //   text_english -> hadith_text
-    //   text_arabic  -> arabic_text
-    //   hadith_number -> reference
-    //   grade        -> hadith_grade
-    if (currentSource === 'all' || currentSource === 'hadith') {
-      const hSelect = 'id,sura_id,aya_number,hadith_text,arabic_text,narrator,collection,reference,tradition,similarity_note,hadith_grade';
-      const hExtra = { ...tradFilter };
-      if (collection) hExtra.collection = `eq.${collection}`;
+    const exactResults = await fetchAllSources(q, tradFilter, collection, scholar);
 
-      // hadith_corpus has no sura/aya link by default; aliased select keeps renderer happy.
-      const corpusSelect = 'id,sura_id,aya_number,hadith_text:text_english,arabic_text:text_arabic,narrator,collection,reference:hadith_number,tradition,hadith_grade:grade';
-      const corpusExtra = { ...tradFilter };
-      if (collection) corpusExtra.collection = `eq.${collection}`;
-
-      const [h1, h2, h3, c1, c2, c3] = await Promise.all([
-        sbSearch('hadith_connections', hSelect,      'hadith_text',  q, hExtra),
-        sbSearch('hadith_connections', hSelect,      'narrator',     q, hExtra),
-        sbSearch('hadith_connections', hSelect,      'collection',   q, hExtra),
-        sbSearch('hadith_corpus',      corpusSelect, 'text_english', q, corpusExtra),
-        sbSearch('hadith_corpus',      corpusSelect, 'narrator',     q, corpusExtra),
-        sbSearch('hadith_corpus',      corpusSelect, 'collection',   q, corpusExtra)
-      ]);
-
-      // Tag rows with their source table so dedupe can distinguish a connections row
-      // (id=42) from a corpus row (id=42) — they share the integer space but mean
-      // different records. Without the tag we'd lose half the results.
-      const tagged = [
-        ...h1.map(r => ({ ...r, _tbl: 'hc' })),
-        ...h2.map(r => ({ ...r, _tbl: 'hc' })),
-        ...h3.map(r => ({ ...r, _tbl: 'hc' })),
-        ...c1.map(r => ({ ...r, _tbl: 'corpus', similarity_note: null })),
-        ...c2.map(r => ({ ...r, _tbl: 'corpus', similarity_note: null })),
-        ...c3.map(r => ({ ...r, _tbl: 'corpus', similarity_note: null }))
-      ];
-      const hSeen = new Set();
-      tagged.forEach(r => {
-        const key = `${r._tbl}:${r.id}`;
-        if (!hSeen.has(key)) { hSeen.add(key); results.push({ type: 'hadith', ...r }); }
+    let relatedResults = [];
+    if (relatedTerms.length) {
+      const exactIds = new Set(exactResults.map(r => r.type + '-' + (r._tbl||'') + '-' + r.id));
+      const batches  = await Promise.all(relatedTerms.slice(0,5).map(t => fetchAllSources(t, tradFilter, collection, scholar)));
+      const seen = new Set(exactIds);
+      batches.flat().forEach(r => {
+        const k = r.type + '-' + (r._tbl||'') + '-' + r.id;
+        if (!seen.has(k)) { seen.add(k); relatedResults.push({...r, _related:true}); }
       });
     }
 
-    // TAFSIR
-    if (currentSource === 'all' || currentSource === 'tafsir') {
-      const tSelect = 'id,sura,aya,content,source_name,scholar_name,tradition,language';
-      const tExtra = { language: 'eq.en', ...tradFilter };
-      if (scholar) tExtra.source_name = `eq.${scholar}`;
-      const [t1, t2] = await Promise.all([
-        sbSearch('tafsir_entries', tSelect, 'content', q, tExtra),
-        sbSearch('tafsir_entries', tSelect, 'source_name', q, tExtra)
-      ]);
-      const tSeen = new Set();
-      [...t1, ...t2].forEach(r => { if (!tSeen.has(r.id)) { tSeen.add(r.id); results.push({ type: 'tafsir', ...r }); } });
+    if (currentSource === 'sira') {
+      const exactSira   = exactResults.filter(r => r.type === 'sira');
+      const relatedSira = relatedResults.filter(r => r.type === 'sira');
+      _siraEvents = [...exactSira, ...relatedSira];
+      renderSiraTimeline(exactSira, relatedSira, q, relatedTerms);
+      allResults = _siraEvents;
+      return;
     }
 
-    // SIRA — search full book: title, story, key figures, location
-    if (currentSource === 'all' || currentSource === 'sira') {
-      const sSelect = 'id,title_en,title_ar,story_en,story_ar,year_ce,year_ah,location,period,key_figures,hadith_ref,tafsir_ref';
-      const [s1, s2, s3, s4] = await Promise.all([
-        sbSearch('sira_events', sSelect, 'title_en', q, {}),
-        sbSearch('sira_events', sSelect, 'story_en', q, {}),
-        sbSearch('sira_events', sSelect, 'location', q, {}),
-        sbSearch('sira_events', sSelect, 'hadith_ref', q, {})
-      ]);
-      const sSeen = new Set();
-      [...s1, ...s2, ...s3, ...s4].forEach(r => {
-        if (!sSeen.has(r.id)) { sSeen.add(r.id); results.push({ type: 'sira', ...r }); }
-      });
-      // If Sira-only mode, render into timeline
-      if (currentSource === 'sira') {
-        const siraResults = results.filter(r => r.type === 'sira');
-        _siraEvents = siraResults;
-        renderSiraTimeline(siraResults, q);
-        allResults = results;
-        return;
-      }
-    }
+    allResults = [...exactResults, ...relatedResults];
+    renderResults(exactResults, relatedResults, q, relatedTerms);
 
-    // ASBAB
-    if (currentSource === 'all' || currentSource === 'asbab') {
-      const aSelect = 'id,sura_id,aya_number,reason_text,scholar,tradition,source';
-      const aExtra = { ...tradFilter };
-      const [a1, a2] = await Promise.all([
-        sbSearch('asbab_al_nuzul', aSelect, 'reason_text', q, aExtra),
-        sbSearch('asbab_al_nuzul', aSelect, 'scholar', q, aExtra)
-      ]);
-      const aSeen = new Set();
-      [...a1, ...a2].forEach(r => { if (!aSeen.has(r.id)) { aSeen.add(r.id); results.push({ type: 'asbab', ...r }); } });
-    }
-
-    allResults = results;
-    renderResults(results, q);
   } catch(e) {
-    container.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-title">Search error</div><div class="empty-desc">${e.message}</div></div>`;
+    container.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-title">Search error</div><div class="empty-desc">' + e.message + '</div></div>';
   }
+}
+
+async function fetchAllSources(q, tradFilter, collection, scholar) {
+  const results = [];
+
+  if (currentSource === 'all' || currentSource === 'hadith') {
+    const hSelect = 'id,sura_id,aya_number,hadith_text,arabic_text,narrator,collection,reference,tradition,similarity_note,hadith_grade';
+    const hExtra  = {...tradFilter};
+    if (collection) hExtra.collection = 'eq.' + collection;
+    const corpSel = 'id,sura_id,aya_number,hadith_text:text_english,arabic_text:text_arabic,narrator,collection,reference:hadith_number,tradition,hadith_grade:grade';
+    const corpExtra = {...tradFilter};
+    if (collection) corpExtra.collection = 'eq.' + collection;
+    const [h1,h2,h3,c1,c2] = await Promise.all([
+      sbSearch('hadith_connections', hSelect,  'hadith_text',  q, hExtra),
+      sbSearch('hadith_connections', hSelect,  'narrator',     q, hExtra),
+      sbSearch('hadith_connections', hSelect,  'collection',   q, hExtra),
+      sbSearch('hadith_corpus',      corpSel,  'text_english', q, corpExtra),
+      sbSearch('hadith_corpus',      corpSel,  'narrator',     q, corpExtra),
+    ]);
+    const tagged = [
+      ...h1.map(r=>({...r,_tbl:'hc'})), ...h2.map(r=>({...r,_tbl:'hc'})), ...h3.map(r=>({...r,_tbl:'hc'})),
+      ...c1.map(r=>({...r,_tbl:'corpus',similarity_note:null})), ...c2.map(r=>({...r,_tbl:'corpus',similarity_note:null}))
+    ];
+    const seen = new Set();
+    tagged.forEach(r => { const k='hc:'+r._tbl+':'+r.id; if(!seen.has(k)){seen.add(k);results.push({type:'hadith',...r});} });
+  }
+
+  if (currentSource === 'all' || currentSource === 'tafsir') {
+    const tSel   = 'id,sura,aya,content,source_name,scholar_name,tradition,language';
+    const tExtra = {language:'eq.en',...tradFilter};
+    if (scholar) tExtra.source_name = 'eq.' + scholar;
+    const [t1,t2] = await Promise.all([
+      sbSearch('tafsir_entries', tSel, 'content',     q, tExtra),
+      sbSearch('tafsir_entries', tSel, 'source_name', q, tExtra),
+    ]);
+    const seen = new Set();
+    [...t1,...t2].forEach(r => { if(!seen.has(r.id)){seen.add(r.id);results.push({type:'tafsir',...r});} });
+  }
+
+  if (currentSource === 'all' || currentSource === 'sira') {
+    const sSel = 'id,title_en,title_ar,story_en,story_ar,year_ce,year_ah,location,period,key_figures,hadith_ref,tafsir_ref';
+    const [s1,s2,s3,s4] = await Promise.all([
+      sbSearch('sira_events', sSel, 'title_en',   q, {}),
+      sbSearch('sira_events', sSel, 'story_en',   q, {}),
+      sbSearch('sira_events', sSel, 'location',   q, {}),
+      sbSearch('sira_events', sSel, 'hadith_ref', q, {}),
+    ]);
+    const seen = new Set();
+    [...s1,...s2,...s3,...s4].forEach(r => { if(!seen.has(r.id)){seen.add(r.id);results.push({type:'sira',...r});} });
+  }
+
+  if (currentSource === 'all' || currentSource === 'asbab') {
+    const aSel   = 'id,sura_id,aya_number,reason_text,scholar,tradition,source';
+    const aExtra = {...tradFilter};
+    const [a1,a2] = await Promise.all([
+      sbSearch('asbab_al_nuzul', aSel, 'reason_text', q, aExtra),
+      sbSearch('asbab_al_nuzul', aSel, 'scholar',     q, aExtra),
+    ]);
+    const seen = new Set();
+    [...a1,...a2].forEach(r => { if(!seen.has(r.id)){seen.add(r.id);results.push({type:'asbab',...r});} });
+  }
+
+  return results;
 }
 
 // ── RENDER ───────────────────────────────────────────────────────
@@ -801,55 +962,51 @@ function esc(s) {
 
 function highlight(text, q) {
   if (!text || !q) return esc(text);
-  let result = esc(text);
-  const plainText = text.toLowerCase();
-  const plainQ = q.toLowerCase();
-
-  // Check if full phrase appears literally in text
-  const phraseFound = plainText.includes(plainQ);
-
-  if (phraseFound) {
-    // Highlight exact phrase only
-    const escaped = q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
-    result = result.replace(new RegExp(`(${escaped})`, 'gi'), '<mark class="hl-yellow">$1</mark>');
-  } else if (q.includes(' ')) {
-    // Multi-word: highlight only words that literally appear in text
-    const words = q.split(/\s+/).filter(w => w.length >= 3);
-    const anyWordFound = words.some(w => plainText.includes(w.toLowerCase()));
-    if (anyWordFound) {
-      words.forEach(word => {
-        if (plainText.includes(word.toLowerCase())) {
-          const escaped = word.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
-          result = result.replace(new RegExp(`(${escaped})`, 'gi'), '<mark class="hl-yellow">$1</mark>');
-        }
-      });
-    }
-    // If no words found literally = conceptual match, return plain text (no highlight)
-  } else {
-    // Single word — highlight if it appears literally
-    if (plainText.includes(plainQ)) {
-      const escaped = q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
-      result = result.replace(new RegExp(`(${escaped})`, 'gi'), '<mark class="hl-yellow">$1</mark>');
-    }
-  }
-  return result;
+  const escaped = q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  return esc(text).replace(new RegExp('(' + escaped + ')', 'gi'), '<mark class="hl-yellow">$1</mark>');
 }
 
-function renderResults(results, q) {
-  const container = document.getElementById('resultsContainer');
-  const header = document.getElementById('resultsHeader');
-  document.getElementById('resultsCount').textContent = `${results.length} result${results.length===1?'':'s'} for "${q}"`;
-  header.style.display = results.length ? 'flex' : 'none';
+function sectionBanner(icon, title, count, color, bg) {
+  return '<div style="display:flex;align-items:center;gap:10px;margin:18px 0 10px;padding:10px 14px;background:' + bg + ';border-radius:10px;border-left:4px solid ' + color + ';">'
+    + '<span style="font-size:18px;">' + icon + '</span>'
+    + '<div style="flex:1;font-size:13px;font-weight:800;color:' + color + ';letter-spacing:0.3px;">' + title + '</div>'
+    + '<span style="background:' + color + ';color:#fff;border-radius:12px;padding:2px 10px;font-size:11px;font-weight:700;">' + count + '</span>'
+    + '</div>';
+}
 
-  if (!results.length) {
-    container.innerHTML = `<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-title">No results found</div><div class="empty-desc">Try different keywords or broaden your search.</div></div>`;
+function renderResults(exactResults, relatedResults, q, relatedTerms) {
+  const container = document.getElementById('resultsContainer');
+  const header    = document.getElementById('resultsHeader');
+  const total     = exactResults.length + relatedResults.length;
+
+  document.getElementById('resultsCount').textContent =
+    exactResults.length + ' exact · ' + relatedResults.length + ' related  —  "' + q + '"';
+  header.style.display = total ? 'flex' : 'none';
+
+  if (!total) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-title">No results found</div><div class="empty-desc">Try a different word, or switch search mode above.</div></div>';
     return;
   }
 
-  container.innerHTML = results.map(r => buildCard(r, q)).join('');
+  let html = '';
+
+  if (exactResults.length) {
+    html += sectionBanner('🎯', 'Exact Matches', exactResults.length, '#B8902A', '#FDF5DE');
+    html += exactResults.map(r => buildCard(r, q, false)).join('');
+  }
+
+  if (relatedResults.length) {
+    const termList = (relatedTerms||[]).slice(0,5).join(', ');
+    html += sectionBanner('🔗', 'Related &amp; Conceptual', relatedResults.length, '#6A1B9A', '#F3E5F5');
+    if (termList) html += '<div style="font-size:11px;color:#6A1B9A;margin:-6px 0 10px 4px;font-style:italic;">Related terms: ' + esc(termList) + '</div>';
+    html += relatedResults.map(r => buildCard(r, q, true)).join('');
+  }
+
+  container.innerHTML = html;
 }
 
-function buildCard(r, q) {
+
+function buildCard(r, q, isRelated) {
   // Hadith now comes from two tables (hadith_connections + hadith_corpus); the
   // _tbl tag (set in doSearch) keeps DOM ids and bookmark keys unique across them.
   const id = r._tbl ? `${r.type}-${r._tbl}-${r.id}` : `${r.type}-${r.id}`;
@@ -905,10 +1062,14 @@ function buildCard(r, q) {
 
   const tradPill = r.tradition ? `<span class="trad-pill pill-${r.tradition}">${r.tradition}</span>` : '';
 
+  const relatedBadge = isRelated
+    ? '<span style="background:#F3E5F5;color:#6A1B9A;border:1px solid #CE93D8;border-radius:10px;font-size:9px;font-weight:700;padding:2px 7px;letter-spacing:0.3px;">🔗 RELATED</span>'
+    : '';
   return `<div class="result-card" id="card-${id}">
     <div class="card-header">
       ${typePill}
       ${tradPill}
+      ${relatedBadge}
       ${r.type === 'sira'
         ? `<a class="verse-ref" href="${verseUrl}" target="_blank" title="Open in Research">📖 Sīra ↗</a>`
         : suraRef ? `<a class="verse-ref" href="${verseUrl}" target="_blank" title="Open verse in Quran platform">${suraRef}:${ayaRef} ↗</a>` : ''
@@ -1303,18 +1464,39 @@ function siraQuick(term) {
 function filterSiraTimeline(q) {
   if (!_siraEvents.length) return;
   const term = q.trim().toLowerCase();
-  if (!term) { renderSiraTimeline(_siraEvents); return; }
-  const filtered = _siraEvents.filter(ev => {
-    return (ev.title_en||'').toLowerCase().includes(term)
-      || (ev.story_en||'').toLowerCase().includes(term)
-      || (ev.location||'').toLowerCase().includes(term)
-      || (ev.period||'').toLowerCase().includes(term)
-      || (Array.isArray(ev.key_figures) ? ev.key_figures.join(' ') : '').toLowerCase().includes(term);
-  });
-  renderSiraTimeline(filtered, q);
+  if (!term) { renderSiraTimeline(_siraEvents, [], '', []); return; }
+
+  // Section 1: exact word-boundary match across all fields
+  const re = new RegExp('(^|\\s|[^a-zA-Z])' + term.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + '($|\\s|[^a-zA-Z])', 'i');
+  const exact = _siraEvents.filter(ev =>
+    re.test(ev.title_en||'') || re.test(ev.story_en||'') ||
+    re.test(ev.location||'') || re.test(ev.period||'') ||
+    re.test(Array.isArray(ev.key_figures) ? ev.key_figures.join(' ') : (ev.key_figures||''))
+  );
+
+  // Section 2: related/conceptual — terms from concept map, soft match
+  const relatedTerms = getRelatedTerms(term);
+  const exactIds = new Set(exact.map(ev => ev.id));
+  const related = [];
+  if (relatedTerms.length) {
+    _siraEvents.forEach(ev => {
+      if (exactIds.has(ev.id)) return;
+      const haystack = [ev.title_en, ev.story_en, ev.location, ev.period,
+        Array.isArray(ev.key_figures) ? ev.key_figures.join(' ') : (ev.key_figures||'')
+      ].join(' ').toLowerCase();
+      if (relatedTerms.some(t => haystack.includes(t))) related.push(ev);
+    });
+  }
+
+  renderSiraTimeline(exact, related, q, relatedTerms);
 }
 
-function renderSiraTimeline(events, q) {
+function renderSiraTimeline(events, relatedEvents, q, relatedTerms) {
+  // Support both old 1-arg calls (from loadSiraResearch) and new 4-arg calls
+  if (!Array.isArray(relatedEvents)) {
+    // called as renderSiraTimeline(events, q) — old style
+    q = relatedEvents; relatedEvents = []; relatedTerms = [];
+  }
   const wrap = document.getElementById('siraTimelineWrap');
   if (!wrap) { console.error('siraTimelineWrap not found'); return; }
   if (!events || !events.length) {
@@ -1400,6 +1582,46 @@ function renderSiraTimeline(events, q) {
   });
 
   html += '</div>';
+
+  // ── Section 2: Related Sira events ──────────────────────────
+  if (relatedEvents && relatedEvents.length) {
+    const termList = (relatedTerms||[]).slice(0,5).join(', ');
+    html += '<div style="display:flex;align-items:center;gap:10px;margin:24px 0 10px;padding:10px 14px;background:#F3E5F5;border-radius:10px;border-left:4px solid #6A1B9A;">'
+          + '<span style="font-size:18px;">🔗</span>'
+          + '<div style="flex:1;font-size:13px;font-weight:800;color:#6A1B9A;">Related &amp; Conceptual</div>'
+          + '<span style="background:#6A1B9A;color:#fff;border-radius:12px;padding:2px 10px;font-size:11px;font-weight:700;">' + relatedEvents.length + '</span>'
+          + '</div>';
+    if (termList) html += '<div style="font-size:11px;color:#6A1B9A;margin:-6px 0 10px 4px;font-style:italic;">Related terms: ' + termList + '</div>';
+    html += '<div class="sira-timeline">';
+    const rPeriods = {};
+    relatedEvents.forEach(ev => { const p=ev.period||'Other'; if(!rPeriods[p]) rPeriods[p]=[]; rPeriods[p].push(ev); });
+    periodOrder.forEach(period => {
+      if (!rPeriods[period]) return;
+      const label = period.replace(/-/g,' ').replace(/\b\w/g, c=>c.toUpperCase());
+      html += '<div class="sira-period-header">📅 ' + label + ' Period <span style="font-weight:400;opacity:0.8;font-size:11px;">(' + rPeriods[period].length + ')</span></div>';
+      rPeriods[period].forEach(ev => {
+        const titleEn = q ? highlightSira(ev.title_en||'', q) : (ev.title_en||'');
+        const storyEn = q ? highlightSira((ev.story_en||'').slice(0,400), q) : (ev.story_en||'').slice(0,400);
+        html += '<div class="sira-event-card" onclick="toggleSiraEvent(this)" style="border-color:#CE93D8;">'
+          + '<div class="sira-event-header">'
+          + '<div class="sira-event-year">' + (ev.year_ce ? ev.year_ce+' CE' : '') + (ev.year_ah && ev.year_ah>0 ? '<br>'+ev.year_ah+' AH' : '') + '</div>'
+          + '<div class="sira-event-titles">'
+          + '<div style="display:flex;align-items:center;gap:6px;">'
+          + '<div class="sira-event-title-en">' + titleEn + '</div>'
+          + '<span style="background:#F3E5F5;color:#6A1B9A;border:1px solid #CE93D8;border-radius:8px;font-size:9px;font-weight:700;padding:1px 6px;white-space:nowrap;">🔗 RELATED</span>'
+          + '</div>'
+          + (ev.title_ar ? '<div class="sira-event-title-ar">' + ev.title_ar + '</div>' : '')
+          + '</div>'
+          + '<div style="font-size:18px;color:#ccc;padding-top:2px;">›</div>'
+          + '</div>'
+          + '<div class="sira-event-body">'
+          + (ev.story_en ? '<div class="sira-story-text">' + storyEn + (ev.story_en.length>400?'…':'') + '</div>' : '')
+          + '</div></div>';
+      });
+    });
+    html += '</div>';
+  }
+
   wrap.innerHTML = html;
 }
 
