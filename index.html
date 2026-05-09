@@ -4999,13 +4999,14 @@ function _aqcUrl(reciter, suraId, ayaNum, bitrate) {
 }
 
 const AUDIO_RECITERS = [
-  // ── Hafs (default reading) — 4 reciters from al-Quran Cloud ──
+  // ── Hafs (default reading) — 3 reciters from al-Quran Cloud ──
+  // Sudais was removed: al-Quran Cloud's Sudais set is incomplete (missing
+  // verses produce AccessDenied on the CDN). Husary/Alafasy/Minshawi all have
+  // verified full per-ayah coverage.
   { id:'husary',   label:'Husary',   sub:'Hafs',  riwayah:'hafs',
     build:(s,a)=>_aqcUrl('ar.husary', s, a) },
   { id:'alafasy',  label:'Alafasy',  sub:'Hafs',  riwayah:'hafs',
     build:(s,a)=>_aqcUrl('ar.alafasy', s, a) },
-  { id:'sudais',   label:'Sudais',   sub:'Hafs',  riwayah:'hafs',
-    build:(s,a)=>_aqcUrl('ar.abdurrahmaansudais', s, a) },
   { id:'minshawi', label:'Minshawi', sub:'Hafs',  riwayah:'hafs',
     build:(s,a)=>_aqcUrl('ar.minshawi', s, a) },
 
@@ -5130,6 +5131,31 @@ function wireAudioEvents(ayaNum, state) {
     const err = audio.error;
     console.error('[QuranAudio] error on', audio.src,
                   '— code:', err ? err.code : '?', err ? err.message : '');
+
+    // Same-riwayah fallback. Reciter coverage on al-Quran Cloud is incomplete
+    // for some reciters on some verses (e.g., Sudais 3:39). When that happens,
+    // try the next reciter in the SAME riwayah — never cross riwayat (Warsh
+    // and Hafs are different texts and silently swapping would defeat the
+    // whole point of the platform). Try at most twice before giving up.
+    state._fbTried = state._fbTried || new Set();
+    state._fbTried.add(state.reciterIdx);
+    const cur = AUDIO_RECITERS[state.reciterIdx];
+    const fallbackIdx = AUDIO_RECITERS.findIndex(
+      (r, i) => r.riwayah === cur.riwayah && !state._fbTried.has(i)
+    );
+    if (fallbackIdx !== -1 && state._fbTried.size < 3) {
+      console.warn('[QuranAudio] falling back to', AUDIO_RECITERS[fallbackIdx].label);
+      state.reciterIdx = fallbackIdx;
+      // Re-highlight the active button so the UI matches reality
+      AUDIO_RECITERS.forEach((_, i) => {
+        const b = document.getElementById(`arc-${ayaNum}-${i}`);
+        if (b) b.classList.toggle('active', i === fallbackIdx);
+      });
+      loadAudioVerse(ayaNum, state);
+      return;
+    }
+    state._fbTried = new Set();  // reset for next user action
+
     document.getElementById('audio-loading-' + ayaNum).style.display = 'none';
     document.getElementById('audio-main-' + ayaNum).style.display = 'none';
     document.getElementById('audio-error-' + ayaNum).style.display = '';
@@ -5183,6 +5209,7 @@ function selectReciter(ayaNum, idx) {
   const state = _audioState[ayaNum];
   if (!state) return;
   state.reciterIdx = idx;
+  state._fbTried = new Set();   // user-initiated change — reset fallback chain
   AUDIO_RECITERS.forEach((_, i) => {
     const btn = document.getElementById(`arc-${ayaNum}-${i}`);
     if (btn) btn.classList.toggle('active', i === idx);
@@ -5198,6 +5225,7 @@ function prevVerseAudio(ayaNum) {
   const state = _audioState[ayaNum];
   if (!state || state.ayaNum <= 1) return;
   state.ayaNum--;
+  state._fbTried = new Set();   // new verse — fresh fallback chain
   document.getElementById('audio-loading-' + ayaNum).innerHTML = `<span class="spinner"></span> Loading verse ${state.suraId}:${state.ayaNum}...`;
   loadAudioVerse(ayaNum, state);
   state.audio.addEventListener('canplay', () => state.audio.play(), { once: true });
@@ -5209,6 +5237,7 @@ function nextVerseAudio(ayaNum) {
   const maxAyas = SURA_AYA_COUNTS[state.suraId - 1] || 286;
   if (state.ayaNum >= maxAyas) return;
   state.ayaNum++;
+  state._fbTried = new Set();   // new verse — fresh fallback chain
   document.getElementById('audio-loading-' + ayaNum).innerHTML = `<span class="spinner"></span> Loading verse ${state.suraId}:${state.ayaNum}...`;
   loadAudioVerse(ayaNum, state);
   state.audio.addEventListener('canplay', () => state.audio.play(), { once: true });
