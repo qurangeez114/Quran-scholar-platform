@@ -82,6 +82,15 @@ body { font-family: 'EB Garamond', Georgia, serif; background: #F5EDD8; color: #
 .signif-cat.lexical     { background: #D4E6F1; color: #1F618D; }
 .signif-words { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; padding: 10px; background: rgba(255,255,255,0.6); border-radius: 6px; }
 .signif-word-row { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+/* Inline play button on each riwayah row inside a significance card.
+   Tapping it plays the entire verse in that riwayah from the appropriate CDN.
+   Only Hafs/Warsh/Duri have audio; Qalun is shown text-only because no
+   per-ayah Qalun audio source has been verified yet. */
+.signif-play { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; border: 1.5px solid #B8902A; background: #fff; color: #B8902A; cursor: pointer; flex-shrink: 0; font-size: 12px; transition: all 0.15s; padding: 0; }
+.signif-play:hover { background: #B8902A; color: #fff; transform: scale(1.05); }
+.signif-play:disabled { opacity: 0.35; cursor: not-allowed; border-color: #BBB; color: #BBB; }
+.signif-play.playing { background: #B8902A; color: #fff; }
+.signif-play-na { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex-shrink: 0; color: #BBB; font-size: 10px; font-style: italic; }
 .signif-word-label { font-size: 10px; font-weight: 700; color: #8B7355; min-width: 52px; text-transform: uppercase; letter-spacing: 0.5px; }
 .signif-word-text { font-family: 'Amiri', serif; font-size: 18px; color: #111; direction: rtl; }
 .signif-word-meaning { font-size: 12px; color: #5C4A35; font-style: italic; flex: 1; }
@@ -1516,21 +1525,31 @@ function renderSignificanceCards(sura, aya) {
 
   const escHtml = (s) => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
-  return entries.map(e => {
+  return entries.map((e, idx) => {
     const wordRows = [];
-    const pushRow = (label, word, meaning, riwClass) => {
+    // Each riwayah row: label, button (or N/A), arabic word, meaning gloss.
+    // The button's onclick fires playSignifAudio(sura, aya, riwayah, btn).
+    // 'qalun' has no audio source — render an N/A placeholder instead.
+    const pushRow = (label, word, meaning, riwayah) => {
       if (!word && !meaning) return;
+      const playBtn = riwayah === 'qalun'
+        ? `<span class="signif-play-na" title="No per-ayah Qalūn audio source available">N/A</span>`
+        : `<button class="signif-play"
+                   onclick="playSignifAudio(${sura}, ${aya}, '${riwayah}', this)"
+                   aria-label="Play verse in ${label}"
+                   title="Play verse in ${label}">▶</button>`;
       wordRows.push(`
         <div class="signif-word-row">
-          <span class="signif-word-label" style="color:var(--${riwClass}-color,#8B7355)">${label}</span>
+          ${playBtn}
+          <span class="signif-word-label">${label}</span>
           <span class="signif-word-text">${escHtml(word||'—')}</span>
           <span class="signif-word-meaning">${escHtml(meaning||'')}</span>
         </div>`);
     };
-    pushRow('Hafs',  e.hafs_word,  e.hafs_meaning_en);
-    pushRow('Warsh', e.warsh_word, e.warsh_meaning_en);
-    pushRow('Qalūn', e.qalun_word, e.qalun_meaning_en);
-    pushRow('Dūrī',  e.duri_word,  e.duri_meaning_en);
+    pushRow('Hafs',  e.hafs_word,  e.hafs_meaning_en, 'hafs');
+    pushRow('Warsh', e.warsh_word, e.warsh_meaning_en, 'warsh');
+    pushRow('Qalūn', e.qalun_word, e.qalun_meaning_en, 'qalun');
+    pushRow('Dūrī',  e.duri_word,  e.duri_meaning_en, 'duri');
 
     const sourcesHtml = (e.sources && e.sources.length)
       ? `<div class="signif-sources"><b>Sources</b>${e.sources.map(s => `<span class="signif-source-item">${escHtml(s)}</span>`).join('')}</div>`
@@ -1551,6 +1570,84 @@ function renderSignificanceCards(sura, aya) {
       ${sourcesHtml}
     </div>`;
   }).join('');
+}
+
+// ── SIGNIFICANCE-CARD AUDIO PLAYER ──────────────────────────────────────
+// One global Audio element shared across all significance cards. When the
+// user taps a row's play button, we route to the right CDN based on riwayah:
+//   hafs  → al-Quran Cloud, Husary 128kbps  (verseGlobalNumber-based URL)
+//   warsh → everyayah, warsh_ibrahim_aldosary_128kbps  (zero-padded SSSAAA)
+//   duri  → everyayah, Yasser_Ad-Dussary_128kbps       (zero-padded SSSAAA)
+//   qalun → no audio source — button renders as N/A and is never reached
+// Playing one button stops any other; tapping a playing button pauses it.
+let _signifAudio = null;
+let _signifCurrentBtn = null;
+
+function _signifBuildUrl(suraId, ayaNum, riwayah) {
+  const pad = String(suraId).padStart(3,'0') + String(ayaNum).padStart(3,'0') + '.mp3';
+  if (riwayah === 'hafs') {
+    // Use Husary as the canonical Hafs voice for variant comparison
+    return `https://cdn.islamic.network/quran/audio/128/ar.husary/${verseGlobalNumber(suraId, ayaNum)}.mp3`;
+  }
+  if (riwayah === 'warsh') {
+    return `https://everyayah.com/data/warsh/warsh_ibrahim_aldosary_128kbps/${pad}`;
+  }
+  if (riwayah === 'duri') {
+    return `https://everyayah.com/data/Yasser_Ad-Dussary_128kbps/${pad}`;
+  }
+  return null;
+}
+
+function _signifResetButton(btn) {
+  if (!btn) return;
+  btn.classList.remove('playing');
+  btn.textContent = '▶';
+}
+
+function playSignifAudio(suraId, ayaNum, riwayah, btn) {
+  // Lazy-init the shared audio element
+  if (!_signifAudio) {
+    _signifAudio = new Audio();
+    _signifAudio.addEventListener('ended', () => {
+      _signifResetButton(_signifCurrentBtn);
+      _signifCurrentBtn = null;
+    });
+    _signifAudio.addEventListener('error', () => {
+      console.error('[signif-audio] failed to load:', _signifAudio.src);
+      if (_signifCurrentBtn) {
+        _signifCurrentBtn.textContent = '⚠';
+        _signifCurrentBtn.title = 'Could not load audio';
+      }
+    });
+  }
+
+  // Tapping the currently-playing button = pause/resume toggle
+  if (btn === _signifCurrentBtn && !_signifAudio.paused) {
+    _signifAudio.pause();
+    _signifResetButton(btn);
+    _signifCurrentBtn = null;
+    return;
+  }
+
+  // Stop whatever was playing before, reset its button
+  if (_signifCurrentBtn && _signifCurrentBtn !== btn) {
+    _signifAudio.pause();
+    _signifResetButton(_signifCurrentBtn);
+  }
+
+  const url = _signifBuildUrl(suraId, ayaNum, riwayah);
+  if (!url) return;
+
+  _signifAudio.src = url;
+  _signifCurrentBtn = btn;
+  btn.classList.add('playing');
+  btn.textContent = '⏸';
+
+  _signifAudio.play().catch(err => {
+    console.error('[signif-audio] play() rejected:', err);
+    _signifResetButton(btn);
+    _signifCurrentBtn = null;
+  });
 }
 
 async function loadVariantsPanel(filter = variantPanelFilter) {
