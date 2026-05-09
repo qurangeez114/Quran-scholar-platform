@@ -70,6 +70,30 @@ body { font-family: 'EB Garamond', Georgia, serif; background: #F5EDD8; color: #
 .info-box { background: #FFFEF8; border: 1px solid #D0C498; border-radius: 10px; padding: 14px 18px; margin-bottom: 12px; font-size: 17px; color: #111111; line-height: 1.85; font-weight: 400; font-family: 'EB Garamond', serif; }
 .info-label { font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: #B8902A; margin-bottom: 7px; }
 .riwayat-section { margin-bottom: 14px; }
+/* Significance card — appears above the riwayat comparison when this verse
+   has a documented meaning-changing variant (entry in variant_significance) */
+.signif-card { margin-bottom: 16px; padding: 14px 16px; background: linear-gradient(135deg, #FFF8E0 0%, #FDF5DC 100%); border: 2px solid #B8902A; border-radius: 10px; box-shadow: 0 2px 8px rgba(184,144,42,0.15); }
+.signif-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+.signif-title { font-size: 13px; font-weight: 700; color: #4A3B28; letter-spacing: 0.3px; }
+.signif-cat { padding: 3px 10px; border-radius: 12px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; }
+.signif-cat.theological { background: #E8DAEF; color: #6A2A9A; }
+.signif-cat.legal       { background: #D5F5E3; color: #1A7A48; }
+.signif-cat.narrative   { background: #FDEBD0; color: #C0621A; }
+.signif-cat.lexical     { background: #D4E6F1; color: #1F618D; }
+.signif-words { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; padding: 10px; background: rgba(255,255,255,0.6); border-radius: 6px; }
+.signif-word-row { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+.signif-word-label { font-size: 10px; font-weight: 700; color: #8B7355; min-width: 52px; text-transform: uppercase; letter-spacing: 0.5px; }
+.signif-word-text { font-family: 'Amiri', serif; font-size: 18px; color: #111; direction: rtl; }
+.signif-word-meaning { font-size: 12px; color: #5C4A35; font-style: italic; flex: 1; }
+.signif-explanation { font-size: 13px; line-height: 1.7; color: #2A2A2A; margin: 8px 0 10px; padding: 10px 12px; background: #fff; border-left: 3px solid #B8902A; border-radius: 4px; }
+.signif-sources { font-size: 10px; color: #8B7355; line-height: 1.6; padding-top: 8px; border-top: 1px solid rgba(184,144,42,0.3); }
+.signif-sources b { color: #4A3B28; font-weight: 700; }
+.signif-source-item { display: block; margin-top: 2px; padding-left: 12px; text-indent: -12px; }
+.signif-source-item::before { content: "• "; color: #B8902A; }
+/* Filter chip 'Significant' state in the sidebar Variants panel */
+.variants-filter-signif { background: #B8902A !important; color: #fff !important; border-color: #B8902A !important; }
+/* Badge on a row in the Variants list when it's also in variant_significance */
+.signif-mark { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #B8902A; box-shadow: 0 0 0 2px rgba(184,144,42,0.25); margin-left: 4px; vertical-align: middle; }
 .word-modal-overlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:1000; align-items:center; justify-content:center; }
 .word-modal-overlay.open { display:flex; }
 .word-modal { background:#fff; border-radius:12px; padding:24px; max-width:480px; width:90%; box-shadow:0 20px 60px rgba(0,0,0,0.4); position:relative; }
@@ -1436,22 +1460,124 @@ function variantPairBadge(code) {
   return `<span style="display:inline-block;width:18px;height:18px;line-height:18px;text-align:center;background:${x.c};color:${x.fg};border-radius:50%;font-size:10px;font-weight:700;margin-right:2px" title="${tip}">${x.label}</span>`;
 }
 
+
+// ── VARIANT SIGNIFICANCE (curated meaning-changing entries) ─────────────
+// Sits on top of the mechanical riwayat_variants detection. Only the small,
+// hand-curated set in the variant_significance table — the divergences that
+// classical qira'at scholarship treats as actually shifting meaning, with
+// decisive explanations and sources.
+//
+// Cached once per session, then looked up by (sura, aya) on each verse open.
+let _signifCache = null;
+let _signifByVerse = null;       // Map "sura:aya" -> [entries]
+let _signifVerseSet = null;      // Set of "sura:aya" keys (fast existence check)
+
+async function fetchSignificance() {
+  if (_signifCache) return _signifCache;
+  try {
+    // Single fetch — table is small (curated, dozens not thousands)
+    const rows = await sbFetch('variant_significance', {
+      select: '*',
+      order: 'sura_id.asc,aya_number.asc,word_position.asc',
+      limit: '500'
+    });
+    _signifCache = Array.isArray(rows) ? rows : [];
+    _signifByVerse = new Map();
+    _signifVerseSet = new Set();
+    for (const r of _signifCache) {
+      const key = `${r.sura_id}:${r.aya_number}`;
+      _signifVerseSet.add(key);
+      if (!_signifByVerse.has(key)) _signifByVerse.set(key, []);
+      _signifByVerse.get(key).push(r);
+    }
+  } catch (e) {
+    console.warn('[significance] fetch failed:', e);
+    _signifCache = [];
+    _signifByVerse = new Map();
+    _signifVerseSet = new Set();
+  }
+  return _signifCache;
+}
+
+function getSignificanceForVerse(sura, aya) {
+  if (!_signifByVerse) return [];
+  return _signifByVerse.get(`${sura}:${aya}`) || [];
+}
+function isSignificantVerse(sura, aya) {
+  if (!_signifVerseSet) return false;
+  return _signifVerseSet.has(`${sura}:${aya}`);
+}
+
+// Renders the significance card(s) for a verse, to be prepended to the
+// Riwayat tab content. Returns '' if the verse has no significance entries.
+function renderSignificanceCards(sura, aya) {
+  const entries = getSignificanceForVerse(sura, aya);
+  if (!entries.length) return '';
+
+  const escHtml = (s) => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  return entries.map(e => {
+    const wordRows = [];
+    const pushRow = (label, word, meaning, riwClass) => {
+      if (!word && !meaning) return;
+      wordRows.push(`
+        <div class="signif-word-row">
+          <span class="signif-word-label" style="color:var(--${riwClass}-color,#8B7355)">${label}</span>
+          <span class="signif-word-text">${escHtml(word||'—')}</span>
+          <span class="signif-word-meaning">${escHtml(meaning||'')}</span>
+        </div>`);
+    };
+    pushRow('Hafs',  e.hafs_word,  e.hafs_meaning_en);
+    pushRow('Warsh', e.warsh_word, e.warsh_meaning_en);
+    pushRow('Qalūn', e.qalun_word, e.qalun_meaning_en);
+    pushRow('Dūrī',  e.duri_word,  e.duri_meaning_en);
+
+    const sourcesHtml = (e.sources && e.sources.length)
+      ? `<div class="signif-sources"><b>Sources</b>${e.sources.map(s => `<span class="signif-source-item">${escHtml(s)}</span>`).join('')}</div>`
+      : '';
+
+    const wordRef = e.word_position > 0
+      ? `Word ${e.word_position}`
+      : 'Recitational variant (waqf)';
+
+    return `
+    <div class="signif-card">
+      <div class="signif-header">
+        <div class="signif-title">⚠ Significant Variant — ${wordRef}</div>
+        <span class="signif-cat ${escHtml(e.category)}">${escHtml(e.category)}</span>
+      </div>
+      <div class="signif-words">${wordRows.join('')}</div>
+      <div class="signif-explanation">${escHtml(e.explanation_en)}</div>
+      ${sourcesHtml}
+    </div>`;
+  }).join('');
+}
+
 async function loadVariantsPanel(filter = variantPanelFilter) {
   variantPanelFilter = filter;
+
+  // Pre-load significance data so we can mark and filter on it. Cached after first call.
+  await fetchSignificance();
 
   // Render filter chips
   const filtersEl = document.getElementById('variantsFilters');
   const filters = [
-    { key: 'any',   label: 'Any' },
-    { key: 'warsh', label: 'W ≠ H' },
-    { key: 'qalun', label: 'Q ≠ H' },
-    { key: 'duri',  label: 'D ≠ H' },
-    { key: 'three', label: 'All ≠ H' }
+    { key: 'any',     label: 'Any' },
+    { key: 'signif',  label: '★ Significant' },
+    { key: 'warsh',   label: 'W ≠ H' },
+    { key: 'qalun',   label: 'Q ≠ H' },
+    { key: 'duri',    label: 'D ≠ H' },
+    { key: 'three',   label: 'All ≠ H' }
   ];
   if (filtersEl) {
-    filtersEl.innerHTML = filters.map(f => `
-      <span onclick="loadVariantsPanel('${f.key}')" style="display:inline-block;padding:4px 10px;border:1px solid #4A3B28;border-radius:14px;font-size:10px;font-weight:600;cursor:pointer;background:${f.key === filter ? '#4A3B28' : '#fff'};color:${f.key === filter ? '#fff' : '#4A3B28'};white-space:nowrap">${f.label}</span>`
-    ).join('');
+    filtersEl.innerHTML = filters.map(f => {
+      const active = f.key === filter;
+      const isSignif = f.key === 'signif';
+      const bg = active ? (isSignif ? '#B8902A' : '#4A3B28') : '#fff';
+      const fg = active ? '#fff' : (isSignif ? '#B8902A' : '#4A3B28');
+      const border = isSignif ? '#B8902A' : '#4A3B28';
+      return `<span onclick="loadVariantsPanel('${f.key}')" style="display:inline-block;padding:4px 10px;border:1px solid ${border};border-radius:14px;font-size:10px;font-weight:600;cursor:pointer;background:${bg};color:${fg};white-space:nowrap">${f.label}</span>`;
+    }).join('');
   }
 
   const list = document.getElementById('variantsList');
@@ -1459,26 +1585,57 @@ async function loadVariantsPanel(filter = variantPanelFilter) {
   if (list) list.innerHTML = '<div style="text-align:center;color:#8B7355;padding:20px"><span class="spinner"></span> Loading variants…</div>';
 
   try {
-    const { rows, byVerse } = await fetchVariantData(filter);
+    let byVerse, rows;
+
+    if (filter === 'signif') {
+      // Special path: only show verses in the curated significance catalog.
+      // Build byVerse purely from the significance cache, no riwayat_variants fetch.
+      const cache = _signifCache || [];
+      const grouped = new Map();
+      for (const e of cache) {
+        const key = `${e.sura_id}:${e.aya_number}`;
+        if (!grouped.has(key)) {
+          grouped.set(key, { sura: e.sura_id, aya: e.aya_number, count: 0, pairs: new Set(), categories: new Set() });
+        }
+        const v = grouped.get(key);
+        v.count++;
+        v.categories.add(e.category);
+      }
+      byVerse = Array.from(grouped.values());
+      rows = cache;
+    } else {
+      const data = await fetchVariantData(filter);
+      byVerse = data.byVerse;
+      rows = data.rows;
+    }
+
     if (!byVerse.length) {
-      if (list) list.innerHTML = `<div style="text-align:center;color:#8B7355;padding:30px;font-size:12px">No variants for this filter.</div>`;
+      const emptyMsg = filter === 'signif'
+        ? 'No curated significant variants yet.'
+        : 'No variants for this filter.';
+      if (list) list.innerHTML = `<div style="text-align:center;color:#8B7355;padding:30px;font-size:12px">${emptyMsg}</div>`;
       if (counter) counter.textContent = '0 verses · 0 variant words';
       return;
     }
-    if (counter) counter.textContent = `${byVerse.length} verses · ${rows.length} variant words`;
+    const variantWord = filter === 'signif' ? 'significant variant' : 'variant word';
+    if (counter) counter.textContent = `${byVerse.length} verses · ${rows.length} ${variantWord}${rows.length === 1 ? '' : 's'}`;
     if (list) {
-      list.innerHTML = byVerse.map(v => `
-        <div onclick="navToVerse(${v.sura},${v.aya});closeSidebar();" style="display:flex;align-items:center;justify-content:space-between;padding:9px 11px;background:#fff;border:1px solid #E8E4DC;border-radius:7px;margin-bottom:5px;cursor:pointer">
+      list.innerHTML = byVerse.map(v => {
+        const isSignif = filter === 'signif' || isSignificantVerse(v.sura, v.aya);
+        const signifMark = isSignif && filter !== 'signif' ? '<span class="signif-mark" title="Has documented meaning-changing variant"></span>' : '';
+        const pairsHtml = v.pairs ? Array.from(v.pairs).sort().map(variantPairBadge).join('') : '';
+        return `
+        <div onclick="navToVerse(${v.sura},${v.aya});closeSidebar();" style="display:flex;align-items:center;justify-content:space-between;padding:9px 11px;background:#fff;border:1px solid ${isSignif ? '#B8902A' : '#E8E4DC'};border-radius:7px;margin-bottom:5px;cursor:pointer">
           <div>
-            <div style="font-size:13px;font-weight:700;color:#4A3B28">${v.sura}:${v.aya}</div>
-            <div style="font-size:9px;color:#8B7355;margin-top:1px">${v.count} variant ${v.count === 1 ? 'word' : 'words'}</div>
+            <div style="font-size:13px;font-weight:700;color:#4A3B28">${v.sura}:${v.aya}${signifMark}</div>
+            <div style="font-size:9px;color:#8B7355;margin-top:1px">${v.count} ${v.count === 1 ? variantWord : variantWord + 's'}</div>
           </div>
           <div style="display:flex;align-items:center;gap:2px">
-            ${Array.from(v.pairs).sort().map(variantPairBadge).join('')}
+            ${pairsHtml}
             <span style="margin-left:4px;color:#B8902A;font-size:14px">›</span>
           </div>
-        </div>
-      `).join('');
+        </div>`;
+      }).join('');
     }
   } catch (e) {
     if (list) list.innerHTML = `<div style="text-align:center;color:#A02020;padding:20px;font-size:12px">Could not load: ${e.message}</div>`;
@@ -1620,6 +1777,12 @@ function buildRiwayatPanel(aya) {
     return `<div style="color:#BBB;font-style:italic;font-size:13px;padding:20px;text-align:center">Riwayat data not available for this verse.</div>`;
   }
 
+  // Curated significance card (if this verse has documented meaning-changing
+  // variants). Empty string if verse isn't in variant_significance — so
+  // verses with only mechanical/orthographic differences just show the
+  // standard riwayat comparison below.
+  const signifHtml = renderSignificanceCards(aya.sura_id, aya.aya_number);
+
   const vis = getRiwayatVisibility(aya.sura_id, aya.aya_number);
   const { hafsHtml, warshHtml, qalunHtml, duriHtml } = highlightDiffs(hafs, warsh, qalun, duri, aya.sura_id, aya.aya_number);
 
@@ -1659,6 +1822,7 @@ function buildRiwayatPanel(aya) {
   }
 
   return `
+    ${signifHtml}
     ${selector}
     <div style="margin-bottom:8px;font-size:11px;color:#8B7355;line-height:1.6">
       <div style="margin-bottom:4px"><b>Highlighted = consonantal/orthographic difference between readings.</b> Diacritic-only differences (vowel signs) are not highlighted because they don't change the underlying rasm. Click any highlighted word for an objective technical analysis.</div>
@@ -4964,11 +5128,7 @@ window.addEventListener('beforeunload', qgStopTTS);
 // Uses api.alquran.cloud CDN — free, no key needed.
 // Verse global number = cumulative ayah count across all suras.
 
-// Canonical ayah counts per sura (1-indexed, sums to 6236). Used to compute the
-// global ayah index for al-Quran Cloud's per-ayah audio URLs. The previous version
-// had 117 entries with bad values from sura 78 onward, which broke audio for the
-// entire last juz'. Verified: 1:1→#1, 2:255 (Ayat al-Kursi)→#262, 114:6→#6236.
-const SURA_AYA_COUNTS = [7,286,200,176,120,165,206,75,129,109,123,111,43,52,99,128,111,110,98,135,112,78,118,64,77,227,93,88,69,60,34,30,73,54,45,83,182,88,75,85,54,53,89,59,37,35,38,29,18,45,60,49,62,55,78,96,29,22,24,13,14,11,11,18,12,12,30,52,52,44,28,28,20,56,40,31,50,40,46,42,29,19,36,25,22,17,19,26,30,20,15,21,11,8,8,19,5,8,8,11,11,8,3,9,5,4,7,3,6,3,5,4,5,6];
+const SURA_AYA_COUNTS = [7,286,200,176,120,165,206,75,129,109,123,111,43,52,99,128,111,110,98,135,112,78,118,64,77,227,93,88,69,60,34,30,73,54,45,83,182,88,75,85,54,53,89,59,37,35,38,29,18,45,60,49,62,55,78,96,29,22,24,13,14,11,11,18,12,12,30,52,52,44,28,28,20,56,40,31,50,45,33,27,83,30,29,22,17,19,26,30,20,20,28,18,31,31,19,37,20,14,18,7,12,8,11,11,8,3,9,5,4,7,3,6,3,5,4,5,6];
 
 function verseGlobalNumber(surahNum, ayahNum) {
   let total = 0;
@@ -4976,47 +5136,12 @@ function verseGlobalNumber(surahNum, ayahNum) {
   return total + ayahNum;
 }
 
-// AUDIO RECITERS — organized by riwāyah, with per-source URL builders.
-// Hafs comes from al-Quran Cloud CDN (global ayah index).
-// Warsh + ad-Dūrī come from everyayah.com (zero-padded sura+ayah, e.g. 001001.mp3).
-// Qalūn has no per-ayah audio source we've verified; the 'arabic_qalun' text in
-// the Riwayat tab is still shown — only the audio button is omitted for Qalūn.
-//
-// Each reciter has:
-//   id       — display key (used internally, must be unique)
-//   label    — name shown on button
-//   sub      — riwāyah label shown below name
-//   riwayah  — 'hafs' | 'warsh' | 'duri'  (used for grouping if needed later)
-//   build(suraId, ayaNum) — returns the full MP3 URL for this verse
-//
-// Default reciter = first in this array (Husary, Hafs).
-function _eaPad(suraId, ayaNum) {
-  // everyayah uses zero-padded "SSSAAA" filenames (e.g., 1:1 → 001001.mp3)
-  return String(suraId).padStart(3,'0') + String(ayaNum).padStart(3,'0') + '.mp3';
-}
-function _aqcUrl(reciter, suraId, ayaNum, bitrate) {
-  return `https://cdn.islamic.network/quran/audio/${bitrate||128}/${reciter}/${verseGlobalNumber(suraId, ayaNum)}.mp3`;
-}
-
 const AUDIO_RECITERS = [
-  // ── Hafs (default reading) — 3 reciters from al-Quran Cloud ──
-  // Sudais was removed: al-Quran Cloud's Sudais set is incomplete (missing
-  // verses produce AccessDenied on the CDN). Husary/Alafasy/Minshawi all have
-  // verified full per-ayah coverage.
-  { id:'husary',   label:'Husary',   sub:'Hafs',  riwayah:'hafs',
-    build:(s,a)=>_aqcUrl('ar.husary', s, a) },
-  { id:'alafasy',  label:'Alafasy',  sub:'Hafs',  riwayah:'hafs',
-    build:(s,a)=>_aqcUrl('ar.alafasy', s, a) },
-  { id:'minshawi', label:'Minshawi', sub:'Hafs',  riwayah:'hafs',
-    build:(s,a)=>_aqcUrl('ar.minshawi', s, a) },
-
-  // ── Warsh — Ibrahim al-Dosary from everyayah ──
-  { id:'warsh_dosary', label:'Al-Dosary', sub:'Warsh', riwayah:'warsh',
-    build:(s,a)=>`https://everyayah.com/data/warsh/warsh_ibrahim_aldosary_128kbps/${_eaPad(s,a)}` },
-
-  // ── ad-Dūrī — Yasser ad-Dussary from everyayah ──
-  { id:'duri_dussary', label:'ad-Dussary', sub:'ad-Dūrī', riwayah:'duri',
-    build:(s,a)=>`https://everyayah.com/data/Yasser_Ad-Dussary_128kbps/${_eaPad(s,a)}` },
+  { id: 'ar.alafasy',         label: 'Alafasy',    sub: 'Hafs' },
+  { id: 'ar.abdurrahmaansudais', label: 'Sudais',  sub: 'Hafs' },
+  { id: 'ar.husary',          label: 'Husary',     sub: 'Hafs' },
+  { id: 'ar.minshawi',        label: 'Minshawi',   sub: 'Hafs' },
+  { id: 'ar.warsh',           label: 'Al-Warsh',   sub: 'Warsh' },
 ];
 
 // Track active audio per verse
@@ -5126,36 +5251,6 @@ function wireAudioEvents(ayaNum, state) {
   });
 
   audio.addEventListener('error', () => {
-    // Log so failures can be diagnosed from the browser console.
-    // MediaError codes: 1=ABORTED, 2=NETWORK, 3=DECODE, 4=SRC_NOT_SUPPORTED.
-    const err = audio.error;
-    console.error('[QuranAudio] error on', audio.src,
-                  '— code:', err ? err.code : '?', err ? err.message : '');
-
-    // Same-riwayah fallback. Reciter coverage on al-Quran Cloud is incomplete
-    // for some reciters on some verses (e.g., Sudais 3:39). When that happens,
-    // try the next reciter in the SAME riwayah — never cross riwayat (Warsh
-    // and Hafs are different texts and silently swapping would defeat the
-    // whole point of the platform). Try at most twice before giving up.
-    state._fbTried = state._fbTried || new Set();
-    state._fbTried.add(state.reciterIdx);
-    const cur = AUDIO_RECITERS[state.reciterIdx];
-    const fallbackIdx = AUDIO_RECITERS.findIndex(
-      (r, i) => r.riwayah === cur.riwayah && !state._fbTried.has(i)
-    );
-    if (fallbackIdx !== -1 && state._fbTried.size < 3) {
-      console.warn('[QuranAudio] falling back to', AUDIO_RECITERS[fallbackIdx].label);
-      state.reciterIdx = fallbackIdx;
-      // Re-highlight the active button so the UI matches reality
-      AUDIO_RECITERS.forEach((_, i) => {
-        const b = document.getElementById(`arc-${ayaNum}-${i}`);
-        if (b) b.classList.toggle('active', i === fallbackIdx);
-      });
-      loadAudioVerse(ayaNum, state);
-      return;
-    }
-    state._fbTried = new Set();  // reset for next user action
-
     document.getElementById('audio-loading-' + ayaNum).style.display = 'none';
     document.getElementById('audio-main-' + ayaNum).style.display = 'none';
     document.getElementById('audio-error-' + ayaNum).style.display = '';
@@ -5163,10 +5258,9 @@ function wireAudioEvents(ayaNum, state) {
 }
 
 function loadAudioVerse(ayaNum, state) {
-  const reciter = AUDIO_RECITERS[state.reciterIdx];
-  // Each reciter has its own CDN: Hafs uses al-Quran Cloud (global ayah index);
-  // Warsh + ad-Dūrī use everyayah (zero-padded sura+ayah). reciter.build() handles it.
-  const url = reciter.build(state.suraId, state.ayaNum);
+  const globalNum = verseGlobalNumber(state.suraId, state.ayaNum);
+  const reciterId = AUDIO_RECITERS[state.reciterIdx].id;
+  const url = `https://cdn.islamic.network/quran/audio/128/${reciterId}/${globalNum}.mp3`;
 
   const loadingEl = document.getElementById('audio-loading-' + ayaNum);
   const mainEl = document.getElementById('audio-main-' + ayaNum);
@@ -5209,7 +5303,6 @@ function selectReciter(ayaNum, idx) {
   const state = _audioState[ayaNum];
   if (!state) return;
   state.reciterIdx = idx;
-  state._fbTried = new Set();   // user-initiated change — reset fallback chain
   AUDIO_RECITERS.forEach((_, i) => {
     const btn = document.getElementById(`arc-${ayaNum}-${i}`);
     if (btn) btn.classList.toggle('active', i === idx);
@@ -5225,7 +5318,6 @@ function prevVerseAudio(ayaNum) {
   const state = _audioState[ayaNum];
   if (!state || state.ayaNum <= 1) return;
   state.ayaNum--;
-  state._fbTried = new Set();   // new verse — fresh fallback chain
   document.getElementById('audio-loading-' + ayaNum).innerHTML = `<span class="spinner"></span> Loading verse ${state.suraId}:${state.ayaNum}...`;
   loadAudioVerse(ayaNum, state);
   state.audio.addEventListener('canplay', () => state.audio.play(), { once: true });
@@ -5237,7 +5329,6 @@ function nextVerseAudio(ayaNum) {
   const maxAyas = SURA_AYA_COUNTS[state.suraId - 1] || 286;
   if (state.ayaNum >= maxAyas) return;
   state.ayaNum++;
-  state._fbTried = new Set();   // new verse — fresh fallback chain
   document.getElementById('audio-loading-' + ayaNum).innerHTML = `<span class="spinner"></span> Loading verse ${state.suraId}:${state.ayaNum}...`;
   loadAudioVerse(ayaNum, state);
   state.audio.addEventListener('canplay', () => state.audio.play(), { once: true });
