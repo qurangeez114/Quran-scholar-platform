@@ -2783,12 +2783,27 @@ const traditionState = {}; // { "sura-aya-tafsir": "sunni", ... }
 
 function tradKey(sura, aya, tab) { return `${sura}-${aya}-${tab}`; }
 
+// Map granular tradition values from tafsir_entries.tradition column to the
+// two-tab Sunni/Shia toggle. Database has values like 'sunni-classical',
+// 'shia-imami', 'mutazila-rationalist', 'sunni-classical-historical',
+// 'sunni-ashari-philosophical'. The toggle has only two buttons, so anything
+// starting with 'shia' lands in Shia, everything else (including mutazila)
+// lands in Sunni — Mutazila tafsir like al-Zamakhshari is widely read in
+// Sunni-adjacent circles, so this is the most user-useful grouping.
+function traditionMatchesTab(rowTradition, tab) {
+  if (!rowTradition) return true;  // unlabeled rows show in both tabs
+  const t = String(rowTradition).toLowerCase();
+  if (tab === 'shia')  return t.startsWith('shia');
+  if (tab === 'sunni') return !t.startsWith('shia');
+  return true;
+}
+
 function renderScholarEntries(entries, tradition, fallbackMsg) {
   if (!entries || entries.length === 0) {
     return `<div style="color:#BBB;font-style:italic;font-size:13px;padding:20px;text-align:center">${fallbackMsg}</div>`;
   }
   return entries.map((e, idx) => `
-    <div class="scholar-entry" data-tradition="${e.tradition || ''}" style="${e.tradition && e.tradition !== tradition ? 'display:none' : ''}">
+    <div class="scholar-entry" data-tradition="${e.tradition || ''}" style="${!traditionMatchesTab(e.tradition, tradition) ? 'display:none' : ''}">
       <div class="scholar-name" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
         <span>${e.scholar || 'Unknown'}</span>
         <span class="source-badge ${e.isAI ? 'source-ai' : 'source-sourced'}">${e.isAI ? 'AI Synthesis' : 'Sourced'}</span>
@@ -2817,7 +2832,7 @@ function setTradition(sura, aya, tab, tradition) {
   if (tradition === 'shia' && btns[1]) btns[1].classList.add('active');
   panel.querySelectorAll('.scholar-entry').forEach(e => {
     const t = e.getAttribute('data-tradition');
-    e.style.display = (!t || t === tradition) ? '' : 'none';
+    e.style.display = traditionMatchesTab(t, tradition) ? '' : 'none';
   });
 }
 
@@ -5243,12 +5258,32 @@ function verseGlobalNumber(surahNum, ayahNum) {
   return total + ayahNum;
 }
 
+// AUDIO RECITERS — organized by riwāyah, with per-source URL builders.
+// Hafs comes from al-Quran Cloud CDN (global ayah index).
+// Warsh + ad-Dūrī come from everyayah.com (zero-padded sura+ayah, e.g. 001001.mp3).
+// Sudais was removed: al-Quran Cloud's Sudais set is incomplete (verified
+// missing for 3:39 AccessDenied). Qalūn has no per-ayah audio source verified.
+function _eaPad(suraId, ayaNum) {
+  return String(suraId).padStart(3,'0') + String(ayaNum).padStart(3,'0') + '.mp3';
+}
+function _aqcUrl(reciter, suraId, ayaNum, bitrate) {
+  return `https://cdn.islamic.network/quran/audio/${bitrate||128}/${reciter}/${verseGlobalNumber(suraId, ayaNum)}.mp3`;
+}
+
 const AUDIO_RECITERS = [
-  { id: 'ar.alafasy',         label: 'Alafasy',    sub: 'Hafs' },
-  { id: 'ar.abdurrahmaansudais', label: 'Sudais',  sub: 'Hafs' },
-  { id: 'ar.husary',          label: 'Husary',     sub: 'Hafs' },
-  { id: 'ar.minshawi',        label: 'Minshawi',   sub: 'Hafs' },
-  { id: 'ar.warsh',           label: 'Al-Warsh',   sub: 'Warsh' },
+  // Hafs — 3 reciters from al-Quran Cloud (verified-complete coverage)
+  { id:'husary',   label:'Husary',   sub:'Hafs',  riwayah:'hafs',
+    build:(s,a)=>_aqcUrl('ar.husary', s, a) },
+  { id:'alafasy',  label:'Alafasy',  sub:'Hafs',  riwayah:'hafs',
+    build:(s,a)=>_aqcUrl('ar.alafasy', s, a) },
+  { id:'minshawi', label:'Minshawi', sub:'Hafs',  riwayah:'hafs',
+    build:(s,a)=>_aqcUrl('ar.minshawi', s, a) },
+  // Warsh — Ibrahim al-Dosary from everyayah
+  { id:'warsh_dosary', label:'Al-Dosary', sub:'Warsh', riwayah:'warsh',
+    build:(s,a)=>`https://everyayah.com/data/warsh/warsh_ibrahim_aldosary_128kbps/${_eaPad(s,a)}` },
+  // ad-Dūrī — Yasser ad-Dussary from everyayah
+  { id:'duri_dussary', label:'ad-Dussary', sub:'ad-Dūrī', riwayah:'duri',
+    build:(s,a)=>`https://everyayah.com/data/Yasser_Ad-Dussary_128kbps/${_eaPad(s,a)}` },
 ];
 
 // Track active audio per verse
@@ -5365,9 +5400,10 @@ function wireAudioEvents(ayaNum, state) {
 }
 
 function loadAudioVerse(ayaNum, state) {
-  const globalNum = verseGlobalNumber(state.suraId, state.ayaNum);
-  const reciterId = AUDIO_RECITERS[state.reciterIdx].id;
-  const url = `https://cdn.islamic.network/quran/audio/128/${reciterId}/${globalNum}.mp3`;
+  const reciter = AUDIO_RECITERS[state.reciterIdx];
+  // Each reciter knows its own CDN: Hafs hits al-Quran Cloud (global ayah index),
+  // Warsh + ad-Dūrī hit everyayah (zero-padded sura+ayah). reciter.build() handles routing.
+  const url = reciter.build(state.suraId, state.ayaNum);
 
   const loadingEl = document.getElementById('audio-loading-' + ayaNum);
   const mainEl = document.getElementById('audio-main-' + ayaNum);
