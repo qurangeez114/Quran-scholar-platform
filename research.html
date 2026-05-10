@@ -184,6 +184,35 @@ mark.hl-green{background:#BAFFC9;}
 }
 .speak-btn{transition:all .18s;}
 .speak-btn.speaking{background:var(--sira)!important;color:#fff!important;border-color:var(--sira)!important;}
+
+/* Active reading highlight */
+.reading-active {
+  border-color: var(--gold-ll) !important;
+  box-shadow: 0 0 0 3px rgba(184,144,42,0.25), var(--sh-m) !important;
+  position: relative;
+}
+.reading-active::after {
+  content: '🔊 Reading...';
+  position: sticky;
+  top: 60px;
+  display: block;
+  background: var(--ink);
+  color: var(--gold-ll);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  padding: 5px 12px;
+  border-radius: 0 0 3px 3px;
+  text-align: center;
+  z-index: 50;
+}
+.reading-active .sira-story-text,
+.reading-active .card-text {
+  background: linear-gradient(135deg, var(--gold-pale), #fff);
+  border-radius: 3px;
+  padding: 10px;
+}
 </style>
 </head>
 <body>
@@ -1388,11 +1417,15 @@ function expandCard(id) {
 }
 
 // ── SPEECH SYNTHESIS ────────────────────────────────────────
-function _speakText(text, lang, btnEl) {
+function _speakText(text, lang, btnEl, cardEl) {
   if (!('speechSynthesis' in window)) { alert('Text-to-speech not supported in this browser.'); return; }
+  // Stop if already speaking
   if (window.speechSynthesis.speaking) {
     window.speechSynthesis.cancel();
-    window._speakingBtn = null;
+    // Reset button
+    if (window._speakingBtn) { window._speakingBtn.textContent='🔊'; window._speakingBtn.classList.remove('speaking'); window._speakingBtn=null; }
+    // Remove active card highlight
+    if (window._speakingCard) { window._speakingCard.classList.remove('reading-active'); window._speakingCard=null; }
     document.querySelectorAll('.speak-btn.speaking').forEach(function(b){ b.textContent='🔊'; b.classList.remove('speaking'); });
     return;
   }
@@ -1400,12 +1433,17 @@ function _speakText(text, lang, btnEl) {
   utt.lang = lang || 'en-US';
   utt.rate = 0.88;
   utt.pitch = 1;
-  if (btnEl) { btnEl.textContent = '⏹'; btnEl.classList.add('speaking'); window._speakingBtn = btnEl; }
+  // Highlight button
+  if (btnEl) { btnEl.textContent = '⏹ Stop'; btnEl.classList.add('speaking'); window._speakingBtn = btnEl; }
+  // Highlight card
+  if (cardEl) { cardEl.classList.add('reading-active'); window._speakingCard = cardEl; }
   utt.onend = function() {
     if (window._speakingBtn) { window._speakingBtn.textContent='🔊'; window._speakingBtn.classList.remove('speaking'); window._speakingBtn=null; }
+    if (window._speakingCard) { window._speakingCard.classList.remove('reading-active'); window._speakingCard=null; }
   };
   utt.onerror = function() {
     if (window._speakingBtn) { window._speakingBtn.textContent='🔊'; window._speakingBtn.classList.remove('speaking'); window._speakingBtn=null; }
+    if (window._speakingCard) { window._speakingCard.classList.remove('reading-active'); window._speakingCard=null; }
   };
   window.speechSynthesis.speak(utt);
 }
@@ -1414,21 +1452,24 @@ function speakCard(id) {
   var el = document.getElementById('text-' + id);
   if (!el) return;
   var btn = document.getElementById('speak-btn-' + id);
-  _speakText(el.innerText || el.textContent, 'en-US', btn);
+  var card = document.getElementById('card-' + id) || el.closest('.result-card');
+  _speakText(el.innerText || el.textContent, 'en-US', btn, card);
 }
 
 function speakArabicCard(id) {
   var el = document.getElementById('arabic-' + id);
   if (!el) return;
   var btn = document.getElementById('speak-ar-btn-' + id);
-  _speakText(el.innerText || el.textContent, 'ar-SA', btn);
+  var card = el.closest('.result-card');
+  _speakText(el.innerText || el.textContent, 'ar-SA', btn, card);
 }
 
 function speakSiraEvent(evId, lang) {
   var el = document.getElementById('sira-story-' + evId);
   var btn = document.getElementById('sira-speak-' + evId + '-' + (lang||'en'));
+  var card = document.getElementById('sira-card-' + evId);
   if (!el) return;
-  _speakText(el.innerText || el.textContent, lang === 'ar' ? 'ar-SA' : 'en-US', btn);
+  _speakText(el.innerText || el.textContent, lang === 'ar' ? 'ar-SA' : 'en-US', btn, card);
 }
 
 function copyCard(id, btn) {
@@ -1683,19 +1724,20 @@ function renderSiraTimeline(events, relatedEvents, q, relatedTerms) {
       html += '</div><div style="font-size:16px;color:var(--ink5);padding-top:3px;transition:transform 0.2s;flex-shrink:0;" class="sira-expand-arrow">›</div>';
       html += '</div>';
       html += '<div class="sira-event-body">';
-      if (storyEn) html += '<div class="sira-story-text" id="sira-story-' + ev.id + '">' + storyEn + '</div>' +
-        '<div class="card-actions sira-actions" style="margin-top:8px;">' +
-          '<button id="sira-speak-' + ev.id + '-en" onclick="speakSiraEvent(\'' + ev.id + '\',\'en\')" class="action-btn speak-btn" title="Read English">🔊 Read</button>' +
-          (ev.story_ar ? '<button id="sira-speak-' + ev.id + '-ar" onclick="speakSiraEvent(\'' + ev.id + '\',\'ar\')" class="action-btn speak-btn" title="Read Arabic">🔊 ع</button>' : '') +
-          '<button class="action-btn" onclick="highlightSiraEvent(\'' + ev.id + '\',this)" title="Highlight">🖊 Highlight</button>' +
-          '<button class="action-btn" onclick="openSiraNote(\'' + ev.id + '\',\'' + (ev.title_en||'').replace(/'/g,'').substring(0,30) + '\')" title="Add note">📝 Note</button>' +
-          '<button id="sira-bm-' + ev.id + '" class="action-btn ' + (isSiraBookmarked(ev.id)?'active':'') + '" onclick="toggleSiraBookmark(\'' + ev.id + '\',\'' + (ev.title_en||'').replace(/'/g,'').substring(0,40) + '\',this)" title="Bookmark">' + (isSiraBookmarked(ev.id)?'🔖 Saved':'🔖 Save') + '</button>' +
-          '<button class="action-btn" onclick="copySiraEvent(\'' + ev.id + '\')" title="Copy">📋 Copy</button>' +
-          '<button class="action-btn" onclick="shareSiraEvent(\'' + ev.id + '\')" title="Share">📤 Share</button>' +
-        '</div>';
+      if (storyEn) html += '<div class="sira-story-text" id="sira-story-' + ev.id + '">' + storyEn + '</div>';
       html += storyArHtml;
       if (vms.length) html += '<div class="sira-section-label">📖 Related Quran Verses</div><div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;">' + verseChips + '</div>';
       html += locationHtml + figuresHtml + hadithHtml + tafsirHtml + sourceHtml + themesHtml;
+      // Action bar — always shown at bottom of expanded card
+      html += '<div class="card-actions sira-actions" style="margin-top:10px;border-top:1px solid var(--bg3);padding-top:8px;">' +
+          '<button id="sira-speak-' + ev.id + '-en" onclick="speakSiraEvent(\'' + ev.id + '\',\'en\')" class="action-btn speak-btn" title="Read English">🔊 Read</button>' +
+          (ev.story_ar ? '<button id="sira-speak-' + ev.id + '-ar" onclick="speakSiraEvent(\'' + ev.id + '\',\'ar\')" class="action-btn speak-btn" title="Read Arabic">🔊 ع</button>' : '') +
+          '<button class="action-btn" onclick="highlightSiraEvent(\'' + ev.id + '\',this)" title="Highlight">🖊 Highlight</button>' +
+          '<button class="action-btn" onclick="openSiraNote(\'' + ev.id + '\',\'' + (ev.title_en||'').replace(/\'|"/g,'').substring(0,30) + '\')" title="Add note">📝 Note</button>' +
+          '<button id="sira-bm-' + ev.id + '" class="action-btn ' + (isSiraBookmarked(ev.id)?'active':'') + '" onclick="toggleSiraBookmark(\'' + ev.id + '\',\'' + (ev.title_en||'').replace(/\'|"/g,'').substring(0,40) + '\',this)" title="Bookmark">' + (isSiraBookmarked(ev.id)?'🔖 Saved':'🔖 Save') + '</button>' +
+          '<button class="action-btn" onclick="copySiraEvent(\'' + ev.id + '\')" title="Copy">📋 Copy</button>' +
+          '<button class="action-btn" onclick="shareSiraEvent(\'' + ev.id + '\')" title="Share">📤 Share</button>' +
+        '</div>';
       html += '</div></div>';
     });
   });
