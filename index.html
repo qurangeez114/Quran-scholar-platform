@@ -2525,6 +2525,7 @@ function renderScholarEntries(entries, tradition, fallbackMsg) {
       </div>
       <div class="scholar-body">${formatScholarlyText(escapeHtml(e.text)).replace(/\n/g,'<br><br>')}</div>
       ${e.meta ? `<div class="scholar-meta">${escapeHtml(e.meta)}</div>` : ''}
+      ${e.isnadHtml || ''}
     </div>
   `).join('');
 }
@@ -2629,19 +2630,43 @@ function rowToHadithEntry(r) {
   if (r.reference) metaParts.push('📖 ' + r.reference);
 
   // Grade badge — infer from hadith_grade or collection name
-  const inferredGrade = (r.hadith_grade && r.hadith_grade !== 'ai_synthesis') ? r.hadith_grade :
+  // 'ai_synthesis' and 'ungraded' are internal markers, not real grades
+  const rawGrade = r.hadith_grade || '';
+  const isInternal = rawGrade === 'ai_synthesis' || rawGrade === 'ungraded' || rawGrade === '';
+  const inferredGrade = !isInternal ? rawGrade :
     (r.collection||'').toLowerCase().includes('sahih') ? 'Sahih' :
-    (r.collection||'').toLowerCase().includes('hasan') ? 'Hasan' : '';
+    (r.collection||'').toLowerCase().includes('hasan') ? 'Hasan' :
+    (r.collection||'').toLowerCase().includes('bukhari') ? 'Sahih' :
+    (r.collection||'').toLowerCase().includes('muslim') ? 'Sahih' :
+    (r.collection||'').toLowerCase().includes('nawawi') ? 'Authentic' :
+    (r.collection||'').toLowerCase().includes('qudsi') ? 'Sahih' : '';
+
   let gradeBadge = '';
   if (inferredGrade) {
     const g = inferredGrade.toLowerCase();
-    const gradeColor = g.includes('sahih') ? '#1A7A48' :
-                       g.includes('hasan') ? '#1A6FA8' :
+    const gradeColor = g.includes('sahih') || g.includes('authentic') ? '#1A7A48' :
+                       g.includes('hasan') || g.includes('good') ? '#1A6FA8' :
                        g.includes('daif') || g.includes('weak') ? '#C0621A' : '#666';
-    const gradeBg = g.includes('sahih') ? '#D5F5E3' :
-                    g.includes('hasan') ? '#D6EAF8' :
+    const gradeBg = g.includes('sahih') || g.includes('authentic') ? '#D5F5E3' :
+                    g.includes('hasan') || g.includes('good') ? '#D6EAF8' :
                     g.includes('daif') || g.includes('weak') ? '#FDEBD0' : '#F0F0F0';
     gradeBadge = `<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:${gradeBg};color:${gradeColor};border:1px solid ${gradeColor};margin-left:6px;">${inferredGrade}</span>`;
+  }
+
+  // Isnad display — parse chain of narrators from narrator field or Arabic text
+  let isnadHtml = '';
+  if (r.narrator && r.narrator.trim()) {
+    const chain = r.narrator.split(/->|→|,|;/).map(s => s.trim()).filter(Boolean);
+    if (chain.length > 1) {
+      isnadHtml = `<div style="margin-top:8px;padding:8px 12px;background:#FFFEF5;border-left:3px solid #B8902A;border-radius:4px;font-size:12px;color:#4A3B28;">
+        <div style="font-size:10px;font-weight:700;color:#B8902A;letter-spacing:0.5px;margin-bottom:6px;">⛓ CHAIN OF NARRATORS (ISNAD)</div>
+        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:4px;">
+          ${chain.map((n,i) => `<span style="padding:2px 8px;background:#FDF5DE;border:1px solid #D4A830;border-radius:12px;font-size:11px;font-weight:600;">${n}</span>${i < chain.length-1 ? '<span style="color:#B8902A;font-size:10px;">→</span>' : ''}`).join('')}
+        </div>
+      </div>`;
+    } else {
+      isnadHtml = `<div style="margin-top:6px;font-size:12px;color:#6B5A3E;"><span style="font-weight:700;color:#B8902A;">⛓ Narrator:</span> ${r.narrator}</div>`;
+    }
   }
 
   // Mark AI-generated hadiths clearly
@@ -2654,7 +2679,8 @@ function rowToHadithEntry(r) {
     meta: metaParts.join(' · ') || null,
     isAI: isAIGenerated,
     aya_number: r.aya_number,
-    gradeBadge
+    gradeBadge,
+    isnadHtml
   };
 }
 

@@ -1206,7 +1206,31 @@ function buildCard(r, q, isRelated) {
 
   if (r.type === 'hadith') {
     typePill = `<span class="source-pill pill-hadith">📜 Hadith</span>`;
-    scholarLine = `<div class="card-scholar">${esc(r.collection||'Hadith')}${r.hadith_grade ? ` <span style="font-size:10px;color:var(--ink4)">(${esc(r.hadith_grade)})</span>` : ''}</div>`;
+    const rawGrade = r.hadith_grade || '';
+    const isInternal = rawGrade === 'ai_synthesis' || rawGrade === 'ungraded' || rawGrade === '';
+    const displayGrade = !isInternal ? rawGrade :
+      (r.collection||'').toLowerCase().includes('bukhari') ? 'Sahih' :
+      (r.collection||'').toLowerCase().includes('muslim') ? 'Sahih' :
+      (r.collection||'').toLowerCase().includes('sahih') ? 'Sahih' :
+      (r.collection||'').toLowerCase().includes('hasan') ? 'Hasan' :
+      (r.collection||'').toLowerCase().includes('nawawi') ? 'Authentic' :
+      (r.collection||'').toLowerCase().includes('qudsi') ? 'Sahih' : '';
+    const gradeG = displayGrade.toLowerCase();
+    const gradeColor = gradeG.includes('sahih')||gradeG.includes('authentic') ? '#1A7A48' :
+                       gradeG.includes('hasan')||gradeG.includes('good') ? '#1A6FA8' :
+                       gradeG.includes('daif')||gradeG.includes('weak') ? '#C0621A' : '#666';
+    const gradeBg = gradeG.includes('sahih')||gradeG.includes('authentic') ? '#D5F5E3' :
+                    gradeG.includes('hasan')||gradeG.includes('good') ? '#D6EAF8' :
+                    gradeG.includes('daif')||gradeG.includes('weak') ? '#FDEBD0' : '#F0F0F0';
+    const gradeBadgeHtml = displayGrade
+      ? ` <span style="display:inline-block;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:700;background:${gradeBg};color:${gradeColor};border:1px solid ${gradeColor};">${displayGrade}</span>`
+      : '';
+    // Isnad chain display
+    const isnadChain = r.narrator ? r.narrator.split(/->|→|,|;/).map(s=>s.trim()).filter(Boolean) : [];
+    const isnadHtml = isnadChain.length > 1
+      ? `<div style="margin-top:8px;padding:7px 10px;background:#FFFEF5;border-left:3px solid #B8902A;border-radius:4px;font-size:11px;color:#4A3B28;"><span style="font-size:10px;font-weight:700;color:#B8902A;">⛓ ISNAD: </span>${isnadChain.map(n=>`<span style="padding:2px 7px;background:#FDF5DE;border:1px solid #D4A830;border-radius:10px;margin:2px;display:inline-block;">${esc(n)}</span>`).join(' → ')}</div>`
+      : (r.narrator ? `<div style="margin-top:5px;font-size:11px;color:#6B5A3E;"><span style="font-weight:700;color:#B8902A;">⛓ Narrator:</span> ${esc(r.narrator)}</div>` : '');
+    scholarLine = `<div class="card-scholar">${esc(r.collection||'Hadith')}${gradeBadgeHtml}</div>`;
     if (r.arabic_text) arabicBlock = `<div class="card-arabic">${esc(r.arabic_text)}</div>`;
     textBlock = `<div class="card-text" id="text-${id}">${highlight(r.hadith_text, q)}</div>`;
     const hSura = r.sura_id || r.sura;
@@ -1220,7 +1244,7 @@ function buildCard(r, q, isRelated) {
            style="padding:2px 8px;border:1px solid var(--sunni-border);border-radius:2px;background:var(--sunni-bg);color:var(--sunni);font-size:10px;font-weight:700;text-decoration:none;margin-left:4px;">
            📖 Quran ${hSura}:${hAya||''}
          </a>` : '';
-    metaLine = `<div class="card-meta">${metaParts.join(' · ')}${quranLink}</div>`;
+    metaLine = `<div class="card-meta">${metaParts.join(' · ')}${quranLink}</div>${isnadHtml}`;
   } else if (r.type === 'quran') {
     typePill = `<span class="source-pill" style="background:#1A6FA8;color:#fff;padding:2px 8px;border-radius:10px;font-size:10px;">📖 Quran</span>`;
     scholarLine = `<div class="card-scholar">Surah ${esc(String(r.sura_id))} : Ayah ${esc(String(r.aya_number))}</div>`;
