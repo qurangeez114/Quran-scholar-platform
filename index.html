@@ -802,25 +802,18 @@ async function init() {
     allSuras = suras;
     renderSuraList(allSuras);
     if (urlSura && urlSura >= 1 && urlSura <= 114) {
-      // Came from research page — show back button
-      const backBtn = document.getElementById('backBtn');
       const fromResearch = urlParams.get('from') === 'research' || document.referrer.includes('research');
-      if (backBtn) {
-        backBtn.style.display = 'block';
-        backBtn.textContent = '← Research';
-        backBtn.onclick = () => {
-          if (document.referrer && document.referrer.includes('research')) {
-            window.history.back();
-          } else {
-            window.location.href = 'research.html';
-          }
-        };
-      }
       await loadSura(urlSura);
       if (urlAya) {
         setTimeout(() => {
           const card = document.getElementById('vc-' + urlAya);
-          if (card) { card.scrollIntoView({ behavior: 'smooth', block: 'center' }); highlightVerse(card); }
+          if (card) {
+            card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            highlightVerse(card);
+            if (fromResearch) {
+              showResearchBackBtn(card, urlAya);
+            }
+          }
         }, 800);
       }
     } else if (allSuras.length > 0) {
@@ -2067,6 +2060,31 @@ function updateCardBackBtn(card, ayahNum) {
   `;
   btn.onclick = (e) => { e.stopPropagation(); goBack(); };
   // Insert at top of card, before verse-top
+  const verseTop = card.querySelector('.verse-top');
+  if (verseTop) card.insertBefore(btn, verseTop);
+  else card.prepend(btn);
+}
+
+function showResearchBackBtn(card, ayahNum) {
+  document.querySelectorAll('.card-back-btn').forEach(b => b.remove());
+  const btn = document.createElement('button');
+  btn.className = 'card-back-btn visible';
+  btn.innerHTML = `
+    <span class="back-arrow">←</span>
+    <span class="back-label">
+      <span class="back-label-main">Back to Research</span>
+      <span class="back-label-sub">Return to your research results</span>
+    </span>
+    <span class="back-steps">🔬</span>
+  `;
+  btn.onclick = (e) => {
+    e.stopPropagation();
+    if (document.referrer && document.referrer.includes('research')) {
+      window.history.back();
+    } else {
+      window.location.href = 'research.html';
+    }
+  };
   const verseTop = card.querySelector('.verse-top');
   if (verseTop) card.insertBefore(btn, verseTop);
   else card.prepend(btn);
