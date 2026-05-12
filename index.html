@@ -3618,19 +3618,65 @@ async function searchLexicon(q, closeBar) {
 
   renderLexicon(results);
 
-  // Always run concordance — show matching verses in main panel, skip dictionary card
+  // Always run concordance — show word card + matching verses
   clearTimeout(window._lexConcordanceTimer);
   window._lexConcordanceTimer = setTimeout(async () => {
     if (raw.length >= 2) {
+      // Build a word object from the first result in the sidebar list (if any)
+      // so we can show the full word detail card on top
+      const wordObj = _currentLexWords.length > 0
+        ? _currentLexWords[0]
+        : { word: raw, transliteration: '', root: '', quranic_meaning: '', surah_number: '', ayah_number: '', id: null };
+      // showLexiconDetailByWord shows the card + triggers loadLexiconConcordance
+      // but we want runWordSearch results (with Arabic highlight bar) in the concordance area.
+      // So: show the card skeleton, then fill concordance via runWordSearch.
       const panel = document.getElementById('searchResultsPanel');
       const resultsDiv = document.getElementById('searchResults');
       const countDiv = document.getElementById('searchCount');
-      panel.style.display = 'flex';
-      document.getElementById('verseArea').style.display = 'none';
-      countDiv.textContent = 'Concordance: ' + raw;
-      resultsDiv.innerHTML = '<div style="padding:20px;text-align:center;color:#BBB;font-style:italic"><span class="spinner"></span> Searching all verses...</div>';
-      // Use runWordSearch so we get the Arabic highlight bar too
-      runWordSearch(raw);
+      const verseArea = document.getElementById('verseArea');
+      if (verseArea) verseArea.style.display = 'none';
+      if (panel) { panel.style.display = 'flex'; panel.style.flexDirection = 'column'; }
+      const clearBtn = document.getElementById('clearSearch');
+      if (clearBtn) clearBtn.style.display = '';
+      countDiv.textContent = 'Lexicon: ' + raw;
+
+      const dictHtml = renderLexiconDictionary(wordObj);
+      const dictId = wordObj.id ? 'lexiconDictionary-' + wordObj.id : 'lexiconDictionary-inline';
+
+      resultsDiv.innerHTML = \`
+        <div style="max-width:700px;margin:0 auto;">
+          <!-- Word detail card -->
+          <div style="background:#fff;border:2px solid #E8C97B;border-radius:12px;padding:16px;margin-bottom:20px;">
+            <div style="text-align:center;padding-bottom:12px;border-bottom:1px solid #F0EDE5;margin-bottom:12px;">
+              <div style="font-family:'Amiri',serif;font-size:42px;color:#1a1a1a;direction:rtl;line-height:1.5">\${escapeHtml(wordObj.word||raw)}</div>
+              \${wordObj.transliteration ? \`<div style="font-size:12px;color:#C9A84C;font-weight:700;margin-top:4px">\${escapeHtml(wordObj.transliteration)}</div>\` : ''}
+              \${wordObj.surah_number ? \`<div style="font-size:11px;color:#8B7355;margin-top:4px">\${wordObj.surah_number}:\${wordObj.ayah_number||''}</div>\` : ''}
+            </div>
+            <div id="\${dictId}">\${dictHtml}</div>
+          </div>
+          <!-- Arabic match bar + concordance filled by runWordSearch below -->
+          <div style="font-size:12px;color:#8B7355;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:8px;">
+            📖 Concordance — verses containing this word
+            <span id="concordanceCount" style="font-size:11px;color:#C9A84C;font-weight:600;background:#FDF5DE;border:1px solid #E8C97B;border-radius:10px;padding:1px 8px;"></span>
+          </div>
+          <div id="lexiconConcordance">
+            <div style="padding:20px;text-align:center;color:#BBB;font-style:italic"><span class="spinner"></span> Searching verses...</div>
+          </div>
+        </div>\`;
+
+      // Fill concordance area with runWordSearch results (Arabic highlight bar + verse cards)
+      // We intercept by temporarily redirecting searchResults writes to lexiconConcordance
+      const origInner = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML');
+      const concBox = document.getElementById('lexiconConcordance');
+      const countEl = document.getElementById('concordanceCount');
+      // Run the search and put results into lexiconConcordance
+      try {
+        const tempDiv = document.createElement('div');
+        // Monkey-patch: run runWordSearch but capture its output
+        // Actually simpler: just call loadLexiconConcordance with a word object
+        // that has the search term, AND separately run Arabic match detection
+        await loadLexiconConcordanceWithHighlight(wordObj, raw);
+      } catch(e) {}
     }
   }, 350);
 }
@@ -3789,6 +3835,171 @@ function renderLexiconDictionary(word) {
       <div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:${s.color};margin-bottom:6px">${escapeHtml(s.label)}</div>
       <div style="font-size:13px;color:#333;line-height:1.7">${s.content}</div>
     </div>`).join('');
+}
+
+
+async function loadLexiconConcordanceWithHighlight(word, rawQuery) {
+  const box = document.getElementById('lexiconConcordance');
+  const countEl = document.getElementById('concordanceCount');
+  if (!box) return;
+
+  const arabicWord = word.word || rawQuery || '';
+  const isArabic = /[؀-ۿ]/.test(rawQuery);
+  const isGeez   = /[ሀ-፿]/.test(rawQuery);
+
+  // ── Find Arabic word matches for the chip bar ─────────────────────────
+  let arabicMatches = [];
+  try {
+    const waCols = 'arabic_word,root_word,original_meaning';
+    let waResults = [];
+    if (isArabic) {
+      waResults = (await Promise.all([
+        sbSearch('word_analysis', waCols, 'arabic_word', rawQuery).catch(() => []),
+        sbSearch('word_analysis', waCols, 'root_word', rawQuery).catch(() => [])
+      ])).flat();
+    } else if (isGeez) {
+      const geezVars = searchVariants(rawQuery);
+      const geezAyas = (await Promise.all(
+        geezVars.flatMap(v => [
+          sbSearch('ayas', 'sura_id,aya_number,arabic', 'aya_text', v).catch(() => []),
+          sbSearch('ayas', 'sura_id,aya_number,arabic', 'amharic', v).catch(() => [])
+        ])
+      )).flat();
+      const awSet = new Set();
+      geezAyas.forEach(r => {
+        (r.arabic || '').split(/\s+/).forEach(w => {
+          const c = w.replace(/[ً-ٰٟۖ-ۭ،؛؟]/g, '').trim();
+          if (c.length >= 2) awSet.add(c);
+        });
+      });
+      waResults = (await Promise.all(
+        [...awSet].slice(0, 5).map(aw => sbSearch('word_analysis', waCols, 'arabic_word', aw).catch(() => []))
+      )).flat();
+    } else {
+      // English / Latin
+      waResults = (await Promise.all([
+        sbSearch('word_analysis', waCols, 'original_meaning', rawQuery).catch(() => []),
+        sbSearch('word_analysis', waCols, 'modern_meaning', rawQuery).catch(() => [])
+      ])).flat();
+    }
+    const seen = new Set();
+    arabicMatches = waResults.filter(r => {
+      if (!r.arabic_word) return false;
+      const key = r.arabic_word.replace(/[ً-ٰٟۖ-ۭ]/g, '');
+      if (seen.has(key)) return false; seen.add(key); return true;
+    }).slice(0, 10);
+  } catch(e) {}
+
+  const arabicHighlightSet = arabicMatches.map(r =>
+    r.arabic_word.replace(/[ً-ٰٟۖ-ۭ]/g, '')
+  ).filter(w => w.length >= 2);
+
+  // ── Arabic chip bar ────────────────────────────────────────────────────
+  let arabicBarHtml = '';
+  if (arabicMatches.length > 0) {
+    const chips = arabicMatches.map(r => {
+      const rootLabel = r.root_word ? `<span class="arabic-match-chip-root">${escapeHtml(r.root_word)}</span>` : '';
+      return `<span class="arabic-match-chip" onclick="searchLexicon('${r.arabic_word.replace(/'/g,"\'")}',true)">${escapeHtml(r.arabic_word)}${rootLabel}</span>`;
+    }).join('');
+    arabicBarHtml = `<div class="arabic-match-bar"><span class="arabic-match-bar-label">🔤 Arabic words found</span>${chips}</div>`;
+  }
+
+  // ── Verse search ───────────────────────────────────────────────────────
+  try {
+    const cols = 'sura_id,aya_number,arabic,english,amharic,oromo,somali,aya_text';
+    const variants = searchVariants(rawQuery);
+    const searchCols = isGeez ? ['aya_text','amharic','arabic','english'] :
+                       isArabic ? ['arabic','aya_text','amharic','english'] :
+                       ['english','aya_text','amharic','arabic'];
+    const tasks = [];
+    for (const v of variants) {
+      for (const c of searchCols) {
+        tasks.push(sbSearch('ayas', cols, c, v).catch(() => []));
+      }
+    }
+    // Also search by Arabic word directly
+    if (arabicWord && /[؀-ۿ]/.test(arabicWord)) {
+      tasks.push(sbSearch('ayas', cols, 'arabic', arabicWord).catch(() => []));
+    }
+    arabicHighlightSet.slice(0, 3).forEach(aw => {
+      tasks.push(sbSearch('ayas', cols, 'arabic', aw).catch(() => []));
+    });
+
+    const all = (await Promise.all(tasks)).flat();
+    const seen = new Set();
+    const deduped = all.filter(v => {
+      const key = `${v.sura_id}:${v.aya_number}`;
+      if (seen.has(key)) return false; seen.add(key); return true;
+    }).sort((a, b) => a.sura_id - b.sura_id || a.aya_number - b.aya_number);
+
+    if (countEl) countEl.textContent = deduped.length + ' verse' + (deduped.length===1?'':'s');
+
+    // ── Highlight functions ──────────────────────────────────────────────
+    const allTerms = [rawQuery, ...variants].filter((v,i,a) => v && v.length>=2 && a.indexOf(v)===i);
+    function hlTranslation(text) {
+      if (!text) return '';
+      let out = text;
+      allTerms.forEach(term => {
+        const esc2 = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        out = out.replace(new RegExp('(' + esc2 + ')', 'gi'),
+          '<mark style="background:#FFE066;color:#1a1a1a;border-radius:3px;padding:0 2px;font-weight:700;">$1</mark>');
+      });
+      return out;
+    }
+    function hlArabic(text) {
+      if (!text) return '';
+      let out = text;
+      const diac = '[ً-ٰٟۖ-ۭ]*';
+      arabicHighlightSet.forEach(aw => {
+        if (aw.length < 2) return;
+        const esc2 = [...aw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')].join(diac);
+        try { out = out.replace(new RegExp('(' + esc2 + ')', 'g'), '<mark class="ar-hl">$1</mark>'); } catch(e) {}
+      });
+      if (isArabic) {
+        allTerms.forEach(term => {
+          if (!/[؀-ۿ]/.test(term)) return;
+          const stripped = term.replace(/[ً-ٰٟۖ-ۭ]/g, '');
+          if (stripped.length < 2) return;
+          const esc2 = [...stripped.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')].join(diac);
+          try { out = out.replace(new RegExp('(' + esc2 + ')', 'g'), '<mark class="ar-hl">$1</mark>'); } catch(e) {}
+        });
+      }
+      return out;
+    }
+
+    if (!deduped.length) {
+      box.innerHTML = arabicBarHtml + '<div style="padding:20px;text-align:center;color:#BBB;font-style:italic">No verses found.</div>';
+      return;
+    }
+
+    box.innerHTML = arabicBarHtml + deduped.map(v => {
+      const suraInfo = allSuras.find(s => (s.sura_id||s.id) === v.sura_id);
+      const translit = transliterateArabic(v.arabic || '');
+      return `
+      <div style="background:#fff;border:1px solid #E8E4DC;border-radius:10px;margin-bottom:10px;overflow:hidden;cursor:pointer;" onclick="gotoResult(${v.sura_id},${v.aya_number},event)">
+        <div style="background:#FDF8EE;border-bottom:1px solid #E8C97B;padding:8px 14px;display:flex;align-items:center;gap:8px;">
+          <div style="width:24px;height:24px;border-radius:50%;background:#C9A84C;color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0">${v.sura_id}</div>
+          <div style="flex:1;min-width:0;">
+            <span style="font-family:'Amiri',serif;font-size:15px;color:#1a1a1a;font-weight:700">${ARABIC_NAMES[v.sura_id]||''}</span>
+            <span style="font-size:12px;color:#B8902A;font-weight:700;margin-left:6px">${suraInfo?.sura_name_english||''}</span>
+            <div style="font-size:11px;color:#8B7355">Surah ${v.sura_id}, Verse ${v.aya_number}</div>
+          </div>
+          <div style="font-size:12px;font-weight:700;color:#fff;background:#B8902A;border-radius:10px;padding:2px 8px;flex-shrink:0">${v.sura_id}:${v.aya_number}</div>
+        </div>
+        <div style="padding:12px 14px;">
+          ${v.arabic ? `<div style="font-family:'Amiri',serif;font-size:20px;direction:rtl;text-align:right;line-height:1.8;margin-bottom:6px;${!langState.arabic?'display:none;':''}">${hlArabic(v.arabic)}</div>` : ''}
+          ${translit ? `<div style="font-size:12px;color:#888;font-style:italic;margin-bottom:4px;${!langState.translit?'display:none;':''}">${hlTranslation(translit)}</div>` : ''}
+          ${v.english ? `<div style="font-size:13px;color:#444;line-height:1.6;font-style:italic;margin-bottom:4px;${!langState.english?'display:none;':''}">${hlTranslation(v.english)}</div>` : ''}
+          ${v.aya_text ? `<div style="font-size:12px;color:#8B7355;line-height:1.5;margin-bottom:3px;${!langState.tigrinya?'display:none;':''}">${hlTranslation(v.aya_text)}</div>` : ''}
+          ${v.amharic ? `<div style="font-size:12px;color:#6B8355;line-height:1.5;margin-bottom:3px;${!langState.amharic?'display:none;':''}">${hlTranslation(v.amharic)}</div>` : ''}
+          ${v.oromo ? `<div style="font-size:12px;color:#5B7355;line-height:1.5;margin-bottom:3px;${!langState.oromo?'display:none;':''}">${hlTranslation(v.oromo)}</div>` : ''}
+          ${v.somali ? `<div style="font-size:12px;color:#355573;line-height:1.5;${!langState.somali?'display:none;':''}">${hlTranslation(v.somali)}</div>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    box.innerHTML = arabicBarHtml + `<div style="color:#C0392B;padding:20px">Error: ${escapeHtml(e.message)}</div>`;
+  }
 }
 
 async function loadLexiconConcordance(word) {
