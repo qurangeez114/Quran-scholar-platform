@@ -213,14 +213,6 @@ mark.hl-green{background:#BAFFC9;}
   border-radius: 3px;
   padding: 10px;
 }
-
-/* Navigation memory: keeps interlinks usable back/forward without redesign */
-.research-nav-memory{position:fixed;left:12px;bottom:14px;z-index:450;display:flex;gap:6px;align-items:center;background:rgba(237,229,208,.96);border:1px solid var(--gold-border);border-radius:24px;padding:6px 8px;box-shadow:0 4px 18px rgba(0,0,0,.12);}
-.research-nav-memory button{border:1px solid var(--gold-border);background:var(--gold-pale);color:var(--gold);border-radius:18px;padding:6px 10px;font-size:11px;font-weight:700;cursor:pointer;}
-.research-nav-memory button:hover{background:var(--gold);color:#fff;}
-.research-nav-memory .nav-label{font-size:10px;color:var(--ink4);font-weight:700;padding:0 4px;white-space:nowrap;}
-@media(max-width:600px){.research-nav-memory{left:8px;right:8px;bottom:8px;justify-content:center}.research-nav-memory .nav-label{display:none}}
-
 </style>
 </head>
 <body>
@@ -234,13 +226,6 @@ mark.hl-green{background:#BAFFC9;}
   <div style="flex:1"></div>
   <a href="https://fascinating-sunburst-516df8.netlify.app" class="topbar-home">📖 Quran Platform</a>
   <button onclick="toggleBookmarks()" style="padding:7px 14px;border:2px solid var(--gold-border);border-radius:20px;background:var(--gold-pale);color:var(--gold);font-size:12px;font-weight:700;cursor:pointer;" id="bmToggleBtn">🔖 Saved</button>
-</div>
-
-<!-- BACK / FORWARD MEMORY FOR RESEARCH LINKS -->
-<div class="research-nav-memory" aria-label="Research navigation memory">
-  <button type="button" onclick="researchGoBack()">← Back</button>
-  <button type="button" onclick="researchGoForward()">Forward →</button>
-  <span class="nav-label">Previous research spot</span>
 </div>
 
 <!-- HERO SEARCH -->
@@ -751,152 +736,8 @@ let currentTrad = 'all';
 let currentNoteId = null;
 let allResults = [];
 
-
-// ── RESEARCH NAVIGATION MEMORY ──────────────────────────────────
-// Saves the current research screen before searches, source changes, Sīra jumps,
-// and Quran-reader links. Browser Back/Forward restores the exact previous spot.
-let __navRestoring = false;
-let __navReady = false;
-
-function activeId(selector) {
-  const el = document.querySelector(selector + '.active');
-  return el ? el.id || '' : '';
-}
-
-function captureResearchState(label) {
-  const results = document.getElementById('resultsContainer');
-  const header = document.getElementById('resultsHeader');
-  const count = document.getElementById('resultsCount');
-  const sira = document.getElementById('siraTimelineWrap');
-  const siraPanel = document.getElementById('siraPanel');
-  const resultsArea = document.querySelector('.results-area');
-  return {
-    qsr: true,
-    label: label || 'Research spot',
-    currentSource,
-    currentTrad,
-    currentMode,
-    searchValue: (document.getElementById('searchInput') || {}).value || '',
-    siraSearchValue: (document.getElementById('siraSearchInput') || {}).value || '',
-    collectionValue: (document.getElementById('collectionFilter') || {}).value || '',
-    scholarValue: (document.getElementById('scholarFilter') || {}).value || '',
-    sourceTabId: activeId('.source-tab'),
-    tradBtnId: activeId('.trad-btn'),
-    modeBtnId: activeId('.mode-btn'),
-    bookChipId: activeId('.book-chip'),
-    resultsHtml: results ? results.innerHTML : '',
-    resultsHeaderDisplay: header ? header.style.display : '',
-    resultsCountText: count ? count.textContent : '',
-    siraHtml: sira ? sira.innerHTML : '',
-    siraActive: siraPanel ? siraPanel.classList.contains('active') : false,
-    resultsAreaDisplay: resultsArea ? resultsArea.style.display : '',
-    resultsAreaVisibility: resultsArea ? resultsArea.style.visibility : '',
-    scrollY: window.scrollY || document.documentElement.scrollTop || 0
-  };
-}
-
-function restoreActive(selector, id) {
-  document.querySelectorAll(selector).forEach(el => el.classList.remove('active'));
-  if (id) {
-    const el = document.getElementById(id);
-    if (el) el.classList.add('active');
-  }
-}
-
-function restoreResearchState(state) {
-  if (!state || !state.qsr) return;
-  __navRestoring = true;
-  currentSource = state.currentSource || 'all';
-  currentTrad = state.currentTrad || 'all';
-  currentMode = state.currentMode || 'word';
-
-  const search = document.getElementById('searchInput');
-  const siraSearch = document.getElementById('siraSearchInput');
-  const collection = document.getElementById('collectionFilter');
-  const scholar = document.getElementById('scholarFilter');
-  if (search) search.value = state.searchValue || '';
-  if (siraSearch) siraSearch.value = state.siraSearchValue || '';
-  if (collection) collection.value = state.collectionValue || '';
-  if (scholar) scholar.value = state.scholarValue || '';
-
-  restoreActive('.source-tab', state.sourceTabId);
-  restoreActive('.trad-btn', state.tradBtnId);
-  restoreActive('.mode-btn', state.modeBtnId);
-  restoreActive('.book-chip', state.bookChipId);
-
-  const results = document.getElementById('resultsContainer');
-  const header = document.getElementById('resultsHeader');
-  const count = document.getElementById('resultsCount');
-  const sira = document.getElementById('siraTimelineWrap');
-  const siraPanel = document.getElementById('siraPanel');
-  const resultsArea = document.querySelector('.results-area');
-  if (results) results.innerHTML = state.resultsHtml || '';
-  if (header) header.style.display = state.resultsHeaderDisplay || '';
-  if (count) count.textContent = state.resultsCountText || '';
-  if (sira) sira.innerHTML = state.siraHtml || '';
-  if (siraPanel) siraPanel.classList.toggle('active', !!state.siraActive);
-  if (resultsArea) {
-    resultsArea.style.display = state.resultsAreaDisplay || '';
-    resultsArea.style.visibility = state.resultsAreaVisibility || '';
-  }
-  setTimeout(() => {
-    window.scrollTo(0, state.scrollY || 0);
-    __navRestoring = false;
-  }, 0);
-}
-
-function beginResearchStep(label) {
-  if (__navRestoring || !__navReady) return;
-  try {
-    history.pushState(captureResearchState(label), '', location.pathname + location.search + '#research-spot-' + Date.now());
-  } catch(e) {}
-}
-
-function commitResearchStep(label) {
-  if (__navRestoring || !__navReady) return;
-  try {
-    history.replaceState(captureResearchState(label), '', location.pathname + location.search + '#research-current');
-  } catch(e) {}
-}
-
-function researchGoBack() { history.back(); }
-function researchGoForward() { history.forward(); }
-
-function saveResearchReturnSpot(label) {
-  try {
-    const state = captureResearchState(label || 'Before opening Quran reader');
-    sessionStorage.setItem('qsrReturnSpot', JSON.stringify(state));
-    history.replaceState(state, '', location.pathname + location.search + '#research-return');
-  } catch(e) {}
-}
-
-function navigateToQuran(sura, aya, ev, href) {
-  if (ev) ev.preventDefault();
-  saveResearchReturnSpot('Quran ' + sura + ':' + (aya || 1));
-  window.location.href = href || ('https://fascinating-sunburst-516df8.netlify.app?sura=' + encodeURIComponent(sura) + '&aya=' + encodeURIComponent(aya || 1) + '&from=research');
-}
-
-window.addEventListener('popstate', function(e) {
-  if (e.state && e.state.qsr) restoreResearchState(e.state);
-});
-
-document.addEventListener('DOMContentLoaded', function() {
-  try { history.replaceState(captureResearchState('Start'), '', location.href); } catch(e) {}
-  __navReady = true;
-  document.addEventListener('click', function(ev) {
-    const a = ev.target.closest('a[href]');
-    if (!a) return;
-    const href = a.getAttribute('href') || '';
-    if (href.includes('fascinating-sunburst-516df8.netlify.app') && href.includes('sura=')) {
-      const u = new URL(a.href);
-      navigateToQuran(u.searchParams.get('sura'), u.searchParams.get('aya') || 1, ev, a.href);
-    }
-  }, true);
-});
-
 // ── SOURCE & FILTER ──────────────────────────────────────────────
 function setSource(src, el) {
-  beginResearchStep('Before changing source');
   currentSource = src;
   document.querySelectorAll('.source-tab').forEach(t => t.classList.remove('active'));
   el.classList.add('active');
@@ -916,15 +757,12 @@ function setSource(src, el) {
     if (resultsArea) { resultsArea.style.display = ''; resultsArea.style.visibility = ''; }
     if (bookRow) bookRow.style.display = 'flex';
   }
-  commitResearchStep('Source: ' + src);
 }
 
 function setTrad(t, el) {
-  beginResearchStep('Before changing tradition');
   currentTrad = t;
   document.querySelectorAll('.trad-btn').forEach(b => b.classList.remove('active'));
   el.classList.add('active');
-  commitResearchStep('Tradition: ' + t);
 }
 
 function setBook(book, btn) {
@@ -1181,7 +1019,6 @@ function getRelatedTerms(q) {
 
 // ── SEARCH ───────────────────────────────────────────────────────
 async function doSearch() {
-  beginResearchStep('Before search');
   const q = document.getElementById('searchInput').value.trim();
   if (!q) return;
   const container = document.getElementById('resultsContainer');
@@ -1213,17 +1050,14 @@ async function doSearch() {
       _siraEvents = [...exactSira, ...relatedSira];
       renderSiraTimeline(exactSira, relatedSira, q, relatedTerms);
       allResults = _siraEvents;
-      commitResearchStep('Sīra search: ' + q);
       return;
     }
 
     allResults = [...exactResults, ...relatedResults];
     renderResults(exactResults, relatedResults, q, relatedTerms);
-    commitResearchStep('Search: ' + q);
 
   } catch(e) {
     container.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-title">Search error</div><div class="empty-desc">' + e.message + '</div></div>';
-    commitResearchStep('Search error');
   }
 }
 
@@ -1486,8 +1320,8 @@ function buildCard(r, q, isRelated) {
       ${tradPill}
       ${relatedBadge}
       ${r.type === 'sira'
-        ? `<a class="verse-ref" href="${verseUrl}" target="_blank" title="Open in Research">📖 Sīra ↗</a>`
-        : suraRef ? `<a class="verse-ref" href="${verseUrl}" target="_blank" title="Open verse in Quran platform">${suraRef}:${ayaRef} ↗</a>` : ''
+        ? `<a class="verse-ref" href="${verseUrl}" title="Open in Research">📖 Sīra ↗</a>`
+        : suraRef ? `<a class="verse-ref" href="${verseUrl}" title="Open verse in Quran platform">${suraRef}:${ayaRef} ↗</a>` : ''
       }
     </div>
     <div class="card-body">
@@ -2040,7 +1874,8 @@ function switchToAllSource() {
 }
 
 function openQuranLink(sura, aya) {
-  navigateToQuran(sura, aya || 1, null);
+  saveResearchSpot();
+  window.location.href = 'https://fascinating-sunburst-516df8.netlify.app?sura=' + encodeURIComponent(sura) + '&aya=' + encodeURIComponent(aya||1) + '&from=research';
 }
 
 function highlightSira(text, q) {
@@ -2050,7 +1885,6 @@ function highlightSira(text, q) {
 }
 
 function toggleSiraEvent(card) {
-  beginResearchStep('Before opening Sīra event');
   if (!card) return;
   var body = card.querySelector('.sira-event-body');
   var arrow = card.querySelector('.sira-expand-arrow');
@@ -2240,5 +2074,36 @@ function loadVerseIntoCard(cardId, sura, aya) {
 }
 
 </script>
+
+<script>
+/* Minimal navigation fix: keep main page link normal, make verse links open in same tab, and preserve return spot. */
+function saveResearchSpot(){
+  try {
+    sessionStorage.setItem('research_return_scroll', String(window.scrollY || 0));
+    sessionStorage.setItem('research_return_time', String(Date.now()));
+  } catch(e) {}
+}
+function restoreResearchSpot(){
+  try {
+    const y = parseInt(sessionStorage.getItem('research_return_scroll') || '', 10);
+    const t = parseInt(sessionStorage.getItem('research_return_time') || '0', 10);
+    if (!isNaN(y) && y > 0 && Date.now() - t < 24*60*60*1000) {
+      setTimeout(function(){ window.scrollTo(0, y); }, 80);
+    }
+  } catch(e) {}
+}
+document.addEventListener('click', function(e){
+  const a = e.target.closest && e.target.closest('a[href]');
+  if (!a) return;
+  const href = a.getAttribute('href') || '';
+  // Do not touch the main Quran Platform button. Only verse links with sura/aya are handled.
+  if (href.indexOf('fascinating-sunburst-516df8.netlify.app') !== -1 && href.indexOf('sura=') !== -1) {
+    saveResearchSpot();
+    a.removeAttribute('target');
+  }
+}, true);
+window.addEventListener('pageshow', restoreResearchSpot);
+</script>
+
 </body>
 </html>
