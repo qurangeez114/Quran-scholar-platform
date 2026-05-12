@@ -289,12 +289,58 @@ mark.hl-green  { background:#BAFFC9;border-radius:2px;padding:0 1px; }
 .verse-tts-btn.playing { background:#B8902A;color:#fff; }
 
 /* ── CROSS-LANGUAGE ARABIC HIGHLIGHT ── */
-mark.ar-hl{background:linear-gradient(135deg,#FFF3C4,#FFE066);color:#1a1a1a;border-radius:4px;padding:1px 3px;border-bottom:3px solid #C9A84C;font-weight:700;display:inline;}
-.arabic-match-bar{background:linear-gradient(135deg,#FDF8EE,#FFF3C4);border:2px solid #E8C97B;border-radius:10px;padding:10px 14px;margin-bottom:12px;display:flex;flex-wrap:wrap;align-items:center;gap:8px;}
-.arabic-match-bar-label{font-size:10px;font-weight:800;color:#8B7355;letter-spacing:1px;text-transform:uppercase;flex-shrink:0;}
-.arabic-match-chip{font-family:'Amiri',serif;font-size:18px;color:#1a1a1a;background:#fff;border:2px solid #C9A84C;border-radius:20px;padding:2px 12px;cursor:pointer;transition:all 0.15s;direction:rtl;}
-.arabic-match-chip:hover{background:#C9A84C;color:#fff;}
-.arabic-match-chip-root{font-size:11px;color:#8B7355;font-family:'Lato',sans-serif;vertical-align:middle;margin-left:4px;}
+mark.ar-hl {
+  background: linear-gradient(135deg, #FFF3C4, #FFE066);
+  color: #1a1a1a;
+  border-radius: 4px;
+  padding: 1px 3px;
+  border-bottom: 3px solid #C9A84C;
+  font-weight: 700;
+  cursor: default;
+  display: inline;
+}
+.arabic-match-bar {
+  background: linear-gradient(135deg, #FDF8EE, #FFF3C4);
+  border: 2px solid #E8C97B;
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.arabic-match-bar-label {
+  font-size: 10px;
+  font-weight: 800;
+  color: #8B7355;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+.arabic-match-chip {
+  font-family: 'Amiri', serif;
+  font-size: 18px;
+  color: #1a1a1a;
+  background: #fff;
+  border: 2px solid #C9A84C;
+  border-radius: 20px;
+  padding: 2px 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+  direction: rtl;
+}
+.arabic-match-chip:hover {
+  background: #C9A84C;
+  color: #fff;
+}
+.arabic-match-chip-root {
+  font-size: 11px;
+  color: #8B7355;
+  font-family: 'Lato', sans-serif;
+  vertical-align: middle;
+  margin-left: 4px;
+}
 
 </style>
 </head>
@@ -1831,80 +1877,217 @@ async function runWordSearch(query) {
   const countDiv = document.getElementById('searchCount');
   panel.style.display = 'flex';
   document.getElementById('verseArea').style.display = 'none';
-  resultsDiv.innerHTML = '<div style="padding:30px;text-align:center;color:#BBB;font-style:italic"><span class="spinner"></span> Searching...</div>';
+  resultsDiv.innerHTML = '<div style="padding:30px;text-align:center;color:#BBB;font-style:italic"><span class="spinner"></span> Searching all verses...</div>';
   countDiv.textContent = '';
+
   try {
-    const safeQ = String(query).replace(/,/g,' ').trim();
-    if (!safeQ) return;
+    const safeQuery = String(query).replace(/,/g, ' ').trim();
+    if (!safeQuery) return;
     const fields = 'sura_id,aya_number,arabic,english,aya_text,amharic,oromo,somali';
-    const isAr = /[\u0600-\u06FF]/.test(safeQ);
-    const isGe = /[\u1200-\u137F]/.test(safeQ);
 
-    let arabicMatches = [];
+    // ── STEP 1: Detect language & find Arabic word matches from word_analysis ──
+    const isArabic = /[\u0600-\u06FF]/.test(safeQuery);
+    const isGeez   = /[\u1200-\u137F]/.test(safeQuery);
+    const isLatin  = /^[\x00-\x7F]+$/.test(safeQuery);
+
+    // Fetch matching Arabic words from word_analysis for cross-language highlight
+    let arabicMatches = []; // [{arabic_word, root_word}]
     try {
-      const wc = 'arabic_word,root_word,original_meaning';
-      let wa = [];
-      if (isAr) {
-        wa = (await Promise.all([sbSearch('word_analysis',wc,'arabic_word',safeQ).catch(()=>[]),sbSearch('word_analysis',wc,'root_word',safeQ).catch(()=>[])]) ).flat();
-      } else if (isGe) {
-        const gv = searchVariants(safeQ);
-        const ga = (await Promise.all(gv.flatMap(v=>[sbSearch('ayas','sura_id,aya_number,arabic','aya_text',v).catch(()=>[]),sbSearch('ayas','sura_id,aya_number,arabic','amharic',v).catch(()=>[])]))).flat();
-        const aws=new Set(); ga.forEach(r=>(r.arabic||'').split(/\s+/).forEach(w=>{ const c=w.replace(/[\u064B-\u065F\u0670\u06D6-\u06ED\u060C\u061B\u061F]/g,'').trim(); if(c.length>=2) aws.add(c); }));
-        wa=(await Promise.all([...aws].slice(0,5).map(aw=>sbSearch('word_analysis',wc,'arabic_word',aw).catch(()=>[])))).flat();
-        if(!wa.length && aws.size) wa=[...aws].slice(0,8).map(w=>({arabic_word:w,root_word:'',original_meaning:''}));
+      const waCols = 'arabic_word,root_word,original_meaning';
+      const waTasks = [];
+      if (!isArabic) {
+        // Search meaning fields for the non-Arabic input
+        waTasks.push(
+          sbSearch('word_analysis', waCols, 'original_meaning', safeQuery).catch(() => []),
+          sbSearch('word_analysis', waCols, 'modern_meaning',   safeQuery).catch(() => [])
+        );
+        // For Ge'ez, also search Tigrinya / Amharic columns if they exist
+        if (isGeez) {
+          waTasks.push(sbSearch('word_analysis', waCols, 'meaning_evolution', safeQuery).catch(() => []));
+        }
       } else {
-        wa=(await Promise.all([sbSearch('word_analysis',wc,'original_meaning',safeQ).catch(()=>[]),sbSearch('word_analysis',wc,'modern_meaning',safeQ).catch(()=>[]),sbSearch('word_analysis',wc,'meaning_evolution',safeQ).catch(()=>[])])).flat();
+        // Arabic typed → look it up directly too
+        waTasks.push(sbSearch('word_analysis', waCols, 'arabic_word', safeQuery).catch(() => []));
+        waTasks.push(sbSearch('word_analysis', waCols, 'root_word',   safeQuery).catch(() => []));
       }
-      const ws=new Set(); arabicMatches=wa.filter(r=>{ if(!r.arabic_word) return false; const k=r.arabic_word.replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g,''); if(ws.has(k)) return false; ws.add(k); return true; }).slice(0,10);
-    } catch(e){ arabicMatches=[]; }
+      const waAll = (await Promise.all(waTasks)).flat();
+      const waSeen = new Set();
+      arabicMatches = waAll.filter(r => {
+        if (!r.arabic_word) return false;
+        // Strip diacritics for dedup key
+        const key = r.arabic_word.replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g, '');
+        if (waSeen.has(key)) return false;
+        waSeen.add(key);
+        return true;
+      }).slice(0, 12); // cap at 12 distinct Arabic words
+    } catch(e) { arabicMatches = []; }
 
-    const ahs = arabicMatches.map(r=>r.arabic_word.replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g,'')).filter(w=>w.length>=2);
+    // Build the set of Arabic words to highlight (stripped of diacritics for matching)
+    const arabicHighlightSet = arabicMatches.map(r =>
+      r.arabic_word.replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g, '')
+    ).filter(w => w.length >= 2);
 
-    let terms = [];
-    if (safeQ.includes(' ')) { safeQ.split(/\s+/).filter(w=>w.length>=3).forEach(w=>searchVariants(w).forEach(v=>{ if(!terms.includes(v)) terms.push(v); })); if(!terms.includes(safeQ)) terms.unshift(safeQ); } else { terms=searchVariants(safeQ); }
-    const cols = isGe?['aya_text','amharic','english','arabic','oromo','somali']:isAr?['arabic','aya_text','amharic','english','oromo','somali']:['english','aya_text','amharic','arabic','oromo','somali'];
-    const tasks=[];
-    for(const v of terms) for(const c of cols) tasks.push(sbSearch('ayas',fields,c,v).then(r=>r.map(x=>({...x,tigrinya:x.aya_text}))).catch(()=>[]));
-    ahs.slice(0,3).forEach(aw=>tasks.push(sbSearch('ayas',fields,'arabic',aw).then(r=>r.map(x=>({...x,tigrinya:x.aya_text}))).catch(()=>[])));
-    const seen=new Set();
-    const all=(await Promise.all(tasks)).flat().filter(v=>{ const k=v.sura_id+':'+v.aya_number; if(seen.has(k)) return false; seen.add(k); return true; }).sort((a,b)=>a.sura_id-b.sura_id||a.aya_number-b.aya_number);
+    // ── STEP 2: Verse search (same as before, across all languages) ───────
+    let searchTerms = [];
+    if (safeQuery.includes(' ')) {
+      const words = safeQuery.split(/\s+/).filter(w => w.length >= 3);
+      words.forEach(w => {
+        const wVariants = searchVariants(w);
+        wVariants.forEach(v => { if (!searchTerms.includes(v)) searchTerms.push(v); });
+      });
+      if (!searchTerms.includes(safeQuery)) searchTerms.unshift(safeQuery);
+    } else {
+      searchTerms = searchVariants(safeQuery);
+    }
+    const variants = searchTerms;
 
-    countDiv.textContent=all.length+' verse'+(all.length===1?'':'s')+' found for "'+query+'"';
+    const searchOne = async (col, term) => {
+      try {
+        const rows = await sbSearch('ayas', fields, col, term);
+        return rows.map(r => ({ ...r, tigrinya: r.aya_text }));
+      } catch { return []; }
+    };
+
+    // Also search ayas.arabic for any matched Arabic words directly
+    const arabicWordTasks = arabicHighlightSet.slice(0, 4).map(aw =>
+      searchOne('arabic', aw)
+    );
+
+    const cols = ['english', 'aya_text', 'amharic', 'arabic', 'oromo', 'somali'];
+    const tasks = [];
+    for (const v of variants) {
+      for (const c of cols) { tasks.push(searchOne(c, v)); }
+    }
+    tasks.push(...arabicWordTasks);
+
+    const allResults = await Promise.all(tasks);
+    const seen = new Set();
+    const all = allResults.flat().filter(v => {
+      const key = `${v.sura_id}:${v.aya_number}`;
+      if (seen.has(key)) return false;
+      seen.add(key); return true;
+    }).sort((a, b) => a.sura_id - b.sura_id || a.aya_number - b.aya_number);
+
+    countDiv.textContent = `${all.length} verse${all.length===1?'':'s'} found for "${query}"`;
     renderSidebarRefList(all, query);
 
-    let barHtml='';
-    if(arabicMatches.length){
-      barHtml='<div class="arabic-match-bar"><span class="arabic-match-bar-label">Arabic words found</span>'
-        +arabicMatches.map(r=>{ const root=r.root_word?'<span class="arabic-match-chip-root">'+escapeHtml(r.root_word)+'</span>':''; return '<span class="arabic-match-chip" onclick="searchLexicon(\''+r.arabic_word.replace(/'/g,"\\'")+"',true)\">"+escapeHtml(r.arabic_word)+root+'</span>'; }).join('')
-        +'<span style="font-size:11px;color:#aaa;margin-left:auto">tap to explore</span></div>';
+    // ── STEP 3: Build Arabic match bar (chip strip) ───────────────────────
+    let arabicBarHtml = '';
+    if (arabicMatches.length > 0) {
+      const chips = arabicMatches.map(r => {
+        const rootLabel = r.root_word ? `<span class="arabic-match-chip-root">${escapeHtml(r.root_word)}</span>` : '';
+        return `<span class="arabic-match-chip" title="Root: ${escapeHtml(r.root_word||'')}" onclick="searchLexicon('${r.arabic_word.replace(/'/g,"\\'")}',true)">${escapeHtml(r.arabic_word)}${rootLabel}</span>`;
+      }).join('');
+      arabicBarHtml = `
+        <div class="arabic-match-bar">
+          <span class="arabic-match-bar-label">🔤 Arabic words found</span>
+          ${chips}
+          <span style="font-size:11px;color:#aaa;margin-left:auto">tap to explore</span>
+        </div>`;
     }
 
-    if(!all.length){ resultsDiv.innerHTML=barHtml+'<div style="padding:30px;text-align:center;color:#BBB;font-style:italic">No verses found for "'+escapeHtml(query)+'".</div>'; return; }
+    if (!all.length) {
+      const variantHint = variants.length > 1
+        ? `<div style="font-size:12px;color:#888;margin-top:10px">Tried: ${variants.map(v => `<code style="background:#FDF8EE;padding:2px 6px;border-radius:4px;color:#B8902A">${escapeHtml(v)}</code>`).join(' ')}</div>`
+        : '';
+      resultsDiv.innerHTML = arabicBarHtml + `<div style="padding:30px;text-align:center;color:#BBB;font-style:italic">
+        No verses found for "${escapeHtml(query)}".<br>
+        <span style="font-size:12px">Try the root form, fewer letters, or a different language.</span>
+        ${variantHint}
+      </div>`;
+      return;
+    }
 
-    const allTerms=[safeQ,...terms].filter((v,i,a)=>v&&v.length>=2&&a.indexOf(v)===i);
-    function hlT(t){ if(!t) return ''; let o=t; allTerms.forEach(tm=>{ const e=tm.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); o=o.replace(new RegExp('('+e+')','gi'),'<mark style="background:#FFE066;color:#1a1a1a;border-radius:3px;padding:0 2px;font-weight:700;">$1</mark>'); }); return o; }
-    const diac='[\u064B-\u065F\u0670\u06D6-\u06ED]*';
-    function hlA(t){ if(!t) return ''; let o=t; ahs.forEach(aw=>{ if(aw.length<2) return; const e=[...aw.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')].join(diac); try{o=o.replace(new RegExp('('+e+')','g'),'<mark class="ar-hl">$1</mark>');}catch(e){} }); return o; }
+    // ── STEP 4: Highlight functions ───────────────────────────────────────
+    // Translation highlight (yellow, for the typed query)
+    const allTerms = variants.slice();
+    if (!allTerms.includes(query)) allTerms.unshift(query);
 
-    resultsDiv.innerHTML=barHtml+all.map(v=>{
-      const si2=allSuras.find(s=>(s.sura_id||s.id)===v.sura_id);
-      const tr=transliterateArabic(v.arabic||'');
-      return '<div style="background:#fff;border:1px solid #E8E4DC;border-radius:10px;margin-bottom:10px;overflow:hidden;cursor:pointer;" onclick="gotoResult('+v.sura_id+','+v.aya_number+',event)">'
-        +'<div style="background:#FDF8EE;border-bottom:1px solid #E8C97B;padding:8px 14px;display:flex;align-items:center;gap:8px;">'
-        +'<div style="width:24px;height:24px;border-radius:50%;background:#C9A84C;color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0">'+v.sura_id+'</div>'
-        +'<div style="flex:1;min-width:0;"><span style="font-family:\'Amiri\',serif;font-size:15px;color:#1a1a1a;font-weight:700">'+(ARABIC_NAMES[v.sura_id]||'')+'</span><span style="font-size:12px;color:#B8902A;font-weight:700;margin-left:6px">'+(si2?.sura_name_english||'')+'</span><div style="font-size:11px;color:#8B7355">Surah '+v.sura_id+', Verse '+v.aya_number+'</div></div>'
-        +'<div style="font-size:12px;font-weight:700;color:#fff;background:#B8902A;border-radius:10px;padding:2px 8px;flex-shrink:0">'+v.sura_id+':'+v.aya_number+'</div></div>'
-        +'<div style="padding:12px 14px;">'
-        +(v.arabic?'<div style="font-family:\'Amiri\',serif;font-size:20px;direction:rtl;text-align:right;line-height:1.8;margin-bottom:6px;'+(langState.arabic?'':'display:none;')+'">'+hlA(v.arabic)+'</div>':'')
-        +(tr?'<div style="font-size:12px;color:#888;font-style:italic;margin-bottom:4px;'+(langState.translit?'':'display:none;')+'">'+hlT(tr)+'</div>':'')
-        +(v.english?'<div style="font-size:13px;color:#444;line-height:1.6;font-style:italic;margin-bottom:4px;'+(langState.english?'':'display:none;')+'">'+hlT(v.english)+'</div>':'')
-        +(v.aya_text?'<div style="font-size:12px;color:#8B7355;line-height:1.5;margin-bottom:3px;'+(langState.tigrinya?'':'display:none;')+'">'+hlT(v.aya_text)+'</div>':'')
-        +(v.amharic?'<div style="font-size:12px;color:#6B8355;line-height:1.5;margin-bottom:3px;'+(langState.amharic?'':'display:none;')+'">'+hlT(v.amharic)+'</div>':'')
-        +(v.oromo?'<div style="font-size:12px;color:#5B7355;line-height:1.5;margin-bottom:3px;'+(langState.oromo?'':'display:none;')+'">'+hlT(v.oromo)+'</div>':'')
-        +(v.somali?'<div style="font-size:12px;color:#355573;line-height:1.5;'+(langState.somali?'':'display:none;')+'">'+hlT(v.somali)+'</div>':'')
-        +'</div></div>';
+    function highlightTranslation(text) {
+      if (!text) return '';
+      let out = text;
+      allTerms.forEach(term => {
+        if (!term || term.length < 2) return;
+        const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        out = out.replace(new RegExp(`(${escaped})`, 'gi'),
+          '<mark style="background:#FFE066;color:#1a1a1a;border-radius:3px;padding:0 2px;font-weight:700;">$1</mark>');
+      });
+      return out;
+    }
+
+    // Arabic highlight (gold border underline, for matched Arabic words)
+    function highlightArabic(arabicText) {
+      if (!arabicText) return '';
+      let out = arabicText;
+      // Also highlight if query itself is Arabic
+      if (isArabic) {
+        allTerms.forEach(term => {
+          if (!term || term.length < 2) return;
+          const stripped = term.replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g, '');
+          if (stripped.length < 2) return;
+          const escaped = stripped.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          // Match with optional diacritics between letters
+          const diac = '[\u064B-\u065F\u0670\u06D6-\u06ED]*';
+          const pattern = [...escaped].join(diac);
+          try {
+            out = out.replace(new RegExp(`(${pattern})`, 'g'),
+              '<mark class="ar-hl">$1</mark>');
+          } catch(e) {}
+        });
+      }
+      // Highlight matched Arabic words from word_analysis
+      arabicHighlightSet.forEach(aw => {
+        if (aw.length < 2) return;
+        const escaped = aw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        // Match the word with optional diacritics scattered through
+        const diac = '[\u064B-\u065F\u0670\u06D6-\u06ED]*';
+        const pattern = [...escaped].join(diac);
+        try {
+          out = out.replace(new RegExp(`(${pattern})`, 'g'),
+            '<mark class="ar-hl">$1</mark>');
+        } catch(e) {}
+      });
+      return out;
+    }
+
+    // ── STEP 5: Render verse cards ────────────────────────────────────────
+    resultsDiv.innerHTML = arabicBarHtml + all.map(v => {
+      const suraInfo = allSuras.find(s => (s.sura_id||s.id) === v.sura_id);
+      const ar = highlightArabic(v.arabic || '');
+      const en = highlightTranslation(v.english || '');
+      const ti = highlightTranslation(v.tigrinya || '');
+      const am = highlightTranslation(v.amharic || '');
+      const or = highlightTranslation(v.oromo || '');
+      const so = highlightTranslation(v.somali || '');
+      const translit = transliterateArabic(v.arabic || '');
+      return `
+      <div style="background:#fff;border:1px solid #E8E4DC;border-radius:10px;margin-bottom:10px;overflow:hidden;cursor:pointer;" onclick="gotoResult(${v.sura_id},${v.aya_number},event)">
+        <div style="background:#FDF8EE;border-bottom:1px solid #E8C97B;padding:8px 14px;display:flex;align-items:center;gap:8px;">
+          <div style="width:24px;height:24px;border-radius:50%;background:#C9A84C;color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0">${v.sura_id}</div>
+          <div style="flex:1;min-width:0;">
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+              <span style="font-family:'Amiri',serif;font-size:15px;color:#1a1a1a;font-weight:700">${ARABIC_NAMES[v.sura_id]||''}</span>
+              <span style="font-size:12px;color:#B8902A;font-weight:700">${suraInfo?.sura_name_english || suraInfo?.sura_name_translated || ''}</span>
+            </div>
+            <div style="font-size:11px;color:#8B7355;margin-top:1px">Surah ${v.sura_id}, Verse ${v.aya_number}</div>
+          </div>
+          <div style="font-size:12px;font-weight:700;color:#fff;background:#B8902A;border-radius:10px;padding:2px 8px;flex-shrink:0">${v.sura_id}:${v.aya_number}</div>
+          <div style="font-size:10px;color:#999;flex-shrink:0">↗</div>
+        </div>
+        <div style="padding:12px 14px;">
+          ${v.arabic ? `<div class="lang-arabic" style="font-family:'Amiri',serif;font-size:20px;direction:rtl;text-align:right;line-height:1.8;margin-bottom:6px;${!langState.arabic?'display:none;':''}">${ar}</div>` : ''}
+          ${translit ? `<div class="lang-translit" style="font-size:12px;color:#888;line-height:1.6;font-style:italic;margin-bottom:4px;letter-spacing:0.3px;${!langState.translit?'display:none;':''}">${highlightTranslation(translit)}</div>` : ''}
+          ${v.english ? `<div class="lang-english" style="font-size:13px;color:#444;line-height:1.6;font-style:italic;margin-bottom:4px;${!langState.english?'display:none;':''}">${en}</div>` : ''}
+          ${v.tigrinya ? `<div class="lang-tigrinya" style="font-size:12px;color:#8B7355;line-height:1.5;margin-bottom:3px;${!langState.tigrinya?'display:none;':''}">${ti}</div>` : ''}
+          ${v.amharic ? `<div class="lang-amharic" style="font-size:12px;color:#6B8355;line-height:1.5;margin-bottom:3px;${!langState.amharic?'display:none;':''}">${am}</div>` : ''}
+          ${v.oromo ? `<div class="lang-oromo" style="font-size:12px;color:#5B7355;line-height:1.5;margin-bottom:3px;${!langState.oromo?'display:none;':''}">${or}</div>` : ''}
+          ${v.somali ? `<div class="lang-somali" style="font-size:12px;color:#355573;line-height:1.5;${!langState.somali?'display:none;':''}">${so}</div>` : ''}
+        </div>
+      </div>`;
     }).join('');
-  } catch(e){ resultsDiv.innerHTML='<div style="color:#C0392B;padding:20px">Search error: '+e.message+'</div>'; }
+  } catch(e) {
+    resultsDiv.innerHTML = `<div style="color:#C0392B;padding:20px">Search error: ${e.message}</div>`;
+  }
 }
 
 
@@ -3365,39 +3548,19 @@ async function searchLexicon(q, closeBar) {
 
   renderLexicon(results);
 
-  // Show word detail card + concordance with Arabic highlighting
+  // Always run concordance — show matching verses in main panel, skip dictionary card
   clearTimeout(window._lexConcordanceTimer);
   window._lexConcordanceTimer = setTimeout(async () => {
     if (raw.length >= 2) {
-      const wordObj = _currentLexWords.length > 0 ? _currentLexWords[0]
-        : { word:raw, transliteration:'', root:'', quranic_meaning:'', surah_number:'', ayah_number:'', id:null };
       const panel = document.getElementById('searchResultsPanel');
       const resultsDiv = document.getElementById('searchResults');
       const countDiv = document.getElementById('searchCount');
-      const verseArea = document.getElementById('verseArea');
-      if (verseArea) verseArea.style.display = 'none';
-      if (panel) { panel.style.display = 'flex'; panel.style.flexDirection = 'column'; }
-      const cb = document.getElementById('clearSearch');
-      if (cb) cb.style.display = '';
-      countDiv.textContent = 'Lexicon: ' + raw;
-      const dictHtml = renderLexiconDictionary(wordObj);
-      const dictId = wordObj.id ? 'lexiconDictionary-' + wordObj.id : 'lexiconDictionary-inline';
-      const tHtml = wordObj.transliteration ? '<div style="font-size:12px;color:#C9A84C;font-weight:700;margin-top:4px">'+escapeHtml(wordObj.transliteration)+'</div>' : '';
-      const rHtml = wordObj.surah_number ? '<div style="font-size:11px;color:#8B7355;margin-top:4px">'+wordObj.surah_number+':'+(wordObj.ayah_number||'')+'</div>' : '';
-      resultsDiv.innerHTML =
-        '<div style="max-width:700px;margin:0 auto;">'
-        +'<div style="background:#fff;border:2px solid #E8C97B;border-radius:12px;padding:16px;margin-bottom:20px;">'
-        +'<div style="text-align:center;padding-bottom:12px;border-bottom:1px solid #F0EDE5;margin-bottom:12px;">'
-        +'<div style="font-family:\'Amiri\',serif;font-size:42px;color:#1a1a1a;direction:rtl;line-height:1.5">'+escapeHtml(wordObj.word||raw)+'</div>'
-        +tHtml+rHtml+'</div>'
-        +'<div id="'+dictId+'">'+dictHtml+'</div></div>'
-        +'<div style="font-size:12px;color:#8B7355;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:8px;">'
-        +'Concordance &mdash; verses containing this word'
-        +'<span id="concordanceCount" style="font-size:11px;color:#C9A84C;font-weight:600;background:#FDF5DE;border:1px solid #E8C97B;border-radius:10px;padding:1px 8px;"></span>'
-        +'</div>'
-        +'<div id="lexiconConcordance"><div style="padding:20px;text-align:center;color:#BBB;font-style:italic"><span class="spinner"></span> Searching...</div></div>'
-        +'</div>';
-      try { await lexiconConcordanceSearch(wordObj, raw); } catch(e) {}
+      panel.style.display = 'flex';
+      document.getElementById('verseArea').style.display = 'none';
+      countDiv.textContent = 'Concordance: ' + raw;
+      resultsDiv.innerHTML = '<div style="padding:20px;text-align:center;color:#BBB;font-style:italic"><span class="spinner"></span> Searching all verses...</div>';
+      // Use runWordSearch so we get the Arabic highlight bar too
+      runWordSearch(raw);
     }
   }, 350);
 }
@@ -3410,8 +3573,7 @@ function onLexiconClick(el) {
   const idx = parseInt(el.getAttribute('data-lex-idx'));
   const w = _currentLexWords[idx];
   if (!w) return;
-  clearTimeout(window._lexConcordanceTimer);
-  openLexWordModal(w);
+  showLexiconDetailByWord(w);
 }
 
 async function showLexiconDetailByWord(word) {
@@ -3559,60 +3721,6 @@ function renderLexiconDictionary(word) {
     </div>`).join('');
 }
 
-
-async function lexiconConcordanceSearch(word, rawQuery) {
-  const box = document.getElementById('lexiconConcordance');
-  const countEl = document.getElementById('concordanceCount');
-  if (!box) return;
-  const isAr = /[\u0600-\u06FF]/.test(rawQuery);
-  const isGe = /[\u1200-\u137F]/.test(rawQuery);
-  let arabicMatches = [];
-  try {
-    const wc='arabic_word,root_word,original_meaning'; let wa=[];
-    if(isAr){ wa=(await Promise.all([sbSearch('word_analysis',wc,'arabic_word',rawQuery).catch(()=>[]),sbSearch('word_analysis',wc,'root_word',rawQuery).catch(()=>[])])).flat(); }
-    else if(isGe){ const gv=searchVariants(rawQuery); const ga=(await Promise.all(gv.flatMap(v=>[sbSearch('ayas','sura_id,aya_number,arabic','aya_text',v).catch(()=>[]),sbSearch('ayas','sura_id,aya_number,arabic','amharic',v).catch(()=>[])]))).flat(); const aws=new Set(); ga.forEach(r=>(r.arabic||'').split(/\s+/).forEach(w=>{ const c=w.replace(/[\u064B-\u065F\u0670\u06D6-\u06ED\u060C\u061B\u061F]/g,'').trim(); if(c.length>=2) aws.add(c); })); wa=(await Promise.all([...aws].slice(0,5).map(aw=>sbSearch('word_analysis',wc,'arabic_word',aw).catch(()=>[])))).flat(); if(!wa.length&&aws.size) wa=[...aws].slice(0,8).map(w=>({arabic_word:w,root_word:'',original_meaning:''})); }
-    else{ wa=(await Promise.all([sbSearch('word_analysis',wc,'original_meaning',rawQuery).catch(()=>[]),sbSearch('word_analysis',wc,'modern_meaning',rawQuery).catch(()=>[])])).flat(); }
-    const ws=new Set(); arabicMatches=wa.filter(r=>{ if(!r.arabic_word) return false; const k=r.arabic_word.replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g,''); if(ws.has(k)) return false; ws.add(k); return true; }).slice(0,10);
-  } catch(e){}
-  const ahs=arabicMatches.map(r=>r.arabic_word.replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g,'')).filter(w=>w.length>=2);
-  let barHtml='';
-  if(arabicMatches.length){ barHtml='<div class="arabic-match-bar"><span class="arabic-match-bar-label">Arabic words</span>'+arabicMatches.map(r=>{ const root=r.root_word?'<span class="arabic-match-chip-root">'+escapeHtml(r.root_word)+'</span>':''; return '<span class="arabic-match-chip" onclick="searchLexicon(\''+r.arabic_word.replace(/'/g,"\\'")+"',true)\">"+escapeHtml(r.arabic_word)+root+'</span>'; }).join('')+'</div>'; }
-  const cols2='sura_id,aya_number,arabic,english,amharic,oromo,somali,aya_text';
-  const variants=searchVariants(rawQuery);
-  const sc=isGe?['aya_text','amharic','arabic','english']:isAr?['arabic','aya_text','amharic','english']:['english','aya_text','amharic','arabic'];
-  const tasks=[];
-  for(const v of variants) for(const c of sc) tasks.push(sbSearch('ayas',cols2,c,v).catch(()=>[]));
-  const aw2=word.word||''; if(aw2&&/[\u0600-\u06FF]/.test(aw2)) tasks.push(sbSearch('ayas',cols2,'arabic',aw2).catch(()=>[]));
-  ahs.slice(0,3).forEach(aw=>tasks.push(sbSearch('ayas',cols2,'arabic',aw).catch(()=>[])));
-  try {
-    const seen=new Set();
-    const all=(await Promise.all(tasks)).flat().filter(v=>{ const k=v.sura_id+':'+v.aya_number; if(seen.has(k)) return false; seen.add(k); return true; }).sort((a,b)=>a.sura_id-b.sura_id||a.aya_number-b.aya_number);
-    if(countEl) countEl.textContent=all.length+' verse'+(all.length===1?'':'s');
-    const allTerms=[rawQuery,...variants].filter((v,i,a)=>v&&v.length>=2&&a.indexOf(v)===i);
-    function hlT(t){ if(!t) return ''; let o=t; allTerms.forEach(tm=>{ const e=tm.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); o=o.replace(new RegExp('('+e+')','gi'),'<mark style="background:#FFE066;color:#1a1a1a;border-radius:3px;padding:0 2px;font-weight:700;">$1</mark>'); }); return o; }
-    const diac='[\u064B-\u065F\u0670\u06D6-\u06ED]*';
-    function hlA(t){ if(!t) return ''; let o=t; ahs.forEach(aw=>{ if(aw.length<2) return; const e=[...aw.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')].join(diac); try{o=o.replace(new RegExp('('+e+')','g'),'<mark class="ar-hl">$1</mark>');}catch(err){} }); return o; }
-    if(!all.length){ box.innerHTML=barHtml+'<div style="padding:20px;text-align:center;color:#BBB;font-style:italic">No verses found.</div>'; return; }
-    box.innerHTML=barHtml+all.map(v=>{
-      const si2=allSuras.find(s=>(s.sura_id||s.id)===v.sura_id); const tr=transliterateArabic(v.arabic||'');
-      return '<div style="background:#fff;border:1px solid #E8E4DC;border-radius:10px;margin-bottom:10px;overflow:hidden;cursor:pointer;" onclick="gotoResult('+v.sura_id+','+v.aya_number+',event)">'
-        +'<div style="background:#FDF8EE;border-bottom:1px solid #E8C97B;padding:8px 14px;display:flex;align-items:center;gap:8px;">'
-        +'<div style="width:24px;height:24px;border-radius:50%;background:#C9A84C;color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0">'+v.sura_id+'</div>'
-        +'<div style="flex:1;min-width:0;"><span style="font-family:\'Amiri\',serif;font-size:15px;color:#1a1a1a;font-weight:700">'+(ARABIC_NAMES[v.sura_id]||'')+'</span><span style="font-size:12px;color:#B8902A;font-weight:700;margin-left:6px">'+(si2?.sura_name_english||'')+'</span><div style="font-size:11px;color:#8B7355">Surah '+v.sura_id+', Verse '+v.aya_number+'</div></div>'
-        +'<div style="font-size:12px;font-weight:700;color:#fff;background:#B8902A;border-radius:10px;padding:2px 8px;flex-shrink:0">'+v.sura_id+':'+v.aya_number+'</div></div>'
-        +'<div style="padding:12px 14px;">'
-        +(v.arabic?'<div style="font-family:\'Amiri\',serif;font-size:20px;direction:rtl;text-align:right;line-height:1.8;margin-bottom:6px;'+(langState.arabic?'':'display:none;')+'">'+hlA(v.arabic)+'</div>':'')
-        +(tr?'<div style="font-size:12px;color:#888;font-style:italic;margin-bottom:4px;'+(langState.translit?'':'display:none;')+'">'+hlT(tr)+'</div>':'')
-        +(v.english?'<div style="font-size:13px;color:#444;line-height:1.6;font-style:italic;margin-bottom:4px;'+(langState.english?'':'display:none;')+'">'+hlT(v.english)+'</div>':'')
-        +(v.aya_text?'<div style="font-size:12px;color:#8B7355;line-height:1.5;margin-bottom:3px;'+(langState.tigrinya?'':'display:none;')+'">'+hlT(v.aya_text)+'</div>':'')
-        +(v.amharic?'<div style="font-size:12px;color:#6B8355;line-height:1.5;margin-bottom:3px;'+(langState.amharic?'':'display:none;')+'">'+hlT(v.amharic)+'</div>':'')
-        +(v.oromo?'<div style="font-size:12px;color:#5B7355;line-height:1.5;margin-bottom:3px;'+(langState.oromo?'':'display:none;')+'">'+hlT(v.oromo)+'</div>':'')
-        +(v.somali?'<div style="font-size:12px;color:#355573;line-height:1.5;'+(langState.somali?'':'display:none;')+'">'+hlT(v.somali)+'</div>':'')
-        +'</div></div>';
-    }).join('');
-  } catch(e){ box.innerHTML=barHtml+'<div style="color:#C0392B;padding:20px">Error: '+escapeHtml(e.message)+'</div>'; }
-}
-
 async function loadLexiconConcordance(word) {
   // Support being called from typed search (searchResults) or word click (lexiconConcordance)
   const box = document.getElementById('lexiconConcordance') || document.getElementById('searchResults');
@@ -3649,6 +3757,11 @@ async function loadLexiconConcordance(word) {
     }
 
     const keywords = [arabicWord, englishHint].filter(k => k && k.length >= 2);
+
+    // Arabic words to highlight with ar-hl (gold underline) — strip diacritics for matching
+    const arStripped = arabicWord
+      ? arabicWord.replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g, '') : '';
+
     function hl(text) {
       if (!text) return '';
       let out = text;
@@ -3658,6 +3771,20 @@ async function loadLexiconConcordance(word) {
         out = out.replace(new RegExp(`(${escaped})`, 'gi'),
           '<mark style="background:#FFE066;color:#1a1a1a;border-radius:3px;padding:0 2px;font-weight:700;">$1</mark>');
       });
+      return out;
+    }
+
+    function hlArabic(text) {
+      if (!text) return '';
+      let out = text;
+      if (arStripped && arStripped.length >= 2) {
+        const diac = '[\u064B-\u065F\u0670\u06D6-\u06ED]*';
+        const escaped = [...arStripped.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')].join(diac);
+        try {
+          out = out.replace(new RegExp('(' + escaped + ')', 'g'),
+            '<mark class="ar-hl">$1</mark>');
+        } catch(e) {}
+      }
       return out;
     }
 
@@ -3683,7 +3810,7 @@ async function loadLexiconConcordance(word) {
           <div style="font-size:10px;color:#999;flex-shrink:0">↗</div>
         </div>
         <div style="padding:12px 14px;">
-          ${v.arabic ? `<div class="lang-arabic" style="font-family:'Amiri',serif;font-size:20px;direction:rtl;text-align:right;line-height:1.8;margin-bottom:6px;${!langState.arabic?'display:none;':''}">${hl(v.arabic)}</div>` : ''}
+          ${v.arabic ? `<div class="lang-arabic" style="font-family:'Amiri',serif;font-size:20px;direction:rtl;text-align:right;line-height:1.8;margin-bottom:6px;${!langState.arabic?'display:none;':''}">${hlArabic(v.arabic)}</div>` : ''}
           ${translit ? `<div class="lang-translit" style="font-size:13px;color:#555;line-height:1.6;font-style:italic;margin-bottom:4px;letter-spacing:0.3px;${!langState.translit?'display:none;':''}">${hl(translit)}</div>` : ''}
           ${v.english ? `<div class="lang-english" style="font-size:13px;color:#444;line-height:1.6;font-style:italic;margin-bottom:4px;${!langState.english?'display:none;':''}">${hl(v.english)}</div>` : ''}
           ${v.aya_text ? `<div class="lang-tigrinya" style="font-size:12px;color:#8B7355;line-height:1.5;margin-bottom:3px;${!langState.tigrinya?'display:none;':''}">${hl(v.aya_text)}</div>` : ''}
@@ -4405,118 +4532,6 @@ function restoreVerseHighlights() {
   });
 }
 
-
-// ── LEXICON WORD MODAL ─────────────────────────────────────────────────────
-let _lexModalWord = null;
-
-function openLexWordModal(word) {
-  _lexModalWord = word;
-  const modal = document.getElementById('lexWordModal');
-  const arabicEl = document.getElementById('lexModalArabic');
-  const metaEl = document.getElementById('lexModalMeta');
-  const bodyEl = document.getElementById('lexModalBody');
-
-  arabicEl.textContent = word.word || '';
-  metaEl.innerHTML = (word.transliteration ? '<div style="font-weight:700;color:#C9A84C">' + escapeHtml(word.transliteration) + '</div>' : '') +
-    (word.surah_number ? '<div>' + word.surah_number + ':' + (word.ayah_number||'') + '</div>' : '');
-
-  // Build sections
-  const root = word.root || detectRoot(word.word || '');
-  let html = '';
-
-  // Root
-  html += lexModalSection('Root', '#C9A84C', '#FDF8EE',
-    root ? escapeHtml(root) : '<em style="color:#BBB">Not detected</em>');
-
-  // Quranic-era meaning
-  html += lexModalSection('Original Meaning (Quranic-era)', '#8B7355', '#F8F5F0',
-    word.quranic_meaning ? escapeHtml(word.quranic_meaning) : '<em style="color:#BBB">Not stored</em>');
-
-  // Modern meaning
-  if (word.modern_meaning) {
-    html += lexModalSection('Modern Meaning', '#1A6FA8', '#E8F4FD', escapeHtml(word.modern_meaning));
-  } else {
-    html += lexModalSection('Modern Meaning', '#1A6FA8', '#E8F4FD',
-      '<em style="color:#888">Not yet stored.</em>' +
-      (word.id ? '<br><button onclick="lexModalGenField('modern_meaning',this)" style="margin-top:8px;padding:6px 14px;background:#1A6FA8;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">✨ Generate with AI</button>' : ''));
-  }
-
-  // Meaning evolution
-  if (word.meaning_evolution) {
-    html += lexModalSection('How the Meaning Evolved', '#9B7EC9', '#F8F0FF', escapeHtml(word.meaning_evolution));
-  } else {
-    html += lexModalSection('How the Meaning Evolved', '#9B7EC9', '#F8F0FF',
-      '<em style="color:#888">Not yet stored.</em>' +
-      (word.id ? '<br><button onclick="lexModalGenField('meaning_evolution',this)" style="margin-top:8px;padding:6px 14px;background:#9B7EC9;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">✨ Generate with AI</button>' : ''));
-  }
-
-  // Scholarly explanation
-  if (word.scholarly_explanation) {
-    const paras = word.scholarly_explanation.split(/\n{2,}/)
-      .map(p => '<p style="margin:0 0 10px 0">' + escapeHtml(p.trim()) + '</p>').join('');
-    html += lexModalSection('Scholarly Explanation', '#2E5D38', '#EAF5EE', paras);
-    if (word.lexicon_sources) {
-      html += lexModalSection('Lexicographic Tradition Referenced', '#7A6644', '#F5F0E5',
-        '<em style="font-size:12px">' + escapeHtml(word.lexicon_sources) + '</em>');
-    }
-  } else {
-    html += lexModalSection('Scholarly Explanation', '#2E5D38', '#EAF5EE',
-      '<em style="color:#888">Multi-paragraph scholarly analysis not yet generated.</em>' +
-      (word.id ? '<br><button onclick="lexModalGenScholarly(this)" style="margin-top:10px;padding:8px 16px;background:#2E5D38;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">📚 Generate Scholarly Analysis</button>' : ''));
-  }
-
-  bodyEl.innerHTML = html;
-  modal.classList.add('open');
-  modal.scrollTop = 0;
-}
-
-function lexModalSection(label, color, bg, content) {
-  return '<div style="background:' + bg + ';border-radius:8px;padding:12px;margin-bottom:8px;">' +
-    '<div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:' + color + ';margin-bottom:6px">' + escapeHtml(label) + '</div>' +
-    '<div style="font-size:13px;color:#333;line-height:1.7">' + content + '</div>' +
-    '</div>';
-}
-
-function closeLexWordModal() {
-  document.getElementById('lexWordModal').classList.remove('open');
-}
-
-function lexModalShowConcordance() {
-  if (!_lexModalWord) return;
-  closeLexWordModal();
-  // Show the word card + concordance in the main panel
-  showLexiconDetailByWord(_lexModalWord);
-}
-
-async function lexModalGenField(field, btn) {
-  if (!_lexModalWord || !_lexModalWord.id) return;
-  const orig = btn.innerHTML;
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span> Generating...';
-  try {
-    await generateLexiconField(_lexModalWord.id, field, btn);
-    // Refresh the modal with updated word data
-    openLexWordModal(_lexModalWord);
-  } catch(e) {
-    btn.disabled = false;
-    btn.innerHTML = orig;
-  }
-}
-
-async function lexModalGenScholarly(btn) {
-  if (!_lexModalWord || !_lexModalWord.id) return;
-  const orig = btn.innerHTML;
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span> Researching...';
-  try {
-    await generateScholarlyExplanation(_lexModalWord.id, btn);
-    openLexWordModal(_lexModalWord);
-  } catch(e) {
-    btn.disabled = false;
-    btn.innerHTML = orig;
-  }
-}
-
 </script>
 
 <!-- ============================================================
@@ -5131,23 +5146,5 @@ function renderSiraList(events) {
   }).join('');
 }
 </script>
-
-<!-- ── LEXICON WORD DETAIL MODAL ── -->
-<div class="word-modal-overlay" id="lexWordModal" onclick="if(event.target===this)closeLexWordModal()" style="z-index:1050;align-items:flex-start;padding-top:5vh;overflow-y:auto;">
-  <div class="word-modal" style="max-width:560px;width:95%;max-height:88vh;overflow-y:auto;padding:0;border-radius:14px;">
-    <div style="position:sticky;top:0;background:#fff;z-index:2;border-radius:14px 14px 0 0;border-bottom:2px solid #F0EDE5;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;">
-      <div id="lexModalArabic" style="font-family:'Amiri',serif;font-size:36px;direction:rtl;color:#1a1a1a;font-weight:700;line-height:1.3;"></div>
-      <div style="display:flex;gap:8px;align-items:center;flex-shrink:0;">
-        <div id="lexModalMeta" style="font-size:11px;color:#8B7355;text-align:right;"></div>
-        <button onclick="closeLexWordModal()" style="width:32px;height:32px;border-radius:50%;border:2px solid #E8C97B;background:#FDF8EE;color:#8B7355;font-size:18px;cursor:pointer;font-weight:700;display:flex;align-items:center;justify-content:center;">✕</button>
-      </div>
-    </div>
-    <div id="lexModalBody" style="padding:16px 18px 24px;"></div>
-    <div style="padding:0 18px 18px;">
-      <button onclick="lexModalShowConcordance()" style="width:100%;padding:10px;background:#FDF8EE;border:2px solid #E8C97B;border-radius:8px;font-size:13px;font-weight:700;color:#C9A84C;cursor:pointer;">📖 Show all verses with this word</button>
-    </div>
-  </div>
-</div>
-
 </body>
 </html>
