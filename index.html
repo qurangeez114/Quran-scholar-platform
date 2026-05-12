@@ -1095,7 +1095,7 @@ async function toggleVerse(num, suraId, el) {
           const label = r.ref_ayah_start === r.ref_ayah_end
             ? `${r.ref_surah}:${r.ref_ayah_start}`
             : `${r.ref_surah}:${r.ref_ayah_start}–${r.ref_ayah_end}`;
-          return `<div class="xref-card" onclick="navToVerse(${r.ref_surah}, ${r.ref_ayah_start})">
+          return `<div class="xref-card" onclick="navToVerse(${r.ref_surah}, ${r.ref_ayah_start}, 'Cross-Ref from ${suraId > 0 ? suraId : ""}:${num}')">
             <div class="xref-ref">${label}</div>
             <div class="xref-theme">Surah ${r.ref_surah}, Ayah ${r.ref_ayah_start}</div>
           </div>`;
@@ -1523,7 +1523,7 @@ async function loadVariantsPanel(filter = variantPanelFilter) {
     if (counter) counter.textContent = `${byVerse.length} verses · ${rows.length} variant words`;
     if (list) {
       list.innerHTML = byVerse.map(v => `
-        <div onclick="navToVerse(${v.sura},${v.aya});closeSidebar();" style="display:flex;align-items:center;justify-content:space-between;padding:9px 11px;background:#fff;border:1px solid #E8E4DC;border-radius:7px;margin-bottom:5px;cursor:pointer">
+        <div onclick="navToVerse(${v.sura},${v.aya},'Variants panel');closeSidebar();" style="display:flex;align-items:center;justify-content:space-between;padding:9px 11px;background:#fff;border:1px solid #E8E4DC;border-radius:7px;margin-bottom:5px;cursor:pointer">
           <div>
             <div style="font-size:13px;font-weight:700;color:#4A3B28">${v.sura}:${v.aya}</div>
             <div style="font-size:9px;color:#8B7355;margin-top:1px">${v.count} variant ${v.count === 1 ? 'word' : 'words'}</div>
@@ -2149,23 +2149,33 @@ function renderSidebarRefList(results, query) {
 
 function goBack() {
   const prev = navHistory.pop();
-  // Remove all card back buttons
   document.querySelectorAll('.card-back-btn').forEach(b => b.remove());
-  // Hide top-bar back btn
   document.getElementById('backBtn').style.display = 'none';
   if (!prev) return;
   loadSura(prev.sura).then(() => {
     setTimeout(() => {
-      document.getElementById('verseArea').scrollTop = prev.scroll || 0;
-      // If there's still history, show the in-card back button on the first visible highlighted card
+      const verseArea = document.getElementById('verseArea');
+      verseArea.scrollTop = prev.scroll || 0;
+      // If still have history, show back button on the verse closest to restored scroll position
       if (navHistory.length > 0) {
-        const highlighted = document.querySelector('.verse-card.open') || document.querySelector('.verse-card');
-        if (highlighted) {
-          const num = highlighted.id?.replace('vc-', '');
-          updateCardBackBtn(highlighted, num);
-        }
+        setTimeout(() => {
+          // Find the verse card most visible in the viewport after scroll restore
+          const cards = document.querySelectorAll('.verse-card');
+          let bestCard = null;
+          let bestScore = -Infinity;
+          const areaRect = verseArea.getBoundingClientRect();
+          cards.forEach(card => {
+            const rect = card.getBoundingClientRect();
+            const visible = Math.min(rect.bottom, areaRect.bottom) - Math.max(rect.top, areaRect.top);
+            if (visible > bestScore) { bestScore = visible; bestCard = card; }
+          });
+          if (bestCard) {
+            const num = bestCard.id?.replace('vc-', '');
+            updateCardBackBtn(bestCard, num);
+          }
+        }, 150);
       }
-    }, 400);
+    }, 450);
   });
 }
 
@@ -2754,21 +2764,18 @@ function rowToHadithEntry(r) {
   };
 }
 
-function jumpToVerse(sura, aya) {
-  const card = document.getElementById('vc-' + aya);
-  if (card) {
-    card.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    const hadithBtn = document.getElementById(`hadith-tab-${aya}`);
-    if (hadithBtn) setTimeout(() => hadithBtn.click(), 400);
-  } else {
-    const suraInput = document.getElementById('sura-input');
-    const ayaInput = document.getElementById('aya-input');
-    if (suraInput && ayaInput) {
-      suraInput.value = sura;
-      ayaInput.value = aya;
-      const goBtn = document.querySelector('button[onclick*="go"], button[onclick*="Go"], button[onclick*="search"]');
-      if (goBtn) goBtn.click();
+async function jumpToVerse(sura, aya, originLabel) {
+  const label = originLabel || (allSuras.find(s => (s.sura_id||s.id) === currentSura)?.sura_name_english || 'Previous');
+  if (sura === currentSura) {
+    const card = document.getElementById('vc-' + aya);
+    if (card) {
+      navHistory.push({ sura: currentSura, scroll: document.getElementById('verseArea').scrollTop, label });
+      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      highlightVerse(card);
+      setTimeout(() => updateCardBackBtn(card, aya), 400);
     }
+  } else {
+    await navToVerse(sura, aya, label);
   }
 }
 
@@ -2842,7 +2849,7 @@ async function loadHadithPanel(sura, aya) {
     verseNumbers.slice(0, 8).forEach(v => {
       const items = grouped[v];
       const preview = (items[0].text || '').slice(0, 120) + (items[0].text && items[0].text.length > 120 ? '…' : '');
-      html += `<div class="hadith-related-verse-card" onclick="jumpToVerse(${sura},${v})">
+      html += `<div class="hadith-related-verse-card" onclick="jumpToVerse(${sura},${v}, 'Hadith panel')">
         <span class="hadith-verse-badge">${sura}:${v}</span>
         <span class="hadith-verse-preview">${escapeHtml(preview)}</span>
         <span class="hadith-verse-count">${items.length} hadith</span>
@@ -3372,7 +3379,7 @@ function renderSavedList() {
     const note = localStorage.getItem(noteKey(b.suraId, b.ayaNum));
     const info = allSuras.find(s => (s.sura_id || s.id) === b.suraId) || {};
     const suraName = info.sura_name_english || `Sura ${b.suraId}`;
-    return `<div style="padding:10px 14px;border-bottom:1px solid #F0EDE6;cursor:pointer;" onclick="navToVerse(${b.suraId},${b.ayaNum});switchSidebarTab('suras')">
+    return `<div style="padding:10px 14px;border-bottom:1px solid #F0EDE6;cursor:pointer;" onclick="navToVerse(${b.suraId},${b.ayaNum},'Bookmarks');switchSidebarTab('suras')">
       <div style="display:flex;justify-content:space-between;align-items:center;">
         <span style="font-size:12px;font-weight:700;color:#C9A84C">${b.suraId}:${b.ayaNum} — ${suraName}</span>
         <button onclick="event.stopPropagation();openNote(${b.ayaNum},${b.suraId})" style="background:none;border:none;font-size:14px;cursor:pointer;">📝</button>
