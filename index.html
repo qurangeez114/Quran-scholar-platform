@@ -2127,5 +2127,191 @@ function loadVerseIntoCard(cardId, sura, aya) {
 }
 
 </script>
+
+
+<!-- BUG FIX ONLY PATCH: Quran verse navigation trail + step-by-step history. No features removed. -->
+<style id="quran-verse-trail-style">
+  #quranNavTrailBox{position:fixed;right:12px;bottom:12px;z-index:450;background:#fff;border:2px solid var(--gold-border);border-radius:14px;box-shadow:0 6px 24px rgba(0,0,0,.14);max-width:min(360px,calc(100vw - 24px));font-family:'Crimson Pro',serif;display:none;overflow:hidden;}
+  #quranNavTrailBox.open{display:block;}
+  #quranNavTrailHead{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--gold-pale);border-bottom:1px solid var(--gold-border);}
+  #quranNavTrailHead strong{font-size:12px;color:var(--gold);letter-spacing:.04em;text-transform:uppercase;white-space:nowrap;}
+  #quranNavTrailHead button{border:1px solid var(--gold-border);background:#fff;color:var(--gold);border-radius:16px;padding:3px 8px;font-size:11px;font-weight:700;cursor:pointer;}
+  #quranNavTrailList{max-height:230px;overflow:auto;padding:8px;display:flex;flex-direction:column;gap:6px;}
+  .quran-trail-item{display:flex;align-items:center;gap:7px;text-decoration:none;color:#333;border:1px solid #eadbb3;background:#fffdf8;border-radius:10px;padding:7px 9px;font-size:12px;line-height:1.25;}
+  .quran-trail-item:hover{background:var(--gold-pale);border-color:var(--gold);}
+  .quran-trail-ref{font-weight:800;color:var(--gold);white-space:nowrap;}
+  .quran-trail-meta{color:#666;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  #quranNavTrailMini{position:fixed;right:12px;bottom:12px;z-index:449;border:2px solid var(--gold-border);background:var(--gold-pale);color:var(--gold);border-radius:22px;padding:8px 12px;font-size:12px;font-weight:800;cursor:pointer;display:none;box-shadow:0 4px 18px rgba(0,0,0,.12);}
+  @media(max-width:600px){#quranNavTrailBox{left:10px;right:10px;bottom:10px;max-width:none;}#quranNavTrailMini{right:10px;bottom:10px;}}
+</style>
+<script id="quran-verse-navigation-history-fix">
+(function(){
+  var TRAIL_KEY = 'quranResearchVerseTrail_v1';
+  var MAX_TRAIL = 50;
+
+  function isQuranVerseUrl(url){
+    return url && url.indexOf('fascinating-sunburst-516df8.netlify.app') !== -1 && /[?&]sura=/.test(url) && /[?&]aya=/.test(url);
+  }
+
+  function parseVerseFromUrl(url){
+    try {
+      var u = new URL(url, window.location.href);
+      return { sura: u.searchParams.get('sura') || '', aya: u.searchParams.get('aya') || '1' };
+    } catch(e) { return {sura:'', aya:'1'}; }
+  }
+
+  function trail(){
+    try { return JSON.parse(sessionStorage.getItem(TRAIL_KEY) || '[]'); }
+    catch(e) { return []; }
+  }
+
+  function saveTrail(items){
+    try { sessionStorage.setItem(TRAIL_KEY, JSON.stringify(items.slice(-MAX_TRAIL))); }
+    catch(e) {}
+  }
+
+  function pushTrail(entry){
+    var items = trail();
+    var last = items[items.length - 1];
+    if (!last || last.url !== entry.url || last.returnHash !== entry.returnHash) {
+      items.push(entry);
+      saveTrail(items);
+    }
+    renderTrail();
+  }
+
+  function labelFromCard(card){
+    if (!card) return 'Research result';
+    var pill = card.querySelector('.source-pill');
+    var scholar = card.querySelector('.card-scholar');
+    var meta = card.querySelector('.card-meta');
+    return ((pill && pill.textContent) || '') + ' ' + ((scholar && scholar.textContent) || '') + ' ' + ((meta && meta.textContent) || '');
+  }
+
+  function addReturnTo(url, cardId){
+    try {
+      var u = new URL(url, window.location.href);
+      u.searchParams.set('from', 'research');
+      u.searchParams.set('returnTo', window.location.href.split('#')[0] + (cardId ? '#' + cardId : ''));
+      return u.toString();
+    } catch(e) { return url; }
+  }
+
+  function rememberResearchPosition(cardId){
+    try {
+      sessionStorage.setItem('researchReturnScrollY', String(window.scrollY || 0));
+      if (cardId) sessionStorage.setItem('researchReturnCardId', cardId);
+      sessionStorage.setItem('researchReturnUrl', window.location.href);
+    } catch(e) {}
+  }
+
+  function restoreResearchPosition(){
+    try {
+      var cardId = sessionStorage.getItem('researchReturnCardId');
+      var y = sessionStorage.getItem('researchReturnScrollY');
+      if (window.location.hash) {
+        var el = document.getElementById(window.location.hash.slice(1));
+        if (el) { setTimeout(function(){ el.scrollIntoView({block:'center'}); }, 80); return; }
+      }
+      if (cardId) {
+        var card = document.getElementById(cardId);
+        if (card) { setTimeout(function(){ card.scrollIntoView({block:'center'}); }, 80); return; }
+      }
+      if (y) setTimeout(function(){ window.scrollTo(0, parseInt(y,10) || 0); }, 80);
+    } catch(e) {}
+  }
+
+  function ensureTrailUI(){
+    if (document.getElementById('quranNavTrailBox')) return;
+    var mini = document.createElement('button');
+    mini.id = 'quranNavTrailMini';
+    mini.type = 'button';
+    mini.textContent = '🧭 Verse Trail';
+    mini.onclick = function(){ toggleTrail(true); };
+    document.body.appendChild(mini);
+
+    var box = document.createElement('div');
+    box.id = 'quranNavTrailBox';
+    box.innerHTML = '<div id="quranNavTrailHead"><strong>🧭 Verse Trail</strong><span style="flex:1"></span><button type="button" id="quranTrailBackBtn">← Back</button><button type="button" id="quranTrailClearBtn">Clear</button><button type="button" id="quranTrailCloseBtn">Hide</button></div><div id="quranNavTrailList"></div>';
+    document.body.appendChild(box);
+    document.getElementById('quranTrailCloseBtn').onclick = function(){ toggleTrail(false); };
+    document.getElementById('quranTrailClearBtn').onclick = function(){ saveTrail([]); renderTrail(); };
+    document.getElementById('quranTrailBackBtn').onclick = function(){ history.back(); };
+  }
+
+  function toggleTrail(open){
+    ensureTrailUI();
+    var box = document.getElementById('quranNavTrailBox');
+    var mini = document.getElementById('quranNavTrailMini');
+    if (open) { box.classList.add('open'); mini.style.display='none'; }
+    else { box.classList.remove('open'); mini.style.display = trail().length ? 'block' : 'none'; }
+  }
+
+  function renderTrail(){
+    ensureTrailUI();
+    var items = trail();
+    var mini = document.getElementById('quranNavTrailMini');
+    var list = document.getElementById('quranNavTrailList');
+    if (!items.length) {
+      list.innerHTML = '<div style="font-size:12px;color:#888;padding:8px;">No verse trail yet.</div>';
+      mini.style.display = 'none';
+      document.getElementById('quranNavTrailBox').classList.remove('open');
+      return;
+    }
+    list.innerHTML = items.map(function(it, idx){
+      var n = idx + 1;
+      var meta = (it.source || 'Research') + (it.label ? ' · ' + it.label : '');
+      return '<a class="quran-trail-item" href="' + it.url + '"><span class="quran-trail-ref">' + n + '. Quran ' + it.sura + ':' + it.aya + '</span><span class="quran-trail-meta">' + escapeHtml(meta) + '</span></a>';
+    }).join('');
+    if (!document.getElementById('quranNavTrailBox').classList.contains('open')) mini.style.display = 'block';
+  }
+
+  function escapeHtml(s){
+    return String(s || '').replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; });
+  }
+
+  function goToQuran(url, card){
+    var cardId = card ? card.id : '';
+    var finalUrl = addReturnTo(url, cardId);
+    var v = parseVerseFromUrl(finalUrl);
+    rememberResearchPosition(cardId);
+    pushTrail({
+      sura: v.sura,
+      aya: v.aya,
+      url: finalUrl,
+      returnHash: cardId ? '#' + cardId : '',
+      source: currentSource || 'research',
+      label: labelFromCard(card).replace(/\s+/g,' ').trim().slice(0, 90),
+      at: Date.now()
+    });
+    window.location.href = finalUrl;
+  }
+
+  window.openQuranLink = function(sura, aya){
+    var ev = window.event || null;
+    var card = ev && ev.target ? ev.target.closest('.result-card,.sira-event-card') : null;
+    goToQuran('https://fascinating-sunburst-516df8.netlify.app?sura=' + encodeURIComponent(sura) + '&aya=' + encodeURIComponent(aya || 1), card);
+    return false;
+  };
+
+  document.addEventListener('click', function(e){
+    var a = e.target.closest && e.target.closest('a[href]');
+    if (!a) return;
+    var href = a.getAttribute('href') || '';
+    if (!isQuranVerseUrl(href)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    var card = a.closest('.result-card,.sira-event-card');
+    goToQuran(href, card);
+  }, true);
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function(){ restoreResearchPosition(); renderTrail(); });
+  } else {
+    restoreResearchPosition(); renderTrail();
+  }
+})();
+</script>
+
 </body>
 </html>
