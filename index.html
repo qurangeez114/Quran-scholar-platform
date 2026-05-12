@@ -3622,14 +3622,10 @@ async function searchLexicon(q, closeBar) {
   clearTimeout(window._lexConcordanceTimer);
   window._lexConcordanceTimer = setTimeout(async () => {
     if (raw.length >= 2) {
-      // Build a word object from the first result in the sidebar list (if any)
-      // so we can show the full word detail card on top
       const wordObj = _currentLexWords.length > 0
         ? _currentLexWords[0]
         : { word: raw, transliteration: '', root: '', quranic_meaning: '', surah_number: '', ayah_number: '', id: null };
-      // showLexiconDetailByWord shows the card + triggers loadLexiconConcordance
-      // but we want runWordSearch results (with Arabic highlight bar) in the concordance area.
-      // So: show the card skeleton, then fill concordance via runWordSearch.
+
       const panel = document.getElementById('searchResultsPanel');
       const resultsDiv = document.getElementById('searchResults');
       const countDiv = document.getElementById('searchCount');
@@ -3642,39 +3638,32 @@ async function searchLexicon(q, closeBar) {
 
       const dictHtml = renderLexiconDictionary(wordObj);
       const dictId = wordObj.id ? 'lexiconDictionary-' + wordObj.id : 'lexiconDictionary-inline';
+      const translitHtml = wordObj.transliteration
+        ? '<div style="font-size:12px;color:#C9A84C;font-weight:700;margin-top:4px">' + escapeHtml(wordObj.transliteration) + '</div>'
+        : '';
+      const refHtml = wordObj.surah_number
+        ? '<div style="font-size:11px;color:#8B7355;margin-top:4px">' + (wordObj.surah_number||'') + ':' + (wordObj.ayah_number||'') + '</div>'
+        : '';
 
-      resultsDiv.innerHTML = \`
-        <div style="max-width:700px;margin:0 auto;">
-          <!-- Word detail card -->
-          <div style="background:#fff;border:2px solid #E8C97B;border-radius:12px;padding:16px;margin-bottom:20px;">
-            <div style="text-align:center;padding-bottom:12px;border-bottom:1px solid #F0EDE5;margin-bottom:12px;">
-              <div style="font-family:'Amiri',serif;font-size:42px;color:#1a1a1a;direction:rtl;line-height:1.5">\${escapeHtml(wordObj.word||raw)}</div>
-              \${wordObj.transliteration ? \`<div style="font-size:12px;color:#C9A84C;font-weight:700;margin-top:4px">\${escapeHtml(wordObj.transliteration)}</div>\` : ''}
-              \${wordObj.surah_number ? \`<div style="font-size:11px;color:#8B7355;margin-top:4px">\${wordObj.surah_number}:\${wordObj.ayah_number||''}</div>\` : ''}
-            </div>
-            <div id="\${dictId}">\${dictHtml}</div>
-          </div>
-          <!-- Arabic match bar + concordance filled by runWordSearch below -->
-          <div style="font-size:12px;color:#8B7355;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:8px;">
-            📖 Concordance — verses containing this word
-            <span id="concordanceCount" style="font-size:11px;color:#C9A84C;font-weight:600;background:#FDF5DE;border:1px solid #E8C97B;border-radius:10px;padding:1px 8px;"></span>
-          </div>
-          <div id="lexiconConcordance">
-            <div style="padding:20px;text-align:center;color:#BBB;font-style:italic"><span class="spinner"></span> Searching verses...</div>
-          </div>
-        </div>\`;
+      resultsDiv.innerHTML =
+        '<div style="max-width:700px;margin:0 auto;">' +
+          '<div style="background:#fff;border:2px solid #E8C97B;border-radius:12px;padding:16px;margin-bottom:20px;">' +
+            '<div style="text-align:center;padding-bottom:12px;border-bottom:1px solid #F0EDE5;margin-bottom:12px;">' +
+              '<div style="font-family:'Amiri',serif;font-size:42px;color:#1a1a1a;direction:rtl;line-height:1.5">' + escapeHtml(wordObj.word || raw) + '</div>' +
+              translitHtml + refHtml +
+            '</div>' +
+            '<div id="' + dictId + '">' + dictHtml + '</div>' +
+          '</div>' +
+          '<div style="font-size:12px;color:#8B7355;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:8px;">' +
+            '&#128214; Concordance — verses containing this word' +
+            '<span id="concordanceCount" style="font-size:11px;color:#C9A84C;font-weight:600;background:#FDF5DE;border:1px solid #E8C97B;border-radius:10px;padding:1px 8px;"></span>' +
+          '</div>' +
+          '<div id="lexiconConcordance">' +
+            '<div style="padding:20px;text-align:center;color:#BBB;font-style:italic"><span class="spinner"></span> Searching verses...</div>' +
+          '</div>' +
+        '</div>';
 
-      // Fill concordance area with runWordSearch results (Arabic highlight bar + verse cards)
-      // We intercept by temporarily redirecting searchResults writes to lexiconConcordance
-      const origInner = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML');
-      const concBox = document.getElementById('lexiconConcordance');
-      const countEl = document.getElementById('concordanceCount');
-      // Run the search and put results into lexiconConcordance
       try {
-        const tempDiv = document.createElement('div');
-        // Monkey-patch: run runWordSearch but capture its output
-        // Actually simpler: just call loadLexiconConcordance with a word object
-        // that has the search term, AND separately run Arabic match detection
         await loadLexiconConcordanceWithHighlight(wordObj, raw);
       } catch(e) {}
     }
