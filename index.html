@@ -3573,54 +3573,138 @@ function onLexiconClick(el) {
   const idx = parseInt(el.getAttribute('data-lex-idx'));
   const w = _currentLexWords[idx];
   if (!w) return;
+  clearTimeout(window._lexConcordanceTimer);
   showLexiconDetailByWord(w);
 }
 
 async function showLexiconDetailByWord(word) {
-  // Close sidebar and properly show search results panel
   closeSidebar();
   const panel = document.getElementById('searchResultsPanel');
   const resultsDiv = document.getElementById('searchResults');
   const countDiv = document.getElementById('searchCount');
   const verseArea = document.getElementById('verseArea');
-  // Hide verse area, show search panel
   if (verseArea) verseArea.style.display = 'none';
   if (panel) { panel.style.display = 'flex'; panel.style.flexDirection = 'column'; }
-  // Show clear search button
   const clearBtn = document.getElementById('clearSearch');
   if (clearBtn) clearBtn.style.display = '';
-  countDiv.textContent = `Lexicon: ${word.word||''}`;
+  countDiv.textContent = 'Lexicon: ' + (word.word || '');
 
-  const dictHtml = renderLexiconDictionary(word);
-  const dictId = word.id ? `lexiconDictionary-${word.id}` : 'lexiconDictionary-inline';
+  const root = word.root || detectRoot(word.word || '');
+  const wordId = word.id;
+  const dictId = wordId ? 'lexDict-' + wordId : 'lexDict-inline';
 
-  // Stacked layout: word card on top, concordance below
-  resultsDiv.innerHTML = `
-    <div style="max-width:700px;margin:0 auto;">
+  // ── Section builder helper ──────────────────────────────────────────
+  function sec(icon, label, color, bg, content) {
+    return '<div style="background:' + bg + ';border-radius:10px;padding:14px 16px;margin-bottom:10px;">' +
+      '<div style="font-size:10px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:' + color + ';margin-bottom:8px;display:flex;align-items:center;gap:6px;">' +
+        '<span style="font-size:14px">' + icon + '</span>' + escapeHtml(label) +
+      '</div>' +
+      '<div style="font-size:14px;color:#1a1a1a;line-height:1.8;font-weight:500">' + content + '</div>' +
+    '</div>';
+  }
+  function aiBtn(field, color, label) {
+    if (!wordId) return '';
+    return '<br><button onclick="lexGenerateField(' + wordId + ',\'' + field + '\',this)" ' +
+      'style="margin-top:10px;padding:7px 16px;background:' + color + ';color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">' +
+      '&#10024; ' + label + '</button>';
+  }
 
-      <!-- Word detail card -->
-      <div style="background:#fff;border:2px solid #E8C97B;border-radius:12px;padding:16px;margin-bottom:20px;">
-        <div style="text-align:center;padding-bottom:12px;border-bottom:1px solid #F0EDE5;margin-bottom:12px;">
-          <div style="font-family:'Amiri',serif;font-size:42px;color:#1a1a1a;direction:rtl;line-height:1.5">${escapeHtml(word.word||'')}</div>
-          ${word.transliteration ? `<div style="font-size:12px;color:#C9A84C;font-weight:700;margin-top:4px">${escapeHtml(word.transliteration)}</div>` : ''}
-          <div style="font-size:11px;color:#8B7355;margin-top:4px">${word.surah_number||''}:${word.ayah_number||''}</div>
-        </div>
-        <div id="${dictId}">${dictHtml}</div>
-      </div>
+  // ── Build sections HTML ─────────────────────────────────────────────
+  let sectionsHtml = '';
 
-      <!-- Concordance below -->
-      <div style="font-size:12px;color:#8B7355;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:8px;">
-        📖 Concordance — Every verse containing this word
-        <span id="concordanceCount" style="font-size:11px;color:#C9A84C;font-weight:600;background:#FDF5DE;border:1px solid #E8C97B;border-radius:10px;padding:1px 8px;"></span>
-      </div>
-      <div id="lexiconConcordance">
-        <div style="padding:20px;text-align:center;color:#BBB;font-style:italic"><span class="spinner"></span> Loading concordance...</div>
-      </div>
+  // 1. Root & morphology
+  sectionsHtml += sec('&#129366;', 'Root & Morphology', '#B8902A', '#FDF8EE',
+    root
+      ? '<span style="font-family:'Amiri',serif;font-size:22px;direction:rtl;color:#B8902A;font-weight:700;">' + escapeHtml(root) + '</span>' +
+        (word.transliteration ? ' &nbsp;<span style="font-size:13px;color:#8B7355;font-style:italic">(' + escapeHtml(word.transliteration) + ')</span>' : '')
+      : '<em style="color:#BBB">Root not detected</em>'
+  );
 
-    </div>`;
+  // 2. Pre-Islamic / ancient meaning
+  const ancientContent = word.quranic_meaning
+    ? escapeHtml(word.quranic_meaning)
+    : '<em style="color:#BBB">Not stored yet.</em>';
+  sectionsHtml += sec('&#128205;', 'Ancient / Pre-Islamic Origin', '#7A5C2A', '#F8F3EB', ancientContent);
 
-  // Load concordance immediately in parallel — don't wait
+  // 3. Quranic-era meaning (time of Prophet Muhammad ﷺ)
+  const quranEraContent = word.quranic_meaning
+    ? escapeHtml(word.quranic_meaning)
+    : '<em style="color:#BBB">Not stored yet.</em>';
+  sectionsHtml += sec('&#128336;', 'Meaning at Time of Revelation (7th century)', '#1A6FA8', '#EAF4FD', quranEraContent);
+
+  // 4. Modern meaning
+  const modernContent = word.modern_meaning
+    ? escapeHtml(word.modern_meaning)
+    : ('<em style="color:#888">Not yet generated.</em>' + aiBtn('modern_meaning', '#1A6FA8', 'Generate Modern Meaning'));
+  sectionsHtml += sec('&#127758;', 'Modern Arabic Meaning (today)', '#1A6FA8', '#E8F4FD', modernContent);
+
+  // 5. How meaning evolved
+  const evolutionContent = word.meaning_evolution
+    ? escapeHtml(word.meaning_evolution)
+    : ('<em style="color:#888">Not yet generated.</em>' + aiBtn('meaning_evolution', '#9B7EC9', 'Generate Meaning Evolution'));
+  sectionsHtml += sec('&#128260;', 'How the Meaning Evolved Over Time', '#6A4CA0', '#F4F0FF', evolutionContent);
+
+  // 6. Scholarly analysis
+  let scholarlyContent;
+  if (word.scholarly_explanation) {
+    scholarlyContent = word.scholarly_explanation
+      .split(/
+{2,}/)
+      .map(p => '<p style="margin:0 0 12px 0">' + escapeHtml(p.trim()) + '</p>')
+      .join('');
+    if (word.lexicon_sources) {
+      scholarlyContent += '<div style="margin-top:10px;padding:8px 12px;background:#EAF5EE;border-radius:6px;font-size:12px;color:#2E5D38;font-style:italic">' +
+        '<b>Sources:</b> ' + escapeHtml(word.lexicon_sources) + '</div>';
+    }
+  } else {
+    scholarlyContent = '<em style="color:#888">Full scholarly analysis (root, classical lexicons, Mufradat, Lisan al-Arab, semantic history) not yet generated.</em>' +
+      (wordId ? '<br><button onclick="lexGenerateScholarly(' + wordId + ',this)" style="margin-top:12px;padding:9px 18px;background:#2E5D38;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;">&#128218; Generate Full Scholarly Analysis</button>' : '');
+  }
+  sectionsHtml += sec('&#128218;', 'Scholarly Analysis (Classical Lexicography)', '#2E5D38', '#EAF5EE', scholarlyContent);
+
+  // ── Assemble full page ──────────────────────────────────────────────
+  resultsDiv.innerHTML =
+    '<div style="max-width:720px;margin:0 auto;padding-bottom:40px;">' +
+
+      // ── WORD HEADER ──
+      '<div style="background:linear-gradient(135deg,#FDFAF2,#FFF3C4);border:2px solid #E8C97B;border-radius:14px;padding:20px;margin-bottom:16px;text-align:center;">' +
+        '<div style="font-family:'Amiri',serif;font-size:52px;color:#1a1a1a;direction:rtl;line-height:1.4;font-weight:700;">' + escapeHtml(word.word || '') + '</div>' +
+        (word.transliteration ? '<div style="font-size:14px;color:#C9A84C;font-weight:700;margin-top:4px;font-style:italic">' + escapeHtml(word.transliteration) + '</div>' : '') +
+        (word.surah_number ? '<div style="font-size:12px;color:#8B7355;margin-top:6px;">First occurrence: ' + word.surah_number + ':' + (word.ayah_number||'') + '</div>' : '') +
+      '</div>' +
+
+      // ── ANALYSIS SECTIONS ──
+      '<div id="' + dictId + '">' + sectionsHtml + '</div>' +
+
+      // ── CONCORDANCE ──
+      '<div style="margin-top:24px;padding-top:16px;border-top:2px solid #E8E4DC;">' +
+        '<div style="font-size:12px;color:#8B7355;font-weight:800;letter-spacing:0.8px;text-transform:uppercase;margin-bottom:12px;display:flex;align-items:center;gap:8px;">' +
+          '&#128214; Every Verse Containing This Word' +
+          '<span id="concordanceCount" style="font-size:11px;color:#C9A84C;font-weight:600;background:#FDF5DE;border:1px solid #E8C97B;border-radius:10px;padding:2px 10px;"></span>' +
+        '</div>' +
+        '<div id="lexiconConcordance"><div style="padding:20px;text-align:center;color:#BBB;font-style:italic"><span class="spinner"></span> Loading all verses...</div></div>' +
+      '</div>' +
+
+    '</div>';
+
   loadLexiconConcordance(word);
+}
+
+// Generate field via AI and refresh the word detail
+async function lexGenerateField(wordId, field, btn) {
+  const word = _currentLexWords.find(w => w.id === wordId) || lexiconData.find(w => w.id === wordId);
+  if (!word) return;
+  await generateLexiconField(wordId, field, btn);
+  word[field] = word[field]; // already updated by generateLexiconField
+  // Re-render the section
+  showLexiconDetailByWord(word);
+}
+
+async function lexGenerateScholarly(wordId, btn) {
+  const word = _currentLexWords.find(w => w.id === wordId) || lexiconData.find(w => w.id === wordId);
+  if (!word) return;
+  await generateScholarlyExplanation(wordId, btn);
+  showLexiconDetailByWord(word);
 }
 
 async function showLexiconDetail(id) {
