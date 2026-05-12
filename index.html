@@ -92,6 +92,60 @@ body { font-family: 'EB Garamond', Georgia, serif; background: #F5EDD8; color: #
 .word-diff-qalun { background: #D5F5E3; border-radius: 3px; padding: 0 2px; border-bottom: 3px solid #1A7A48; }
 .word-variant { cursor: pointer; padding: 2px 5px !important; border-radius: 5px !important; box-shadow: 0 0 0 1px rgba(0,0,0,0.1), inset 0 0 0 1px rgba(255,255,255,0.4); transition: transform 0.1s; font-weight: 600; }
 .word-variant:hover { transform: scale(1.05); box-shadow: 0 2px 6px rgba(0,0,0,0.15); }
+/* ── IN-CARD BACK BUTTON ── */
+.card-back-btn {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  margin: 0 18px 14px;
+  padding: 10px 16px;
+  background: linear-gradient(135deg, #2C1810, #4A2C1A);
+  color: #F5D98A;
+  border: none;
+  border-radius: 30px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(44,24,16,0.35);
+  transition: all 0.2s;
+  letter-spacing: 0.3px;
+  position: relative;
+  overflow: hidden;
+}
+.card-back-btn::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 4px;
+  background: linear-gradient(180deg, #F5D98A, #B8902A);
+  border-radius: 30px 0 0 30px;
+}
+.card-back-btn:hover {
+  background: linear-gradient(135deg, #4A2C1A, #6B3A22);
+  box-shadow: 0 6px 20px rgba(44,24,16,0.5);
+  transform: translateY(-1px);
+}
+.card-back-btn:active { transform: translateY(0); }
+.card-back-btn .back-arrow {
+  font-size: 18px;
+  line-height: 1;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.3));
+}
+.card-back-btn .back-label { display: flex; flex-direction: column; }
+.card-back-btn .back-label-main { font-size: 13px; font-weight: 800; color: #F5D98A; }
+.card-back-btn .back-label-sub { font-size: 10px; font-weight: 600; color: #D4B870; opacity: 0.85; margin-top: 1px; }
+.card-back-btn .back-steps {
+  margin-left: auto;
+  background: rgba(245,217,138,0.18);
+  border: 1px solid rgba(245,217,138,0.35);
+  border-radius: 12px;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #F5D98A;
+}
+.card-back-btn.visible { display: flex; }
+
 .xref-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; }
 .xref-card { background: #F5F3EC; border: 2px solid #D4C9A8; border-radius: 8px; padding: 10px; cursor: pointer; }
 .xref-card:hover { border-color: #B8902A; background: #FDF5DE; }
@@ -827,6 +881,7 @@ function filterSuras() {
 function selectSura(id) {
   navHistory = [];
   document.getElementById('backBtn').style.display = 'none';
+  document.querySelectorAll('.card-back-btn').forEach(b => b.remove());
   document.getElementById('readModeBtn').style.display = 'inline-block';
   // Close search panel if open
   const sp = document.getElementById('searchResultsPanel');
@@ -1971,19 +2026,50 @@ async function runWordSearch(query) {
   }
 }
 
-async function navToVerse(suraId, ayahNum) {
-  // Save current sura AND scroll position for back navigation
-  navHistory.push({ sura: currentSura, scroll: document.getElementById('verseArea').scrollTop });
-  document.getElementById('backBtn').style.display = 'block';
-  document.getElementById('backBtn').textContent = '← Back to ' + (allSuras.find(s => (s.sura_id||s.id) === currentSura)?.sura_name || 'Previous');
+async function navToVerse(suraId, ayahNum, originLabel) {
+  // Save current sura, scroll position, and a human-readable origin label
+  const suraInfo = allSuras.find(s => (s.sura_id||s.id) === currentSura);
+  const label = originLabel || (suraInfo?.sura_name_english || suraInfo?.sura_name || 'Previous');
+  navHistory.push({
+    sura: currentSura,
+    scroll: document.getElementById('verseArea').scrollTop,
+    label: label
+  });
+  // Hide top-bar back btn (we use in-card now)
+  document.getElementById('backBtn').style.display = 'none';
   await loadSura(suraId);
   setTimeout(() => {
     const card = document.getElementById('vc-' + ayahNum);
     if (card) {
       card.scrollIntoView({ behavior: 'smooth', block: 'center' });
       highlightVerse(card);
+      // Show in-card back button on the destination card
+      updateCardBackBtn(card, ayahNum);
     }
   }, 600);
+}
+
+function updateCardBackBtn(card, ayahNum) {
+  // Remove any existing card back btns
+  document.querySelectorAll('.card-back-btn').forEach(b => b.remove());
+  if (!navHistory.length) return;
+  const top = navHistory[navHistory.length - 1];
+  const steps = navHistory.length;
+  const btn = document.createElement('button');
+  btn.className = 'card-back-btn visible';
+  btn.innerHTML = `
+    <span class="back-arrow">←</span>
+    <span class="back-label">
+      <span class="back-label-main">Back to ${escapeHtml(top.label)}</span>
+      <span class="back-label-sub">You came from here</span>
+    </span>
+    ${steps > 1 ? `<span class="back-steps">${steps} steps</span>` : ''}
+  `;
+  btn.onclick = (e) => { e.stopPropagation(); goBack(); };
+  // Insert at top of card, before verse-top
+  const verseTop = card.querySelector('.verse-top');
+  if (verseTop) card.insertBefore(btn, verseTop);
+  else card.prepend(btn);
 }
 
 // Wrapper used by clickable result cards. Skips navigation if:
@@ -2063,14 +2149,24 @@ function renderSidebarRefList(results, query) {
 
 function goBack() {
   const prev = navHistory.pop();
-  document.getElementById('backBtn').style.display = navHistory.length > 0 ? 'block' : 'none';
-  if (prev) {
-    loadSura(prev.sura).then(() => {
-      setTimeout(() => {
-        document.getElementById('verseArea').scrollTop = prev.scroll || 0;
-      }, 400);
-    });
-  }
+  // Remove all card back buttons
+  document.querySelectorAll('.card-back-btn').forEach(b => b.remove());
+  // Hide top-bar back btn
+  document.getElementById('backBtn').style.display = 'none';
+  if (!prev) return;
+  loadSura(prev.sura).then(() => {
+    setTimeout(() => {
+      document.getElementById('verseArea').scrollTop = prev.scroll || 0;
+      // If there's still history, show the in-card back button on the first visible highlighted card
+      if (navHistory.length > 0) {
+        const highlighted = document.querySelector('.verse-card.open') || document.querySelector('.verse-card');
+        if (highlighted) {
+          const num = highlighted.id?.replace('vc-', '');
+          updateCardBackBtn(highlighted, num);
+        }
+      }
+    }, 400);
+  });
 }
 
 let readModeOn = false;
