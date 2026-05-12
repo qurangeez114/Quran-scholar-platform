@@ -1885,41 +1885,104 @@ async function runWordSearch(query) {
     if (!safeQuery) return;
     const fields = 'sura_id,aya_number,arabic,english,aya_text,amharic,oromo,somali';
 
-    // ── STEP 1: Detect language & find Arabic word matches from word_analysis ──
+    // ── STEP 1: Detect language & find Arabic word matches ──────────────────
     const isArabic = /[\u0600-\u06FF]/.test(safeQuery);
-    const isGeez   = /[\u1200-\u137F]/.test(safeQuery);
+    const isGeez   = /[\u1200-\u137F]/.test(safeQuery);  // Tigrinya & Amharic
     const isLatin  = /^[\x00-\x7F]+$/.test(safeQuery);
 
-    // Fetch matching Arabic words from word_analysis for cross-language highlight
-    let arabicMatches = []; // [{arabic_word, root_word}]
+    // Fetch matching Arabic words for cross-language highlight
+    // Strategy:
+    //   Latin (English) → search word_analysis meaning fields directly
+    //   Ge'ez (Tigrinya/Amharic) → search ayas table aya_text+amharic columns,
+    //                               then collect the Arabic text of those verses,
+    //                               then look up those Arabic words in word_analysis
+    //   Arabic → direct lookup in word_analysis
+    let arabicMatches = []; // [{arabic_word, root_word, original_meaning}]
     try {
       const waCols = 'arabic_word,root_word,original_meaning';
-      const waTasks = [];
-      if (!isArabic) {
-        // Search meaning fields for the non-Arabic input
-        waTasks.push(
-          sbSearch('word_analysis', waCols, 'original_meaning', safeQuery).catch(() => []),
-          sbSearch('word_analysis', waCols, 'modern_meaning',   safeQuery).catch(() => [])
-        );
-        // For Ge'ez, also search Tigrinya / Amharic columns if they exist
-        if (isGeez) {
-          waTasks.push(sbSearch('word_analysis', waCols, 'meaning_evolution', safeQuery).catch(() => []));
+
+      if (isArabic) {
+        // Arabic typed → direct word_analysis lookup
+        const waAll = (await Promise.all([
+          sbSearch('word_analysis', waCols, 'arabic_word', safeQuery).catch(() => []),
+          sbSearch('word_analysis', waCols, 'root_word',   safeQuery).catch(() => [])
+        ])).flat();
+        const seen = new Set();
+        arabicMatches = waAll.filter(r => {
+          if (!r.arabic_word) return false;
+          const key = r.arabic_word.replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g, '');
+          if (seen.has(key)) return false; seen.add(key); return true;
+        }).slice(0, 12);
+
+      } else if (isGeez) {
+        // Tigrinya / Amharic typed:
+        // Step A — find matching verses by searching aya_text (Tigrinya) and amharic columns
+        const geezVariants = searchVariants(safeQuery);
+        const ayasTasks = [];
+        for (const v of geezVariants) {
+          ayasTasks.push(
+            sbSearch('ayas', 'sura_id,aya_number,arabic', 'aya_text', v).catch(() => []),
+            sbSearch('ayas', 'sura_id,aya_number,arabic', 'amharic',  v).catch(() => [])
+          );
         }
+        const geezAyas = (await Promise.all(ayasTasks)).flat();
+        // Deduplicate and collect unique Arabic words found in those verses
+        const arabicWords = new Set();
+        geezAyas.forEach(r => {
+          if (!r.arabic) return;
+          // Split Arabic verse into individual words (split on spaces, strip diacritics)
+          r.arabic.split(/\s+/).forEach(w => {
+            const clean = w.replace(/[\u064B-\u065F\u0670\u06D6-\u06ED\u060C\u061B\u061F]/g, '').trim();
+            if (clean.length >= 2) arabicWords.add(clean);
+          });
+        });
+        // Step B — look those Arabic words up in word_analysis to get root + meaning
+        if (arabicWords.size > 0) {
+          // Take top 6 most common words to avoid too many API calls
+          const wordList = [...arabicWords].slice(0, 6);
+          const lookupTasks = wordList.map(w =>
+            sbSearch('word_analysis', waCols, 'arabic_word', w).catch(() => [])
+          );
+          const looked = (await Promise.all(lookupTasks)).flat();
+          const seen = new Set();
+          arabicMatches = looked.filter(r => {
+            if (!r.arabic_word) return false;
+            const key = r.arabic_word.replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g, '');
+            if (seen.has(key)) return false; seen.add(key); return true;
+          }).slice(0, 12);
+        }
+
+        // Step C — if word_analysis lookup found nothing, still show Arabic text
+        // from the matched verses as chips (raw, without root data)
+        if (!arabicMatches.length && geezAyas.length > 0) {
+          const seen = new Set();
+          geezAyas.forEach(r => {
+            if (!r.arabic) return;
+            r.arabic.split(/\s+/).slice(0, 3).forEach(w => {
+              const clean = w.replace(/[\u064B-\u065F\u0670\u06D6-\u06ED\u060C\u061B\u061F]/g, '').trim();
+              if (clean.length >= 3 && !seen.has(clean)) {
+                seen.add(clean);
+                arabicMatches.push({ arabic_word: clean, root_word: '', original_meaning: '' });
+              }
+            });
+          });
+          arabicMatches = arabicMatches.slice(0, 8);
+        }
+
       } else {
-        // Arabic typed → look it up directly too
-        waTasks.push(sbSearch('word_analysis', waCols, 'arabic_word', safeQuery).catch(() => []));
-        waTasks.push(sbSearch('word_analysis', waCols, 'root_word',   safeQuery).catch(() => []));
+        // Latin / English → search word_analysis meaning columns
+        const waAll = (await Promise.all([
+          sbSearch('word_analysis', waCols, 'original_meaning', safeQuery).catch(() => []),
+          sbSearch('word_analysis', waCols, 'modern_meaning',   safeQuery).catch(() => []),
+          sbSearch('word_analysis', waCols, 'meaning_evolution', safeQuery).catch(() => [])
+        ])).flat();
+        const seen = new Set();
+        arabicMatches = waAll.filter(r => {
+          if (!r.arabic_word) return false;
+          const key = r.arabic_word.replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g, '');
+          if (seen.has(key)) return false; seen.add(key); return true;
+        }).slice(0, 12);
       }
-      const waAll = (await Promise.all(waTasks)).flat();
-      const waSeen = new Set();
-      arabicMatches = waAll.filter(r => {
-        if (!r.arabic_word) return false;
-        // Strip diacritics for dedup key
-        const key = r.arabic_word.replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g, '');
-        if (waSeen.has(key)) return false;
-        waSeen.add(key);
-        return true;
-      }).slice(0, 12); // cap at 12 distinct Arabic words
     } catch(e) { arabicMatches = []; }
 
     // Build the set of Arabic words to highlight (stripped of diacritics for matching)
@@ -1927,7 +1990,7 @@ async function runWordSearch(query) {
       r.arabic_word.replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g, '')
     ).filter(w => w.length >= 2);
 
-    // ── STEP 2: Verse search (same as before, across all languages) ───────
+    // ── STEP 2: Verse search across all languages ───────────────────────────
     let searchTerms = [];
     if (safeQuery.includes(' ')) {
       const words = safeQuery.split(/\s+/).filter(w => w.length >= 3);
@@ -1948,12 +2011,19 @@ async function runWordSearch(query) {
       } catch { return []; }
     };
 
+    // For Ge'ez input: prioritize aya_text (Tigrinya) and amharic columns first
+    // For Latin: prioritize english
+    // For Arabic: prioritize arabic column
+    let cols;
+    if (isGeez)   cols = ['aya_text', 'amharic', 'english', 'arabic', 'oromo', 'somali'];
+    else if (isArabic) cols = ['arabic', 'aya_text', 'amharic', 'english', 'oromo', 'somali'];
+    else               cols = ['english', 'aya_text', 'amharic', 'arabic', 'oromo', 'somali'];
+
     // Also search ayas.arabic for any matched Arabic words directly
     const arabicWordTasks = arabicHighlightSet.slice(0, 4).map(aw =>
       searchOne('arabic', aw)
     );
 
-    const cols = ['english', 'aya_text', 'amharic', 'arabic', 'oromo', 'somali'];
     const tasks = [];
     for (const v of variants) {
       for (const c of cols) { tasks.push(searchOne(c, v)); }
