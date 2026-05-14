@@ -113,6 +113,26 @@ background-repeat:no-repeat;background-size:contain;pointer-events:none;}
 .card-header{padding:9px 14px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--p1);background:var(--p1);}
 .source-pill{display:inline-flex;align-items:center;gap:3px;padding:2px 9px;border-radius:2px;font-family:'Inconsolata',monospace;font-size:9px;font-weight:400;letter-spacing:.12em;text-transform:uppercase;}
 .pill-hadith{background:var(--hadith-bg);color:var(--hadith);border:1px solid var(--hadith-border);}
+/* ── HADITH ANALYSIS SCORES ── */
+.analysis-scores{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 4px;}
+.score-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700;}
+.score-hr-high{background:#D5F5E3;color:#1A7A48;border:1px solid #81C784;}
+.score-hr-mid{background:#FFF3CD;color:#8B6914;border:1px solid #F0D060;}
+.score-hr-low{background:#FDEBD0;color:#C0621A;border:1px solid #E0A060;}
+.score-sci-high{background:#D4E6F1;color:#1F618D;border:1px solid #85C1E9;}
+.score-sci-mid{background:#F3E5F5;color:#6A1B9A;border:1px solid #CE93D8;}
+.score-sci-low{background:#FDEBD0;color:#C0621A;border:1px solid #E0A060;}
+.score-grade-sahih{background:#D5F5E3;color:#1A7A48;border:1px solid #81C784;}
+.score-grade-hasan{background:#FFF3CD;color:#8B6914;border:1px solid #F0D060;}
+.score-grade-daif{background:#FDEBD0;color:#C0621A;border:1px solid #E0A060;}
+.score-grade-unknown{background:#F0F0F0;color:#666;border:1px solid #CCC;}
+.analysis-panel{margin-top:8px;padding:10px 12px;background:#FAFAF7;border:1px solid #E8E4DC;border-radius:8px;font-size:12px;line-height:1.7;color:#333;}
+.analysis-section{margin-bottom:10px;}
+.analysis-section:last-child{margin-bottom:0;}
+.analysis-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--gold);margin-bottom:4px;}
+.analysis-text{color:#333;line-height:1.7;}
+.analysis-toggle{font-size:11px;color:var(--gold);background:none;border:none;cursor:pointer;padding:2px 0;font-weight:700;}
+.analysis-toggle:hover{text-decoration:underline;}
 .pill-tafsir{background:var(--tafsir-bg);color:var(--tafsir);border:1px solid var(--tafsir-border);}
 .pill-asbab{background:var(--bronze-ss);color:var(--bronze);border:1px solid var(--bronze-s);}
 .trad-pill{display:inline-block;padding:2px 8px;border-radius:2px;font-family:'Inconsolata',monospace;font-size:9px;letter-spacing:.08em;text-transform:uppercase;}
@@ -1169,8 +1189,111 @@ function renderResults(exactResults, relatedResults, q, relatedTerms) {
   }
 
   container.innerHTML = html;
+  // Async: fetch hadith analysis scores and inject badges into hadith cards
+  setTimeout(() => injectAnalysisScores(), 150);
 }
 
+// ── HADITH ANALYSIS ─────────────────────────────────────────────────────
+// Fetches from hadith_analysis table by hadith_id. Cached per session.
+const _analysisCache = {};
+
+async function fetchAnalysis(hadithId) {
+  if (!hadithId) return null;
+  if (_analysisCache[hadithId] !== undefined) return _analysisCache[hadithId];
+  try {
+    const url = `${SB_URL}/rest/v1/hadith_analysis?hadith_id=eq.${hadithId}&select=*&limit=1`;
+    const res = await fetch(url, {headers: hdrs});
+    const rows = await res.json();
+    _analysisCache[hadithId] = rows && rows.length ? rows[0] : null;
+  } catch(e) {
+    _analysisCache[hadithId] = null;
+  }
+  return _analysisCache[hadithId];
+}
+
+function scoreClass(score, type) {
+  if (!score && score !== 0) return type === 'hr' ? 'score-hr-mid' : 'score-sci-mid';
+  const n = parseFloat(score);
+  if (n >= 7.5) return type === 'hr' ? 'score-hr-high' : 'score-sci-high';
+  if (n >= 5)   return type === 'hr' ? 'score-hr-mid'  : 'score-sci-mid';
+  return type === 'hr' ? 'score-hr-low' : 'score-sci-low';
+}
+
+function gradeClass(grade) {
+  if (!grade) return 'score-grade-unknown';
+  const g = grade.toLowerCase();
+  if (g.includes('sahih')) return 'score-grade-sahih';
+  if (g.includes('hasan')) return 'score-grade-hasan';
+  if (g.includes('da') || g.includes('weak')) return 'score-grade-daif';
+  return 'score-grade-unknown';
+}
+
+function renderAnalysisScores(a) {
+  if (!a) return '';
+  const hr = a.human_rights_score;
+  const sci = a.scientific_score;
+  const grade = a.authenticity_grade;
+  const badges = [];
+  if (grade) badges.push(`<span class="score-badge ${gradeClass(grade)}" title="Authenticity grade">📜 ${esc(grade)}</span>`);
+  if (hr != null) badges.push(`<span class="score-badge ${scoreClass(hr,'hr')}" title="Human Rights compatibility score">⚖️ HR: ${hr}/10</span>`);
+  if (sci != null) badges.push(`<span class="score-badge ${scoreClass(sci,'sci')}" title="Scientific compatibility score">🔬 Sci: ${sci}/10</span>`);
+  if (!badges.length) return '';
+  return `<div class="analysis-scores">${badges.join('')}</div>`;
+}
+
+function renderAnalysisPanel(a, cardId) {
+  if (!a) return '';
+  const sections = [
+    ['Common Sense', a.common_sense_analysis],
+    ['Historical Context', a.historical_context],
+    ['Human Rights', a.human_rights_analysis],
+    ['Human Dignity', a.human_dignity_analysis],
+    ["Women's Rights", a.womens_rights_analysis],
+    ['Science', a.scientific_compatibility],
+    ['Universal vs Specific', a.universal_vs_specific],
+    ['Sunni Interpretation', a.sunni_interpretation],
+    ['Shia Interpretation', a.shia_interpretation],
+    ['Scholarly Debate', a.scholarly_debate],
+    ['Potential Concerns', a.potential_concerns],
+    ['Universal Principles', a.universal_principles],
+  ].filter(([, v]) => v && v.trim());
+
+  if (!sections.length) return '';
+  const inner = sections.map(([label, text]) =>
+    `<div class="analysis-section">
+      <div class="analysis-label">${label}</div>
+      <div class="analysis-text">${esc(text)}</div>
+    </div>`
+  ).join('');
+  return `<div class="analysis-panel" id="ap-${cardId}" style="display:none">
+    <div style="font-size:11px;color:#888;margin-bottom:10px;font-style:italic">⚠ AI-generated analysis for scholarly discussion. Not an authoritative religious ruling.</div>
+    ${inner}
+  </div>
+  <button class="analysis-toggle" onclick="toggleAnalysis('${cardId}')">📊 Show analysis ▼</button>`;
+}
+
+function toggleAnalysis(cardId) {
+  const panel = document.getElementById('ap-' + cardId);
+  const btn = panel ? panel.nextElementSibling : null;
+  if (!panel) return;
+  const open = panel.style.display !== 'none';
+  panel.style.display = open ? 'none' : 'block';
+  if (btn) btn.textContent = open ? '📊 Show analysis ▼' : '📊 Hide analysis ▲';
+}
+
+// After cards render, fetch analysis for each visible hadith card and inject badges
+async function injectAnalysisScores() {
+  const cards = document.querySelectorAll('.result-card[data-hadith-id]');
+  for (const card of cards) {
+    const hadithId = card.dataset.hadithId;
+    const a = await fetchAnalysis(hadithId);
+    const scoresEl = card.querySelector('.analysis-scores-placeholder');
+    const panelEl = card.querySelector('.analysis-panel-placeholder');
+    const cardId = card.id.replace('card-', '');
+    if (scoresEl) scoresEl.outerHTML = renderAnalysisScores(a);
+    if (panelEl) panelEl.outerHTML = renderAnalysisPanel(a, cardId);
+  }
+}
 
 function buildCard(r, q, isRelated) {
   // Hadith now comes from two tables (hadith_connections + hadith_corpus); the
@@ -1196,6 +1319,9 @@ function buildCard(r, q, isRelated) {
     if (r.reference) meta.push(`📖 ${r.reference}`);
     if (r.similarity_note) meta.push(`Similarity: ${r.similarity_note}`);
     metaLine = meta.length ? `<div class="card-meta">${meta.map(esc).join(' · ')}</div>` : '';
+    // Analysis placeholders — filled asynchronously by injectAnalysisScores()
+    metaLine += `<div class="analysis-scores-placeholder"></div>
+    <div class="analysis-panel-placeholder"></div>`;
   } else if (r.type === 'sira') {
     typePill = `<span class="source-pill pill-sira" style="background:#7B4F2E;color:#fff;padding:2px 8px;border-radius:10px;font-size:10px;">📖 Sīra</span>`;
     scholarLine = `<div class="card-scholar">${esc(r.title_en||'')}</div>`;
@@ -1231,7 +1357,7 @@ function buildCard(r, q, isRelated) {
   const relatedBadge = isRelated
     ? '<span style="background:#F3E5F5;color:#6A1B9A;border:1px solid #CE93D8;border-radius:10px;font-size:9px;font-weight:700;padding:2px 7px;letter-spacing:0.3px;">🔗 RELATED</span>'
     : '';
-  return `<div class="result-card" id="card-${id}">
+  return `<div class="result-card" id="card-${id}" ${r.type === 'hadith' && r.id ? `data-hadith-id="${r.id}"` : ''}>
     <div class="card-header">
       ${typePill}
       ${tradPill}
