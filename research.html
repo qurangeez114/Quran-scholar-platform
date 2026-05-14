@@ -1303,9 +1303,10 @@ function buildCard(r, q, isRelated) {
   const noteText = getNote(id);
   const suraRef = r.sura || r.sura_id;
   const ayaRef = r.aya || r.aya_number;
+  const currentQ = document.getElementById('searchInput')?.value || '';
   const verseUrl = (r.type === 'sira')
     ? `research.html?sira=${encodeURIComponent(r.title_en||'')}`
-    : suraRef ? `index.html?sura=${suraRef}&aya=${ayaRef}&from=research` : `index.html`;
+    : suraRef ? `index.html?sura=${suraRef}&aya=${ayaRef}&from=research&q=${encodeURIComponent(currentQ)}&source=${encodeURIComponent(currentSource||'all')}` : `index.html`;
 
   let typePill = '', scholarLine = '', arabicBlock = '', textBlock = '', metaLine = '';
 
@@ -1357,7 +1358,7 @@ function buildCard(r, q, isRelated) {
   const relatedBadge = isRelated
     ? '<span style="background:#F3E5F5;color:#6A1B9A;border:1px solid #CE93D8;border-radius:10px;font-size:9px;font-weight:700;padding:2px 7px;letter-spacing:0.3px;">🔗 RELATED</span>'
     : '';
-  return `<div class="result-card" id="card-${id}" ${r.type === 'hadith' && r.id ? `data-hadith-id="${r.id}"` : ''}>
+  return `<div class="result-card" id="card-${id}" ${r.type === 'hadith' && r._tbl === 'corpus' && r.id ? `data-hadith-id="${r.id}"` : ''}>
     <div class="card-header">
       ${typePill}
       ${tradPill}
@@ -1831,8 +1832,8 @@ function renderSiraTimeline(events, relatedEvents, q, relatedTerms) {
       const vms = _siraMapsBySira[ev.id] || [];
       const verseChips = vms.map(vm =>
         vm.applies_to_full_sura
-          ? `<span class="sira-verse-chip" onclick="location.href='index.html?sura=${vm.sura}&from=research'">📖 ${vm.sura}:all</span>`
-          : `<span class="sira-verse-chip" onclick="location.href='index.html?sura=${vm.sura}&from=research&aya=${vm.aya}'">📖 ${vm.sura}:${vm.aya}</span>`
+          ? `<span class="sira-verse-chip" onclick="location.href='index.html?sura=${vm.sura}&from=research&source=sira'">📖 ${vm.sura}:all</span>`
+          : `<span class="sira-verse-chip" onclick="location.href='index.html?sura=${vm.sura}&from=research&aya=${vm.aya}&source=sira'">📖 ${vm.sura}:${vm.aya}</span>`
       ).join('');
 
       const titleEn = q ? highlightSira(ev.title_en||'', q) : (ev.title_en||'');
@@ -1939,6 +1940,31 @@ function toggleSiraEvent(card) {
   body.classList.toggle('open');
   if (arrow) arrow.style.transform = isOpen ? '' : 'rotate(90deg)';
 }
+
+// On page load: if we're returning from a verse (?q=... in URL), restore the search
+(function restoreSearchOnReturn() {
+  const params = new URLSearchParams(window.location.search);
+  const q = params.get('q');
+  const source = params.get('source');
+  const sira = params.get('sira');
+  if (q) {
+    const input = document.getElementById('searchInput');
+    if (input) {
+      input.value = q;
+      // Restore source tab if present
+      if (source && source !== 'all') {
+        const tab = document.querySelector(`.source-tab.${source}`);
+        if (tab) { setSource(source, tab); }
+      }
+      // Auto-run the search so results appear immediately
+      setTimeout(() => doSearch(), 300);
+    }
+  } else if (sira) {
+    // Returned from a Sira-linked verse — open Sira panel
+    const siraTab = document.querySelector('.source-tab.sira');
+    if (siraTab) { setSource('sira', siraTab); loadSiraResearch(); }
+  }
+})();
 </script>
 </body>
 </html>

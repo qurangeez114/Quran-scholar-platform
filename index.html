@@ -791,20 +791,35 @@ async function init() {
     allSuras = suras;
     renderSuraList(allSuras);
     if (urlSura && urlSura >= 1 && urlSura <= 114) {
-      // Came from research page — show back button
+      // Came from research page — show back button and navigation trail
       const backBtn = document.getElementById('backBtn');
-      const fromResearch = urlParams.get('from') === 'research' || document.referrer.includes('research');
-      if (backBtn) {
-        backBtn.style.display = 'block';
-        backBtn.textContent = '← Research';
-        backBtn.onclick = () => {
-          if (document.referrer && document.referrer.includes('research')) {
-            window.history.back();
-          } else {
-            window.location.href = 'research.html';
-          }
-        };
+      const fromParam = urlParams.get('from');
+      const fromSearch = urlParams.get('q') || '';
+      const fromSource = urlParams.get('source') || '';
+
+      if (backBtn && (fromParam === 'research' || fromParam === 'verse')) {
+        backBtn.style.display = 'flex';
+
+        if (fromParam === 'research') {
+          // Always navigate back to research — history.back() is unreliable on mobile
+          backBtn.textContent = '← Research';
+          backBtn.title = 'Back to Research Library';
+          backBtn.onclick = () => {
+            // Restore research state if we saved it
+            window.location.href = 'research.html' + (fromSearch ? `?q=${encodeURIComponent(fromSearch)}&source=${fromSource}` : '');
+          };
+        } else if (fromParam === 'verse') {
+          // Came from another verse (cross-reference navigation)
+          const fromSura = parseInt(urlParams.get('fromSura') || '0');
+          const fromAya  = parseInt(urlParams.get('fromAya')  || '0');
+          backBtn.textContent = fromSura && fromAya ? `← ${fromSura}:${fromAya}` : '← Back';
+          backBtn.title = fromSura && fromAya ? `Back to verse ${fromSura}:${fromAya}` : 'Back';
+          backBtn.onclick = () => {
+            window.location.href = `index.html?sura=${fromSura}&aya=${fromAya}`;
+          };
+        }
       }
+
       await loadSura(urlSura);
       if (urlAya) {
         setTimeout(() => {
