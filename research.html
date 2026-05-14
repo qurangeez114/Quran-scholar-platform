@@ -113,6 +113,22 @@ background-repeat:no-repeat;background-size:contain;pointer-events:none;}
 .card-header{padding:9px 14px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--p1);background:var(--p1);}
 .source-pill{display:inline-flex;align-items:center;gap:3px;padding:2px 9px;border-radius:2px;font-family:'Inconsolata',monospace;font-size:9px;font-weight:400;letter-spacing:.12em;text-transform:uppercase;}
 .pill-hadith{background:var(--hadith-bg);color:var(--hadith);border:1px solid var(--hadith-border);}
+/* ── TOPIC ANALYSIS PANEL ── */
+.ta-section{margin-bottom:14px;}
+.ta-section:last-child{margin-bottom:0;}
+.ta-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--gold);margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid var(--gold-border);}
+.ta-text{font-size:13px;line-height:1.8;color:#2A2A2A;}
+.ta-can{background:#F0FFF4;border-left:3px solid #2E7D32;padding:8px 10px;border-radius:0 6px 6px 0;}
+.ta-cant{background:#FFF8F0;border-left:3px solid #C0621A;padding:8px 10px;border-radius:0 6px 6px 0;}
+.ta-contradiction{background:#fff;border:1px solid #E8E4DC;border-radius:8px;margin-bottom:10px;overflow:hidden;}
+.ta-contra-row{display:grid;grid-template-columns:1fr auto 1fr;gap:0;}
+.ta-contra-cell{padding:12px 14px;}
+.ta-cell-a{background:#E8F4FD;border-right:1px solid #E8E4DC;}
+.ta-cell-b{background:#FDEBD0;}
+.ta-contra-vs{display:flex;align-items:center;justify-content:center;padding:0 8px;font-size:10px;font-weight:700;color:#888;background:#F8F5EE;}
+.ta-cell-source{font-size:10px;font-weight:700;color:#666;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.3px;}
+.ta-cell-claim{font-size:12px;color:#111;line-height:1.6;font-style:italic;}
+.ta-conflict{padding:10px 14px;font-size:12px;color:#4A3B28;line-height:1.7;border-top:1px solid #E8E4DC;background:#FAFAF7;}
 /* ── HADITH ANALYSIS SCORES ── */
 .analysis-scores{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 4px;}
 .score-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700;}
@@ -678,6 +694,24 @@ async function runAIResearch() {
     <div class="results-count" id="resultsCount"></div>
     <button onclick="exportResults()" style="padding:4px 11px;border:1px solid var(--p2);border-radius:2px;background:transparent;font-family:'Inconsolata',monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--bronze-l);cursor:pointer;">Export</button>
   </div>
+
+  <!-- TOPIC ANALYSIS PANEL — shown after search, expanded on demand -->
+  <div id="topicAnalysisPanel" style="display:none;margin-bottom:16px;border-radius:10px;overflow:hidden;border:2px solid var(--gold-border);background:linear-gradient(135deg,#FDF8EE,#F8F0DC);">
+    <!-- Summary bar — always visible after search -->
+    <div id="topicAnalysisSummary" style="padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;cursor:pointer;" onclick="toggleTopicAnalysis()">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <span style="font-size:13px;font-weight:700;color:#4A3B28">🔬 Topic Analysis</span>
+        <span id="topicAnalysisStats" style="font-size:12px;color:#8B7355"></span>
+        <span id="topicAnalysisCached" style="font-size:10px;color:#2E7D32;font-weight:700;display:none">✓ Cached</span>
+      </div>
+      <button id="topicAnalysisBtn" onclick="event.stopPropagation();runTopicAnalysis()" style="padding:7px 16px;background:var(--gold);color:#fff;border:none;border-radius:20px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;">Analyze these results ▶</button>
+    </div>
+    <!-- Full analysis — shown after Claude responds -->
+    <div id="topicAnalysisContent" style="display:none;padding:0 16px 16px;border-top:1px solid var(--gold-border);">
+      <div id="topicAnalysisBody"></div>
+    </div>
+  </div>
+
   <div id="resultsContainer">
     <div class="empty-state">
       <div class="empty-icon">📚</div>
@@ -1189,6 +1223,8 @@ function renderResults(exactResults, relatedResults, q, relatedTerms) {
   }
 
   container.innerHTML = html;
+  // Show topic analysis panel for hadith results
+  showTopicAnalysisPanel(allResults, q);
   // Async: fetch hadith analysis scores and inject badges into hadith cards
   setTimeout(() => injectAnalysisScores(), 150);
 }
@@ -1931,6 +1967,275 @@ function highlightSira(text, q) {
   if (!text || !q) return text;
   const escaped = q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
   return text.replace(new RegExp(`(${escaped})`, 'gi'), '<mark class="hl-yellow">$1</mark>');
+}
+
+// ── TOPIC ANALYSIS ──────────────────────────────────────────────────────────
+// Analyzes all hadith results for the current search topic using Claude API.
+// Results are cached in the topic_analysis Supabase table so repeat searches
+// return instantly without another API call.
+
+let _currentAnalysisResults = [];  // hadiths from last search, for analysis
+let _analysisRunning = false;
+
+// Called after every search — shows the panel with stats and Analyze button
+function showTopicAnalysisPanel(results, query) {
+  const panel    = document.getElementById('topicAnalysisPanel');
+  const stats    = document.getElementById('topicAnalysisStats');
+  const btn      = document.getElementById('topicAnalysisBtn');
+  const content  = document.getElementById('topicAnalysisContent');
+  const body     = document.getElementById('topicAnalysisBody');
+  const cached   = document.getElementById('topicAnalysisCached');
+
+  if (!panel || !query || query.trim().length < 2) {
+    if (panel) panel.style.display = 'none';
+    return;
+  }
+
+  // Only show for hadith-type results
+  const hadithResults = results.filter(r => r.type === 'hadith');
+  if (!hadithResults.length) { panel.style.display = 'none'; return; }
+
+  _currentAnalysisResults = hadithResults;
+  _analysisRunning = false;
+
+  // Build stats line
+  const collections = [...new Set(hadithResults.map(r => r.collection).filter(Boolean))];
+  const sunni = hadithResults.filter(r => (r.tradition||'').toLowerCase().includes('sunni')).length;
+  const shia  = hadithResults.filter(r => (r.tradition||'').toLowerCase().includes('shia')).length;
+  stats.textContent = `${hadithResults.length} hadiths · ${collections.length} collections · ${sunni} Sunni · ${shia} Shia`;
+  cached.style.display = 'none';
+  content.style.display = 'none';
+  body.innerHTML = '';
+  btn.textContent = 'Analyze these results ▶';
+  btn.disabled = false;
+  panel.style.display = 'block';
+
+  // Check if we have a cached analysis for this topic
+  checkCachedAnalysis(query.trim().toLowerCase());
+}
+
+async function checkCachedAnalysis(topic) {
+  const btn    = document.getElementById('topicAnalysisBtn');
+  const cached = document.getElementById('topicAnalysisCached');
+  try {
+    const url = `${SB_URL}/rest/v1/topic_analysis?topic=eq.${encodeURIComponent(topic)}&select=*&limit=1`;
+    const res = await fetch(url, {headers: hdrs});
+    const rows = await res.json();
+    if (rows && rows.length) {
+      cached.style.display = 'inline';
+      btn.textContent = 'Show cached analysis ▶';
+      btn.onclick = () => { btn.disabled = true; renderAnalysis(rows[0], true); };
+    }
+  } catch(e) { /* silent */ }
+}
+
+function toggleTopicAnalysis() {
+  const content = document.getElementById('topicAnalysisContent');
+  if (!content) return;
+  if (content.innerHTML.trim() && content.style.display !== 'none') {
+    content.style.display = 'none';
+  } else if (content.innerHTML.trim()) {
+    content.style.display = 'block';
+  }
+}
+
+async function runTopicAnalysis() {
+  if (_analysisRunning) return;
+  _analysisRunning = true;
+
+  const btn    = document.getElementById('topicAnalysisBtn');
+  const content = document.getElementById('topicAnalysisContent');
+  const body   = document.getElementById('topicAnalysisBody');
+  const q      = document.getElementById('searchInput')?.value?.trim() || '';
+
+  btn.textContent = '⏳ Analyzing...';
+  btn.disabled = true;
+  content.style.display = 'block';
+  body.innerHTML = `<div style="padding:20px;text-align:center;color:#8B7355;font-style:italic">
+    <span class="spinner"></span> Claude is reading ${_currentAnalysisResults.length} hadiths about "${esc(q)}"...<br>
+    <span style="font-size:11px;margin-top:6px;display:block">Identifying consensus, contradictions, and conclusions</span>
+  </div>`;
+
+  try {
+    // Check cache first
+    const cacheUrl = `${SB_URL}/rest/v1/topic_analysis?topic=eq.${encodeURIComponent(q.toLowerCase())}&select=*&limit=1`;
+    const cacheRes = await fetch(cacheUrl, {headers: hdrs});
+    const cached   = await cacheRes.json();
+    if (cached && cached.length) {
+      renderAnalysis(cached[0], true);
+      _analysisRunning = false;
+      return;
+    }
+
+    // Build hadith block for Claude
+    const top = _currentAnalysisResults.slice(0, 25);
+    const hadithBlock = top.map((h, i) =>
+      `HADITH ${i+1} — ${h.collection||'?'} (${h.tradition||'?'}) Grade:${h.hadith_grade||'?'}\n` +
+      `${(h.hadith_text||'').slice(0, 350)}`
+    ).join('\n\n');
+
+    const prompt = `You are an Islamic studies scholar. A researcher searched for "${q}" and found ${_currentAnalysisResults.length} hadiths. Analyze the following ${top.length} representative hadiths.
+
+${hadithBlock}
+
+Respond ONLY with valid JSON (no markdown, no preamble):
+{
+  "consensus": "What most hadiths agree on (2-3 sentences)",
+  "contradictions": [
+    {
+      "hadith_a": "Collection + key claim of first position",
+      "hadith_b": "Collection + key claim of contradicting position",
+      "idea_a": "Exact claim A (one sentence)",
+      "idea_b": "Exact claim B (one sentence)",
+      "conflict": "Why these conflict and what it means"
+    }
+  ],
+  "hr_verdict": "Honest assessment of these hadiths against human rights values: dignity, equality, freedom, justice. Note both aligned and problematic aspects.",
+  "science_verdict": "Honest assessment against modern scientific understanding.",
+  "conclusion_can": "What a scholar CAN honestly conclude from this evidence",
+  "conclusion_cant": "What a scholar CANNOT conclude — where evidence is insufficient or contradicted",
+  "quran_verses": ["verse references like 2:188 connected to this topic"]
+}`;
+
+    const claudeRes = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 2000,
+        messages: [{ role: "user", content: prompt }]
+      })
+    });
+
+    const claudeData = await claudeRes.json();
+    let text = claudeData?.content?.[0]?.text || '';
+    text = text.replace(/```json|```/g, '').trim();
+    const analysis = JSON.parse(text);
+
+    // Build the result object matching topic_analysis schema
+    const collections = [...new Set(top.map(r=>r.collection).filter(Boolean))];
+    const result = {
+      topic: q.toLowerCase(),
+      hadith_count: _currentAnalysisResults.length,
+      collections,
+      ...analysis
+    };
+
+    renderAnalysis(result, false);
+
+    // Save to Supabase in background (don't await — don't block the UI)
+    saveTopicAnalysis(result);
+
+  } catch(err) {
+    body.innerHTML = `<div style="padding:16px;color:#A02020;font-size:13px">Analysis failed: ${err.message}. Check your connection and try again.</div>`;
+    btn.textContent = 'Retry ▶';
+    btn.disabled = false;
+    _analysisRunning = false;
+  }
+}
+
+function renderAnalysis(a, fromCache) {
+  const body = document.getElementById('topicAnalysisBody');
+  const btn  = document.getElementById('topicAnalysisBtn');
+  const cached = document.getElementById('topicAnalysisCached');
+
+  if (fromCache) cached.style.display = 'inline';
+  btn.textContent = 'Hide analysis ▲';
+  btn.disabled = false;
+  btn.onclick = toggleTopicAnalysis;
+
+  const contradictions = typeof a.contradictions === 'string'
+    ? JSON.parse(a.contradictions || '[]')
+    : (a.contradictions || []);
+
+  const contSection = contradictions.length ? `
+    <div class="ta-section">
+      <div class="ta-label">⚡ Contradictions Found (${contradictions.length})</div>
+      ${contradictions.map(c => `
+        <div class="ta-contradiction">
+          <div class="ta-contra-row">
+            <div class="ta-contra-cell ta-cell-a">
+              <div class="ta-cell-source">${esc(c.hadith_a||'')}</div>
+              <div class="ta-cell-claim">"${esc(c.idea_a||'')}"</div>
+            </div>
+            <div class="ta-contra-vs">VS</div>
+            <div class="ta-contra-cell ta-cell-b">
+              <div class="ta-cell-source">${esc(c.hadith_b||'')}</div>
+              <div class="ta-cell-claim">"${esc(c.idea_b||'')}"</div>
+            </div>
+          </div>
+          <div class="ta-conflict">${esc(c.conflict||'')}</div>
+        </div>`).join('')}
+    </div>` : '';
+
+  const verses = (a.quran_verses||[]);
+  const verseChips = verses.length ? `
+    <div class="ta-section">
+      <div class="ta-label">📖 Connected Quran Verses</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+        ${verses.map(v => {
+          const parts = String(v).split(':');
+          const s = parseInt(parts[0]), ay = parseInt(parts[1]);
+          if (!s) return '';
+          const q2 = encodeURIComponent(document.getElementById('searchInput')?.value||'');
+          return `<a href="index.html?sura=${s}&aya=${ay||1}&from=research&q=${q2}&source=${encodeURIComponent(currentSource||'all')}"
+                    style="display:inline-block;background:#FDF5DE;border:1px solid var(--gold-border);border-radius:12px;padding:4px 12px;font-size:12px;font-weight:700;color:var(--gold);text-decoration:none"
+                    title="Open verse ${v} in Quran reader">📖 ${esc(v)}</a>`;
+        }).join('')}
+      </div>
+    </div>` : '';
+
+  const avgRow = (a.avg_hr_score || a.avg_sci_score) ? `
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+      ${a.avg_hr_score  != null ? `<span class="score-badge ${scoreClass(a.avg_hr_score,'hr')}">⚖️ Avg HR: ${a.avg_hr_score}/10</span>` : ''}
+      ${a.avg_sci_score != null ? `<span class="score-badge ${scoreClass(a.avg_sci_score,'sci')}">🔬 Avg Sci: ${a.avg_sci_score}/10</span>` : ''}
+      ${a.hadith_count  != null ? `<span class="score-badge" style="background:#F0F0F0;color:#444;border:1px solid #CCC">📜 ${a.hadith_count} hadiths</span>` : ''}
+    </div>` : '';
+
+  body.innerHTML = `
+    <div style="padding-top:14px">
+      ${fromCache ? '<div style="font-size:10px;color:#2E7D32;font-weight:700;margin-bottom:10px">✓ Cached analysis — instant result</div>' : ''}
+      ${avgRow}
+      ${a.consensus ? `<div class="ta-section"><div class="ta-label">✅ Consensus</div><div class="ta-text">${esc(a.consensus)}</div></div>` : ''}
+      ${contSection}
+      ${a.conclusion_can  ? `<div class="ta-section"><div class="ta-label">✓ What CAN be concluded</div><div class="ta-text ta-can">${esc(a.conclusion_can)}</div></div>` : ''}
+      ${a.conclusion_cant ? `<div class="ta-section"><div class="ta-label">✗ What CANNOT be concluded</div><div class="ta-text ta-cant">${esc(a.conclusion_cant)}</div></div>` : ''}
+      ${a.hr_verdict      ? `<div class="ta-section"><div class="ta-label">⚖️ Human Rights Assessment</div><div class="ta-text">${esc(a.hr_verdict)}</div></div>` : ''}
+      ${a.science_verdict ? `<div class="ta-section"><div class="ta-label">🔬 Science Assessment</div><div class="ta-text">${esc(a.science_verdict)}</div></div>` : ''}
+      ${verseChips}
+      <div style="font-size:10px;color:#AAA;margin-top:12px;font-style:italic">AI-generated scholarly analysis. Not an authoritative religious ruling. Verify with qualified scholars.</div>
+    </div>`;
+
+  _analysisRunning = false;
+}
+
+async function saveTopicAnalysis(result) {
+  // Save silently in background — failures are non-critical
+  try {
+    const saveHdrs = {...hdrs, "Prefer": "resolution=merge-duplicates,return=minimal"};
+    const row = {
+      topic: result.topic,
+      hadith_count: result.hadith_count,
+      collections: result.collections,
+      consensus: result.consensus,
+      contradictions: JSON.stringify(result.contradictions || []),
+      hr_verdict: result.hr_verdict,
+      science_verdict: result.science_verdict,
+      conclusion_can: result.conclusion_can,
+      conclusion_cant: result.conclusion_cant,
+      quran_verses: result.quran_verses || [],
+      avg_hr_score: result.avg_hr_score || null,
+      avg_sci_score: result.avg_sci_score || null,
+    };
+    await fetch(`${SB_URL}/rest/v1/topic_analysis`, {
+      method: "POST",
+      headers: saveHdrs,
+      body: JSON.stringify([row])
+    });
+    // Show cached indicator now that it's saved
+    const cachedEl = document.getElementById('topicAnalysisCached');
+    if (cachedEl) cachedEl.style.display = 'inline';
+  } catch(e) { /* silent — background save failure is not user-visible */ }
 }
 
 function toggleSiraEvent(card) {
