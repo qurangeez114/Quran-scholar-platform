@@ -2312,12 +2312,32 @@ function gotoResult(suraId, ayahNum, evt) {
     const sel = window.getSelection && window.getSelection();
     if (sel && sel.removeAllRanges) sel.removeAllRanges();
   } catch(e) {}
+  // Store the active search query so we can highlight it in the opened verse
+  window._activeSearchQuery = window._lastTopicQuery || document.getElementById('globalSearch')?.value?.trim() || '';
   // Hide search panel, show verse area, navigate
   const sp = document.getElementById('searchResultsPanel');
   if (sp) sp.style.display = 'none';
   const va = document.getElementById('verseArea');
   if (va) va.style.display = '';
-  navToVerse(suraId, ayahNum);
+  navToVerse(suraId, ayahNum).then(() => {
+    if (!window._activeSearchQuery) return;
+    setTimeout(() => {
+      const card = document.getElementById('vc-' + ayahNum);
+      if (!card) return;
+      const q = window._activeSearchQuery;
+      const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(`(${escaped})`, 'gi');
+      // Highlight in all text nodes inside the card
+      card.querySelectorAll('div, p, span').forEach(el => {
+        if (el.children.length > 0) return; // skip parent elements
+        if (!el.textContent.trim()) return;
+        if (regex.test(el.innerHTML)) {
+          el.innerHTML = el.innerHTML.replace(regex,
+            '<mark style="background:#FFE066;color:#1a1a1a;border-radius:3px;padding:0 2px;font-weight:700;">$1</mark>');
+        }
+      });
+    }, 1000);
+  });
 }
 
 // Populate the sidebar list panel (Topic or Lexicon) with a compact list of
