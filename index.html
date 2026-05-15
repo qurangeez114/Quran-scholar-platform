@@ -489,9 +489,19 @@ mark.hl-green  { background:#BAFFC9;border-radius:2px;padding:0 1px; }
 
     <!-- Search Results Panel (overlays verse area) -->
     <div id="searchResultsPanel" style="display:none;flex-direction:column;flex:1;overflow:hidden;background:#FAFAF7;">
-      <div style="padding:12px 24px 8px;border-bottom:1px solid #E8E4DC;background:#fff;display:flex;align-items:center;justify-content:space-between;">
+      <div style="padding:12px 24px 8px;border-bottom:1px solid #E8E4DC;background:#fff;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
         <div id="searchCount" style="font-size:13px;font-weight:700;color:#C9A84C"></div>
-        <button onclick="document.getElementById('searchResultsPanel').style.display='none';document.getElementById('verseArea').style.display='';document.getElementById('globalSearch').value=''" style="padding:4px 12px;border:1px solid #E8E4DC;border-radius:20px;background:#fff;font-size:12px;color:#666;cursor:pointer;">← Back to Sura</button>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button id="analyzeVerseBtn" onclick="analyzeTopicVerses()" style="display:none;padding:5px 14px;background:#C9A84C;color:#fff;border:none;border-radius:20px;font-size:12px;font-weight:700;cursor:pointer;letter-spacing:0.3px;">🔬 Analyze</button>
+          <button onclick="document.getElementById('searchResultsPanel').style.display='none';document.getElementById('verseArea').style.display='';document.getElementById('globalSearch').value=''" style="padding:4px 12px;border:1px solid #E8E4DC;border-radius:20px;background:#fff;font-size:12px;color:#666;cursor:pointer;">← Back to Sura</button>
+        </div>
+      </div>
+      <div id="topicAnalysisPanel" style="display:none;margin:12px 24px;background:#fff;border:1px solid #E8C97B;border-radius:12px;overflow:hidden;">
+        <div style="background:#FDF8EE;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;">
+          <div style="font-size:13px;font-weight:700;color:#C9A84C;">🔬 Quranic Topic Analysis</div>
+          <button onclick="document.getElementById('topicAnalysisPanel').style.display='none'" style="background:none;border:none;color:#999;font-size:16px;cursor:pointer;">✕</button>
+        </div>
+        <div id="topicAnalysisContent" style="padding:16px;font-size:13px;color:#333;line-height:1.7;"></div>
       </div>
       <div id="searchResults" style="overflow-y:auto;flex:1;padding:16px 24px;"></div>
     </div>
@@ -2189,6 +2199,13 @@ async function runWordSearch(query) {
     }).sort((a, b) => a.sura_id - b.sura_id || a.aya_number - b.aya_number);
 
     countDiv.textContent = `${all.length} verse${all.length===1?'':'s'} found for "${query}"`;
+
+    // Store for analysis and show the Analyze button
+    window._lastTopicQuery = query;
+    window._lastTopicVerses = all;
+    const analyzeBtn = document.getElementById('analyzeVerseBtn');
+    if (analyzeBtn) analyzeBtn.style.display = all.length >= 1 ? 'inline-block' : 'none';
+    document.getElementById('topicAnalysisPanel').style.display = 'none';
 
     // Also populate the sidebar reference list if we're in Topic or Lexicon tab.
     renderSidebarRefList(all, query);
@@ -4270,6 +4287,111 @@ async function loadTopicVerses(t) {
 
   } catch(e) {
     resultsDiv.innerHTML = `<div style="color:#C0392B;padding:20px">Error: ${e.message}</div>`;
+  }
+}
+
+async function analyzeTopicVerses() {
+  const query = window._lastTopicQuery || '';
+  const verses = window._lastTopicVerses || [];
+  if (!verses.length) return;
+
+  const panel = document.getElementById('topicAnalysisPanel');
+  const content = document.getElementById('topicAnalysisContent');
+  panel.style.display = 'block';
+  content.innerHTML = '<div style="text-align:center;padding:20px;color:#BBB;"><span class="spinner"></span> Claude is analyzing ' + verses.length + ' verses about "' + escapeHtml(query) + '"...</div>';
+  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+  const verseBlock = verses.slice(0, 30).map((v, i) =>
+    `VERSE ${i+1} — ${v.sura_id}:${v.aya_number}\nEnglish: ${(v.english || '').substring(0, 300)}`
+  ).join('\n\n');
+
+  const prompt = `You are a Quran scholar analyzing verses about the topic: "${query}".
+
+Here are ${Math.min(verses.length, 30)} verses from the Quran (out of ${verses.length} found):
+
+${verseBlock}
+
+Provide a structured scholarly analysis. Respond ONLY with valid JSON, no markdown, no preamble:
+
+{
+  "consensus": "What these verses collectively establish about this topic (2-3 sentences)",
+  "key_themes": ["theme1", "theme2", "theme3"],
+  "contradictions": [
+    {
+      "verse_a": "Surah:Verse reference",
+      "verse_b": "Surah:Verse reference",
+      "tension": "What appears different or in tension between these verses and how scholars reconcile it"
+    }
+  ],
+  "hr_verdict": "How these verses relate to universal human rights values — dignity, equality, freedom, justice. Be honest about both aligned and problematic aspects.",
+  "conclusion_can": "What can honestly be concluded from these verses about this topic",
+  "conclusion_cant": "What cannot be concluded — where the evidence is insufficient or context-dependent",
+  "related_topics": ["other Quran topics connected to this one"]
+}
+
+Rules:
+- Be objective and scholarly
+- contradictions array: 0-3 real tensions only, omit if none exist
+- All strings must be single line, no literal newlines inside JSON values`;
+
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 2000, messages: [{ role: 'user', content: prompt }] })
+    });
+    const data = await resp.json();
+    let text = (data.content?.[0]?.text || '').trim();
+    if (text.startsWith('```')) { text = text.split('```')[1]; if (text.startsWith('json')) text = text.slice(4); }
+    text = text.trim();
+
+    let analysis;
+    try { analysis = JSON.parse(text); } catch { analysis = null; }
+
+    if (!analysis) {
+      content.innerHTML = '<div style="color:#C0392B;padding:10px">Could not parse Claude response. Try again.</div>';
+      return;
+    }
+
+    const contradictionsHtml = (analysis.contradictions || []).length
+      ? `<div style="margin-top:14px"><div style="font-weight:700;color:#C9A84C;margin-bottom:8px">⚡ Tensions / Apparent Contradictions</div>${
+          (analysis.contradictions || []).map(c => `
+            <div style="background:#FFF8F0;border-left:3px solid #E8A84C;padding:10px 12px;border-radius:0 8px 8px 0;margin-bottom:8px;">
+              <div style="font-size:11px;font-weight:700;color:#B8902A;margin-bottom:4px">${escapeHtml(c.verse_a)} vs ${escapeHtml(c.verse_b)}</div>
+              <div>${escapeHtml(c.tension)}</div>
+            </div>`).join('')
+        }</div>` : '';
+
+    const themesHtml = (analysis.key_themes || []).length
+      ? `<div style="margin-top:12px;display:flex;flex-wrap:wrap;gap:6px">${(analysis.key_themes||[]).map(t=>`<span style="background:#FDF8EE;border:1px solid #E8C97B;border-radius:12px;padding:3px 10px;font-size:12px;color:#B8902A;font-weight:600">${escapeHtml(t)}</span>`).join('')}</div>` : '';
+
+    const relatedHtml = (analysis.related_topics || []).length
+      ? `<div style="margin-top:14px"><div style="font-weight:700;color:#C9A84C;margin-bottom:6px">🔗 Related Topics</div><div style="display:flex;flex-wrap:wrap;gap:6px">${(analysis.related_topics||[]).map(t=>`<button onclick="document.getElementById('topicSearch').value='${t}';filterTopics()" style="background:#F0F4FF;border:1px solid #C0C8E8;border-radius:12px;padding:3px 10px;font-size:12px;color:#5566AA;font-weight:600;cursor:pointer">${escapeHtml(t)}</button>`).join('')}</div></div>` : '';
+
+    content.innerHTML = `
+      <div style="font-weight:700;color:#1a1a1a;font-size:14px;margin-bottom:8px">📖 Consensus</div>
+      <div style="background:#F7FBF7;border-left:3px solid #6B8E6B;padding:10px 12px;border-radius:0 8px 8px 0;margin-bottom:12px">${escapeHtml(analysis.consensus||'')}</div>
+      ${themesHtml}
+      ${contradictionsHtml}
+      <div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div>
+          <div style="font-weight:700;color:#C9A84C;margin-bottom:6px">✅ What CAN be concluded</div>
+          <div style="font-size:12px;background:#F7FBF7;padding:10px;border-radius:8px">${escapeHtml(analysis.conclusion_can||'')}</div>
+        </div>
+        <div>
+          <div style="font-weight:700;color:#C9A84C;margin-bottom:6px">❌ What CANNOT be concluded</div>
+          <div style="font-size:12px;background:#FFF7F7;padding:10px;border-radius:8px">${escapeHtml(analysis.conclusion_cant||'')}</div>
+        </div>
+      </div>
+      <div style="margin-top:14px">
+        <div style="font-weight:700;color:#C9A84C;margin-bottom:6px">⚖ Human Rights Assessment</div>
+        <div style="font-size:12px;background:#FDF8EE;padding:10px;border-radius:8px">${escapeHtml(analysis.hr_verdict||'')}</div>
+      </div>
+      ${relatedHtml}
+      <div style="margin-top:12px;font-size:11px;color:#BBB;text-align:right">Based on ${verses.length} verse${verses.length===1?'':'s'} · Claude Sonnet</div>`;
+
+  } catch(e) {
+    content.innerHTML = `<div style="color:#C0392B;padding:10px">Error: ${escapeHtml(e.message)}</div>`;
   }
 }
 
