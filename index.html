@@ -2351,15 +2351,39 @@ function renderSidebarRefList(results, query) {
     return '';
   }
 
-  const header = `<div style="padding:8px 14px;border-bottom:1px solid #E8E4DC;background:#FDF8EE;font-size:11px;font-weight:700;color:#B8902A;letter-spacing:0.5px">${results.length} REFS — TAP TO READ</div>`;
+  function countWords(results, field) {
+    return results.reduce((sum, v) => {
+      const text = v[field] || '';
+      return sum + (text.trim() ? text.trim().split(/\s+/).length : 0);
+    }, 0);
+  }
 
-  list.innerHTML = header + results.map(v => {
-    const preview = pickPreview(v);
+  const langCounts = [
+    { label: 'Arabic', field: 'arabic' },
+    { label: 'English', field: 'english' },
+    { label: 'Tigrinya', field: 'aya_text' },
+    { label: 'Amharic', field: 'amharic' },
+    { label: 'Oromo', field: 'oromo' },
+    { label: 'Somali', field: 'somali' },
+  ].map(l => ({ label: l.label, count: countWords(results, l.field) }))
+   .filter(l => l.count > 0)
+   .map(l => `${l.label} ${l.count.toLocaleString()}`)
+   .join(' · ');
+
+  const header = `<div style="padding:8px 14px;border-bottom:1px solid #E8E4DC;background:#FDF8EE;font-size:11px;font-weight:700;color:#B8902A;letter-spacing:0.3px">${results.length} VERSES — TAP TO READ<div style="font-size:10px;font-weight:600;color:#C9A84C;margin-top:2px;letter-spacing:0.2px">${langCounts}</div></div>`;
+
+  list.innerHTML = header + results.map((v, i) => {
+    const eng = v.english ? (v.english.trim().length > 80 ? v.english.trim().slice(0, 80) + '…' : v.english.trim()) : '';
+    const ara = v.arabic ? (v.arabic.trim().length > 60 ? v.arabic.trim().slice(0, 60) + '…' : v.arabic.trim()) : '';
     return `
     <div onclick="gotoResult(${v.sura_id},${v.aya_number},event)"
-         style="padding:8px 14px;border-bottom:1px solid #F0EDE5;cursor:pointer;display:flex;gap:8px;align-items:flex-start;">
-      <div style="font-size:11px;font-weight:700;color:#B8902A;min-width:40px;flex-shrink:0;background:#FDF5DE;border:1px solid #D4A830;border-radius:10px;padding:2px 6px;text-align:center;">${v.sura_id}:${v.aya_number}</div>
-      <div style="font-size:11px;color:#555;line-height:1.5;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(preview)}</div>
+         style="padding:9px 12px;border-bottom:1px solid #F0EDE5;cursor:pointer;display:flex;gap:8px;align-items:flex-start;">
+      <div style="font-size:10px;font-weight:700;color:#fff;min-width:22px;height:22px;flex-shrink:0;background:#C9A84C;border-radius:50%;display:flex;align-items:center;justify-content:center;">${i+1}</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:10px;font-weight:700;color:#B8902A;margin-bottom:3px;">${v.sura_id}:${v.aya_number}</div>
+        ${eng ? `<div style="font-size:11px;color:#444;line-height:1.5;margin-bottom:3px;">${escapeHtml(eng)}</div>` : ''}
+        ${ara ? `<div style="font-size:13px;color:#1a1a1a;font-family:'Amiri',serif;direction:rtl;text-align:right;line-height:1.7;">${escapeHtml(ara)}</div>` : ''}
+      </div>
     </div>`;
   }).join('');
 }
