@@ -2375,14 +2375,22 @@ function renderSidebarRefList(results, query) {
   list.innerHTML = header + results.map((v, i) => {
     const eng = v.english ? (v.english.trim().length > 80 ? v.english.trim().slice(0, 80) + '…' : v.english.trim()) : '';
     const ara = v.arabic ? (v.arabic.trim().length > 60 ? v.arabic.trim().slice(0, 60) + '…' : v.arabic.trim()) : '';
+
+    function hlText(text) {
+      if (!text || !query) return escapeHtml(text);
+      const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      return escapeHtml(text).replace(new RegExp(`(${escaped})`, 'gi'),
+        '<mark style="background:#FFE066;color:#1a1a1a;border-radius:3px;padding:0 2px;font-weight:700;">$1</mark>');
+    }
+
     return `
     <div onclick="gotoResult(${v.sura_id},${v.aya_number},event)"
          style="padding:9px 12px;border-bottom:1px solid #F0EDE5;cursor:pointer;display:flex;gap:8px;align-items:flex-start;">
       <div style="font-size:10px;font-weight:700;color:#fff;min-width:22px;height:22px;flex-shrink:0;background:#C9A84C;border-radius:50%;display:flex;align-items:center;justify-content:center;">${i+1}</div>
       <div style="flex:1;min-width:0;">
         <div style="font-size:10px;font-weight:700;color:#B8902A;margin-bottom:3px;">${v.sura_id}:${v.aya_number}</div>
-        ${eng ? `<div style="font-size:11px;color:#444;line-height:1.5;margin-bottom:3px;">${escapeHtml(eng)}</div>` : ''}
-        ${ara ? `<div style="font-size:13px;color:#1a1a1a;font-family:'Amiri',serif;direction:rtl;text-align:right;line-height:1.7;">${escapeHtml(ara)}</div>` : ''}
+        ${eng ? `<div style="font-size:11px;color:#444;line-height:1.5;margin-bottom:3px;">${hlText(eng)}</div>` : ''}
+        ${ara ? `<div style="font-size:13px;color:#1a1a1a;font-family:'Amiri',serif;direction:rtl;text-align:right;line-height:1.7;">${hlText(ara)}</div>` : ''}
       </div>
     </div>`;
   }).join('');
