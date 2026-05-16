@@ -38,6 +38,17 @@ body { font-family: 'EB Garamond', Georgia, serif; background: #F5EDD8; color: #
 .badge-blue { background: #E8F4FD; color: #1A6FA8; border: 1px solid #7AB8D8; }
 .back-btn { padding: 10px 18px; border: 2px solid #B8902A; border-radius: 20px; background: #FDF5DE; cursor: pointer; font-size: 14px; font-weight: 700; color: #B8902A; flex-shrink: 0; box-shadow: 0 2px 8px rgba(184,144,42,0.2); }
 .back-btn:hover { background: #B8902A; color: #fff; }
+#navTrailBar{display:none;background:linear-gradient(135deg,#FDF8EE,#F8F0DC);border-bottom:1px solid #E8C97B;padding:7px 16px;overflow-x:auto;white-space:nowrap;scrollbar-width:none;-webkit-overflow-scrolling:touch;flex-shrink:0;}
+#navTrailBar::-webkit-scrollbar{display:none;}
+.nav-trail-inner{display:inline-flex;align-items:center;gap:4px;min-width:max-content;}
+.nav-trail-item{display:inline-flex;align-items:center;padding:4px 10px;border-radius:14px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid #D4C9A8;background:#fff;color:#4A3B28;white-space:nowrap;transition:all 0.15s;max-width:140px;overflow:hidden;text-overflow:ellipsis;}
+.nav-trail-item:hover{background:#B8902A;color:#fff;border-color:#B8902A;}
+.nav-trail-item.nav-trail-current{background:#FDF5DE;color:#B8902A;border-color:#B8902A;cursor:default;}
+.nav-trail-item.nav-trail-research{background:#E8F5E9;color:#2E7D32;border-color:#81C784;}
+.nav-trail-item.nav-trail-research:hover{background:#2E7D32;color:#fff;}
+.nav-trail-sep{color:#B8902A;font-size:12px;font-weight:700;flex-shrink:0;}
+.nav-trail-back{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:14px;font-size:11px;font-weight:700;cursor:pointer;background:#B8902A;color:#fff;border:1px solid #B8902A;white-space:nowrap;flex-shrink:0;}
+.nav-trail-back:hover{background:#8B6F1F;}
 .read-mode .sidebar { display: none !important; }
 .read-mode .main { width: 100vw; }
 .read-mode .verse-area { padding: 30px 10vw; background: #FFFEF8; }
@@ -435,6 +446,10 @@ mark.hl-green  { background:#BAFFC9;border-radius:2px;padding:0 1px; }
         <div class="top-meta" id="topMeta"></div>
       </div>
     </div>
+    <!-- NAVIGATION BREADCRUMB TRAIL -->
+    <div id="navTrailBar">
+      <div class="nav-trail-inner" id="navTrailInner"></div>
+    </div>
     <div style="background:#F8F6F0;border-bottom:1px solid #E8E4DC;padding:8px 24px;display:flex;gap:8px;align-items:center;flex-shrink:0;">
       <input id="globalSearch" placeholder="🔍 Search any word in all verses..." oninput="onSearchInput(this.value)"
         style="flex:1;padding:7px 12px;border:1px solid #E8C97B;border-radius:20px;font-size:13px;background:#fff;outline:none;color:#1a1a1a;">
@@ -768,6 +783,92 @@ const ARABIC_NAMES = {
 
 let allSuras = [];
 let currentSura = null;
+// ── NAVIGATION HISTORY — full breadcrumb trail ───────────────────────────────
+const NAV_KEY = 'quran_nav_history';
+function _navLoad(){try{return JSON.parse(sessionStorage.getItem(NAV_KEY)||'[]');}catch(e){return[];}}
+function _navSave(s){try{sessionStorage.setItem(NAV_KEY,JSON.stringify(s.slice(-20)));}catch(e){}}
+function _navPush(entry){
+  const s=_navLoad();
+  if(s.length>0){
+    const last=s[s.length-1];
+    if(last.type===entry.type&&last.label===entry.label)return;
+    if(entry.type==='verse'&&last.type==='verse'&&last.sura===entry.sura&&last.aya===entry.aya)return;
+  }
+  s.push(entry);_navSave(s);_navRender();
+}
+function _navPop(){
+  const s=_navLoad();
+  if(s.length<=1)return null;
+  s.pop();
+  const prev=s[s.length-1];
+  _navSave(s);_navRender();
+  return prev;
+}
+function _navJumpTo(idx){
+  const s=_navLoad();
+  if(idx<0||idx>=s.length)return;
+  const target=s[idx];
+  _navSave(s.slice(0,idx+1));
+  _navRender();
+  _navNavigateTo(target);
+}
+function _navNavigateTo(entry){
+  if(entry.type==='research'){
+    window.location.href=entry.url||'research.html';
+  } else if(entry.type==='verse'){
+    loadSura(entry.sura).then(()=>{
+      setTimeout(()=>{
+        if(entry.aya){const card=document.getElementById('vc-'+entry.aya);if(card){card.scrollIntoView({behavior:'smooth',block:'center'});highlightVerse(card);}}
+        else{document.getElementById('verseArea').scrollTop=entry.scroll||0;}
+      },500);
+    });
+  } else if(entry.type==='lexicon'&&entry.wordObj){
+    showLexiconDetailByWord(entry.wordObj,true);
+  }
+}
+function _navRender(){
+  const s=_navLoad();
+  const bar=document.getElementById('navTrailBar');
+  const inner=document.getElementById('navTrailInner');
+  if(!bar||!inner)return;
+  if(s.length<=1){bar.style.display='none';return;}
+  bar.style.display='block';
+  const items=s.map((entry,idx)=>{
+    const isCurrent=idx===s.length-1;
+    const isRes=entry.type==='research';
+    const cls=isCurrent?'nav-trail-item nav-trail-current':isRes?'nav-trail-item nav-trail-research':'nav-trail-item';
+    const icon=entry.type==='research'?'🔍 ':entry.type==='lexicon'?'📖 ':'';
+    const onclick=isCurrent?'':` onclick="_navJumpTo(${idx})"`;
+    return `<span class="${cls}"${onclick} title="${entry.label}">${icon}${entry.label}</span>`;
+  });
+  const parts=[`<span class="nav-trail-back" onclick="navGoBack()">← Back</span>`,`<span class="nav-trail-sep">|</span>`];
+  items.forEach((item,idx)=>{parts.push(item);if(idx<items.length-1)parts.push(`<span class="nav-trail-sep">›</span>`);});
+  inner.innerHTML=parts.join('');
+  setTimeout(()=>{bar.scrollLeft=bar.scrollWidth;},50);
+}
+function navGoBack(){const prev=_navPop();if(prev)_navNavigateTo(prev);}
+function navPushVerse(sura,aya,label){
+  const suraName=(allSuras.find(s=>(s.sura_id||s.id)===sura)||{}).sura_name||'';
+  _navPush({type:'verse',label:label||(aya?`${sura}:${aya}`:(suraName||`Sura ${sura}`)),sura,aya,scroll:document.getElementById('verseArea')?.scrollTop||0});
+}
+function navPushResearch(q,source){
+  const url='research.html'+(q?`?q=${encodeURIComponent(q)}&source=${encodeURIComponent(source||'all')}`:'');
+  _navPush({type:'research',label:q?`Research: ${q}`:'Research',url});
+}
+function navPushLexicon(word){_navPush({type:'lexicon',label:`Lexicon: ${word.word||''}`,wordObj:word});}
+function navInit(){
+  const params=new URLSearchParams(window.location.search);
+  const from=params.get('from'),q=params.get('q'),src=params.get('source');
+  if(from==='research'){
+    const s=_navLoad();
+    if(!s.length||s[s.length-1].type!=='research'){
+      const url='research.html'+(q?`?q=${encodeURIComponent(q)}&source=${encodeURIComponent(src||'all')}`:'');
+      s.push({type:'research',label:q?`Research: ${q}`:'Research',url});
+      _navSave(s);
+    }
+  }
+  _navRender();
+}
 let navHistory = [];
 
 async function sbFetch(table, params) {
@@ -792,6 +893,7 @@ async function sbSearch(table, select, column, query) {
 }
 
 async function init() {
+  navInit();
   // Handle direct URL params e.g. ?sura=2&aya=218
   const urlParams = new URLSearchParams(window.location.search);
   const urlSura = parseInt(urlParams.get('sura'));
@@ -894,9 +996,9 @@ function filterSuras() {
 
 function selectSura(id) {
   navHistory = [];
+  sessionStorage.removeItem('quran_nav_history');
   document.getElementById('backBtn').style.display = 'none';
   document.getElementById('readModeBtn').style.display = 'inline-block';
-  // Close search panel if open
   const sp = document.getElementById('searchResultsPanel');
   if (sp) sp.style.display = 'none';
   const va = document.getElementById('verseArea');
@@ -2274,11 +2376,9 @@ async function runWordSearch(query) {
   }
 }
 
-async function navToVerse(suraId, ayahNum) {
-  // Save current sura AND scroll position for back navigation
-  navHistory.push({ sura: currentSura, scroll: document.getElementById('verseArea').scrollTop });
-  document.getElementById('backBtn').style.display = 'block';
-  document.getElementById('backBtn').textContent = '← Back to ' + (allSuras.find(s => (s.sura_id||s.id) === currentSura)?.sura_name || 'Previous');
+async function navToVerse(suraId, ayahNum, label) {
+  navPushVerse(currentSura, null, null);
+  navPushVerse(suraId, ayahNum, label);
   await loadSura(suraId);
   setTimeout(() => {
     const card = document.getElementById('vc-' + ayahNum);
@@ -2417,15 +2517,7 @@ function renderSidebarRefList(results, query) {
 }
 
 function goBack() {
-  const prev = navHistory.pop();
-  document.getElementById('backBtn').style.display = navHistory.length > 0 ? 'block' : 'none';
-  if (prev) {
-    loadSura(prev.sura).then(() => {
-      setTimeout(() => {
-        document.getElementById('verseArea').scrollTop = prev.scroll || 0;
-      }, 400);
-    });
-  }
+  navGoBack();
 }
 
 let readModeOn = false;
@@ -3846,7 +3938,8 @@ function onLexiconClick(el) {
   showLexiconDetailByWord(w);
 }
 
-async function showLexiconDetailByWord(word) {
+async function showLexiconDetailByWord(word, skipHistory) {
+  if (!skipHistory) navPushLexicon(word);
   // Close sidebar and properly show search results panel
   closeSidebar();
   const panel = document.getElementById('searchResultsPanel');
@@ -4390,7 +4483,7 @@ Rules:
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 2000, messages: [{ role: 'user', content: prompt }] })
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 2000, messages: [{ role: 'user', content: prompt }] })
     });
     const data = await resp.json();
     let text = (data.content?.[0]?.text || '').trim();
