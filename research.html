@@ -2193,50 +2193,51 @@ function renderAnalysis(a, fromCache) {
       ${a.hadith_count  != null ? `<span class="score-badge" style="background:#F0F0F0;color:#444;border:1px solid #CCC">📜 ${a.hadith_count} hadiths</span>` : ''}
     </div>` : '';
 
-  const tabs = [
-    { id: 'rta-consensus',  label: '✅ CONSENSUS',   content: `${avgRow}${a.consensus ? `<div class="ta-text">${esc(a.consensus)}</div>` : ''}` },
-    { id: 'rta-conflicts',  label: '⚡ CONFLICTS',   content: contSection || `<div style="color:#999;font-style:italic;padding:8px">No contradictions found.</div>` },
-    { id: 'rta-can',        label: '✓ CAN',          content: a.conclusion_can  ? `<div class="ta-text ta-can">${esc(a.conclusion_can)}</div>`  : `<div style="color:#999;font-style:italic;padding:8px">—</div>` },
-    { id: 'rta-cant',       label: '✗ CANNOT',       content: a.conclusion_cant ? `<div class="ta-text ta-cant">${esc(a.conclusion_cant)}</div>` : `<div style="color:#999;font-style:italic;padding:8px">—</div>` },
-    { id: 'rta-hr',         label: '⚖️ RIGHTS',      content: a.hr_verdict      ? `<div class="ta-text">${esc(a.hr_verdict)}</div>`      : `<div style="color:#999;font-style:italic;padding:8px">—</div>` },
-    { id: 'rta-science',    label: '🔬 SCIENCE',     content: a.science_verdict ? `<div class="ta-text">${esc(a.science_verdict)}</div>` : `<div style="color:#999;font-style:italic;padding:8px">—</div>` },
-    { id: 'rta-verses',     label: '📖 VERSES',      content: verseChips || `<div style="color:#999;font-style:italic;padding:8px">No connected verses.</div>` },
-  ];
+  // Build tabs — only include sections that have content
+  const tabs = [];
+  if (a.consensus)           tabs.push({ id:'ta_consensus', label:'✅ Consensus',          html: `<div class="ta-text">${esc(a.consensus)}</div>` });
+  if (contradictions.length) tabs.push({ id:'ta_contra',    label:`⚡ Conflicts (${contradictions.length})`, html: contSection });
+  if (a.conclusion_can)      tabs.push({ id:'ta_can',       label:'✓ Can Conclude',        html: `<div class="ta-text ta-can">${esc(a.conclusion_can)}</div>` });
+  if (a.conclusion_cant)     tabs.push({ id:'ta_cant',      label:'✗ Cannot Conclude',     html: `<div class="ta-text ta-cant">${esc(a.conclusion_cant)}</div>` });
+  if (a.hr_verdict)          tabs.push({ id:'ta_hr',        label:'⚖️ Rights',             html: `<div class="ta-text">${esc(a.hr_verdict)}</div>` });
+  if (a.science_verdict)     tabs.push({ id:'ta_sci',       label:'🔬 Science',            html: `<div class="ta-text">${esc(a.science_verdict)}</div>` });
+  if (verses.length)         tabs.push({ id:'ta_verses',    label:'📖 Verses',             html: verseChips });
 
-  const btnBase = 'padding:7px 11px;border:1px solid #E0D8CC;border-radius:8px;background:#fff;font-size:10px;font-weight:700;color:#888;cursor:pointer;letter-spacing:0.4px;display:inline-flex;align-items:center;gap:4px;white-space:nowrap;font-family:inherit;';
-  const btnActive = 'background:#FDF3D8;color:#B8902A;border-color:#C9A84C;';
+  const radioGroup = tabs.map((t, i) => `
+    <label style="display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:20px;cursor:pointer;font-size:11px;font-weight:700;border:1px solid var(--gold-border);background:${i===0?'var(--gold)':'transparent'};color:${i===0?'#fff':'#6B5025'};transition:all .2s;" id="label_${t.id}">
+      <input type="radio" name="ta_tab" value="${t.id}" ${i===0?'checked':''} onchange="switchTATab('${t.id}')" style="display:none">
+      ${t.label}
+    </label>`).join('');
 
-  function rtaSwitch(id) {
-    document.querySelectorAll('.rta-panel').forEach(p => p.style.display = 'none');
-    document.getElementById(id).style.display = 'block';
-    document.querySelectorAll('.rta-btn').forEach(b => { b.style.background='#fff'; b.style.color='#888'; b.style.borderColor='#E0D8CC'; });
-    const ab = document.getElementById('btn-'+id);
-    if (ab) { ab.style.background='#FDF3D8'; ab.style.color='#B8902A'; ab.style.borderColor='#C9A84C'; }
-  }
-  window.rtaSwitch = rtaSwitch;
-
-  const shareText = `Topic Analysis: ${a.topic||''}\n\nConsensus: ${a.consensus||''}\n\nCan Conclude: ${a.conclusion_can||''}\n\nCannot Conclude: ${a.conclusion_cant||''}\n\nHuman Rights: ${a.hr_verdict||''}\n\nVia: ${location.href}`;
-
-  const buttons = tabs.map((t,i) =>
-    `<button id="btn-${t.id}" class="rta-btn" onclick="rtaSwitch('${t.id}')" style="${btnBase}${i===0?btnActive:''}">${t.label}</button>`
-  ).join('');
-
-  const shareBtn = `<button onclick="if(navigator.share){navigator.share({title:'Topic Analysis',text:${JSON.stringify(shareText)}})}else{navigator.clipboard.writeText(${JSON.stringify(shareText)}).then(()=>alert('Copied!'))}" style="${btnBase}">📤 SHARE</button>`;
-
-  const panels = tabs.map((t,i) =>
-    `<div id="${t.id}" class="rta-panel" style="display:${i===0?'block':'none'};padding:12px 0;">${t.content}</div>`
-  ).join('');
+  const panels = tabs.map((t, i) => `
+    <div id="panel_${t.id}" style="display:${i===0?'block':'none'};padding-top:10px">
+      ${t.html}
+    </div>`).join('');
 
   body.innerHTML = `
-    <div style="padding-top:12px">
-      ${fromCache ? '<div style="font-size:10px;color:#2E7D32;font-weight:700;margin-bottom:10px">✓ Cached analysis — instant result</div>' : ''}
-      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;">
-        ${buttons}
-        ${shareBtn}
+    <div style="padding-top:14px">
+      ${fromCache ? '<div style="font-size:10px;color:#2E7D32;font-weight:700;margin-bottom:10px">✓ Cached — instant result</div>' : ''}
+      ${avgRow}
+      <div id="ta_radio_group" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">
+        ${radioGroup}
       </div>
-      ${panels}
-      <div style="font-size:10px;color:#AAA;margin-top:12px;font-style:italic">AI-generated scholarly analysis. Not an authoritative religious ruling. Verify with qualified scholars.</div>
+      <div id="ta_panels">
+        ${panels}
+      </div>
+      <div style="font-size:10px;color:#AAA;margin-top:12px;font-style:italic">AI-generated scholarly analysis. Not an authoritative religious ruling.</div>
     </div>`;
+
+  // Inject switchTATab globally once
+  window.switchTATab = function(activeId) {
+    document.querySelectorAll('[id^="panel_ta_"]').forEach(p => p.style.display = 'none');
+    document.querySelectorAll('[id^="label_ta_"]').forEach(l => {
+      const isActive = l.id === 'label_' + activeId;
+      l.style.background = isActive ? 'var(--gold)' : 'transparent';
+      l.style.color = isActive ? '#fff' : '#6B5025';
+    });
+    const panel = document.getElementById('panel_' + activeId);
+    if (panel) panel.style.display = 'block';
+  };
 
   _analysisRunning = false;
 }
