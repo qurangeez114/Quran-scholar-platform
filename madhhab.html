@@ -33,6 +33,13 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
 .topbar-link{padding:6px 14px;border:1px solid var(--p2);border-radius:2px;background:transparent;color:var(--ink2);font-family:'EB Garamond',serif;font-size:13.5px;cursor:pointer;text-decoration:none;white-space:nowrap;transition:all .18s;}
 .topbar-link:hover{border-color:var(--bronze-ll);color:var(--bronze);}
 
+/* Return banner — shown when arriving from another page */
+.return-banner{display:none;background:var(--bronze-ss);border-bottom:1px solid var(--p2);padding:9px 18px;align-items:center;gap:10px;}
+.return-banner.show{display:flex;}
+.return-banner a{font-family:'Inconsolata',monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--bronze);text-decoration:none;padding:5px 12px;border:1px solid var(--bronze-ll);border-radius:2px;background:#fff;transition:all .15s;}
+.return-banner a:hover{background:var(--bronze);color:#fff;}
+.return-banner-desc{font-family:'EB Garamond',serif;font-style:italic;color:var(--ink3);font-size:13px;}
+
 /* ── HERO ── */
 .hero{background:linear-gradient(175deg,var(--p0) 0%,var(--p1) 100%);border-bottom:1px solid var(--p2);padding:26px 18px 20px;position:relative;overflow:hidden;}
 .hero::before{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:240px;height:240px;opacity:.025;
@@ -185,6 +192,12 @@ background-repeat:no-repeat;background-size:contain;pointer-events:none;}
   <a href="index.html" class="topbar-link">Quran Platform</a>
   <a href="research.html" class="topbar-link">Research</a>
   <a href="sira.html" class="topbar-link">📜 Sira</a>
+</div>
+
+<!-- RETURN BANNER (shown when arriving from sira via a chip) -->
+<div class="return-banner" id="returnBanner">
+  <a id="returnLink" href="#">◂ Back</a>
+  <span class="return-banner-desc" id="returnDesc"></span>
 </div>
 
 <div class="hero">
@@ -599,12 +612,13 @@ function renderDetail(topic, r) {
     const parts = String(v).split(':');
     const s = parseInt(parts[0]), ay = parseInt(parts[1]);
     if (!s) return `<span class="ref-chip">📖 ${esc(v)}</span>`;
-    return `<a class="ref-chip" href="index.html?sura=${s}&aya=${ay||1}" title="Open in Quran reader">📖 ${esc(v)}</a>`;
+    return `<a class="ref-chip" href="index.html?sura=${s}&aya=${ay||1}&from=madhhab&topic=${topic.id}" title="Open in Quran reader">📖 ${esc(v)}</a>`;
   }).join('');
 
-  const hadithChips = (r.hadith_refs||[]).filter(Boolean).map(h =>
-    `<span class="ref-chip">📜 ${esc(h)}</span>`
-  ).join('');
+  const hadithChips = (r.hadith_refs||[]).filter(Boolean).map(h => {
+    const q = encodeURIComponent(String(h).trim());
+    return `<a class="ref-chip" href="research.html?q=${q}&source=hadith&from=madhhab&topic=${topic.id}" title="Open in Research">📜 ${esc(h)}</a>`;
+  }).join('');
 
   const reflections = (r.reflection_questions||[]).filter(Boolean);
 
@@ -714,6 +728,22 @@ loadTopics();
 (function() {
   const params = new URLSearchParams(window.location.search);
   const tid = parseInt(params.get('topic'));
+  const from = params.get('from');
+  const eventId = params.get('event');
+
+  // Show return banner if arriving from sira
+  if (from === 'sira' && eventId) {
+    const banner = document.getElementById('returnBanner');
+    const link = document.getElementById('returnLink');
+    const desc = document.getElementById('returnDesc');
+    if (banner && link) {
+      link.href = `sira.html?event=${encodeURIComponent(eventId)}`;
+      link.textContent = '◂ Back to Sira event';
+      if (desc) desc.textContent = 'You arrived here from a Sira event.';
+      banner.classList.add('show');
+    }
+  }
+
   if (tid) {
     const tryOpen = setInterval(() => {
       if (_topics.length > 0) {

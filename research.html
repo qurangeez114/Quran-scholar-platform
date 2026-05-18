@@ -40,6 +40,13 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
 .topbar-home{padding:6px 14px;border:1px solid var(--p2);border-radius:2px;background:transparent;color:var(--ink2);font-family:'EB Garamond',serif;font-size:13.5px;cursor:pointer;text-decoration:none;white-space:nowrap;transition:all .18s;}
 .topbar-home:hover{border-color:var(--bronze-ll);color:var(--bronze);}
 
+/* Return banner — shown when arriving from another page */
+.return-banner{display:none;background:var(--bronze-ss);border-bottom:1px solid var(--p2);padding:9px 18px;}
+.return-banner.show{display:flex;align-items:center;gap:10px;}
+.return-banner a{font-family:'Inconsolata',monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--bronze);text-decoration:none;padding:5px 12px;border:1px solid var(--bronze-ll);border-radius:2px;background:#fff;transition:all .15s;}
+.return-banner a:hover{background:var(--bronze);color:#fff;}
+.return-banner-desc{font-family:'EB Garamond',serif;font-style:italic;color:var(--ink3);font-size:13px;}
+
 /* ── SEARCH HERO ── */
 .hero{background:linear-gradient(175deg,var(--p0) 0%,var(--p1) 100%);border-bottom:1px solid var(--p2);padding:26px 18px 20px;position:relative;overflow:hidden;}
 
@@ -276,6 +283,12 @@ mark.hl-green{background:#BAFFC9;}
   <a href="madhhab.html" class="topbar-home">⚖️ Madhhab</a>
   <a href="sira.html" class="topbar-home">📜 Sira</a>
   <button onclick="toggleBookmarks()" style="padding:6px 14px;border:1px solid var(--p2);border-radius:2px;background:transparent;color:var(--ink2);font-family:'EB Garamond',serif;font-size:13.5px;cursor:pointer;" id="bmToggleBtn">Saved</button>
+</div>
+
+<!-- RETURN BANNER (shown when arriving from madhhab or sira via a chip) -->
+<div class="return-banner" id="returnBanner">
+  <a id="returnLink" href="#">◂ Back</a>
+  <span class="return-banner-desc" id="returnDesc"></span>
 </div>
 
 <!-- HERO SEARCH -->
@@ -902,9 +915,9 @@ async function sbSearch(table, select, column, q, extra) {
       // Search every text field in sira_events in one shot
       filterParam = `title_en.ilike.*${enc}*,title_ar.ilike.*${enc}*,story_en.ilike.*${enc}*,story_ar.ilike.*${enc}*,location.ilike.*${enc}*,period.ilike.*${enc}*,hadith_ref.ilike.*${enc}*,tafsir_ref.ilike.*${enc}*`;
     } else if (table === 'hadith_connections') {
-      filterParam = `hadith_text.ilike.*${enc}*,narrator.ilike.*${enc}*,collection.ilike.*${enc}*,similarity_note.ilike.*${enc}*`;
+      filterParam = `hadith_text.ilike.*${enc}*,narrator.ilike.*${enc}*,collection.ilike.*${enc}*,reference.ilike.*${enc}*,similarity_note.ilike.*${enc}*`;
     } else if (table === 'hadith_corpus') {
-      filterParam = `text_english.ilike.*${enc}*,narrator.ilike.*${enc}*,collection.ilike.*${enc}*`;
+      filterParam = `text_english.ilike.*${enc}*,narrator.ilike.*${enc}*,collection.ilike.*${enc}*,hadith_number.ilike.*${enc}*,collection_name.ilike.*${enc}*`;
     } else if (table === 'tafsir_entries') {
       filterParam = `content.ilike.*${enc}*,source_name.ilike.*${enc}*,scholar_name.ilike.*${enc}*`;
     } else if (table === 'asbab_al_nuzul') {
@@ -2287,6 +2300,33 @@ function toggleSiraEvent(card) {
   const q = params.get('q');
   const source = params.get('source');
   const sira = params.get('sira');
+  const from = params.get('from');
+  const topicId = params.get('topic');
+  const eventId = params.get('event');
+
+  // Show return banner if we arrived from another page
+  if (from === 'madhhab' && topicId) {
+    const banner = document.getElementById('returnBanner');
+    const link = document.getElementById('returnLink');
+    const desc = document.getElementById('returnDesc');
+    if (banner && link) {
+      link.href = `madhhab.html?topic=${encodeURIComponent(topicId)}`;
+      link.textContent = '◂ Back to Madhhab topic';
+      if (desc) desc.textContent = q ? `Showing hadith search results for "${q}"` : '';
+      banner.classList.add('show');
+    }
+  } else if (from === 'sira' && eventId) {
+    const banner = document.getElementById('returnBanner');
+    const link = document.getElementById('returnLink');
+    const desc = document.getElementById('returnDesc');
+    if (banner && link) {
+      link.href = `sira.html?event=${encodeURIComponent(eventId)}`;
+      link.textContent = '◂ Back to Sira event';
+      if (desc) desc.textContent = q ? `Showing results for "${q}"` : '';
+      banner.classList.add('show');
+    }
+  }
+
   if (q) {
     const input = document.getElementById('searchInput');
     if (input) {
