@@ -4411,18 +4411,45 @@ Rules:
         'anthropic-version': '2023-06-01',
         'anthropic-dangerous-direct-browser-access': 'true'
       },
-      body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 2000, messages: [{ role: 'user', content: prompt }] })
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 4000,
+        messages: [
+          { role: 'user', content: prompt },
+          // Prefill assistant with "{" so Claude is forced to continue as JSON.
+          { role: 'assistant', content: '{' }
+        ]
+      })
     });
     const data = await resp.json();
-    let text = (data.content?.[0]?.text || '').trim();
-    if (text.startsWith('```')) { text = text.split('```')[1]; if (text.startsWith('json')) text = text.slice(4); }
-    text = text.trim();
+    if (data.error) {
+      content.innerHTML = '<div style="color:#C0392B;padding:10px">API error: ' + escapeHtml(data.error.message || JSON.stringify(data.error)) + '</div>';
+      return;
+    }
+    let raw = (data.content?.[0]?.text || '').trim();
+    // Because we prefilled "{", reattach it.
+    let text = '{' + raw;
+    // Strip markdown fences if present.
+    text = text.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
+    // Extract the largest balanced JSON object — handles trailing text.
+    const firstBrace = text.indexOf('{');
+    const lastBrace = text.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+      text = text.slice(firstBrace, lastBrace + 1);
+    }
 
     let analysis;
-    try { analysis = JSON.parse(text); } catch { analysis = null; }
+    try { analysis = JSON.parse(text); } catch (e) {
+      console.warn('JSON parse failed. Raw response:', raw);
+      console.warn('Cleaned text:', text);
+      console.warn('Error:', e);
+      analysis = null;
+    }
 
     if (!analysis) {
-      content.innerHTML = '<div style="color:#C0392B;padding:10px">Could not parse Claude response. Try again.</div>';
+      const wasTruncated = data.stop_reason === 'max_tokens';
+      const hint = wasTruncated ? ' (response was cut off — try a narrower query)' : ' (open browser console to inspect raw response)';
+      content.innerHTML = '<div style="color:#C0392B;padding:10px">Could not parse Claude response.' + hint + '</div>';
       return;
     }
 
