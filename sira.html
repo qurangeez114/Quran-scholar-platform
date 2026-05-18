@@ -201,6 +201,16 @@ const SB_URL = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
 const HDRS = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY };
 const esc = s => String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+// Highlight search term inside escaped HTML — wraps each occurrence in <mark>
+function highlight(text, term) {
+  const escaped = esc(text);
+  if (!term) return escaped;
+  // Escape regex metacharacters in the term itself
+  const safeTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp('(' + safeTerm + ')', 'gi');
+  return escaped.replace(re, '<mark style="background:#FFEB99;color:inherit;padding:0 1px;border-radius:2px">$1</mark>');
+}
 // Base64-encode arbitrary strings for safe use inside HTML attribute onclick values
 const jsq = s => btoa(unescape(encodeURIComponent(String(s||''))));
 const jsqDecode = v => { try { return decodeURIComponent(escape(atob(v))); } catch(e) { return v; } };
@@ -378,8 +388,21 @@ function renderTimeline() {
     );
   }
 
-  document.getElementById('resultMeta').textContent =
-    `${filtered.length} ${filtered.length===1?'event':'events'}`;
+  const rm = document.getElementById('resultMeta');
+  let countLabel = `${filtered.length} ${filtered.length===1?'event':'events'}`;
+  if (_search) {
+    countLabel = filtered.length === 0
+      ? `0 results for "${esc(_search)}" — try a different term`
+      : `${filtered.length} ${filtered.length===1?'event':'events'} matching "${esc(_search)}"`;
+  } else if (_period !== 'all' || _figure !== 'all' || _location !== 'all') {
+    countLabel = `${filtered.length} ${filtered.length===1?'event':'events'} (filtered)`;
+  } else {
+    countLabel = `${filtered.length} total events`;
+  }
+  rm.innerHTML = countLabel;
+  rm.style.color = (_search && filtered.length === 0) ? 'var(--crimson)' : '';
+  rm.style.fontWeight = _search ? '500' : '400';
+  rm.style.fontSize = '12px';
 
   const tl = document.getElementById('timeline');
   if (!filtered.length) {
@@ -416,7 +439,16 @@ function eventCard(ev) {
   const verseCount = (_verseMap[ev.id]||[]).length;
   const hadithCount = _hadithMap[ev.id] || 0;
   const madhhabCount = _madhhabMap[ev.id] || 0;
-  const preview = (ev.story_en||'').slice(0, 220);
+  // If searching, find a window of the story around the matching term so the user sees the match
+  let preview = (ev.story_en||'').slice(0, 220);
+  if (_search && ev.story_en) {
+    const idx = ev.story_en.toLowerCase().indexOf(_search);
+    if (idx >= 0) {
+      const start = Math.max(0, idx - 60);
+      const end = Math.min(ev.story_en.length, idx + 180);
+      preview = (start > 0 ? '…' : '') + ev.story_en.slice(start, end) + (end < ev.story_en.length ? '…' : '');
+    }
+  }
   return `<div class="event-card" onclick="openEvent('${esc(ev.id)}')">
     <div class="event-head">
       <div class="event-year">
@@ -424,16 +456,16 @@ function eventCard(ev) {
         ${ev.year_ah ? '<br>' + ev.year_ah + ' AH' : ''}
       </div>
       <div class="event-titles">
-        <div class="event-title-en">${esc(ev.title_en||'')}</div>
-        ${ev.title_ar ? `<div class="event-title-ar">${esc(ev.title_ar)}</div>` : ''}
-        ${preview ? `<div class="event-preview">${esc(preview)}…</div>` : ''}
+        <div class="event-title-en">${highlight(ev.title_en||'', _search)}</div>
+        ${ev.title_ar ? `<div class="event-title-ar">${highlight(ev.title_ar, _search)}</div>` : ''}
+        ${preview ? `<div class="event-preview">${highlight(preview, _search)}</div>` : ''}
       </div>
     </div>
     <div class="connections-row">
       <span class="conn-pill ${verseCount?'has':''}">📖 ${verseCount} verses</span>
       <span class="conn-pill ${hadithCount?'has':''}">📜 ${hadithCount} hadiths</span>
       <span class="conn-pill ${madhhabCount?'has':''}">⚖️ ${madhhabCount} rulings</span>
-      ${ev.location ? `<span class="conn-pill">📍 ${esc(ev.location)}</span>` : ''}
+      ${ev.location ? `<span class="conn-pill">📍 ${highlight(ev.location, _search)}</span>` : ''}
     </div>
   </div>`;
 }
@@ -468,15 +500,18 @@ async function openEvent(id) {
   const prev = idx > 0 ? sortedEvents[idx-1] : null;
   const next = idx >= 0 && idx < sortedEvents.length-1 ? sortedEvents[idx+1] : null;
 
-  // Fetch detail data
-  const [hadiths, madhhabs] = await Promise.all([
-    fetchHadithsForEvent(id),
-    fetchMadhhabsForEvent(id)
-  ]);
-
+  // Compute linked verses first so we can fetch their asbab and tafsir
   const verses = _verseMap[id] || [];
 
-  dv.innerHTML = renderEventDetail(ev, verses, hadiths, madhhabs, prev, next);
+  // Fetch all related data in parallel
+  const [hadiths, madhhabs, asbab, tafsirs] = await Promise.all([
+    fetchHadithsForEvent(id),
+    fetchMadhhabsForEvent(id),
+    fetchAsbabForVerses(verses),
+    fetchTafsirForVerses(verses)
+  ]);
+
+  dv.innerHTML = renderEventDetail(ev, verses, hadiths, madhhabs, asbab, tafsirs, prev, next);
 }
 
 function updateBreadcrumb(ev) {
@@ -553,10 +588,69 @@ async function fetchMadhhabsForEvent(siraId) {
   }
 }
 
-function renderEventDetail(ev, verses, hadiths, madhhabs, prev, next) {
+// Fetch asbab al-nuzul for the verses linked to this event
+async function fetchAsbabForVerses(verses) {
+  if (!verses || !verses.length) return [];
+  const results = [];
+  try {
+    // Build OR conditions: each verse needs sura_id+aya_number match
+    // PostgREST: use or=(...)
+    const conditions = [];
+    verses.forEach(v => {
+      if (v.applies_to_full_sura) {
+        conditions.push(`and(sura_id.eq.${v.sura})`);
+      } else {
+        conditions.push(`and(sura_id.eq.${v.sura},aya_number.eq.${v.aya})`);
+      }
+    });
+    const orClause = conditions.join(',');
+    const r = await fetch(
+      `${SB_URL}/rest/v1/asbab_al_nuzul?select=id,sura_id,aya_number,reason_text,scholar,source,tradition&or=(${orClause})&limit=200`,
+      {headers: HDRS}
+    );
+    if (r.ok) {
+      const data = await r.json();
+      return data || [];
+    }
+  } catch (e) {
+    console.warn('Asbab fetch error:', e);
+  }
+  return results;
+}
+
+// Fetch tafsir entries for verses linked to this event
+async function fetchTafsirForVerses(verses) {
+  if (!verses || !verses.length) return [];
+  try {
+    const conditions = [];
+    verses.forEach(v => {
+      if (v.applies_to_full_sura) {
+        conditions.push(`and(sura.eq.${v.sura})`);
+      } else {
+        conditions.push(`and(sura.eq.${v.sura},aya.eq.${v.aya})`);
+      }
+    });
+    const orClause = conditions.join(',');
+    const r = await fetch(
+      `${SB_URL}/rest/v1/tafsir_entries?select=id,sura,aya,content,language,scholar_name,source_name,source_url,theological_position,tradition&or=(${orClause})&limit=200`,
+      {headers: HDRS}
+    );
+    if (r.ok) {
+      const data = await r.json();
+      return data || [];
+    }
+  } catch (e) {
+    console.warn('Tafsir fetch error:', e);
+  }
+  return [];
+}
+
+function renderEventDetail(ev, verses, hadiths, madhhabs, asbab, tafsirs, prev, next) {
   const sections = [];
   if (ev.story_en) sections.push({id:'story', label:'📖 Narrative'});
   if (verses.length) sections.push({id:'verses', label:`📖 Quran Verses (${verses.length})`});
+  if (asbab.length) sections.push({id:'asbab', label:`📅 Asbāb al-Nuzūl (${asbab.length})`});
+  if (tafsirs.length) sections.push({id:'tafsirs', label:`📚 Tafsir (${tafsirs.length})`});
   if (hadiths.length) sections.push({id:'hadiths', label:`📜 Hadiths (${hadiths.length})`});
   if (madhhabs.length) sections.push({id:'madhhabs', label:`⚖️ Madhhab Rulings (${madhhabs.length})`});
 
@@ -567,7 +661,7 @@ function renderEventDetail(ev, verses, hadiths, madhhabs, prev, next) {
       ${ev.year_ce !== null ? ev.year_ce + ' CE' : ''}${ev.year_ah ? ' · ' + ev.year_ah + ' AH' : ''}
       ${ev.period ? ' · ' + esc(ev.period) + ' Period' : ''}
     </div>
-    <div class="detail-title-en">${esc(ev.title_en||'')}</div>
+    <div class="detail-title-en">${highlight(ev.title_en||'', _search)}</div>
     ${ev.title_ar ? `<div class="detail-title-ar">${esc(ev.title_ar)}</div>` : ''}
 
     <div class="detail-meta-row">
@@ -595,7 +689,7 @@ function renderEventDetail(ev, verses, hadiths, madhhabs, prev, next) {
     ${ev.story_en ? `
       <div class="sec" id="story">
         <div class="sec-label">📖 Ibn Ishaq's Narrative</div>
-        <div class="story" id="story-text-${esc(ev.id)}">${esc(ev.story_en)}</div>
+        <div class="story" id="story-text-${esc(ev.id)}">${highlight(ev.story_en, _search)}</div>
       </div>` : ''}
 
     ${ev.story_ar ? `
@@ -621,6 +715,61 @@ function renderEventDetail(ev, verses, hadiths, madhhabs, prev, next) {
             <div class="ref-card-text">Tap to open ${ref} in the Quran reader with verse context, tafsir, and asbāb al-nuzūl.</div>
           </div>`;
         }).join('')}
+      </div>` : ''}
+
+    <!-- ASBAB AL-NUZUL -->
+    ${asbab.length ? `
+      <div class="sec" id="asbab">
+        <div class="sec-label">📅 Asbāb al-Nuzūl — Causes of Revelation <span class="sec-count">${asbab.length}</span></div>
+        ${asbab.map(a => {
+          const verseRef = `${a.sura_id}${a.aya_number?':'+a.aya_number:''}`;
+          return `<div class="ref-card" onclick="location.href='index.html?sura=${a.sura_id}${a.aya_number?'&aya='+a.aya_number:''}&from=sira&event=${encodeURIComponent(ev.id)}'">
+            <div class="ref-card-head">
+              <span class="ref-card-tag">📅 QURAN ${esc(verseRef)}${a.scholar?' · '+esc(a.scholar):''}</span>
+              <span class="ref-card-tag">${esc(a.tradition||'')}</span>
+            </div>
+            <div class="ref-card-text">${esc(a.reason_text||'')}</div>
+            ${a.source ? `<div class="ref-card-note">Source: ${esc(a.source)}</div>` : ''}
+          </div>`;
+        }).join('')}
+      </div>` : ''}
+
+    <!-- TAFSIR -->
+    ${tafsirs.length ? `
+      <div class="sec" id="tafsirs">
+        <div class="sec-label">📚 Tafsir — Scholarly Commentary <span class="sec-count">${tafsirs.length}</span></div>
+        ${(() => {
+          // Group by tradition
+          const byTrad = {};
+          tafsirs.forEach(t => {
+            const trad = (t.tradition || 'other').toLowerCase();
+            if (!byTrad[trad]) byTrad[trad] = [];
+            byTrad[trad].push(t);
+          });
+          const tradOrder = ['sunni','shia','mutazila','other'];
+          const tradLabel = {sunni:'Sunni',shia:'Shia',mutazila:"Mu'tazila",other:'Other'};
+          const tradColor = {sunni:'#1A6FA8',shia:'#7B4F2E',mutazila:'#8A6E2E',other:'#666'};
+          return tradOrder.filter(k=>byTrad[k]).map(trad => {
+            const items = byTrad[trad];
+            return `<div style="margin-bottom:14px">
+              <div style="font-family:'Inconsolata',monospace;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:${tradColor[trad]};font-weight:500;margin-bottom:8px">
+                ${tradLabel[trad]} (${items.length})
+              </div>
+              ${items.map(t => {
+                const verseRef = `${t.sura}${t.aya?':'+t.aya:''}`;
+                const content = (t.content||'').slice(0, 400);
+                return `<div class="ref-card" onclick="location.href='index.html?sura=${t.sura}${t.aya?'&aya='+t.aya:''}&from=sira&event=${encodeURIComponent(ev.id)}'">
+                  <div class="ref-card-head">
+                    <span class="ref-card-tag" style="color:${tradColor[trad]}">📚 ${esc(verseRef)} · ${esc(t.scholar_name||'?')}</span>
+                    <span class="ref-card-tag">${esc(t.source_name||'')}</span>
+                  </div>
+                  <div class="ref-card-text">${esc(content)}${(t.content||'').length > 400 ? '…' : ''}</div>
+                  ${t.theological_position ? `<div class="ref-card-note">${esc(t.theological_position)}</div>` : ''}
+                </div>`;
+              }).join('')}
+            </div>`;
+          }).join('');
+        })()}
       </div>` : ''}
 
     <!-- HADITHS -->
