@@ -134,6 +134,36 @@ background-repeat:no-repeat;background-size:contain;pointer-events:none;}
 
 .disclaimer{margin-top:24px;padding:12px;background:var(--p1);border:1px solid var(--p2);border-radius:2px;font-size:12px;color:var(--ink3);text-align:center;font-style:italic;}
 
+/* ── AUDIO READER ── */
+.audio-wrap{display:inline-flex;align-items:center;gap:6px;vertical-align:middle;user-select:none;}
+.audio-wrap.sm{gap:4px;}
+.audio-btn{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;border:1px solid var(--bronze-ll);background:var(--bronze-ss);color:var(--bronze);cursor:pointer;padding:0;transition:all .15s;flex-shrink:0;}
+.audio-btn:hover{background:var(--bronze-s);border-color:var(--bronze-l);}
+.audio-btn:active{transform:scale(.94);}
+.audio-btn svg{width:13px;height:13px;fill:currentColor;}
+.audio-wrap.sm .audio-btn{width:24px;height:24px;}
+.audio-wrap.sm .audio-btn svg{width:11px;height:11px;}
+.audio-btn.stop{background:transparent;}
+.audio-speed{display:inline-flex;align-items:center;justify-content:center;min-width:34px;height:22px;padding:0 8px;border-radius:11px;border:1px solid var(--p3);background:var(--bronze-ss);color:var(--bronze);font-family:'Inconsolata',monospace;font-size:10.5px;font-weight:500;letter-spacing:.04em;cursor:pointer;transition:all .15s;}
+.audio-speed:hover{background:var(--bronze-s);border-color:var(--bronze-ll);}
+.audio-wrap.sm .audio-speed{height:20px;min-width:30px;font-size:9.5px;padding:0 6px;}
+.audio-speed-pop{position:absolute;background:#fff;border:1px solid var(--p2);border-radius:3px;box-shadow:var(--sh-m);padding:4px;display:flex;flex-direction:column;gap:2px;z-index:200;}
+.audio-speed-pop button{background:none;border:none;padding:5px 12px;font-family:'Inconsolata',monospace;font-size:11px;color:var(--ink2);cursor:pointer;border-radius:2px;text-align:left;}
+.audio-speed-pop button:hover{background:var(--bronze-ss);}
+.audio-speed-pop button.active{background:var(--bronze-s);color:var(--bronze);font-weight:600;}
+.audio-progress{height:3px;width:50px;background:var(--p2);border-radius:2px;overflow:hidden;}
+.audio-wrap.sm .audio-progress{width:36px;height:2px;}
+.audio-progress-bar{height:100%;background:var(--bronze-ll);width:0;transition:width .2s ease-out;}
+.audio-pos{position:relative;display:inline-block;}
+/* Position helper for putting a speaker beside a heading */
+.with-audio{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;}
+.with-audio > :first-child{flex:1;min-width:0;}
+.compare-title-row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:8px;}
+.compare-title-row .compare-title{margin-bottom:0;}
+.school-card .audio-wrap{margin-bottom:6px;}
+.reflect-list li{position:relative;}
+.reflect-list .audio-wrap{float:right;margin-left:8px;}
+
 @media(max-width:640px){
   .schools-grid{grid-template-columns:1fr;}
   .hero-title{font-size:22px;}
@@ -205,6 +235,184 @@ const SB_URL = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
 const HDRS = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY };
 const esc = s => String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+/* ─────────── AUDIO READER ──────────────────────────────────
+   Renders a speaker control for any text block. Vanilla JS,
+   uses window.speechSynthesis. Only one speaker plays at a time
+   across the whole page.
+   Usage in templates:
+     ${audioBtn(textString)}              // standard
+     ${audioBtn(textString, {size:'sm'})} // smaller, for italics/refl
+*/
+const SPEEDS = [0.75, 1, 1.25, 1.5, 2];
+let _audioSeq = 0;
+const _audio = {
+  activeId: null,
+  utterance: null,
+  rate: 1,
+  state: 'idle', // idle | playing | paused
+};
+
+function audioBtn(text, opts) {
+  if (!text || typeof text !== 'string') return '';
+  opts = opts || {};
+  const id = 'aud' + (++_audioSeq);
+  const sizeClass = opts.size === 'sm' ? ' sm' : '';
+  // Stash text on a data attribute (escaped) so JS can read it back.
+  const safe = String(text).replace(/[\u2018\u2019]/g, "'").replace(/\s+/g, ' ').trim();
+  const enc = safe.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return `<span class="audio-wrap${sizeClass}" data-audio-id="${id}" data-audio-text="${enc}">
+    <button type="button" class="audio-btn" aria-label="Play" onclick="audioToggle('${id}')">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+    </button>
+    <span class="audio-pos">
+      <button type="button" class="audio-speed" aria-label="Speed" onclick="audioSpeedMenu('${id}', event)">1×</button>
+    </span>
+  </span>`;
+}
+
+function audioFindWrap(id) {
+  return document.querySelector(`[data-audio-id="${id}"]`);
+}
+
+function audioStopActive() {
+  if (window.speechSynthesis) window.speechSynthesis.cancel();
+  if (_audio.activeId) {
+    const prev = audioFindWrap(_audio.activeId);
+    if (prev) {
+      const btn = prev.querySelector('.audio-btn');
+      const stopBtn = prev.querySelector('.audio-btn.stop');
+      const prog = prev.querySelector('.audio-progress');
+      if (btn) {
+        btn.setAttribute('aria-label','Play');
+        btn.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
+      }
+      if (stopBtn) stopBtn.remove();
+      if (prog) prog.remove();
+    }
+  }
+  _audio.activeId = null;
+  _audio.utterance = null;
+  _audio.state = 'idle';
+}
+
+function audioSpeak(id) {
+  const wrap = audioFindWrap(id);
+  if (!wrap) return;
+  const text = wrap.dataset.audioText || '';
+  if (!text || !('speechSynthesis' in window)) return;
+
+  // Stop whatever was playing.
+  audioStopActive();
+
+  const u = new SpeechSynthesisUtterance(text);
+  u.rate = _audio.rate;
+  u.pitch = 1;
+  u.lang = 'en-US';
+
+  const btn = wrap.querySelector('.audio-btn');
+  // Insert stop button + progress bar after main btn.
+  const stopBtn = document.createElement('button');
+  stopBtn.type = 'button';
+  stopBtn.className = 'audio-btn stop';
+  stopBtn.setAttribute('aria-label', 'Stop');
+  stopBtn.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>';
+  stopBtn.onclick = () => audioStopActive();
+  btn.insertAdjacentElement('afterend', stopBtn);
+
+  const prog = document.createElement('span');
+  prog.className = 'audio-progress';
+  prog.innerHTML = '<span class="audio-progress-bar"></span>';
+  wrap.appendChild(prog);
+  const progBar = prog.querySelector('.audio-progress-bar');
+
+  u.onstart = () => {
+    _audio.state = 'playing';
+    btn.setAttribute('aria-label','Pause');
+    btn.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>';
+  };
+  u.onboundary = (ev) => {
+    if (ev.charIndex && text.length && progBar) {
+      progBar.style.width = Math.min(100, (ev.charIndex / text.length) * 100) + '%';
+    }
+  };
+  u.onend = () => {
+    if (progBar) progBar.style.width = '100%';
+    setTimeout(() => audioStopActive(), 400);
+  };
+  u.onerror = () => audioStopActive();
+
+  _audio.utterance = u;
+  _audio.activeId = id;
+  _audio.state = 'playing';
+  window.speechSynthesis.speak(u);
+}
+
+function audioToggle(id) {
+  if (_audio.activeId === id) {
+    if (_audio.state === 'playing') {
+      window.speechSynthesis.pause();
+      _audio.state = 'paused';
+      const wrap = audioFindWrap(id);
+      const btn = wrap && wrap.querySelector('.audio-btn:not(.stop)');
+      if (btn) {
+        btn.setAttribute('aria-label','Resume');
+        btn.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
+      }
+    } else if (_audio.state === 'paused') {
+      window.speechSynthesis.resume();
+      _audio.state = 'playing';
+      const wrap = audioFindWrap(id);
+      const btn = wrap && wrap.querySelector('.audio-btn:not(.stop)');
+      if (btn) {
+        btn.setAttribute('aria-label','Pause');
+        btn.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>';
+      }
+    }
+  } else {
+    audioSpeak(id);
+  }
+}
+
+function audioSpeedMenu(id, ev) {
+  ev.stopPropagation();
+  // Close any open menu first.
+  document.querySelectorAll('.audio-speed-pop').forEach(p => p.remove());
+  const wrap = audioFindWrap(id);
+  if (!wrap) return;
+  const pos = wrap.querySelector('.audio-pos');
+  const pop = document.createElement('div');
+  pop.className = 'audio-speed-pop';
+  pop.innerHTML = SPEEDS.map(s =>
+    `<button type="button" class="${s===_audio.rate?'active':''}" onclick="audioSetSpeed(${s}, '${id}')">${s}×</button>`
+  ).join('');
+  pos.appendChild(pop);
+  // Close on outside click.
+  setTimeout(() => {
+    const close = (e) => {
+      if (!pop.contains(e.target)) {
+        pop.remove();
+        document.removeEventListener('click', close);
+      }
+    };
+    document.addEventListener('click', close);
+  }, 0);
+}
+
+function audioSetSpeed(rate, id) {
+  _audio.rate = rate;
+  document.querySelectorAll('.audio-speed').forEach(b => { b.textContent = rate + '×'; });
+  document.querySelectorAll('.audio-speed-pop').forEach(p => p.remove());
+  // If something is playing, restart at new speed (Web Speech can't rate-change live).
+  if (_audio.activeId && _audio.state !== 'idle') {
+    const activeId = _audio.activeId;
+    audioStopActive();
+    audioSpeak(activeId);
+  }
+}
+
+// Stop audio when navigating away or closing the topic.
+window.addEventListener('beforeunload', () => audioStopActive());
 
 let _topics = [];
 let _category = 'all';
@@ -346,6 +554,7 @@ async function openTopic(topicId) {
 }
 
 function closeTopic() {
+  audioStopActive();
   document.getElementById('detailView').style.display = 'none';
   document.getElementById('listView').style.display = 'block';
   window.scrollTo({top:0, behavior:'smooth'});
@@ -353,10 +562,14 @@ function closeTopic() {
 
 function renderDetailHeader(topic) {
   const lvl = topic.controversy_level || 3;
+  const topicAudioText = [topic.topic, topic.brief_description].filter(Boolean).join('. ');
   return `<div class="compare">
     <button class="compare-back" onclick="closeTopic()">◂ Back to topics</button>
     <div class="compare-meta">${esc(topic.category||'')}${topic.subcategory?' · '+esc(topic.subcategory):''}</div>
-    <div class="compare-title">${esc(topic.topic)}</div>
+    <div class="compare-title-row">
+      <div class="compare-title">${esc(topic.topic)}</div>
+      ${audioBtn(topicAudioText)}
+    </div>
     <div class="compare-controversy">Controversy Level ${lvl}/5</div>
     ${topic.brief_description?`<div class="compare-desc">${esc(topic.brief_description)}</div>`:''}
   `;
@@ -367,8 +580,14 @@ function renderSchoolCard(klass, name, position, evidence, sources) {
   const srcs = (sources||[]).filter(Boolean);
   return `<div class="school-card ${klass}">
     <div class="school-name ${klass}">${name}</div>
-    <div class="school-pos">${esc(position)}</div>
-    ${evidence?`<div class="school-evidence">${esc(evidence)}</div>`:''}
+    <div class="with-audio">
+      <div class="school-pos">${esc(position)}</div>
+      ${audioBtn(position)}
+    </div>
+    ${evidence?`<div class="with-audio">
+      <div class="school-evidence">${esc(evidence)}</div>
+      ${audioBtn(evidence, {size:'sm'})}
+    </div>`:''}
     ${srcs.length?`<div class="school-sources">${srcs.map(s=>`<span class="school-source-pill">${esc(s)}</span>`).join('')}</div>`:''}
   </div>`;
 }
@@ -413,37 +632,55 @@ function renderDetail(topic, r) {
     ${r.consensus ? `
     <div class="sec">
       <div class="sec-label">✓ Where They Agree</div>
-      <div class="sec-body consensus">${esc(r.consensus)}</div>
+      <div class="with-audio">
+        <div class="sec-body consensus">${esc(r.consensus)}</div>
+        ${audioBtn(r.consensus)}
+      </div>
     </div>` : ''}
 
     ${r.key_disagreement ? `
     <div class="sec">
       <div class="sec-label">⚡ The Key Disagreement</div>
-      <div class="sec-body">${esc(r.key_disagreement)}</div>
+      <div class="with-audio">
+        <div class="sec-body">${esc(r.key_disagreement)}</div>
+        ${audioBtn(r.key_disagreement)}
+      </div>
     </div>` : ''}
 
     ${r.practical_difference ? `
     <div class="sec">
       <div class="sec-label">In Practice</div>
-      <div class="sec-body">${esc(r.practical_difference)}</div>
+      <div class="with-audio">
+        <div class="sec-body">${esc(r.practical_difference)}</div>
+        ${audioBtn(r.practical_difference)}
+      </div>
     </div>` : ''}
 
     ${r.historical_consequences ? `
     <div class="sec">
       <div class="sec-label">📜 Historical Consequences</div>
-      <div class="sec-body">${esc(r.historical_consequences)}</div>
+      <div class="with-audio">
+        <div class="sec-body">${esc(r.historical_consequences)}</div>
+        ${audioBtn(r.historical_consequences)}
+      </div>
     </div>` : ''}
 
     ${r.bloodshed_or_persecution ? `
     <div class="sec">
       <div class="sec-label">⚔ Bloodshed &amp; Persecution</div>
-      <div class="sec-body danger">${esc(r.bloodshed_or_persecution)}</div>
+      <div class="with-audio">
+        <div class="sec-body danger">${esc(r.bloodshed_or_persecution)}</div>
+        ${audioBtn(r.bloodshed_or_persecution)}
+      </div>
     </div>` : ''}
 
     ${r.reformist_view ? `
     <div class="sec">
       <div class="sec-label">🔄 The Reformist Challenge</div>
-      <div class="sec-body reformist">${esc(r.reformist_view)}</div>
+      <div class="with-audio">
+        <div class="sec-body reformist">${esc(r.reformist_view)}</div>
+        ${audioBtn(r.reformist_view)}
+      </div>
     </div>` : ''}
 
     ${verseChips || hadithChips ? `
@@ -456,7 +693,7 @@ function renderDetail(topic, r) {
     <div class="sec">
       <div class="sec-label">Reflect</div>
       <ul class="reflect-list">
-        ${reflections.map(q => `<li>${esc(q)}</li>`).join('')}
+        ${reflections.map(q => `<li>${audioBtn(q, {size:'sm'})}${esc(q)}</li>`).join('')}
       </ul>
     </div>` : ''}
 
