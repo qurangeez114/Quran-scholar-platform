@@ -15,7 +15,7 @@ exports.handler = async (event) => {
     return { statusCode: 400, body: JSON.stringify({ error: 'Invalid JSON in request body' }) };
   }
 
-  const { prompt, max_tokens = 4000, model = 'claude-sonnet-4-20250514' } = body;
+  const { prompt, max_tokens = 4000, model = 'claude-sonnet-4-6' } = body;
   if (!prompt) {
     return { statusCode: 400, body: JSON.stringify({ error: 'Missing prompt' }) };
   }
