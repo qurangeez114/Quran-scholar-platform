@@ -4375,34 +4375,53 @@ async function analyzeTopicVerses() {
     `VERSE ${i+1} — ${v.sura_id}:${v.aya_number}\nEnglish: ${(v.english || '').substring(0, 300)}`
   ).join('\n\n');
 
-  const prompt = `You are a Quran scholar analyzing verses about the topic: "${query}".
+  const prompt = `You are a scholarly textual analyst examining how the Quran itself treats the topic: "${query}".
 
 Here are ${Math.min(verses.length, 30)} verses from the Quran (out of ${verses.length} found):
 
 ${verseBlock}
 
-Provide a structured scholarly analysis. Respond ONLY with valid JSON, no markdown, no preamble:
+Your task is HONEST INTRA-QURANIC ANALYSIS. The user is studying the Quran's own text on its own terms.
+
+ABSOLUTE RULES:
+1. DO NOT mention, compare, or contrast with the Bible, Torah, Gospels, Hebrew Scriptures, Old Testament, New Testament, or any non-Quranic religious text. This is a Quran-internal analysis only.
+2. DO NOT use apologetic framing. Do not say things like "the Quran beautifully reconciles," "properly understood," "in its perfect wisdom," "as scholars elegantly explain." Be plain and neutral.
+3. When the Quran says different things in different places about the same topic or story, NAME THE TENSION DIRECTLY. Cite both verses. Do not hide it.
+4. Where classical scholars have offered a reconciliation, mention it briefly so the user can evaluate it — but do not present the reconciliation as the answer. Frame it as "Classical reconciliation: ..." and let the user decide.
+5. If the verses are consistent and there are no real tensions, say so honestly. Do not invent contradictions where none exist.
+6. Be specific. Use verse references (Surah:Aya). Avoid vague phrases like "some verses suggest."
+
+Respond ONLY with valid JSON, no markdown, no preamble:
 
 {
-  "consensus": "What these verses collectively establish about this topic (2-3 sentences)",
-  "key_themes": ["theme1", "theme2", "theme3"],
+  "overview": "A neutral 2-3 sentence summary of what these verses collectively say about '${query}'. Plain, not laudatory.",
+  "key_themes": ["specific theme 1", "specific theme 2", "specific theme 3"],
   "contradictions": [
     {
-      "verse_a": "Surah:Verse reference",
-      "verse_b": "Surah:Verse reference",
-      "tension": "What appears different or in tension between these verses and how scholars reconcile it"
+      "verse_a": "Surah:Aya",
+      "verse_b": "Surah:Aya",
+      "tension": "Plainly state what verse A says vs what verse B says. Quote or closely paraphrase both sides.",
+      "reconciliation": "Briefly note the most common classical reconciliation (e.g., abrogation/naskh, contextual reading, different referents). Empty string if there is no widely accepted one."
     }
   ],
-  "hr_verdict": "How these verses relate to universal human rights values — dignity, equality, freedom, justice. Be honest about both aligned and problematic aspects.",
-  "conclusion_can": "What can honestly be concluded from these verses about this topic",
-  "conclusion_cant": "What cannot be concluded — where the evidence is insufficient or context-dependent",
-  "related_topics": ["other Quran topics connected to this one"]
+  "variations": [
+    {
+      "topic": "What aspect of the story/theme is told differently",
+      "accounts": "Describe each variant with verse refs (e.g., 'In 7:11–18 the angels prostrate before Adam and Iblis refuses; in 15:28–35 the same scene is recounted with different dialogue; in 38:71–85 a third version adds...'). Name what changes between accounts.",
+      "doctrinal_consequence": "What theological/doctrinal position different Muslim schools have built on which version (e.g., 'The 18:50 description of Iblis as one of the jinn vs the prostration command implying angelic status produced the classical debate over whether Iblis was an angel or jinn — Ashʿarī, Muʿtazilī, and Shia positions differ.'). Empty if not applicable."
+    }
+  ],
+  "ambiguities": [
+    "Specific term, claim, or implication left textually unresolved (e.g., 'The verses do not specify whether Adam was created in Paradise or on earth then placed in Paradise — 2:35 and 7:19 are silent on this.'). One bullet per ambiguity."
+  ],
+  "doctrinal_divergence": "How the same set of verses has been read to support different doctrinal positions within Islam (Sunni vs Shia, classical vs Salafi, rationalist vs traditionalist). Name the schools and what they conclude from the same text. 2-4 sentences. Empty string if not applicable to this topic.",
+  "what_text_says": "What the verses textually and explicitly state, distinguishing this from common assumptions or interpretive additions.",
+  "what_text_does_not_say": "What is commonly believed about this topic but is NOT actually stated in these verses. Be specific about gaps between text and tradition.",
+  "hr_assessment": "Plainly assess how the verses treat dignity, equality, freedom, justice, treatment of women, non-Muslims, slaves, dissenters. Name both passages that affirm these values and passages in tension with modern human rights, without rhetorical softening.",
+  "related_topics": ["other Quranic topics that intersect with this one"]
 }
 
-Rules:
-- Be objective and scholarly
-- contradictions array: 0-3 real tensions only, omit if none exist
-- All strings must be single line, no literal newlines inside JSON values`;
+Length rule: every string value must be a single line — no literal newlines inside JSON strings. Use semicolons or periods to separate sub-points.`;
 
   try {
     const resp = await fetch('/.netlify/functions/analyze', {
@@ -4438,36 +4457,69 @@ Rules:
     }
 
     const contradictionsHtml = (analysis.contradictions || []).length
-      ? `<div style="margin-top:14px"><div style="font-weight:700;color:#C9A84C;margin-bottom:8px">⚡ Tensions / Apparent Contradictions</div>${
-          (analysis.contradictions || []).map(c => `
-            <div style="background:#FFF8F0;border-left:3px solid #E8A84C;padding:10px 12px;border-radius:0 8px 8px 0;margin-bottom:8px;">
-              <div style="font-size:11px;font-weight:700;color:#B8902A;margin-bottom:4px">${escapeHtml(c.verse_a)} vs ${escapeHtml(c.verse_b)}</div>
-              <div>${escapeHtml(c.tension)}</div>
+      ? (analysis.contradictions || []).map(c => `
+            <div style="background:#FFF8F0;border-left:3px solid #E8A84C;padding:10px 12px;border-radius:0 8px 8px 0;margin-bottom:10px;">
+              <div style="font-size:11px;font-weight:700;color:#B8902A;margin-bottom:6px;letter-spacing:0.4px">${escapeHtml(c.verse_a || '')} &nbsp;⟷&nbsp; ${escapeHtml(c.verse_b || '')}</div>
+              <div style="margin-bottom:6px">${escapeHtml(c.tension || '')}</div>
+              ${c.reconciliation ? `<div style="font-size:11.5px;color:#7a6a3a;font-style:italic;border-top:1px dashed #E8C97B;padding-top:6px;margin-top:6px"><b>Classical reconciliation:</b> ${escapeHtml(c.reconciliation)}</div>` : ''}
             </div>`).join('')
-        }</div>` : '';
+      : `<div style="color:#999;font-style:italic;padding:10px">No significant intra-Quranic contradictions surfaced in this verse set.</div>`;
+
+    const variationsHtml = (analysis.variations || []).length
+      ? (analysis.variations || []).map(v => `
+            <div style="background:#F7F4FB;border-left:3px solid #9A7BC0;padding:10px 12px;border-radius:0 8px 8px 0;margin-bottom:10px;">
+              <div style="font-weight:700;color:#6B4FA0;margin-bottom:4px">${escapeHtml(v.topic || '')}</div>
+              <div style="margin-bottom:6px">${escapeHtml(v.accounts || '')}</div>
+              ${v.doctrinal_consequence ? `<div style="font-size:11.5px;color:#5a4078;font-style:italic;border-top:1px dashed #C4B0E0;padding-top:6px;margin-top:6px"><b>Doctrinal consequence:</b> ${escapeHtml(v.doctrinal_consequence)}</div>` : ''}
+            </div>`).join('')
+      : `<div style="color:#999;font-style:italic;padding:10px">No notable narrative variations in this verse set.</div>`;
+
+    const ambiguitiesHtml = (analysis.ambiguities || []).length
+      ? `<ul style="margin:0;padding-left:20px;line-height:1.7">${(analysis.ambiguities||[]).map(a=>`<li style="margin-bottom:6px">${escapeHtml(a)}</li>`).join('')}</ul>`
+      : `<div style="color:#999;font-style:italic;padding:10px">No notable ambiguities identified.</div>`;
 
     const themesHtml = (analysis.key_themes || []).length
       ? `<div style="margin-top:12px;display:flex;flex-wrap:wrap;gap:6px">${(analysis.key_themes||[]).map(t=>`<span style="background:#FDF8EE;border:1px solid #E8C97B;border-radius:12px;padding:3px 10px;font-size:12px;color:#B8902A;font-weight:600">${escapeHtml(t)}</span>`).join('')}</div>` : '';
 
     const relatedHtml = (analysis.related_topics || []).length
-      ? `<div style="margin-top:14px"><div style="font-weight:700;color:#C9A84C;margin-bottom:6px">🔗 Related Topics</div><div style="display:flex;flex-wrap:wrap;gap:6px">${(analysis.related_topics||[]).map(t=>`<button onclick="document.getElementById('topicSearch').value='${t}';filterTopics()" style="background:#F0F4FF;border:1px solid #C0C8E8;border-radius:12px;padding:3px 10px;font-size:12px;color:#5566AA;font-weight:600;cursor:pointer">${escapeHtml(t)}</button>`).join('')}</div></div>` : '';
+      ? `<div style="display:flex;flex-wrap:wrap;gap:6px">${(analysis.related_topics||[]).map(t=>`<button onclick="document.getElementById('topicSearch').value='${escapeHtml(t).replace(/'/g,'&#39;')}';filterTopics()" style="background:#F0F4FF;border:1px solid #C0C8E8;border-radius:12px;padding:4px 12px;font-size:12px;color:#5566AA;font-weight:600;cursor:pointer">${escapeHtml(t)}</button>`).join('')}</div>`
+      : `<div style="color:#999;font-style:italic;padding:10px">No related topics suggested.</div>`;
+
+    const textVsTraditionHtml = `
+      <div style="background:#F7FBF7;border-left:3px solid #6B8E6B;padding:10px 12px;border-radius:0 8px 8px 0;margin-bottom:10px;">
+        <div style="font-weight:700;color:#4a7050;margin-bottom:4px">✓ What the text says</div>
+        <div>${escapeHtml(analysis.what_text_says || '—')}</div>
+      </div>
+      <div style="background:#FFF7F7;border-left:3px solid #C07070;padding:10px 12px;border-radius:0 8px 8px 0;">
+        <div style="font-weight:700;color:#984040;margin-bottom:4px">✗ What the text does NOT say (but is often assumed)</div>
+        <div>${escapeHtml(analysis.what_text_does_not_say || '—')}</div>
+      </div>`;
+
+    const doctrinalHtml = analysis.doctrinal_divergence
+      ? `<div style="background:#F4F1FA;border-left:3px solid #8970B0;padding:10px 12px;border-radius:0 8px 8px 0;">${escapeHtml(analysis.doctrinal_divergence)}</div>`
+      : `<div style="color:#999;font-style:italic;padding:10px">No major doctrinal divergence identified for this topic.</div>`;
 
     const tabs = [
-      { id: 'ta-consensus',      label: '📖 CONSENSUS',       html: `<div style="background:#F7FBF7;border-left:3px solid #6B8E6B;padding:10px 12px;border-radius:0 8px 8px 0;">${escapeHtml(analysis.consensus||'')}${themesHtml}</div>` },
-      { id: 'ta-contradictions', label: '⚡ CONFLICTS',        html: (analysis.contradictions||[]).length ? contradictionsHtml : `<div style="color:#999;font-style:italic;padding:10px">No significant contradictions found.</div>` },
-      { id: 'ta-can',            label: '✅ CAN',              html: `<div style="background:#F7FBF7;padding:10px;border-radius:8px">${escapeHtml(analysis.conclusion_can||'')}</div>` },
-      { id: 'ta-cant',           label: '❌ CANNOT',           html: `<div style="background:#FFF7F7;padding:10px;border-radius:8px">${escapeHtml(analysis.conclusion_cant||'')}</div>` },
-      { id: 'ta-hr',             label: '⚖ RIGHTS',           html: `<div style="background:#FDF8EE;padding:10px;border-radius:8px">${escapeHtml(analysis.hr_verdict||'')}</div>` },
-      { id: 'ta-related',        label: '🔗 RELATED',          html: relatedHtml || `<div style="color:#999;font-style:italic;padding:10px">None listed.</div>` },
+      { id: 'ta-overview',       label: '📖 OVERVIEW',         html: `<div style="background:#F7FBF7;border-left:3px solid #6B8E6B;padding:10px 12px;border-radius:0 8px 8px 0;">${escapeHtml(analysis.overview||'')}${themesHtml}</div>` },
+      { id: 'ta-contradictions', label: '⚡ CONTRADICTIONS',    html: contradictionsHtml },
+      { id: 'ta-variations',     label: '🔀 VARIATIONS',       html: variationsHtml },
+      { id: 'ta-ambiguities',    label: '❔ AMBIGUITIES',       html: ambiguitiesHtml },
+      { id: 'ta-textVsTradition',label: '📚 TEXT vs TRADITION', html: textVsTraditionHtml },
+      { id: 'ta-doctrinal',      label: '🕌 DOCTRINAL',         html: doctrinalHtml },
+      { id: 'ta-hr',             label: '⚖ RIGHTS',           html: `<div style="background:#FDF8EE;padding:10px;border-radius:8px">${escapeHtml(analysis.hr_assessment||'')}</div>` },
+      { id: 'ta-related',        label: '🔗 RELATED',          html: relatedHtml },
     ];
 
     // Stash the analysis data so the share handler can read it without inline-onclick gymnastics.
     window._taShare = {
       query: query,
-      consensus: analysis.consensus || '',
-      can: analysis.conclusion_can || '',
-      cant: analysis.conclusion_cant || '',
-      hr: analysis.hr_verdict || ''
+      overview: analysis.overview || '',
+      contradictions: (analysis.contradictions || []).map(c => `${c.verse_a} vs ${c.verse_b}: ${c.tension}`).join('\n'),
+      variations: (analysis.variations || []).map(v => `${v.topic}: ${v.accounts}`).join('\n'),
+      doctrinal: analysis.doctrinal_divergence || '',
+      whatSays: analysis.what_text_says || '',
+      whatNot: analysis.what_text_does_not_say || '',
+      hr: analysis.hr_assessment || ''
     };
 
     const shareBtn = `<button onclick="taShareAnalysis()" style="padding:6px 10px;border:1px solid #E0D8CC;border-radius:8px;background:#fff;font-size:10px;font-weight:700;color:#888;cursor:pointer;letter-spacing:0.4px;display:inline-flex;align-items:center;gap:4px;white-space:nowrap;">📤 SHARE</button>`;
@@ -4492,17 +4544,24 @@ Rules:
     // Expose share handler globally so the inline onclick can call it.
     window.taShareAnalysis = function() {
       const d = window._taShare || {};
-      const txt = (d.query || '') + ' — Quran Topic Analysis\n\n' +
-        'Consensus: ' + (d.consensus || '') + '\n\n' +
-        'Can Conclude: ' + (d.can || '') + '\n\n' +
-        'Cannot Conclude: ' + (d.cant || '') + '\n\n' +
-        'Human Rights: ' + (d.hr || '') + '\n\n' +
-        'Via: https://fascinating-sunburst-516df8.netlify.app';
+      const parts = [
+        (d.query || '') + ' — Quran Topic Analysis',
+        '',
+        'OVERVIEW',
+        d.overview || '',
+      ];
+      if (d.contradictions) { parts.push('', 'CONTRADICTIONS', d.contradictions); }
+      if (d.variations)     { parts.push('', 'VARIATIONS',     d.variations); }
+      if (d.whatSays)       { parts.push('', 'WHAT THE TEXT SAYS',          d.whatSays); }
+      if (d.whatNot)        { parts.push('', 'WHAT THE TEXT DOES NOT SAY',  d.whatNot); }
+      if (d.doctrinal)      { parts.push('', 'DOCTRINAL DIVERGENCE',         d.doctrinal); }
+      if (d.hr)             { parts.push('', 'HUMAN RIGHTS ASSESSMENT',     d.hr); }
+      parts.push('', 'Via: https://fascinating-sunburst-516df8.netlify.app');
+      const txt = parts.join('\n');
       if (navigator.share) {
         navigator.share({ title: (d.query || '') + ' — Quran Analysis', text: txt }).catch(()=>{});
       } else if (navigator.clipboard) {
         navigator.clipboard.writeText(txt).then(()=>alert('Copied to clipboard!')).catch(()=>{
-          // Fallback for browsers without clipboard API
           prompt('Copy the text below:', txt);
         });
       } else {
