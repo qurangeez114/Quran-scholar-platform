@@ -32,8 +32,7 @@ exports.handler = async (event) => {
         model,
         max_tokens,
         messages: [
-          { role: 'user', content: prompt },
-          { role: 'assistant', content: '{' }
+          { role: 'user', content: prompt }
         ]
       })
     });
