@@ -4459,16 +4459,16 @@ Rules:
       { id: 'ta-related',        label: '🔗 RELATED',          html: relatedHtml || `<div style="color:#999;font-style:italic;padding:10px">None listed.</div>` },
     ];
 
-    const shareBtn = `<button onclick="
-      const txt = '${escapeHtml(query)} — Quran Topic Analysis\\n\\n' +
-        'Consensus: ' + ${JSON.stringify(analysis.consensus||'')} + '\\n\\n' +
-        'Can Conclude: ' + ${JSON.stringify(analysis.conclusion_can||'')} + '\\n\\n' +
-        'Cannot Conclude: ' + ${JSON.stringify(analysis.conclusion_cant||'')} + '\\n\\n' +
-        'Human Rights: ' + ${JSON.stringify(analysis.hr_verdict||'')} + '\\n\\n' +
-        'Via: https://fascinating-sunburst-516df8.netlify.app';
-      if (navigator.share) { navigator.share({ title: '${escapeHtml(query)} — Quran Analysis', text: txt }); }
-      else { navigator.clipboard.writeText(txt).then(()=>alert('Copied to clipboard!')); }
-    " style="padding:6px 10px;border:1px solid #E0D8CC;border-radius:8px;background:#fff;font-size:10px;font-weight:700;color:#888;cursor:pointer;letter-spacing:0.4px;display:flex;align-items:center;gap:4px;white-space:nowrap;">📤 SHARE</button>`;
+    // Stash the analysis data so the share handler can read it without inline-onclick gymnastics.
+    window._taShare = {
+      query: query,
+      consensus: analysis.consensus || '',
+      can: analysis.conclusion_can || '',
+      cant: analysis.conclusion_cant || '',
+      hr: analysis.hr_verdict || ''
+    };
+
+    const shareBtn = `<button onclick="taShareAnalysis()" style="padding:6px 10px;border:1px solid #E0D8CC;border-radius:8px;background:#fff;font-size:10px;font-weight:700;color:#888;cursor:pointer;letter-spacing:0.4px;display:inline-flex;align-items:center;gap:4px;white-space:nowrap;">📤 SHARE</button>`;
 
     function taSwitch(id) {
       window._taActive = id;
@@ -4482,6 +4482,27 @@ Rules:
       const active = document.getElementById('btn-' + id);
       if (active) { active.style.background = '#FDF3D8'; active.style.color = '#B8902A'; active.style.borderColor = '#C9A84C'; }
     }
+
+    // Expose share handler globally so the inline onclick can call it.
+    window.taShareAnalysis = function() {
+      const d = window._taShare || {};
+      const txt = (d.query || '') + ' — Quran Topic Analysis\n\n' +
+        'Consensus: ' + (d.consensus || '') + '\n\n' +
+        'Can Conclude: ' + (d.can || '') + '\n\n' +
+        'Cannot Conclude: ' + (d.cant || '') + '\n\n' +
+        'Human Rights: ' + (d.hr || '') + '\n\n' +
+        'Via: https://fascinating-sunburst-516df8.netlify.app';
+      if (navigator.share) {
+        navigator.share({ title: (d.query || '') + ' — Quran Analysis', text: txt }).catch(()=>{});
+      } else if (navigator.clipboard) {
+        navigator.clipboard.writeText(txt).then(()=>alert('Copied to clipboard!')).catch(()=>{
+          // Fallback for browsers without clipboard API
+          prompt('Copy the text below:', txt);
+        });
+      } else {
+        prompt('Copy the text below:', txt);
+      }
+    };
 
     const btnStyle = 'padding:6px 10px;border:1px solid #E0D8CC;border-radius:8px;background:#fff;font-size:10px;font-weight:700;color:#888;cursor:pointer;letter-spacing:0.4px;display:flex;align-items:center;gap:4px;white-space:nowrap;';
 
