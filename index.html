@@ -4403,35 +4403,20 @@ Rules:
 - All strings must be single line, no literal newlines inside JSON values`;
 
   try {
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    const resp = await fetch('/.netlify/functions/analyze', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': ANTHROPIC_KEY,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 4000,
-        messages: [
-          { role: 'user', content: prompt },
-          // Prefill assistant with "{" so Claude is forced to continue as JSON.
-          { role: 'assistant', content: '{' }
-        ]
-      })
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt, max_tokens: 4000 })
     });
     const data = await resp.json();
     if (data.error) {
-      content.innerHTML = '<div style="color:#C0392B;padding:10px">API error: ' + escapeHtml(data.error.message || JSON.stringify(data.error)) + '</div>';
+      content.innerHTML = '<div style="color:#C0392B;padding:10px">API error: ' + escapeHtml(data.error.message || data.error) + '</div>';
       return;
     }
     let raw = (data.content?.[0]?.text || '').trim();
-    // Because we prefilled "{", reattach it.
+    // The function prefilled with "{" so reattach it.
     let text = '{' + raw;
-    // Strip markdown fences if present.
     text = text.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
-    // Extract the largest balanced JSON object — handles trailing text.
     const firstBrace = text.indexOf('{');
     const lastBrace = text.lastIndexOf('}');
     if (firstBrace !== -1 && lastBrace > firstBrace) {
@@ -4441,8 +4426,6 @@ Rules:
     let analysis;
     try { analysis = JSON.parse(text); } catch (e) {
       console.warn('JSON parse failed. Raw response:', raw);
-      console.warn('Cleaned text:', text);
-      console.warn('Error:', e);
       analysis = null;
     }
 
