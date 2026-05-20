@@ -719,57 +719,46 @@ async function generateReport(query, ctx, lang, translateAll) {
   // specific verse reference or a general topic/concept.
   let prompt;
   if (ctx.mode === 'verse' && ctx.verse) {
-    prompt = `You are an honest scholar of the Quran and Islamic tradition. The reader of this report is a serious adult who wants the unvarnished truth — including contradictions, weak chains, scientific impossibilities, and morally troubling content. Do not soften. Do not apologize for the tradition. Do not editorialize against it either. Present what the sources actually say.
+    prompt = `You are an honest scholar of the Quran. The reader wants the unvarnished truth — contradictions, weak chains, scientific impossibilities, and morally troubling content. Don't soften, don't apologize, don't editorialize. Be concise — FINISH WITHIN 50 SECONDS.
 
 QUERY: ${query}
 
-DATABASE CONTEXT (from the platform's own database — cite these where used):
-${JSON.stringify(ctx, null, 2).substring(0, 6000)}
+DATABASE CONTEXT (cite where used):
+${JSON.stringify(ctx, null, 2).substring(0, 5000)}
 
-Produce a comprehensive report with these sections:
+Produce a tight report (1-2 paragraphs per section):
 
-1. VERSE IDENTIFICATION — Arabic text, literal English meaning, surah and aya number.
-2. WORD ANALYSIS — Key Arabic roots, linguistic origins, semantic range. Note where translations smooth over difficult words.
-3. ASBAB AL-NUZUL — Historical context of revelation, with named transmitters.
-4. CLASSICAL TAFSIR — Major Sunni (al-Tabari, Ibn Kathir, al-Qurtubi) and Shia (al-Tusi, al-Tabarsi) commentary. Where they disagree, name the disagreement.
-5. HADITH CONNECTIONS — Related hadiths with collection and grade. Flag weak or disputed chains.
-6. CROSS-REFERENCES — Other verses on this theme, including any that appear to contradict it.
-7. CONTRADICTIONS AND TENSIONS — Honestly list every contradiction with other verses, hadiths, science, or modern ethics. "None known" only if truly none.
-8. MULTI-PERSPECTIVE READING — Sunni traditional, Shia, Mu'tazila/rationalist, Sufi, Salafi, modernist, reformist. Note where each school's reading reveals its own assumptions.
-9. PHILOSOPHICAL AND ETHICAL EVALUATION — Does the content cohere with reason? With human dignity? With observed reality? Be specific.
-10. HONEST CONCLUSION — What a careful reader should take away. Do not preach.
+1. VERSE — Arabic text, literal English, location.
+2. WORD ANALYSIS — Key roots, where translations smooth over difficulty.
+3. ASBAB AL-NUZUL — Historical context of revelation.
+4. CLASSICAL TAFSIR — Sunni (al-Tabari, Ibn Kathir, al-Qurtubi) and Shia (al-Tusi, al-Tabarsi). Name disagreements.
+5. HADITH CONNECTIONS — Related hadiths with grades. Flag weak chains.
+6. CROSS-REFERENCES & CONTRADICTIONS — Other verses, including any that contradict. List specifics.
+7. MULTI-PERSPECTIVE — Sunni traditional, Shia, Mu'tazila, Sufi, Salafi, reformist. Note assumptions each reading carries.
+8. EVALUATION — Coherence with reason, dignity, observed reality. Name incoherence directly.
+9. HONEST CONCLUSION — 3-4 sentences. No preaching.
 
 ${langNote}`;
   } else {
     // Topic / concept query
-    prompt = `You are an honest scholar of the Quran and Islamic tradition. The reader of this report is a serious adult who wants the unvarnished truth — including contradictions, weak chains, anthropomorphic imagery, scientific impossibilities, and morally troubling content. Do not soften. Do not apologize for the tradition. Do not editorialize against it either. Present what the sources actually say, then compare and evaluate them.
+    prompt = `You are an honest scholar. The reader wants the unvarnished truth — including contradictions, weak chains, and morally troubling content. Don't soften, don't apologize, don't editorialize. Be concise — aim for clarity over completeness, and FINISH WITHIN 50 SECONDS.
 
-QUERY (a topic or concept): ${query}
+TOPIC: ${query}
 
-DATABASE CONTEXT (from this platform's database — these are real entries from the hadith corpus, hadith analyses already performed by AI, madhhab catalog, madhhab rulings, Quran verses, and tafsir. Cite them where used and quote text directly where useful.):
-${JSON.stringify(ctx, null, 2).substring(0, 7000)}
+DATABASE EVIDENCE (real entries from the platform's hadith corpus, hadith analyses, madhhab catalog, madhhab rulings, Quran verses, and tafsir — cite these where used):
+${JSON.stringify(ctx, null, 2).substring(0, 5000)}
 
-Produce a comprehensive scholarly report on this topic with these sections:
+Produce a tight scholarly report with these sections (keep each section focused — 1-2 paragraphs max):
 
-1. WHAT THE QURAN SAYS — Every relevant verse from the database plus other key verses you know. Quote the Arabic and English where central. Note any verses that contradict each other on this point.
-
-2. WHAT THE HADITH CORPUS SAYS — Collate the hadiths matched in the database PLUS any other significant hadiths you know on this topic. For each, give: collection, hadith number if available, narrator, English text (paraphrased if long), and authenticity grade. Group by collection (Sahih Bukhari, Sahih Muslim, the Sunan, the Shia Four Books, etc.).
-
-3. SIMILARITY AND CLUSTERS — Group the hadiths and verses by what they actually claim. Where 5 hadiths say A and 2 hadiths say not-A, name that.
-
-4. CONTRADICTIONS — List every contradiction: hadith-vs-Quran, hadith-vs-hadith, Quran-vs-Quran on this topic, and any contradiction with reason or science. Be specific: "Hadith X in Bukhari says Y, but Verse Q:S:A says not-Y." Use the database matches as your evidence base.
-
-5. CLASSICAL SCHOLARLY DEBATE — How did the major schools and theological movements handle this? Cover: Hanafi, Maliki, Shafi'i, Hanbali, Ja'fari (Twelver Shia), Mu'tazila, Ash'ari, Athari (literalist), Sufi, Salafi. Name the actual scholars who took each position (al-Tabari, Ibn Taymiyya, al-Ghazali, al-Razi, al-Tusi, etc.). Where the database includes a relevant madhhab ruling, use it directly.
-
-6. PHILOSOPHICAL EVALUATION — Is the dominant claim coherent? Does it survive scrutiny by reason? Does anthropomorphic language (if relevant) cohere with tawhid? Where the tradition contains incoherence, name it.
-
-7. MODERN HUMAN RIGHTS AND SCIENTIFIC LENS — Where the database hadith analyses include human rights scores or scientific compatibility scores, summarize them honestly. Where the topic touches on women, slaves, religious minorities, or punishment, do not skip the analysis.
-
-8. REFORMIST AND PROGRESSIVE PERSPECTIVES — How do Khaled Abou El Fadl, Amina Wadud, Fazlur Rahman, Mohammed Arkoun, Scott Kugle, Mohammed Shahrour, and similar contemporary scholars handle this? Where they reject the classical consensus, say so plainly and explain why.
-
-9. HONEST SUMMARY — In 4-6 sentences, what is true, what is contested, and what should a reasoning reader conclude. Do not preach. Do not pretend to neutrality where the evidence is asymmetric.
-
-10. REFLECTION QUESTIONS — 4-5 sharp, probing questions that put pressure on inherited assumptions. Not soft devotional questions.
+1. QURAN ON THIS — Key verses with brief Arabic/English where central. Note any internal contradictions.
+2. HADITH ON THIS — Collate matched hadiths by collection (Bukhari, Muslim, Sunan, Shia Four Books). Include authenticity grades.
+3. CONTRADICTIONS — Specific: "Hadith X says Y, but verse Z says not-Y." List every contradiction with reason, science, or other texts.
+4. CLASSICAL SCHOOLS — How Hanafi, Maliki, Shafi'i, Hanbali, Ja'fari, Mu'tazila, Ash'ari, Sufi, Salafi handle this. Name key scholars (al-Tabari, Ibn Taymiyya, al-Ghazali, al-Tusi, etc.).
+5. PHILOSOPHICAL EVALUATION — Is it coherent? Does it survive scrutiny by reason? Name incoherence directly.
+6. HUMAN RIGHTS & SCIENTIFIC LENS — Where the database analyses show low HR/Sci scores, surface them. Don't skip women, slaves, minorities, or punishment.
+7. REFORMIST VIEWS — Khaled Abou El Fadl, Wadud, Fazlur Rahman, Arkoun, Kugle, Shahrour. Where they reject the classical position, say so.
+8. HONEST CONCLUSION — 3-4 sentences. What's settled, what's contested, what a thinking reader should take from this.
+9. REFLECTION QUESTIONS — 3 sharp questions that pressure inherited assumptions.
 
 ${langNote}`;
   }
@@ -779,7 +768,7 @@ ${langNote}`;
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: 'claude-sonnet-4-5',
-      max_tokens: 8000,
+      max_tokens: 3500,
       messages: [{ role: 'user', content: prompt }]
     })
   });
