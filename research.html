@@ -705,46 +705,40 @@ async function generateReport(query, ctx, lang, translateAll) {
   // specific verse reference or a general topic/concept.
   let prompt;
   if (ctx.mode === 'verse' && ctx.verse) {
-    prompt = `You are an honest scholar of the Quran. The reader wants the unvarnished truth — contradictions, weak chains, scientific impossibilities, and morally troubling content. Don't soften, don't apologize, don't editorialize. Be concise — FINISH WITHIN 50 SECONDS.
+    prompt = `You are an honest scholar of the Quran. The reader wants the unvarnished truth — contradictions, weak chains, scientific impossibilities, morally troubling content. Don't soften, don't apologize, don't editorialize. Be CONCISE. Aim for 4-6 short paragraphs. FINISH WITHIN 20 SECONDS.
 
 QUERY: ${query}
 
-DATABASE CONTEXT (cite where used):
-${JSON.stringify(ctx, null, 2).substring(0, 5000)}
+DATABASE CONTEXT:
+${JSON.stringify(ctx, null, 2).substring(0, 3500)}
 
-Produce a tight report (1-2 paragraphs per section):
+Produce a tight report covering, in order:
 
-1. VERSE — Arabic text, literal English, location.
-2. WORD ANALYSIS — Key roots, where translations smooth over difficulty.
-3. ASBAB AL-NUZUL — Historical context of revelation.
-4. CLASSICAL TAFSIR — Sunni (al-Tabari, Ibn Kathir, al-Qurtubi) and Shia (al-Tusi, al-Tabarsi). Name disagreements.
-5. HADITH CONNECTIONS — Related hadiths with grades. Flag weak chains.
-6. CROSS-REFERENCES & CONTRADICTIONS — Other verses, including any that contradict. List specifics.
-7. MULTI-PERSPECTIVE — Sunni traditional, Shia, Mu'tazila, Sufi, Salafi, reformist. Note assumptions each reading carries.
-8. EVALUATION — Coherence with reason, dignity, observed reality. Name incoherence directly.
-9. HONEST CONCLUSION — 3-4 sentences. No preaching.
+1. VERSE — Arabic, English, location. If the verse doesn't exist, say so plainly.
+2. CLASSICAL TAFSIR — One paragraph on the main Sunni (al-Tabari, Ibn Kathir) and Shia (al-Tusi, al-Tabarsi) readings. Note disagreements.
+3. HADITH CONNECTIONS — Related hadiths with grades. Flag weak chains.
+4. CONTRADICTIONS — Other verses or hadiths that contradict this. Modern ethical / scientific tensions. Be specific.
+5. MULTI-PERSPECTIVE — One sentence each: Sunni, Shia, Mu'tazila, Sufi, Salafi, reformist.
+6. HONEST CONCLUSION — 3 sentences. No preaching.
 
 ${langNote}`;
   } else {
     // Topic / concept query
-    prompt = `You are an honest scholar. The reader wants the unvarnished truth — including contradictions, weak chains, and morally troubling content. Don't soften, don't apologize, don't editorialize. Be concise — aim for clarity over completeness, and FINISH WITHIN 50 SECONDS.
+    prompt = `You are an honest scholar. The reader wants the unvarnished truth — including contradictions, weak chains, and morally troubling content. Don't soften, don't apologize, don't editorialize. Be CONCISE. Aim for 4-6 short paragraphs total. FINISH WITHIN 20 SECONDS.
 
 TOPIC: ${query}
 
-DATABASE EVIDENCE (real entries from the platform's hadith corpus, hadith analyses, madhhab catalog, madhhab rulings, Quran verses, and tafsir — cite these where used):
-${JSON.stringify(ctx, null, 2).substring(0, 5000)}
+DATABASE EVIDENCE (cite where used):
+${JSON.stringify(ctx, null, 2).substring(0, 3500)}
 
-Produce a tight scholarly report with these sections (keep each section focused — 1-2 paragraphs max):
+Produce a tight scholarly brief covering, in order:
 
-1. QURAN ON THIS — Key verses with brief Arabic/English where central. Note any internal contradictions.
-2. HADITH ON THIS — Collate matched hadiths by collection (Bukhari, Muslim, Sunan, Shia Four Books). Include authenticity grades.
-3. CONTRADICTIONS — Specific: "Hadith X says Y, but verse Z says not-Y." List every contradiction with reason, science, or other texts.
-4. CLASSICAL SCHOOLS — How Hanafi, Maliki, Shafi'i, Hanbali, Ja'fari, Mu'tazila, Ash'ari, Sufi, Salafi handle this. Name key scholars (al-Tabari, Ibn Taymiyya, al-Ghazali, al-Tusi, etc.).
-5. PHILOSOPHICAL EVALUATION — Is it coherent? Does it survive scrutiny by reason? Name incoherence directly.
-6. HUMAN RIGHTS & SCIENTIFIC LENS — Where the database analyses show low HR/Sci scores, surface them. Don't skip women, slaves, minorities, or punishment.
-7. REFORMIST VIEWS — Khaled Abou El Fadl, Wadud, Fazlur Rahman, Arkoun, Kugle, Shahrour. Where they reject the classical position, say so.
-8. HONEST CONCLUSION — 3-4 sentences. What's settled, what's contested, what a thinking reader should take from this.
-9. REFLECTION QUESTIONS — 3 sharp questions that pressure inherited assumptions.
+1. WHAT THE SOURCES SAY — Quran verses + key hadiths on this. Note authenticity grades.
+2. CONTRADICTIONS — Specific ones: "Hadith X says Y, but verse Z says not-Y." List the real disagreements.
+3. CLASSICAL SCHOOLS — How Sunni schools (Hanafi/Maliki/Shafi'i/Hanbali), Ja'fari Shia, Mu'tazila, and Salafi handle this in one line each.
+4. HUMAN RIGHTS / SCIENTIFIC LENS — Where database analyses show concerns, surface them. Don't skip women, slaves, minorities, punishment.
+5. REFORMIST VIEW — In 2 sentences: how do Abou El Fadl, Wadud, Fazlur Rahman, Arkoun handle this?
+6. HONEST CONCLUSION — 3 sentences. What's settled, what's contested, what should a thinking reader take.
 
 ${langNote}`;
   }
@@ -754,7 +748,7 @@ ${langNote}`;
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 2500,
+      max_tokens: 1800,
       messages: [{ role: 'user', content: prompt }]
     })
   });
