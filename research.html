@@ -643,13 +643,22 @@ async function fetchDBContext(query) {
 
     // Path B: topic search (e.g. "face of Allah", "body of Allah",
     // "stoning", "women testimony"). Search across all major tables.
+    // Keep this lean — Netlify functions have a 60s budget and we still
+    // need most of that for Claude to generate the report.
     ctx.mode = 'topic';
     const q = encodeURIComponent('*' + query.trim().replace(/\s+/g, ' ') + '*');
     const qPlain = query.trim();
 
-    // Helper that swallows individual table errors so one failure
-    // doesn't kill the whole report.
-    const safe = (p) => p.then(r => r.ok ? r.json() : []).catch(() => []);
+    // Helper that swallows individual table errors and short-circuits on timeout
+    const SB_TIMEOUT = 8000;   // 8s max per table
+    const safe = (url) => new Promise((resolve) => {
+      const ctl = new AbortController();
+      const t = setTimeout(() => ctl.abort(), SB_TIMEOUT);
+      fetch(url, { headers: hdrs, signal: ctl.signal })
+        .then(r => r.ok ? r.json() : [])
+        .then(j => { clearTimeout(t); resolve(j || []); })
+        .catch(() => { clearTimeout(t); resolve([]); });
+    });
 
     const [
       hadithMatches,
@@ -657,38 +666,17 @@ async function fetchDBContext(query) {
       madhhabTopics,
       madhhabRulings,
       ayaMatches,
-      tafsirMatches,
     ] = await Promise.all([
-      // 1. Raw hadith text matches (English)
-      safe(fetch(
-        `${SB_URL}/rest/v1/hadith_corpus?select=id,collection,narrator,hadith_number,text_english,grade,tradition&text_english=ilike.${q}&limit=12`,
-        {headers:hdrs}
-      )),
-      // 2. Hadith analyses that touch this topic (use Sonnet/Haiku output)
-      safe(fetch(
-        `${SB_URL}/rest/v1/hadith_analysis?select=hadith_id,authenticity_grade,common_sense_analysis,potential_concerns,contradictions,human_rights_score,scientific_score,human_rights_analysis,universal_principles&or=(common_sense_analysis.ilike.${q},potential_concerns.ilike.${q},contradictions.ilike.${q},sunni_interpretation.ilike.${q},shia_interpretation.ilike.${q})&limit=10`,
-        {headers:hdrs}
-      )),
-      // 3. Madhhab topics matching this term
-      safe(fetch(
-        `${SB_URL}/rest/v1/madhhab_topics?select=id,topic,category,subcategory,controversy_level,brief_description&or=(topic.ilike.${q},brief_description.ilike.${q})&limit=8`,
-        {headers:hdrs}
-      )),
-      // 4. Madhhab rulings (only some will have content)
-      safe(fetch(
-        `${SB_URL}/rest/v1/madhhab_rulings?select=topic_id,consensus,key_disagreement,hanafi_position,maliki_position,shafii_position,hanbali_position,jafari_position,salafi_position,bloodshed_or_persecution&or=(consensus.ilike.${q},key_disagreement.ilike.${q},hanafi_position.ilike.${q},maliki_position.ilike.${q},shafii_position.ilike.${q},hanbali_position.ilike.${q})&limit=6`,
-        {headers:hdrs}
-      )),
+      // 1. Raw hadith text matches (English) - small limit, single column
+      safe(`${SB_URL}/rest/v1/hadith_corpus?select=id,collection,narrator,hadith_number,text_english,grade&text_english=ilike.${q}&limit=8`),
+      // 2. Hadith analyses that touch this topic - search ONE column for speed
+      safe(`${SB_URL}/rest/v1/hadith_analysis?select=hadith_id,authenticity_grade,common_sense_analysis,potential_concerns,human_rights_score,scientific_score&potential_concerns=ilike.${q}&limit=6`),
+      // 3. Madhhab topics matching this term - search ONE column
+      safe(`${SB_URL}/rest/v1/madhhab_topics?select=id,topic,category,subcategory,controversy_level,brief_description&topic=ilike.${q}&limit=6`),
+      // 4. Madhhab rulings - search ONE column
+      safe(`${SB_URL}/rest/v1/madhhab_rulings?select=topic_id,consensus,key_disagreement,hanafi_position,maliki_position,shafii_position,hanbali_position,jafari_position&consensus=ilike.${q}&limit=4`),
       // 5. Quran verses matching this term in English
-      safe(fetch(
-        `${SB_URL}/rest/v1/ayas?select=sura_id,aya_number,arabic,english&english=ilike.${q}&limit=8`,
-        {headers:hdrs}
-      )),
-      // 6. Tafsir entries
-      safe(fetch(
-        `${SB_URL}/rest/v1/tafsir_entries?select=sura,aya,scholar_name,content,tradition&content.ilike=${q}&limit=6`,
-        {headers:hdrs}
-      )),
+      safe(`${SB_URL}/rest/v1/ayas?select=sura_id,aya_number,arabic,english&english=ilike.${q}&limit=6`),
     ]);
 
     if (hadithMatches.length)  ctx.hadith_matches   = hadithMatches;
@@ -696,7 +684,6 @@ async function fetchDBContext(query) {
     if (madhhabTopics.length)  ctx.madhhab_topics   = madhhabTopics;
     if (madhhabRulings.length) ctx.madhhab_rulings  = madhhabRulings;
     if (ayaMatches.length)     ctx.quran_verses     = ayaMatches;
-    if (tafsirMatches.length)  ctx.tafsir           = tafsirMatches;
 
     ctx.match_summary = {
       hadiths:       hadithMatches.length,
@@ -704,7 +691,6 @@ async function fetchDBContext(query) {
       madhhab_topics: madhhabTopics.length,
       madhhab_rulings: madhhabRulings.length,
       quran_verses:  ayaMatches.length,
-      tafsir:        tafsirMatches.length,
     };
   } catch(e) { ctx.dbError = e.message; }
   return ctx;
@@ -768,7 +754,7 @@ ${langNote}`;
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: 'claude-sonnet-4-5',
-      max_tokens: 3500,
+      max_tokens: 2500,
       messages: [{ role: 'user', content: prompt }]
     })
   });
