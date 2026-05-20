@@ -523,7 +523,15 @@ mark.hl-green{background:#BAFFC9;}
             <button onclick="clearAIOutput()" style="padding:4px 11px;border:1px solid rgba(120,90,40,0.2);border-radius:2px;background:transparent;font-family:'Inconsolata',monospace;font-size:9px;color:#9a7a45;cursor:pointer;">Clear</button>
           </div>
         </div>
-        <div id="aiReportBody" style="padding:16px;font-family:'EB Garamond',serif;font-size:15px;color:#2a1f0f;line-height:1.85;white-space:pre-wrap;"></div>
+        <div id="aiReportBody" style="padding:16px;font-family:'EB Garamond',serif;font-size:15px;color:#2a1f0f;line-height:1.85;"></div>
+        <!-- Action toolbar for AI report -->
+        <div class="card-actions" style="border-top:1px solid rgba(120,90,40,0.2);background:var(--p0);">
+          <button class="action-btn" onclick="speakAIReport()">🔊 Read</button>
+          <button class="action-btn" id="aiSaveBtn" onclick="saveAIReport()">🔖 Save</button>
+          <button class="action-btn" onclick="copyAIReport()">📋 Copy</button>
+          <button class="action-btn" onclick="exportAIReport()">📄 Export</button>
+          <button class="action-btn" onclick="shareAIReport()">📤 Share</button>
+        </div>
       </div>
 
     </div>
@@ -582,17 +590,96 @@ function clearAIImage() {
 }
 function clearAIOutput() {
   document.getElementById('aiOutput').style.display = 'none';
-  document.getElementById('aiReportBody').textContent = '';
+  document.getElementById('aiReportBody').innerHTML = '';
+  window._aiReportText = '';
 }
+
+// ── Markdown → HTML renderer (no external lib needed) ──────────
+function renderMarkdown(md) {
+  let html = md
+    // Escape HTML entities first
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    // Headers
+    .replace(/^### (.+)$/gm, '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:17px;color:#4a3520;margin:18px 0 6px;font-weight:600;letter-spacing:.01em;">$1</h3>')
+    .replace(/^## (.+)$/gm,  '<h2 style="font-family:\'Cormorant Garamond\',serif;font-size:20px;color:#2c1f0a;margin:22px 0 8px;font-weight:600;border-bottom:1px solid rgba(120,90,40,0.2);padding-bottom:4px;">$1</h2>')
+    .replace(/^# (.+)$/gm,   '<h1 style="font-family:\'Cormorant Garamond\',serif;font-size:24px;color:#1a1005;margin:0 0 16px;font-weight:600;">$1</h1>')
+    // Bold + italic combo ***text***
+    .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
+    // Bold **text**
+    .replace(/\*\*(.+?)\*\*/g, '<strong style="color:#3a2a10;font-weight:700;">$1</strong>')
+    // Italic *text*
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    // Horizontal rule
+    .replace(/^---$/gm, '<hr style="border:none;border-top:1px solid rgba(120,90,40,0.2);margin:16px 0;">')
+    // ── Quran verse refs: [Q 2:255] → link to index.html
+    .replace(/\[Q\s+(\d+):(\d+)\]/g, (_, s, a) => {
+      const url = `index.html?sura=${s}&aya=${a}&from=research`;
+      return `<a href="${url}" target="_blank" title="Open Quran ${s}:${a}" style="display:inline-flex;align-items:center;gap:3px;padding:1px 7px;background:var(--bronze-ss);border:1px solid var(--bronze-s);border-radius:3px;color:var(--bronze);font-family:'Inconsolata',monospace;font-size:11px;font-weight:700;text-decoration:none;transition:all .15s;" onmouseover="this.style.background='var(--bronze)';this.style.color='#fff'" onmouseout="this.style.background='var(--bronze-ss)';this.style.color='var(--bronze)'">📖 ${s}:${a} ↗</a>`;
+    })
+    // ── Hadith refs: [H Bukhari 56:2787] → search this page
+    .replace(/\[H\s+([^\]]+)\]/g, (_, ref) => {
+      const searchQ = encodeURIComponent(ref.trim());
+      const url = `research.html?q=${searchQ}&source=hadith`;
+      return `<a href="${url}" target="_blank" title="Search hadith: ${ref}" style="display:inline-flex;align-items:center;gap:3px;padding:1px 7px;background:var(--hadith-bg);border:1px solid var(--hadith-border);border-radius:3px;color:var(--hadith);font-family:'Inconsolata',monospace;font-size:11px;font-weight:700;text-decoration:none;transition:all .15s;" onmouseover="this.style.background='var(--hadith)';this.style.color='#fff'" onmouseout="this.style.background='var(--hadith-bg)';this.style.color='var(--hadith)'">📜 ${ref} ↗</a>`;
+    })
+    // Blank lines → paragraph breaks
+    .replace(/\n\n+/g, '</p><p style="margin:0 0 12px;">')
+    // Single newlines → <br> within paragraphs
+    .replace(/\n/g, '<br>');
+  return '<p style="margin:0 0 12px;">' + html + '</p>';
+}
+
 function copyAIReport() {
-  const text = document.getElementById('aiReportBody').textContent;
+  const text = window._aiReportText || document.getElementById('aiReportBody').innerText;
   if (!text) return;
+  const btn = event?.target;
   navigator.clipboard.writeText(text).catch(() => {
     const ta = document.createElement('textarea');
     ta.value = text; document.body.appendChild(ta); ta.select();
     document.execCommand('copy'); document.body.removeChild(ta);
   });
-  alert('Report copied!');
+  if (btn) { const orig = btn.textContent; btn.textContent = '✓ Copied'; setTimeout(() => btn.textContent = orig, 1400); }
+}
+
+function speakAIReport() {
+  if ('speechSynthesis' in window) {
+    if (window.speechSynthesis.speaking) { window.speechSynthesis.cancel(); return; }
+    const text = window._aiReportText || document.getElementById('aiReportBody').innerText;
+    const utt = new SpeechSynthesisUtterance(text);
+    utt.lang = 'en-US'; utt.rate = 0.9;
+    window.speechSynthesis.speak(utt);
+  }
+}
+
+function saveAIReport() {
+  const text = window._aiReportText || '';
+  if (!text) return;
+  const topic = document.getElementById('aiTextInput').value.trim() || 'AI Research Report';
+  const stored = JSON.parse(localStorage.getItem('research_bm') || '{}');
+  const id = 'ai-report-' + Date.now();
+  stored[id] = { id, type: 'ai', sura_id: '—', aya_number: '—', preview: topic + ': ' + text.slice(0, 100), savedAt: new Date().toISOString() };
+  localStorage.setItem('research_bm', JSON.stringify(stored));
+  renderBookmarks();
+  const btn = document.getElementById('aiSaveBtn');
+  if (btn) { btn.textContent = '🔖 Saved'; btn.classList.add('active'); }
+}
+
+function exportAIReport() {
+  const text = window._aiReportText || '';
+  if (!text) return;
+  const topic = document.getElementById('aiTextInput').value.trim() || 'report';
+  const blob = new Blob([text], { type: 'text/plain' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = 'quran-research-' + topic.slice(0,30).replace(/\s+/g,'-') + '.txt';
+  a.click();
+}
+
+function shareAIReport() {
+  const text = window._aiReportText || '';
+  if (!text) return;
+  const topic = document.getElementById('aiTextInput').value.trim() || 'Quran Research';
+  if (navigator.share) navigator.share({ title: topic, text: text.slice(0, 800) + '\n\nhttps://fascinating-sunburst-516df8.netlify.app' });
+  else navigator.clipboard?.writeText(text).then(() => alert('Report copied to clipboard.'));
 }
 
 async function extractNoteFromImage(base64, mime) {
@@ -704,6 +791,12 @@ async function generateReport(query, ctx, lang, translateAll) {
   // Two different prompts depending on whether the user asked about a
   // specific verse reference or a general topic/concept.
   let prompt;
+  const refNote = `
+REFERENCE FORMAT — use these exact formats for all citations so they become clickable links:
+- Quran verses: [Q SURA:AYA] e.g. [Q 2:255] or [Q 24:31]
+- Hadith: [H Collection Book:Number] e.g. [H Bukhari 56:2787] or [H Muslim 1:1]
+Always cite inline right after the claim.`;
+
   if (ctx.mode === 'verse' && ctx.verse) {
     prompt = `You are an honest scholar of the Quran. The reader wants the unvarnished truth — contradictions, weak chains, scientific impossibilities, morally troubling content. Don't soften, don't apologize, don't editorialize. Be CONCISE. Aim for 4-6 short paragraphs. FINISH WITHIN 20 SECONDS.
 
@@ -721,6 +814,7 @@ Produce a tight report covering, in order:
 5. MULTI-PERSPECTIVE — One sentence each: Sunni, Shia, Mu'tazila, Sufi, Salafi, reformist.
 6. HONEST CONCLUSION — 3 sentences. No preaching.
 
+${refNote}
 ${langNote}`;
   } else {
     // Topic / concept query
@@ -740,6 +834,7 @@ Produce a tight scholarly brief covering, in order:
 5. REFORMIST VIEW — In 2 sentences: how do Abou El Fadl, Wadud, Fazlur Rahman, Arkoun handle this?
 6. HONEST CONCLUSION — 3 sentences. What's settled, what's contested, what should a thinking reader take.
 
+${refNote}
 ${langNote}`;
   }
 
@@ -779,8 +874,11 @@ async function runAIResearch() {
     document.getElementById('aiLoadingMsg').textContent = `🔬 Generating report in ${aiLang}...`;
     const report = await generateReport(query, ctx, aiLang, translateAll);
     document.getElementById('aiLoading').style.display = 'none';
-    document.getElementById('aiReportBody').textContent = report;
+    window._aiReportText = report;
+    document.getElementById('aiReportBody').innerHTML = renderMarkdown(report);
     document.getElementById('aiOutput').style.display = 'block';
+    const saveBtn = document.getElementById('aiSaveBtn');
+    if (saveBtn) { saveBtn.textContent = '🔖 Save'; saveBtn.classList.remove('active'); }
   } catch(err) {
     document.getElementById('aiLoading').style.display = 'none';
     document.getElementById('aiError').style.display = 'block';
@@ -1456,10 +1554,14 @@ function buildCard(r, q, isRelated) {
     if (r.arabic_text) arabicBlock = `<div class="card-arabic">${esc(r.arabic_text)}</div>`;
     textBlock = `<div class="card-text" id="text-${id}">${highlight(r.hadith_text, q)}</div>`;
     const meta = [];
-    if (r.narrator) meta.push(`Narrator: ${r.narrator}`);
-    if (r.reference) meta.push(`📖 ${r.reference}`);
-    if (r.similarity_note) meta.push(`Similarity: ${r.similarity_note}`);
-    metaLine = meta.length ? `<div class="card-meta">${meta.map(esc).join(' · ')}</div>` : '';
+    if (r.narrator) meta.push(`Narrator: ${esc(r.narrator)}`);
+    if (r.reference) {
+      const refSearch = encodeURIComponent(r.reference);
+      meta.push(`<a href="research.html?q=${refSearch}&source=hadith" style="color:var(--hadith);text-decoration:none;font-style:normal;" title="Search this reference">📖 ${esc(r.reference)} ↗</a>`);
+    }
+    if (suraRef) meta.push(`<a href="${verseUrl}" target="_blank" style="color:var(--bronze);text-decoration:none;font-style:normal;" title="Open verse ${suraRef}:${ayaRef} in Quran platform">🔗 Verse ${suraRef}:${ayaRef} ↗</a>`);
+    if (r.similarity_note) meta.push(`<span style="font-style:italic">${esc(r.similarity_note)}</span>`);
+    metaLine = meta.length ? `<div class="card-meta">${meta.join(' · ')}</div>` : '';
     // Analysis placeholders — filled asynchronously by injectAnalysisScores()
     metaLine += `<div class="analysis-scores-placeholder"></div>
     <div class="analysis-panel-placeholder"></div>`;
@@ -1485,12 +1587,17 @@ function buildCard(r, q, isRelated) {
     if (isLong) textBlock += '<button onclick="expandCard(\'' + id + '\')" style="font-size:11px;color:var(--gold);background:none;border:none;cursor:pointer;padding:2px 0;">Show more ▼</button>';
     const suraNum = r.sura || r.sura_id;
     const ayaNum = r.aya || r.aya_number;
-    metaLine = suraNum ? `<div class="card-meta">Verse ${suraNum}:${ayaNum} · ${esc(r.tradition||'')}</div>` : '';
+    const tafsirVerseUrl = suraNum ? `index.html?sura=${suraNum}&aya=${ayaNum}&from=research&q=${encodeURIComponent(currentQ)}&source=tafsir` : '';
+    metaLine = suraNum ? `<div class="card-meta"><a href="${tafsirVerseUrl}" target="_blank" style="color:var(--bronze);text-decoration:none;" title="Open verse ${suraNum}:${ayaNum}">🔗 Verse ${suraNum}:${ayaNum} ↗</a>${r.tradition ? ' · ' + esc(r.tradition) : ''}</div>` : '';
   } else if (r.type === 'asbab') {
     typePill = `<span class="source-pill pill-asbab">🕰 Asbāb</span>`;
     scholarLine = `<div class="card-scholar">${esc(r.scholar||'Classical narration')}</div>`;
     textBlock = `<div class="card-text" id="text-${id}">${highlight(r.reason_text, q)}</div>`;
-    if (r.source) metaLine = `<div class="card-meta">${esc(r.source)}</div>`;
+    const asbabVerseUrl = suraRef ? `index.html?sura=${suraRef}&aya=${ayaRef}&from=research&q=${encodeURIComponent(currentQ)}&source=asbab` : '';
+    const asbabMeta = [];
+    if (r.source) asbabMeta.push(esc(r.source));
+    if (suraRef) asbabMeta.push(`<a href="${asbabVerseUrl}" target="_blank" style="color:var(--bronze);text-decoration:none;" title="Open verse ${suraRef}:${ayaRef}">🔗 Verse ${suraRef}:${ayaRef} ↗</a>`);
+    metaLine = asbabMeta.length ? `<div class="card-meta">${asbabMeta.join(' · ')}</div>` : '';
   }
 
   const tradPill = r.tradition ? `<span class="trad-pill pill-${r.tradition}">${r.tradition}</span>` : '';
