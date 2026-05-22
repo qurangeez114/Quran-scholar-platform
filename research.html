@@ -992,12 +992,11 @@ async function runAIResearch() {
 
 <script>
 const SB_URL = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
-const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
+const SB_KEY = 'sb_publishable_KtJjJRWQn5a5VMSnAoTQXw_dCwnI6BH';
 const HDRS = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY };
 const hdrs = HDRS; // alias so all functions share the same headers object
 
 let currentSource = 'all';
-let _lastSearchError = '';
 let currentTrad = 'all';
 let currentNoteId = null;
 let allResults = [];
@@ -1120,26 +1119,14 @@ async function sbSearch(table, select, column, q, extra) {
     if (extra) Object.entries(extra).forEach(([k,v]) => url.searchParams.set(k, v));
     try {
       const r = await fetch(url, { headers: HDRS });
-      if (!r.ok) {
-        const errText = await r.text().catch(()=>'');
-        console.warn('sbSearch HTTP error', r.status, table, term, errText);
-        _lastSearchError = `DB error ${r.status} on ${table}: ${errText.slice(0,120)}`;
-        continue;
-      }
+      if (!r.ok) continue;
       const rows = await r.json();
-      if (!Array.isArray(rows)) {
-        console.warn('sbSearch non-array response', table, term, rows);
-        _lastSearchError = `Unexpected response from ${table}: ${JSON.stringify(rows).slice(0,120)}`;
-        continue;
-      }
+      if (!Array.isArray(rows)) continue;
       rows.forEach(row => {
         const key = row.id || JSON.stringify(row);
         if (!seen.has(key)) { seen.add(key); results.push(row); }
       });
-    } catch(e) {
-      console.warn('sbSearch fetch error', table, term, e);
-      _lastSearchError = `Network error on ${table}: ${e.message}`;
-    }
+    } catch(e) { console.warn('sbSearch error', table, term, e); }
   }
   return results;
 }
@@ -1297,7 +1284,6 @@ function getRelatedTerms(q) {
 
 // ── SEARCH ───────────────────────────────────────────────────────
 async function doSearch() {
-  _lastSearchError = '';
   const q = document.getElementById('searchInput').value.trim();
   if (!q) return;
   const container = document.getElementById('resultsContainer');
@@ -1336,15 +1322,7 @@ async function doSearch() {
     renderResults(exactResults, relatedResults, q, relatedTerms);
 
   } catch(e) {
-    console.error('doSearch error', e);
-    container.innerHTML = '<div class="empty-state">'
-      + '<div class="empty-icon">⚠️</div>'
-      + '<div class="empty-title">Search failed</div>'
-      + '<div class="empty-desc">' + e.message + '</div>'
-      + '<div style="margin-top:10px;padding:10px 14px;background:#FEE;border:1px solid #C00;border-radius:8px;font-size:13px;color:#900;font-family:Inconsolata,monospace;">'
-      + e.stack || e.message
-      + '</div>'
-      + '</div>';
+    container.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-title">Search error</div><div class="empty-desc">' + e.message + '</div></div>';
   }
 }
 
@@ -1428,26 +1406,7 @@ function renderResults(exactResults, relatedResults, q, relatedTerms) {
   header.style.display = total ? 'flex' : 'none';
 
   if (!total) {
-    const activeBook    = document.getElementById('collectionFilter')?.value || '';
-    const activeScholar = document.getElementById('scholarFilter')?.value || '';
-    let filterNote = '';
-    if (activeBook || activeScholar) {
-      filterNote = '<div style="margin-top:10px;padding:10px 14px;background:#FFF8E8;border:1px solid #D4A830;border-radius:8px;font-size:15px;color:#7A5A10;">'
-        + '📚 Active filter: <strong>' + (activeBook || activeScholar) + '</strong> — '
-        + '<a onclick="document.getElementById('book-all').click();doSearch();" style="color:#B8902A;cursor:pointer;text-decoration:underline;">clear filter &amp; retry</a>'
-        + '</div>';
-    }
-    let errorNote = '';
-    if (_lastSearchError) {
-      errorNote = '<div style="margin-top:10px;padding:10px 14px;background:#FEE;border:1px solid #C00;border-radius:8px;font-size:13px;color:#900;font-family:Inconsolata,monospace;word-break:break-all;">'
-        + '⚠️ ' + _lastSearchError + '</div>';
-    }
-    container.innerHTML = '<div class="empty-state">'
-      + '<div class="empty-icon">🔍</div>'
-      + '<div class="empty-title">No results for &ldquo;' + q + '&rdquo;</div>'
-      + '<div class="empty-desc">Try a different word, or check your filters.</div>'
-      + filterNote + errorNote
-      + '</div>';
+    container.innerHTML = '<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-title">No results found</div><div class="empty-desc">Try a different word, or switch search mode above.</div></div>';
     return;
   }
 
