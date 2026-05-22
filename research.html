@@ -997,6 +997,7 @@ const HDRS = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY };
 const hdrs = HDRS; // alias so all functions share the same headers object
 
 let currentSource = 'all';
+let _lastSearchError = '';
 let currentTrad = 'all';
 let currentNoteId = null;
 let allResults = [];
@@ -1055,7 +1056,9 @@ function setScholar(scholar, btn) {
   if (sel) sel.value = '';
   document.querySelectorAll('.book-chip').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
-  // Do NOT auto-switch source — keep current source so user sees all results
+  // Switch source to tafsir automatically
+  const tafsirTab = document.querySelector('.source-tab.tafsir');
+  if (tafsirTab) setSource('tafsir', tafsirTab);
   const q = document.getElementById('searchInput').value.trim();
   if (q) doSearch();
 }
@@ -1117,14 +1120,26 @@ async function sbSearch(table, select, column, q, extra) {
     if (extra) Object.entries(extra).forEach(([k,v]) => url.searchParams.set(k, v));
     try {
       const r = await fetch(url, { headers: HDRS });
-      if (!r.ok) continue;
+      if (!r.ok) {
+        const errText = await r.text().catch(()=>'');
+        console.warn('sbSearch HTTP error', r.status, table, term, errText);
+        _lastSearchError = `DB error ${r.status} on ${table}: ${errText.slice(0,120)}`;
+        continue;
+      }
       const rows = await r.json();
-      if (!Array.isArray(rows)) continue;
+      if (!Array.isArray(rows)) {
+        console.warn('sbSearch non-array response', table, term, rows);
+        _lastSearchError = `Unexpected response from ${table}: ${JSON.stringify(rows).slice(0,120)}`;
+        continue;
+      }
       rows.forEach(row => {
         const key = row.id || JSON.stringify(row);
         if (!seen.has(key)) { seen.add(key); results.push(row); }
       });
-    } catch(e) { console.warn('sbSearch error', table, term, e); }
+    } catch(e) {
+      console.warn('sbSearch fetch error', table, term, e);
+      _lastSearchError = `Network error on ${table}: ${e.message}`;
+    }
   }
   return results;
 }
@@ -1282,31 +1297,12 @@ function getRelatedTerms(q) {
 
 // ── SEARCH ───────────────────────────────────────────────────────
 async function doSearch() {
+  _lastSearchError = '';
   const q = document.getElementById('searchInput').value.trim();
   if (!q) return;
   const container = document.getElementById('resultsContainer');
   container.innerHTML = '<div class="loading-msg"><span class="spinner"></span>Searching...</div>';
   document.getElementById('resultsHeader').style.display = 'none';
-
-  // Show active filter pill near search
-  const activeBook    = document.getElementById('collectionFilter')?.value || '';
-  const activeScholar = document.getElementById('scholarFilter')?.value || '';
-  let filterBar = document.getElementById('activeFilterBar');
-  if (!filterBar) {
-    filterBar = document.createElement('div');
-    filterBar.id = 'activeFilterBar';
-    filterBar.style.cssText = 'padding:6px 18px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;';
-    const hero = document.querySelector('.hero');
-    if (hero) hero.appendChild(filterBar);
-  }
-  const active = activeBook || activeScholar;
-  filterBar.innerHTML = active
-    ? '<span style="font-size:13px;color:#7A5A10;font-family:Inconsolata,monospace;letter-spacing:.06em;">FILTERED:</span>'
-    + '<span style="display:inline-flex;align-items:center;gap:6px;padding:4px 12px;background:#FDF5DE;border:1px solid #D4A830;border-radius:20px;font-size:14px;color:#5A3A08;font-weight:700;">'
-    + '📚 ' + (active) 
-    + '<button onclick="document.getElementById('book-all').click();doSearch();" style="background:none;border:none;cursor:pointer;color:#B8902A;font-size:16px;line-height:1;padding:0 0 0 4px;font-weight:700;">×</button>'
-    + '</span>'
-    : '';
 
   try {
     const tradFilter = currentTrad !== 'all' ? { tradition: 'eq.' + currentTrad } : {};
@@ -1340,7 +1336,15 @@ async function doSearch() {
     renderResults(exactResults, relatedResults, q, relatedTerms);
 
   } catch(e) {
-    container.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-title">Search error</div><div class="empty-desc">' + e.message + '</div></div>';
+    console.error('doSearch error', e);
+    container.innerHTML = '<div class="empty-state">'
+      + '<div class="empty-icon">⚠️</div>'
+      + '<div class="empty-title">Search failed</div>'
+      + '<div class="empty-desc">' + e.message + '</div>'
+      + '<div style="margin-top:10px;padding:10px 14px;background:#FEE;border:1px solid #C00;border-radius:8px;font-size:13px;color:#900;font-family:Inconsolata,monospace;">'
+      + e.stack || e.message
+      + '</div>'
+      + '</div>';
   }
 }
 
@@ -1369,7 +1373,7 @@ async function fetchAllSources(q, tradFilter, collection, scholar) {
 
   if (currentSource === 'all' || currentSource === 'tafsir') {
     const tSel   = 'id,sura,aya,content,source_name,scholar_name,tradition,language';
-    const tExtra = {...tradFilter};  // removed language filter — too restrictive
+    const tExtra = {language:'eq.en',...tradFilter};
     if (scholar) tExtra.source_name = 'eq.' + scholar;
     const tRows = await sbSearch('tafsir_entries', tSel, 'content', q, tExtra);
     const seen = new Set();
@@ -1424,14 +1428,26 @@ function renderResults(exactResults, relatedResults, q, relatedTerms) {
   header.style.display = total ? 'flex' : 'none';
 
   if (!total) {
-    const activeBook   = document.getElementById('collectionFilter')?.value || '';
+    const activeBook    = document.getElementById('collectionFilter')?.value || '';
     const activeScholar = document.getElementById('scholarFilter')?.value || '';
-    const activeSource = currentSource !== 'all' ? currentSource : '';
     let filterNote = '';
-    if (activeBook)    filterNote += '<div style="margin-top:8px;padding:8px 14px;background:#FFF8E8;border:1px solid #D4A830;border-radius:8px;font-size:15px;color:#7A5A10;">📚 Filtered to: <strong>' + activeBook + '</strong> — <a onclick="document.getElementById('book-all').click()" style="color:#B8902A;cursor:pointer;text-decoration:underline;">clear filter</a></div>';
-    if (activeScholar) filterNote += '<div style="margin-top:8px;padding:8px 14px;background:#FFF8E8;border:1px solid #D4A830;border-radius:8px;font-size:15px;color:#7A5A10;">📚 Filtered to: <strong>' + activeScholar + '</strong> — <a onclick="document.getElementById('book-all').click()" style="color:#B8902A;cursor:pointer;text-decoration:underline;">clear filter</a></div>';
-    if (activeSource)  filterNote += '<div style="margin-top:8px;padding:8px 14px;background:#F3E5F5;border:1px solid #CE93D8;border-radius:8px;font-size:15px;color:#4A1B7A;">🔍 Source: <strong>' + activeSource + '</strong> only — try switching to All Sources above</div>';
-    container.innerHTML = '<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-title">No results found for "' + q + '"</div><div class="empty-desc">Try a different word, or switch search mode above.</div>' + filterNote + '</div>';
+    if (activeBook || activeScholar) {
+      filterNote = '<div style="margin-top:10px;padding:10px 14px;background:#FFF8E8;border:1px solid #D4A830;border-radius:8px;font-size:15px;color:#7A5A10;">'
+        + '📚 Active filter: <strong>' + (activeBook || activeScholar) + '</strong> — '
+        + '<a onclick="document.getElementById('book-all').click();doSearch();" style="color:#B8902A;cursor:pointer;text-decoration:underline;">clear filter &amp; retry</a>'
+        + '</div>';
+    }
+    let errorNote = '';
+    if (_lastSearchError) {
+      errorNote = '<div style="margin-top:10px;padding:10px 14px;background:#FEE;border:1px solid #C00;border-radius:8px;font-size:13px;color:#900;font-family:Inconsolata,monospace;word-break:break-all;">'
+        + '⚠️ ' + _lastSearchError + '</div>';
+    }
+    container.innerHTML = '<div class="empty-state">'
+      + '<div class="empty-icon">🔍</div>'
+      + '<div class="empty-title">No results for &ldquo;' + q + '&rdquo;</div>'
+      + '<div class="empty-desc">Try a different word, or check your filters.</div>'
+      + filterNote + errorNote
+      + '</div>';
     return;
   }
 
