@@ -146,7 +146,324 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
   .seq-nav{flex-direction:column;}
   .seq-btn{max-width:100%;}
 }
+
+/* ═══════════════════════════════════════
+   CROSS-PAGE LINK WEB
+   ═══════════════════════════════════════ */
+.xweb {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--p2, #E0D8C4);
+}
+.xweb-label {
+  width: 100%;
+  font-family: 'Inconsolata', monospace;
+  font-size: 10px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--ink4, #A89880);
+  margin-bottom: 2px;
+}
+.xweb-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 11px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid;
+  text-decoration: none;
+  transition: all .15s;
+  white-space: nowrap;
+  font-family: 'EB Garamond', serif;
+}
+.xweb-chip:hover { opacity: 0.8; transform: translateY(-1px); }
+
+/* Colours per destination */
+.xweb-quran   { background: #FFF8E8; border-color: #D4A830; color: #7A5010; }
+.xweb-research{ background: #F0F8FF; border-color: #4A90D0; color: #1A4878; }
+.xweb-sira    { background: #FFF4EE; border-color: #C07040; color: #6A3010; }
+.xweb-madhhab { background: #F0FFF4; border-color: #3A8A50; color: #1A4A28; }
+
+.xweb-chip.loading { opacity: 0.5; pointer-events: none; }
+
+
+/* ═══ HISTORY DRAWER ═══ */
+#qhist-btn {
+  position: fixed; bottom: 72px; right: 16px; z-index: 900;
+  width: 50px; height: 50px; border-radius: 50%;
+  background: #B8902A; color: #fff; border: none;
+  font-size: 20px; cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+  display: flex; align-items: center; justify-content: center;
+  transition: transform .15s;
+}
+#qhist-btn:hover { transform: scale(1.08); }
+#qhist-badge {
+  position: absolute; top: -4px; right: -4px;
+  background: #C03020; color: #fff; border-radius: 10px;
+  font-size: 10px; font-weight: 800;
+  min-width: 18px; height: 18px; padding: 0 4px;
+  display: none; align-items: center; justify-content: center;
+  font-family: 'Inconsolata', monospace;
+}
+#qhist-drawer {
+  position: fixed; bottom: 132px; right: 16px; z-index: 899;
+  width: min(340px, calc(100vw - 32px));
+  max-height: 65vh;
+  background: #FFFEF8; border: 1px solid #E0D4B0;
+  border-radius: 14px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.20);
+  display: none; flex-direction: column; overflow: hidden;
+}
+html[data-theme="dark"] #qhist-drawer { background: #242220; border-color: #3A3630; }
+#qhist-drawer.open { display: flex; }
+.qhist-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px 8px; border-bottom: 1px solid #EAE0C8; flex-shrink: 0;
+}
+.qhist-title { font-family: 'Inconsolata',monospace; font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: #B8902A; font-weight: 700; }
+.qhist-clearall { font-size: 11px; color: #C08050; background: none; border: none; cursor: pointer; font-family: 'Inconsolata',monospace; text-transform: uppercase; padding: 2px 8px; border-radius: 4px; }
+.qhist-scroll { overflow-y: auto; flex: 1; }
+.qhist-item {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 10px 16px; cursor: pointer;
+  border-bottom: 1px solid #F0E8D4;
+  text-decoration: none; color: inherit; transition: background .12s;
+}
+html[data-theme="dark"] .qhist-item { border-color: #2E2C28; }
+.qhist-item:hover { background: #FDF5E4; }
+.qhist-ico { font-size: 17px; flex-shrink: 0; margin-top: 1px; }
+.qhist-body { flex: 1; min-width: 0; }
+.qhist-lbl { font-family: 'EB Garamond',serif; font-size: 16px; font-weight: 700; color: #1A1610; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+html[data-theme="dark"] .qhist-lbl { color: #E8E4DC; }
+.qhist-sub { font-family: 'Inconsolata',monospace; font-size: 10px; color: #9A8A70; margin-top: 2px; }
+.qhist-ago { font-family: 'Inconsolata',monospace; font-size: 10px; color: #C4B490; flex-shrink: 0; margin-top: 3px; }
+.qhist-empty { padding: 28px 16px; text-align: center; font-style: italic; color: #A89060; font-size: 15px; font-family: 'EB Garamond',serif; }
+
 </style>
+<script>
+/* ═══════════════════════════════════════════════════════════
+   CROSS-PAGE LINK ENGINE  — shared across all 4 pages
+   Builds a "web" of links from any content item to related
+   content on the other 3 pages using shared sura/aya keys.
+   ═══════════════════════════════════════════════════════════ */
+(function(W) {
+  var SB_URL = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
+  var SB_KEY = 'sb_publishable_KtJjJRWQn5a5VMSnAoTQXw_dCwnI6BH';
+  var HDRS   = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY };
+
+  function sbGet(table, params) {
+    var url = new URL(SB_URL + '/rest/v1/' + table);
+    Object.entries(params).forEach(function(kv){ url.searchParams.set(kv[0], kv[1]); });
+    return fetch(url.toString(), { headers: HDRS })
+      .then(function(r){ return r.ok ? r.json() : []; })
+      .catch(function(){ return []; });
+  }
+
+  /* ── Navigate with back-stack ── */
+  function xnavGo(url, fromLabel, fromIcon) {
+    try {
+      var stack = JSON.parse(sessionStorage.getItem('qnav_stack') || '[]');
+      stack.push({ url: window.location.href, label: fromLabel, icon: fromIcon, scrollY: window.scrollY });
+      sessionStorage.setItem('qnav_stack', JSON.stringify(stack));
+      localStorage.setItem('qnav_restore_scroll', JSON.stringify(window.scrollY));
+    } catch(e) {}
+    window.location.href = url;
+  }
+
+  /* ── Build chips HTML ── */
+  function chip(cls, icon, label, url, fromLabel, fromIcon) {
+    return '<a class="xweb-chip ' + cls + '" href="' + url + '" '
+      + 'onclick="event.preventDefault();xnavGo('' + url.replace(/'/g,"\'") + '',''
+      + (fromLabel||'').replace(/'/g,"\'") + '','' + (fromIcon||'').replace(/'/g,"\'") + '')">'
+      + icon + ' ' + label + '</a>';
+  }
+
+  /* ══ MAIN: build cross-web for a sura:aya pair ══
+     Returns HTML string of chips.
+     currentPage: 'index'|'research'|'sira'|'madhhab'
+     context: { sura, aya, eventId, topicId, q }
+  */
+  W.xwebBuild = async function(container, currentPage, context) {
+    var sura    = context.sura;
+    var aya     = context.aya;
+    var eventId = context.eventId;
+    var topicQ  = context.topicQ;
+    var q       = context.q || '';
+    var fromLabel = context.fromLabel || '';
+    var fromIcon  = context.fromIcon  || '';
+
+    var chips = [];
+
+    /* 1. Quran verse link (from any page that has sura+aya) */
+    if (currentPage !== 'index' && sura) {
+      var verseUrl = 'index.html?sura=' + sura + (aya ? '&aya=' + aya : '') + '&from=' + currentPage;
+      chips.push(chip('xweb-quran', '📖', (aya ? sura+':'+aya : 'Sura '+sura), verseUrl, fromLabel, fromIcon));
+    }
+
+    /* 2. Research link (search by verse ref or topic) */
+    if (currentPage !== 'research') {
+      var rq = aya ? sura+':'+aya : (q || topicQ || '');
+      if (rq) {
+        var rUrl = 'research.html?q=' + encodeURIComponent(rq) + '&from=' + currentPage;
+        chips.push(chip('xweb-research', '🔬', 'Research "'+rq+'"', rUrl, fromLabel, fromIcon));
+      }
+    }
+
+    /* 3. Sīra link — find events mentioning this sura:aya */
+    if (currentPage !== 'sira' && sura) {
+      var ref = sura + (aya ? ':'+aya : '');
+      var siraRows = await sbGet('sira_events', {
+        select: 'id,title_en',
+        or: '(quran_verses.ilike.*' + ref + '*,hadith_ref.ilike.*' + ref + '*,tafsir_ref.ilike.*' + ref + '*)',
+        limit: 3
+      });
+      siraRows.forEach(function(ev) {
+        var sUrl = 'sira.html?event=' + encodeURIComponent(ev.id) + '&from=' + currentPage;
+        chips.push(chip('xweb-sira', '📜', ev.title_en.substring(0,28), sUrl, fromLabel, fromIcon));
+      });
+    }
+
+    /* 4. Madhhab link — find rulings mentioning this sura:aya or topic */
+    if (currentPage !== 'madhhab') {
+      var mRef = sura ? (sura + (aya?':'+aya:'')) : '';
+      var mSearch = mRef || topicQ || q;
+      if (mSearch) {
+        var mRows = await sbGet('madhhab_topics', {
+          select: 'id,topic',
+          or: '(topic.ilike.*' + encodeURIComponent(mSearch) + '*,brief_description.ilike.*' + encodeURIComponent(mSearch) + '*)',
+          limit: 2
+        });
+        mRows.forEach(function(t) {
+          var mUrl = 'madhhab.html?topic=' + encodeURIComponent(t.id) + '&from=' + currentPage;
+          chips.push(chip('xweb-madhhab', '⚖️', t.topic.substring(0,28), mUrl, fromLabel, fromIcon));
+        });
+      }
+    }
+
+    if (!chips.length) return;
+
+    var web = document.createElement('div');
+    web.className = 'xweb';
+    web.innerHTML = '<div class="xweb-label">🕸 Connected to</div>' + chips.join('');
+    container.appendChild(web);
+  };
+
+  W.xnavGo = xnavGo;
+
+})(window);
+</script>
+
+<script>
+/* ═══ ACTIVITY HISTORY + FLOATING BUTTON ═══ */
+(function(W) {
+  var MAX = 60;
+
+  function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function ago(ts){
+    var s=Math.floor((Date.now()-ts)/1000);
+    if(s<60) return 'just now';
+    if(s<3600) return Math.floor(s/60)+'m ago';
+    if(s<86400) return Math.floor(s/3600)+'h ago';
+    return Math.floor(s/86400)+'d ago';
+  }
+  function getHist(){ try{ return JSON.parse(localStorage.getItem('qnav_hist')||'[]'); }catch(e){ return []; } }
+  function saveHist(h){ try{ localStorage.setItem('qnav_hist',JSON.stringify(h)); }catch(e){} }
+
+  /* Record a visit */
+  function record(label, url, icon, sub) {
+    var h = getHist().filter(function(x){ return x.url !== url; });
+    h.unshift({ label: label||'Page', url: url||window.location.href, icon: icon||'📄', sub: sub||'', time: Date.now() });
+    if(h.length > MAX) h = h.slice(0, MAX);
+    saveHist(h);
+    renderList();
+    updateBadge();
+  }
+  W.qhistRecord = record;
+
+  function renderList(){
+    var el = document.getElementById('qhist-scroll');
+    if(!el) return;
+    var h = getHist();
+    if(!h.length){ el.innerHTML='<div class="qhist-empty">No history yet — start exploring!</div>'; return; }
+    el.innerHTML = h.map(function(item){
+      return '<a class="qhist-item" href="'+esc(item.url)+'" onclick="event.preventDefault();qhistGo(''+esc(item.url)+'')">'
+        +'<span class="qhist-ico">'+(item.icon||'📄')+'</span>'
+        +'<span class="qhist-body">'
+        +'<div class="qhist-lbl">'+esc(item.label)+'</div>'
+        +'<div class="qhist-sub">'+esc(item.sub)+'</div>'
+        +'</span>'
+        +'<span class="qhist-ago">'+ago(item.time)+'</span>'
+        +'</a>';
+    }).join('');
+  }
+
+  function updateBadge(){
+    var b = document.getElementById('qhist-badge');
+    if(!b) return;
+    var n = getHist().length;
+    b.textContent = n; b.style.display = n ? 'flex' : 'none';
+  }
+
+  W.qnavToggleHist = function(){
+    var d = document.getElementById('qhist-drawer');
+    if(!d) return;
+    d.classList.toggle('open');
+    if(d.classList.contains('open')) renderList();
+  };
+  W.qnavClearHist = function(){
+    saveHist([]); renderList(); updateBadge();
+  };
+  W.qhistGo = function(url){
+    try{
+      var stack = JSON.parse(sessionStorage.getItem('qnav_stack')||'[]');
+      stack.push({ url: window.location.href, label: document.title, icon: '📄', scrollY: window.scrollY });
+      sessionStorage.setItem('qnav_stack', JSON.stringify(stack));
+    }catch(e){}
+    window.location.href = url;
+  };
+
+  /* Inject HTML */
+  function inject(){
+    if(document.getElementById('qhist-btn')) return;
+
+    var btn = document.createElement('button');
+    btn.id = 'qhist-btn';
+    btn.title = 'Your browsing history';
+    btn.setAttribute('onclick','qnavToggleHist()');
+    btn.style.position = 'relative';
+    btn.innerHTML = '🕐<span id="qhist-badge" class="qhist-badge" style="position:absolute;top:-4px;right:-4px;background:#C03020;color:#fff;border-radius:10px;font-size:10px;font-weight:800;min-width:18px;height:18px;padding:0 4px;display:none;align-items:center;justify-content:center;"></span>';
+    document.body.appendChild(btn);
+
+    var drawer = document.createElement('div');
+    drawer.id = 'qhist-drawer';
+    drawer.innerHTML = '<div class="qhist-head"><span class="qhist-title">📖 Activity History</span><button class="qhist-clearall" onclick="qnavClearHist()">Clear all</button></div><div class="qhist-scroll" id="qhist-scroll"></div>';
+    document.body.appendChild(drawer);
+
+    document.addEventListener('click', function(e){
+      var d = document.getElementById('qhist-drawer');
+      var b = document.getElementById('qhist-btn');
+      if(d && d.classList.contains('open') && !d.contains(e.target) && b && !b.contains(e.target))
+        d.classList.remove('open');
+    });
+
+    updateBadge();
+  }
+
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', inject);
+  } else {
+    inject();
+  }
+})(window);
+</script>
+
 </head>
 <body>
 
@@ -707,7 +1024,7 @@ function renderEventDetail(ev, verses, hadiths, madhhabs, asbab, tafsirs, prev, 
           const link = v.applies_to_full_sura
             ? `index.html?sura=${v.sura}&from=sira&event=${encodeURIComponent(ev.id)}`
             : `index.html?sura=${v.sura}&aya=${v.aya}&from=sira&event=${encodeURIComponent(ev.id)}`;
-          return `<div class="ref-card" onclick="location.href='${link}'">
+          return `<div class="ref-card" onclick="qnavGoSira('${link}','${ref}')">
             <div class="ref-card-head">
               <span class="ref-card-tag">📖 QURAN ${ref}</span>
               <span class="ref-card-tag">Open in Reader →</span>
@@ -959,6 +1276,85 @@ function refreshSaveButton(id) {
 
 // Boot
 loadAll();
+</script>
+
+<script>
+function qnavGoSira(url, label) {
+  try {
+    var stack = JSON.parse(sessionStorage.getItem('qnav_stack') || '[]');
+    var evTitle = document.querySelector('.detail-title-en')?.textContent || 'Sīra Event';
+    stack.push({ url: window.location.href, label: 'Sīra: ' + evTitle, icon: '📜', scrollY: window.scrollY });
+    sessionStorage.setItem('qnav_stack', JSON.stringify(stack));
+    localStorage.setItem('qnav_restore_scroll', JSON.stringify(window.scrollY));
+  } catch(e) {}
+  window.location.href = url;
+}
+
+/* Return bar when arriving from research or madhhab */
+document.addEventListener('DOMContentLoaded', function() {
+  try {
+    var stack = JSON.parse(sessionStorage.getItem('qnav_stack') || '[]');
+    if (!stack.length) return;
+    var prev = stack[stack.length - 1];
+    if (!prev || !prev.url) return;
+    var icon = prev.icon || '←';
+    var label = prev.label || 'Back';
+    var bar = document.createElement('div');
+    bar.style.cssText = 'display:flex;align-items:center;gap:10px;padding:10px 16px;background:#FFF8E8;border-bottom:3px solid #D4A830;position:sticky;top:0;z-index:9999;flex-shrink:0;';
+    var btn = document.createElement('button');
+    btn.style.cssText = 'display:inline-flex;align-items:center;gap:6px;padding:8px 18px;background:#B8902A;color:#fff;border:none;border-radius:24px;font-size:14px;cursor:pointer;font-weight:700;white-space:nowrap;flex-shrink:0;';
+    btn.innerHTML = '← ' + icon + ' ' + label;
+    btn.onclick = function() {
+      var s = JSON.parse(sessionStorage.getItem('qnav_stack') || '[]');
+      var e = s.pop(); sessionStorage.setItem('qnav_stack', JSON.stringify(s));
+      if (e) localStorage.setItem('qnav_restore_scroll', JSON.stringify(e.scrollY || 0));
+      window.location.href = prev.url;
+    };
+    bar.appendChild(btn);
+    document.body.insertBefore(bar, document.body.firstChild);
+    var sy = JSON.parse(localStorage.getItem('qnav_restore_scroll') || 'null');
+    if (sy !== null) { localStorage.removeItem('qnav_restore_scroll'); setTimeout(function(){ window.scrollTo(0, sy); }, 400); }
+  } catch(e) {}
+});
+</script>
+
+<script>
+/* ── Add cross-web to Sīra event panels ── */
+var _origOpenEvent = window.openEvent;
+if (typeof openEvent === 'function') {
+  window.openEvent = function(id, ev) {
+    _origOpenEvent(id, ev);
+    setTimeout(function() {
+      var panel = document.getElementById('event-detail-' + id) || document.querySelector('.event-detail.open');
+      if (!panel) return;
+      if (panel.querySelector('.xweb')) return;
+      // Extract sura from quran_verses field if present
+      var verses = (ev && ev.quran_verses) ? ev.quran_verses : '';
+      var m = String(verses).match(/(\d+):(\d+)/);
+      var sura = m ? m[1] : null;
+      var aya  = m ? m[2] : null;
+      xwebBuild(panel, 'sira', {
+        sura: sura, aya: aya,
+        topicQ: ev ? (ev.title_en || '') : '',
+        fromLabel: 'Sīra: ' + (ev ? (ev.title_en||'').substring(0,30) : ''), fromIcon: '📜'
+      });
+    }, 300);
+  };
+}
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  qhistRecord('Sīra', window.location.href, '📜', 'Prophetic Biography');
+  var origOpen = window.openEvent;
+  if(typeof origOpen === 'function'){
+    window.openEvent = function(id, ev){
+      origOpen.apply(this, arguments);
+      var title = ev && ev.title_en ? ev.title_en : 'Sīra Event';
+      qhistRecord('Sīra: '+title, window.location.href+'#'+id, '📜', 'Sīra');
+    };
+  }
+});
 </script>
 </body>
 </html>
