@@ -279,7 +279,7 @@ mark.hl-green{background:#BAFFC9;}
     <div class="topbar-sub">Research Library</div>
   </div>
   <div style="flex:1"></div>
-  <a href="#" onclick="event.preventDefault();qnavGoVerse('index.html','Quran Platform')" class="topbar-home">Quran Platform</a>
+  <a href="index.html" class="topbar-home">Quran Platform</a>
   <a href="madhhab.html" class="topbar-home">⚖️ Madhhab</a>
   <a href="sira.html" class="topbar-home">📜 Sira</a>
   <button onclick="toggleBookmarks()" style="padding:6px 14px;border:1px solid var(--p2);border-radius:2px;background:transparent;color:var(--ink2);font-family:'EB Garamond',serif;font-size:13.5px;cursor:pointer;" id="bmToggleBtn">Saved</button>
@@ -614,13 +614,13 @@ function renderMarkdown(md) {
     // ── Quran verse refs: [Q 2:255] → link to index.html
     .replace(/\[Q\s+(\d+):(\d+)\]/g, (_, s, a) => {
       const url = `index.html?sura=${s}&aya=${a}&from=research`;
-      return `<a href="#" onclick="event.preventDefault();qnavGoVerse('${url}','${s}:${a}')" title="Open Quran ${s}:${a}" style="display:inline-flex;align-items:center;gap:3px;padding:1px 7px;background:var(--bronze-ss);border:1px solid var(--bronze-s);border-radius:3px;color:var(--bronze);font-family:'Inconsolata',monospace;font-size:11px;font-weight:700;text-decoration:none;transition:all .15s;" onmouseover="this.style.background='var(--bronze)';this.style.color='#fff'" onmouseout="this.style.background='var(--bronze-ss)';this.style.color='var(--bronze)'">📖 ${s}:${a} ↗</a>`;
+      return `<a href="${url}" target="_blank" title="Open Quran ${s}:${a}" style="display:inline-flex;align-items:center;gap:3px;padding:1px 7px;background:var(--bronze-ss);border:1px solid var(--bronze-s);border-radius:3px;color:var(--bronze);font-family:'Inconsolata',monospace;font-size:11px;font-weight:700;text-decoration:none;transition:all .15s;" onmouseover="this.style.background='var(--bronze)';this.style.color='#fff'" onmouseout="this.style.background='var(--bronze-ss)';this.style.color='var(--bronze)'">📖 ${s}:${a} ↗</a>`;
     })
     // ── Hadith refs: [H Bukhari 56:2787] → search this page
     .replace(/\[H\s+([^\]]+)\]/g, (_, ref) => {
       const searchQ = encodeURIComponent(ref.trim());
       const url = `research.html?q=${searchQ}&source=hadith`;
-      return `<a href="#" onclick="event.preventDefault();qnavGoVerse('${url}','${s}:${a}')" title="Search hadith: ${ref}" style="display:inline-flex;align-items:center;gap:3px;padding:1px 7px;background:var(--hadith-bg);border:1px solid var(--hadith-border);border-radius:3px;color:var(--hadith);font-family:'Inconsolata',monospace;font-size:11px;font-weight:700;text-decoration:none;transition:all .15s;" onmouseover="this.style.background='var(--hadith)';this.style.color='#fff'" onmouseout="this.style.background='var(--hadith-bg)';this.style.color='var(--hadith)'">📜 ${ref} ↗</a>`;
+      return `<a href="${url}" target="_blank" title="Search hadith: ${ref}" style="display:inline-flex;align-items:center;gap:3px;padding:1px 7px;background:var(--hadith-bg);border:1px solid var(--hadith-border);border-radius:3px;color:var(--hadith);font-family:'Inconsolata',monospace;font-size:11px;font-weight:700;text-decoration:none;transition:all .15s;" onmouseover="this.style.background='var(--hadith)';this.style.color='#fff'" onmouseout="this.style.background='var(--hadith-bg)';this.style.color='var(--hadith)'">📜 ${ref} ↗</a>`;
     })
     // Blank lines → paragraph breaks
     .replace(/\n\n+/g, '</p><p style="margin:0 0 12px;">')
@@ -1055,9 +1055,7 @@ function setScholar(scholar, btn) {
   if (sel) sel.value = '';
   document.querySelectorAll('.book-chip').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
-  // Switch source to tafsir automatically
-  const tafsirTab = document.querySelector('.source-tab.tafsir');
-  if (tafsirTab) setSource('tafsir', tafsirTab);
+  // Do NOT auto-switch source — keep current source so user sees all results
   const q = document.getElementById('searchInput').value.trim();
   if (q) doSearch();
 }
@@ -1290,6 +1288,26 @@ async function doSearch() {
   container.innerHTML = '<div class="loading-msg"><span class="spinner"></span>Searching...</div>';
   document.getElementById('resultsHeader').style.display = 'none';
 
+  // Show active filter pill near search
+  const activeBook    = document.getElementById('collectionFilter')?.value || '';
+  const activeScholar = document.getElementById('scholarFilter')?.value || '';
+  let filterBar = document.getElementById('activeFilterBar');
+  if (!filterBar) {
+    filterBar = document.createElement('div');
+    filterBar.id = 'activeFilterBar';
+    filterBar.style.cssText = 'padding:6px 18px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;';
+    const hero = document.querySelector('.hero');
+    if (hero) hero.appendChild(filterBar);
+  }
+  const active = activeBook || activeScholar;
+  filterBar.innerHTML = active
+    ? '<span style="font-size:13px;color:#7A5A10;font-family:Inconsolata,monospace;letter-spacing:.06em;">FILTERED:</span>'
+    + '<span style="display:inline-flex;align-items:center;gap:6px;padding:4px 12px;background:#FDF5DE;border:1px solid #D4A830;border-radius:20px;font-size:14px;color:#5A3A08;font-weight:700;">'
+    + '📚 ' + (active) 
+    + '<button onclick="document.getElementById('book-all').click();doSearch();" style="background:none;border:none;cursor:pointer;color:#B8902A;font-size:16px;line-height:1;padding:0 0 0 4px;font-weight:700;">×</button>'
+    + '</span>'
+    : '';
+
   try {
     const tradFilter = currentTrad !== 'all' ? { tradition: 'eq.' + currentTrad } : {};
     const collection = document.getElementById('collectionFilter').value;
@@ -1351,7 +1369,7 @@ async function fetchAllSources(q, tradFilter, collection, scholar) {
 
   if (currentSource === 'all' || currentSource === 'tafsir') {
     const tSel   = 'id,sura,aya,content,source_name,scholar_name,tradition,language';
-    const tExtra = {language:'eq.en',...tradFilter};
+    const tExtra = {...tradFilter};  // removed language filter — too restrictive
     if (scholar) tExtra.source_name = 'eq.' + scholar;
     const tRows = await sbSearch('tafsir_entries', tSel, 'content', q, tExtra);
     const seen = new Set();
@@ -1406,7 +1424,14 @@ function renderResults(exactResults, relatedResults, q, relatedTerms) {
   header.style.display = total ? 'flex' : 'none';
 
   if (!total) {
-    container.innerHTML = '<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-title">No results found</div><div class="empty-desc">Try a different word, or switch search mode above.</div></div>';
+    const activeBook   = document.getElementById('collectionFilter')?.value || '';
+    const activeScholar = document.getElementById('scholarFilter')?.value || '';
+    const activeSource = currentSource !== 'all' ? currentSource : '';
+    let filterNote = '';
+    if (activeBook)    filterNote += '<div style="margin-top:8px;padding:8px 14px;background:#FFF8E8;border:1px solid #D4A830;border-radius:8px;font-size:15px;color:#7A5A10;">📚 Filtered to: <strong>' + activeBook + '</strong> — <a onclick="document.getElementById('book-all').click()" style="color:#B8902A;cursor:pointer;text-decoration:underline;">clear filter</a></div>';
+    if (activeScholar) filterNote += '<div style="margin-top:8px;padding:8px 14px;background:#FFF8E8;border:1px solid #D4A830;border-radius:8px;font-size:15px;color:#7A5A10;">📚 Filtered to: <strong>' + activeScholar + '</strong> — <a onclick="document.getElementById('book-all').click()" style="color:#B8902A;cursor:pointer;text-decoration:underline;">clear filter</a></div>';
+    if (activeSource)  filterNote += '<div style="margin-top:8px;padding:8px 14px;background:#F3E5F5;border:1px solid #CE93D8;border-radius:8px;font-size:15px;color:#4A1B7A;">🔍 Source: <strong>' + activeSource + '</strong> only — try switching to All Sources above</div>';
+    container.innerHTML = '<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-title">No results found for "' + q + '"</div><div class="empty-desc">Try a different word, or switch search mode above.</div>' + filterNote + '</div>';
     return;
   }
 
@@ -2076,8 +2101,8 @@ function renderSiraTimeline(events, relatedEvents, q, relatedTerms) {
       const vms = _siraMapsBySira[ev.id] || [];
       const verseChips = vms.map(vm =>
         vm.applies_to_full_sura
-          ? `<span class="sira-verse-chip" onclick="qnavGoVerse('index.html?sura='+vm.sura+'&from=research&source=sira','Sura '+vm.sura)">📖 ${vm.sura}:all</span>`
-          : `<span class="sira-verse-chip" onclick="qnavGoVerse('index.html?sura='+vm.sura+'&from=research&aya='+vm.aya+'&source=sira',vm.sura+':'+vm.aya)">📖 ${vm.sura}:${vm.aya}</span>`
+          ? `<span class="sira-verse-chip" onclick="location.href='index.html?sura=${vm.sura}&from=research&source=sira'">📖 ${vm.sura}:all</span>`
+          : `<span class="sira-verse-chip" onclick="location.href='index.html?sura=${vm.sura}&from=research&aya=${vm.aya}&source=sira'">📖 ${vm.sura}:${vm.aya}</span>`
       ).join('');
 
       const titleEn = q ? highlightSira(ev.title_en||'', q) : (ev.title_en||'');
@@ -2386,7 +2411,7 @@ function renderAnalysis(a, fromCache) {
           const s = parseInt(parts[0]), ay = parseInt(parts[1]);
           if (!s) return '';
           const q2 = encodeURIComponent(document.getElementById('searchInput')?.value||'');
-          return `<a href="#" onclick="event.preventDefault();qnavGoVerse('index.html?sura=${s}&aya=${ay||1}&from=research&q=${q2}&source=${encodeURIComponent(currentSource||\'all\')}','📖 ${esc(v)}')"
+          return `<a href="index.html?sura=${s}&aya=${ay||1}&from=research&q=${q2}&source=${encodeURIComponent(currentSource||'all')}"
                     style="display:inline-block;background:#FDF5DE;border:1px solid var(--gold-border);border-radius:12px;padding:4px 12px;font-size:12px;font-weight:700;color:var(--gold);text-decoration:none"
                     title="Open verse ${v} in Quran reader">📖 ${esc(v)}</a>`;
         }).join('')}
@@ -2537,33 +2562,6 @@ function toggleSiraEvent(card) {
     if (siraTab) { setSource('sira', siraTab); loadSiraResearch(); }
   }
 })();
-</script>
-
-<script>
-/* ── qnavGoVerse: save context then navigate to Quran verse ── */
-function qnavGoVerse(url, label) {
-  var inp = document.getElementById('searchInput');
-  var q = inp ? inp.value.trim() : '';
-  var fromLabel = 'Research' + (q ? ': "' + q + '"' : '');
-  // Save scroll + current page to return stack
-  try {
-    var stack = JSON.parse(sessionStorage.getItem('qnav_stack') || '[]');
-    stack.push({
-      url: window.location.href,
-      label: fromLabel,
-      icon: '🔬',
-      scrollY: window.scrollY
-    });
-    sessionStorage.setItem('qnav_stack', JSON.stringify(stack));
-    // Save scroll restore marker
-    localStorage.setItem('qnav_restore_scroll', JSON.stringify(window.scrollY));
-  } catch(e) {}
-  // Add &from=research&q=... to url if not already there
-  var sep = url.indexOf('?') >= 0 ? '&' : '?';
-  if (url.indexOf('from=') < 0) url += sep + 'from=research';
-  if (q && url.indexOf('&q=') < 0) url += '&q=' + encodeURIComponent(q);
-  window.location.href = url;
-}
 </script>
 </body>
 </html>
