@@ -317,11 +317,11 @@ mark.hl-green{background:#BAFFC9;}
 
 /* ═══ HISTORY DRAWER ═══ */
 #qhist-btn {
-  position: fixed; bottom: 72px; right: 16px; z-index: 900;
-  width: 50px; height: 50px; border-radius: 50%;
-  background: #B8902A; color: #fff; border: none;
-  font-size: 20px; cursor: pointer;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+  position: fixed; bottom: 24px; right: 16px; z-index: 9999;
+  width: 54px; height: 54px; border-radius: 50%;
+  background: #B8902A; color: #fff; border: 3px solid #fff;
+  font-size: 22px; cursor: pointer;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.35);
   display: flex; align-items: center; justify-content: center;
   transition: transform .15s;
 }
@@ -2840,18 +2840,41 @@ function toggleSiraEvent(card) {
     const input = document.getElementById('searchInput');
     if (input) {
       input.value = q;
-      // Restore source tab if present
       if (source && source !== 'all') {
         const tab = document.querySelector(`.source-tab.${source}`);
         if (tab) { setSource(source, tab); }
       }
-      // Auto-run the search so results appear immediately
       setTimeout(() => doSearch(), 300);
     }
   } else if (sira) {
-    // Returned from a Sira-linked verse — open Sira panel
     const siraTab = document.querySelector('.source-tab.sira');
     if (siraTab) { setSource('sira', siraTab); loadSiraResearch(); }
+  } else {
+    // Check if returning from a verse — restore saved search state
+    const savedRaw = sessionStorage.getItem('research_saved_state');
+    if (savedRaw) {
+      try {
+        const saved = JSON.parse(savedRaw);
+        if (saved.q) {
+          const input = document.getElementById('searchInput');
+          if (input) input.value = saved.q;
+          // Restore source/trad
+          if (saved.source && saved.source !== 'all') {
+            const tab = document.querySelector('.source-tab.' + saved.source);
+            if (tab) setSource(saved.source, tab);
+          }
+          // Run search then restore scroll
+          setTimeout(() => {
+            doSearch();
+            setTimeout(() => {
+              window.scrollTo(0, saved.scrollY || 0);
+            }, 700);
+          }, 300);
+          // Clear state so it doesn't restore again on fresh visit
+          sessionStorage.removeItem('research_saved_state');
+        }
+      } catch(e) {}
+    }
   }
 })();
 </script>
@@ -2862,10 +2885,18 @@ function qnavGoVerse(url, label) {
   var q = inp ? inp.value.trim() : '';
   var fromLabel = 'Research' + (q ? ': "' + q + '"' : '');
   try {
+    // Save full research state so we can restore it on return
+    var state = {
+      q: q,
+      scrollY: window.scrollY,
+      source: window.currentSource || 'all',
+      trad: window.currentTrad || 'all'
+    };
+    sessionStorage.setItem('research_saved_state', JSON.stringify(state));
+
     var stack = JSON.parse(sessionStorage.getItem('qnav_stack') || '[]');
     stack.push({ url: window.location.href, label: fromLabel, icon: '🔬', scrollY: window.scrollY });
     sessionStorage.setItem('qnav_stack', JSON.stringify(stack));
-    localStorage.setItem('qnav_restore_scroll', JSON.stringify(window.scrollY));
   } catch(e) {}
   var sep = url.indexOf('?') >= 0 ? '&' : '?';
   if (url.indexOf('from=') < 0) url += sep + 'from=research';
