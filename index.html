@@ -1419,24 +1419,28 @@ function renderVerses(ayas, suraId) {
     // verse's Arabic field. Since we render our own banner, we remove it here.
     let arabic = aya.arabic || aya.aya_text || '';
     if (aya.aya_number === 1 && arabic) {
-      // Robust Bismillah strip: works regardless of diacritic variant used in DB.
-      // Strips diacritics from a copy, matches bare بسم الله الرحمن الرحيم,
-      // then maps the consumed length back to the original string.
-      (function() {
-        var DIAC = /[\u064B-\u065F\u0670\u06D6-\u06DC]/g;
-        var bare = arabic.replace(DIAC, '').replace(/\u0671/g, '\u0627');
-        var bmMatch = bare.match(/^\s*\u0628\u0633\u0645\s+\u0627\u0644\u0644\u0647\s+\u0627\u0644\u0631\u062D\u0645\u0646\s+\u0627\u0644\u0631\u062D\u064A\u0645\s*/);
-        if (bmMatch) {
-          var bareConsumed = bmMatch[0].length;
-          var bareCount = 0, origIdx = 0;
-          while (origIdx < arabic.length && bareCount < bareConsumed) {
-            var ch = arabic[origIdx];
-            if (!/[\u064B-\u065F\u0670\u06D6-\u06DC]/.test(ch)) bareCount++;
-            origIdx++;
+      // Only strip Bismillah prefix from verse 1 of surahs where the DB stores
+      // it as a prefix before the muqatta'at (e.g. "بسم الله الرحمن الرحيم الم").
+      // Surah 1 (Al-Fatiha) verse 1 IS the Bismillah itself — never strip it.
+      // Surah 9 (At-Tawbah) has no Bismillah — never strip.
+      var MUQATTAAT_SURAS = new Set([2,3,7,10,11,12,13,14,15,19,20,26,27,28,29,30,31,32,36,38,40,41,42,43,44,45,46,50,68]);
+      if (MUQATTAAT_SURAS.has(suraId)) {
+        (function() {
+          var DIAC = /[\u064B-\u065F\u0670\u06D6-\u06DC]/g;
+          var bare = arabic.replace(DIAC, '').replace(/\u0671/g, '\u0627');
+          var bmMatch = bare.match(/^\s*\u0628\u0633\u0645\s+\u0627\u0644\u0644\u0647\s+\u0627\u0644\u0631\u062D\u0645\u0646\s+\u0627\u0644\u0631\u062D\u064A\u0645\s*/);
+          if (bmMatch) {
+            var bareConsumed = bmMatch[0].length;
+            var bareCount = 0, origIdx = 0;
+            while (origIdx < arabic.length && bareCount < bareConsumed) {
+              var ch = arabic[origIdx];
+              if (!/[\u064B-\u065F\u0670\u06D6-\u06DC]/.test(ch)) bareCount++;
+              origIdx++;
+            }
+            arabic = arabic.substring(origIdx).trim();
           }
-          arabic = arabic.substring(origIdx).trim();
-        }
-      })();
+        })();
+      }
     }
     const english = aya.english || '';
     // For Surah 7 verse 1 (الٓمٓصٓ) the Tigrinya is the muqatta'at rendering.
