@@ -2918,13 +2918,36 @@ const ANTHROPIC_KEY = 'sk-ant-api03-MzaYEqHR8EwjThk4deB-UAO0xEzG8rLjC8rIkNWnViPq
 
 function buildWordByWord(arabicText, translitText, suraId, ayaNum) {
   if (!arabicText) return '';
-  const words = arabicText.trim().split(/\s+/);
-  const tWords = translitText ? translitText.trim().split(/\s+/) : [];
+  var words = arabicText.trim().split(/\s+/);
+  var tWords = translitText ? translitText.trim().split(/\s+/) : [];
+
+  // Per-word transliteration override for Bismillah words.
+  // The API returns compound tokens like "Bismillaahir rahmaanir raheem" (3 tokens)
+  // but the Arabic has 4 separate words. We use bare-consonant matching to
+  // assign the correct transliteration to each word individually.
+  var BARE_TRANSLIT = {
+    '\u0628\u0633\u0645': 'Bismi',
+    '\u0627\u0644\u0644\u0647': 'llaahi',
+    '\u0627\u0644\u0631\u062d\u0645\u0646': 'r-Rahmaani',
+    '\u0627\u0644\u0631\u062d\u064a\u0645': 'r-Raheem'
+  };
+
+  function bareOf(w) {
+    return w.replace(/[\u064B-\u065F\u0670\u06D6-\u06DC]/g, '').replace(/\u0671/g, '\u0627');
+  }
+
+  function getTranslit(word, idx) {
+    // Try per-word Bismillah lookup first
+    var override = BARE_TRANSLIT[bareOf(word)];
+    if (override) return override;
+    // Fall back to positional match
+    return tWords[idx] || '';
+  }
 
   if (words.length <= 1) {
-    const tSingle = tWords[0] || '';
-    const tDiv = tSingle
-      ? '<div style="font-size:12px;color:#A88840;font-style:italic;direction:ltr;margin-top:2px;">' + tSingle + '</div>'
+    var tSingle = getTranslit(words[0], 0);
+    var tDiv = tSingle
+      ? '<div style="font-size:11px;color:#A88840;font-style:italic;direction:ltr;margin-top:3px;text-align:center;">' + tSingle + '</div>'
       : '';
     return '<div style="text-align:center;direction:rtl;">'
       + '<span style="font-family:\'Scheherazade New\',\'Amiri\',serif;font-size:28px;font-weight:600;color:#1a1a1a;line-height:2;">' + arabicText + '</span>'
@@ -2932,10 +2955,10 @@ function buildWordByWord(arabicText, translitText, suraId, ayaNum) {
       + '</div>';
   }
 
-  const tiles = words.map(function(word, i) {
-    const safe = word.replace(/'/g, "&#39;").replace(/"/g, '&quot;');
-    const tWord = tWords[i] || '';
-    const tSpan = tWord
+  var tiles = words.map(function(word, i) {
+    var safe = word.replace(/'/g, "&#39;").replace(/"/g, '&quot;');
+    var tWord = getTranslit(word, i);
+    var tSpan = tWord
       ? '<span class="wbw-translit">' + tWord + '</span>'
       : '';
     return '<span class="wbw-word" onclick="event.stopPropagation();openWbwPopup(this,\''+safe+'\','+suraId+','+ayaNum+','+i+')">'
