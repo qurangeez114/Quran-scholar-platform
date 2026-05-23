@@ -1419,12 +1419,24 @@ function renderVerses(ayas, suraId) {
     // verse's Arabic field. Since we render our own banner, we remove it here.
     let arabic = aya.arabic || aya.aya_text || '';
     if (aya.aya_number === 1 && arabic) {
-      // Remove any leading Bismillah variant (with or without diacritics/tatweel)
-      arabic = arabic
-        .replace(/^\s*بِسْمِ\s+ٱللَّهِ\s+ٱلرَّحْمَٰنِ\s+ٱلرَّحِيمِ\s*/u, '')
-        .replace(/^\s*بِسْمِ\s+اللَّهِ\s+الرَّحْمَٰنِ\s+الرَّحِيمِ\s*/u, '')
-        .replace(/^\s*بسم\s+الله\s+الرحمن\s+الرحيم\s*/u, '')
-        .trim();
+      // Robust Bismillah strip: works regardless of diacritic variant used in DB.
+      // Strips diacritics from a copy, matches bare بسم الله الرحمن الرحيم,
+      // then maps the consumed length back to the original string.
+      (function() {
+        var DIAC = /[\u064B-\u065F\u0670\u06D6-\u06DC]/g;
+        var bare = arabic.replace(DIAC, '').replace(/\u0671/g, '\u0627');
+        var bmMatch = bare.match(/^\s*\u0628\u0633\u0645\s+\u0627\u0644\u0644\u0647\s+\u0627\u0644\u0631\u062D\u0645\u0646\s+\u0627\u0644\u0631\u062D\u064A\u0645\s*/);
+        if (bmMatch) {
+          var bareConsumed = bmMatch[0].length;
+          var bareCount = 0, origIdx = 0;
+          while (origIdx < arabic.length && bareCount < bareConsumed) {
+            var ch = arabic[origIdx];
+            if (!/[\u064B-\u065F\u0670\u06D6-\u06DC]/.test(ch)) bareCount++;
+            origIdx++;
+          }
+          arabic = arabic.substring(origIdx).trim();
+        }
+      })();
     }
     const english = aya.english || '';
     // For Surah 7 verse 1 (الٓمٓصٓ) the Tigrinya is the muqatta'at rendering.
