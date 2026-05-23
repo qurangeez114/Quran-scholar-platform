@@ -1281,11 +1281,44 @@ async function loadSura(id) {
 
 function renderVerses(ayas, suraId) {
   const area = document.getElementById('verseArea');
-  const bismillah = '';
-  area.innerHTML = bismillah + ayas.map(aya => {
+
+  // ── Bismillah banner (shown at the top of every surah) ──────────────────
+  // Surah 9 (At-Tawbah) is the only surah without a Bismillah.
+  const bismillah = suraId === 9 ? '' : `
+    <div style="
+      text-align:center;
+      padding: 22px 16px 18px;
+      margin-bottom: 10px;
+      background: linear-gradient(135deg, #FDFAF2, #F8F2DC);
+      border-bottom: 2px solid #D4A830;
+      border-radius: 10px 10px 0 0;
+    ">
+      <div style="
+        font-family:'Scheherazade New','Amiri',serif;
+        font-size: 32px;
+        color: #1a1a1a;
+        direction: rtl;
+        line-height: 2;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+      ">بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ</div>
+    </div>`;
+
+  // ── Filter out any aya_number=0 rows (Bismillah stored as verse 0) ───────
+  // Some databases store Bismillah as aya_number=0. We display it as the
+  // banner above and skip it from the verse list to prevent offset.
+  const filteredAyas = ayas.filter(a => a.aya_number > 0);
+
+  area.innerHTML = bismillah + filteredAyas.map(aya => {
+
     const arabic = aya.arabic || aya.aya_text || '';
     const english = aya.english || '';
-    const tigrinya = aya.tigrinya || aya.aya_text || '';
+    // For Surah 7 verse 1 (الٓمٓصٓ) the Tigrinya is the muqatta'at rendering.
+    // Guard: if aya_text is identical to the Arabic (meaning no real Tigrinya
+    // translation was stored), fall back gracefully to empty so the block is
+    // hidden rather than showing Arabic in the Tigrinya slot.
+    const rawTigrinya = aya.tigrinya || aya.aya_text || '';
+    const tigrinya = (rawTigrinya && rawTigrinya !== (aya.arabic || '')) ? rawTigrinya : '';
     const amharic = aya.amharic || '';
     const oromo = aya.oromo || '';
     const somali = aya.somali || '';
