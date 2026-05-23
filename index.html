@@ -2893,6 +2893,8 @@ function renderSidebarRefList(results, query) {
   }).join('');
 }
 
+const ANTHROPIC_KEY = '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';
+
 // ── WORD-BY-WORD ARABIC RENDERER ────────────────────────────────────────────
 // Splits an Arabic verse into individual word spans. Each word is a tappable
 // tile showing the Arabic script; tapping opens the lexicon popup.
@@ -2905,34 +2907,44 @@ function buildWordByWord(arabicText, translitText, suraId, ayaNum) {
 
   if (words.length <= 1) {
     const tSingle = tWords[0] || '';
-    return `<div style="text-align:center;direction:rtl;">
-      <span style="font-family:'Scheherazade New','Amiri',serif;font-size:28px;font-weight:600;color:#1a1a1a;line-height:2;">${arabicText}</span>
-      ${tSingle ? `<div style="font-size:12px;color:#A88840;font-style:italic;direction:ltr;margin-top:2px;">${tSingle}</div>` : ''}
-    </div>`;
+    const tDiv = tSingle
+      ? '<div style="font-size:12px;color:#A88840;font-style:italic;direction:ltr;margin-top:2px;">' + tSingle + '</div>'
+      : '';
+    return '<div style="text-align:center;direction:rtl;">'
+      + '<span style="font-family:\'Scheherazade New\',\'Amiri\',serif;font-size:28px;font-weight:600;color:#1a1a1a;line-height:2;">' + arabicText + '</span>'
+      + tDiv
+      + '</div>';
   }
 
-  const tiles = words.map((word, i) => {
-    const safe = word.replace(/'/g, "\'").replace(/"/g, '&quot;');
+  const tiles = words.map(function(word, i) {
+    const safe = word.replace(/'/g, "&#39;").replace(/"/g, '&quot;');
     const tWord = tWords[i] || '';
-    return `<span class="wbw-word" onclick="event.stopPropagation();openWbwPopup('${safe}',${suraId},${ayaNum},${i})">
-      <span class="wbw-arabic">${word}</span>
-      ${tWord ? `<span class="wbw-translit">${tWord}</span>` : ''}
-    </span>`;
+    const tSpan = tWord
+      ? '<span class="wbw-translit">' + tWord + '</span>'
+      : '';
+    return '<span class="wbw-word" onclick="event.stopPropagation();openWbwPopup(this,\''+safe+'\','+suraId+','+ayaNum+','+i+')">'
+      + '<span class="wbw-arabic">' + word + '</span>'
+      + tSpan
+      + '</span>';
   }).join('');
 
-  return `<div class="wbw-grid">${tiles}</div>`;
+  return '<div class="wbw-grid">' + tiles + '</div>';
 }
 
 // ── WORD POPUP ───────────────────────────────────────────────────────────────
-function openWbwPopup(word, suraId, ayaNum, wordIdx) {
+function openWbwPopup(btn, word, suraId, ayaNum, wordIdx) {
   const overlay = document.getElementById('wbwPopup');
   if (!overlay) return;
-  document.getElementById('wbwPopupWord').textContent = word;
+  // Decode HTML entities back to Arabic chars
+  const tmp = document.createElement('textarea');
+  tmp.innerHTML = word;
+  const decoded = tmp.value;
+  document.getElementById('wbwPopupWord').textContent = decoded;
   document.getElementById('wbwPopupTranslit').textContent = '';
   document.getElementById('wbwPopupBody').innerHTML =
     '<div style="text-align:center;padding:20px;color:#AAA;font-style:italic"><span class="spinner"></span> Looking up word...</div>';
   overlay.classList.add('open');
-  loadWbwWordData(word, suraId, ayaNum, wordIdx);
+  loadWbwWordData(decoded, suraId, ayaNum, wordIdx);
 }
 
 function closeWbwPopup() {
@@ -5762,7 +5774,7 @@ let researchImageBase64 = null;
 let researchImageMime = null;
 let researchLang = 'English';
 
-const ANTHROPIC_KEY = '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';
+// ANTHROPIC_KEY moved to top of main script
 
 function openResearchModal() {
   document.getElementById('researchModal').style.display = 'flex';
