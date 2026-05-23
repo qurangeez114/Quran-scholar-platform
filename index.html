@@ -28,7 +28,9 @@ body { font-family: 'EB Garamond', Georgia, serif; background: #F5EDD8; color: #
 .sura-translated { font-size: 13px; color: #222222; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; font-family: 'EB Garamond', serif; }
 .sura-ayas { font-size: 10px; color: #B8902A; margin-left: 6px; flex-shrink: 0; font-weight: 700; background: #FDF5DE; border: 1px solid #D4A830; border-radius: 10px; padding: 2px 6px; }
 .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-.top-bar { background: linear-gradient(135deg, #FDFAF2, #F8F2DC); border-bottom: 2px solid #D4A830; padding: 12px 18px; display: flex; align-items: center; gap: 14px; flex-shrink: 0; box-shadow: 0 2px 8px rgba(184,144,42,0.1); }
+.top-bar { background: linear-gradient(135deg, #FDFAF2, #F8F2DC); border-bottom: 2px solid #D4A830; padding: 0; display: flex; flex-direction: column; flex-shrink: 0; box-shadow: 0 2px 8px rgba(184,144,42,0.1); }
+.top-bar-row1 { display: flex; align-items: center; gap: 10px; padding: 8px 14px; flex-wrap: nowrap; overflow-x: auto; }
+.top-bar-row2 { display: flex; align-items: center; justify-content: space-between; padding: 6px 14px 10px; border-top: 1px solid rgba(212,168,48,0.3); }
 .top-arabic { font-family: 'Scheherazade New', 'Amiri', serif; font-size: 34px; color: #000000; font-weight: 600; }
 .top-info { flex: 1; }
 .top-english { font-size: 17px; color: #B8902A; font-style: italic; font-weight: 700; }
@@ -317,6 +319,95 @@ body { font-family: 'EB Garamond', Georgia, serif; background: #F5EDD8; color: #
 .hl-dot:hover { transform:scale(1.1); }
 .hl-remove { font-size:11px;color:#E74C3C;background:none;border:none;cursor:pointer;padding:0;font-weight:700;text-align:left; }
 mark.hl-yellow { background:#FFE066;border-radius:2px;padding:0 1px; }
+
+/* ── WORD-BY-WORD ARABIC ── */
+.wbw-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  direction: rtl;
+  justify-content: center;
+  padding: 8px 0 4px;
+}
+.wbw-word {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  cursor: pointer;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  transition: all 0.15s;
+  min-width: 44px;
+}
+.wbw-word:hover, .wbw-word:active {
+  background: #FDF5DE;
+  border-color: #D4A830;
+  box-shadow: 0 2px 8px rgba(184,144,42,0.2);
+}
+.wbw-arabic {
+  font-family: 'Scheherazade New', 'Amiri', serif;
+  font-size: 24px;
+  color: #1a1a1a;
+  line-height: 1.6;
+  font-weight: 600;
+}
+.wbw-translit {
+  font-size: 10px;
+  color: #A88840;
+  font-style: italic;
+  text-align: center;
+  max-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: ltr;
+}
+
+/* ── WORD DETAIL POPUP ── */
+.wbw-popup-overlay {
+  display: none; position: fixed; top:0; left:0; width:100%; height:100%;
+  background: rgba(0,0,0,0.55); z-index: 2000;
+  align-items: flex-end; justify-content: center;
+}
+.wbw-popup-overlay.open { display: flex; }
+.wbw-popup {
+  background: #fff; border-radius: 20px 20px 0 0;
+  width: 100%; max-width: 560px;
+  padding: 20px 20px 36px;
+  box-shadow: 0 -8px 32px rgba(0,0,0,0.25);
+  max-height: 80vh; overflow-y: auto;
+}
+.wbw-popup-word {
+  font-family: 'Scheherazade New', 'Amiri', serif;
+  font-size: 48px; color: #1a1a1a; text-align: center;
+  direction: rtl; line-height: 1.5; font-weight: 700;
+  margin-bottom: 4px;
+}
+.wbw-popup-translit {
+  text-align: center; font-size: 14px; color: #B8902A;
+  font-style: italic; margin-bottom: 16px; font-weight: 600;
+}
+.wbw-popup-section {
+  background: #FDFBF5; border: 1px solid #E8DCC0;
+  border-radius: 10px; padding: 12px 14px; margin-bottom: 10px;
+}
+.wbw-popup-label {
+  font-size: 10px; font-weight: 800; letter-spacing: 1px;
+  text-transform: uppercase; color: #B8902A; margin-bottom: 6px;
+}
+.wbw-popup-value {
+  font-size: 14px; color: #1a1a1a; line-height: 1.7; font-weight: 500;
+}
+.wbw-popup-close {
+  position: absolute; top: 14px; right: 16px;
+  width: 32px; height: 32px; border-radius: 50%;
+  border: 1px solid #E8E4DC; background: #F5F3EC;
+  font-size: 16px; color: #666; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700;
+}
 mark.hl-pink   { background:#FFB3BA;border-radius:2px;padding:0 1px; }
 mark.hl-green  { background:#BAFFC9;border-radius:2px;padding:0 1px; }
 
@@ -742,16 +833,28 @@ html[data-theme="dark"] .qhist-lbl { color: #E8E4DC; }
   <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
   <div class="main">
     <div class="top-bar">
-      <button class="menu-toggle" onclick="toggleSidebar()" title="Menu" aria-label="Open menu">☰</button>
-      <button class="back-btn" id="backBtn" style="display:none" onclick="goBack()">← Back</button>
-      <button class="back-btn" id="readModeBtn" onclick="toggleReadMode()" title="Full Screen Read Mode" style="display:none">📖 Read</button>
-      <a href="research.html" title="Research Library" style="padding:7px 12px;border:2px solid #D4C9A8;border-radius:20px;background:#F5F3EC;font-size:12px;font-weight:700;color:#B8902A;text-decoration:none;flex-shrink:0;">🔬 Research</a>
-      <a href="madhhab.html" title="Madhhab Comparison" style="padding:7px 12px;border:2px solid #D4C9A8;border-radius:20px;background:#F5F3EC;font-size:12px;font-weight:700;color:#B8902A;text-decoration:none;flex-shrink:0;">⚖️ Madhhab</a>
-      <a href="sira.html" title="Sira — Prophetic Biography" style="padding:7px 12px;border:2px solid #D4C9A8;border-radius:20px;background:#F5F3EC;font-size:12px;font-weight:700;color:#B8902A;text-decoration:none;flex-shrink:0;">📜 Sira</a>
-      <div class="top-arabic" id="topArabic"></div>
-      <div class="top-info">
-        <div class="top-english" id="topEnglish"></div>
-        <div class="top-meta" id="topMeta"></div>
+      <!-- Row 1: nav buttons + surah title -->
+      <div class="top-bar-row1">
+        <button class="menu-toggle" onclick="toggleSidebar()" title="Menu" aria-label="Open menu">☰</button>
+        <button class="back-btn" id="backBtn" style="display:none" onclick="goBack()">← Back</button>
+        <!-- Prev/Next chapter -->
+        <button id="prevSuraBtn" onclick="navigateSura(-1)" title="Previous chapter"
+          style="width:36px;height:36px;border-radius:50%;border:2px solid #D4A830;background:#FDF5DE;color:#B8902A;font-size:20px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;">&#8249;</button>
+        <!-- Surah name block — centered and clean -->
+        <div style="flex:1;text-align:center;min-width:0;">
+          <div class="top-arabic" id="topArabic" style="font-size:28px;line-height:1.3;"></div>
+          <div class="top-english" id="topEnglish" style="font-size:14px;margin-top:1px;"></div>
+          <div class="top-meta" id="topMeta" style="justify-content:center;font-size:11px;"></div>
+        </div>
+        <button id="nextSuraBtn" onclick="navigateSura(1)" title="Next chapter"
+          style="width:36px;height:36px;border-radius:50%;border:2px solid #D4A830;background:#FDF5DE;color:#B8902A;font-size:20px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;">&#8250;</button>
+        <button class="back-btn" id="readModeBtn" onclick="toggleReadMode()" title="Full Screen Read Mode" style="display:none;padding:7px 12px;font-size:12px;">📖 Read</button>
+      </div>
+      <!-- Row 2: tool links -->
+      <div class="top-bar-row2">
+        <a href="research.html" style="padding:5px 10px;border:1px solid #D4C9A8;border-radius:16px;background:#F5F3EC;font-size:11px;font-weight:700;color:#B8902A;text-decoration:none;">🔬 Research</a>
+        <a href="madhhab.html" style="padding:5px 10px;border:1px solid #D4C9A8;border-radius:16px;background:#F5F3EC;font-size:11px;font-weight:700;color:#B8902A;text-decoration:none;">⚖️ Madhhab</a>
+        <a href="sira.html" style="padding:5px 10px;border:1px solid #D4C9A8;border-radius:16px;background:#F5F3EC;font-size:11px;font-weight:700;color:#B8902A;text-decoration:none;">📜 Sira</a>
       </div>
     </div>
     <div style="background:#F8F6F0;border-bottom:1px solid #E8E4DC;padding:8px 24px;display:flex;gap:8px;align-items:center;flex-shrink:0;">
@@ -1311,7 +1414,18 @@ function renderVerses(ayas, suraId) {
 
   area.innerHTML = bismillah + filteredAyas.map(aya => {
 
-    const arabic = aya.arabic || aya.aya_text || '';
+    // Strip Bismillah prefix if stored inside verse 1's arabic text.
+    // Some databases prepend "بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ" to the first
+    // verse's Arabic field. Since we render our own banner, we remove it here.
+    let arabic = aya.arabic || aya.aya_text || '';
+    if (aya.aya_number === 1 && arabic) {
+      // Remove any leading Bismillah variant (with or without diacritics/tatweel)
+      arabic = arabic
+        .replace(/^\s*بِسْمِ\s+ٱللَّهِ\s+ٱلرَّحْمَٰنِ\s+ٱلرَّحِيمِ\s*/u, '')
+        .replace(/^\s*بِسْمِ\s+اللَّهِ\s+الرَّحْمَٰنِ\s+الرَّحِيمِ\s*/u, '')
+        .replace(/^\s*بسم\s+الله\s+الرحمن\s+الرحيم\s*/u, '')
+        .trim();
+    }
     const english = aya.english || '';
     // For Surah 7 verse 1 (الٓمٓصٓ) the Tigrinya is the muqatta'at rendering.
     // Guard: if aya_text is identical to the Arabic (meaning no real Tigrinya
@@ -1346,13 +1460,10 @@ function renderVerses(ayas, suraId) {
             <button id="copy-${aya.aya_number}" onclick="event.stopPropagation();copyVerse(${aya.aya_number},${suraId})" title="Copy visible languages" style="background:#FDF8EE;border:1px solid #E8C97B;border-radius:6px;width:32px;height:30px;font-size:14px;cursor:pointer;padding:0;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;">📋</button>
             <button onclick="event.stopPropagation();shareVerse(${aya.aya_number},${suraId})" title="Share verse" style="background:#FDF8EE;border:1px solid #E8C97B;border-radius:6px;width:32px;height:30px;font-size:14px;cursor:pointer;padding:0;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;">📤</button>
           </div>
-          <div class="verse-arabic lang-arabic" style="${!langState.arabic?'display:none':''}">${arabic}</div>
-          ${translit ? `<div class="lang-translit" style="margin-top:14px;padding-bottom:12px;border-bottom:1px solid #E8DDC0;${!langState.translit?'display:none':''}">
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">
-              <div style="font-size:10px;font-weight:700;letter-spacing:1.2px;color:#A88840;text-transform:uppercase;font-style:normal;">Transliteration</div>
-            </div>
-            <div style="font-size:15px;color:#1a1a1a;line-height:1.7;font-style:italic;letter-spacing:0.2px;font-weight:500;">${translit}</div>
-          </div>` : ''}
+          <div class="verse-arabic lang-arabic" style="${!langState.arabic?'display:none':''}">
+            ${buildWordByWord(arabic, translit, suraId, aya.aya_number)}
+          </div>
+          ${translit ? `<div class="lang-translit" style="display:none"></div>` : ''}
           ${english ? `<div class="verse-english lang-english" style="margin-top:14px;padding-bottom:12px;border-bottom:1px solid #E8DDC0;font-style:normal;${!langState.english?'display:none':''}">
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">
               <div style="font-size:10px;font-weight:700;letter-spacing:1.2px;color:#1A6FA8;text-transform:uppercase;font-style:normal;">English</div>
@@ -2780,6 +2891,176 @@ function renderSidebarRefList(results, query) {
       </div>
     </div>`;
   }).join('');
+}
+
+// ── WORD-BY-WORD ARABIC RENDERER ────────────────────────────────────────────
+// Splits an Arabic verse into individual word spans. Each word is a tappable
+// tile showing the Arabic script; tapping opens the lexicon popup.
+// Transliteration is split by spaces to match word positions.
+
+function buildWordByWord(arabicText, translitText, suraId, ayaNum) {
+  if (!arabicText) return '';
+  const words = arabicText.trim().split(/\s+/);
+  const tWords = translitText ? translitText.trim().split(/\s+/) : [];
+
+  if (words.length <= 1) {
+    const tSingle = tWords[0] || '';
+    return `<div style="text-align:center;direction:rtl;">
+      <span style="font-family:'Scheherazade New','Amiri',serif;font-size:28px;font-weight:600;color:#1a1a1a;line-height:2;">${arabicText}</span>
+      ${tSingle ? `<div style="font-size:12px;color:#A88840;font-style:italic;direction:ltr;margin-top:2px;">${tSingle}</div>` : ''}
+    </div>`;
+  }
+
+  const tiles = words.map((word, i) => {
+    const safe = word.replace(/'/g, "\'").replace(/"/g, '&quot;');
+    const tWord = tWords[i] || '';
+    return `<span class="wbw-word" onclick="event.stopPropagation();openWbwPopup('${safe}',${suraId},${ayaNum},${i})">
+      <span class="wbw-arabic">${word}</span>
+      ${tWord ? `<span class="wbw-translit">${tWord}</span>` : ''}
+    </span>`;
+  }).join('');
+
+  return `<div class="wbw-grid">${tiles}</div>`;
+}
+
+// ── WORD POPUP ───────────────────────────────────────────────────────────────
+function openWbwPopup(word, suraId, ayaNum, wordIdx) {
+  const overlay = document.getElementById('wbwPopup');
+  if (!overlay) return;
+  document.getElementById('wbwPopupWord').textContent = word;
+  document.getElementById('wbwPopupTranslit').textContent = '';
+  document.getElementById('wbwPopupBody').innerHTML =
+    '<div style="text-align:center;padding:20px;color:#AAA;font-style:italic"><span class="spinner"></span> Looking up word...</div>';
+  overlay.classList.add('open');
+  loadWbwWordData(word, suraId, ayaNum, wordIdx);
+}
+
+function closeWbwPopup() {
+  const overlay = document.getElementById('wbwPopup');
+  if (overlay) overlay.classList.remove('open');
+}
+
+async function loadWbwWordData(word, suraId, ayaNum, wordIdx) {
+  const body = document.getElementById('wbwPopupBody');
+  const translitEl = document.getElementById('wbwPopupTranslit');
+
+  // 1. Try lexicon database first (word_analysis table)
+  try {
+    const rows = await sbFetch('word_analysis', {
+      select: 'word_arabic,root,transliteration,meaning_arabic,meaning_english,modern_meaning,scholarly_explanation,language_origin',
+      sura_id: `eq.${suraId}`,
+      aya_number: `eq.${ayaNum}`,
+      word_position: `eq.${wordIdx}`
+    });
+    if (rows && rows.length) {
+      const r = rows[0];
+      if (r.transliteration) translitEl.textContent = r.transliteration;
+      renderWbwResult(body, r, word);
+      return;
+    }
+  } catch(e) {}
+
+  // 2. Search lexicon by Arabic word
+  try {
+    const rows = await sbFetch('word_analysis', {
+      select: 'word_arabic,root,transliteration,meaning_arabic,meaning_english,modern_meaning,scholarly_explanation,language_origin',
+      word_arabic: `eq.${word}`,
+      limit: '1'
+    });
+    if (rows && rows.length) {
+      const r = rows[0];
+      if (r.transliteration) translitEl.textContent = r.transliteration;
+      renderWbwResult(body, r, word);
+      return;
+    }
+  } catch(e) {}
+
+  // 3. Fallback — generate via AI
+  renderWbwAIFallback(body, translitEl, word, suraId, ayaNum);
+}
+
+function renderWbwResult(body, r, word) {
+  const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  let html = '';
+  if (r.root) html += `<div class="wbw-popup-section"><div class="wbw-popup-label">Root · جذر</div><div class="wbw-popup-value" style="font-family:'Amiri',serif;font-size:20px;direction:rtl;">${esc(r.root)}</div></div>`;
+  if (r.meaning_english) html += `<div class="wbw-popup-section"><div class="wbw-popup-label">Classical Meaning</div><div class="wbw-popup-value">${esc(r.meaning_english)}</div></div>`;
+  if (r.modern_meaning) html += `<div class="wbw-popup-section"><div class="wbw-popup-label">Modern Meaning</div><div class="wbw-popup-value">${esc(r.modern_meaning)}</div></div>`;
+  if (r.meaning_arabic) html += `<div class="wbw-popup-section"><div class="wbw-popup-label">Arabic Meaning · المعنى</div><div class="wbw-popup-value" style="font-family:'Amiri',serif;font-size:18px;direction:rtl;text-align:right;">${esc(r.meaning_arabic)}</div></div>`;
+  if (r.language_origin) html += `<div class="wbw-popup-section"><div class="wbw-popup-label">Language Origin</div><div class="wbw-popup-value">${esc(r.language_origin)}</div></div>`;
+  if (r.scholarly_explanation) html += `<div class="wbw-popup-section"><div class="wbw-popup-label">Scholarly Analysis</div><div class="wbw-popup-value">${esc(r.scholarly_explanation).substring(0,400)}${r.scholarly_explanation.length>400?'…':''}</div></div>`;
+  if (!html) html = `<div style="color:#BBB;text-align:center;padding:20px;font-style:italic">No detailed entry for this word yet.<br><button onclick="generateWbwAI('${word.replace(/'/g,"\'")}')" style="margin-top:10px;padding:8px 18px;background:#B8902A;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">✨ Generate Analysis</button></div>`;
+  body.innerHTML = html;
+}
+
+async function renderWbwAIFallback(body, translitEl, word, suraId, ayaNum) {
+  body.innerHTML = '<div style="text-align:center;padding:12px;color:#AAA;font-style:italic"><span class="spinner"></span> Generating analysis...</div>';
+  try {
+    const prompt = `You are an Arabic lexicographer. Analyze the Quranic Arabic word: "${word}" (from Surah ${suraId}, Verse ${ayaNum}).
+
+Provide a concise JSON response with these fields only:
+{
+  "transliteration": "romanized pronunciation",
+  "root": "three-letter root in Arabic",
+  "classical_meaning": "meaning in Quranic Arabic (1-2 sentences)",
+  "modern_meaning": "how the word is used in Modern Standard Arabic",
+  "language_origin": "Arabic / Aramaic / Hebrew / etc. if known"
+}
+
+Respond with JSON only, no markdown fences, no preamble.`;
+
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': ANTHROPIC_KEY,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 500,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+    const data = await resp.json();
+    let raw = (data.content?.[0]?.text || '').trim()
+      .replace(/^```json\s*/i,'').replace(/```\s*$/i,'').trim();
+    const parsed = JSON.parse(raw);
+    if (parsed.transliteration) translitEl.textContent = parsed.transliteration;
+    renderWbwResult(body, {
+      root: parsed.root,
+      meaning_english: parsed.classical_meaning,
+      modern_meaning: parsed.modern_meaning,
+      language_origin: parsed.language_origin
+    }, word);
+  } catch(e) {
+    body.innerHTML = `<div style="color:#BBB;text-align:center;padding:20px;font-style:italic">Could not load analysis.<br><small>${e.message}</small></div>`;
+  }
+}
+
+function navigateSura(direction) {
+  // direction: -1 = previous, +1 = next
+  if (!currentSura || !allSuras || !allSuras.length) return;
+  const ids = allSuras.map(s => s.sura_id || s.id).sort((a, b) => a - b);
+  const idx = ids.indexOf(currentSura);
+  if (idx === -1) return;
+  const newIdx = idx + direction;
+  if (newIdx < 0 || newIdx >= ids.length) return;
+  const newId = ids[newIdx];
+  // Scroll verse area to top
+  const va = document.getElementById('verseArea');
+  if (va) va.scrollTop = 0;
+  // Highlight the new sura in sidebar
+  selectSura(newId);
+  // Update button states
+  updateSuraNavButtons(ids, newIdx);
+}
+
+function updateSuraNavButtons(ids, idx) {
+  const prev = document.getElementById('prevSuraBtn');
+  const next = document.getElementById('nextSuraBtn');
+  if (prev) { prev.disabled = idx <= 0; prev.style.opacity = idx <= 0 ? '0.35' : '1'; }
+  if (next) { next.disabled = idx >= ids.length - 1; next.style.opacity = idx >= ids.length - 1 ? '0.35' : '1'; }
 }
 
 function goBack() {
@@ -6370,5 +6651,16 @@ document.addEventListener('DOMContentLoaded', function(){
   qhistRecord(label, window.location.href, '📖', 'Quran Platform');
 });
 </script>
+<!-- ── WORD-BY-WORD POPUP ── -->
+<div class="wbw-popup-overlay" id="wbwPopup" onclick="if(event.target===this)closeWbwPopup()">
+  <div class="wbw-popup" style="position:relative;">
+    <button class="wbw-popup-close" onclick="closeWbwPopup()">✕</button>
+    <div class="wbw-popup-word" id="wbwPopupWord"></div>
+    <div class="wbw-popup-translit" id="wbwPopupTranslit"></div>
+    <div id="wbwPopupBody">
+      <div style="text-align:center;padding:20px;color:#AAA;font-style:italic"><span class="spinner"></span> Looking up word...</div>
+    </div>
+  </div>
+</div>
 </body>
 </html>
