@@ -3642,10 +3642,36 @@ function openWbwPopup(btn, word, suraId, ayaNum, wordIdx) {
   const decoded = tmp.value;
   document.getElementById('wbwPopupWord').textContent = decoded;
   document.getElementById('wbwPopupTranslit').textContent = '';
+  // Store for audio playback
+  window._wbwCurrent = { word: decoded, suraId: suraId, ayaNum: ayaNum, wordIdx: wordIdx };
   document.getElementById('wbwPopupBody').innerHTML =
     '<div style="text-align:center;padding:20px;color:#AAA;font-style:italic"><span class="spinner"></span> Looking up word...</div>';
   overlay.classList.add('open');
   loadWbwWordData(decoded, suraId, ayaNum, wordIdx);
+}
+
+function playWbwAudio() {
+  var cur = window._wbwCurrent;
+  if (!cur) return;
+  var pad = function(n) { return String(n).padStart(3, '0'); };
+  var url = 'https://audio.qurancdn.com/wbw/'
+    + pad(cur.suraId) + '_' + pad(cur.ayaNum) + '_' + pad(cur.wordIdx) + '.mp3';
+  var btn = document.getElementById('wbwAudioBtn');
+  // Stop any existing audio
+  if (window._wbwAudio) { window._wbwAudio.pause(); window._wbwAudio = null; }
+  var audio = new Audio(url);
+  window._wbwAudio = audio;
+  if (btn) btn.textContent = '⏸';
+  audio.play().catch(function(e) {
+    console.warn('Word audio failed:', url, e);
+    if (btn) btn.textContent = '🔊';
+  });
+  audio.onended = function() { if (btn) btn.textContent = '🔊'; };
+  audio.onerror = function() {
+    // Try alternative: play full verse audio instead
+    if (btn) btn.textContent = '❌';
+    setTimeout(function() { if (btn) btn.textContent = '🔊'; }, 1500);
+  };
 }
 
 function closeWbwPopup() {
@@ -7375,7 +7401,14 @@ document.addEventListener('DOMContentLoaded', function(){
 <div class="wbw-popup-overlay" id="wbwPopup" onclick="if(event.target===this)closeWbwPopup()">
   <div class="wbw-popup" style="position:relative;">
     <button class="wbw-popup-close" onclick="closeWbwPopup()">✕</button>
+    <div style="display:flex;align-items:center;justify-content:center;gap:12px;">
     <div class="wbw-popup-word" id="wbwPopupWord"></div>
+    <button id="wbwAudioBtn" onclick="playWbwAudio()"
+      style="width:42px;height:42px;border-radius:50%;background:var(--accent,#3A5A7A);
+      color:#fff;border:none;font-size:20px;cursor:pointer;display:flex;
+      align-items:center;justify-content:center;flex-shrink:0;"
+      title="Play word audio">🔊</button>
+  </div>
     <div class="wbw-popup-translit" id="wbwPopupTranslit"></div>
     <div id="wbwPopupBody">
       <div style="text-align:center;padding:20px;color:#AAA;font-style:italic"><span class="spinner"></span> Looking up word...</div>
