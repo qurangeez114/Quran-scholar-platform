@@ -2919,12 +2919,8 @@ const ANTHROPIC_KEY = 'sk-ant-api03-MzaYEqHR8EwjThk4deB-UAO0xEzG8rLjC8rIkNWnViPq
 function buildWordByWord(arabicText, translitText, suraId, ayaNum) {
   if (!arabicText) return '';
   var words = arabicText.trim().split(/\s+/);
-  var tWords = translitText ? translitText.trim().split(/\s+/) : [];
 
-  // Per-word transliteration override for Bismillah words.
-  // The API returns compound tokens like "Bismillaahir rahmaanir raheem" (3 tokens)
-  // but the Arabic has 4 separate words. We use bare-consonant matching to
-  // assign the correct transliteration to each word individually.
+  // Per-word Bismillah overrides (human-readable)
   var BARE_TRANSLIT = {
     '\u0628\u0633\u0645': 'Bismi',
     '\u0627\u0644\u0644\u0647': 'llaahi',
@@ -2936,16 +2932,19 @@ function buildWordByWord(arabicText, translitText, suraId, ayaNum) {
     return w.replace(/[\u064B-\u065F\u0670\u06D6-\u06DC]/g, '').replace(/\u0671/g, '\u0627');
   }
 
-  function getTranslit(word, idx) {
-    // Try per-word Bismillah lookup first
+  // Generate transliteration per word:
+  // 1. Check Bismillah override table first
+  // 2. Use local transliterateArabic() per word — always aligns 1:1
+  // We do NOT split the API translit string by spaces because the API
+  // compounds words differently (e.g. "Bismillaahir" = 4 Arabic words)
+  function getTranslit(word) {
     var override = BARE_TRANSLIT[bareOf(word)];
     if (override) return override;
-    // Fall back to positional match
-    return tWords[idx] || '';
+    return transliterateArabic(word);
   }
 
   if (words.length <= 1) {
-    var tSingle = getTranslit(words[0], 0);
+    var tSingle = getTranslit(words[0]);
     var tDiv = tSingle
       ? '<div style="font-size:11px;color:#A88840;font-style:italic;direction:ltr;margin-top:3px;text-align:center;">' + tSingle + '</div>'
       : '';
@@ -2957,7 +2956,7 @@ function buildWordByWord(arabicText, translitText, suraId, ayaNum) {
 
   var tiles = words.map(function(word, i) {
     var safe = word.replace(/'/g, "&#39;").replace(/"/g, '&quot;');
-    var tWord = getTranslit(word, i);
+    var tWord = getTranslit(word);
     var tSpan = tWord
       ? '<span class="wbw-translit">' + tWord + '</span>'
       : '';
