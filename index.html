@@ -3144,8 +3144,27 @@ async function renderWbwAIFallback(body, translitEl, word, suraId, ayaNum) {
       })
     });
     const data = await resp.json();
-    let raw = (data.content?.[0]?.text || '').trim()
-      .replace(/^```json\s*/i,'').replace(/```\s*$/i,'').trim();
+
+    // Handle API-level errors (auth, rate limit, etc.)
+    if (data.type === 'error') {
+      const errType = data.error?.type || 'unknown';
+      const errMsg = errType === 'authentication_error'
+        ? 'API key invalid or expired. Please update the key.'
+        : errType === 'rate_limit_error'
+        ? 'Rate limit reached. Please try again in a moment.'
+        : (data.error?.message || 'API error: ' + errType);
+      body.innerHTML = '<div style="color:#C0392B;text-align:center;padding:20px;font-size:13px;">'
+        + '⚠️ ' + errMsg + '</div>';
+      return;
+    }
+
+    const rawText = (data.content?.[0]?.text || '').trim();
+    if (!rawText) {
+      body.innerHTML = '<div style="color:#BBB;text-align:center;padding:20px;font-style:italic">No response from AI.</div>';
+      return;
+    }
+
+    let raw = rawText.replace(/^```json\s*/i,'').replace(/```\s*$/i,'').trim();
     const parsed = JSON.parse(raw);
     if (parsed.transliteration) translitEl.textContent = parsed.transliteration;
     renderWbwResult(body, {
@@ -3155,7 +3174,8 @@ async function renderWbwAIFallback(body, translitEl, word, suraId, ayaNum) {
       language_origin: parsed.language_origin
     }, word);
   } catch(e) {
-    body.innerHTML = `<div style="color:#BBB;text-align:center;padding:20px;font-style:italic">Could not load analysis.<br><small>${e.message}</small></div>`;
+    body.innerHTML = '<div style="color:#BBB;text-align:center;padding:20px;font-style:italic">'
+      + 'Could not load analysis.<br><small>' + e.message + '</small></div>';
   }
 }
 
