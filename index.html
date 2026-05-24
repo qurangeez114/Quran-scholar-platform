@@ -565,9 +565,11 @@ html[data-theme="dark"] .qhist-lbl { color: #E8E4DC; }
 
   /* ── Build chips HTML ── */
   function chip(cls, icon, label, url, fromLabel, fromIcon) {
+    var safeUrl = url.replace(/'/g, "\'");
+    var safeFrom = (fromLabel||'').replace(/'/g, "\'");
+    var safeIcon = (fromIcon||'').replace(/'/g, "\'");
     return '<a class="xweb-chip ' + cls + '" href="' + url + '" '
-      + 'onclick="event.preventDefault();xnavGo('' + url.replace(/'/g,"\'") + '',''
-      + (fromLabel||'').replace(/'/g,"\'") + '','' + (fromIcon||'').replace(/'/g,"\'") + '')">'
+      + 'onclick="event.preventDefault();xnavGo(\'' + safeUrl + '\',\'' + safeFrom + '\',\'' + safeIcon + '\')">'
       + icon + ' ' + label + '</a>';
   }
 
@@ -679,7 +681,7 @@ html[data-theme="dark"] .qhist-lbl { color: #E8E4DC; }
     var h = getHist();
     if(!h.length){ el.innerHTML='<div class="qhist-empty">No history yet — start exploring!</div>'; return; }
     el.innerHTML = h.map(function(item){
-      return '<a class="qhist-item" href="'+esc(item.url)+'" onclick="event.preventDefault();qhistGo(''+esc(item.url)+'')">'
+      return '<a class="qhist-item" href="'+esc(item.url)+'" onclick="event.preventDefault();qhistGo(this.href)">' 
         +'<span class="qhist-ico">'+(item.icon||'📄')+'</span>'
         +'<span class="qhist-body">'
         +'<div class="qhist-lbl">'+esc(item.label)+'</div>'
@@ -2919,12 +2921,8 @@ function renderSidebarRefList(results, query) {
 function buildWordByWord(arabicText, translitText, suraId, ayaNum) {
   if (!arabicText) return '';
   var words = arabicText.trim().split(/\s+/);
-  var tWords = translitText ? translitText.trim().split(/\s+/) : [];
 
-  // Per-word transliteration override for Bismillah words.
-  // The API returns compound tokens like "Bismillaahir rahmaanir raheem" (3 tokens)
-  // but the Arabic has 4 separate words. We use bare-consonant matching to
-  // assign the correct transliteration to each word individually.
+  // Per-word Bismillah overrides (human-readable)
   var BARE_TRANSLIT = {
     '\u0628\u0633\u0645': 'Bismi',
     '\u0627\u0644\u0644\u0647': 'llaahi',
@@ -2936,34 +2934,45 @@ function buildWordByWord(arabicText, translitText, suraId, ayaNum) {
     return w.replace(/[\u064B-\u065F\u0670\u06D6-\u06DC]/g, '').replace(/\u0671/g, '\u0627');
   }
 
-  function getTranslit(word, idx) {
-    // Try per-word Bismillah lookup first
+  // Generate transliteration per word — always 1:1 aligned with Arabic words.
+  // Never split the API string by spaces (API compounds words differently).
+  function getTranslit(word) {
     var override = BARE_TRANSLIT[bareOf(word)];
     if (override) return override;
-    // Fall back to positional match
-    return tWords[idx] || '';
+    return transliterateArabic(word);
+  }
+
+  // Get English word from pre-loaded map (position is 1-based)
+  function getEnglish(pos) {
+    var ayaMap = (wbwWordMap[suraId] || {})[ayaNum] || {};
+    return ayaMap[pos] || '';
+  }
+
+  // Trigger async load of word map for this surah
+  if (!wbwWordMap[suraId] && !wbwWordMapLoading[suraId]) {
+    loadWbwWordMap(suraId);
   }
 
   if (words.length <= 1) {
-    var tSingle = getTranslit(words[0], 0);
-    var tDiv = tSingle
-      ? '<div style="font-size:11px;color:#A88840;font-style:italic;direction:ltr;margin-top:3px;text-align:center;">' + tSingle + '</div>'
-      : '';
+    var tSingle = getTranslit(words[0]);
+    var eSingle = getEnglish(1);
     return '<div style="text-align:center;direction:rtl;">'
       + '<span style="font-family:\'Scheherazade New\',\'Amiri\',serif;font-size:28px;font-weight:600;color:#1a1a1a;line-height:2;">' + arabicText + '</span>'
-      + tDiv
+      + (tSingle ? '<div style="font-size:11px;color:#A88840;font-style:italic;direction:ltr;margin-top:3px;">' + tSingle + '</div>' : '')
+      + (eSingle ? '<div style="font-size:11px;color:#1A6FA8;font-weight:600;direction:ltr;margin-top:2px;">' + eSingle + '</div>' : '')
       + '</div>';
   }
 
   var tiles = words.map(function(word, i) {
     var safe = word.replace(/'/g, "&#39;").replace(/"/g, '&quot;');
-    var tWord = getTranslit(word, i);
-    var tSpan = tWord
-      ? '<span class="wbw-translit">' + tWord + '</span>'
-      : '';
-    return '<span class="wbw-word" onclick="event.stopPropagation();openWbwPopup(this,\''+safe+'\','+suraId+','+ayaNum+','+i+')">'
+    var tWord = getTranslit(word);
+    var eWord = getEnglish(i + 1); // positions are 1-based
+    var tSpan = tWord ? '<span class="wbw-translit">' + tWord + '</span>' : '';
+    var eSpan = eWord ? '<span class="wbw-english">' + eWord + '</span>' : '<span class="wbw-english"></span>';
+    return '<span class="wbw-word" data-pos="' + (i+1) + '" data-aya="' + ayaNum + '" onclick="event.stopPropagation();openWbwPopup(this,\''+safe+'\','+suraId+','+ayaNum+','+(i+1)+')">'
       + '<span class="wbw-arabic">' + word + '</span>'
       + tSpan
+      + eSpan
       + '</span>';
   }).join('');
 
