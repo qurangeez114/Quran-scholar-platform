@@ -3564,6 +3564,38 @@ async function loadWbwWordMap(suraId) {
 
 function buildWordByWord(arabicText, translitText, suraId, ayaNum) {
   if (!arabicText) return '';
+
+  // ── Use quran_words.json words directly if available ──────────────────────
+  // This guarantees position alignment between Arabic, translit and English.
+  var verseKey = suraId + ':' + ayaNum;
+  if (QURAN_WORDS_READY && QURAN_WORDS && QURAN_WORDS[verseKey] && QURAN_WORDS[verseKey].length) {
+    var qwords = QURAN_WORDS[verseKey];
+    var BARE_TRANSLIT2 = {
+      '\u0628\u0633\u0645': 'Bismi', '\u0627\u0644\u0644\u0647': 'llaahi',
+      '\u0627\u0644\u0631\u062d\u0645\u0646': 'r-Rahmaani', '\u0627\u0644\u0631\u062d\u064a\u0645': 'r-Raheem'
+    };
+    function bareOf2(w) { return w.replace(/[\u064B-\u065F\u0670\u06D6-\u06DC]/g,'').replace(/\u0671/g,'\u0627'); }
+    if (qwords.length === 1) {
+      var w0 = qwords[0];
+      var t0 = BARE_TRANSLIT2[bareOf2(w0.a)] || w0.t || '';
+      return '<div style="text-align:center;direction:rtl;">'
+        + '<span style="font-family:\'Scheherazade New\',\'Amiri\',serif;font-size:28px;font-weight:700;color:#000000;line-height:2;">' + w0.a + '</span>'
+        + (t0 ? '<div style="font-size:11px;color:#1E293B;font-style:italic;font-weight:600;direction:ltr;margin-top:3px;">' + t0 + '</div>' : '')
+        + (w0.e ? '<div style="font-size:11px;color:#0F172A;font-weight:600;direction:ltr;margin-top:2px;">' + w0.e + '</div>' : '')
+        + '</div>';
+    }
+    var qtiles = qwords.map(function(w, i) {
+      var safe = w.a.replace(/'/g,"&#39;").replace(/"/g,'&quot;');
+      var tWord = BARE_TRANSLIT2[bareOf2(w.a)] || w.t || '';
+      var tSpan = tWord ? '<span class="wbw-translit">' + tWord + '</span>' : '';
+      var eSpan = w.e ? '<span class="wbw-english">' + w.e + '</span>' : '<span class="wbw-english"></span>';
+      return '<span class="wbw-word" data-pos="'+(i+1)+'" data-aya="'+ayaNum+'" onclick="event.stopPropagation();openWbwPopup(this,\''+safe+'\','+suraId+','+ayaNum+','+(i+1)+')">'
+        + '<span class="wbw-arabic">' + w.a + '</span>'
+        + tSpan + eSpan + '</span>';
+    }).join('');
+    return '<div class="wbw-grid">' + qtiles + '</div>';
+  }
+  // ── Fallback: split Arabic text by spaces ─────────────────────────────────
   var words = arabicText.trim().split(/\s+/);
 
   // Per-word Bismillah overrides (human-readable)
