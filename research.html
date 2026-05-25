@@ -2837,7 +2837,7 @@ function speakCard(id) {
 }
 
 function copyCard(id, btn) {
-  const r = allResults.find(x => `${x.type}-${x._tbl ? x._tbl+'-' : ''}${x.id}` === id);
+  const r = allResults.find(x => `${x.type}-${x._tbl ? x._tbl+"-" : ""}${x.id}` === id);
   if (!r) return;
   const text = [
     `[${r.type.toUpperCase()}] Quran ${r.sura_id}:${r.aya_number}`,
@@ -2869,7 +2869,7 @@ function copyCard(id, btn) {
 }
 
 function shareCard(id) {
-  const r = allResults.find(x => `${x.type}-${x._tbl ? x._tbl+'-' : ''}${x.id}` === id);
+  const r = allResults.find(x => `${x.type}-${x._tbl ? x._tbl+"-" : ""}${x.id}` === id);
   if (!r) return;
   const text = [
     `Quran ${r.sura_id}:${r.aya_number}`,
@@ -3567,7 +3567,7 @@ function toggleSiraEvent(card) {
           }
           setTimeout(() => {
             doSearch();
-            function tryScrollToCard(attemptsLeft) {
+            function tryScrollToCard(n) {
               if (saved.cardId) {
                 var card = document.getElementById(saved.cardId);
                 if (card) {
@@ -3578,11 +3578,8 @@ function toggleSiraEvent(card) {
                   return;
                 }
               }
-              if (attemptsLeft > 0) {
-                setTimeout(function() { tryScrollToCard(attemptsLeft - 1); }, 300);
-              } else {
-                window.scrollTo(0, saved.scrollY || 0);
-              }
+              if (n > 0) setTimeout(function() { tryScrollToCard(n-1); }, 300);
+              else window.scrollTo(0, saved.scrollY || 0);
             }
             setTimeout(function() { tryScrollToCard(5); }, 400);
           }, 300);
@@ -3599,20 +3596,17 @@ function qnavGoVerse(url, label, clickedEl) {
   var q = inp ? inp.value.trim() : '';
   var fromLabel = 'Research' + (q ? ': "' + q + '"' : '');
   try {
-    // Find which card was clicked so we can scroll back to it on return
     var clickedCardId = null;
     try {
       if (clickedEl) {
-        var closest = (typeof clickedEl.closest === 'function') ? clickedEl.closest('.result-card') : null;
-        if (closest) clickedCardId = closest.id || null;
+        var cl = (typeof clickedEl.closest === 'function') ? clickedEl.closest('.result-card') : null;
+        if (cl) clickedCardId = cl.id || null;
       }
-      if (!clickedCardId) {
-        var activeEl = document.activeElement;
-        var closestActive = activeEl ? activeEl.closest('.result-card') : null;
-        if (closestActive) clickedCardId = closestActive.id || null;
+      if (!clickedCardId && document.activeElement) {
+        var ca = document.activeElement.closest('.result-card');
+        if (ca) clickedCardId = ca.id || null;
       }
     } catch(ex) {}
-    // Save full research state so we can restore it on return
     var state = {
       q: q,
       scrollY: window.scrollY,
