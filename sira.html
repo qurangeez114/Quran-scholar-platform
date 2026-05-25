@@ -1386,13 +1386,15 @@ async function loadAll() {
     renderFilters();
     renderTimeline();
 
-    // Deep link - restore open event and scroll to its card
+    // Deep link — restore open event and scroll to its card
     const params = new URLSearchParams(window.location.search);
     const tid = params.get('event');
     if (tid) {
       openEvent(tid);
-      function tryScrollToEvent(n) {
-        var card = document.querySelector('.event-card[onclick*="' + tid + '"]');
+      // Scroll the event card into view after it renders, and highlight it
+      function tryScrollToEvent(attemptsLeft) {
+        var card = document.querySelector('.event-card[onclick*="' + tid + '"]') ||
+                   document.getElementById('event-' + tid);
         if (card) {
           card.scrollIntoView({ behavior: 'smooth', block: 'center' });
           card.style.transition = 'box-shadow 0.3s';
@@ -1400,7 +1402,9 @@ async function loadAll() {
           setTimeout(function() { card.style.boxShadow = ''; }, 1500);
           return;
         }
-        if (n > 0) setTimeout(function() { tryScrollToEvent(n-1); }, 300);
+        if (attemptsLeft > 0) {
+          setTimeout(function() { tryScrollToEvent(attemptsLeft - 1); }, 300);
+        }
       }
       setTimeout(function() { tryScrollToEvent(6); }, 400);
     }
