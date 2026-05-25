@@ -1386,10 +1386,28 @@ async function loadAll() {
     renderFilters();
     renderTimeline();
 
-    // Deep link
+    // Deep link — restore open event and scroll to its card
     const params = new URLSearchParams(window.location.search);
     const tid = params.get('event');
-    if (tid) openEvent(tid);
+    if (tid) {
+      openEvent(tid);
+      // Scroll the event card into view after it renders, and highlight it
+      function tryScrollToEvent(attemptsLeft) {
+        var card = document.querySelector('.event-card[onclick*="' + tid + '"]') ||
+                   document.getElementById('event-' + tid);
+        if (card) {
+          card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          card.style.transition = 'box-shadow 0.3s';
+          card.style.boxShadow = '0 0 0 3px #c9a85c';
+          setTimeout(function() { card.style.boxShadow = ''; }, 1500);
+          return;
+        }
+        if (attemptsLeft > 0) {
+          setTimeout(function() { tryScrollToEvent(attemptsLeft - 1); }, 300);
+        }
+      }
+      setTimeout(function() { tryScrollToEvent(6); }, 400);
+    }
   } catch (e) {
     tl.innerHTML = `<div class="empty-state">Failed to load: ${esc(e.message)}</div>`;
     console.error(e);

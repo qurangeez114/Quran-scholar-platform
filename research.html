@@ -2578,7 +2578,7 @@ function buildCard(r, q, isRelated) {
       const refSearch = encodeURIComponent(r.reference);
       meta.push(`<a href="research.html?q=${refSearch}&source=hadith" style="color:var(--hadith);text-decoration:none;font-style:normal;" title="Search this reference">📖 ${esc(r.reference)} ↗</a>`);
     }
-    if (suraRef) meta.push(`<a href="${verseUrl}" style="color:var(--bronze);text-decoration:none;font-style:normal;" title="Open verse ${suraRef}:${ayaRef}" onclick="event.preventDefault();qnavGoVerse('${verseUrl}','${suraRef}:${ayaRef}')">🔗 Verse ${suraRef}:${ayaRef} ↗</a>`);
+    if (suraRef) meta.push(`<a href="${verseUrl}" style="color:var(--bronze);text-decoration:none;font-style:normal;" title="Open verse ${suraRef}:${ayaRef}" onclick="event.preventDefault();qnavGoVerse('${verseUrl}','${suraRef}:${ayaRef}',this)">🔗 Verse ${suraRef}:${ayaRef} ↗</a>`);
     if (r.similarity_note) meta.push(`<span style="font-style:italic">${esc(r.similarity_note)}</span>`);
     metaLine = meta.length ? `<div class="card-meta">${meta.join(' · ')}</div>` : '';
     // Analysis placeholders — filled asynchronously by injectAnalysisScores()
@@ -2607,7 +2607,7 @@ function buildCard(r, q, isRelated) {
     const suraNum = r.sura || r.sura_id;
     const ayaNum = r.aya || r.aya_number;
     const tafsirVerseUrl = suraNum ? `index.html?sura=${suraNum}&aya=${ayaNum}&from=research&q=${encodeURIComponent(currentQ)}&source=tafsir` : '';
-    metaLine = suraNum ? `<div class="card-meta"><a href="${tafsirVerseUrl}" style="color:var(--bronze);text-decoration:none;" title="Open verse ${suraNum}:${ayaNum}" onclick="event.preventDefault();qnavGoVerse('${tafsirVerseUrl}','${suraNum}:${ayaNum}')">🔗 Verse ${suraNum}:${ayaNum} ↗</a>${r.tradition ? ' · ' + esc(r.tradition) : ''}</div>` : '';
+    metaLine = suraNum ? `<div class="card-meta"><a href="${tafsirVerseUrl}" style="color:var(--bronze);text-decoration:none;" title="Open verse ${suraNum}:${ayaNum}" onclick="event.preventDefault();qnavGoVerse('${tafsirVerseUrl}','${suraNum}:${ayaNum}',this)">🔗 Verse ${suraNum}:${ayaNum} ↗</a>${r.tradition ? ' · ' + esc(r.tradition) : ''}</div>` : '';
   } else if (r.type === 'asbab') {
     typePill = `<span class="source-pill pill-asbab">🕰 Asbāb</span>`;
     scholarLine = `<div class="card-scholar">${esc(r.scholar||'Classical narration')}</div>`;
@@ -2615,7 +2615,7 @@ function buildCard(r, q, isRelated) {
     const asbabVerseUrl = suraRef ? `index.html?sura=${suraRef}&aya=${ayaRef}&from=research&q=${encodeURIComponent(currentQ)}&source=asbab` : '';
     const asbabMeta = [];
     if (r.source) asbabMeta.push(esc(r.source));
-    if (suraRef) asbabMeta.push(`<a href="${asbabVerseUrl}" style="color:var(--bronze);text-decoration:none;" title="Open verse ${suraRef}:${ayaRef}" onclick="event.preventDefault();qnavGoVerse('${asbabVerseUrl}','${suraRef}:${ayaRef}')">🔗 Verse ${suraRef}:${ayaRef} ↗</a>`);
+    if (suraRef) asbabMeta.push(`<a href="${asbabVerseUrl}" style="color:var(--bronze);text-decoration:none;" title="Open verse ${suraRef}:${ayaRef}" onclick="event.preventDefault();qnavGoVerse('${asbabVerseUrl}','${suraRef}:${ayaRef}',this)">🔗 Verse ${suraRef}:${ayaRef} ↗</a>`);
     metaLine = asbabMeta.length ? `<div class="card-meta">${asbabMeta.join(' · ')}</div>` : '';
   }
 
@@ -2630,8 +2630,8 @@ function buildCard(r, q, isRelated) {
       ${tradPill}
       ${relatedBadge}
       ${r.type === 'sira'
-        ? `<a class="verse-ref" href="${verseUrl}" title="Open in Research" onclick="event.preventDefault();qnavGoVerse('${verseUrl}','Sīra')">📖 Sīra ↗</a>`
-        : suraRef ? `<a class="verse-ref" href="${verseUrl}" title="Open verse in Quran platform" onclick="event.preventDefault();qnavGoVerse('${verseUrl}','${suraRef}:${ayaRef}')">  ${suraRef}:${ayaRef} ↗</a>` : ''
+        ? `<a class="verse-ref" href="${verseUrl}" title="Open in Research" onclick="event.preventDefault();qnavGoVerse('${verseUrl}','Sīra',this)">📖 Sīra ↗</a>`
+        : suraRef ? `<a class="verse-ref" href="${verseUrl}" title="Open verse in Quran platform" onclick="event.preventDefault();qnavGoVerse('${verseUrl}','${suraRef}:${ayaRef}',this)">  ${suraRef}:${ayaRef} ↗</a>` : ''
       }
     </div>
     <div class="card-body">
@@ -3557,6 +3557,7 @@ function toggleSiraEvent(card) {
     if (savedRaw) {
       try {
         const saved = JSON.parse(savedRaw);
+        sessionStorage.removeItem('research_saved_state'); // clear early so it doesn't restore on refresh
         if (saved.q) {
           const input = document.getElementById('searchInput');
           if (input) input.value = saved.q;
@@ -3565,15 +3566,28 @@ function toggleSiraEvent(card) {
             const tab = document.querySelector('.source-tab.' + saved.source);
             if (tab) setSource(saved.source, tab);
           }
-          // Run search then restore scroll
+          // Run search, then scroll to the exact card that was clicked
           setTimeout(() => {
             doSearch();
-            setTimeout(() => {
-              window.scrollTo(0, saved.scrollY || 0);
-            }, 700);
+            function tryScrollToCard(attemptsLeft) {
+              if (saved.cardId) {
+                var card = document.getElementById(saved.cardId);
+                if (card) {
+                  card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  card.style.transition = 'box-shadow 0.3s';
+                  card.style.boxShadow = '0 0 0 3px #c9a85c';
+                  setTimeout(function() { card.style.boxShadow = ''; }, 1500);
+                  return;
+                }
+              }
+              if (attemptsLeft > 0) {
+                setTimeout(function() { tryScrollToCard(attemptsLeft - 1); }, 300);
+              } else {
+                window.scrollTo(0, saved.scrollY || 0);
+              }
+            }
+            setTimeout(function() { tryScrollToCard(5); }, 400);
           }, 300);
-          // Clear state so it doesn't restore again on fresh visit
-          sessionStorage.removeItem('research_saved_state');
         }
       } catch(e) {}
     }
@@ -3582,15 +3596,30 @@ function toggleSiraEvent(card) {
 </script>
 
 <script>
-function qnavGoVerse(url, label) {
+function qnavGoVerse(url, label, clickedEl) {
   var inp = document.getElementById('searchInput');
   var q = inp ? inp.value.trim() : '';
   var fromLabel = 'Research' + (q ? ': "' + q + '"' : '');
   try {
+    // Find which card the click came from so we can scroll back to it
+    var clickedCardId = null;
+    try {
+      if (clickedEl) {
+        var closest = (typeof clickedEl.closest === 'function') ? clickedEl.closest('.result-card') : null;
+        if (closest) clickedCardId = closest.id || null;
+      }
+      if (!clickedCardId) {
+        var activeEl = document.activeElement;
+        var closestActive = activeEl ? activeEl.closest('.result-card') : null;
+        if (closestActive) clickedCardId = closestActive.id || null;
+      }
+    } catch(ex) {}
+
     // Save full research state so we can restore it on return
     var state = {
       q: q,
       scrollY: window.scrollY,
+      cardId: clickedCardId,
       source: window.currentSource || 'all',
       trad: window.currentTrad || 'all'
     };
