@@ -2712,7 +2712,7 @@ function loadHighlights() {
 // ── NOTES ────────────────────────────────────────────────────────
 function openNote(id, btn) {
   currentNoteId = id;
-  const r = allResults.find(x => `${x.type}-${x.id}` === id);
+  const r = allResults.find(x => `${x.type}-${x._tbl ? x._tbl+"-" : ""}${x.id}` === id);
   document.getElementById('noteLabel').textContent = r ? `${r.sura_id}:${r.aya_number}` : id;
   document.getElementById('noteEditor').innerHTML = getNote(id) || '';
   document.getElementById('noteModal').classList.add('open');
@@ -2775,7 +2775,7 @@ function toggleBookmark(id, btn) {
     btn.textContent = '🔖 Save';
     btn.classList.remove('active');
   } else {
-    const r = allResults.find(x => `${x.type}-${x.id}` === id);
+    const r = allResults.find(x => `${x.type}-${x._tbl ? x._tbl+"-" : ""}${x.id}` === id);
     if (r) stored[id] = { id, type: r.type, sura_id: r.sura_id, aya_number: r.aya_number, preview: (r.hadith_text || r.content || r.tafsir_text || r.reason_text || r.title || '').slice(0, 120), savedAt: new Date().toISOString() };
     btn.textContent = '🔖 Saved';
     btn.classList.add('active');
@@ -2837,7 +2837,7 @@ function speakCard(id) {
 }
 
 function copyCard(id, btn) {
-  const r = allResults.find(x => `${x.type}-${x.id}` === id);
+  const r = allResults.find(x => `${x.type}-${x._tbl ? x._tbl+'-' : ''}${x.id}` === id);
   if (!r) return;
   const text = [
     `[${r.type.toUpperCase()}] Quran ${r.sura_id}:${r.aya_number}`,
@@ -2869,7 +2869,7 @@ function copyCard(id, btn) {
 }
 
 function shareCard(id) {
-  const r = allResults.find(x => `${x.type}-${x.id}` === id);
+  const r = allResults.find(x => `${x.type}-${x._tbl ? x._tbl+'-' : ''}${x.id}` === id);
   if (!r) return;
   const text = [
     `Quran ${r.sura_id}:${r.aya_number}`,
@@ -3557,16 +3557,14 @@ function toggleSiraEvent(card) {
     if (savedRaw) {
       try {
         const saved = JSON.parse(savedRaw);
-        sessionStorage.removeItem('research_saved_state'); // clear early so it doesn't restore on refresh
+        sessionStorage.removeItem('research_saved_state');
         if (saved.q) {
           const input = document.getElementById('searchInput');
           if (input) input.value = saved.q;
-          // Restore source/trad
           if (saved.source && saved.source !== 'all') {
             const tab = document.querySelector('.source-tab.' + saved.source);
             if (tab) setSource(saved.source, tab);
           }
-          // Run search, then scroll to the exact card that was clicked
           setTimeout(() => {
             doSearch();
             function tryScrollToCard(attemptsLeft) {
@@ -3601,7 +3599,7 @@ function qnavGoVerse(url, label, clickedEl) {
   var q = inp ? inp.value.trim() : '';
   var fromLabel = 'Research' + (q ? ': "' + q + '"' : '');
   try {
-    // Find which card the click came from so we can scroll back to it
+    // Find which card was clicked so we can scroll back to it on return
     var clickedCardId = null;
     try {
       if (clickedEl) {
@@ -3614,7 +3612,6 @@ function qnavGoVerse(url, label, clickedEl) {
         if (closestActive) clickedCardId = closestActive.id || null;
       }
     } catch(ex) {}
-
     // Save full research state so we can restore it on return
     var state = {
       q: q,
