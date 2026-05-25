@@ -4204,17 +4204,7 @@ async function runWordSearch(query) {
 
 async function navToVerse(suraId, ayahNum) {
   // Save current sura AND scroll position for back navigation
-  const _va = document.getElementById('verseArea');
-  const _si = allSuras.find(s => (s.sura_id||s.id) === currentSura);
-  navHistory.push({
-    sura: currentSura,
-    scroll: _va ? _va.scrollTop : 0,
-    html: _va ? _va.innerHTML : '',
-    topArabic: document.getElementById('topArabic')?.textContent || '',
-    topEnglish: document.getElementById('topEnglish')?.textContent || '',
-    topMeta: document.getElementById('topMeta')?.innerHTML || '',
-    backLabel: _si?.sura_name_english || _si?.sura_name || 'Previous'
-  });
+  navHistory.push({ sura: currentSura, scroll: document.getElementById('verseArea').scrollTop });
   document.getElementById('backBtn').style.display = 'block';
   document.getElementById('backBtn').textContent = '← Back to ' + (allSuras.find(s => (s.sura_id||s.id) === currentSura)?.sura_name || 'Previous');
   await loadSura(suraId);
@@ -4726,21 +4716,11 @@ function updateSuraNavButtons(ids, idx) {
 function goBack() {
   const prev = navHistory.pop();
   document.getElementById('backBtn').style.display = navHistory.length > 0 ? 'block' : 'none';
-  if (!prev) return;
-  currentSura = prev.sura;
-  if (prev.topArabic) document.getElementById('topArabic').textContent = prev.topArabic;
-  if (prev.topEnglish) document.getElementById('topEnglish').textContent = prev.topEnglish;
-  if (prev.topMeta) document.getElementById('topMeta').innerHTML = prev.topMeta;
-  const verseArea = document.getElementById('verseArea');
-  if (prev.html && verseArea) {
-    verseArea.innerHTML = prev.html;
-    setTimeout(() => { verseArea.scrollTop = prev.scroll || 0; }, 50);
-    document.querySelectorAll('.sura-item').forEach(el => el.classList.remove('active'));
-    const activeEl = document.getElementById('si-' + prev.sura);
-    if (activeEl) activeEl.classList.add('active');
-  } else {
+  if (prev) {
     loadSura(prev.sura).then(() => {
-      setTimeout(() => { verseArea.scrollTop = prev.scroll || 0; }, 400);
+      setTimeout(() => {
+        document.getElementById('verseArea').scrollTop = prev.scroll || 0;
+      }, 400);
     });
   }
 }
