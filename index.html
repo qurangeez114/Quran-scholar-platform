@@ -2412,7 +2412,7 @@ img, iframe, table, pre, code, video {
 
 <script>
 const SUPABASE_URL = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
+const SUPABASE_KEY = 'sb_publishable_KtJjJRWQn5a5VMSnAoTQXw_dCwnI6BH';
 
 // Arabic to Latin transliteration using character codes
 function transliterateArabic(text) {
@@ -4203,17 +4203,8 @@ async function runWordSearch(query) {
 }
 
 async function navToVerse(suraId, ayahNum) {
-  const verseArea = document.getElementById('verseArea');
-  const suraInfo = allSuras.find(s => (s.sura_id||s.id) === currentSura);
-  navHistory.push({
-    sura: currentSura,
-    scroll: verseArea ? verseArea.scrollTop : 0,
-    html: verseArea ? verseArea.innerHTML : '',
-    topArabic: document.getElementById('topArabic')?.textContent || '',
-    topEnglish: document.getElementById('topEnglish')?.textContent || '',
-    topMeta: document.getElementById('topMeta')?.innerHTML || '',
-    backLabel: suraInfo?.sura_name_english || suraInfo?.sura_name || 'Previous'
-  });
+  // Save current sura AND scroll position for back navigation
+  navHistory.push({ sura: currentSura, scroll: document.getElementById('verseArea').scrollTop });
   document.getElementById('backBtn').style.display = 'block';
   document.getElementById('backBtn').textContent = '← Back to ' + (allSuras.find(s => (s.sura_id||s.id) === currentSura)?.sura_name || 'Previous');
   await loadSura(suraId);
@@ -4725,21 +4716,11 @@ function updateSuraNavButtons(ids, idx) {
 function goBack() {
   const prev = navHistory.pop();
   document.getElementById('backBtn').style.display = navHistory.length > 0 ? 'block' : 'none';
-  if (!prev) return;
-  currentSura = prev.sura;
-  if (prev.topArabic) document.getElementById('topArabic').textContent = prev.topArabic;
-  if (prev.topEnglish) document.getElementById('topEnglish').textContent = prev.topEnglish;
-  if (prev.topMeta) document.getElementById('topMeta').innerHTML = prev.topMeta;
-  const verseArea = document.getElementById('verseArea');
-  if (prev.html && verseArea) {
-    verseArea.innerHTML = prev.html;
-    setTimeout(() => { verseArea.scrollTop = prev.scroll || 0; }, 50);
-    document.querySelectorAll('.sura-item').forEach(el => el.classList.remove('active'));
-    const activeEl = document.getElementById('si-' + prev.sura);
-    if (activeEl) activeEl.classList.add('active');
-  } else {
+  if (prev) {
     loadSura(prev.sura).then(() => {
-      setTimeout(() => { verseArea.scrollTop = prev.scroll || 0; }, 400);
+      setTimeout(() => {
+        document.getElementById('verseArea').scrollTop = prev.scroll || 0;
+      }, 400);
     });
   }
 }
