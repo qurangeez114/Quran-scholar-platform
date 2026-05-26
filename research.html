@@ -500,10 +500,15 @@ html[data-theme="dark"] .qhist-lbl { color: #E8E4DC; }
   function getHist(){ try{ return JSON.parse(localStorage.getItem('qnav_hist')||'[]'); }catch(e){ return []; } }
   function saveHist(h){ try{ localStorage.setItem('qnav_hist',JSON.stringify(h)); }catch(e){} }
 
-  /* Record a visit */
-  function record(label, url, icon, sub) {
-    var h = getHist().filter(function(x){ return x.url !== url; });
-    h.unshift({ label: label||'Page', url: url||window.location.href, icon: icon||'📄', sub: sub||'', time: Date.now() });
+  /* Record a visit — cardId embeds scroll target in URL hash */
+  function record(label, url, icon, sub, cardId) {
+    var finalUrl = url || window.location.href;
+    if (cardId) {
+      // Strip existing hash and add card anchor
+      finalUrl = finalUrl.replace(/#.*$/, '') + '#' + cardId;
+    }
+    var h = getHist().filter(function(x){ return x.url !== finalUrl; });
+    h.unshift({ label: label||'Page', url: finalUrl, icon: icon||'📄', sub: sub||'', time: Date.now(), cardId: cardId||null });
     if(h.length > MAX) h = h.slice(0, MAX);
     saveHist(h);
     renderList();
@@ -549,6 +554,21 @@ html[data-theme="dark"] .qhist-lbl { color: #E8E4DC; }
       var stack = JSON.parse(sessionStorage.getItem('qnav_stack')||'[]');
       stack.push({ url: window.location.href, label: document.title, icon: '📄', scrollY: window.scrollY });
       sessionStorage.setItem('qnav_stack', JSON.stringify(stack));
+      // Extract cardId from hash and save as restore state
+      var hashMatch = url.match(/#(card-[^&?]+)/);
+      if (hashMatch) {
+        var baseUrl = url.replace(/#.*$/, '');
+        var urlParams = new URLSearchParams(baseUrl.split('?')[1] || '');
+        var state = {
+          q: urlParams.get('q') || '',
+          cardId: hashMatch[1],
+          source: urlParams.get('source') || 'all',
+          scrollY: 0,
+          fromHistory: true
+        };
+        sessionStorage.setItem('research_saved_state', JSON.stringify(state));
+        url = baseUrl; // navigate without the hash so page loads clean
+      }
     }catch(e){}
     window.location.href = url;
   };
@@ -3634,6 +3654,47 @@ function qnavGoVerse(url, label, clickedEl) {
 </script>
 
 <script>
+/* ── linkifyRefs: auto-link Quran verse refs and Hadith refs in card text ── */
+function linkifyRefs(html, currentQ) {
+  var q = currentQ || (document.getElementById('searchInput') ? document.getElementById('searchInput').value.trim() : '');
+  var src = encodeURIComponent(window.currentSource || 'all');
+  var qEnc = encodeURIComponent(q);
+
+  // Match Quran refs: "2:255", "2: 255", "Surah 2:255", "Q2:255"
+  html = html.replace(/(?:Surah\s+|Sura\s+|Q\.?\s*)?(\d{1,3})\s*:\s*(\d{1,3})/g, function(match, s, a) {
+    var sn = parseInt(s), an = parseInt(a);
+    if (sn < 1 || sn > 114 || an < 1 || an > 286) return match; // out of range, skip
+    var url = 'index.html?sura=' + sn + '&aya=' + an + '&from=research&q=' + qEnc + '&source=' + src;
+    return '<a href="' + url + '" onclick="event.preventDefault();qnavGoVerse('' + url + '','' + sn + ':' + an + '',this)" '
+      + 'style="color:var(--bronze);text-decoration:underline dotted;font-style:normal;white-space:nowrap;" '
+      + 'title="Open Quran ' + sn + ':' + an + '">📖 ' + match + '</a>';
+  });
+
+  // Match Hadith collection refs: "Bukhari 1234", "Muslim 567", "Tirmidhi 890"
+  html = html.replace(/(Bukhari|Muslim|Tirmidhi|Tirmizi|Abu\s+Dawud|Abu\s+Dawood|Nasai|Ibn\s+Majah|Malik|Ahmad)\s+(\d+)/gi, function(match, coll, num) {
+    var qRef = encodeURIComponent(coll + ' ' + num);
+    var url = 'research.html?q=' + qRef + '&source=hadith';
+    return '<a href="' + url + '" onclick="event.preventDefault();window.location.href='' + url + ''" '
+      + 'style="color:var(--hadith);text-decoration:underline dotted;font-style:normal;white-space:nowrap;" '
+      + 'title="Search Hadith: ' + match + '">📜 ' + match + '</a>';
+  });
+
+  return html;
+}
+
+/* Apply linkify to all card text blocks after render */
+function linkifyAllCards() {
+  var q = document.getElementById('searchInput') ? document.getElementById('searchInput').value.trim() : '';
+  document.querySelectorAll('.card-text, .card-notes').forEach(function(el) {
+    // Only process if not already linkified
+    if (el.dataset.linkified) return;
+    el.dataset.linkified = '1';
+    el.innerHTML = linkifyRefs(el.innerHTML, q);
+  });
+}
+</script>
+
+<script>
 /* ── Inject cross-web into each result card ── */
 var _xwebOrig = window.renderResults;
 if (typeof renderResults === 'function') {
@@ -3651,7 +3712,9 @@ if (typeof renderResults === 'function') {
           fromLabel: 'Research: "' + q + '"', fromIcon: '🔬'
         });
       });
-    }, 200);
+      // Auto-link Quran/Hadith references in card text
+      if (typeof linkifyAllCards === 'function') linkifyAllCards();
+    }, 300);
   };
 }
 </script>
@@ -3661,7 +3724,7 @@ document.addEventListener('DOMContentLoaded', function(){
   var p = new URLSearchParams(window.location.search);
   var q = p.get('q') || '';
   qhistRecord('Research'+(q?': "'+q+'"':''), window.location.href, '🔬', 'Research Library');
-  // Also record each search
+  // Record each search with first card id so history returns to exact card
   var origSearch = window.doSearch;
   if(typeof origSearch === 'function'){
     window.doSearch = function(){
@@ -3669,8 +3732,13 @@ document.addEventListener('DOMContentLoaded', function(){
       setTimeout(function(){
         var inp = document.getElementById('searchInput');
         var q2 = inp ? inp.value.trim() : '';
-        if(q2) qhistRecord('Search: "'+q2+'"', window.location.href, '🔬', 'Research Library');
-      }, 300);
+        if(q2) {
+          var firstCard = document.querySelector('.result-card[id]');
+          var cardId = firstCard ? firstCard.id : null;
+          var recUrl = window.location.pathname + '?q=' + encodeURIComponent(q2) + '&source=' + encodeURIComponent(window.currentSource||'all');
+          qhistRecord('Search: "'+q2+'"', recUrl, '🔬', 'Research Library', cardId);
+        }
+      }, 800);
     };
   }
 });
