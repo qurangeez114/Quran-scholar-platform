@@ -1,2 +1,3 @@
-# Quran-scholar-platform
-Multilingual Quran Research Platform with FastAPI and Suabase
+# Quran Scholar Platform
+
+Live at https://fascinating-sunburst-516df8.netlify.app
