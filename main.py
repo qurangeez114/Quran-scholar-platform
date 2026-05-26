@@ -2,7 +2,7 @@ import json
 import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import RedirectResponse
 from supabase import create_client
 
 app = FastAPI()
@@ -19,13 +19,13 @@ SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-@app.get("/app")
-def serve_app():
-    return FileResponse("/storage/emulated/0/quran_project/Download/quran.html")
-
 @app.get("/")
 def home():
-    return {"status": "Quran API is running", "languages": ["tigrinya", "arabic", "arabic_transliteration", "english", "amharic"]}
+    return RedirectResponse(url="https://fascinating-sunburst-516df8.netlify.app", status_code=301)
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
 
 @app.get("/suras")
 def get_suras():
@@ -51,7 +51,8 @@ def search(q: str):
 def stats():
     suras = client.table("suras").select("sura_id", count="exact").execute()
     ayas = client.table("ayas").select("id", count="exact").execute()
-    return {"total_suras": suras.count, "total_ayas": ayas.count, "languages": ["tigrinya", "arabic", "arabic_transliteration", "english", "amharic"]}
+    return {"total_suras": suras.count, "total_ayas": ayas.count}
+
 @app.get("/cross-references/{surah}/{ayah}")
 def get_cross_references(surah: int, ayah: int):
     res = client.table("cross_references")\
