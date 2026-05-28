@@ -213,6 +213,53 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system,Bli
   transition: all 0.2s;
 }
 .search-tab.active { color: var(--gold); border-bottom-color: var(--gold); }
+
+/* ── TTS Player ── */
+.tts-bar {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding: 10px 16px;
+  display: flex; align-items: center; gap: 10px;
+  z-index: 999;
+  box-shadow: 0 -4px 20px rgba(0,0,0,0.3);
+  transform: translateY(100%);
+  transition: transform 0.3s ease;
+}
+.tts-bar.visible { transform: translateY(0); }
+.tts-btn {
+  width: 40px; height: 40px; border-radius: 50%;
+  border: none; cursor: pointer; font-size: 18px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; transition: all 0.2s;
+}
+.tts-play  { background: var(--gold); color: #1B2A4A; }
+.tts-play:hover { background: var(--gold-light); }
+.tts-stop  { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+.tts-stop:hover { background: #283552; }
+.tts-info  { flex: 1; min-width: 0; }
+.tts-title { font-size: 12px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tts-sub   { font-size: 10px; color: var(--text-secondary); margin-top: 2px; }
+.tts-progress { height: 3px; background: var(--border); border-radius: 2px; margin-top: 6px; }
+.tts-progress-fill { height: 100%; background: var(--gold); border-radius: 2px; transition: width 0.3s; width: 0%; }
+.tts-speed { background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 10px; padding: 4px 8px; font-size: 11px; cursor: pointer; }
+/* Read button on each card */
+.card-read-btn {
+  background: none; border: 1px solid var(--border);
+  color: var(--text-secondary); border-radius: 20px;
+  padding: 3px 10px; font-size: 11px; cursor: pointer;
+  transition: all 0.2s; margin-left: auto;
+}
+.card-read-btn:hover { border-color: var(--gold); color: var(--gold); }
+.card-read-btn.reading { border-color: var(--gold); color: var(--gold); background: rgba(201,168,76,0.1); }
+/* Read all button */
+.read-all-btn {
+  background: linear-gradient(135deg, #1B2A4A, #2C3E6B);
+  color: var(--gold); border: 1px solid rgba(201,168,76,0.4);
+  border-radius: 24px; padding: 8px 18px; font-size: 13px;
+  font-weight: 600; cursor: pointer; white-space: nowrap;
+}
+.read-all-btn:hover { background: linear-gradient(135deg, #2C3E6B, #3A5285); }
 </style>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Scheherazade+New:wght@400;700&display=swap" rel="stylesheet"/>
@@ -358,6 +405,7 @@ async function loadStory(story) {
           <div class="source-name">${src.source_name}</div>
           <div class="source-ref">${src.volume ? src.volume + ' · ' : ''}${src.reference||''}</div>
         </div>
+        <button class="card-read-btn" onclick="event.stopPropagation();ttsReadCard(this,this.closest('.source-card'))" title="Read this card">🔊 Read</button>
         <span style="color:var(--text-secondary);font-size:18px;">▼</span>
       </div>
       <div class="source-body">
@@ -389,6 +437,7 @@ async function loadStory(story) {
         <span class="badge badge-gold">${ICONS[story.category]||'📖'} ${story.category}</span>
         <span class="badge badge-green">📖 ${story.total_mentions} Quranic mentions</span>
         <span class="badge badge-blue">${suras.length} Surahs</span>
+        <button class="read-all-btn" onclick="ttsReadAll()" title="Read all content aloud">🔊 Read All</button>
       </div>
       <p class="story-summary">${story.summary||''}</p>
     </div>
@@ -650,7 +699,7 @@ Return ONLY the JSON array, no other text.`
       return;
     }
 
-    let html = `<div style="font-size:11px;color:var(--text-secondary);padding:0 0 12px;">🤖 AI-generated comparative analysis for "<strong style="color:var(--gold);">${q}</strong>"</div>`;
+    let html = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;"><div style="font-size:11px;color:var(--text-secondary);">🤖 AI-generated comparative analysis for "<strong style="color:var(--gold);">${q}</strong>"</div>`;
     sources.forEach(src => {
       html += `<div class="search-result-card">
         <div class="search-result-header">
@@ -689,8 +738,209 @@ function showStoryFromSearch(slug) {
 
 function tradClass(t) { return 'trad-' + (t||'').split('/')[0].trim().replace(/\s+/g,''); }
 
+// ════════════════════════════════════════
+//  TTS — Text To Speech System
+// ════════════════════════════════════════
+const TTS = {
+  queue: [],       // array of {text, lang, label}
+  idx: 0,
+  playing: false,
+  paused: false,
+  utt: null,
+  speed: 0.85,
+  activeBtn: null
+};
+
+function ttsDetectLang(text) {
+  if (!text) return 'en';
+  const arabicRe = /[؀-ۿ]/;
+  const ethiopicRe = /[ሀ-፿]/;
+  if (arabicRe.test(text)) return 'ar';
+  if (ethiopicRe.test(text)) return 'ti'; // Tigrinya
+  return 'en';
+}
+
+function ttsLangCode(lang) {
+  const map = { ar: 'ar-SA', en: 'en-US', ti: 'ti-ET', he: 'he-IL', de: 'de-DE' };
+  return map[lang] || 'en-US';
+}
+
+function ttsShowBar() {
+  document.getElementById('ttsBar').classList.add('visible');
+}
+function ttsHide() {
+  ttsStop();
+  document.getElementById('ttsBar').classList.remove('visible');
+}
+
+function ttsSetSpeed(v) {
+  TTS.speed = parseFloat(v);
+  if (TTS.playing && TTS.utt) {
+    window.speechSynthesis.cancel();
+    TTS.playing = false;
+    ttsPlayNext();
+  }
+}
+
+function ttsSetTitle(title, sub) {
+  document.getElementById('ttsTitleEl').textContent = title || '';
+  document.getElementById('ttsSubEl').textContent = sub || '';
+}
+
+function ttsSetProgress(pct) {
+  document.getElementById('ttsProgressFill').style.width = Math.min(100,pct) + '%';
+}
+
+function ttsToggle() {
+  if (!TTS.queue.length) return;
+  if (TTS.paused) {
+    window.speechSynthesis.resume();
+    TTS.paused = false;
+    TTS.playing = true;
+    document.getElementById('ttsPlayBtn').textContent = '⏸';
+  } else if (TTS.playing) {
+    window.speechSynthesis.pause();
+    TTS.paused = true;
+    TTS.playing = false;
+    document.getElementById('ttsPlayBtn').textContent = '▶';
+  } else {
+    ttsPlayNext();
+  }
+}
+
+function ttsStop() {
+  window.speechSynthesis.cancel();
+  TTS.playing = false;
+  TTS.paused = false;
+  TTS.idx = 0;
+  TTS.queue = [];
+  document.getElementById('ttsPlayBtn').textContent = '▶';
+  ttsSetProgress(0);
+  ttsSetTitle('Ready to read', 'Tap 🔊 on any card or use Read All');
+  if (TTS.activeBtn) { TTS.activeBtn.classList.remove('reading'); TTS.activeBtn.textContent = '🔊 Read'; TTS.activeBtn = null; }
+}
+
+function ttsPlayNext() {
+  if (TTS.idx >= TTS.queue.length) {
+    ttsStop();
+    return;
+  }
+  const item = TTS.queue[TTS.idx];
+  const utt = new SpeechSynthesisUtterance(item.text);
+  utt.lang = ttsLangCode(item.lang || ttsDetectLang(item.text));
+  utt.rate = TTS.speed;
+  TTS.utt = utt;
+  TTS.playing = true;
+  document.getElementById('ttsPlayBtn').textContent = '⏸';
+  ttsSetTitle(item.label || 'Reading...', `${TTS.idx+1} of ${TTS.queue.length}`);
+  ttsSetProgress(((TTS.idx+1) / TTS.queue.length) * 100);
+
+  utt.onend = () => {
+    TTS.idx++;
+    setTimeout(ttsPlayNext, 300);
+  };
+  utt.onerror = () => { TTS.idx++; setTimeout(ttsPlayNext, 300); };
+  window.speechSynthesis.speak(utt);
+}
+
+// Read a single card's text
+function ttsReadCard(btn, cardEl) {
+  ttsStop();
+  if (TTS.activeBtn) { TTS.activeBtn.classList.remove('reading'); TTS.activeBtn.textContent = '🔊 Read'; }
+  TTS.activeBtn = btn;
+  btn.classList.add('reading');
+  btn.textContent = '⏹ Stop';
+
+  // Gather text segments from the card
+  const segments = [];
+  // Source tradition + name
+  const trad = cardEl.querySelector('.source-tradition-badge, .search-result-title');
+  if (trad) segments.push({ text: trad.textContent.trim(), lang: 'en', label: 'Source' });
+  // Summary text
+  cardEl.querySelectorAll('.source-summary-text, .comp-text, .ai-output, .quran-verse-english, .story-summary').forEach(el => {
+    const t = el.textContent.trim();
+    if (t) segments.push({ text: t, lang: ttsDetectLang(t), label: el.className.includes('arabic') ? 'Arabic' : 'Text' });
+  });
+  // Arabic separately
+  cardEl.querySelectorAll('.quran-verse-arabic, .story-header-arabic').forEach(el => {
+    const t = el.textContent.trim();
+    if (t) segments.push({ text: t, lang: 'ar', label: 'Arabic' });
+  });
+
+  if (!segments.length) segments.push({ text: cardEl.textContent.replace(/\s+/g,' ').trim().slice(0,500), lang: 'en', label: 'Card' });
+
+  TTS.queue = segments;
+  TTS.idx = 0;
+  ttsShowBar();
+  ttsPlayNext();
+}
+
+// Read ALL visible content continuously
+function ttsReadAll() {
+  ttsStop();
+  const segments = [];
+
+  // Story header
+  const hdr = document.querySelector('.story-header');
+  if (hdr) {
+    const eng = hdr.querySelector('.story-header-english');
+    if (eng) segments.push({ text: eng.textContent.trim(), lang: 'en', label: 'Chapter: ' + eng.textContent.trim() });
+    const sum = hdr.querySelector('.story-summary');
+    if (sum) segments.push({ text: sum.textContent.trim(), lang: 'en', label: 'Summary' });
+  }
+
+  // Source cards
+  document.querySelectorAll('.source-card, .search-result-card').forEach((card, i) => {
+    const name = card.querySelector('.source-name, .search-result-title');
+    const label = name ? name.textContent.trim() : 'Source ' + (i+1);
+    segments.push({ text: label, lang: 'en', label: 'Source: ' + label });
+    card.querySelectorAll('.source-summary-text, .comp-text').forEach(el => {
+      const t = el.textContent.trim();
+      if (t && t !== '—') segments.push({ text: t, lang: ttsDetectLang(t), label });
+    });
+  });
+
+  // AI output
+  const ai = document.getElementById('aiOutput');
+  if (ai && ai.style.display !== 'none') {
+    segments.push({ text: ai.textContent.trim(), lang: 'en', label: 'AI Analysis' });
+  }
+
+  // Search results
+  document.querySelectorAll('.quran-verse-english').forEach(el => {
+    const t = el.textContent.trim();
+    if (t) segments.push({ text: t, lang: 'en', label: 'Quran Verse' });
+  });
+
+  if (!segments.length) { alert('Nothing to read yet. Open a story or search first.'); return; }
+
+  TTS.queue = segments;
+  TTS.idx = 0;
+  ttsShowBar();
+  ttsPlayNext();
+}
+
 init();
 </script>
 </div><!-- end browseArea -->
+
+<!-- TTS Player Bar -->
+<div class="tts-bar" id="ttsBar">
+  <button class="tts-btn tts-play" id="ttsPlayBtn" onclick="ttsToggle()" title="Play/Pause">▶</button>
+  <button class="tts-btn tts-stop" onclick="ttsStop()" title="Stop">⏹</button>
+  <div class="tts-info">
+    <div class="tts-title" id="ttsTitleEl">Ready to read</div>
+    <div class="tts-sub" id="ttsSubEl">Tap 🔊 on any card or use Read All</div>
+    <div class="tts-progress"><div class="tts-progress-fill" id="ttsProgressFill"></div></div>
+  </div>
+  <select class="tts-speed" id="ttsSpeedSel" onchange="ttsSetSpeed(this.value)">
+    <option value="0.7">0.7x</option>
+    <option value="0.85" selected>0.85x</option>
+    <option value="1.0">1.0x</option>
+    <option value="1.2">1.2x</option>
+  </select>
+  <button class="tts-btn tts-stop" onclick="ttsHide()" title="Close" style="font-size:14px;">✕</button>
+</div>
+
 </body>
 </html>
