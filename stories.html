@@ -148,6 +148,71 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system,Bli
   .main { padding: 12px; }
   .comparison-grid { grid-template-columns: 1fr; }
 }
+
+/* ── Search Bar ── */
+.search-bar {
+  display: flex; gap: 10px; align-items: center;
+  padding: 12px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.search-input {
+  flex: 1; background: var(--surface2); border: 1px solid var(--border);
+  color: var(--text); border-radius: 24px; padding: 10px 18px;
+  font-size: 14px; outline: none; transition: border-color 0.2s;
+}
+.search-input:focus { border-color: var(--gold); }
+.search-input::placeholder { color: var(--text-secondary); }
+.search-btn {
+  background: linear-gradient(135deg, #1B2A4A, #2C3E6B);
+  color: var(--gold); border: 1px solid rgba(201,168,76,0.4);
+  border-radius: 24px; padding: 10px 20px; font-size: 13px;
+  font-weight: 600; cursor: pointer; white-space: nowrap;
+  transition: all 0.2s;
+}
+.search-btn:hover { background: linear-gradient(135deg, #2C3E6B, #3A5285); }
+.search-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.search-results { padding: 16px; }
+.search-result-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 14px; margin-bottom: 14px; overflow: hidden;
+}
+.search-result-header {
+  padding: 14px 16px;
+  background: linear-gradient(135deg, #1B2A4A, #212D42);
+  display: flex; align-items: center; gap: 10px;
+}
+.search-result-title { font-size: 15px; font-weight: 700; color: var(--gold-light); }
+.search-result-meta { font-size: 11px; color: var(--text-secondary); margin-top: 3px; }
+.search-result-body { padding: 14px 16px; }
+.quran-verse-block {
+  background: var(--surface2); border-radius: 10px; padding: 12px;
+  margin-bottom: 12px; border-left: 3px solid var(--gold);
+}
+.quran-verse-arabic {
+  font-family: var(--arabic-font); font-size: 22px; color: var(--gold-light);
+  direction: rtl; text-align: right; line-height: 2; margin-bottom: 6px;
+}
+.quran-verse-english { font-size: 13px; color: var(--text-secondary); line-height: 1.6; }
+.quran-verse-ref {
+  font-size: 11px; color: var(--gold); margin-top: 6px; cursor: pointer;
+  text-decoration: underline dotted;
+}
+.no-results { text-align: center; padding: 40px; color: var(--text-secondary); font-size: 14px; }
+.search-suggestions { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 16px 0; }
+.suggestion-chip {
+  background: var(--surface2); border: 1px solid var(--border);
+  color: var(--text-secondary); border-radius: 20px; padding: 5px 12px;
+  font-size: 12px; cursor: pointer; transition: all 0.2s;
+}
+.suggestion-chip:hover { border-color: var(--gold); color: var(--gold); }
+.search-tab-bar { display: flex; border-bottom: 1px solid var(--border); }
+.search-tab {
+  padding: 10px 18px; font-size: 13px; cursor: pointer;
+  color: var(--text-secondary); border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+}
+.search-tab.active { color: var(--gold); border-bottom-color: var(--gold); }
 </style>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Scheherazade+New:wght@400;700&display=swap" rel="stylesheet"/>
@@ -162,6 +227,34 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system,Bli
   </div>
 </header>
 
+
+<!-- Search Bar -->
+<div class="search-bar" id="searchBarSection">
+  <input type="text" class="search-input" id="conceptSearch"
+    placeholder="Search concept, name, or topic... e.g. sacrifice, flood, virgin birth, clay birds"
+    onkeydown="if(event.key==='Enter')doConceptSearch()"/>
+  <button class="search-btn" id="searchBtn" onclick="doConceptSearch()">🔍 Search</button>
+</div>
+<div class="search-suggestions">
+  <span style="font-size:11px;color:var(--text-secondary);align-self:center;">Try:</span>
+  <span class="suggestion-chip" onclick="quickSearch('sacrifice')">sacrifice</span>
+  <span class="suggestion-chip" onclick="quickSearch('flood')">flood</span>
+  <span class="suggestion-chip" onclick="quickSearch('virgin birth')">virgin birth</span>
+  <span class="suggestion-chip" onclick="quickSearch('clay birds')">clay birds</span>
+  <span class="suggestion-chip" onclick="quickSearch('burning bush')">burning bush</span>
+  <span class="suggestion-chip" onclick="quickSearch('parting of the sea')">parting of the sea</span>
+  <span class="suggestion-chip" onclick="quickSearch('tower of babel')">tower of babel</span>
+  <span class="suggestion-chip" onclick="quickSearch('creation of man')">creation of man</span>
+</div>
+<div id="searchResultsArea" style="display:none;">
+  <div class="search-tab-bar">
+    <div class="search-tab active" onclick="switchSearchTab('results',this)">Results</div>
+    <div class="search-tab" onclick="switchSearchTab('browse',this)">Browse Stories</div>
+  </div>
+  <div id="searchResultsContent" class="search-results"></div>
+</div>
+
+<div id="browseArea" style="display:block;">
 <div class="app">
   <nav class="sidebar" id="storySidebar">
     <div class="loading"><div class="spinner"></div></div>
@@ -367,7 +460,237 @@ function hexToRgb(hex) {
   return r ? `${parseInt(r[1],16)},${parseInt(r[2],16)},${parseInt(r[3],16)}` : '201,168,76';
 }
 
+function quickSearch(q) {
+  document.getElementById('conceptSearch').value = q;
+  doConceptSearch();
+}
+
+function switchSearchTab(tab, el) {
+  document.querySelectorAll('.search-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  if (tab === 'browse') {
+    document.getElementById('searchResultsContent').style.display = 'none';
+    document.getElementById('browseArea').style.display = 'block';
+  } else {
+    document.getElementById('searchResultsContent').style.display = 'block';
+    document.getElementById('browseArea').style.display = 'none';
+  }
+}
+
+async function doConceptSearch() {
+  const q = document.getElementById('conceptSearch').value.trim();
+  if (!q) return;
+
+  const btn = document.getElementById('searchBtn');
+  btn.textContent = '⏳ Searching...';
+  btn.disabled = true;
+
+  const resultsArea = document.getElementById('searchResultsArea');
+  const resultsContent = document.getElementById('searchResultsContent');
+  resultsArea.style.display = 'block';
+  document.getElementById('browseArea').style.display = 'none';
+  resultsContent.innerHTML = '<div class="loading" style="padding:40px;"><div class="spinner"></div><p style="margin-top:14px;color:var(--text-secondary);">Searching Quran and comparative sources...</p></div>';
+
+  // Switch to results tab
+  document.querySelectorAll('.search-tab').forEach((t,i) => t.classList.toggle('active', i===0));
+
+  try {
+    // 1. Search stories by name/slug
+    const matchedStories = stories.filter(s =>
+      s.name_english.toLowerCase().includes(q.toLowerCase()) ||
+      (s.summary||'').toLowerCase().includes(q.toLowerCase()) ||
+      (s.slug||'').toLowerCase().includes(q.toLowerCase())
+    );
+
+    // 2. Search story_sources by summary/similarities/differences
+    const enc = encodeURIComponent(q);
+    const [srcBySummary, srcByTrad] = await Promise.all([
+      sbFetch('story_sources', `or=(summary.ilike.*${enc}*,similarities.ilike.*${enc}*,differences.ilike.*${enc}*,unique_quran.ilike.*${enc}*,source_name.ilike.*${enc}*)&select=*,quranic_stories(name_english,name_arabic,slug)&limit=20`),
+      sbFetch('story_sources', `tradition.ilike.*${enc}*&select=*,quranic_stories(name_english,name_arabic,slug)&limit=10`)
+    ]);
+
+    // 3. Also ask AI for relevant Quran verses about this concept
+    const aiVerses = await searchQuranVerses(q);
+
+    const allSources = [...srcBySummary, ...srcByTrad].filter((s,i,arr) => arr.findIndex(x=>x.id===s.id)===i);
+
+    if (!matchedStories.length && !allSources.length && !aiVerses.length) {
+      // No DB results — use AI to generate comparison
+      await aiGenerateSearch(q);
+      btn.textContent = '🔍 Search';
+      btn.disabled = false;
+      return;
+    }
+
+    let html = '';
+
+    // Show matched stories first
+    if (matchedStories.length) {
+      html += `<div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-secondary);padding:0 0 10px;">Related Stories (${matchedStories.length})</div>`;
+      matchedStories.forEach(s => {
+        html += `<div class="search-result-card" style="cursor:pointer;" onclick="showStoryFromSearch('${s.slug}')">
+          <div class="search-result-header">
+            <div style="font-size:24px;">${ICONS[s.category]||'📖'}</div>
+            <div>
+              <div class="search-result-title">${s.name_arabic||''} — ${s.name_english}</div>
+              <div class="search-result-meta">${s.total_mentions} Quranic mentions · ${(s.primary_suras||[]).length} surahs · Tap to open full story</div>
+            </div>
+          </div>
+          <div class="search-result-body">
+            <p style="font-size:13px;color:var(--text-secondary);line-height:1.7;">${s.summary||''}</p>
+          </div>
+        </div>`;
+      });
+    }
+
+    // Show source comparison cards
+    if (allSources.length) {
+      html += `<div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-secondary);padding:12px 0 10px;">Source Comparisons (${allSources.length})</div>`;
+      allSources.forEach(src => {
+        const story = src.quranic_stories || {};
+        html += `<div class="search-result-card">
+          <div class="search-result-header">
+            <span class="source-tradition-badge ${tradClass(src.tradition)}" style="flex-shrink:0;">${src.tradition}</span>
+            <div>
+              <div class="search-result-title">${src.source_name} ${src.reference ? '· '+src.reference : ''}</div>
+              <div class="search-result-meta">${src.volume||''} ${story.name_english ? '· Story of '+story.name_english : ''}</div>
+            </div>
+          </div>
+          <div class="search-result-body">
+            <p class="source-summary-text">${src.summary||''}</p>
+            <div class="comparison-grid">
+              <div class="comp-box comp-similar"><div class="comp-label">✓ Similarities</div><div class="comp-text">${src.similarities||'—'}</div></div>
+              <div class="comp-box comp-diff"><div class="comp-label">✕ Differences</div><div class="comp-text">${src.differences||'—'}</div></div>
+            </div>
+            <div class="comp-box comp-unique" style="margin-top:10px;"><div class="comp-label">★ Unique to Quran</div><div class="comp-text">${src.unique_quran||'—'}</div></div>
+            ${src.url ? `<div style="margin-top:10px;"><a href="${src.url}" target="_blank" class="source-link">📎 Read source →</a></div>` : ''}
+            ${story.slug ? `<div style="margin-top:10px;"><button onclick="showStoryFromSearch('${story.slug}')" style="background:none;border:1px solid var(--gold);color:var(--gold);border-radius:20px;padding:4px 14px;font-size:12px;cursor:pointer;">📖 Open full story →</button></div>` : ''}
+          </div>
+        </div>`;
+      });
+    }
+
+    // Show AI-found verses
+    if (aiVerses.length) {
+      html += `<div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-secondary);padding:12px 0 10px;">Quranic Verses on "${q}"</div>`;
+      aiVerses.forEach(v => {
+        html += `<div class="quran-verse-block">
+          <div class="quran-verse-arabic">${v.arabic||''}</div>
+          <div class="quran-verse-english">${v.english||''}</div>
+          <div class="quran-verse-ref" onclick="window.location.href='index.html?sura=${v.sura_id}&aya=${v.aya_number}&from=stories'">📖 Surah ${v.sura_id}:${v.aya_number} — tap to open →</div>
+        </div>`;
+      });
+    }
+
+    if (!html) {
+      await aiGenerateSearch(q);
+    } else {
+      resultsContent.innerHTML = html;
+    }
+
+  } catch(e) {
+    resultsContent.innerHTML = `<div class="no-results">Error: ${e.message}</div>`;
+  }
+
+  btn.textContent = '🔍 Search';
+  btn.disabled = false;
+}
+
+async function searchQuranVerses(q) {
+  try {
+    const enc = encodeURIComponent(q);
+    const res = await sbFetch('ayas',
+      `or=(english.ilike.*${enc}*,arabic.ilike.*${enc}*)&select=sura_id,aya_number,arabic,english&limit=5`
+    );
+    return Array.isArray(res) ? res : [];
+  } catch(e) { return []; }
+}
+
+async function aiGenerateSearch(q) {
+  const resultsContent = document.getElementById('searchResultsContent');
+  resultsContent.innerHTML = '<div class="loading" style="padding:30px;"><div class="spinner"></div><p style="margin-top:12px;color:var(--text-secondary);">Generating AI comparison for "' + q + '"...</p></div>';
+
+  try {
+    const res = await fetch('https://qurangeez-quran-scholar-api.hf.space/claude', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1200,
+        messages: [{
+          role: 'user',
+          content: `You are a comparative scripture scholar. The user searched for: "${q}"
+
+Find where this concept, story, or word appears in:
+1. The Quran (cite specific surah:verse numbers)
+2. The Torah/Bible (cite book, chapter:verse)
+3. The Talmud (cite tractate and page, e.g. Sanhedrin 89b)
+4. Any other relevant source (Midrash, Apocrypha, Gospel of Thomas, Dead Sea Scrolls, etc.)
+
+For each source found, provide:
+- The exact reference
+- A 1-2 sentence summary of what it says
+- Key similarity with Quran
+- Key difference from Quran
+
+Format as JSON array like:
+[{"tradition":"Torah/Bible","source_name":"Genesis","reference":"6:9-22","volume":"Book of Genesis","summary":"...","similarities":"...","differences":"...","unique_quran":"...","url":"https://..."}]
+
+Return ONLY the JSON array, no other text.`
+        }]
+      })
+    });
+    const data = await res.json();
+    const text = (data.content?.[0]?.text || '[]').replace(/```json|```/g,'').trim();
+    let sources = [];
+    try { sources = JSON.parse(text); } catch(e) {}
+
+    if (!sources.length) {
+      resultsContent.innerHTML = `<div class="no-results">No results found for "<strong>${q}</strong>".<br><span style="font-size:12px;">Try a different search term or browse the stories list.</span></div>`;
+      return;
+    }
+
+    let html = `<div style="font-size:11px;color:var(--text-secondary);padding:0 0 12px;">🤖 AI-generated comparative analysis for "<strong style="color:var(--gold);">${q}</strong>"</div>`;
+    sources.forEach(src => {
+      html += `<div class="search-result-card">
+        <div class="search-result-header">
+          <span class="source-tradition-badge ${tradClass(src.tradition||'')}">${src.tradition||'Source'}</span>
+          <div>
+            <div class="search-result-title">${src.source_name||''} ${src.reference ? '· '+src.reference : ''}</div>
+            <div class="search-result-meta">${src.volume||''}</div>
+          </div>
+        </div>
+        <div class="search-result-body">
+          <p class="source-summary-text">${src.summary||''}</p>
+          <div class="comparison-grid">
+            <div class="comp-box comp-similar"><div class="comp-label">✓ Similarities</div><div class="comp-text">${src.similarities||'—'}</div></div>
+            <div class="comp-box comp-diff"><div class="comp-label">✕ Differences</div><div class="comp-text">${src.differences||'—'}</div></div>
+          </div>
+          <div class="comp-box comp-unique" style="margin-top:10px;"><div class="comp-label">★ Unique to Quran</div><div class="comp-text">${src.unique_quran||'—'}</div></div>
+          ${src.url ? `<div style="margin-top:10px;"><a href="${src.url}" target="_blank" class="source-link">📎 Read source →</a></div>` : ''}
+        </div>
+      </div>`;
+    });
+    resultsContent.innerHTML = html;
+  } catch(e) {
+    resultsContent.innerHTML = `<div class="no-results">Could not generate comparison. Please try again.</div>`;
+  }
+}
+
+function showStoryFromSearch(slug) {
+  const s = stories.find(x => x.slug === slug);
+  if (s) {
+    document.getElementById('searchResultsArea').style.display = 'none';
+    document.getElementById('browseArea').style.display = 'block';
+    loadStory(s);
+    window.scrollTo({top:0,behavior:'smooth'});
+  }
+}
+
+function tradClass(t) { return 'trad-' + (t||'').split('/')[0].trim().replace(/\s+/g,''); }
+
 init();
 </script>
+</div><!-- end browseArea -->
 </body>
 </html>
