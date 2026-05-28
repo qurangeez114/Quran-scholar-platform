@@ -260,6 +260,33 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system,Bli
   font-weight: 600; cursor: pointer; white-space: nowrap;
 }
 .read-all-btn:hover { background: linear-gradient(135deg, #2C3E6B, #3A5285); }
+
+/* ── Verse Display Cards ── */
+.verse-display-card {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--gold);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  transition: border-color 0.2s;
+}
+.verse-display-card:hover { border-left-color: #F0D080; }
+.verse-display-ref {
+  display: flex; align-items: center; gap: 6px;
+  margin-bottom: 10px; flex-wrap: wrap;
+}
+.verse-display-arabic {
+  font-family: var(--arabic-font);
+  font-size: clamp(20px, 5vw, 28px);
+  color: var(--gold-light);
+  direction: rtl; text-align: right;
+  line-height: 2; margin-bottom: 8px;
+}
+.verse-display-english {
+  font-size: 13px; color: var(--text-secondary);
+  line-height: 1.7;
+}
 </style>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Scheherazade+New:wght@400;700&display=swap" rel="stylesheet"/>
@@ -391,11 +418,50 @@ async function loadStory(story) {
   const suras = story.primary_suras || [];
   const SURA_NAMES = {1:'Al-Fatiha',2:'Al-Baqarah',3:'Ali Imran',4:'An-Nisa',5:'Al-Maidah',6:'Al-Anam',7:'Al-Araf',8:'Al-Anfal',9:'At-Tawbah',10:'Yunus',11:'Hud',12:'Yusuf',13:'Ar-Rad',14:'Ibrahim',15:'Al-Hijr',16:'An-Nahl',17:'Al-Isra',18:'Al-Kahf',19:'Maryam',20:'Ta-Ha',21:'Al-Anbiya',22:'Al-Hajj',23:'Al-Muminun',24:'An-Nur',25:'Al-Furqan',26:'Ash-Shuara',27:'An-Naml',28:'Al-Qasas',29:'Al-Ankabut',30:'Ar-Rum',31:'Luqman',32:'As-Sajdah',33:'Al-Ahzab',34:'Saba',35:'Fatir',36:'Ya-Sin',37:'As-Saffat',38:'Sad',39:'Az-Zumar',40:'Ghafir',41:'Fussilat',42:'Ash-Shura',43:'Az-Zukhruf',44:'Ad-Dukhan',45:'Al-Jathiyah',46:'Al-Ahqaf',51:'Adh-Dhariyat',53:'An-Najm',54:'Al-Qamar',57:'Al-Hadid',60:'Al-Mumtahanah',61:'As-Saff',66:'At-Tahrim',68:'Al-Qalam',69:'Al-Haqqah',71:'Nuh',79:'An-Naziat',85:'Al-Buruj',87:'Al-Ala',89:'Al-Fajr',91:'Ash-Shams'};
 
-  const verseChips = suras.map(s =>
-    `<a href="index.html?sura=${s}&from=stories&story=${story.slug}" class="verse-chip">
+  // Load actual key verses for this story from DB
+  let keyVerses = [];
+  try {
+    // Get story_verses mapping first
+    const storyVerses = await sbFetch('story_verses',
+      `story_id=eq.${story.id}&select=sura_id,aya_number,note&order=sura_id.asc,aya_number.asc&limit=12`
+    );
+    if (storyVerses && storyVerses.length) {
+      // Fetch actual verse text for each
+      const versePromises = storyVerses.map(v =>
+        sbFetch('ayas', `sura_id=eq.${v.sura_id}&aya_number=eq.${v.aya_number}&select=sura_id,aya_number,arabic,english&limit=1`)
+          .then(r => r[0] ? {...r[0], note: v.note} : null)
+      );
+      const fetched = await Promise.all(versePromises);
+      keyVerses = fetched.filter(Boolean);
+    }
+    // If no story_verses, fall back to fetching first verse of each primary sura
+    if (!keyVerses.length && suras.length) {
+      const fallbackPromises = suras.slice(0,8).map(s =>
+        sbFetch('ayas', `sura_id=eq.${s}&aya_number=gte.1&select=sura_id,aya_number,arabic,english&order=aya_number.asc&limit=1`)
+          .then(r => r[0] || null)
+      );
+      keyVerses = (await Promise.all(fallbackPromises)).filter(Boolean);
+    }
+  } catch(e) { console.warn('verse load error', e); }
+
+  // Build verse cards with actual text
+  const verseChips = keyVerses.length ? keyVerses.map(v => {
+    const suraName = SURA_NAMES[v.sura_id] || 'Surah ' + v.sura_id;
+    const url = `index.html?sura=${v.sura_id}&aya=${v.aya_number}&from=stories&story=${story.slug}`;
+    return `<div class="verse-display-card">
+      <div class="verse-display-ref">
+        <span style="color:var(--gold);font-weight:700;">📖 ${v.sura_id}:${v.aya_number}</span>
+        <span style="color:var(--text-secondary);font-size:11px;margin-left:6px;">${suraName}</span>
+        ${v.note ? `<span style="color:var(--text-secondary);font-size:10px;margin-left:6px;font-style:italic;">— ${v.note}</span>` : ''}
+        <a href="${url}" style="margin-left:auto;font-size:11px;color:var(--gold);text-decoration:none;white-space:nowrap;">Open →</a>
+      </div>
+      <div class="verse-display-arabic">${v.arabic||''}</div>
+      <div class="verse-display-english">${v.english||''}</div>
+    </div>`;
+  }).join('') :
+    suras.map(s => `<a href="index.html?sura=${s}&from=stories&story=${story.slug}" class="verse-chip">
       <span style="color:var(--gold);">📖</span> ${s}. ${SURA_NAMES[s]||'Surah '+s}
-    </a>`
-  ).join('');
+    </a>`).join('');
 
   // Sources HTML
   const tradClass = t => 'trad-' + t.split('/')[0].trim().replace(/\s+/g,'');
@@ -445,8 +511,8 @@ async function loadStory(story) {
     </div>
 
     <div class="section">
-      <div class="section-title">📖 Quranic References — tap to open verse</div>
-      <div class="verse-chips">${verseChips}</div>
+      <div class="section-title">📖 Key Quranic Verses — tap "Open →" to read in Quran</div>
+      <div id="verseCardsContainer">${verseChips}</div>
     </div>
 
     <div class="section">
