@@ -224,30 +224,49 @@ function tradClass(t){
 }
 
 async function init(){
-  allStories=await sb('quranic_stories','select=*&order=total_mentions.desc');
-  buildSidebar();
-  // Load hadith topics
-  const htopics=await sb('hadith_comparative','select=topic,slug,category&order=category.asc,topic.asc');
-  const seen=new Set();
-  const uniq=htopics.filter(t=>{if(seen.has(t.slug))return false;seen.add(t.slug);return true;});
-  const catIcons={worship:'🕌',ethics:'⚖️',theology:'📿',prophethood:'🌟',law:'📜',practice:'🤲'};
   const list=document.getElementById('sb-list');
   if(list){
-    list.innerHTML+=`<div class="cat" style="margin-top:8px;border-top:1px solid var(--border);padding-top:10px;">⚙️ HADITH PRACTICES</div>`;
-    uniq.forEach(t=>{
-      const div=document.createElement('div');
-      div.className='si';
-      div.innerHTML=`<div class="si-icon" style="background:rgba(74,32,128,.2);">${catIcons[t.category]||'📖'}</div><div class="si-text"><span class="si-en">${t.topic}</span></div>`;
-      div.addEventListener('click',()=>openHadith(t.slug,t.topic));
-      list.appendChild(div);
-    });
+    list.innerHTML='<div class="loading"><div class="spin"></div><p style="margin-top:10px;font-size:11px;color:var(--dim);">Loading content...</p></div>';
   }
-  // Open first story
-  if(allStories.length) openStory(allStories[0]);
+  try{
+    // 1. Pull stories from Supabase
+    allStories=await sb('quranic_stories','select=*&order=total_mentions.desc');
+    // 2. Build categorical sidebar
+    buildSidebar();
+    // 3. Append Hadith Practices
+    const htopics=await sb('hadith_comparative','select=topic,slug,category&order=category.asc,topic.asc');
+    const seen=new Set();
+    const uniq=htopics.filter(t=>{if(seen.has(t.slug))return false;seen.add(t.slug);return true;});
+    const catIcons={worship:'🕌',ethics:'⚖️',theology:'📿',prophethood:'🌟',law:'📜',practice:'🤲'};
+    if(list&&uniq.length){
+      const divider=document.createElement('div');
+      divider.className='cat';
+      divider.style.cssText='margin-top:8px;border-top:1px solid var(--border);padding-top:10px;';
+      divider.textContent='⚙️ HADITH PRACTICES';
+      list.appendChild(divider);
+      uniq.forEach(t=>{
+        const div=document.createElement('div');
+        div.className='si';
+        div.innerHTML=`<div class="si-icon" style="background:rgba(74,32,128,.2);">${catIcons[t.category]||'📖'}</div><div class="si-text"><span class="si-en">${t.topic}</span></div>`;
+        div.addEventListener('click',()=>openHadith(t.slug,t.topic));
+        list.appendChild(div);
+      });
+    }
+    // 4. Open first story
+    if(allStories.length){
+      openStory(allStories[0]);
+    } else {
+      if(list) list.innerHTML='<p style="padding:20px;color:var(--dim);text-align:center;">No entries found.</p>';
+    }
+  } catch(error){
+    console.error('Cloud Fetch Error:',error);
+    if(list) list.innerHTML='<p style="padding:20px;color:#FF8888;text-align:center;">Failed to sync with cloud database.</p>';
+  }
 }
 
 function buildSidebar(){
   const list=document.getElementById('sb-list');
+  if(!list) return;
   list.innerHTML='';
   const cats={};
   allStories.forEach(s=>{
@@ -256,7 +275,7 @@ function buildSidebar(){
     cats[c].push(s);
   });
   [...CATS,...Object.keys(cats).filter(c=>!CATS.includes(c))].forEach(c=>{
-    if(!cats[c])return;
+    if(!cats[c]||cats[c].length===0) return;
     const label=document.createElement('div');
     label.className='cat';
     label.textContent=c+'s';
