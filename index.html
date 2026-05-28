@@ -3042,27 +3042,125 @@ async function loadSura(id) {
 function renderVerses(ayas, suraId) {
   const area = document.getElementById('verseArea');
 
-  // ── Bismillah banner (shown at the top of every surah) ──────────────────
-  // Surah 9 (At-Tawbah) is the only surah without a Bismillah.
-  const bismillah = suraId === 9 ? '' : `
+  // ── Surah Header + Bismillah banner ─────────────────────────────────────
+  const suraInfo = allSuras.find(s => (s.sura_id || s.id) === suraId) || {};
+  const suraNameArabic  = suraInfo.name_arabic  || suraInfo.sura_name_arabic  || `سورة ${suraId}`;
+  const suraNameEnglish = suraInfo.name_english || suraInfo.sura_name_english || '';
+  const suraNameTranslit = suraInfo.name_transliteration || suraInfo.transliteration || '';
+  const totalAyat = ayas.filter(a => a.aya_number > 0).length;
+  const revelationType = suraInfo.revelation_type || suraInfo.type || '';
+  const revBadgeColor = revelationType.toLowerCase().includes('meccan') || revelationType.toLowerCase().includes('makki')
+    ? 'linear-gradient(135deg,#C0621A,#E8884A)'
+    : 'linear-gradient(135deg,#1A7A48,#2ECC71)';
+
+  const surahHeader = `
     <div style="
-      text-align:center;
-      padding: 22px 16px 18px;
-      margin-bottom: 10px;
-      background: linear-gradient(135deg, #F4F6FA, #EDF1F7);
-      border-bottom: 2px solid #6B8299;
-      border-radius: 10px 10px 0 0;
+      margin-bottom: 14px;
+      border-radius: 18px;
+      overflow: hidden;
+      box-shadow: 0 4px 20px rgba(107,130,153,0.18);
     ">
+      <!-- Chapter name banner -->
       <div style="
-        font-family:'Scheherazade New','Amiri',serif;
-        font-size: 32px;
-        color: #1a1a1a;
-        direction: rtl;
-        line-height: 2;
-        font-weight: 700;
-        letter-spacing: 0.03em;
-      ">بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ</div>
+        background: linear-gradient(135deg, #1B2A4A 0%, #2C3E6B 50%, #1B4332 100%);
+        padding: 14px 16px 10px;
+        text-align: center;
+        position: relative;
+      ">
+        <!-- Decorative top line -->
+        <div style="
+          height: 3px;
+          background: linear-gradient(90deg, transparent, #C9A84C, #E8C96D, #C9A84C, transparent);
+          border-radius: 2px;
+          margin-bottom: 10px;
+        "></div>
+
+        <!-- Surah number badge -->
+        <div style="
+          position: absolute; top: 14px; left: 14px;
+          background: rgba(201,168,76,0.2);
+          border: 1px solid rgba(201,168,76,0.5);
+          color: #E8C96D;
+          font-size: 10px;
+          font-weight: 700;
+          padding: 2px 8px;
+          border-radius: 20px;
+          letter-spacing: 0.05em;
+        ">Surah ${suraId}</div>
+
+        <!-- Revelation type badge -->
+        ${revelationType ? `<div style="
+          position: absolute; top: 14px; right: 14px;
+          background: ${revBadgeColor};
+          color: #fff;
+          font-size: 9px;
+          font-weight: 700;
+          padding: 2px 8px;
+          border-radius: 20px;
+          letter-spacing: 0.05em;
+          text-transform: uppercase;
+        ">${revelationType}</div>` : ''}
+
+        <!-- Arabic name -->
+        <div style="
+          font-family: 'Scheherazade New','Amiri',serif;
+          font-size: clamp(28px, 7vw, 42px);
+          color: #F0D080;
+          line-height: 1.4;
+          font-weight: 700;
+          direction: rtl;
+          text-shadow: 0 2px 8px rgba(0,0,0,0.4);
+          margin-bottom: 4px;
+        ">${suraNameArabic}</div>
+
+        <!-- English + Transliteration -->
+        <div style="
+          font-size: 13px;
+          color: #A8C4E0;
+          letter-spacing: 0.06em;
+          font-weight: 500;
+        ">${suraNameEnglish}${suraNameTranslit && suraNameTranslit !== suraNameEnglish ? ' · ' + suraNameTranslit : ''}</div>
+
+        <!-- Verse count -->
+        <div style="
+          font-size: 11px;
+          color: rgba(168,196,224,0.7);
+          margin-top: 4px;
+        ">${totalAyat} verses</div>
+
+        <!-- Decorative bottom line -->
+        <div style="
+          height: 2px;
+          background: linear-gradient(90deg, transparent, #C9A84C, #E8C96D, #C9A84C, transparent);
+          border-radius: 2px;
+          margin-top: 10px;
+        "></div>
+      </div>
+
+      <!-- Bismillah strip — compact, vibrant -->
+      ${suraId === 9 ? '' : `
+      <div style="
+        background: linear-gradient(135deg, #2D1B4E, #4A2080, #2D1B4E);
+        padding: 8px 16px;
+        text-align: center;
+        border-top: 1px solid rgba(201,168,76,0.3);
+      ">
+        <div style="
+          font-family: 'Scheherazade New','Amiri',serif;
+          font-size: clamp(18px, 4.5vw, 24px);
+          background: linear-gradient(135deg, #E8C96D, #F5E6A3, #C9A84C);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
+          direction: rtl;
+          line-height: 1.8;
+          font-weight: 700;
+          letter-spacing: 0.04em;
+        ">بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ</div>
+      </div>`}
     </div>`;
+
+  const bismillah = surahHeader;
 
   // ── Filter out any aya_number=0 rows (Bismillah stored as verse 0) ───────
   // Some databases store Bismillah as aya_number=0. We display it as the
