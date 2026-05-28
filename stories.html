@@ -645,31 +645,55 @@ async function loadHadithTopic(slug, topicName) {
 }
 
 function renderSidebar() {
+  // Build a slug->story map so onclick can reference by slug safely
+  window._storyMap = {};
+  stories.forEach(s => { window._storyMap[s.slug] = s; });
+
+  const catOrder = ['prophet','event','people','theme'];
   const categories = {};
   stories.forEach(s => {
-    if (!categories[s.category]) categories[s.category] = [];
-    categories[s.category].push(s);
+    const cat = s.category || 'other';
+    if (!categories[cat]) categories[cat] = [];
+    categories[cat].push(s);
   });
 
-  let html = '';
-  for (const [cat, items] of Object.entries(categories)) {
-    html += `<div class="category-label">${cat}s</div>`;
+  let out = '';
+  // Render in preferred order then any remaining
+  const orderedCats = [...catOrder.filter(c => categories[c]), ...Object.keys(categories).filter(c => !catOrder.includes(c))];
+  for (const cat of orderedCats) {
+    const items = categories[cat];
+    if (!items || !items.length) continue;
+    out += `<div class="category-label">${cat}s</div>`;
     items.forEach(s => {
-      html += `<div class="story-item" id="item-${s.slug}" onclick="loadStory(${JSON.stringify(s).replace(/"/g,'&quot;')});closeSidebarOnMobile()">
-        <div class="story-icon" style="background:rgba(${hexToRgb(CATEGORY_COLORS[s.category]||'#C9A84C')},0.15);">${ICONS[s.category]||'📖'}</div>
+      const color = hexToRgb(CATEGORY_COLORS[s.category] || '#C9A84C');
+      out += `<div class="story-item" id="item-${s.slug}" onclick="selectStory('${s.slug}')">
+        <div class="story-icon" style="background:rgba(${color},0.15);">${ICONS[s.category]||'📖'}</div>
         <div>
           <div class="story-arabic">${s.name_arabic||''}</div>
           <div class="story-name">${s.name_english}</div>
-          <div class="story-count">${s.total_mentions} mentions in Quran</div>
         </div>
       </div>`;
     });
   }
-  document.getElementById('sidebarList').innerHTML = html + `
+
+  document.getElementById('sidebarList').innerHTML = out + `
     <div class="category-label" style="margin-top:8px;border-top:1px solid var(--border);padding-top:10px;">⚙️ Hadith Practices</div>
     <div id="hadithTopicList"></div>
   `;
 }
+
+// Safe story selector using slug map
+function selectHadithTopic(el) {
+  const slug = el.getAttribute('data-slug');
+  const topic = el.getAttribute('data-topic');
+  if (slug && topic) { loadHadithTopic(slug, topic); closeSidebarOnMobile(); }
+}
+
+function selectStory(slug) {
+  const s = window._storyMap && window._storyMap[slug];
+  if (s) { loadStory(s); closeSidebarOnMobile(); }
+}
+
 
 async function loadStory(story) {
   currentStory = story;
