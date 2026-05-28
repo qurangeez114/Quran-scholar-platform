@@ -359,7 +359,9 @@ body { padding-bottom: 70px; }
 <div class="app">
   <nav class="sidebar" id="storySidebar">
     <div class="loading"><div class="spinner"></div></div>
-  </nav>
+    <div class="category-label" style="margin-top:8px;border-top:1px solid var(--border);padding-top:10px;">⚙️ Hadith Practices</div>
+  <div id="hadithTopicList" style="overflow-y:auto;"></div>
+</nav>
   <main class="main" id="storyMain">
     <div class="loading" style="padding:80px 40px;">
       <div class="spinner"></div>
@@ -402,6 +404,9 @@ async function init() {
   stories = await sbFetch('quranic_stories', 'select=*&order=total_mentions.desc');
   renderSidebar();
 
+  // Load hadith topics
+  loadHadithTopics();
+
   // Check URL param
   const slug = new URLSearchParams(location.search).get('story');
   if (slug) {
@@ -410,6 +415,91 @@ async function init() {
   } else if (stories.length) {
     loadStory(stories[0]);
   }
+}
+
+async function loadHadithTopics() {
+  try {
+    const topics = await sbFetch('hadith_comparative',
+      'select=topic,slug,category&order=category.asc,topic.asc'
+    );
+    // Get unique topics
+    const seen = new Set();
+    const unique = topics.filter(t => {
+      if (seen.has(t.slug)) return false;
+      seen.add(t.slug);
+      return true;
+    });
+    const catIcons = { worship:'🕌', ethics:'⚖️', theology:'📿', prophethood:'🌟', law:'📜', practice:'🤲' };
+    const list = document.getElementById('hadithTopicList');
+    if (!list) return;
+    list.innerHTML = unique.map(t => `
+      <div class="story-item" onclick="loadHadithTopic('${t.slug}', '${t.topic.replace(/'/g,'\'')}')">
+        <div class="story-icon" style="background:rgba(74,32,128,0.2);">${catIcons[t.category]||'📖'}</div>
+        <div>
+          <div class="story-name" style="font-size:12px;">${t.topic}</div>
+          <div class="story-count">${t.category}</div>
+        </div>
+      </div>`).join('');
+  } catch(e) { console.warn('hadith topics error', e); }
+}
+
+async function loadHadithTopic(slug, topicName) {
+  document.getElementById('storyMain').innerHTML =
+    '<div class="loading" style="padding:60px;"><div class="spinner"></div></div>';
+
+  const sources = await sbFetch('hadith_comparative',
+    `slug=eq.${slug}&select=*&order=tradition.asc`
+  );
+  if (!sources.length) {
+    document.getElementById('storyMain').innerHTML =
+      '<div class="no-results">No comparative sources found for this topic.</div>';
+    return;
+  }
+
+  const tradClass = t => 'trad-' + (t||'').split('/')[0].trim().replace(/\s+/g,'');
+
+  const sourcesHtml = sources.map(src => `
+    <div class="source-card">
+      <div class="source-header" onclick="toggleSource(this)">
+        <span class="source-tradition-badge ${tradClass(src.tradition)}">${src.tradition}</span>
+        <div class="source-info">
+          <div class="source-name">${src.source_name}</div>
+          <div class="source-ref">${src.volume||''} ${src.reference ? '· '+src.reference : ''}</div>
+        </div>
+        <button class="card-read-btn" onclick="event.stopPropagation();ttsReadCard(this,this.closest('.source-card'))">🔊</button>
+        <span style="color:var(--text-secondary);font-size:18px;">▼</span>
+      </div>
+      <div class="source-body">
+        <div style="background:rgba(201,168,76,0.08);border-left:3px solid var(--gold);border-radius:8px;padding:10px 14px;margin-bottom:12px;">
+          <div style="font-size:10px;font-weight:700;color:var(--gold);margin-bottom:4px;">HADITH</div>
+          <div style="font-size:13px;color:var(--text);line-height:1.7;">${src.hadith_text||''}</div>
+        </div>
+        <p class="source-summary-text">${src.summary||''}</p>
+        <div class="comparison-grid">
+          <div class="comp-box comp-similar"><div class="comp-label">✓ Similarities</div><div class="comp-text">${src.similarities||'—'}</div></div>
+          <div class="comp-box comp-diff"><div class="comp-label">✕ Differences</div><div class="comp-text">${src.differences||'—'}</div></div>
+        </div>
+        <div class="comp-box comp-unique" style="margin-top:10px;">
+          <div class="comp-label">★ Unique to Islam</div>
+          <div class="comp-text">${src.unique_islam||'—'}</div>
+        </div>
+        ${src.url ? `<div style="margin-top:10px;"><a href="${src.url}" target="_blank" class="source-link">📎 Read source →</a></div>` : ''}
+      </div>
+    </div>`).join('');
+
+  document.getElementById('storyMain').innerHTML = `
+    <div class="story-header">
+      <div class="story-header-english">${topicName}</div>
+      <div class="story-header-meta">
+        <span class="badge badge-gold">⚙️ Hadith Practice</span>
+        <span class="badge badge-blue">${sources.length} comparative sources</span>
+        <button class="read-all-btn" onclick="ttsReadAll()">🔊 Read All</button>
+      </div>
+    </div>
+    <div class="section">
+      <div class="section-title">📚 Comparative Sources from Prior Traditions</div>
+      ${sourcesHtml}
+    </div>`;
 }
 
 function renderSidebar() {
@@ -656,10 +746,36 @@ async function doConceptSearch() {
 
     // 2. Search story_sources by summary/similarities/differences
     const enc = encodeURIComponent(q);
-    const [srcBySummary, srcByTrad] = await Promise.all([
+    const [srcBySummary, srcByTrad, hadithSrc] = await Promise.all([
       sbFetch('story_sources', `or=(summary.ilike.*${enc}*,similarities.ilike.*${enc}*,differences.ilike.*${enc}*,unique_quran.ilike.*${enc}*,source_name.ilike.*${enc}*)&select=*,quranic_stories(name_english,name_arabic,slug)&limit=20`),
-      sbFetch('story_sources', `tradition.ilike.*${enc}*&select=*,quranic_stories(name_english,name_arabic,slug)&limit=10`)
+      sbFetch('story_sources', `tradition.ilike.*${enc}*&select=*,quranic_stories(name_english,name_arabic,slug)&limit=10`),
+      sbFetch('hadith_comparative', `or=(topic.ilike.*${enc}*,summary.ilike.*${enc}*,similarities.ilike.*${enc}*,hadith_text.ilike.*${enc}*,source_name.ilike.*${enc}*)&select=*&limit=10`)
     ]);
+    // Add hadith results to display
+    if (hadithSrc && hadithSrc.length) {
+      hadithSrc.forEach(src => {
+        const card = document.createElement('div');
+        card.className = 'search-result-card';
+        card.innerHTML = `
+          <div class="search-result-header">
+            <span class="source-tradition-badge trad-${(src.tradition||'').split('/')[0].trim().replace(/\s+/g,'')}">${src.tradition}</span>
+            <div>
+              <div class="search-result-title">${src.topic} · ${src.source_name}</div>
+              <div class="search-result-meta">Hadith Practice · ${src.volume||''}</div>
+            </div>
+          </div>
+          <div class="search-result-body">
+            <div style="background:rgba(201,168,76,0.08);border-left:3px solid var(--gold);border-radius:8px;padding:8px 12px;margin-bottom:8px;font-size:12px;color:var(--text);">${src.hadith_text||''}</div>
+            <p class="source-summary-text">${src.summary||''}</p>
+            <div class="comparison-grid">
+              <div class="comp-box comp-similar"><div class="comp-label">✓ Similarities</div><div class="comp-text">${src.similarities||'—'}</div></div>
+              <div class="comp-box comp-diff"><div class="comp-label">✕ Differences</div><div class="comp-text">${src.differences||'—'}</div></div>
+            </div>
+            <div class="comp-box comp-unique" style="margin-top:8px;"><div class="comp-label">★ Unique to Islam</div><div class="comp-text">${src.unique_islam||'—'}</div></div>
+          </div>`;
+        document.getElementById('searchResultsContent').appendChild(card);
+      });
+    }
 
     // 3. Also ask AI for relevant Quran verses about this concept
     const aiVerses = await searchQuranVerses(q);
