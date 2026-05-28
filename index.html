@@ -8661,17 +8661,20 @@ function xwebAddToVerse(sura, aya) {
   });
 }
 
-// Hook into verse rendering
-var _origRenderVerses = window.renderVerses;
-if (typeof renderVerses === 'function') {
-  window.renderVerses = function() {
-    _origRenderVerses.apply(this, arguments);
-    setTimeout(function() {
-      var p = new URLSearchParams(window.location.search);
-      var s = p.get('sura'), a = p.get('aya');
-      if (s) xwebAddToVerse(s, a || 1);
-    }, 500);
-  };
+// Hook into verse rendering — guard against double-wrap
+if (!window._xwebRenderHooked) {
+  window._xwebRenderHooked = true;
+  var _origRenderVerses = window.renderVerses;
+  if (typeof renderVerses === 'function') {
+    window.renderVerses = function() {
+        _origRenderVerses.apply(this, arguments);
+      setTimeout(function() {
+        var p = new URLSearchParams(window.location.search);
+        var s = p.get('sura'), a = p.get('aya');
+        if (s) xwebAddToVerse(s, a || 1);
+      }, 500);
+    };
+  }
 }
 </script>
 
@@ -17579,39 +17582,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 
-<script>
-/* ── Add cross-web to verse cards when rendered ── */
-function xwebAddToVerse(sura, aya) {
-  var cards = document.querySelectorAll('.verse-card');
-  cards.forEach(function(card) {
-    var numEl = card.querySelector('.verse-num');
-    if (!numEl) return;
-    var txt = numEl.textContent.trim();
-    var parts = txt.split(':');
-    var cSura = parts[0], cAya = parts[1];
-    if (String(cSura) === String(sura) && String(cAya) === String(aya)) {
-      if (card.querySelector('.xweb')) return; // already added
-      xwebBuild(card, 'index', {
-        sura: sura, aya: aya,
-        fromLabel: 'Quran ' + sura + ':' + aya, fromIcon: '📖'
-      });
-    }
-  });
-}
 
-// Hook into verse rendering
-var _origRenderVerses = window.renderVerses;
-if (typeof renderVerses === 'function') {
-  window.renderVerses = function() {
-    _origRenderVerses.apply(this, arguments);
-    setTimeout(function() {
-      var p = new URLSearchParams(window.location.search);
-      var s = p.get('sura'), a = p.get('aya');
-      if (s) xwebAddToVerse(s, a || 1);
-    }, 500);
-  };
-}
-</script>
 
 <script>
 document.addEventListener('DOMContentLoaded', function(){
