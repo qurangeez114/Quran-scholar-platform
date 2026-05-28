@@ -303,6 +303,23 @@ function closeSidebarOnMobile() {
   }
 }
 
+// Event delegation for sidebar clicks — works with dynamically injected HTML
+document.addEventListener('click', function(e) {
+  // Story item click
+  const storyItem = e.target.closest('.story-item[data-slug]');
+  if (storyItem) {
+    const slug = storyItem.getAttribute('data-slug');
+    if (slug) { selectStory(slug); return; }
+  }
+  // Hadith topic click
+  const hadithItem = e.target.closest('.story-item[data-hadith-slug]');
+  if (hadithItem) {
+    const slug = hadithItem.getAttribute('data-hadith-slug');
+    const topic = hadithItem.getAttribute('data-topic');
+    if (slug && topic) { loadHadithTopic(slug, topic); closeSidebarOnMobile(); return; }
+  }
+});
+
 async function init() {
   stories = await sbFetch('quranic_stories', 'select=*&order=total_mentions.desc');
   console.log('Stories fetched:', stories.length, stories.map(s=>s.slug));
@@ -428,9 +445,9 @@ function renderSidebar() {
     out += `<div class="category-label">${cat}s</div>`;
     items.forEach(s => {
       const color = hexToRgb(CATEGORY_COLORS[s.category] || '#C9A84C');
-      out += `<div class="story-item" id="item-${s.slug}" onclick="selectStory('${s.slug}')">
+      out += `<div class="story-item" id="item-${s.slug}" data-slug="${s.slug}">
         <div class="story-icon" style="background:rgba(${color},0.15);">${ICONS[s.category]||'📖'}</div>
-        <div>
+        <div style="min-width:0;">
           <div class="story-arabic">${s.name_arabic||''}</div>
           <div class="story-name">${s.name_english}</div>
         </div>
