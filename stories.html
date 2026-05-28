@@ -205,7 +205,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#0F1623;color:#E8EDF
     <div class="loading"><div class="spinner"></div></div>
   </div>
 </nav>
-  <div class="main" style="display:flex;flex-direction:column;overflow:hidden;min-width:0;">
+  <div class="main" style="display:flex;flex-direction:column;overflow:hidden;min-width:0;position:relative;">
     <!-- Search bar moved inside main -->
     <div style="flex-shrink:0;">
       <!-- Search Bar -->
@@ -237,7 +237,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#0F1623;color:#E8EDF
 </div>
     </div>
     <!-- Story content scrollable area -->
-    <div id="storyMain" style="flex:1;overflow-y:auto;padding:16px;min-height:0;">
+    <div id="storyMain" style="flex:1;overflow-y:auto;padding:16px;min-height:0;position:relative;z-index:1;">
       <div class="loading" style="padding:60px 20px;">
         <div class="spinner"></div>
         <p style="margin-top:16px;color:var(--text-secondary);">Select a story from the list</p>
@@ -323,7 +323,7 @@ document.addEventListener('click', function(e) {
 
 async function init() {
   stories = await sbFetch('quranic_stories', 'select=*&order=total_mentions.desc');
-  console.log('Stories fetched:', stories.length, stories.map(s=>s.slug));
+  window.stories = stories; // expose globally for fallback
   renderSidebar();
 
   // Load hadith topics
@@ -477,10 +477,22 @@ function selectHadithTopic(el) {
 }
 
 function selectStory(slug) {
-  console.log('selectStory called:', slug, window._storyMap);
   const s = window._storyMap && window._storyMap[slug];
-  if (s) { loadStory(s); closeSidebarOnMobile(); }
-  else { console.warn('Story not found in map:', slug, Object.keys(window._storyMap||{})); }
+  if (s) {
+    loadStory(s);
+    closeSidebarOnMobile();
+    // Scroll main content to top
+    const main = document.getElementById('storyMain');
+    if (main) main.scrollTop = 0;
+    // Also scroll the .main container
+    const mainDiv = document.querySelector('.main');
+    if (mainDiv) mainDiv.scrollTop = 0;
+  } else {
+    // Fallback: try to find story in global stories array
+    const fallback = window.stories && window.stories.find(x => x.slug === slug);
+    if (fallback) { loadStory(fallback); closeSidebarOnMobile(); }
+    else { alert('Story "' + slug + '" not found. Please refresh the page.'); }
+  }
 }
 
 
