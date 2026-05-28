@@ -356,7 +356,6 @@ body { padding-bottom: 70px; }
   <div id="searchResultsContent" class="search-results"></div>
 </div>
 
-<div id="browseArea" style="display:block;">
 <div class="app">
   <nav class="sidebar" id="storySidebar">
     <div class="loading"><div class="spinner"></div></div>
@@ -388,6 +387,16 @@ async function sbFetch(table, params='') {
   const r = await fetch(`${SB_URL}/rest/v1/${table}?${params}`, { headers: HDRS });
   return r.json();
 }
+
+// Unlock TTS on first user interaction (required on iOS/Android)
+document.addEventListener('click', function unlockTTS() {
+  if (window.speechSynthesis) {
+    const u = new SpeechSynthesisUtterance('');
+    u.volume = 0;
+    window.speechSynthesis.speak(u);
+  }
+  document.removeEventListener('click', unlockTTS);
+}, { once: true });
 
 async function init() {
   stories = await sbFetch('quranic_stories', 'select=*&order=total_mentions.desc');
@@ -613,10 +622,10 @@ function switchSearchTab(tab, el) {
   el.classList.add('active');
   if (tab === 'browse') {
     document.getElementById('searchResultsContent').style.display = 'none';
-    document.getElementById('browseArea').style.display = 'block';
+    document.getElementById('searchResultsArea').style.display = 'none';
   } else {
     document.getElementById('searchResultsContent').style.display = 'block';
-    document.getElementById('browseArea').style.display = 'none';
+    document.getElementById('searchResultsArea').style.display = 'block';
   }
 }
 
@@ -824,7 +833,6 @@ function showStoryFromSearch(slug) {
   const s = stories.find(x => x.slug === slug);
   if (s) {
     document.getElementById('searchResultsArea').style.display = 'none';
-    document.getElementById('browseArea').style.display = 'block';
     loadStory(s);
     window.scrollTo({top:0,behavior:'smooth'});
   }
@@ -939,29 +947,55 @@ function ttsPlayNext() {
 
 // Read a single card's text
 function ttsReadCard(btn, cardEl) {
+  // If already reading this card, stop
+  if (TTS.activeBtn === btn && TTS.playing) { ttsStop(); return; }
   ttsStop();
   if (TTS.activeBtn) { TTS.activeBtn.classList.remove('reading'); TTS.activeBtn.textContent = '🔊 Read'; }
   TTS.activeBtn = btn;
   btn.classList.add('reading');
   btn.textContent = '⏹ Stop';
 
-  // Gather text segments from the card
+  // Auto-open card body so text is accessible
+  const body = cardEl.querySelector('.source-body');
+  if (body && !body.classList.contains('open')) {
+    body.classList.add('open');
+  }
+
   const segments = [];
-  // Source tradition + name
-  const trad = cardEl.querySelector('.source-tradition-badge, .search-result-title');
-  if (trad) segments.push({ text: trad.textContent.trim(), lang: 'en', label: 'Source' });
-  // Summary text
-  cardEl.querySelectorAll('.source-summary-text, .comp-text, .ai-output, .quran-verse-english, .story-summary').forEach(el => {
-    const t = el.textContent.trim();
-    if (t) segments.push({ text: t, lang: ttsDetectLang(t), label: el.className.includes('arabic') ? 'Arabic' : 'Text' });
-  });
-  // Arabic separately
-  cardEl.querySelectorAll('.quran-verse-arabic, .story-header-arabic').forEach(el => {
-    const t = el.textContent.trim();
-    if (t) segments.push({ text: t, lang: 'ar', label: 'Arabic' });
+
+  // Title / tradition
+  const title = cardEl.querySelector('.source-name, .search-result-title, .source-tradition-badge');
+  if (title) segments.push({ text: title.textContent.trim(), lang: 'en', label: 'Source' });
+
+  // Reference
+  const ref = cardEl.querySelector('.source-ref, .search-result-meta');
+  if (ref) segments.push({ text: ref.textContent.trim(), lang: 'en', label: 'Reference' });
+
+  // All readable text
+  const selectors = [
+    '.source-summary-text', '.comp-text', '.quran-verse-english',
+    '.verse-display-english', '.story-summary', '.ai-output'
+  ];
+  selectors.forEach(sel => {
+    cardEl.querySelectorAll(sel).forEach(el => {
+      const t = el.textContent.trim();
+      if (t && t !== '—') segments.push({ text: t, lang: ttsDetectLang(t), label: sel });
+    });
   });
 
-  if (!segments.length) segments.push({ text: cardEl.textContent.replace(/\s+/g,' ').trim().slice(0,500), lang: 'en', label: 'Card' });
+  // Arabic text
+  cardEl.querySelectorAll('.quran-verse-arabic, .verse-display-arabic').forEach(el => {
+    const t = el.textContent.trim();
+    if (t) segments.push({ text: t, lang: 'ar', label: 'Arabic verse' });
+  });
+
+  // Fallback
+  if (!segments.length) {
+    const t = cardEl.textContent.replace(/\s+/g,' ').trim().slice(0, 600);
+    if (t) segments.push({ text: t, lang: 'en', label: 'Card' });
+  }
+
+  if (!segments.length) { alert('Nothing to read in this card.'); ttsStop(); return; }
 
   TTS.queue = segments;
   TTS.idx = 0;
@@ -1016,7 +1050,6 @@ function ttsReadAll() {
 
 init();
 </script>
-</div><!-- end browseArea -->
 
 <!-- TTS Player Bar -->
 <div class="tts-bar" id="ttsBar">
