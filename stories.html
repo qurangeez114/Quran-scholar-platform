@@ -191,9 +191,15 @@ const SB_URL='https://ylosytbxpzxzwfzjpaej.supabase.co';
 const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
 const HD={'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY};
 
-async function sb(table,params){
-  const r=await fetch(SB_URL+'/rest/v1/'+table+'?'+params,{headers:HD});
-  return r.json();
+async function sb(table, params) {
+  try {
+    const r = await fetch(SB_URL + '/rest/v1/' + table + '?' + params, { headers: HD });
+    if (!r.ok) throw new Error('HTTP error! Status: ' + r.status);
+    return await r.json();
+  } catch(e) {
+    console.error('Database fetch failed for table: ' + table, e);
+    return null;
+  }
 }
 
 let allStories=[];
@@ -223,71 +229,75 @@ function tradClass(t){
   return'tO';
 }
 
-async function init(){
-  const list=document.getElementById('sb-list');
-  if(list){
-    list.innerHTML='<div class="loading"><div class="spin"></div><p style="margin-top:10px;font-size:11px;color:var(--dim);">Loading content...</p></div>';
+async function init() {
+  const list = document.getElementById('sb-list');
+
+  // 1. Fetch Stories
+  const storyData = await sb('quranic_stories', 'select=*&order=total_mentions.desc');
+
+  if (!storyData) {
+    if (list) list.innerHTML = '<p style="padding:15px;color:#FF8888;font-size:12px;text-align:center;">⚠️ Cloud connection error. Check Console.</p>';
+    return;
   }
-  try{
-    // 1. Pull stories from Supabase
-    allStories=await sb('quranic_stories','select=*&order=total_mentions.desc');
-    // 2. Build categorical sidebar
-    buildSidebar();
-    // 3. Append Hadith Practices
-    const htopics=await sb('hadith_comparative','select=topic,slug,category&order=category.asc,topic.asc');
-    const seen=new Set();
-    const uniq=htopics.filter(t=>{if(seen.has(t.slug))return false;seen.add(t.slug);return true;});
-    const catIcons={worship:'🕌',ethics:'⚖️',theology:'📿',prophethood:'🌟',law:'📜',practice:'🤲'};
-    if(list&&uniq.length){
-      const divider=document.createElement('div');
-      divider.className='cat';
-      divider.style.cssText='margin-top:8px;border-top:1px solid var(--border);padding-top:10px;';
-      divider.textContent='⚙️ HADITH PRACTICES';
+
+  allStories = storyData;
+  buildSidebar();
+
+  // 2. Fetch Hadith practices
+  const htopics = await sb('hadith_comparative', 'select=topic,slug,category&order=category.asc,topic.asc');
+
+  if (htopics && htopics.length) {
+    const seen = new Set();
+    const uniq = htopics.filter(t => {
+      if (seen.has(t.slug)) return false;
+      seen.add(t.slug);
+      return true;
+    });
+    const catIcons = { worship:'🕌', ethics:'⚖️', theology:'📿', prophethood:'🌟', law:'📜', practice:'🤲' };
+    if (list) {
+      const divider = document.createElement('div');
+      divider.className = 'cat';
+      divider.style.cssText = 'margin-top:8px;border-top:1px solid var(--border);padding-top:10px;';
+      divider.textContent = '⚙️ HADITH PRACTICES';
       list.appendChild(divider);
-      uniq.forEach(t=>{
-        const div=document.createElement('div');
-        div.className='si';
-        div.innerHTML=`<div class="si-icon" style="background:rgba(74,32,128,.2);">${catIcons[t.category]||'📖'}</div><div class="si-text"><span class="si-en">${t.topic}</span></div>`;
-        div.addEventListener('click',()=>openHadith(t.slug,t.topic));
+      uniq.forEach(t => {
+        const div = document.createElement('div');
+        div.className = 'si';
+        div.innerHTML = '<div class="si-icon" style="background:rgba(74,32,128,.2);">' + (catIcons[t.category]||'📖') + '</div><div class="si-text"><span class="si-en">' + t.topic + '</span></div>';
+        div.addEventListener('click', () => openHadith(t.slug, t.topic));
         list.appendChild(div);
       });
     }
-    // 4. Open first story
-    if(allStories.length){
-      openStory(allStories[0]);
-    } else {
-      if(list) list.innerHTML='<p style="padding:20px;color:var(--dim);text-align:center;">No entries found.</p>';
-    }
-  } catch(error){
-    console.error('Cloud Fetch Error:',error);
-    if(list) list.innerHTML='<p style="padding:20px;color:#FF8888;text-align:center;">Failed to sync with cloud database.</p>';
   }
+
+  // 3. Open first story
+  if (allStories.length) openStory(allStories[0]);
 }
 
-function buildSidebar(){
-  const list=document.getElementById('sb-list');
-  if(!list) return;
-  list.innerHTML='';
-  const cats={};
-  allStories.forEach(s=>{
-    const c=s.category||'other';
-    if(!cats[c])cats[c]=[];
+function buildSidebar() {
+  const list = document.getElementById('sb-list');
+  if (!list) return;
+  list.innerHTML = '';
+  const cats = {};
+  allStories.forEach(s => {
+    const c = s.category || 'other';
+    if (!cats[c]) cats[c] = [];
     cats[c].push(s);
   });
-  [...CATS,...Object.keys(cats).filter(c=>!CATS.includes(c))].forEach(c=>{
-    if(!cats[c]||cats[c].length===0) return;
-    const label=document.createElement('div');
-    label.className='cat';
-    label.textContent=c+'s';
+  [...CATS, ...Object.keys(cats).filter(c => !CATS.includes(c))].forEach(c => {
+    if (!cats[c] || !cats[c].length) return;
+    const label = document.createElement('div');
+    label.className = 'cat';
+    label.textContent = c + 's';
     list.appendChild(label);
-    cats[c].forEach(s=>{
-      const div=document.createElement('div');
-      div.className='si';
-      div.id='si-'+s.slug;
-      div.innerHTML=`<div class="si-icon" style="background:rgba(201,168,76,.15);">${ICONS[s.category]||'📖'}</div><div class="si-text"><span class="si-ar">${s.name_arabic||''}</span><span class="si-en">${s.name_english}</span></div>`;
-      div.addEventListener('click',()=>{
+    cats[c].forEach(s => {
+      const div = document.createElement('div');
+      div.className = 'si';
+      div.id = 'si-' + s.slug;
+      div.innerHTML = '<div class="si-icon" style="background:rgba(201,168,76,.15);">' + (ICONS[s.category]||'📖') + '</div><div class="si-text"><span class="si-ar">' + (s.name_arabic||'') + '</span><span class="si-en">' + s.name_english + '</span></div>';
+      div.addEventListener('click', () => {
         openStory(s);
-        if(window.innerWidth<600){toggleSB();}
+        if (window.innerWidth < 600) toggleSB();
       });
       list.appendChild(div);
     });
