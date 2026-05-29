@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Lexicon Bulk Fill</title>
+  <title>Lexicon Bulk Fill v4</title>
   <style>
     body { font-family: Georgia, serif; background: #1a1a2e; color: #eee; padding: 20px; max-width: 500px; margin: 0 auto; }
     h2 { color: #c8a96e; text-align: center; }
@@ -13,43 +13,52 @@
     .stop  { background: #e74c3c; color: #fff; }
     .progress-bar { width: 100%; height: 18px; background: #0f3460; border-radius: 9px; overflow: hidden; margin: 12px 0; }
     .progress-fill { height: 100%; background: linear-gradient(90deg, #c8a96e, #f0c674); border-radius: 9px; transition: width 0.5s; }
-    .log { background: #0f0f1a; border-radius: 8px; padding: 12px; height: 200px; overflow-y: auto; font-size: 11px; font-family: monospace; color: #7fdbca; margin-top: 10px; }
+    .log { background: #0f0f1a; border-radius: 8px; padding: 12px; height: 220px; overflow-y: auto; font-size: 11px; font-family: monospace; color: #7fdbca; margin-top: 10px; }
     .stat { display: flex; justify-content: space-between; margin: 6px 0; font-size: 13px; }
     .stat span:last-child { color: #c8a96e; font-weight: 700; }
   </style>
 </head>
 <body>
-  <h2>📚 Lexicon Bulk Fill</h2>
+  <h2>📚 Lexicon Bulk Fill v4</h2>
   <div class="card">
     <div class="stat"><span>Total Missing</span><span id="statTotal">9,998</span></div>
     <div class="stat"><span>Filled This Session</span><span id="statFilled">0</span></div>
-    <div class="stat"><span>Current Batch</span><span id="statBatch">-</span></div>
+    <div class="stat"><span>Last ID processed</span><span id="statId">83146</span></div>
     <div class="stat"><span>Status</span><span id="statStatus">Ready</span></div>
     <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
     <button class="start" id="startBtn" onclick="startFill()">▶ Start Filling</button>
-    <button class="stop" id="stopBtn" onclick="stopFill()" style="display:none">⏹ Stop</button>
+    <button class="stop"  id="stopBtn"  onclick="stopFill()" style="display:none">⏹ Stop</button>
   </div>
   <div class="card">
     <div style="font-size:12px;color:#aaa;margin-bottom:6px;">Log</div>
     <div class="log" id="log"></div>
   </div>
+
   <script>
-    const FN = '/.netlify/functions/bulk-fill-lexicon';
+    // Real missing words start at ID 83147 — skip all pause-mark rows below
+    const REAL_START_ID = 83146;
     const TOTAL = 9998;
-    let running = false, afterId = 0, totalFilled = 0, batchNum = 0;
+    const FN = '/.netlify/functions/bulk-fill-lexicon';
+
+    let running = false;
+    let afterId = REAL_START_ID;
+    let totalFilled = 0;
+    let batchNum = 0;
 
     function log(msg) {
       const el = document.getElementById('log');
-      const line = document.createElement('div');
-      line.textContent = new Date().toLocaleTimeString() + ' — ' + msg;
-      el.appendChild(line); el.scrollTop = el.scrollHeight;
+      const d = document.createElement('div');
+      d.textContent = new Date().toLocaleTimeString() + ' — ' + msg;
+      el.appendChild(d);
+      el.scrollTop = el.scrollHeight;
     }
 
-    function updateStats() {
+    function updateStats(filled) {
+      totalFilled += (filled || 0);
       document.getElementById('statFilled').textContent = totalFilled.toLocaleString();
-      document.getElementById('statBatch').textContent = batchNum;
-      const pct = Math.min(100, Math.round((totalFilled / TOTAL) * 100));
-      document.getElementById('progressFill').style.width = pct + '%';
+      document.getElementById('statId').textContent = afterId.toLocaleString();
+      document.getElementById('progressFill').style.width =
+        Math.min(100, Math.round(totalFilled / TOTAL * 100)) + '%';
     }
 
     async function startFill() {
@@ -57,40 +66,49 @@
       document.getElementById('startBtn').style.display = 'none';
       document.getElementById('stopBtn').style.display = 'block';
       document.getElementById('statStatus').textContent = 'Running...';
-      log('Started — targeting only missing rows after ID ' + afterId);
+      log('Starting from ID ' + afterId);
 
       while (running) {
         batchNum++;
+        document.getElementById('statStatus').textContent = 'Batch ' + batchNum;
         try {
-          document.getElementById('statStatus').textContent = 'Batch ' + batchNum + '...';
-          const res = await fetch(FN, { method:'POST',
-            headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({after_id: afterId}) });
+          const res = await fetch(FN, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ after_id: afterId })
+          });
           const data = await res.json();
-          if (data.error) { log('Error: ' + data.error); break; }
-          totalFilled += (data.filled || 0);
-          updateStats();
-          log('Batch ' + batchNum + ': filled ' + data.filled + ' words (after_id ' + afterId + ')');
+
+          if (data.error) { log('❌ Error: ' + data.error); break; }
+
+          const filled = data.filled || 0;
+          updateStats(filled);
+
           if (data.done) {
-            log('✅ ALL DONE! Total filled: ' + totalFilled);
+            log('✅ ALL DONE! Filled ' + totalFilled + ' words total.');
             document.getElementById('statStatus').textContent = '✅ Complete!';
             running = false; break;
           }
+
           afterId = data.after_id;
+          log('Batch ' + batchNum + ': +' + filled + ' words — next ID: ' + afterId);
           await new Promise(r => setTimeout(r, 300));
+
         } catch(e) {
-          log('Error: ' + e.message + ' — retrying in 3s');
+          log('⚠ ' + e.message + ' — retrying in 3s');
           await new Promise(r => setTimeout(r, 3000));
         }
       }
 
       document.getElementById('startBtn').style.display = 'block';
       document.getElementById('stopBtn').style.display = 'none';
-      if (running) document.getElementById('statStatus').textContent = 'Stopped at ID ' + afterId;
-      running = false;
+      if (running) { document.getElementById('statStatus').textContent = 'Stopped'; running = false; }
     }
 
-    function stopFill() { running = false; log('Stopped at after_id ' + afterId); }
+    function stopFill() {
+      running = false;
+      log('Stopped at ID ' + afterId + '. Tap Start to resume.');
+    }
   </script>
 </body>
 </html>
