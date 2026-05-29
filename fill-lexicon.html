@@ -20,9 +20,8 @@
 </head>
 <body>
   <h2>📚 Lexicon Bulk Fill</h2>
-
   <div class="card">
-    <div class="stat"><span>Total Missing</span><span id="statTotal">28,125</span></div>
+    <div class="stat"><span>Total Missing</span><span id="statTotal">9,998</span></div>
     <div class="stat"><span>Filled This Session</span><span id="statFilled">0</span></div>
     <div class="stat"><span>Current Batch</span><span id="statBatch">-</span></div>
     <div class="stat"><span>Status</span><span id="statStatus">Ready</span></div>
@@ -30,26 +29,20 @@
     <button class="start" id="startBtn" onclick="startFill()">▶ Start Filling</button>
     <button class="stop" id="stopBtn" onclick="stopFill()" style="display:none">⏹ Stop</button>
   </div>
-
   <div class="card">
     <div style="font-size:12px;color:#aaa;margin-bottom:6px;">Log</div>
     <div class="log" id="log"></div>
   </div>
-
   <script>
     const FN = '/.netlify/functions/bulk-fill-lexicon';
-    const TOTAL = 28125;
-    let running = false;
-    let offset = 0;
-    let totalFilled = 0;
-    let batchNum = 0;
+    const TOTAL = 9998;
+    let running = false, afterId = 0, totalFilled = 0, batchNum = 0;
 
     function log(msg) {
       const el = document.getElementById('log');
       const line = document.createElement('div');
       line.textContent = new Date().toLocaleTimeString() + ' — ' + msg;
-      el.appendChild(line);
-      el.scrollTop = el.scrollHeight;
+      el.appendChild(line); el.scrollTop = el.scrollHeight;
     }
 
     function updateStats() {
@@ -64,34 +57,27 @@
       document.getElementById('startBtn').style.display = 'none';
       document.getElementById('stopBtn').style.display = 'block';
       document.getElementById('statStatus').textContent = 'Running...';
-      log('Started bulk fill from offset ' + offset);
+      log('Started — targeting only missing rows after ID ' + afterId);
 
       while (running) {
         batchNum++;
         try {
           document.getElementById('statStatus').textContent = 'Batch ' + batchNum + '...';
-          const res = await fetch(FN, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ offset })
-          });
+          const res = await fetch(FN, { method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({after_id: afterId}) });
           const data = await res.json();
-
           if (data.error) { log('Error: ' + data.error); break; }
-
           totalFilled += (data.filled || 0);
           updateStats();
-          log('Batch ' + batchNum + ': filled ' + data.filled + ' words (offset ' + offset + ')');
-
+          log('Batch ' + batchNum + ': filled ' + data.filled + ' words (after_id ' + afterId + ')');
           if (data.done) {
             log('✅ ALL DONE! Total filled: ' + totalFilled);
             document.getElementById('statStatus').textContent = '✅ Complete!';
-            running = false;
-            break;
+            running = false; break;
           }
-
-          offset = data.offset;
-          await new Promise(r => setTimeout(r, 300)); // small pause
+          afterId = data.after_id;
+          await new Promise(r => setTimeout(r, 300));
         } catch(e) {
           log('Error: ' + e.message + ' — retrying in 3s');
           await new Promise(r => setTimeout(r, 3000));
@@ -100,14 +86,11 @@
 
       document.getElementById('startBtn').style.display = 'block';
       document.getElementById('stopBtn').style.display = 'none';
-      if (running) document.getElementById('statStatus').textContent = 'Stopped at offset ' + offset;
+      if (running) document.getElementById('statStatus').textContent = 'Stopped at ID ' + afterId;
       running = false;
     }
 
-    function stopFill() {
-      running = false;
-      log('Stopped at offset ' + offset + '. Click Start to resume.');
-    }
+    function stopFill() { running = false; log('Stopped at after_id ' + afterId); }
   </script>
 </body>
 </html>
