@@ -2930,7 +2930,7 @@ function searchVariants(query) {
 
   // Detect script
   const isGeez = /[\u1200-\u137F]/.test(q);   // Tigrinya / Amharic
-  const isArabic = /[\u0600-\u06FF]/.test(q);
+  const isArabic = /[\u0600-\u06FF]/.test(q);  // Arabic + Urdu
   const isLatin = /^[\x00-\x7F]+$/.test(q);
 
   // ───── Ge'ez (Tigrinya / Amharic) ─────
@@ -2979,15 +2979,21 @@ function searchVariants(query) {
     });
   }
 
-  // ───── Latin (English / transliteration) ─────
+  // ───── Latin (English / German / Turkish / transliteration) ─────
   if (isLatin) {
     const lower = q.toLowerCase();
     out.add(lower);
-    // Plural / verb forms
+    // English plural / verb suffixes
     [/ies$/, /es$/, /s$/, /ed$/, /ing$/, /ly$/].forEach(re => {
-      if (re.test(lower) && lower.length > 4) {
-        out.add(lower.replace(re, ''));
-      }
+      if (re.test(lower) && lower.length > 4) out.add(lower.replace(re, ''));
+    });
+    // German suffixes: -en -em -er -es -ung -heit -keit -lich -isch
+    [/ungen$/, /ungen$/, /heit$/, /keit$/, /lich$/, /isch$/, /ung$/, /en$/, /em$/, /er$/, /es$/].forEach(re => {
+      if (re.test(lower) && lower.length > 5) out.add(lower.replace(re, ''));
+    });
+    // Turkish vowel harmony suffixes: -ler -lar -ın -in -un -ün -den -dan -nin -nın
+    [/lerin$/, /larin$/, /ların$/, /lerin$/, /ler$/, /lar$/, /ının$/, /inin$/, /ın$/, /in$/, /un$/, /ün$/, /den$/, /dan$/, /nın$/, /nin$/].forEach(re => {
+      if (re.test(lower) && lower.length > 4) out.add(lower.replace(re, ''));
     });
   }
 
@@ -4562,7 +4568,7 @@ async function runWordSearch(query) {
   try {
     const safeQuery = String(query).replace(/,/g, ' ').trim();
     if (!safeQuery) return;
-    const fields = 'sura_id,aya_number,arabic,english,aya_text,amharic,oromo,somali';
+    const fields = 'sura_id,aya_number,arabic,english,aya_text,amharic,oromo,somali,turkish,german,urdu';
 
     // For multi-word queries, search each word independently then combine
     let searchTerms = [];
@@ -4588,7 +4594,7 @@ async function runWordSearch(query) {
     };
 
     // Build all (variant × column) tasks
-    const cols = ['english', 'aya_text', 'amharic', 'arabic', 'oromo', 'somali'];
+    const cols = ['english', 'aya_text', 'amharic', 'arabic', 'oromo', 'somali', 'turkish', 'german', 'urdu'];
     const tasks = [];
     for (const v of variants) {
       for (const c of cols) {
@@ -4652,6 +4658,9 @@ async function runWordSearch(query) {
       const am = highlightAll(v.amharic || '');
       const or = highlightAll(v.oromo || '');
       const so = highlightAll(v.somali || '');
+      const tr = highlightAll(v.turkish || '');
+      const de = highlightAll(v.german || '');
+      const ur = highlightAll(v.urdu || '');
       return `
       <div style="background:#fff;border:1px solid #E8E4DC;border-radius:10px;margin-bottom:10px;overflow:hidden;cursor:pointer;" onclick="gotoResult(${v.sura_id},${v.aya_number},event)">
         <div style="background:#F2F5FA;border-bottom:1px solid #E8C97B;padding:8px 14px;display:flex;align-items:center;gap:8px;">
@@ -4673,6 +4682,9 @@ async function runWordSearch(query) {
           ${v.amharic ? `<div class="lang-amharic" style="font-size:12px;color:#6B8355;line-height:1.5;margin-bottom:3px;${!langState.amharic?'display:none;':''}">${am}</div>` : ''}
           ${v.oromo ? `<div class="lang-oromo" style="font-size:12px;color:#5B7355;line-height:1.5;margin-bottom:3px;${!langState.oromo?'display:none;':''}">${or}</div>` : ''}
           ${v.somali ? `<div class="lang-somali" style="font-size:12px;color:#355573;line-height:1.5;${!langState.somali?'display:none;':''}">${so}</div>` : ''}
+          ${v.turkish ? `<div class="lang-turkish" style="font-size:12px;color:#5A3F2E;line-height:1.5;margin-bottom:3px;${!langState.turkish?'display:none;':''}">${tr}</div>` : ''}
+          ${v.german  ? `<div class="lang-german"  style="font-size:12px;color:#3A3A5A;line-height:1.5;margin-bottom:3px;${!langState.german?'display:none;':''}">${de}</div>` : ''}
+          ${v.urdu    ? `<div class="lang-urdu"    style="font-size:13px;color:#1A3A2A;line-height:2;direction:rtl;text-align:right;${!langState.urdu?'display:none;':''}">${ur}</div>` : ''}
         </div>
       </div>`;
     }).join('');
@@ -5523,19 +5535,49 @@ async function gotoVerse() {
 }
 
 function highlightVerse(card) {
-  // Remove any existing highlights
+  // Remove any existing card-level highlights
   document.querySelectorAll('.verse-highlight').forEach(el => {
     el.classList.remove('verse-highlight');
     el.style.transition = '';
     el.style.boxShadow = '';
     el.style.borderColor = '';
   });
-  // Apply highlight
+  // Apply card border glow
   card.style.transition = 'box-shadow 0.3s, border-color 0.3s';
   card.style.boxShadow = '0 0 0 3px #8FA3B8, 0 4px 24px rgba(201,168,76,0.4)';
   card.style.borderColor = '#8FA3B8';
   card.classList.add('verse-highlight');
-  // Fade out after 7 seconds
+
+  // ── Highlight matching words INSIDE the verse card ──
+  const query = window._activeSearchQuery || '';
+  if (query && query.length >= 2) {
+    // Remove previous inline marks
+    card.querySelectorAll('mark.search-match').forEach(m => {
+      m.outerHTML = m.innerHTML;
+    });
+    const terms = searchVariants(query);
+    if (!terms.includes(query)) terms.unshift(query);
+    // Walk all text-containing elements inside the card
+    const textEls = card.querySelectorAll(
+      '.verse-arabic, .wbw-arabic, .verse-english, .verse-tigrinya, ' +
+      '.lang-english, .lang-amharic, .lang-oromo, .lang-somali, ' +
+      '.lang-turkish, .lang-german, .lang-urdu, .lang-tigrinya'
+    );
+    textEls.forEach(el => {
+      let inner = el.innerHTML;
+      terms.forEach(term => {
+        if (!term || term.length < 2) return;
+        const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        inner = inner.replace(
+          new RegExp(`(?!<[^>]*)(${escaped})(?![^<]*>)`, 'gi'),
+          '<mark class="search-match" style="background:#FFE066;color:#0D0D0D;border-radius:3px;padding:0 2px;font-weight:700;">$1</mark>'
+        );
+      });
+      el.innerHTML = inner;
+    });
+  }
+
+  // Fade out card glow after 7 seconds (keep word marks longer)
   setTimeout(() => {
     card.style.boxShadow = '';
     card.style.borderColor = '';
@@ -11973,7 +12015,7 @@ function searchVariants(query) {
 
   // Detect script
   const isGeez = /[\u1200-\u137F]/.test(q);   // Tigrinya / Amharic
-  const isArabic = /[\u0600-\u06FF]/.test(q);
+  const isArabic = /[\u0600-\u06FF]/.test(q);  // Arabic + Urdu
   const isLatin = /^[\x00-\x7F]+$/.test(q);
 
   // ───── Ge'ez (Tigrinya / Amharic) ─────
@@ -12022,15 +12064,21 @@ function searchVariants(query) {
     });
   }
 
-  // ───── Latin (English / transliteration) ─────
+  // ───── Latin (English / German / Turkish / transliteration) ─────
   if (isLatin) {
     const lower = q.toLowerCase();
     out.add(lower);
-    // Plural / verb forms
+    // English plural / verb suffixes
     [/ies$/, /es$/, /s$/, /ed$/, /ing$/, /ly$/].forEach(re => {
-      if (re.test(lower) && lower.length > 4) {
-        out.add(lower.replace(re, ''));
-      }
+      if (re.test(lower) && lower.length > 4) out.add(lower.replace(re, ''));
+    });
+    // German suffixes: -en -em -er -es -ung -heit -keit -lich -isch
+    [/ungen$/, /ungen$/, /heit$/, /keit$/, /lich$/, /isch$/, /ung$/, /en$/, /em$/, /er$/, /es$/].forEach(re => {
+      if (re.test(lower) && lower.length > 5) out.add(lower.replace(re, ''));
+    });
+    // Turkish vowel harmony suffixes: -ler -lar -ın -in -un -ün -den -dan -nin -nın
+    [/lerin$/, /larin$/, /ların$/, /lerin$/, /ler$/, /lar$/, /ının$/, /inin$/, /ın$/, /in$/, /un$/, /ün$/, /den$/, /dan$/, /nın$/, /nin$/].forEach(re => {
+      if (re.test(lower) && lower.length > 4) out.add(lower.replace(re, ''));
     });
   }
 
@@ -13605,7 +13653,7 @@ async function runWordSearch(query) {
   try {
     const safeQuery = String(query).replace(/,/g, ' ').trim();
     if (!safeQuery) return;
-    const fields = 'sura_id,aya_number,arabic,english,aya_text,amharic,oromo,somali';
+    const fields = 'sura_id,aya_number,arabic,english,aya_text,amharic,oromo,somali,turkish,german,urdu';
 
     // For multi-word queries, search each word independently then combine
     let searchTerms = [];
@@ -13631,7 +13679,7 @@ async function runWordSearch(query) {
     };
 
     // Build all (variant × column) tasks
-    const cols = ['english', 'aya_text', 'amharic', 'arabic', 'oromo', 'somali'];
+    const cols = ['english', 'aya_text', 'amharic', 'arabic', 'oromo', 'somali', 'turkish', 'german', 'urdu'];
     const tasks = [];
     for (const v of variants) {
       for (const c of cols) {
@@ -13695,6 +13743,9 @@ async function runWordSearch(query) {
       const am = highlightAll(v.amharic || '');
       const or = highlightAll(v.oromo || '');
       const so = highlightAll(v.somali || '');
+      const tr = highlightAll(v.turkish || '');
+      const de = highlightAll(v.german || '');
+      const ur = highlightAll(v.urdu || '');
       return `
       <div style="background:#fff;border:1px solid #E8E4DC;border-radius:10px;margin-bottom:10px;overflow:hidden;cursor:pointer;" onclick="gotoResult(${v.sura_id},${v.aya_number},event)">
         <div style="background:#F2F5FA;border-bottom:1px solid #E8C97B;padding:8px 14px;display:flex;align-items:center;gap:8px;">
@@ -13716,6 +13767,9 @@ async function runWordSearch(query) {
           ${v.amharic ? `<div class="lang-amharic" style="font-size:12px;color:#6B8355;line-height:1.5;margin-bottom:3px;${!langState.amharic?'display:none;':''}">${am}</div>` : ''}
           ${v.oromo ? `<div class="lang-oromo" style="font-size:12px;color:#5B7355;line-height:1.5;margin-bottom:3px;${!langState.oromo?'display:none;':''}">${or}</div>` : ''}
           ${v.somali ? `<div class="lang-somali" style="font-size:12px;color:#355573;line-height:1.5;${!langState.somali?'display:none;':''}">${so}</div>` : ''}
+          ${v.turkish ? `<div class="lang-turkish" style="font-size:12px;color:#5A3F2E;line-height:1.5;margin-bottom:3px;${!langState.turkish?'display:none;':''}">${tr}</div>` : ''}
+          ${v.german  ? `<div class="lang-german"  style="font-size:12px;color:#3A3A5A;line-height:1.5;margin-bottom:3px;${!langState.german?'display:none;':''}">${de}</div>` : ''}
+          ${v.urdu    ? `<div class="lang-urdu"    style="font-size:13px;color:#1A3A2A;line-height:2;direction:rtl;text-align:right;${!langState.urdu?'display:none;':''}">${ur}</div>` : ''}
         </div>
       </div>`;
     }).join('');
@@ -14566,19 +14620,49 @@ async function gotoVerse() {
 }
 
 function highlightVerse(card) {
-  // Remove any existing highlights
+  // Remove any existing card-level highlights
   document.querySelectorAll('.verse-highlight').forEach(el => {
     el.classList.remove('verse-highlight');
     el.style.transition = '';
     el.style.boxShadow = '';
     el.style.borderColor = '';
   });
-  // Apply highlight
+  // Apply card border glow
   card.style.transition = 'box-shadow 0.3s, border-color 0.3s';
   card.style.boxShadow = '0 0 0 3px #8FA3B8, 0 4px 24px rgba(201,168,76,0.4)';
   card.style.borderColor = '#8FA3B8';
   card.classList.add('verse-highlight');
-  // Fade out after 7 seconds
+
+  // ── Highlight matching words INSIDE the verse card ──
+  const query = window._activeSearchQuery || '';
+  if (query && query.length >= 2) {
+    // Remove previous inline marks
+    card.querySelectorAll('mark.search-match').forEach(m => {
+      m.outerHTML = m.innerHTML;
+    });
+    const terms = searchVariants(query);
+    if (!terms.includes(query)) terms.unshift(query);
+    // Walk all text-containing elements inside the card
+    const textEls = card.querySelectorAll(
+      '.verse-arabic, .wbw-arabic, .verse-english, .verse-tigrinya, ' +
+      '.lang-english, .lang-amharic, .lang-oromo, .lang-somali, ' +
+      '.lang-turkish, .lang-german, .lang-urdu, .lang-tigrinya'
+    );
+    textEls.forEach(el => {
+      let inner = el.innerHTML;
+      terms.forEach(term => {
+        if (!term || term.length < 2) return;
+        const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        inner = inner.replace(
+          new RegExp(`(?!<[^>]*)(${escaped})(?![^<]*>)`, 'gi'),
+          '<mark class="search-match" style="background:#FFE066;color:#0D0D0D;border-radius:3px;padding:0 2px;font-weight:700;">$1</mark>'
+        );
+      });
+      el.innerHTML = inner;
+    });
+  }
+
+  // Fade out card glow after 7 seconds (keep word marks longer)
   setTimeout(() => {
     card.style.boxShadow = '';
     card.style.borderColor = '';
