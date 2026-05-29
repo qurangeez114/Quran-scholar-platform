@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lexicon Bulk Fill</title>
+  <style>
+    body { font-family: Georgia, serif; background: #1a1a2e; color: #eee; padding: 20px; max-width: 500px; margin: 0 auto; }
+    h2 { color: #c8a96e; text-align: center; }
+    .card { background: #16213e; border-radius: 12px; padding: 20px; margin: 16px 0; border: 1px solid #c8a96e33; }
+    button { width: 100%; padding: 14px; border: none; border-radius: 10px; font-size: 16px; font-weight: 700; cursor: pointer; margin-top: 10px; }
+    .start { background: #c8a96e; color: #1a1a2e; }
+    .stop  { background: #e74c3c; color: #fff; }
+    .progress-bar { width: 100%; height: 18px; background: #0f3460; border-radius: 9px; overflow: hidden; margin: 12px 0; }
+    .progress-fill { height: 100%; background: linear-gradient(90deg, #c8a96e, #f0c674); border-radius: 9px; transition: width 0.5s; }
+    .log { background: #0f0f1a; border-radius: 8px; padding: 12px; height: 200px; overflow-y: auto; font-size: 11px; font-family: monospace; color: #7fdbca; margin-top: 10px; }
+    .stat { display: flex; justify-content: space-between; margin: 6px 0; font-size: 13px; }
+    .stat span:last-child { color: #c8a96e; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <h2>📚 Lexicon Bulk Fill</h2>
+
+  <div class="card">
+    <div class="stat"><span>Total Missing</span><span id="statTotal">28,125</span></div>
+    <div class="stat"><span>Filled This Session</span><span id="statFilled">0</span></div>
+    <div class="stat"><span>Current Batch</span><span id="statBatch">-</span></div>
+    <div class="stat"><span>Status</span><span id="statStatus">Ready</span></div>
+    <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+    <button class="start" id="startBtn" onclick="startFill()">▶ Start Filling</button>
+    <button class="stop" id="stopBtn" onclick="stopFill()" style="display:none">⏹ Stop</button>
+  </div>
+
+  <div class="card">
+    <div style="font-size:12px;color:#aaa;margin-bottom:6px;">Log</div>
+    <div class="log" id="log"></div>
+  </div>
+
+  <script>
+    const FN = '/.netlify/functions/bulk-fill-lexicon';
+    const TOTAL = 28125;
+    let running = false;
+    let offset = 0;
+    let totalFilled = 0;
+    let batchNum = 0;
+
+    function log(msg) {
+      const el = document.getElementById('log');
+      const line = document.createElement('div');
+      line.textContent = new Date().toLocaleTimeString() + ' — ' + msg;
+      el.appendChild(line);
+      el.scrollTop = el.scrollHeight;
+    }
+
+    function updateStats() {
+      document.getElementById('statFilled').textContent = totalFilled.toLocaleString();
+      document.getElementById('statBatch').textContent = batchNum;
+      const pct = Math.min(100, Math.round((totalFilled / TOTAL) * 100));
+      document.getElementById('progressFill').style.width = pct + '%';
+    }
+
+    async function startFill() {
+      running = true;
+      document.getElementById('startBtn').style.display = 'none';
+      document.getElementById('stopBtn').style.display = 'block';
+      document.getElementById('statStatus').textContent = 'Running...';
+      log('Started bulk fill from offset ' + offset);
+
+      while (running) {
+        batchNum++;
+        try {
+          document.getElementById('statStatus').textContent = 'Batch ' + batchNum + '...';
+          const res = await fetch(FN, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ offset })
+          });
+          const data = await res.json();
+
+          if (data.error) { log('Error: ' + data.error); break; }
+
+          totalFilled += (data.filled || 0);
+          updateStats();
+          log('Batch ' + batchNum + ': filled ' + data.filled + ' words (offset ' + offset + ')');
+
+          if (data.done) {
+            log('✅ ALL DONE! Total filled: ' + totalFilled);
+            document.getElementById('statStatus').textContent = '✅ Complete!';
+            running = false;
+            break;
+          }
+
+          offset = data.offset;
+          await new Promise(r => setTimeout(r, 300)); // small pause
+        } catch(e) {
+          log('Error: ' + e.message + ' — retrying in 3s');
+          await new Promise(r => setTimeout(r, 3000));
+        }
+      }
+
+      document.getElementById('startBtn').style.display = 'block';
+      document.getElementById('stopBtn').style.display = 'none';
+      if (running) document.getElementById('statStatus').textContent = 'Stopped at offset ' + offset;
+      running = false;
+    }
+
+    function stopFill() {
+      running = false;
+      log('Stopped at offset ' + offset + '. Click Start to resume.');
+    }
+  </script>
+</body>
+</html>
