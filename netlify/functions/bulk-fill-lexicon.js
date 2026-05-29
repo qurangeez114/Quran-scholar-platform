@@ -32,7 +32,8 @@ function claudeCall(prompt) {
   return new Promise((resolve, reject) => {
     const payload = JSON.stringify({ model:'claude-haiku-4-5-20251001', max_tokens:800,
       messages:[{role:'user',content:prompt}] });
-    const req = https.request({ hostname:'api.anthropic.com',port:443,path:'/v1/messages',method:'POST',
+    const req = https.request({ hostname:'api.anthropic.com',port:443,
+      path:'/v1/messages',method:'POST',
       headers:{'Content-Type':'application/json','x-api-key':process.env.ANTHROPIC_API_KEY,
         'anthropic-version':'2023-06-01','Content-Length':Buffer.byteLength(payload)}
     }, res => { let d=''; res.on('data',c=>d+=c); res.on('end',()=>resolve(JSON.parse(d))); });
@@ -48,41 +49,58 @@ exports.handler = async (event) => {
     const body = event.body ? JSON.parse(event.body) : {};
     const afterId = body.after_id || 0;
 
-    // Fetch ONLY the missing words — filter by null meaning AND id > afterId
+    // Use correct Supabase REST syntax: is.null for null values
+    // Fetch missing words with id > afterId, ordered by id
     const path = `/rest/v1/word_analysis?select=id,arabic_word,root_word`
-      + `&or=(original_meaning.is.null,original_meaning.eq.)&arabic_word=not.is.null`
-      + `&id=gt.${afterId}&order=id&limit=${BATCH_SIZE}`;
+      + `&original_meaning=is.null`
+      + `&id=gt.${afterId}`
+      + `&order=id.asc`
+      + `&limit=${BATCH_SIZE}`;
+
     const raw = await supabaseGet(path);
-    const words = JSON.parse(raw).filter(w => w.arabic_word && /[\u0600-\u06FF]/.test(w.arabic_word) && w.arabic_word.length > 1);
+    let words = JSON.parse(raw);
+    
+    // Filter to real Arabic words only
+    words = words.filter(w => 
+      w.arabic_word && 
+      /[\u0600-\u06FF]/.test(w.arabic_word) && 
+      w.arabic_word.trim().length > 1
+    );
 
     if (words.length === 0) {
-      return { statusCode:200,headers:corsHeaders,
-        body:JSON.stringify({done:true,message:'All words filled!'}) };
+      return { statusCode:200, headers:corsHeaders,
+        body: JSON.stringify({done:true, message:'All words filled!'}) };
     }
 
     const lastId = words[words.length-1].id;
     const chunks = [];
-    for (let i=0;i<words.length;i+=CHUNK_SIZE) chunks.push(words.slice(i,i+CHUNK_SIZE));
+    for (let i=0; i<words.length; i+=CHUNK_SIZE) chunks.push(words.slice(i, i+CHUNK_SIZE));
 
     const results = await Promise.allSettled(chunks.map(async chunk => {
       try {
-        const list = chunk.map((w,i)=>`${i+1}. "${w.arabic_word}"${w.root_word?` (root: ${w.root_word})`:''}`).join('\n');
-        const prompt = `You are a Quranic Arabic lexicographer. For each Arabic word below, provide a concise Quranic-era meaning in English (max 12 words each). Respond ONLY as a JSON array of strings in the same order, no extra text, no markdown.\n\nWords:\n${list}`;
+        const list = chunk.map((w,i) => 
+          `${i+1}. "${w.arabic_word}"${w.root_word ? ` (root: ${w.root_word})` : ''}`
+        ).join('\n');
+        const prompt = `You are a Quranic Arabic lexicographer. For each Arabic word below, provide a concise Quranic-era meaning in English (max 12 words each). Respond ONLY as a JSON array of strings in the same order, no extra text, no markdown fences.\n\nWords:\n${list}`;
         const data = await claudeCall(prompt);
         const text = (data.content?.[0]?.text||'[]').replace(/```json|```/g,'').trim();
         const meanings = JSON.parse(text);
         let count = 0;
-        await Promise.all(chunk.map(async (w,i) => {
-          if (meanings[i]) { await supabasePatch(w.id,{original_meaning:meanings[i]}); count++; }
+        await Promise.all(chunk.map(async (w, i) => {
+          if (meanings[i]) {
+            await supabasePatch(w.id, {original_meaning: meanings[i]});
+            count++;
+          }
         }));
         return count;
-      } catch(e) { console.error('chunk failed:',e.message); return 0; }
+      } catch(e) { console.error('chunk failed:', e.message); return 0; }
     }));
 
-    const filled = results.reduce((s,r)=>s+(r.value||0),0);
-    return { statusCode:200,headers:corsHeaders,
-      body:JSON.stringify({done:false, after_id:lastId, filled, total_in_batch:words.length}) };
+    const filled = results.reduce((s,r) => s + (r.value||0), 0);
+    return { statusCode:200, headers:corsHeaders,
+      body: JSON.stringify({done:false, after_id:lastId, filled, total_in_batch:words.length}) };
+
   } catch(e) {
-    return {statusCode:500,headers:corsHeaders,body:JSON.stringify({error:e.message})};
+    return {statusCode:500, headers:corsHeaders, body:JSON.stringify({error:e.message})};
   }
 };
