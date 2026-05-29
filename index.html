@@ -2208,50 +2208,28 @@ img, iframe, table, pre, code, video {
     }
   }
 
-/* ── READ / STUDY MODE TOGGLE ── */
-/* Default (Read): compact cards */
-body:not(.study-mode) .wbw-arabic { font-size: 20px !important; line-height: 1.4 !important; }
-body:not(.study-mode) .wbw-translit { font-size: 9px !important; }
-body:not(.study-mode) .wbw-english { font-size: 9px !important; }
-body:not(.study-mode) .wbw-word { padding: 4px 6px !important; gap: 2px !important; min-width: 48px !important; border-radius: 7px !important; }
-body:not(.study-mode) .wbw-grid { gap: 5px 6px !important; padding: 6px 4px 4px !important; }
+/* global study mode removed — now per-verse */
 
-/* Study mode: large uniform cards */
-body.study-mode .wbw-arabic { font-size: 30px !important; line-height: 1.7 !important; }
-body.study-mode .wbw-translit { font-size: 12px !important; }
-body.study-mode .wbw-english { font-size: 12px !important; }
-body.study-mode .wbw-word {
+/* ── PER-VERSE STUDY MODE ── */
+.wbw-grid.study { gap: 10px 12px !important; padding: 12px 6px 8px !important; }
+.wbw-grid.study .wbw-arabic { font-size: 30px !important; line-height: 1.7 !important; }
+.wbw-grid.study .wbw-translit { font-size: 12px !important; }
+.wbw-grid.study .wbw-english { font-size: 12px !important; }
+.wbw-grid.study .wbw-word {
   padding: 12px 10px !important;
   gap: 5px !important;
   min-width: 80px !important;
   border-radius: 12px !important;
-  /* FIX 3: uniform card height */
   display: flex !important;
   flex-direction: column !important;
   justify-content: space-between !important;
   min-height: 120px !important;
 }
-body.study-mode .wbw-grid { gap: 10px 12px !important; padding: 12px 6px 8px !important; }
-
-/* FIX 2: Top bar toggle button states */
-#studyModeBtn {
-  margin-left: 6px;
-  opacity: 0.65;
-  transition: all 0.2s ease;
-}
-#studyModeBtn.active {
+/* Active state for per-verse study button */
+.verse-study-btn.active {
   background: #c8a96e !important;
   color: #fff !important;
   border-color: #b08840 !important;
-  opacity: 1 !important;
-  font-weight: 700;
-}
-#readModeBtn {
-  opacity: 0.65;
-  transition: all 0.2s ease;
-}
-#readModeBtn.active {
-  opacity: 1;
 }
 </style>
 <script>
@@ -2623,7 +2601,6 @@ body.study-mode .wbw-grid { gap: 10px 12px !important; padding: 12px 6px 8px !im
         <button id="nextSuraBtn" onclick="navigateSura(1)" title="Next chapter"
           style="width:36px;height:36px;border-radius:50%;border:2px solid #6B8299;background:#EEF2F7;color:#7A8FA6;font-size:20px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;">&#8250;</button>
         <button class="back-btn" id="readModeBtn" onclick="toggleReadMode()" title="Full Screen Read Mode" style="display:none;padding:7px 12px;font-size:12px;">📖 Read</button>
-        <button id="studyModeBtn" onclick="toggleStudyMode()" title="Toggle Study / Read mode" style="padding:5px 10px;font-size:11px;font-weight:700;border:2px solid #6B8299;border-radius:20px;background:#EEF2F7;color:#7A8FA6;cursor:pointer;flex-shrink:0;transition:all 0.2s;">📚 Study</button>
       </div>
       <!-- Row 2: tool links -->
       <div class="top-bar-row2">
@@ -3296,7 +3273,10 @@ function renderVerses(ayas, suraId) {
           ${aya.german ? `<div class="lang-german" style="margin-top:14px;padding-bottom:12px;border-bottom:1px solid #E8DDC0;${!langState.german?'display:none':''}"><div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;"><div style="font-size:10px;font-weight:700;letter-spacing:1.2px;color:#333;text-transform:uppercase;">Deutsch</div></div><div style="font-size:15px;color:#222;line-height:1.7;font-weight:600;">${escapeHtml(aya.german)}</div></div>` : ''}
           ${aya.urdu ? `<div class="lang-urdu" style="margin-top:14px;padding-bottom:0;${!langState.urdu?'display:none':''}"><div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;"><div style="font-size:10px;font-weight:700;letter-spacing:1.2px;color:#2D6A4F;text-transform:uppercase;">Urdu · اردو</div></div><div style="font-size:16px;color:#1A3A2A;line-height:2;font-weight:600;direction:rtl;text-align:right;">${escapeHtml(aya.urdu)}</div></div>` : ''}
         </div>
-        <button class="expand-btn">▼ Details</button>
+        <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
+          <button class="verse-study-btn" id="vsb-${aya.aya_number}" onclick="event.stopPropagation();toggleVerseStudy(${aya.aya_number})" title="Toggle word card size for this verse" style="padding:5px 10px;border:1px solid #B8C4D4;border-radius:20px;background:#F2F5FA;cursor:pointer;font-size:11px;color:#7A8FA6;font-weight:700;white-space:nowrap;">📚 Study</button>
+          <button class="expand-btn">▼ Details</button>
+        </div>
       </div>
       <div class="verse-detail">
         <div class="tab-bar">
@@ -8906,21 +8886,14 @@ function toggleReadingMode() {
 </script>
 
 <script>
-function toggleStudyMode() {
-  var btn = document.getElementById('studyModeBtn');
-  var isStudy = document.body.classList.toggle('study-mode');
+function toggleVerseStudy(num) {
+  var grid = document.querySelector('#vc-' + num + ' .wbw-grid');
+  var btn  = document.getElementById('vsb-' + num);
+  if (!grid || !btn) return;
+  var isStudy = grid.classList.toggle('study');
   btn.textContent = isStudy ? '📖 Read' : '📚 Study';
   btn.classList.toggle('active', isStudy);
-  localStorage.setItem('studyMode', isStudy ? '1' : '0');
 }
-// Restore preference on load
-(function() {
-  if (localStorage.getItem('studyMode') === '1') {
-    document.body.classList.add('study-mode');
-    var btn = document.getElementById('studyModeBtn');
-    if (btn) { btn.textContent = '📖 Read'; btn.classList.add('active'); }
-  }
-})();
 </script>
 
 </body>
@@ -12174,7 +12147,10 @@ function renderVerses(ayas, suraId) {
           ${aya.german ? `<div class="lang-german" style="margin-top:14px;padding-bottom:12px;border-bottom:1px solid #E8DDC0;${!langState.german?'display:none':''}"><div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;"><div style="font-size:10px;font-weight:700;letter-spacing:1.2px;color:#333;text-transform:uppercase;">Deutsch</div></div><div style="font-size:15px;color:#222;line-height:1.7;font-weight:600;">${escapeHtml(aya.german)}</div></div>` : ''}
           ${aya.urdu ? `<div class="lang-urdu" style="margin-top:14px;padding-bottom:0;${!langState.urdu?'display:none':''}"><div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;"><div style="font-size:10px;font-weight:700;letter-spacing:1.2px;color:#2D6A4F;text-transform:uppercase;">Urdu · اردو</div></div><div style="font-size:16px;color:#1A3A2A;line-height:2;font-weight:600;direction:rtl;text-align:right;">${escapeHtml(aya.urdu)}</div></div>` : ''}
         </div>
-        <button class="expand-btn">▼ Details</button>
+        <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
+          <button class="verse-study-btn" id="vsb-${aya.aya_number}" onclick="event.stopPropagation();toggleVerseStudy(${aya.aya_number})" title="Toggle word card size for this verse" style="padding:5px 10px;border:1px solid #B8C4D4;border-radius:20px;background:#F2F5FA;cursor:pointer;font-size:11px;color:#7A8FA6;font-weight:700;white-space:nowrap;">📚 Study</button>
+          <button class="expand-btn">▼ Details</button>
+        </div>
       </div>
       <div class="verse-detail">
         <div class="tab-bar">
