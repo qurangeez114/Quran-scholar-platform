@@ -4602,6 +4602,19 @@ async function runWordSearch(query) {
 
     const searchOne = async (col, term) => {
       try {
+        // For Ge'ez/Tigrinya use the RPC function which handles UTF-8 properly
+        if (col === 'aya_text' && /[ሀ-፿]/.test(term)) {
+          const rpcUrl = `${SUPABASE_URL}/rest/v1/rpc/search_tigrinya`;
+          const r = await fetch(rpcUrl, {
+            method: 'POST',
+            headers: { ...HEADERS, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ search_term: term })
+          });
+          if (!r.ok) return [];
+          const rows = await r.json();
+          if (!Array.isArray(rows)) return [];
+          return rows.map(r => ({ ...r, tigrinya: r.aya_text }));
+        }
         const rows = await sbSearch('ayas', fields, col, term);
         return rows.map(r => ({ ...r, tigrinya: r.aya_text }));
       } catch { return []; }
@@ -13835,6 +13848,19 @@ async function runWordSearch(query) {
 
     const searchOne = async (col, term) => {
       try {
+        // For Ge'ez/Tigrinya use the RPC function which handles UTF-8 properly
+        if (col === 'aya_text' && /[ሀ-፿]/.test(term)) {
+          const rpcUrl = `${SUPABASE_URL}/rest/v1/rpc/search_tigrinya`;
+          const r = await fetch(rpcUrl, {
+            method: 'POST',
+            headers: { ...HEADERS, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ search_term: term })
+          });
+          if (!r.ok) return [];
+          const rows = await r.json();
+          if (!Array.isArray(rows)) return [];
+          return rows.map(r => ({ ...r, tigrinya: r.aya_text }));
+        }
         const rows = await sbSearch('ayas', fields, col, term);
         return rows.map(r => ({ ...r, tigrinya: r.aya_text }));
       } catch { return []; }
