@@ -3542,8 +3542,31 @@ async function toggleVerse(num, suraId, el) {
       const themes = [...new Set(themeRows.map(r => r.theme))];
 
       if (themes.length === 0) {
-        if (xrefTab) xrefTab.textContent = `Cross-Refs (0)`;
-        xrefPanel.innerHTML = `<div style="color:#BBB;font-style:italic;font-size:13px;padding:20px;text-align:center">No thematic cross-references for this verse.</div>`;
+        // Fallback to old flat cross_references table
+        try {
+          const flatRefs = await sbFetch('cross_references', {
+            select: 'ref_surah,ref_ayah_start',
+            source_surah: `eq.${suraId}`,
+            source_ayah: `eq.${num}`
+          });
+          if (flatRefs.length > 0) {
+            if (xrefTab) xrefTab.textContent = `Cross-Refs (${flatRefs.length})`;
+            xrefPanel.innerHTML = `
+              <div class="theme-group">
+                <div class="theme-label" style="color:#888;border-color:#444;">General Cross-References <span class="theme-count">${flatRefs.length}</span></div>
+                <div style="font-size:11px;color:#555;margin-bottom:8px;font-style:italic;">No theme assigned yet. Showing flat cross-references.</div>
+                <div class="theme-verses">${flatRefs.map(r =>
+                  `<span class="xref-chip" onclick="navToVerse(${r.ref_surah},${r.ref_ayah_start})">${r.ref_surah}:${r.ref_ayah_start}</span>`
+                ).join('')}</div>
+              </div>`;
+          } else {
+            if (xrefTab) xrefTab.textContent = `Cross-Refs (0)`;
+            xrefPanel.innerHTML = `<div style="color:#BBB;font-style:italic;font-size:13px;padding:20px;text-align:center">No cross-references for this verse.</div>`;
+          }
+        } catch(e) {
+          if (xrefTab) xrefTab.textContent = `Cross-Refs (0)`;
+          xrefPanel.innerHTML = `<div style="color:#BBB;font-style:italic;font-size:13px;padding:20px;text-align:center">No cross-references for this verse.</div>`;
+        }
       } else {
         let totalCount = 0;
         let html = '';
@@ -12841,8 +12864,31 @@ async function toggleVerse(num, suraId, el) {
       const themes = [...new Set(themeRows.map(r => r.theme))];
 
       if (themes.length === 0) {
-        if (xrefTab) xrefTab.textContent = `Cross-Refs (0)`;
-        xrefPanel.innerHTML = `<div style="color:#BBB;font-style:italic;font-size:13px;padding:20px;text-align:center">No thematic cross-references for this verse.</div>`;
+        // Fallback to old flat cross_references table
+        try {
+          const flatRefs = await sbFetch('cross_references', {
+            select: 'ref_surah,ref_ayah_start',
+            source_surah: `eq.${suraId}`,
+            source_ayah: `eq.${num}`
+          });
+          if (flatRefs.length > 0) {
+            if (xrefTab) xrefTab.textContent = `Cross-Refs (${flatRefs.length})`;
+            xrefPanel.innerHTML = `
+              <div class="theme-group">
+                <div class="theme-label" style="color:#888;border-color:#444;">General Cross-References <span class="theme-count">${flatRefs.length}</span></div>
+                <div style="font-size:11px;color:#555;margin-bottom:8px;font-style:italic;">No theme assigned yet. Showing flat cross-references.</div>
+                <div class="theme-verses">${flatRefs.map(r =>
+                  `<span class="xref-chip" onclick="navToVerse(${r.ref_surah},${r.ref_ayah_start})">${r.ref_surah}:${r.ref_ayah_start}</span>`
+                ).join('')}</div>
+              </div>`;
+          } else {
+            if (xrefTab) xrefTab.textContent = `Cross-Refs (0)`;
+            xrefPanel.innerHTML = `<div style="color:#BBB;font-style:italic;font-size:13px;padding:20px;text-align:center">No cross-references for this verse.</div>`;
+          }
+        } catch(e) {
+          if (xrefTab) xrefTab.textContent = `Cross-Refs (0)`;
+          xrefPanel.innerHTML = `<div style="color:#BBB;font-style:italic;font-size:13px;padding:20px;text-align:center">No cross-references for this verse.</div>`;
+        }
       } else {
         let totalCount = 0;
         let html = '';
