@@ -552,6 +552,43 @@ function applyLangToElement(el, lang) {
 }
 
 loadStudyPage();
+
+// ── SCROLL POSITION MEMORY ──
+// Save scroll position to sessionStorage keyed by full URL
+function saveScroll() {
+  sessionStorage.setItem('scroll:' + location.href, window.scrollY);
+}
+
+// Restore scroll after page content loads
+function restoreScroll() {
+  const saved = sessionStorage.getItem('scroll:' + location.href);
+  if (saved !== null) {
+    window.scrollTo({ top: parseInt(saved), behavior: 'instant' });
+  }
+}
+
+// Save on every scroll (throttled)
+let scrollTimer;
+window.addEventListener('scroll', () => {
+  clearTimeout(scrollTimer);
+  scrollTimer = setTimeout(saveScroll, 150);
+}, { passive: true });
+
+// Save before navigating away
+window.addEventListener('beforeunload', saveScroll);
+window.addEventListener('pagehide', saveScroll);
+
+// Restore when page loads — wait for content to render
+window.addEventListener('load', () => {
+  setTimeout(restoreScroll, 600);
+});
+
+// Also hook into the back/forward button
+window.addEventListener('pageshow', (e) => {
+  if (e.persisted) {
+    setTimeout(restoreScroll, 100);
+  }
+});
 </script>
 </body>
 </html>
