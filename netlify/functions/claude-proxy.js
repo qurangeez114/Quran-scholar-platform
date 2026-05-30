@@ -8,7 +8,6 @@ exports.handler = async (event) => {
     'Content-Type': 'application/json'
   };
 
-  // Handle preflight
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers: corsHeaders, body: '' };
   }
@@ -29,8 +28,7 @@ exports.handler = async (event) => {
     return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: 'Invalid JSON' }) };
   }
 
-  // Build payload — only include system if actually provided
-  const payload = { 
+  const payload = {
     model: body.model || 'claude-haiku-4-5-20251001',
     max_tokens: body.max_tokens || 1000,
     messages: body.messages
@@ -57,6 +55,10 @@ exports.handler = async (event) => {
       let data = '';
       res.on('data', chunk => data += chunk);
       res.on('end', () => {
+        // Log non-200 for debugging
+        if (res.statusCode !== 200) {
+          console.error('Anthropic API error:', res.statusCode, data);
+        }
         resolve({
           statusCode: res.statusCode,
           headers: corsHeaders,
@@ -66,6 +68,7 @@ exports.handler = async (event) => {
     });
 
     req.on('error', (err) => {
+      console.error('Request error:', err.message);
       resolve({
         statusCode: 500,
         headers: corsHeaders,
