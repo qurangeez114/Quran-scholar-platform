@@ -39,8 +39,9 @@ body { font-family: 'EB Garamond', Georgia, serif; background: #F0F3F7; color: #
 .badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 10px; font-weight: 700; }
 .badge-gold { background: #EEF2F7; color: #7A8FA6; border: 1px solid #6B8299; }
 .badge-blue { background: #E8F4FD; color: #1A6FA8; border: 1px solid #7AB8D8; }
-.back-btn { padding: 10px 18px; border: 2px solid #7A8FA6; border-radius: 20px; background: #EEF2F7; cursor: pointer; font-size: 14px; font-weight: 700; color: #7A8FA6; flex-shrink: 0; box-shadow: 0 2px 8px rgba(184,144,42,0.2); }
-.back-btn:hover { background: #7A8FA6; color: #fff; }
+.back-btn { padding: 8px 16px; border: 2px solid #c9a84c; border-radius: 20px; background: #c9a84c; cursor: pointer; font-size: 13px; font-weight: 700; color: #000; flex-shrink: 0; box-shadow: 0 2px 8px rgba(201,168,76,0.4); transition: all 0.15s; }
+.back-btn:hover { background: #b8973b; border-color: #b8973b; }
+[data-theme="dark"] .back-btn { background: #c9a84c; border-color: #c9a84c; color: #000; }
 .read-mode .sidebar { display: none !important; }
 .read-mode .main { width: 100%; max-width: 100%; }
 .read-mode .verse-area { padding: 30px 5vw; background: #FFFEF8; }
@@ -4991,9 +4992,31 @@ async function runWordSearch(query) {
 
 async function navToVerse(suraId, ayahNum) {
   // Save current sura AND scroll position for back navigation
-  navHistory.push({ sura: currentSura, scroll: document.getElementById('verseArea').scrollTop });
-  document.getElementById('backBtn').style.display = 'block';
-  document.getElementById('backBtn').textContent = '← Back to ' + (allSuras.find(s => (s.sura_id||s.id) === currentSura)?.sura_name || 'Previous');
+  // Save origin: sura, verse, scroll position and label
+  const originSuraName = (allSuras.find(s => (s.sura_id||s.id) === currentSura)?.sura_name) || ('Sura ' + currentSura);
+  const originVerse = document.querySelector('.verse-card.open, .verse-card:focus') || null;
+  const originAya = originVerse ? originVerse.id.replace('vc-','') : null;
+  navHistory.push({
+    sura: currentSura,
+    aya: originAya,
+    scroll: document.getElementById('verseArea').scrollTop,
+    label: originSuraName
+  });
+  const backBtn = document.getElementById('backBtn');
+  if (backBtn) {
+    backBtn.style.display = 'flex';
+    backBtn.textContent = '← ' + originSuraName;
+    backBtn.title = 'Go back to ' + originSuraName;
+  }
+  if (suraId === currentSura) {
+    // Same sura — no reload needed, just scroll
+    const card = document.getElementById('vc-' + ayahNum);
+    if (card) {
+      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      highlightVerse(card);
+    }
+    return;
+  }
   await loadSura(suraId);
   setTimeout(() => {
     const card = document.getElementById('vc-' + ayahNum);
@@ -5502,12 +5525,30 @@ function updateSuraNavButtons(ids, idx) {
 
 function goBack() {
   const prev = navHistory.pop();
-  document.getElementById('backBtn').style.display = navHistory.length > 0 ? 'block' : 'none';
-  if (prev) {
+  const backBtn = document.getElementById('backBtn');
+  if (navHistory.length > 0) {
+    backBtn.style.display = 'flex';
+    backBtn.textContent = '← ' + navHistory[navHistory.length-1].label;
+  } else {
+    backBtn.style.display = 'none';
+  }
+  if (!prev) return;
+  if (prev.sura === currentSura) {
+    // Same sura — just restore scroll or jump to verse
+    if (prev.aya) {
+      const card = document.getElementById('vc-' + prev.aya);
+      if (card) { card.scrollIntoView({ behavior: 'smooth', block: 'center' }); highlightVerse(card); return; }
+    }
+    document.getElementById('verseArea').scrollTop = prev.scroll || 0;
+  } else {
     loadSura(prev.sura).then(() => {
       setTimeout(() => {
+        if (prev.aya) {
+          const card = document.getElementById('vc-' + prev.aya);
+          if (card) { card.scrollIntoView({ behavior: 'smooth', block: 'center' }); highlightVerse(card); return; }
+        }
         document.getElementById('verseArea').scrollTop = prev.scroll || 0;
-      }, 400);
+      }, 500);
     });
   }
 }
@@ -9566,8 +9607,9 @@ body { font-family: 'EB Garamond', Georgia, serif; background: #F0F3F7; color: #
 .badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 10px; font-weight: 700; }
 .badge-gold { background: #EEF2F7; color: #7A8FA6; border: 1px solid #6B8299; }
 .badge-blue { background: #E8F4FD; color: #1A6FA8; border: 1px solid #7AB8D8; }
-.back-btn { padding: 10px 18px; border: 2px solid #7A8FA6; border-radius: 20px; background: #EEF2F7; cursor: pointer; font-size: 14px; font-weight: 700; color: #7A8FA6; flex-shrink: 0; box-shadow: 0 2px 8px rgba(184,144,42,0.2); }
-.back-btn:hover { background: #7A8FA6; color: #fff; }
+.back-btn { padding: 8px 16px; border: 2px solid #c9a84c; border-radius: 20px; background: #c9a84c; cursor: pointer; font-size: 13px; font-weight: 700; color: #000; flex-shrink: 0; box-shadow: 0 2px 8px rgba(201,168,76,0.4); transition: all 0.15s; }
+.back-btn:hover { background: #b8973b; border-color: #b8973b; }
+[data-theme="dark"] .back-btn { background: #c9a84c; border-color: #c9a84c; color: #000; }
 .read-mode .sidebar { display: none !important; }
 .read-mode .main { width: 100%; max-width: 100%; }
 .read-mode .verse-area { padding: 30px 5vw; background: #FFFEF8; }
@@ -14512,9 +14554,31 @@ async function runWordSearch(query) {
 
 async function navToVerse(suraId, ayahNum) {
   // Save current sura AND scroll position for back navigation
-  navHistory.push({ sura: currentSura, scroll: document.getElementById('verseArea').scrollTop });
-  document.getElementById('backBtn').style.display = 'block';
-  document.getElementById('backBtn').textContent = '← Back to ' + (allSuras.find(s => (s.sura_id||s.id) === currentSura)?.sura_name || 'Previous');
+  // Save origin: sura, verse, scroll position and label
+  const originSuraName = (allSuras.find(s => (s.sura_id||s.id) === currentSura)?.sura_name) || ('Sura ' + currentSura);
+  const originVerse = document.querySelector('.verse-card.open, .verse-card:focus') || null;
+  const originAya = originVerse ? originVerse.id.replace('vc-','') : null;
+  navHistory.push({
+    sura: currentSura,
+    aya: originAya,
+    scroll: document.getElementById('verseArea').scrollTop,
+    label: originSuraName
+  });
+  const backBtn = document.getElementById('backBtn');
+  if (backBtn) {
+    backBtn.style.display = 'flex';
+    backBtn.textContent = '← ' + originSuraName;
+    backBtn.title = 'Go back to ' + originSuraName;
+  }
+  if (suraId === currentSura) {
+    // Same sura — no reload needed, just scroll
+    const card = document.getElementById('vc-' + ayahNum);
+    if (card) {
+      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      highlightVerse(card);
+    }
+    return;
+  }
   await loadSura(suraId);
   setTimeout(() => {
     const card = document.getElementById('vc-' + ayahNum);
@@ -15023,12 +15087,30 @@ function updateSuraNavButtons(ids, idx) {
 
 function goBack() {
   const prev = navHistory.pop();
-  document.getElementById('backBtn').style.display = navHistory.length > 0 ? 'block' : 'none';
-  if (prev) {
+  const backBtn = document.getElementById('backBtn');
+  if (navHistory.length > 0) {
+    backBtn.style.display = 'flex';
+    backBtn.textContent = '← ' + navHistory[navHistory.length-1].label;
+  } else {
+    backBtn.style.display = 'none';
+  }
+  if (!prev) return;
+  if (prev.sura === currentSura) {
+    // Same sura — just restore scroll or jump to verse
+    if (prev.aya) {
+      const card = document.getElementById('vc-' + prev.aya);
+      if (card) { card.scrollIntoView({ behavior: 'smooth', block: 'center' }); highlightVerse(card); return; }
+    }
+    document.getElementById('verseArea').scrollTop = prev.scroll || 0;
+  } else {
     loadSura(prev.sura).then(() => {
       setTimeout(() => {
+        if (prev.aya) {
+          const card = document.getElementById('vc-' + prev.aya);
+          if (card) { card.scrollIntoView({ behavior: 'smooth', block: 'center' }); highlightVerse(card); return; }
+        }
         document.getElementById('verseArea').scrollTop = prev.scroll || 0;
-      }, 400);
+      }, 500);
     });
   }
 }
