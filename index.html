@@ -4588,7 +4588,7 @@ async function loadContradictionClaims(num) {
 
   try {
     const url = new URL(SUPABASE_URL + '/rest/v1/contradiction_analysis');
-    url.searchParams.set('select', 'topic,contradiction_type,position_a,position_a_holders,position_a_defense,position_b,position_b_holders,position_b_defense,sectarian_impact,socratic_questions,external_references');
+    url.searchParams.set('select', 'topic,contradiction_type,contradicted_by,claim,traditional_response,critical_analysis,severity,category,position_a,position_a_holders,position_b,position_b_holders,sectarian_impact,socratic_questions,external_references');
     url.searchParams.set('sura', 'eq.' + suraId);
     url.searchParams.set('aya', 'eq.' + num);
     const res = await fetch(url, { headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }});
@@ -4602,44 +4602,39 @@ async function loadContradictionClaims(num) {
       return;
     }
 
-    panel.innerHTML = rows.map(r => {
-      let refs = [];
-      try { refs = JSON.parse(r.external_references || '[]'); } catch {}
+    panel.innerHTML = rows.map(row => {
       let questions = [];
-      try { questions = JSON.parse(r.socratic_questions || '[]'); } catch {
-        questions = (r.socratic_questions || '').split('?').filter(q => q.trim()).map(q => q.trim() + '?');
+      try { questions = JSON.parse(row.socratic_questions || '[]'); } catch {
+        questions = (row.socratic_questions || '').split('?').filter(q => q.trim()).map(q => q.trim() + '?');
       }
-      return \`
-        <div style="margin-bottom:4px;">
-          <div style="font-size:11px;font-weight:700;letter-spacing:1px;color:#c9a84c;text-transform:uppercase;margin-bottom:10px;">⚡ \${r.contradiction_type || 'Contradiction Claim'}</div>
-          <div style="font-size:15px;font-weight:700;color:#e8e8e8;margin-bottom:12px;">\${r.topic}</div>
-
-          <div style="background:#111;border-left:3px solid #7A8FA6;border-radius:0 6px 6px 0;padding:10px 12px;margin-bottom:8px;">
-            <div style="font-size:10px;font-weight:700;color:#7A8FA6;letter-spacing:1px;text-transform:uppercase;margin-bottom:5px;">Position A</div>
-            <div style="font-size:13px;color:#ccc;line-height:1.7;margin-bottom:6px;">\${r.position_a}</div>
-            <div style="font-size:11px;color:#666;">Held by: \${r.position_a_holders}</div>
-          </div>
-
-          <div style="background:#111;border-left:3px solid #c9a84c;border-radius:0 6px 6px 0;padding:10px 12px;margin-bottom:8px;">
-            <div style="font-size:10px;font-weight:700;color:#c9a84c;letter-spacing:1px;text-transform:uppercase;margin-bottom:5px;">Position B</div>
-            <div style="font-size:13px;color:#ccc;line-height:1.7;margin-bottom:6px;">\${r.position_b}</div>
-            <div style="font-size:11px;color:#666;">Held by: \${r.position_b_holders}</div>
-          </div>
-
-          \${r.sectarian_impact ? \`<div style="background:#111;border-radius:6px;padding:10px 12px;margin-bottom:8px;">
-            <div style="font-size:10px;font-weight:700;color:#888;letter-spacing:1px;text-transform:uppercase;margin-bottom:5px;">Why It Matters</div>
-            <div style="font-size:13px;color:#bbb;line-height:1.7;">\${r.sectarian_impact}</div>
-          </div>\` : ''}
-
-          \${questions.length ? \`<div style="margin-bottom:8px;">
-            <div style="font-size:10px;font-weight:700;color:#888;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">Key Questions</div>
-            \${questions.slice(0,4).map(q => \`<div style="font-size:13px;color:#aaa;padding:5px 0;border-bottom:1px solid #222;line-height:1.6;">• \${q}</div>\`).join('')}
-          </div>\` : ''}
-
-          \${refs.length ? \`<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;">
-            \${refs.map(r => \`<span style="background:#222;border:1px solid #333;color:#c9a84c;padding:3px 9px;border-radius:10px;font-size:12px;font-family:'Amiri',serif;cursor:pointer;" onclick="navToVerse(\${r.split(':')[0]},\${r.split(':')[1]})">\${r}</span>\`).join('')}
-          </div>\` : ''}
-        </div>\`;
+      let contradictedBy = (row.contradicted_by || '').split(',').map(v => v.trim()).filter(Boolean);
+      const sevColor = row.severity === 'high' ? '#e05555' : row.severity === 'medium' ? '#c9a84c' : '#6ab06a';
+      let html = '<div style="margin-bottom:4px;">';
+      html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">';
+      html += '<div style="font-size:11px;font-weight:700;letter-spacing:1px;color:#c9a84c;text-transform:uppercase;">⚡ ' + (row.contradiction_type || 'Contradiction Claim') + '</div>';
+      if (row.severity) html += '<span style="font-size:10px;font-weight:700;background:' + sevColor + '22;color:' + sevColor + ';border:1px solid ' + sevColor + '44;padding:2px 8px;border-radius:8px;text-transform:uppercase;">' + row.severity + '</span>';
+      if (row.category) html += '<span style="font-size:10px;color:#666;background:#1a1a1a;border:1px solid #333;padding:2px 8px;border-radius:8px;">' + row.category + '</span>';
+      html += '</div>';
+      html += '<div style="font-size:15px;font-weight:700;color:#e8e8e8;margin-bottom:12px;">' + row.topic + '</div>';
+      if (contradictedBy.length) {
+        html += '<div style="margin-bottom:10px;"><div style="font-size:10px;font-weight:700;color:#888;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">Contradicted By</div><div style="display:flex;flex-wrap:wrap;gap:5px;">';
+        contradictedBy.forEach(v => {
+          const parts = v.split(':');
+          html += '<span style="background:#222;border:1px solid #444;color:#c9a84c;padding:3px 9px;border-radius:10px;font-size:13px;font-family:Amiri,serif;cursor:pointer;" onclick="navToVerse(' + parts[0] + ',' + parts[1] + ')">' + v + '</span>';
+        });
+        html += '</div></div>';
+      }
+      if (row.claim) html += '<div style="background:#1a0000;border-left:3px solid #e05555;border-radius:0 6px 6px 0;padding:10px 12px;margin-bottom:8px;"><div style="font-size:10px;font-weight:700;color:#e05555;letter-spacing:1px;text-transform:uppercase;margin-bottom:5px;">The Claim</div><div style="font-size:13px;color:#ccc;line-height:1.7;">' + row.claim + '</div></div>';
+      if (row.traditional_response) html += '<div style="background:#001a00;border-left:3px solid #6ab06a;border-radius:0 6px 6px 0;padding:10px 12px;margin-bottom:8px;"><div style="font-size:10px;font-weight:700;color:#6ab06a;letter-spacing:1px;text-transform:uppercase;margin-bottom:5px;">Traditional Response</div><div style="font-size:13px;color:#ccc;line-height:1.7;">' + row.traditional_response + '</div></div>';
+      if (row.critical_analysis) html += '<div style="background:#111;border-left:3px solid #7A8FA6;border-radius:0 6px 6px 0;padding:10px 12px;margin-bottom:8px;"><div style="font-size:10px;font-weight:700;color:#7A8FA6;letter-spacing:1px;text-transform:uppercase;margin-bottom:5px;">Critical Analysis</div><div style="font-size:13px;color:#ccc;line-height:1.7;">' + row.critical_analysis + '</div></div>';
+      if (row.sectarian_impact) html += '<div style="background:#111;border-radius:6px;padding:10px 12px;margin-bottom:8px;"><div style="font-size:10px;font-weight:700;color:#888;letter-spacing:1px;text-transform:uppercase;margin-bottom:5px;">Why It Matters</div><div style="font-size:13px;color:#bbb;line-height:1.7;">' + row.sectarian_impact + '</div></div>';
+      if (questions.length) {
+        html += '<div style="margin-bottom:8px;"><div style="font-size:10px;font-weight:700;color:#888;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">Key Questions</div>';
+        questions.slice(0,4).forEach(q => { html += '<div style="font-size:13px;color:#aaa;padding:5px 0;border-bottom:1px solid #222;line-height:1.6;">• ' + q + '</div>'; });
+        html += '</div>';
+      }
+      html += '</div>';
+      return html;
     }).join('<hr style="border-color:#222;margin:16px 0;">');
 
   } catch(e) {
@@ -14051,7 +14046,7 @@ async function loadContradictionClaims(num) {
 
   try {
     const url = new URL(SUPABASE_URL + '/rest/v1/contradiction_analysis');
-    url.searchParams.set('select', 'topic,contradiction_type,position_a,position_a_holders,position_a_defense,position_b,position_b_holders,position_b_defense,sectarian_impact,socratic_questions,external_references');
+    url.searchParams.set('select', 'topic,contradiction_type,contradicted_by,claim,traditional_response,critical_analysis,severity,category,position_a,position_a_holders,position_b,position_b_holders,sectarian_impact,socratic_questions,external_references');
     url.searchParams.set('sura', 'eq.' + suraId);
     url.searchParams.set('aya', 'eq.' + num);
     const res = await fetch(url, { headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }});
@@ -14065,44 +14060,39 @@ async function loadContradictionClaims(num) {
       return;
     }
 
-    panel.innerHTML = rows.map(r => {
-      let refs = [];
-      try { refs = JSON.parse(r.external_references || '[]'); } catch {}
+    panel.innerHTML = rows.map(row => {
       let questions = [];
-      try { questions = JSON.parse(r.socratic_questions || '[]'); } catch {
-        questions = (r.socratic_questions || '').split('?').filter(q => q.trim()).map(q => q.trim() + '?');
+      try { questions = JSON.parse(row.socratic_questions || '[]'); } catch {
+        questions = (row.socratic_questions || '').split('?').filter(q => q.trim()).map(q => q.trim() + '?');
       }
-      return \`
-        <div style="margin-bottom:4px;">
-          <div style="font-size:11px;font-weight:700;letter-spacing:1px;color:#c9a84c;text-transform:uppercase;margin-bottom:10px;">⚡ \${r.contradiction_type || 'Contradiction Claim'}</div>
-          <div style="font-size:15px;font-weight:700;color:#e8e8e8;margin-bottom:12px;">\${r.topic}</div>
-
-          <div style="background:#111;border-left:3px solid #7A8FA6;border-radius:0 6px 6px 0;padding:10px 12px;margin-bottom:8px;">
-            <div style="font-size:10px;font-weight:700;color:#7A8FA6;letter-spacing:1px;text-transform:uppercase;margin-bottom:5px;">Position A</div>
-            <div style="font-size:13px;color:#ccc;line-height:1.7;margin-bottom:6px;">\${r.position_a}</div>
-            <div style="font-size:11px;color:#666;">Held by: \${r.position_a_holders}</div>
-          </div>
-
-          <div style="background:#111;border-left:3px solid #c9a84c;border-radius:0 6px 6px 0;padding:10px 12px;margin-bottom:8px;">
-            <div style="font-size:10px;font-weight:700;color:#c9a84c;letter-spacing:1px;text-transform:uppercase;margin-bottom:5px;">Position B</div>
-            <div style="font-size:13px;color:#ccc;line-height:1.7;margin-bottom:6px;">\${r.position_b}</div>
-            <div style="font-size:11px;color:#666;">Held by: \${r.position_b_holders}</div>
-          </div>
-
-          \${r.sectarian_impact ? \`<div style="background:#111;border-radius:6px;padding:10px 12px;margin-bottom:8px;">
-            <div style="font-size:10px;font-weight:700;color:#888;letter-spacing:1px;text-transform:uppercase;margin-bottom:5px;">Why It Matters</div>
-            <div style="font-size:13px;color:#bbb;line-height:1.7;">\${r.sectarian_impact}</div>
-          </div>\` : ''}
-
-          \${questions.length ? \`<div style="margin-bottom:8px;">
-            <div style="font-size:10px;font-weight:700;color:#888;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">Key Questions</div>
-            \${questions.slice(0,4).map(q => \`<div style="font-size:13px;color:#aaa;padding:5px 0;border-bottom:1px solid #222;line-height:1.6;">• \${q}</div>\`).join('')}
-          </div>\` : ''}
-
-          \${refs.length ? \`<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;">
-            \${refs.map(r => \`<span style="background:#222;border:1px solid #333;color:#c9a84c;padding:3px 9px;border-radius:10px;font-size:12px;font-family:'Amiri',serif;cursor:pointer;" onclick="navToVerse(\${r.split(':')[0]},\${r.split(':')[1]})">\${r}</span>\`).join('')}
-          </div>\` : ''}
-        </div>\`;
+      let contradictedBy = (row.contradicted_by || '').split(',').map(v => v.trim()).filter(Boolean);
+      const sevColor = row.severity === 'high' ? '#e05555' : row.severity === 'medium' ? '#c9a84c' : '#6ab06a';
+      let html = '<div style="margin-bottom:4px;">';
+      html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">';
+      html += '<div style="font-size:11px;font-weight:700;letter-spacing:1px;color:#c9a84c;text-transform:uppercase;">⚡ ' + (row.contradiction_type || 'Contradiction Claim') + '</div>';
+      if (row.severity) html += '<span style="font-size:10px;font-weight:700;background:' + sevColor + '22;color:' + sevColor + ';border:1px solid ' + sevColor + '44;padding:2px 8px;border-radius:8px;text-transform:uppercase;">' + row.severity + '</span>';
+      if (row.category) html += '<span style="font-size:10px;color:#666;background:#1a1a1a;border:1px solid #333;padding:2px 8px;border-radius:8px;">' + row.category + '</span>';
+      html += '</div>';
+      html += '<div style="font-size:15px;font-weight:700;color:#e8e8e8;margin-bottom:12px;">' + row.topic + '</div>';
+      if (contradictedBy.length) {
+        html += '<div style="margin-bottom:10px;"><div style="font-size:10px;font-weight:700;color:#888;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">Contradicted By</div><div style="display:flex;flex-wrap:wrap;gap:5px;">';
+        contradictedBy.forEach(v => {
+          const parts = v.split(':');
+          html += '<span style="background:#222;border:1px solid #444;color:#c9a84c;padding:3px 9px;border-radius:10px;font-size:13px;font-family:Amiri,serif;cursor:pointer;" onclick="navToVerse(' + parts[0] + ',' + parts[1] + ')">' + v + '</span>';
+        });
+        html += '</div></div>';
+      }
+      if (row.claim) html += '<div style="background:#1a0000;border-left:3px solid #e05555;border-radius:0 6px 6px 0;padding:10px 12px;margin-bottom:8px;"><div style="font-size:10px;font-weight:700;color:#e05555;letter-spacing:1px;text-transform:uppercase;margin-bottom:5px;">The Claim</div><div style="font-size:13px;color:#ccc;line-height:1.7;">' + row.claim + '</div></div>';
+      if (row.traditional_response) html += '<div style="background:#001a00;border-left:3px solid #6ab06a;border-radius:0 6px 6px 0;padding:10px 12px;margin-bottom:8px;"><div style="font-size:10px;font-weight:700;color:#6ab06a;letter-spacing:1px;text-transform:uppercase;margin-bottom:5px;">Traditional Response</div><div style="font-size:13px;color:#ccc;line-height:1.7;">' + row.traditional_response + '</div></div>';
+      if (row.critical_analysis) html += '<div style="background:#111;border-left:3px solid #7A8FA6;border-radius:0 6px 6px 0;padding:10px 12px;margin-bottom:8px;"><div style="font-size:10px;font-weight:700;color:#7A8FA6;letter-spacing:1px;text-transform:uppercase;margin-bottom:5px;">Critical Analysis</div><div style="font-size:13px;color:#ccc;line-height:1.7;">' + row.critical_analysis + '</div></div>';
+      if (row.sectarian_impact) html += '<div style="background:#111;border-radius:6px;padding:10px 12px;margin-bottom:8px;"><div style="font-size:10px;font-weight:700;color:#888;letter-spacing:1px;text-transform:uppercase;margin-bottom:5px;">Why It Matters</div><div style="font-size:13px;color:#bbb;line-height:1.7;">' + row.sectarian_impact + '</div></div>';
+      if (questions.length) {
+        html += '<div style="margin-bottom:8px;"><div style="font-size:10px;font-weight:700;color:#888;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">Key Questions</div>';
+        questions.slice(0,4).forEach(q => { html += '<div style="font-size:13px;color:#aaa;padding:5px 0;border-bottom:1px solid #222;line-height:1.6;">• ' + q + '</div>'; });
+        html += '</div>';
+      }
+      html += '</div>';
+      return html;
     }).join('<hr style="border-color:#222;margin:16px 0;">');
 
   } catch(e) {
