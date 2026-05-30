@@ -139,6 +139,31 @@ body { font-family: 'EB Garamond', Georgia, serif; background: #F0F3F7; color: #
 .theme-verses { display: flex; flex-wrap: wrap; gap: 6px; }
 .xref-chip { background: #1e1e1e; border: 1px solid #444; color: #e0c97f; padding: 5px 11px; border-radius: 14px; font-size: 13px; cursor: pointer; transition: background 0.2s, border-color 0.2s; font-family: 'Amiri', serif; }
 .xref-chip:hover { background: #2a2a2a; border-color: #c9a84c; }
+
+/* New cross-ref row layout */
+.xref-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 10px; border-radius: 8px;
+  background: #1e1e1e; border: 1px solid #2a2a2a;
+  cursor: pointer; margin-bottom: 5px;
+  transition: border-color 0.15s, background 0.15s;
+}
+.xref-row:hover { background: #252525; border-color: #c9a84c88; }
+.xref-ref { font-family: 'Amiri', serif; font-size: 16px; font-weight: 700; color: #c9a84c; min-width: 52px; }
+.xref-theme-label { font-size: 12px; color: #888; flex: 1; }
+
+/* AI research buttons */
+.ai-research-btn {
+  font-size: 12px !important; padding: 6px 11px !important;
+  border-radius: 8px !important; font-weight: 600 !important;
+  background: #f8f6f0 !important; border: 1px solid #B8C4D4 !important;
+  color: #4A5F6E !important; cursor: pointer;
+  transition: background 0.15s, border-color 0.15s !important;
+  white-space: nowrap;
+}
+.ai-research-btn:hover { background: #eef2f7 !important; border-color: #7A8FA6 !important; }
+[data-theme="dark"] .ai-research-btn { background: #222 !important; border-color: #444 !important; color: #aaa !important; }
+[data-theme="dark"] .ai-research-btn:hover { background: #2a2a2a !important; border-color: #c9a84c !important; color: #c9a84c !important; }
 .study-page-btn { margin-left: auto; font-size: 11px; font-weight: 600; color: #c9a84c; text-decoration: none; background: #1a1a1a; border: 1px solid #c9a84c44; padding: 3px 10px; border-radius: 12px; white-space: nowrap; transition: background 0.2s; }
 .study-page-btn:hover { background: #c9a84c22; }
 .ai-box { background: var(--surface); border: 2px solid #6B8299; border-radius: 10px; padding: 16px; }
@@ -3583,7 +3608,10 @@ async function toggleVerse(num, suraId, el) {
             <div class="theme-label">${theme} <span class="theme-count">${others.length}</span></div>
             <a href="${studyUrl}" target="_blank" class="study-page-btn">📖 Open Study Page</a>
             <div class="theme-verses" style="margin-top:8px">${others.map(v =>
-              `<span class="xref-chip" onclick="navToVerse(${v.sura},${v.aya})">${v.sura}:${v.aya}</span>`
+              `<div class="xref-row" onclick="navToVerse(${v.sura},${v.aya})">
+                <span class="xref-ref">${v.sura}:${v.aya}</span>
+                <span class="xref-theme-label">${theme.split(':')[0]}</span>
+              </div>`
             ).join('')}</div>
           </div>`;
         }
@@ -4500,18 +4528,38 @@ const verseChats = {};
 function buildAIPanel(num, arabic, english, tigrinya) {
   if (!verseChats[num]) verseChats[num] = [];
   return `<div class="ai-box">
-    <div style="font-size:12px;color:#4A5F6E;margin-bottom:8px;font-style:italic;font-weight:600">Chat with AI about this verse — ask follow-up questions</div>
-    <div class="ai-presets">
-      <button class="ai-preset" onclick="sendChat(${num},'Analyze the rhetorical devices in this verse')">Rhetorical devices</button>
-      <button class="ai-preset" onclick="sendChat(${num},'Explain the root word meanings')">Root meanings</button>
-      <button class="ai-preset" onclick="sendChat(${num},'Compare Sunni and Shia interpretations')">Sunni vs Shia</button>
-      <button class="ai-preset" onclick="sendChat(${num},'What are the pre-Islamic origins of key words?')">Pre-Islamic origins</button>
-      <button class="ai-preset" onclick="sendChat(${num},'Explain the grammatical structure (I\'rab)')">Grammar</button>
-      <button class="ai-preset" onclick="sendChat(${num},'What Hadith are connected to this verse?')">Related Hadith</button>
+
+    <!-- Research Buttons -->
+    <div style="margin-bottom:12px;">
+      <div style="font-size:10px;font-weight:700;letter-spacing:1px;color:#7A8FA6;text-transform:uppercase;margin-bottom:8px;">Research Tools</div>
+      <div class="ai-presets" style="display:flex;flex-wrap:wrap;gap:6px;">
+        <button class="ai-preset ai-research-btn" onclick="loadContradictionClaims(${num})">⚡ Contradiction Claims</button>
+        <button class="ai-preset ai-research-btn" onclick="sendChat(${num},'What are the traditional Muslim scholarly responses to contradiction claims about this verse?')">🛡️ Traditional Responses</button>
+        <button class="ai-preset ai-research-btn" onclick="sendChat(${num},'Compare Sunni and Shia interpretations of this verse in detail')">☯️ Sunni vs Shia</button>
+        <button class="ai-preset ai-research-btn" onclick="sendChat(${num},'Provide classical tafsir commentary on this verse from Ibn Kathir, Al-Tabari, and Al-Qurtubi')">📖 Classical Tafsir</button>
+        <button class="ai-preset ai-research-btn" onclick="sendChat(${num},'Provide an academic and critical analysis of this verse including Western scholarship')">🎓 Academic Analysis</button>
+        <button class="ai-preset ai-research-btn" onclick="sendChat(${num},'Explain the historical context and circumstances surrounding the revelation of this verse')">🕌 Historical Context</button>
+        <button class="ai-preset ai-research-btn" onclick="sendChat(${num},'Is this verse considered abrogated (mansukh)? Explain the abrogation debate with evidence')">📜 Abrogation</button>
+        <button class="ai-preset ai-research-btn" onclick="sendChat(${num},'Explain the Arabic grammar and i\'rab structure of this verse')">🔤 Grammar</button>
+        <button class="ai-preset ai-research-btn" onclick="sendChat(${num},'Explain the root word meanings and etymology of key terms in this verse')">🌱 Root Meanings</button>
+        <button class="ai-preset ai-research-btn" onclick="sendChat(${num},'What hadiths are connected to this verse? Include collection name and grade')">📿 Related Hadith</button>
+        <button class="ai-preset ai-research-btn" onclick="sendChat(${num},'What are the pre-Islamic Arabian origins of concepts or words in this verse?')">🏺 Pre-Islamic Origins</button>
+        <button class="ai-preset ai-research-btn" onclick="sendChat(${num},'Find parallel passages in the Bible that relate to this verse')">✝️ Biblical Parallels</button>
+        <button class="ai-preset ai-research-btn" onclick="sendChat(${num},'Find parallel passages in the Talmud or Torah that relate to this verse')">✡️ Talmudic Parallels</button>
+      </div>
     </div>
+
+    <!-- Contradiction Claims panel (hidden by default) -->
+    <div id="contradiction-panel-${num}" style="display:none;margin-bottom:12px;background:#1a1a1a;border:1px solid #c9a84c44;border-radius:8px;padding:14px;"></div>
+
+    <!-- Divider -->
+    <div style="border-top:1px solid #ddd;margin:10px 0 12px;"></div>
+
+    <!-- Chat -->
+    <div style="font-size:11px;font-weight:700;letter-spacing:1px;color:#7A8FA6;text-transform:uppercase;margin-bottom:8px;">Chat with AI</div>
     <div id="chat-messages-${num}" style="max-height:320px;overflow-y:auto;margin-bottom:10px;display:flex;flex-direction:column;gap:8px;"></div>
     <div class="ai-input-row">
-      <input class="ai-input" id="ai-input-${num}" placeholder="Type or 🎤 speak your question..." onkeydown="if(event.key==='Enter')sendChat(${num})">
+      <input class="ai-input" id="ai-input-${num}" placeholder="Ask anything about this verse..." onkeydown="if(event.key==='Enter')sendChat(${num})">
       <button id="verse-mic-${num}" onclick="startVerseVoice(${num})" style="padding:9px 12px;background:#F2F5FA;border:2px solid #6B8299;border-radius:6px;font-size:15px;cursor:pointer;flex-shrink:0;" title="Speak your question">🎤</button>
       <button class="ai-btn" id="ai-btn-${num}" onclick="sendChat(${num})">Send</button>
     </div>
@@ -4519,6 +4567,84 @@ function buildAIPanel(num, arabic, english, tigrinya) {
       <button onclick="clearChat(${num})" style="font-size:10px;color:#999;background:none;border:none;cursor:pointer;">Clear chat</button>
     </div>
   </div>`;
+}
+
+async function loadContradictionClaims(num) {
+  const panel = document.getElementById('contradiction-panel-' + num);
+  if (!panel) return;
+
+  // Toggle off if already open
+  if (panel.style.display !== 'none') {
+    panel.style.display = 'none';
+    return;
+  }
+
+  panel.style.display = 'block';
+  panel.innerHTML = '<div style="color:#888;font-size:13px;">Loading contradiction claims...</div>';
+
+  // Find suraId from the verse card context
+  const card = document.getElementById('vc-' + num);
+  const suraId = currentSura;
+
+  try {
+    const url = new URL(SUPABASE_URL + '/rest/v1/contradiction_analysis');
+    url.searchParams.set('select', 'topic,contradiction_type,position_a,position_a_holders,position_a_defense,position_b,position_b_holders,position_b_defense,sectarian_impact,socratic_questions,external_references');
+    url.searchParams.set('sura', 'eq.' + suraId);
+    url.searchParams.set('aya', 'eq.' + num);
+    const res = await fetch(url, { headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }});
+    const rows = await res.json();
+
+    if (!rows.length) {
+      // Fall back to AI-generated contradiction analysis
+      panel.innerHTML = '<div style="color:#888;font-size:13px;margin-bottom:8px;">No stored contradiction claims — generating via AI...</div>';
+      sendChat(num, 'What contradiction claims are made about this verse by critics? List the verses it supposedly contradicts, the claim, and the traditional Muslim response for each.');
+      panel.style.display = 'none';
+      return;
+    }
+
+    panel.innerHTML = rows.map(r => {
+      let refs = [];
+      try { refs = JSON.parse(r.external_references || '[]'); } catch {}
+      let questions = [];
+      try { questions = JSON.parse(r.socratic_questions || '[]'); } catch {
+        questions = (r.socratic_questions || '').split('?').filter(q => q.trim()).map(q => q.trim() + '?');
+      }
+      return \`
+        <div style="margin-bottom:4px;">
+          <div style="font-size:11px;font-weight:700;letter-spacing:1px;color:#c9a84c;text-transform:uppercase;margin-bottom:10px;">⚡ \${r.contradiction_type || 'Contradiction Claim'}</div>
+          <div style="font-size:15px;font-weight:700;color:#e8e8e8;margin-bottom:12px;">\${r.topic}</div>
+
+          <div style="background:#111;border-left:3px solid #7A8FA6;border-radius:0 6px 6px 0;padding:10px 12px;margin-bottom:8px;">
+            <div style="font-size:10px;font-weight:700;color:#7A8FA6;letter-spacing:1px;text-transform:uppercase;margin-bottom:5px;">Position A</div>
+            <div style="font-size:13px;color:#ccc;line-height:1.7;margin-bottom:6px;">\${r.position_a}</div>
+            <div style="font-size:11px;color:#666;">Held by: \${r.position_a_holders}</div>
+          </div>
+
+          <div style="background:#111;border-left:3px solid #c9a84c;border-radius:0 6px 6px 0;padding:10px 12px;margin-bottom:8px;">
+            <div style="font-size:10px;font-weight:700;color:#c9a84c;letter-spacing:1px;text-transform:uppercase;margin-bottom:5px;">Position B</div>
+            <div style="font-size:13px;color:#ccc;line-height:1.7;margin-bottom:6px;">\${r.position_b}</div>
+            <div style="font-size:11px;color:#666;">Held by: \${r.position_b_holders}</div>
+          </div>
+
+          \${r.sectarian_impact ? \`<div style="background:#111;border-radius:6px;padding:10px 12px;margin-bottom:8px;">
+            <div style="font-size:10px;font-weight:700;color:#888;letter-spacing:1px;text-transform:uppercase;margin-bottom:5px;">Why It Matters</div>
+            <div style="font-size:13px;color:#bbb;line-height:1.7;">\${r.sectarian_impact}</div>
+          </div>\` : ''}
+
+          \${questions.length ? \`<div style="margin-bottom:8px;">
+            <div style="font-size:10px;font-weight:700;color:#888;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">Key Questions</div>
+            \${questions.slice(0,4).map(q => \`<div style="font-size:13px;color:#aaa;padding:5px 0;border-bottom:1px solid #222;line-height:1.6;">• \${q}</div>\`).join('')}
+          </div>\` : ''}
+
+          \${refs.length ? \`<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;">
+            \${refs.map(r => \`<span style="background:#222;border:1px solid #333;color:#c9a84c;padding:3px 9px;border-radius:10px;font-size:12px;font-family:'Amiri',serif;cursor:pointer;" onclick="navToVerse(\${r.split(':')[0]},\${r.split(':')[1]})">\${r}</span>\`).join('')}
+          </div>\` : ''}
+        </div>\`;
+    }).join('<hr style="border-color:#222;margin:16px 0;">');
+
+  } catch(e) {
+    panel.innerHTML = '<div style="color:#c66;font-size:13px;">Could not load contradiction data.</div>';
+  }
 }
 
 function renderChatMessages(num) {
@@ -9482,6 +9608,31 @@ body { font-family: 'EB Garamond', Georgia, serif; background: #F0F3F7; color: #
 .theme-verses { display: flex; flex-wrap: wrap; gap: 6px; }
 .xref-chip { background: #1e1e1e; border: 1px solid #444; color: #e0c97f; padding: 5px 11px; border-radius: 14px; font-size: 13px; cursor: pointer; transition: background 0.2s, border-color 0.2s; font-family: 'Amiri', serif; }
 .xref-chip:hover { background: #2a2a2a; border-color: #c9a84c; }
+
+/* New cross-ref row layout */
+.xref-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 10px; border-radius: 8px;
+  background: #1e1e1e; border: 1px solid #2a2a2a;
+  cursor: pointer; margin-bottom: 5px;
+  transition: border-color 0.15s, background 0.15s;
+}
+.xref-row:hover { background: #252525; border-color: #c9a84c88; }
+.xref-ref { font-family: 'Amiri', serif; font-size: 16px; font-weight: 700; color: #c9a84c; min-width: 52px; }
+.xref-theme-label { font-size: 12px; color: #888; flex: 1; }
+
+/* AI research buttons */
+.ai-research-btn {
+  font-size: 12px !important; padding: 6px 11px !important;
+  border-radius: 8px !important; font-weight: 600 !important;
+  background: #f8f6f0 !important; border: 1px solid #B8C4D4 !important;
+  color: #4A5F6E !important; cursor: pointer;
+  transition: background 0.15s, border-color 0.15s !important;
+  white-space: nowrap;
+}
+.ai-research-btn:hover { background: #eef2f7 !important; border-color: #7A8FA6 !important; }
+[data-theme="dark"] .ai-research-btn { background: #222 !important; border-color: #444 !important; color: #aaa !important; }
+[data-theme="dark"] .ai-research-btn:hover { background: #2a2a2a !important; border-color: #c9a84c !important; color: #c9a84c !important; }
 .study-page-btn { margin-left: auto; font-size: 11px; font-weight: 600; color: #c9a84c; text-decoration: none; background: #1a1a1a; border: 1px solid #c9a84c44; padding: 3px 10px; border-radius: 12px; white-space: nowrap; transition: background 0.2s; }
 .study-page-btn:hover { background: #c9a84c22; }
 .ai-box { background: var(--surface); border: 2px solid #6B8299; border-radius: 10px; padding: 16px; }
@@ -12920,7 +13071,10 @@ async function toggleVerse(num, suraId, el) {
             <div class="theme-label">${theme} <span class="theme-count">${others.length}</span></div>
             <a href="${studyUrl}" target="_blank" class="study-page-btn">📖 Open Study Page</a>
             <div class="theme-verses" style="margin-top:8px">${others.map(v =>
-              `<span class="xref-chip" onclick="navToVerse(${v.sura},${v.aya})">${v.sura}:${v.aya}</span>`
+              `<div class="xref-row" onclick="navToVerse(${v.sura},${v.aya})">
+                <span class="xref-ref">${v.sura}:${v.aya}</span>
+                <span class="xref-theme-label">${theme.split(':')[0]}</span>
+              </div>`
             ).join('')}</div>
           </div>`;
         }
@@ -13837,18 +13991,38 @@ const verseChats = {};
 function buildAIPanel(num, arabic, english, tigrinya) {
   if (!verseChats[num]) verseChats[num] = [];
   return `<div class="ai-box">
-    <div style="font-size:12px;color:#4A5F6E;margin-bottom:8px;font-style:italic;font-weight:600">Chat with AI about this verse — ask follow-up questions</div>
-    <div class="ai-presets">
-      <button class="ai-preset" onclick="sendChat(${num},'Analyze the rhetorical devices in this verse')">Rhetorical devices</button>
-      <button class="ai-preset" onclick="sendChat(${num},'Explain the root word meanings')">Root meanings</button>
-      <button class="ai-preset" onclick="sendChat(${num},'Compare Sunni and Shia interpretations')">Sunni vs Shia</button>
-      <button class="ai-preset" onclick="sendChat(${num},'What are the pre-Islamic origins of key words?')">Pre-Islamic origins</button>
-      <button class="ai-preset" onclick="sendChat(${num},'Explain the grammatical structure (I\'rab)')">Grammar</button>
-      <button class="ai-preset" onclick="sendChat(${num},'What Hadith are connected to this verse?')">Related Hadith</button>
+
+    <!-- Research Buttons -->
+    <div style="margin-bottom:12px;">
+      <div style="font-size:10px;font-weight:700;letter-spacing:1px;color:#7A8FA6;text-transform:uppercase;margin-bottom:8px;">Research Tools</div>
+      <div class="ai-presets" style="display:flex;flex-wrap:wrap;gap:6px;">
+        <button class="ai-preset ai-research-btn" onclick="loadContradictionClaims(${num})">⚡ Contradiction Claims</button>
+        <button class="ai-preset ai-research-btn" onclick="sendChat(${num},'What are the traditional Muslim scholarly responses to contradiction claims about this verse?')">🛡️ Traditional Responses</button>
+        <button class="ai-preset ai-research-btn" onclick="sendChat(${num},'Compare Sunni and Shia interpretations of this verse in detail')">☯️ Sunni vs Shia</button>
+        <button class="ai-preset ai-research-btn" onclick="sendChat(${num},'Provide classical tafsir commentary on this verse from Ibn Kathir, Al-Tabari, and Al-Qurtubi')">📖 Classical Tafsir</button>
+        <button class="ai-preset ai-research-btn" onclick="sendChat(${num},'Provide an academic and critical analysis of this verse including Western scholarship')">🎓 Academic Analysis</button>
+        <button class="ai-preset ai-research-btn" onclick="sendChat(${num},'Explain the historical context and circumstances surrounding the revelation of this verse')">🕌 Historical Context</button>
+        <button class="ai-preset ai-research-btn" onclick="sendChat(${num},'Is this verse considered abrogated (mansukh)? Explain the abrogation debate with evidence')">📜 Abrogation</button>
+        <button class="ai-preset ai-research-btn" onclick="sendChat(${num},'Explain the Arabic grammar and i\'rab structure of this verse')">🔤 Grammar</button>
+        <button class="ai-preset ai-research-btn" onclick="sendChat(${num},'Explain the root word meanings and etymology of key terms in this verse')">🌱 Root Meanings</button>
+        <button class="ai-preset ai-research-btn" onclick="sendChat(${num},'What hadiths are connected to this verse? Include collection name and grade')">📿 Related Hadith</button>
+        <button class="ai-preset ai-research-btn" onclick="sendChat(${num},'What are the pre-Islamic Arabian origins of concepts or words in this verse?')">🏺 Pre-Islamic Origins</button>
+        <button class="ai-preset ai-research-btn" onclick="sendChat(${num},'Find parallel passages in the Bible that relate to this verse')">✝️ Biblical Parallels</button>
+        <button class="ai-preset ai-research-btn" onclick="sendChat(${num},'Find parallel passages in the Talmud or Torah that relate to this verse')">✡️ Talmudic Parallels</button>
+      </div>
     </div>
+
+    <!-- Contradiction Claims panel (hidden by default) -->
+    <div id="contradiction-panel-${num}" style="display:none;margin-bottom:12px;background:#1a1a1a;border:1px solid #c9a84c44;border-radius:8px;padding:14px;"></div>
+
+    <!-- Divider -->
+    <div style="border-top:1px solid #ddd;margin:10px 0 12px;"></div>
+
+    <!-- Chat -->
+    <div style="font-size:11px;font-weight:700;letter-spacing:1px;color:#7A8FA6;text-transform:uppercase;margin-bottom:8px;">Chat with AI</div>
     <div id="chat-messages-${num}" style="max-height:320px;overflow-y:auto;margin-bottom:10px;display:flex;flex-direction:column;gap:8px;"></div>
     <div class="ai-input-row">
-      <input class="ai-input" id="ai-input-${num}" placeholder="Type or 🎤 speak your question..." onkeydown="if(event.key==='Enter')sendChat(${num})">
+      <input class="ai-input" id="ai-input-${num}" placeholder="Ask anything about this verse..." onkeydown="if(event.key==='Enter')sendChat(${num})">
       <button id="verse-mic-${num}" onclick="startVerseVoice(${num})" style="padding:9px 12px;background:#F2F5FA;border:2px solid #6B8299;border-radius:6px;font-size:15px;cursor:pointer;flex-shrink:0;" title="Speak your question">🎤</button>
       <button class="ai-btn" id="ai-btn-${num}" onclick="sendChat(${num})">Send</button>
     </div>
@@ -13856,6 +14030,84 @@ function buildAIPanel(num, arabic, english, tigrinya) {
       <button onclick="clearChat(${num})" style="font-size:10px;color:#999;background:none;border:none;cursor:pointer;">Clear chat</button>
     </div>
   </div>`;
+}
+
+async function loadContradictionClaims(num) {
+  const panel = document.getElementById('contradiction-panel-' + num);
+  if (!panel) return;
+
+  // Toggle off if already open
+  if (panel.style.display !== 'none') {
+    panel.style.display = 'none';
+    return;
+  }
+
+  panel.style.display = 'block';
+  panel.innerHTML = '<div style="color:#888;font-size:13px;">Loading contradiction claims...</div>';
+
+  // Find suraId from the verse card context
+  const card = document.getElementById('vc-' + num);
+  const suraId = currentSura;
+
+  try {
+    const url = new URL(SUPABASE_URL + '/rest/v1/contradiction_analysis');
+    url.searchParams.set('select', 'topic,contradiction_type,position_a,position_a_holders,position_a_defense,position_b,position_b_holders,position_b_defense,sectarian_impact,socratic_questions,external_references');
+    url.searchParams.set('sura', 'eq.' + suraId);
+    url.searchParams.set('aya', 'eq.' + num);
+    const res = await fetch(url, { headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }});
+    const rows = await res.json();
+
+    if (!rows.length) {
+      // Fall back to AI-generated contradiction analysis
+      panel.innerHTML = '<div style="color:#888;font-size:13px;margin-bottom:8px;">No stored contradiction claims — generating via AI...</div>';
+      sendChat(num, 'What contradiction claims are made about this verse by critics? List the verses it supposedly contradicts, the claim, and the traditional Muslim response for each.');
+      panel.style.display = 'none';
+      return;
+    }
+
+    panel.innerHTML = rows.map(r => {
+      let refs = [];
+      try { refs = JSON.parse(r.external_references || '[]'); } catch {}
+      let questions = [];
+      try { questions = JSON.parse(r.socratic_questions || '[]'); } catch {
+        questions = (r.socratic_questions || '').split('?').filter(q => q.trim()).map(q => q.trim() + '?');
+      }
+      return \`
+        <div style="margin-bottom:4px;">
+          <div style="font-size:11px;font-weight:700;letter-spacing:1px;color:#c9a84c;text-transform:uppercase;margin-bottom:10px;">⚡ \${r.contradiction_type || 'Contradiction Claim'}</div>
+          <div style="font-size:15px;font-weight:700;color:#e8e8e8;margin-bottom:12px;">\${r.topic}</div>
+
+          <div style="background:#111;border-left:3px solid #7A8FA6;border-radius:0 6px 6px 0;padding:10px 12px;margin-bottom:8px;">
+            <div style="font-size:10px;font-weight:700;color:#7A8FA6;letter-spacing:1px;text-transform:uppercase;margin-bottom:5px;">Position A</div>
+            <div style="font-size:13px;color:#ccc;line-height:1.7;margin-bottom:6px;">\${r.position_a}</div>
+            <div style="font-size:11px;color:#666;">Held by: \${r.position_a_holders}</div>
+          </div>
+
+          <div style="background:#111;border-left:3px solid #c9a84c;border-radius:0 6px 6px 0;padding:10px 12px;margin-bottom:8px;">
+            <div style="font-size:10px;font-weight:700;color:#c9a84c;letter-spacing:1px;text-transform:uppercase;margin-bottom:5px;">Position B</div>
+            <div style="font-size:13px;color:#ccc;line-height:1.7;margin-bottom:6px;">\${r.position_b}</div>
+            <div style="font-size:11px;color:#666;">Held by: \${r.position_b_holders}</div>
+          </div>
+
+          \${r.sectarian_impact ? \`<div style="background:#111;border-radius:6px;padding:10px 12px;margin-bottom:8px;">
+            <div style="font-size:10px;font-weight:700;color:#888;letter-spacing:1px;text-transform:uppercase;margin-bottom:5px;">Why It Matters</div>
+            <div style="font-size:13px;color:#bbb;line-height:1.7;">\${r.sectarian_impact}</div>
+          </div>\` : ''}
+
+          \${questions.length ? \`<div style="margin-bottom:8px;">
+            <div style="font-size:10px;font-weight:700;color:#888;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">Key Questions</div>
+            \${questions.slice(0,4).map(q => \`<div style="font-size:13px;color:#aaa;padding:5px 0;border-bottom:1px solid #222;line-height:1.6;">• \${q}</div>\`).join('')}
+          </div>\` : ''}
+
+          \${refs.length ? \`<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;">
+            \${refs.map(r => \`<span style="background:#222;border:1px solid #333;color:#c9a84c;padding:3px 9px;border-radius:10px;font-size:12px;font-family:'Amiri',serif;cursor:pointer;" onclick="navToVerse(\${r.split(':')[0]},\${r.split(':')[1]})">\${r}</span>\`).join('')}
+          </div>\` : ''}
+        </div>\`;
+    }).join('<hr style="border-color:#222;margin:16px 0;">');
+
+  } catch(e) {
+    panel.innerHTML = '<div style="color:#c66;font-size:13px;">Could not load contradiction data.</div>';
+  }
 }
 
 function renderChatMessages(num) {
