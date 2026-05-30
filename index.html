@@ -3115,9 +3115,13 @@ async function sbSearch(table, select, column, query) {
   if (!r.ok) return [];
   const rows = await r.json();
   if (!Array.isArray(rows)) return [];
-  const escaped = query.replace(/[-[\]{}()*+?.,\^$|#\s]/g, '\$&');
-  const re = new RegExp('(^|\s|[^a-zA-Z])' + escaped + '($|\s|[^a-zA-Z])', 'i');
-  return rows.filter(row => !row[column] || re.test(row[column]) || query.length <= 3);
+  // Use simple case-insensitive substring match — works for all scripts
+  // (Arabic, Ge'ez/Tigrinya, Latin, Ethiopic, Urdu etc.)
+  const lower = query.toLowerCase();
+  return rows.filter(row => {
+    if (!row[column]) return true;
+    return row[column].toLowerCase().includes(lower);
+  });
 }
 
 async function init() {
@@ -12339,9 +12343,13 @@ async function sbSearch(table, select, column, query) {
   if (!r.ok) return [];
   const rows = await r.json();
   if (!Array.isArray(rows)) return [];
-  const escaped = query.replace(/[-[\]{}()*+?.,\^$|#\s]/g, '\$&');
-  const re = new RegExp('(^|\s|[^a-zA-Z])' + escaped + '($|\s|[^a-zA-Z])', 'i');
-  return rows.filter(row => !row[column] || re.test(row[column]) || query.length <= 3);
+  // Use simple case-insensitive substring match — works for all scripts
+  // (Arabic, Ge'ez/Tigrinya, Latin, Ethiopic, Urdu etc.)
+  const lower = query.toLowerCase();
+  return rows.filter(row => {
+    if (!row[column]) return true;
+    return row[column].toLowerCase().includes(lower);
+  });
 }
 
 async function init() {
