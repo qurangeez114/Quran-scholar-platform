@@ -4588,7 +4588,7 @@ async function loadContradictionClaims(num) {
 
   try {
     const url = new URL(SUPABASE_URL + '/rest/v1/contradiction_analysis');
-    url.searchParams.set('select', 'topic,contradiction_type,contradicted_by,claim,traditional_response,critical_analysis,severity,category,position_a,position_a_holders,position_b,position_b_holders,sectarian_impact,socratic_questions,external_references');
+    url.searchParams.set('select', 'topic,contradiction_type,contradiction_strength,claim_side,counter_side,contradicted_by,claim,traditional_response,critical_analysis,severity,category,position_a,position_a_holders,position_b,position_b_holders,sectarian_impact,socratic_questions,external_references');
     url.searchParams.set('sura', 'eq.' + suraId);
     url.searchParams.set('aya', 'eq.' + num);
     const res = await fetch(url, { headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }});
@@ -4609,18 +4609,43 @@ async function loadContradictionClaims(num) {
       }
       let contradictedBy = (row.contradicted_by || '').split(',').map(v => v.trim()).filter(Boolean);
       const sevColor = row.severity === 'high' ? '#e05555' : row.severity === 'medium' ? '#c9a84c' : '#6ab06a';
+      const strColor = row.contradiction_strength === 'strong' ? '#e05555' : row.contradiction_strength === 'moderate' ? '#c9a84c' : '#6ab06a';
       let html = '<div style="margin-bottom:4px;">';
-      html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">';
+      html += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;flex-wrap:wrap;">';
       html += '<div style="font-size:11px;font-weight:700;letter-spacing:1px;color:#c9a84c;text-transform:uppercase;">⚡ ' + (row.contradiction_type || 'Contradiction Claim') + '</div>';
+      if (row.contradiction_strength) html += '<span style="font-size:10px;font-weight:700;background:' + strColor + '22;color:' + strColor + ';border:1px solid ' + strColor + '44;padding:2px 8px;border-radius:8px;text-transform:uppercase;" title="Contradiction strength">' + row.contradiction_strength + '</span>';
       if (row.severity) html += '<span style="font-size:10px;font-weight:700;background:' + sevColor + '22;color:' + sevColor + ';border:1px solid ' + sevColor + '44;padding:2px 8px;border-radius:8px;text-transform:uppercase;">' + row.severity + '</span>';
       if (row.category) html += '<span style="font-size:10px;color:#666;background:#1a1a1a;border:1px solid #333;padding:2px 8px;border-radius:8px;">' + row.category + '</span>';
       html += '</div>';
       html += '<div style="font-size:15px;font-weight:700;color:#e8e8e8;margin-bottom:12px;">' + row.topic + '</div>';
-      if (contradictedBy.length) {
+      // Both sides display
+      let claimSide = [];
+      let counterSide = [];
+      try { claimSide = JSON.parse(row.claim_side || '[]'); } catch {}
+      try { counterSide = JSON.parse(row.counter_side || '[]'); } catch {}
+
+      if (claimSide.length && counterSide.length) {
+        html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">';
+        html += '<div style="background:#001a00;border:1px solid #4a8a4a44;border-radius:8px;padding:10px;">';
+        html += '<div style="font-size:10px;font-weight:700;color:#6ab06a;letter-spacing:1px;text-transform:uppercase;margin-bottom:7px;">Freedom Side</div>';
+        claimSide.forEach(v => {
+          const parts = v.split(':');
+          if (parts.length === 2) html += '<div style="font-family:Amiri,serif;font-size:14px;color:#c9a84c;padding:3px 0;cursor:pointer;border-bottom:1px solid #2a2a2a;" onclick="navToVerse(' + parts[0] + ',' + parts[1] + ')">' + v + '</div>';
+        });
+        html += '</div>';
+        html += '<div style="background:#1a0000;border:1px solid #e0555544;border-radius:8px;padding:10px;">';
+        html += '<div style="font-size:10px;font-weight:700;color:#e05555;letter-spacing:1px;text-transform:uppercase;margin-bottom:7px;">Opposing Side</div>';
+        counterSide.forEach(v => {
+          const parts = v.split(':');
+          if (parts.length === 2) html += '<div style="font-family:Amiri,serif;font-size:14px;color:#c9a84c;padding:3px 0;cursor:pointer;border-bottom:1px solid #2a2a2a;" onclick="navToVerse(' + parts[0] + ',' + parts[1] + ')">' + v + '</div>';
+        });
+        html += '</div>';
+        html += '</div>';
+      } else if (contradictedBy.length) {
         html += '<div style="margin-bottom:10px;"><div style="font-size:10px;font-weight:700;color:#888;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">Contradicted By</div><div style="display:flex;flex-wrap:wrap;gap:5px;">';
         contradictedBy.forEach(v => {
           const parts = v.split(':');
-          html += '<span style="background:#222;border:1px solid #444;color:#c9a84c;padding:3px 9px;border-radius:10px;font-size:13px;font-family:Amiri,serif;cursor:pointer;" onclick="navToVerse(' + parts[0] + ',' + parts[1] + ')">' + v + '</span>';
+          if (parts.length === 2) html += '<span style="background:#222;border:1px solid #444;color:#c9a84c;padding:3px 9px;border-radius:10px;font-size:13px;font-family:Amiri,serif;cursor:pointer;" onclick="navToVerse(' + parts[0] + ',' + parts[1] + ')">' + v + '</span>';
         });
         html += '</div></div>';
       }
@@ -14046,7 +14071,7 @@ async function loadContradictionClaims(num) {
 
   try {
     const url = new URL(SUPABASE_URL + '/rest/v1/contradiction_analysis');
-    url.searchParams.set('select', 'topic,contradiction_type,contradicted_by,claim,traditional_response,critical_analysis,severity,category,position_a,position_a_holders,position_b,position_b_holders,sectarian_impact,socratic_questions,external_references');
+    url.searchParams.set('select', 'topic,contradiction_type,contradiction_strength,claim_side,counter_side,contradicted_by,claim,traditional_response,critical_analysis,severity,category,position_a,position_a_holders,position_b,position_b_holders,sectarian_impact,socratic_questions,external_references');
     url.searchParams.set('sura', 'eq.' + suraId);
     url.searchParams.set('aya', 'eq.' + num);
     const res = await fetch(url, { headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }});
@@ -14067,18 +14092,43 @@ async function loadContradictionClaims(num) {
       }
       let contradictedBy = (row.contradicted_by || '').split(',').map(v => v.trim()).filter(Boolean);
       const sevColor = row.severity === 'high' ? '#e05555' : row.severity === 'medium' ? '#c9a84c' : '#6ab06a';
+      const strColor = row.contradiction_strength === 'strong' ? '#e05555' : row.contradiction_strength === 'moderate' ? '#c9a84c' : '#6ab06a';
       let html = '<div style="margin-bottom:4px;">';
-      html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">';
+      html += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;flex-wrap:wrap;">';
       html += '<div style="font-size:11px;font-weight:700;letter-spacing:1px;color:#c9a84c;text-transform:uppercase;">⚡ ' + (row.contradiction_type || 'Contradiction Claim') + '</div>';
+      if (row.contradiction_strength) html += '<span style="font-size:10px;font-weight:700;background:' + strColor + '22;color:' + strColor + ';border:1px solid ' + strColor + '44;padding:2px 8px;border-radius:8px;text-transform:uppercase;" title="Contradiction strength">' + row.contradiction_strength + '</span>';
       if (row.severity) html += '<span style="font-size:10px;font-weight:700;background:' + sevColor + '22;color:' + sevColor + ';border:1px solid ' + sevColor + '44;padding:2px 8px;border-radius:8px;text-transform:uppercase;">' + row.severity + '</span>';
       if (row.category) html += '<span style="font-size:10px;color:#666;background:#1a1a1a;border:1px solid #333;padding:2px 8px;border-radius:8px;">' + row.category + '</span>';
       html += '</div>';
       html += '<div style="font-size:15px;font-weight:700;color:#e8e8e8;margin-bottom:12px;">' + row.topic + '</div>';
-      if (contradictedBy.length) {
+      // Both sides display
+      let claimSide = [];
+      let counterSide = [];
+      try { claimSide = JSON.parse(row.claim_side || '[]'); } catch {}
+      try { counterSide = JSON.parse(row.counter_side || '[]'); } catch {}
+
+      if (claimSide.length && counterSide.length) {
+        html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">';
+        html += '<div style="background:#001a00;border:1px solid #4a8a4a44;border-radius:8px;padding:10px;">';
+        html += '<div style="font-size:10px;font-weight:700;color:#6ab06a;letter-spacing:1px;text-transform:uppercase;margin-bottom:7px;">Freedom Side</div>';
+        claimSide.forEach(v => {
+          const parts = v.split(':');
+          if (parts.length === 2) html += '<div style="font-family:Amiri,serif;font-size:14px;color:#c9a84c;padding:3px 0;cursor:pointer;border-bottom:1px solid #2a2a2a;" onclick="navToVerse(' + parts[0] + ',' + parts[1] + ')">' + v + '</div>';
+        });
+        html += '</div>';
+        html += '<div style="background:#1a0000;border:1px solid #e0555544;border-radius:8px;padding:10px;">';
+        html += '<div style="font-size:10px;font-weight:700;color:#e05555;letter-spacing:1px;text-transform:uppercase;margin-bottom:7px;">Opposing Side</div>';
+        counterSide.forEach(v => {
+          const parts = v.split(':');
+          if (parts.length === 2) html += '<div style="font-family:Amiri,serif;font-size:14px;color:#c9a84c;padding:3px 0;cursor:pointer;border-bottom:1px solid #2a2a2a;" onclick="navToVerse(' + parts[0] + ',' + parts[1] + ')">' + v + '</div>';
+        });
+        html += '</div>';
+        html += '</div>';
+      } else if (contradictedBy.length) {
         html += '<div style="margin-bottom:10px;"><div style="font-size:10px;font-weight:700;color:#888;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">Contradicted By</div><div style="display:flex;flex-wrap:wrap;gap:5px;">';
         contradictedBy.forEach(v => {
           const parts = v.split(':');
-          html += '<span style="background:#222;border:1px solid #444;color:#c9a84c;padding:3px 9px;border-radius:10px;font-size:13px;font-family:Amiri,serif;cursor:pointer;" onclick="navToVerse(' + parts[0] + ',' + parts[1] + ')">' + v + '</span>';
+          if (parts.length === 2) html += '<span style="background:#222;border:1px solid #444;color:#c9a84c;padding:3px 9px;border-radius:10px;font-size:13px;font-family:Amiri,serif;cursor:pointer;" onclick="navToVerse(' + parts[0] + ',' + parts[1] + ')">' + v + '</span>';
         });
         html += '</div></div>';
       }
