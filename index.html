@@ -4584,6 +4584,27 @@ async function runWordSearch(query) {
     if (!safeQuery) return;
     const fields = 'sura_id,aya_number,arabic,english,aya_text,amharic,oromo,somali,turkish,german,urdu';
 
+    // For Ge'ez/Tigrinya/Amharic — skip variants and search directly via RPC
+    const isGeezQuery = /[\u1200-\u137F]/.test(safeQuery);
+    if (isGeezQuery) {
+      const rpcUrl = `${SUPABASE_URL}/rest/v1/rpc/search_tigrinya`;
+      const r = await fetch(rpcUrl, {
+        method: 'POST',
+        headers: { ...HEADERS, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ search_term: safeQuery })
+      });
+      if (r.ok) {
+        const rows = await r.json();
+        if (Array.isArray(rows) && rows.length > 0) {
+          const results = rows.map(v => ({ ...v, tigrinya: v.aya_text }));
+          renderSearchResults(results, safeQuery);
+          return;
+        }
+      }
+      renderSearchResults([], safeQuery);
+      return;
+    }
+
     // For multi-word queries, search each word independently then combine
     let searchTerms = [];
     if (safeQuery.includes(' ')) {
@@ -13836,6 +13857,27 @@ async function runWordSearch(query) {
     const safeQuery = String(query).replace(/,/g, ' ').trim();
     if (!safeQuery) return;
     const fields = 'sura_id,aya_number,arabic,english,aya_text,amharic,oromo,somali,turkish,german,urdu';
+
+    // For Ge'ez/Tigrinya/Amharic — skip variants and search directly via RPC
+    const isGeezQuery = /[\u1200-\u137F]/.test(safeQuery);
+    if (isGeezQuery) {
+      const rpcUrl = `${SUPABASE_URL}/rest/v1/rpc/search_tigrinya`;
+      const r = await fetch(rpcUrl, {
+        method: 'POST',
+        headers: { ...HEADERS, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ search_term: safeQuery })
+      });
+      if (r.ok) {
+        const rows = await r.json();
+        if (Array.isArray(rows) && rows.length > 0) {
+          const results = rows.map(v => ({ ...v, tigrinya: v.aya_text }));
+          renderSearchResults(results, safeQuery);
+          return;
+        }
+      }
+      renderSearchResults([], safeQuery);
+      return;
+    }
 
     // For multi-word queries, search each word independently then combine
     let searchTerms = [];
