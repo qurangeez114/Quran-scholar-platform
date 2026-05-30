@@ -3580,14 +3580,29 @@ async function toggleVerse(num, suraId, el) {
           totalCount += others.length;
           const studyUrl = `study_page.html?theme=${encodeURIComponent(theme)}&sura=${suraId}&aya=${num}`;
           html += `<div class="theme-group">
-            <div class="theme-label">${theme} <span class="theme-count">${others.length}</span>
-              <a href="${studyUrl}" target="_blank" class="study-page-btn">📖 Open Study Page</a>
-            </div>
-            <div class="theme-verses">${others.map(v =>
+            <div class="theme-label">${theme} <span class="theme-count">${others.length}</span></div>
+            <a href="${studyUrl}" target="_blank" class="study-page-btn">📖 Open Study Page</a>
+            <div class="theme-verses" style="margin-top:8px">${others.map(v =>
               `<span class="xref-chip" onclick="navToVerse(${v.sura},${v.aya})">${v.sura}:${v.aya}</span>`
             ).join('')}</div>
           </div>`;
         }
+        // Also load flat general refs
+        try {
+          const flatRefs = await sbFetch('cross_references', {
+            select: 'ref_surah,ref_ayah_start',
+            source_surah: `eq.${suraId}`,
+            source_ayah: `eq.${num}`
+          });
+          if (flatRefs.length > 0) {
+            html += `<div class="theme-group" style="margin-top:14px;padding-top:14px;border-top:1px solid #2a2a2a">
+              <div class="theme-label" style="color:#888;border-color:#333">General References <span class="theme-count">${flatRefs.length}</span></div>
+              <div class="theme-verses" style="margin-top:8px">${flatRefs.map(r =>
+                `<span class="xref-chip" style="border-color:#333;color:#aaa" onclick="navToVerse(${r.ref_surah},${r.ref_ayah_start})">${r.ref_surah}:${r.ref_ayah_start}</span>`
+              ).join('')}</div>
+            </div>`;
+          }
+        } catch {}
         if (xrefTab) xrefTab.textContent = `Cross-Refs (${totalCount})`;
         xrefPanel.innerHTML = html;
       }
@@ -12902,14 +12917,29 @@ async function toggleVerse(num, suraId, el) {
           totalCount += others.length;
           const studyUrl = `study_page.html?theme=${encodeURIComponent(theme)}&sura=${suraId}&aya=${num}`;
           html += `<div class="theme-group">
-            <div class="theme-label">${theme} <span class="theme-count">${others.length}</span>
-              <a href="${studyUrl}" target="_blank" class="study-page-btn">📖 Open Study Page</a>
-            </div>
-            <div class="theme-verses">${others.map(v =>
+            <div class="theme-label">${theme} <span class="theme-count">${others.length}</span></div>
+            <a href="${studyUrl}" target="_blank" class="study-page-btn">📖 Open Study Page</a>
+            <div class="theme-verses" style="margin-top:8px">${others.map(v =>
               `<span class="xref-chip" onclick="navToVerse(${v.sura},${v.aya})">${v.sura}:${v.aya}</span>`
             ).join('')}</div>
           </div>`;
         }
+        // Also load flat general refs
+        try {
+          const flatRefs = await sbFetch('cross_references', {
+            select: 'ref_surah,ref_ayah_start',
+            source_surah: `eq.${suraId}`,
+            source_ayah: `eq.${num}`
+          });
+          if (flatRefs.length > 0) {
+            html += `<div class="theme-group" style="margin-top:14px;padding-top:14px;border-top:1px solid #2a2a2a">
+              <div class="theme-label" style="color:#888;border-color:#333">General References <span class="theme-count">${flatRefs.length}</span></div>
+              <div class="theme-verses" style="margin-top:8px">${flatRefs.map(r =>
+                `<span class="xref-chip" style="border-color:#333;color:#aaa" onclick="navToVerse(${r.ref_surah},${r.ref_ayah_start})">${r.ref_surah}:${r.ref_ayah_start}</span>`
+              ).join('')}</div>
+            </div>`;
+          }
+        } catch {}
         if (xrefTab) xrefTab.textContent = `Cross-Refs (${totalCount})`;
         xrefPanel.innerHTML = html;
       }
