@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Thematic Study Page</title>
+<link href="https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', sans-serif; background: #0f0f0f; color: #e0e0e0; min-height: 100vh; }
+
+  #top-bar {
+    position: sticky; top: 0; z-index: 100;
+    background: #1a1a1a; border-bottom: 1px solid #333;
+    padding: 12px 20px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  }
+  #top-bar h1 { font-size: 15px; font-weight: 700; color: #c9a84c; flex: 1; }
+  #top-bar .verse-count { font-size: 12px; color: #888; }
+
+  .lang-btn {
+    padding: 5px 12px; border-radius: 20px; border: 1px solid #444;
+    background: #222; color: #aaa; font-size: 12px; cursor: pointer; transition: all 0.2s;
+  }
+  .lang-btn.active { background: #c9a84c; color: #000; border-color: #c9a84c; font-weight: 700; }
+
+  #content { max-width: 860px; margin: 0 auto; padding: 24px 16px 60px; }
+
+  .verse-block {
+    background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 12px;
+    margin-bottom: 32px; overflow: hidden;
+  }
+  .verse-header {
+    background: #222; padding: 10px 16px;
+    display: flex; align-items: center; gap: 10px;
+    border-bottom: 1px solid #2a2a2a;
+  }
+  .verse-ref { font-family: 'Amiri', serif; font-size: 18px; font-weight: 700; color: #c9a84c; }
+  .verse-sura-name { font-size: 12px; color: #888; }
+
+  .verse-body { padding: 16px; }
+
+  .arabic-text {
+    font-family: 'Amiri', serif; font-size: 26px; line-height: 1.9;
+    text-align: right; direction: rtl; color: #f5f0e8;
+    margin-bottom: 14px; padding-bottom: 14px; border-bottom: 1px solid #2a2a2a;
+  }
+  .translation-text {
+    font-size: 14px; line-height: 1.8; color: #ccc;
+    margin-bottom: 14px; padding-bottom: 14px; border-bottom: 1px solid #2a2a2a;
+  }
+  .translation-text.hidden { display: none; }
+
+  .section-label {
+    font-size: 11px; font-weight: 700; color: #c9a84c; letter-spacing: 1px;
+    text-transform: uppercase; margin-bottom: 10px; margin-top: 16px;
+  }
+
+  .scholar-card {
+    background: #222; border-left: 3px solid #c9a84c; border-radius: 6px;
+    padding: 10px 14px; margin-bottom: 8px;
+  }
+  .scholar-name { font-size: 12px; font-weight: 700; color: #c9a84c; margin-bottom: 4px; }
+  .scholar-text { font-size: 13px; line-height: 1.7; color: #ccc; }
+  .scholar-meta { font-size: 11px; color: #666; margin-top: 4px; }
+
+  .hadith-card {
+    background: #1e2a1e; border-left: 3px solid #4a8a4a; border-radius: 6px;
+    padding: 10px 14px; margin-bottom: 8px;
+  }
+  .hadith-name { font-size: 12px; font-weight: 700; color: #6ab06a; margin-bottom: 4px; }
+  .hadith-text { font-size: 13px; line-height: 1.7; color: #ccc; }
+  .hadith-meta { font-size: 11px; color: #666; margin-top: 4px; }
+
+  .no-data { font-size: 13px; color: #555; font-style: italic; padding: 8px 0; }
+
+  #loading {
+    text-align: center; padding: 80px 20px; color: #888;
+    font-size: 15px;
+  }
+  .spinner {
+    width: 36px; height: 36px; border: 3px solid #333;
+    border-top-color: #c9a84c; border-radius: 50%;
+    animation: spin 0.8s linear infinite; margin: 0 auto 16px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .theme-intro {
+    background: #1a1a1a; border: 1px solid #c9a84c33; border-radius: 10px;
+    padding: 16px 20px; margin-bottom: 28px;
+  }
+  .theme-intro h2 { font-size: 18px; color: #c9a84c; margin-bottom: 6px; }
+  .theme-intro p { font-size: 13px; color: #888; }
+
+  /* Language-specific visibility */
+  .lang-tigrinya, .lang-amharic, .lang-oromo, .lang-somali { display: none; }
+</style>
+</head>
+<body>
+
+<div id="top-bar">
+  <h1 id="theme-title">Loading...</h1>
+  <span class="verse-count" id="verse-count"></span>
+  <button class="lang-btn active" onclick="setLang('en')">English</button>
+  <button class="lang-btn" onclick="setLang('ar')">Arabic Only</button>
+  <button class="lang-btn" onclick="setLang('ti')">Tigrinya</button>
+  <button class="lang-btn" onclick="setLang('am')">Amharic</button>
+</div>
+
+<div id="content">
+  <div id="loading"><div class="spinner"></div>Loading study page...</div>
+  <div id="verses-container"></div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
+const HEADERS = { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY };
+
+async function sbFetch(table, params) {
+  const url = new URL(`${SUPABASE_URL}/rest/v1/${table}`);
+  Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+  const r = await fetch(url, { headers: HEADERS });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.json();
+}
+
+let currentLang = 'en';
+
+function setLang(lang) {
+  currentLang = lang;
+  document.querySelectorAll('.lang-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  // Toggle translation visibility
+  document.querySelectorAll('.translation-text').forEach(el => {
+    el.classList.toggle('hidden', lang === 'ar');
+  });
+  document.querySelectorAll('.lang-tigrinya').forEach(el => {
+    el.style.display = lang === 'ti' ? 'block' : 'none';
+  });
+  document.querySelectorAll('.lang-amharic').forEach(el => {
+    el.style.display = lang === 'am' ? 'block' : 'none';
+  });
+}
+
+async function loadStudyPage() {
+  const params = new URLSearchParams(window.location.search);
+  const theme = params.get('theme');
+  const currentSura = parseInt(params.get('sura') || 0);
+  const currentAya = parseInt(params.get('aya') || 0);
+
+  if (!theme) {
+    document.getElementById('loading').innerHTML = '<p style="color:#c66">No theme specified.</p>';
+    return;
+  }
+
+  document.title = theme;
+  document.getElementById('theme-title').textContent = theme;
+
+  // 1. Get all verses in this theme
+  const verseRows = await sbFetch('thematic_cross_references', {
+    select: 'sura,aya',
+    theme: `eq.${theme}`,
+    order: 'sura.asc,aya.asc'
+  });
+
+  document.getElementById('verse-count').textContent = `${verseRows.length} verses`;
+  document.getElementById('loading').style.display = 'none';
+
+  const container = document.getElementById('verses-container');
+
+  // Theme intro block
+  container.innerHTML = `
+    <div class="theme-intro">
+      <h2>${theme}</h2>
+      <p>${verseRows.length} verses — Arabic, English translation, Tafsir, and Hadith references for each verse.</p>
+    </div>`;
+
+  // 2. Load each verse one by one
+  for (const v of verseRows) {
+    const block = document.createElement('div');
+    block.className = 'verse-block';
+    block.id = `study-${v.sura}-${v.aya}`;
+
+    // Highlight the verse the user came from
+    if (v.sura === currentSura && v.aya === currentAya) {
+      block.style.border = '1px solid #c9a84c';
+    }
+
+    block.innerHTML = `
+      <div class="verse-header">
+        <span class="verse-ref">${v.sura}:${v.aya}</span>
+        <span class="verse-sura-name" id="sname-${v.sura}-${v.aya}">Sura ${v.sura}</span>
+      </div>
+      <div class="verse-body">
+        <div class="arabic-text" id="arabic-${v.sura}-${v.aya}">...</div>
+        <div class="translation-text" id="trans-${v.sura}-${v.aya}">Loading...</div>
+        <div class="lang-tigrinya" id="ti-${v.sura}-${v.aya}"></div>
+        <div class="lang-amharic" id="am-${v.sura}-${v.aya}"></div>
+        <div class="section-label">Tafsir</div>
+        <div id="tafsir-${v.sura}-${v.aya}"><p class="no-data">Loading...</p></div>
+        <div class="section-label">Hadith References</div>
+        <div id="hadith-${v.sura}-${v.aya}"><p class="no-data">Loading...</p></div>
+      </div>`;
+
+    container.appendChild(block);
+
+    // Load verse text + tafsir + hadith in parallel
+    loadVerseData(v.sura, v.aya);
+  }
+}
+
+async function loadVerseData(sura, aya) {
+  // Verse text
+  try {
+    const rows = await sbFetch('ayas', {
+      select: 'arabic,aya_text,english,amharic,sura_id',
+      sura_id: `eq.${sura}`,
+      aya_number: `eq.${aya}`,
+      limit: '1'
+    });
+    if (rows.length > 0) {
+      const r = rows[0];
+      document.getElementById(`arabic-${sura}-${aya}`).textContent = r.arabic || '';
+      document.getElementById(`trans-${sura}-${aya}`).textContent = r.english || r.aya_text || '';
+      if (r.aya_text) document.getElementById(`ti-${sura}-${aya}`).textContent = r.aya_text;
+      if (r.amharic) document.getElementById(`am-${sura}-${aya}`).textContent = r.amharic;
+    }
+  } catch(e) {
+    document.getElementById(`arabic-${sura}-${aya}`).textContent = '—';
+    document.getElementById(`trans-${sura}-${aya}`).textContent = '—';
+  }
+
+  // Sura name
+  try {
+    const sr = await sbFetch('suras', { select: 'english_name,sura_name', sura_id: `eq.${sura}`, limit: '1' });
+    if (sr.length > 0) {
+      document.getElementById(`sname-${sura}-${aya}`).textContent =
+        sr[0].english_name || sr[0].sura_name || `Sura ${sura}`;
+    }
+  } catch {}
+
+  // Tafsir
+  try {
+    const rows = await sbFetch('tafsir_entries', {
+      select: 'source_name,scholar_name,content,tradition',
+      sura: `eq.${sura}`,
+      aya: `eq.${aya}`,
+      language: 'eq.en'
+    });
+    const el = document.getElementById(`tafsir-${sura}-${aya}`);
+    if (rows.length > 0) {
+      el.innerHTML = rows.map(r => `
+        <div class="scholar-card">
+          <div class="scholar-name">${r.source_name || r.scholar_name || 'Scholar'}</div>
+          <div class="scholar-text">${r.content || ''}</div>
+        </div>`).join('');
+    } else {
+      el.innerHTML = '<p class="no-data">No tafsir entries in database for this verse.</p>';
+    }
+  } catch {
+    document.getElementById(`tafsir-${sura}-${aya}`).innerHTML = '<p class="no-data">Could not load tafsir.</p>';
+  }
+
+  // Hadith
+  try {
+    const rows = await sbFetch('hadith_connections', {
+      select: 'hadith_text,collection,reference,narrator,hadith_grade,tradition',
+      sura_id: `eq.${sura}`,
+      aya_number: `eq.${aya}`
+    });
+    const el = document.getElementById(`hadith-${sura}-${aya}`);
+    if (rows.length > 0) {
+      el.innerHTML = rows.map(r => `
+        <div class="hadith-card">
+          <div class="hadith-name">${r.collection || 'Hadith'}${r.hadith_grade ? ` — ${r.hadith_grade}` : ''}</div>
+          <div class="hadith-text">${r.hadith_text || ''}</div>
+          <div class="hadith-meta">${[r.narrator ? 'Narrator: ' + r.narrator : '', r.reference || ''].filter(Boolean).join(' · ')}</div>
+        </div>`).join('');
+    } else {
+      el.innerHTML = '<p class="no-data">No hadith references in database for this verse.</p>';
+    }
+  } catch {
+    document.getElementById(`hadith-${sura}-${aya}`).innerHTML = '<p class="no-data">Could not load hadith.</p>';
+  }
+}
+
+loadStudyPage();
+</script>
+</body>
+</html>
