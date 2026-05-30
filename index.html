@@ -142,19 +142,24 @@ body { font-family: 'EB Garamond', Georgia, serif; background: #F0F3F7; color: #
 
 /* New cross-ref row layout */
 .xref-row {
-  display: flex; align-items: center; gap: 10px;
-  padding: 8px 12px; border-radius: 8px;
+  display: block;
+  padding: 10px 12px; border-radius: 8px;
   background: #f8f6f0; border: 1px solid #ddd;
-  cursor: pointer; margin-bottom: 5px;
+  cursor: pointer; margin-bottom: 6px;
   transition: border-color 0.15s, background 0.15s;
 }
 .xref-row:hover { background: #eef2f7; border-color: #7A8FA6; }
-.xref-ref { font-family: 'Amiri', serif; font-size: 17px; font-weight: 700; color: #7A3A14; min-width: 56px; flex-shrink: 0; }
-.xref-theme-label { font-size: 12px; color: #555; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.xref-row-header { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+.xref-ref { font-family: 'Amiri', serif; font-size: 16px; font-weight: 700; color: #7A3A14; flex-shrink: 0; }
+.xref-theme-label { font-size: 11px; color: #999; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.xref-arabic { font-family: 'Amiri', serif; font-size: 17px; line-height: 1.8; text-align: right; direction: rtl; color: #1a1a1a; margin-bottom: 4px; }
+.xref-english { font-size: 13px; color: #444; line-height: 1.6; }
 [data-theme="dark"] .xref-row { background: #252525; border-color: #3a3a3a; }
 [data-theme="dark"] .xref-row:hover { background: #2e2e2e; border-color: #c9a84c88; }
 [data-theme="dark"] .xref-ref { color: #c9a84c; }
-[data-theme="dark"] .xref-theme-label { color: #999; }
+[data-theme="dark"] .xref-theme-label { color: #666; }
+[data-theme="dark"] .xref-arabic { color: #f0ebe0; }
+[data-theme="dark"] .xref-english { color: #bbb; }
 
 /* AI research buttons */
 .ai-research-btn {
@@ -3599,6 +3604,7 @@ async function toggleVerse(num, suraId, el) {
       } else {
         let totalCount = 0;
         let html = '';
+        const allOthers = [];
         for (const theme of themes) {
           const verseRows = await sbFetch('thematic_cross_references', {
             select: 'sura,aya',
@@ -3606,15 +3612,20 @@ async function toggleVerse(num, suraId, el) {
             order: 'sura.asc,aya.asc'
           });
           const others = verseRows.filter(v => !(v.sura == suraId && v.aya == num));
+          others.forEach(v => { if (!allOthers.find(x => x.sura==v.sura && x.aya==v.aya)) allOthers.push(v); });
           totalCount += others.length;
           const studyUrl = `study_page.html?theme=${encodeURIComponent(theme)}&sura=${suraId}&aya=${num}`;
           html += `<div class="theme-group">
             <div class="theme-label">${theme} <span class="theme-count">${others.length}</span></div>
             <a href="${studyUrl}" target="_blank" class="study-page-btn">📖 Open Study Page</a>
             <div class="theme-verses" style="margin-top:8px">${others.map(v =>
-              `<div class="xref-row" onclick="navToVerse(${v.sura},${v.aya})">
-                <span class="xref-ref">${v.sura}:${v.aya}</span>
-                <span class="xref-theme-label">${theme.length > 40 ? theme.slice(0,38)+'…' : theme}</span>
+              `<div class="xref-row" onclick="navToVerse(${v.sura},${v.aya})" id="xref-card-${v.sura}-${v.aya}">
+                <div class="xref-row-header">
+                  <span class="xref-ref">${v.sura}:${v.aya}</span>
+                  <span class="xref-theme-label">${theme.length > 40 ? theme.slice(0,38)+'…' : theme}</span>
+                </div>
+                <div class="xref-arabic" id="xref-ar-${v.sura}-${v.aya}">...</div>
+                <div class="xref-english" id="xref-en-${v.sura}-${v.aya}">Loading...</div>
               </div>`
             ).join('')}</div>
           </div>`;
@@ -3637,6 +3648,7 @@ async function toggleVerse(num, suraId, el) {
         } catch {}
         if (xrefTab) xrefTab.textContent = `Cross-Refs (${totalCount})`;
         xrefPanel.innerHTML = html;
+        allOthers.forEach(v => loadXrefVerseText(v.sura, v.aya));
       }
     } catch(e) {
       xrefPanel.innerHTML = `<div style="color:#BBB;font-style:italic;font-size:13px;padding:20px;text-align:center">Could not load cross-references.</div>`;
@@ -4571,6 +4583,28 @@ function buildAIPanel(num, arabic, english, tigrinya) {
       <button onclick="clearChat(${num})" style="font-size:10px;color:#999;background:none;border:none;cursor:pointer;">Clear chat</button>
     </div>
   </div>`;
+}
+
+async function loadXrefVerseText(sura, aya) {
+  const arEl = document.getElementById(`xref-ar-${sura}-${aya}`);
+  const enEl = document.getElementById(`xref-en-${sura}-${aya}`);
+  if (!arEl || !enEl) return;
+  try {
+    const rows = await sbFetch('ayas', {
+      select: 'arabic,english,aya_text',
+      sura_id: `eq.${sura}`, aya_number: `eq.${aya}`, limit: '1'
+    });
+    if (rows.length > 0) {
+      arEl.textContent = rows[0].arabic || '';
+      enEl.textContent = rows[0].english || rows[0].aya_text || '';
+    } else {
+      arEl.textContent = '';
+      enEl.textContent = '';
+    }
+  } catch {
+    arEl.textContent = '';
+    enEl.textContent = '';
+  }
 }
 
 async function loadContradictionClaims(num) {
@@ -9635,19 +9669,24 @@ body { font-family: 'EB Garamond', Georgia, serif; background: #F0F3F7; color: #
 
 /* New cross-ref row layout */
 .xref-row {
-  display: flex; align-items: center; gap: 10px;
-  padding: 8px 12px; border-radius: 8px;
+  display: block;
+  padding: 10px 12px; border-radius: 8px;
   background: #f8f6f0; border: 1px solid #ddd;
-  cursor: pointer; margin-bottom: 5px;
+  cursor: pointer; margin-bottom: 6px;
   transition: border-color 0.15s, background 0.15s;
 }
 .xref-row:hover { background: #eef2f7; border-color: #7A8FA6; }
-.xref-ref { font-family: 'Amiri', serif; font-size: 17px; font-weight: 700; color: #7A3A14; min-width: 56px; flex-shrink: 0; }
-.xref-theme-label { font-size: 12px; color: #555; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.xref-row-header { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+.xref-ref { font-family: 'Amiri', serif; font-size: 16px; font-weight: 700; color: #7A3A14; flex-shrink: 0; }
+.xref-theme-label { font-size: 11px; color: #999; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.xref-arabic { font-family: 'Amiri', serif; font-size: 17px; line-height: 1.8; text-align: right; direction: rtl; color: #1a1a1a; margin-bottom: 4px; }
+.xref-english { font-size: 13px; color: #444; line-height: 1.6; }
 [data-theme="dark"] .xref-row { background: #252525; border-color: #3a3a3a; }
 [data-theme="dark"] .xref-row:hover { background: #2e2e2e; border-color: #c9a84c88; }
 [data-theme="dark"] .xref-ref { color: #c9a84c; }
-[data-theme="dark"] .xref-theme-label { color: #999; }
+[data-theme="dark"] .xref-theme-label { color: #666; }
+[data-theme="dark"] .xref-arabic { color: #f0ebe0; }
+[data-theme="dark"] .xref-english { color: #bbb; }
 
 /* AI research buttons */
 .ai-research-btn {
@@ -13086,6 +13125,7 @@ async function toggleVerse(num, suraId, el) {
       } else {
         let totalCount = 0;
         let html = '';
+        const allOthers = [];
         for (const theme of themes) {
           const verseRows = await sbFetch('thematic_cross_references', {
             select: 'sura,aya',
@@ -13093,15 +13133,20 @@ async function toggleVerse(num, suraId, el) {
             order: 'sura.asc,aya.asc'
           });
           const others = verseRows.filter(v => !(v.sura == suraId && v.aya == num));
+          others.forEach(v => { if (!allOthers.find(x => x.sura==v.sura && x.aya==v.aya)) allOthers.push(v); });
           totalCount += others.length;
           const studyUrl = `study_page.html?theme=${encodeURIComponent(theme)}&sura=${suraId}&aya=${num}`;
           html += `<div class="theme-group">
             <div class="theme-label">${theme} <span class="theme-count">${others.length}</span></div>
             <a href="${studyUrl}" target="_blank" class="study-page-btn">📖 Open Study Page</a>
             <div class="theme-verses" style="margin-top:8px">${others.map(v =>
-              `<div class="xref-row" onclick="navToVerse(${v.sura},${v.aya})">
-                <span class="xref-ref">${v.sura}:${v.aya}</span>
-                <span class="xref-theme-label">${theme.length > 40 ? theme.slice(0,38)+'…' : theme}</span>
+              `<div class="xref-row" onclick="navToVerse(${v.sura},${v.aya})" id="xref-card-${v.sura}-${v.aya}">
+                <div class="xref-row-header">
+                  <span class="xref-ref">${v.sura}:${v.aya}</span>
+                  <span class="xref-theme-label">${theme.length > 40 ? theme.slice(0,38)+'…' : theme}</span>
+                </div>
+                <div class="xref-arabic" id="xref-ar-${v.sura}-${v.aya}">...</div>
+                <div class="xref-english" id="xref-en-${v.sura}-${v.aya}">Loading...</div>
               </div>`
             ).join('')}</div>
           </div>`;
@@ -13124,6 +13169,7 @@ async function toggleVerse(num, suraId, el) {
         } catch {}
         if (xrefTab) xrefTab.textContent = `Cross-Refs (${totalCount})`;
         xrefPanel.innerHTML = html;
+        allOthers.forEach(v => loadXrefVerseText(v.sura, v.aya));
       }
     } catch(e) {
       xrefPanel.innerHTML = `<div style="color:#BBB;font-style:italic;font-size:13px;padding:20px;text-align:center">Could not load cross-references.</div>`;
@@ -14058,6 +14104,28 @@ function buildAIPanel(num, arabic, english, tigrinya) {
       <button onclick="clearChat(${num})" style="font-size:10px;color:#999;background:none;border:none;cursor:pointer;">Clear chat</button>
     </div>
   </div>`;
+}
+
+async function loadXrefVerseText(sura, aya) {
+  const arEl = document.getElementById(`xref-ar-${sura}-${aya}`);
+  const enEl = document.getElementById(`xref-en-${sura}-${aya}`);
+  if (!arEl || !enEl) return;
+  try {
+    const rows = await sbFetch('ayas', {
+      select: 'arabic,english,aya_text',
+      sura_id: `eq.${sura}`, aya_number: `eq.${aya}`, limit: '1'
+    });
+    if (rows.length > 0) {
+      arEl.textContent = rows[0].arabic || '';
+      enEl.textContent = rows[0].english || rows[0].aya_text || '';
+    } else {
+      arEl.textContent = '';
+      enEl.textContent = '';
+    }
+  } catch {
+    arEl.textContent = '';
+    enEl.textContent = '';
+  }
 }
 
 async function loadContradictionClaims(num) {
