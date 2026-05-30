@@ -3109,17 +3109,22 @@ async function sbFetch(table, params) {
 
 async function sbSearch(table, select, column, query) {
   const orderCol = table === 'verses' ? 'surah_id' : 'sura_id';
+  // Encode the query safely — Ethiopic/Arabic/non-ASCII chars need full encoding
   const encodedQuery = encodeURIComponent(query);
-  const url = `${SUPABASE_URL}/rest/v1/${table}?select=${encodeURIComponent(select)}&${encodeURIComponent(column)}=ilike.*${encodedQuery}*&order=${orderCol}&limit=50`;
-  const r = await fetch(url, { headers: HEADERS });
+  const encodedCol = encodeURIComponent(column);
+  const encodedSelect = encodeURIComponent(select);
+  const url = `${SUPABASE_URL}/rest/v1/${table}?select=${encodedSelect}&${encodedCol}=ilike.*${encodedQuery}*&order=${orderCol}&limit=50`;
+  let r;
+  try {
+    r = await fetch(url, { headers: HEADERS });
+  } catch(e) { return []; }
   if (!r.ok) return [];
   const rows = await r.json();
   if (!Array.isArray(rows)) return [];
-  // Use simple case-insensitive substring match — works for all scripts
-  // (Arabic, Ge'ez/Tigrinya, Latin, Ethiopic, Urdu etc.)
+  // Simple substring match — works for ALL scripts (Ethiopic, Arabic, Latin)
   const lower = query.toLowerCase();
   return rows.filter(row => {
-    if (!row[column]) return true;
+    if (!row[column]) return false;
     return row[column].toLowerCase().includes(lower);
   });
 }
@@ -12337,17 +12342,22 @@ async function sbFetch(table, params) {
 
 async function sbSearch(table, select, column, query) {
   const orderCol = table === 'verses' ? 'surah_id' : 'sura_id';
+  // Encode the query safely — Ethiopic/Arabic/non-ASCII chars need full encoding
   const encodedQuery = encodeURIComponent(query);
-  const url = `${SUPABASE_URL}/rest/v1/${table}?select=${encodeURIComponent(select)}&${encodeURIComponent(column)}=ilike.*${encodedQuery}*&order=${orderCol}&limit=50`;
-  const r = await fetch(url, { headers: HEADERS });
+  const encodedCol = encodeURIComponent(column);
+  const encodedSelect = encodeURIComponent(select);
+  const url = `${SUPABASE_URL}/rest/v1/${table}?select=${encodedSelect}&${encodedCol}=ilike.*${encodedQuery}*&order=${orderCol}&limit=50`;
+  let r;
+  try {
+    r = await fetch(url, { headers: HEADERS });
+  } catch(e) { return []; }
   if (!r.ok) return [];
   const rows = await r.json();
   if (!Array.isArray(rows)) return [];
-  // Use simple case-insensitive substring match — works for all scripts
-  // (Arabic, Ge'ez/Tigrinya, Latin, Ethiopic, Urdu etc.)
+  // Simple substring match — works for ALL scripts (Ethiopic, Arabic, Latin)
   const lower = query.toLowerCase();
   return rows.filter(row => {
-    if (!row[column]) return true;
+    if (!row[column]) return false;
     return row[column].toLowerCase().includes(lower);
   });
 }
