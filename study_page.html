@@ -262,7 +262,7 @@ function setLang(lang, btn) {
   document.querySelectorAll('.lang-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   document.querySelectorAll('.translation-text').forEach(el => {
-    el.classList.toggle('hidden', lang === 'ar');
+    applyLangToElement(el, lang);
   });
 }
 
@@ -514,21 +514,41 @@ async function loadStudyPage() {
 async function loadVerseText(sura, aya) {
   try {
     const rows = await sbFetch('ayas', {
-      select: 'arabic,english,aya_text,amharic',
+      select: 'arabic,english,aya_text,amharic,oromo,somali',
       sura_id: `eq.${sura}`, aya_number: `eq.${aya}`, limit: '1'
     });
+    const transEl = document.getElementById(`trans-${sura}-${aya}`);
+    const arabicEl = document.getElementById(`arabic-${sura}-${aya}`);
     if (rows.length > 0) {
       const r = rows[0];
-      document.getElementById(`arabic-${sura}-${aya}`).textContent  = r.arabic  || '';
-      document.getElementById(`trans-${sura}-${aya}`).textContent   = r.english || r.aya_text || '';
+      arabicEl.textContent = r.arabic || '';
+      // Store all translations as data attributes
+      transEl.dataset.en = r.english || '';
+      transEl.dataset.ti = r.aya_text || '';
+      transEl.dataset.am = r.amharic || '';
+      transEl.dataset.or = r.oromo || '';
+      transEl.dataset.so = r.somali || '';
+      // Show current language
+      applyLangToElement(transEl, currentLang);
     } else {
-      document.getElementById(`arabic-${sura}-${aya}`).textContent = '—';
-      document.getElementById(`trans-${sura}-${aya}`).textContent  = '—';
+      arabicEl.textContent = '—';
+      transEl.textContent = '—';
     }
   } catch {
     document.getElementById(`arabic-${sura}-${aya}`).textContent = '—';
     document.getElementById(`trans-${sura}-${aya}`).textContent  = '—';
   }
+}
+
+function applyLangToElement(el, lang) {
+  if (lang === 'ar') {
+    el.classList.add('hidden');
+    return;
+  }
+  el.classList.remove('hidden');
+  const map = { en: el.dataset.en, ti: el.dataset.ti, am: el.dataset.am, or: el.dataset.or, so: el.dataset.so };
+  const text = map[lang] || el.dataset.en || '';
+  el.textContent = text || (lang !== 'en' ? '(No ' + lang.toUpperCase() + ' translation available)' : '');
 }
 
 loadStudyPage();
