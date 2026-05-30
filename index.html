@@ -132,6 +132,12 @@ body { font-family: 'EB Garamond', Georgia, serif; background: #F0F3F7; color: #
 .xref-card:hover { border-color: #7A8FA6; background: #EEF2F7; }
 .xref-ref { font-family: 'Amiri', serif; font-size: 18px; color: #7A8FA6; font-weight: 700; }
 .xref-theme { font-size: 12px; color: #333; margin-top: 3px; line-height: 1.4; font-weight: 600; }
+.theme-group { margin-bottom: 18px; }
+.theme-label { font-size: 13px; font-weight: 700; color: #c9a84c; margin-bottom: 8px; border-bottom: 1px solid #333; padding-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+.theme-count { background: #333; color: #aaa; font-size: 11px; padding: 1px 7px; border-radius: 10px; font-weight: 500; }
+.theme-verses { display: flex; flex-wrap: wrap; gap: 6px; }
+.xref-chip { background: #1e1e1e; border: 1px solid #444; color: #e0c97f; padding: 5px 11px; border-radius: 14px; font-size: 13px; cursor: pointer; transition: background 0.2s, border-color 0.2s; font-family: 'Amiri', serif; }
+.xref-chip:hover { background: #2a2a2a; border-color: #c9a84c; }
 .ai-box { background: var(--surface); border: 2px solid #6B8299; border-radius: 10px; padding: 16px; }
 .ai-presets { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
 .ai-preset { padding: 5px 12px; border: 2px solid #6B8299; border-radius: 20px; font-size: 12px; color: #2A3F4E; cursor: pointer; background: var(--surface); font-weight: 600; }
@@ -3519,32 +3525,47 @@ async function toggleVerse(num, suraId, el) {
     }
   }
 
-  // Load cross-references
+  // Load thematic cross-references
   const xrefPanel = document.getElementById(`tp-${num}-xrefs`);
   const xrefTab = document.getElementById(`xref-tab-${num}`);
   if (xrefPanel.querySelector('.loading')) {
     try {
-      const refs = await sbFetch('cross_references', {
-        select: 'ref_surah,ref_ayah_start,ref_ayah_end',
-        source_surah: `eq.${suraId}`,
-        source_ayah: `eq.${num}`
+      // Step 1: find all themes containing this verse
+      const themeRows = await sbFetch('thematic_cross_references', {
+        select: 'theme',
+        sura: `eq.${suraId}`,
+        aya: `eq.${num}`
       });
-      if (xrefTab) xrefTab.textContent = `Cross-Refs (${refs.length})`;
-      if (refs.length > 0) {
-        xrefPanel.innerHTML = `<div class="xref-grid">${refs.map(r => {
-          const label = r.ref_ayah_start === r.ref_ayah_end
-            ? `${r.ref_surah}:${r.ref_ayah_start}`
-            : `${r.ref_surah}:${r.ref_ayah_start}–${r.ref_ayah_end}`;
-          return `<div class="xref-card" onclick="navToVerse(${r.ref_surah}, ${r.ref_ayah_start})">
-            <div class="xref-ref">${label}</div>
-            <div class="xref-theme">Surah ${r.ref_surah}, Ayah ${r.ref_ayah_start}</div>
-          </div>`;
-        }).join('')}</div>`;
+      const themes = [...new Set(themeRows.map(r => r.theme))];
+
+      if (themes.length === 0) {
+        if (xrefTab) xrefTab.textContent = `Cross-Refs (0)`;
+        xrefPanel.innerHTML = `<div style="color:#BBB;font-style:italic;font-size:13px;padding:20px;text-align:center">No thematic cross-references for this verse.</div>`;
       } else {
-        xrefPanel.innerHTML = `<div style="color:#BBB;font-style:italic;font-size:13px;padding:20px;text-align:center">No cross-references for this verse.</div>`;
+        let totalCount = 0;
+        let html = '';
+        for (const theme of themes) {
+          const encoded = encodeURIComponent(theme);
+          const verseRows = await sbFetch('thematic_cross_references', {
+            select: 'sura,aya',
+            theme: `eq.${encoded}`,
+            order: 'sura.asc,aya.asc'
+          });
+          const others = verseRows.filter(v => !(v.sura == suraId && v.aya == num));
+          totalCount += others.length;
+          html += `<div class="theme-group">
+            <div class="theme-label">${theme} <span class="theme-count">${others.length}</span></div>
+            <div class="theme-verses">${others.map(v =>
+              `<span class="xref-chip" onclick="navToVerse(${v.sura},${v.aya})">${v.sura}:${v.aya}</span>`
+            ).join('')}</div>
+          </div>`;
+        }
+        if (xrefTab) xrefTab.textContent = `Cross-Refs (${totalCount})`;
+        xrefPanel.innerHTML = html;
       }
-    } catch {
+    } catch(e) {
       xrefPanel.innerHTML = `<div style="color:#BBB;font-style:italic;font-size:13px;padding:20px;text-align:center">Could not load cross-references.</div>`;
+      console.error('xref error', e);
     }
   }
 
@@ -9412,6 +9433,12 @@ body { font-family: 'EB Garamond', Georgia, serif; background: #F0F3F7; color: #
 .xref-card:hover { border-color: #7A8FA6; background: #EEF2F7; }
 .xref-ref { font-family: 'Amiri', serif; font-size: 18px; color: #7A8FA6; font-weight: 700; }
 .xref-theme { font-size: 12px; color: #333; margin-top: 3px; line-height: 1.4; font-weight: 600; }
+.theme-group { margin-bottom: 18px; }
+.theme-label { font-size: 13px; font-weight: 700; color: #c9a84c; margin-bottom: 8px; border-bottom: 1px solid #333; padding-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+.theme-count { background: #333; color: #aaa; font-size: 11px; padding: 1px 7px; border-radius: 10px; font-weight: 500; }
+.theme-verses { display: flex; flex-wrap: wrap; gap: 6px; }
+.xref-chip { background: #1e1e1e; border: 1px solid #444; color: #e0c97f; padding: 5px 11px; border-radius: 14px; font-size: 13px; cursor: pointer; transition: background 0.2s, border-color 0.2s; font-family: 'Amiri', serif; }
+.xref-chip:hover { background: #2a2a2a; border-color: #c9a84c; }
 .ai-box { background: var(--surface); border: 2px solid #6B8299; border-radius: 10px; padding: 16px; }
 .ai-presets { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
 .ai-preset { padding: 5px 12px; border: 2px solid #6B8299; border-radius: 20px; font-size: 12px; color: #2A3F4E; cursor: pointer; background: var(--surface); font-weight: 600; }
@@ -12793,32 +12820,47 @@ async function toggleVerse(num, suraId, el) {
     }
   }
 
-  // Load cross-references
+  // Load thematic cross-references
   const xrefPanel = document.getElementById(`tp-${num}-xrefs`);
   const xrefTab = document.getElementById(`xref-tab-${num}`);
   if (xrefPanel.querySelector('.loading')) {
     try {
-      const refs = await sbFetch('cross_references', {
-        select: 'ref_surah,ref_ayah_start,ref_ayah_end',
-        source_surah: `eq.${suraId}`,
-        source_ayah: `eq.${num}`
+      // Step 1: find all themes containing this verse
+      const themeRows = await sbFetch('thematic_cross_references', {
+        select: 'theme',
+        sura: `eq.${suraId}`,
+        aya: `eq.${num}`
       });
-      if (xrefTab) xrefTab.textContent = `Cross-Refs (${refs.length})`;
-      if (refs.length > 0) {
-        xrefPanel.innerHTML = `<div class="xref-grid">${refs.map(r => {
-          const label = r.ref_ayah_start === r.ref_ayah_end
-            ? `${r.ref_surah}:${r.ref_ayah_start}`
-            : `${r.ref_surah}:${r.ref_ayah_start}–${r.ref_ayah_end}`;
-          return `<div class="xref-card" onclick="navToVerse(${r.ref_surah}, ${r.ref_ayah_start})">
-            <div class="xref-ref">${label}</div>
-            <div class="xref-theme">Surah ${r.ref_surah}, Ayah ${r.ref_ayah_start}</div>
-          </div>`;
-        }).join('')}</div>`;
+      const themes = [...new Set(themeRows.map(r => r.theme))];
+
+      if (themes.length === 0) {
+        if (xrefTab) xrefTab.textContent = `Cross-Refs (0)`;
+        xrefPanel.innerHTML = `<div style="color:#BBB;font-style:italic;font-size:13px;padding:20px;text-align:center">No thematic cross-references for this verse.</div>`;
       } else {
-        xrefPanel.innerHTML = `<div style="color:#BBB;font-style:italic;font-size:13px;padding:20px;text-align:center">No cross-references for this verse.</div>`;
+        let totalCount = 0;
+        let html = '';
+        for (const theme of themes) {
+          const encoded = encodeURIComponent(theme);
+          const verseRows = await sbFetch('thematic_cross_references', {
+            select: 'sura,aya',
+            theme: `eq.${encoded}`,
+            order: 'sura.asc,aya.asc'
+          });
+          const others = verseRows.filter(v => !(v.sura == suraId && v.aya == num));
+          totalCount += others.length;
+          html += `<div class="theme-group">
+            <div class="theme-label">${theme} <span class="theme-count">${others.length}</span></div>
+            <div class="theme-verses">${others.map(v =>
+              `<span class="xref-chip" onclick="navToVerse(${v.sura},${v.aya})">${v.sura}:${v.aya}</span>`
+            ).join('')}</div>
+          </div>`;
+        }
+        if (xrefTab) xrefTab.textContent = `Cross-Refs (${totalCount})`;
+        xrefPanel.innerHTML = html;
       }
-    } catch {
+    } catch(e) {
       xrefPanel.innerHTML = `<div style="color:#BBB;font-style:italic;font-size:13px;padding:20px;text-align:center">Could not load cross-references.</div>`;
+      console.error('xref error', e);
     }
   }
 
