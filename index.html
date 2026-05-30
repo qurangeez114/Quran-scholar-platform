@@ -6625,18 +6625,25 @@ async function searchLexicon(q, closeBar) {
   const cols = 'id,sura_id,aya_number,word_position,arabic_word,original_meaning,root_word,modern_meaning,meaning_evolution,scholarly_explanation,lexicon_sources';
   let results = [];
   try {
-    // Search arabic_word, root_word, and original_meaning in parallel
-    const tasks = [
-      sbSearch('word_analysis', cols, 'arabic_word', raw).catch(() => []),
-      sbSearch('word_analysis', cols, 'root_word', raw).catch(() => []),
-      sbSearch('word_analysis', cols, 'original_meaning', raw).catch(() => [])
-    ];
-    // Also try stripping diacritics for Arabic searches
-    const stripped = raw.replace(/[ً-ٰٟۖ-ۭ]/g, '');
-    if (stripped !== raw && stripped.length >= 2) {
-      tasks.push(sbSearch('word_analysis', cols, 'arabic_word', stripped).catch(() => []));
+    // RPC search — handles diacritic normalization in the database
+    const rpcRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/search_lexicon`, {
+      method: 'POST',
+      headers: { ...HEADERS, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ search_term: raw })
+    });
+    let all = [];
+    if (rpcRes.ok) {
+      const rpcRows = await rpcRes.json();
+      if (Array.isArray(rpcRows)) all = rpcRows;
     }
-    const all = (await Promise.all(tasks)).flat();
+    // Fallback if RPC returned nothing
+    if (!all.length) {
+      const tasks = [
+        sbSearch('word_analysis', cols, 'arabic_word', raw).catch(() => []),
+        sbSearch('word_analysis', cols, 'original_meaning', raw).catch(() => [])
+      ];
+      all = (await Promise.all(tasks)).flat();
+    }
     const seen = new Set();
     results = all.filter(r => {
       if (seen.has(r.id)) return false;
@@ -15871,18 +15878,25 @@ async function searchLexicon(q, closeBar) {
   const cols = 'id,sura_id,aya_number,word_position,arabic_word,original_meaning,root_word,modern_meaning,meaning_evolution,scholarly_explanation,lexicon_sources';
   let results = [];
   try {
-    // Search arabic_word, root_word, and original_meaning in parallel
-    const tasks = [
-      sbSearch('word_analysis', cols, 'arabic_word', raw).catch(() => []),
-      sbSearch('word_analysis', cols, 'root_word', raw).catch(() => []),
-      sbSearch('word_analysis', cols, 'original_meaning', raw).catch(() => [])
-    ];
-    // Also try stripping diacritics for Arabic searches
-    const stripped = raw.replace(/[ً-ٰٟۖ-ۭ]/g, '');
-    if (stripped !== raw && stripped.length >= 2) {
-      tasks.push(sbSearch('word_analysis', cols, 'arabic_word', stripped).catch(() => []));
+    // RPC search — handles diacritic normalization in the database
+    const rpcRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/search_lexicon`, {
+      method: 'POST',
+      headers: { ...HEADERS, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ search_term: raw })
+    });
+    let all = [];
+    if (rpcRes.ok) {
+      const rpcRows = await rpcRes.json();
+      if (Array.isArray(rpcRows)) all = rpcRows;
     }
-    const all = (await Promise.all(tasks)).flat();
+    // Fallback if RPC returned nothing
+    if (!all.length) {
+      const tasks = [
+        sbSearch('word_analysis', cols, 'arabic_word', raw).catch(() => []),
+        sbSearch('word_analysis', cols, 'original_meaning', raw).catch(() => [])
+      ];
+      all = (await Promise.all(tasks)).flat();
+    }
     const seen = new Set();
     results = all.filter(r => {
       if (seen.has(r.id)) return false;
