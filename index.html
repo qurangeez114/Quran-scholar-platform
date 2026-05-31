@@ -8560,7 +8560,63 @@ async function fetchSupabaseContext(query) {
       );
       const asbabData = await asbabRes.json();
       if (asbabData && asbabData.length > 0) results.asbab = asbabData;
+
+      // Thematic cross-references
+      const themeRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/thematic_cross_references?sura=eq.${sura}&aya=eq.${aya}&select=theme`,
+        { headers: HEADERS }
+      );
+      const themeData = await themeRes.json();
+      if (themeData && themeData.length > 0) {
+        results.themes = themeData.map(t => t.theme);
+        // Get all verses in each theme
+        const allThemeVerses = [];
+        for (const t of themeData) {
+          const tvRes = await fetch(
+            `${SUPABASE_URL}/rest/v1/thematic_cross_references?theme=eq.${encodeURIComponent(t.theme)}&select=sura,aya&order=sura.asc,aya.asc`,
+            { headers: HEADERS }
+          );
+          const tvData = await tvRes.json();
+          allThemeVerses.push({ theme: t.theme, verses: tvData.map(v => v.sura+':'+v.aya) });
+        }
+        results.themeVerses = allThemeVerses;
+      }
+
+      // Contradiction analysis
+      const contraRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/contradiction_analysis?sura=eq.${sura}&aya=eq.${aya}&select=topic,contradiction_type,claim,traditional_response,critical_analysis,severity,category,contradicted_by,socratic_questions`,
+        { headers: HEADERS }
+      );
+      const contraData = await contraRes.json();
+      if (contraData && contraData.length > 0) results.contradictions = contraData;
     }
+
+    // Also search contradiction_analysis by topic keyword
+    try {
+      const topicContraRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/contradiction_analysis?topic=ilike.*${encodeURIComponent(query.slice(0,30))}*&select=sura,aya,topic,contradiction_type,claim,traditional_response,severity&limit=5`,
+        { headers: HEADERS }
+      );
+      const topicContraData = await topicContraRes.json();
+      if (topicContraData && topicContraData.length > 0) results.relatedContradictions = topicContraData;
+    } catch {}
+
+    // Search thematic cross-references by theme keyword
+    try {
+      const topicThemeRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/thematic_cross_references?theme=ilike.*${encodeURIComponent(query.slice(0,30))}*&select=theme,sura,aya&limit=20`,
+        { headers: HEADERS }
+      );
+      const topicThemeData = await topicThemeRes.json();
+      if (topicThemeData && topicThemeData.length > 0) {
+        const themeMap = {};
+        topicThemeData.forEach(r => {
+          if (!themeMap[r.theme]) themeMap[r.theme] = [];
+          themeMap[r.theme].push(r.sura+':'+r.aya);
+        });
+        results.relatedThemes = themeMap;
+      }
+    } catch {}
 
     // Sura name search (topic-based)
     const suraRes = await fetch(
@@ -8590,6 +8646,12 @@ USER QUERY: ${userQuery}
 
 DATABASE CONTEXT FROM QURAN DATABASE:
 ${dbSummary}
+
+The database context may include:
+- Verse text (Arabic, English, translations)
+- Thematic cross-reference groups with related verses
+- Contradiction analysis: claims, traditional responses, critical analysis
+- Hadith connections, Tafsir, Asbab al-nuzul, Word analysis
 
 Please produce a comprehensive, well-structured research report that includes:
 
@@ -18001,7 +18063,63 @@ async function fetchSupabaseContext(query) {
       );
       const asbabData = await asbabRes.json();
       if (asbabData && asbabData.length > 0) results.asbab = asbabData;
+
+      // Thematic cross-references
+      const themeRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/thematic_cross_references?sura=eq.${sura}&aya=eq.${aya}&select=theme`,
+        { headers: HEADERS }
+      );
+      const themeData = await themeRes.json();
+      if (themeData && themeData.length > 0) {
+        results.themes = themeData.map(t => t.theme);
+        // Get all verses in each theme
+        const allThemeVerses = [];
+        for (const t of themeData) {
+          const tvRes = await fetch(
+            `${SUPABASE_URL}/rest/v1/thematic_cross_references?theme=eq.${encodeURIComponent(t.theme)}&select=sura,aya&order=sura.asc,aya.asc`,
+            { headers: HEADERS }
+          );
+          const tvData = await tvRes.json();
+          allThemeVerses.push({ theme: t.theme, verses: tvData.map(v => v.sura+':'+v.aya) });
+        }
+        results.themeVerses = allThemeVerses;
+      }
+
+      // Contradiction analysis
+      const contraRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/contradiction_analysis?sura=eq.${sura}&aya=eq.${aya}&select=topic,contradiction_type,claim,traditional_response,critical_analysis,severity,category,contradicted_by,socratic_questions`,
+        { headers: HEADERS }
+      );
+      const contraData = await contraRes.json();
+      if (contraData && contraData.length > 0) results.contradictions = contraData;
     }
+
+    // Also search contradiction_analysis by topic keyword
+    try {
+      const topicContraRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/contradiction_analysis?topic=ilike.*${encodeURIComponent(query.slice(0,30))}*&select=sura,aya,topic,contradiction_type,claim,traditional_response,severity&limit=5`,
+        { headers: HEADERS }
+      );
+      const topicContraData = await topicContraRes.json();
+      if (topicContraData && topicContraData.length > 0) results.relatedContradictions = topicContraData;
+    } catch {}
+
+    // Search thematic cross-references by theme keyword
+    try {
+      const topicThemeRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/thematic_cross_references?theme=ilike.*${encodeURIComponent(query.slice(0,30))}*&select=theme,sura,aya&limit=20`,
+        { headers: HEADERS }
+      );
+      const topicThemeData = await topicThemeRes.json();
+      if (topicThemeData && topicThemeData.length > 0) {
+        const themeMap = {};
+        topicThemeData.forEach(r => {
+          if (!themeMap[r.theme]) themeMap[r.theme] = [];
+          themeMap[r.theme].push(r.sura+':'+r.aya);
+        });
+        results.relatedThemes = themeMap;
+      }
+    } catch {}
 
     // Sura name search (topic-based)
     const suraRes = await fetch(
@@ -18031,6 +18149,12 @@ USER QUERY: ${userQuery}
 
 DATABASE CONTEXT FROM QURAN DATABASE:
 ${dbSummary}
+
+The database context may include:
+- Verse text (Arabic, English, translations)
+- Thematic cross-reference groups with related verses
+- Contradiction analysis: claims, traditional responses, critical analysis
+- Hadith connections, Tafsir, Asbab al-nuzul, Word analysis
 
 Please produce a comprehensive, well-structured research report that includes:
 
