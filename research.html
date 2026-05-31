@@ -1821,20 +1821,36 @@ async function fetchDBContext(query) {
       const s = parseInt(ref[1]), a = parseInt(ref[2]);
       ctx.mode = 'verse';
       ctx.reference = { sura: s, aya: a };
-      const [aya, xref, words, hadith, tafsir, asbab] = await Promise.all([
+      const [aya, xref, words, hadith, tafsir, asbab, themes, contra] = await Promise.all([
         fetch(`${SB_URL}/rest/v1/ayas?sura_id=eq.${s}&aya_number=eq.${a}&select=arabic,english,aya_text,amharic,oromo,somali`, {headers:hdrs}).then(r=>r.json()),
         fetch(`${SB_URL}/rest/v1/cross_references?sura_id=eq.${s}&aya_number=eq.${a}&select=ref_sura,ref_aya,theme&limit=8`, {headers:hdrs}).then(r=>r.json()),
         fetch(`${SB_URL}/rest/v1/word_analysis?sura_id=eq.${s}&aya_number=eq.${a}&select=word_arabic,root,meaning_english,language_origin&limit=15`, {headers:hdrs}).then(r=>r.json()),
         fetch(`${SB_URL}/rest/v1/hadith_connections?sura_id=eq.${s}&aya_number=eq.${a}&select=hadith_text,source,narrator,relevance&limit=5`, {headers:hdrs}).then(r=>r.json()),
         fetch(`${SB_URL}/rest/v1/tafsir_entries?sura=eq.${s}&aya=eq.${a}&select=scholar_name,content,tradition&limit=5`, {headers:hdrs}).then(r=>r.json()),
         fetch(`${SB_URL}/rest/v1/asbab_al_nuzul?sura_id=eq.${s}&aya_number=eq.${a}&select=*&limit=3`, {headers:hdrs}).then(r=>r.json()),
+        fetch(`${SB_URL}/rest/v1/thematic_cross_references?sura=eq.${s}&aya=eq.${a}&select=theme`, {headers:hdrs}).then(r=>r.json()),
+        fetch(`${SB_URL}/rest/v1/contradiction_analysis?sura=eq.${s}&aya=eq.${a}&select=topic,contradiction_type,claim,traditional_response,critical_analysis,severity,category,contradicted_by,socratic_questions,claim_side,counter_side`, {headers:hdrs}).then(r=>r.json()),
       ]);
-      if (aya?.length)    ctx.verse     = aya[0];
-      if (xref?.length)   ctx.crossrefs = xref;
-      if (words?.length)  ctx.words     = words;
-      if (hadith?.length) ctx.hadith    = hadith;
-      if (tafsir?.length) ctx.tafsir    = tafsir;
-      if (asbab?.length)  ctx.asbab     = asbab;
+      if (aya?.length)    ctx.verse          = aya[0];
+      if (xref?.length)   ctx.crossrefs      = xref;
+      if (words?.length)  ctx.words          = words;
+      if (hadith?.length) ctx.hadith         = hadith;
+      if (tafsir?.length) ctx.tafsir         = tafsir;
+      if (asbab?.length)  ctx.asbab          = asbab;
+      if (themes?.length) ctx.themes         = themes.map(t => t.theme);
+      if (contra?.length) ctx.contradictions = contra;
+
+      // Fetch all verses in each theme
+      if (themes?.length) {
+        const themeVerses = [];
+        for (const t of themes) {
+          try {
+            const tv = await fetch(`${SB_URL}/rest/v1/thematic_cross_references?theme=eq.${encodeURIComponent(t.theme)}&select=sura,aya&order=sura.asc,aya.asc`, {headers:hdrs}).then(r=>r.json());
+            themeVerses.push({ theme: t.theme, verses: tv.map(v => v.sura+':'+v.aya) });
+          } catch {}
+        }
+        ctx.themeVerses = themeVerses;
+      }
       return ctx;
     }
 
@@ -1882,12 +1898,30 @@ async function fetchDBContext(query) {
     if (madhhabRulings.length) ctx.madhhab_rulings  = madhhabRulings;
     if (ayaMatches.length)     ctx.quran_verses     = ayaMatches;
 
+    // Also search thematic cross-references and contradiction analysis
+    const [themeMatches, contraMatches] = await Promise.all([
+      safe(`${SB_URL}/rest/v1/thematic_cross_references?theme=ilike.${q}&select=theme,sura,aya&limit=30`),
+      safe(`${SB_URL}/rest/v1/contradiction_analysis?topic=ilike.${q}&select=sura,aya,topic,contradiction_type,claim,traditional_response,critical_analysis,severity,category,contradicted_by,claim_side,counter_side&limit=8`),
+    ]);
+
+    if (themeMatches.length) {
+      const themeMap = {};
+      themeMatches.forEach(r => {
+        if (!themeMap[r.theme]) themeMap[r.theme] = [];
+        themeMap[r.theme].push(r.sura+':'+r.aya);
+      });
+      ctx.thematic_networks = themeMap;
+    }
+    if (contraMatches.length) ctx.contradiction_debates = contraMatches;
+
     ctx.match_summary = {
-      hadiths:       hadithMatches.length,
-      analyses:      hadithAnalyses.length,
-      madhhab_topics: madhhabTopics.length,
-      madhhab_rulings: madhhabRulings.length,
-      quran_verses:  ayaMatches.length,
+      hadiths:              hadithMatches.length,
+      analyses:             hadithAnalyses.length,
+      madhhab_topics:       madhhabTopics.length,
+      madhhab_rulings:      madhhabRulings.length,
+      quran_verses:         ayaMatches.length,
+      thematic_networks:    themeMatches.length,
+      contradiction_debates: contraMatches.length,
     };
   } catch(e) { ctx.dbError = e.message; }
   return ctx;
@@ -1915,9 +1949,17 @@ QUERY: ${query}
 DATABASE CONTEXT:
 ${JSON.stringify(ctx, null, 2).substring(0, 3500)}
 
+IMPORTANT: If ctx.thematic_networks or ctx.contradiction_debates exist, use them prominently.
+- ctx.thematic_networks = verse groups by topic from the thematic cross-reference database
+- ctx.contradiction_debates = scholarly debates with claim, traditional response, critical analysis
+- ctx.themes/themeVerses = themes this specific verse belongs to
+- ctx.contradictions = contradiction entries for this specific verse
+
 Produce a tight report covering, in order:
 
 1. VERSE — Arabic, English, location. If the verse doesn't exist, say so plainly.
+2. THEMATIC NETWORKS — If ctx.themes or ctx.themeVerses exist, list which themes this verse belongs to and key related verses.
+3. CONTRADICTION DEBATES — If ctx.contradictions exist, present: the claim, traditional response, critical analysis, and key questions for each debate. Be honest about both sides.
 2. CLASSICAL TAFSIR — One paragraph on the main Sunni (al-Tabari, Ibn Kathir) and Shia (al-Tusi, al-Tabarsi) readings. Note disagreements.
 3. HADITH CONNECTIONS — Related hadiths with grades. Flag weak chains.
 4. CONTRADICTIONS — Other verses or hadiths that contradict this. Modern ethical / scientific tensions. Be specific.
