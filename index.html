@@ -3579,15 +3579,15 @@ async function toggleVerse(num, suraId, el) {
   const xrefTab = document.getElementById(`xref-tab-${num}`);
   if (xrefPanel.querySelector('.loading')) {
     try {
-      // Step 1: find all themes containing this verse
-      const themeRows = await sbFetch('thematic_cross_references', {
-        select: 'theme',
-        sura: `eq.${suraId}`,
-        aya: `eq.${num}`
+      // Use RPC to get all thematic cross-refs in one call
+      const { data: rpcRows, error: rpcErr } = await supabase.rpc('get_thematic_cross_refs', {
+        p_sura: suraId,
+        p_aya: num
       });
-      const themes = [...new Set(themeRows.map(r => r.theme))];
 
-      if (themes.length === 0) {
+      const rows = rpcRows || [];
+
+      if (rows.length === 0) {
         // Fallback to old flat cross_references table
         try {
           const flatRefs = await sbFetch('cross_references', {
@@ -3614,16 +3614,16 @@ async function toggleVerse(num, suraId, el) {
           xrefPanel.innerHTML = `<div style="color:#BBB;font-style:italic;font-size:13px;padding:20px;text-align:center">No cross-references for this verse.</div>`;
         }
       } else {
+        // Group rows by theme
+        const grouped = {};
+        for (const r of rows) {
+          if (!grouped[r.theme]) grouped[r.theme] = [];
+          grouped[r.theme].push({ sura: r.ref_sura, aya: r.ref_aya });
+        }
         let totalCount = 0;
         let html = '';
         const allOthers = [];
-        for (const theme of themes) {
-          const verseRows = await sbFetch('thematic_cross_references', {
-            select: 'sura,aya',
-            theme: `eq.${theme}`,
-            order: 'sura.asc,aya.asc'
-          });
-          const others = verseRows.filter(v => !(v.sura == suraId && v.aya == num));
+        for (const [theme, others] of Object.entries(grouped)) {
           others.forEach(v => { if (!allOthers.find(x => x.sura==v.sura && x.aya==v.aya)) allOthers.push(v); });
           totalCount += others.length;
           const studyUrl = `study_page.html?theme=${encodeURIComponent(theme)}&sura=${suraId}&aya=${num}`;
@@ -13260,15 +13260,15 @@ async function toggleVerse(num, suraId, el) {
   const xrefTab = document.getElementById(`xref-tab-${num}`);
   if (xrefPanel.querySelector('.loading')) {
     try {
-      // Step 1: find all themes containing this verse
-      const themeRows = await sbFetch('thematic_cross_references', {
-        select: 'theme',
-        sura: `eq.${suraId}`,
-        aya: `eq.${num}`
+      // Use RPC to get all thematic cross-refs in one call
+      const { data: rpcRows, error: rpcErr } = await supabase.rpc('get_thematic_cross_refs', {
+        p_sura: suraId,
+        p_aya: num
       });
-      const themes = [...new Set(themeRows.map(r => r.theme))];
 
-      if (themes.length === 0) {
+      const rows = rpcRows || [];
+
+      if (rows.length === 0) {
         // Fallback to old flat cross_references table
         try {
           const flatRefs = await sbFetch('cross_references', {
@@ -13295,16 +13295,16 @@ async function toggleVerse(num, suraId, el) {
           xrefPanel.innerHTML = `<div style="color:#BBB;font-style:italic;font-size:13px;padding:20px;text-align:center">No cross-references for this verse.</div>`;
         }
       } else {
+        // Group rows by theme
+        const grouped = {};
+        for (const r of rows) {
+          if (!grouped[r.theme]) grouped[r.theme] = [];
+          grouped[r.theme].push({ sura: r.ref_sura, aya: r.ref_aya });
+        }
         let totalCount = 0;
         let html = '';
         const allOthers = [];
-        for (const theme of themes) {
-          const verseRows = await sbFetch('thematic_cross_references', {
-            select: 'sura,aya',
-            theme: `eq.${theme}`,
-            order: 'sura.asc,aya.asc'
-          });
-          const others = verseRows.filter(v => !(v.sura == suraId && v.aya == num));
+        for (const [theme, others] of Object.entries(grouped)) {
           others.forEach(v => { if (!allOthers.find(x => x.sura==v.sura && x.aya==v.aya)) allOthers.push(v); });
           totalCount += others.length;
           const studyUrl = `study_page.html?theme=${encodeURIComponent(theme)}&sura=${suraId}&aya=${num}`;
