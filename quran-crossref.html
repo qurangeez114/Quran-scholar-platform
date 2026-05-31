@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Confirmation of Previous Scripture — Quranic Cross-Reference</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Almendra+SC&family=IBM+Plex+Mono:wght@300;400&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ink: #1a1209; --parchment: #f5edd8; --parchment-dark: #ede0c4;
+  --gold: #b8860b; --gold-light: #d4a017; --gold-dim: #8b6914;
+  --rust: #8b3a0f; --teal: #2a6b6b; --teal-light: #3d9b9b;
+  --border: rgba(184,134,11,0.35); --shadow: rgba(26,18,9,0.15);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  background: var(--parchment);
+  color: var(--ink);
+  min-height: 100vh;
+  background-image: radial-gradient(ellipse at 20% 10%, rgba(184,134,11,0.07) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 90%, rgba(42,107,107,0.06) 0%, transparent 50%);
+}
+
+/* HEADER */
+.header { text-align:center; padding:2rem 1.5rem 1.5rem; border-bottom:1px solid var(--border); background:linear-gradient(180deg,rgba(184,134,11,0.05) 0%,transparent 100%); }
+.header::before { content:'۞'; display:block; font-size:1.8rem; color:var(--gold); opacity:.6; margin-bottom:.5rem; }
+.header h1 { font-family:'Almendra SC',serif; font-size:clamp(1.1rem,3vw,1.8rem); letter-spacing:.06em; }
+.header .sub { font-style:italic; font-size:.9rem; color:var(--gold-dim); margin-top:.3rem; }
+
+/* LAYOUT */
+.layout { display:grid; grid-template-columns:260px 1fr; min-height:calc(100vh - 140px); }
+
+/* SIDEBAR */
+.sidebar { border-right:1px solid var(--border); padding:1.25rem 1rem; overflow-y:auto; position:sticky; top:0; height:calc(100vh - 140px); }
+.sidebar::-webkit-scrollbar { width:3px; } .sidebar::-webkit-scrollbar-thumb { background:var(--border); }
+.sec-label { font-family:'IBM Plex Mono',monospace; font-size:.6rem; letter-spacing:.18em; text-transform:uppercase; color:var(--gold-dim); border-bottom:1px solid var(--border); padding-bottom:.3rem; margin-bottom:.6rem; margin-top:1rem; }
+.sec-label:first-child { margin-top:0; }
+.vgrid { display:grid; grid-template-columns:repeat(4,1fr); gap:.3rem; margin-bottom:.5rem; }
+.vbtn { background:none; border:1px solid transparent; padding:.28rem .1rem; font-family:'IBM Plex Mono',monospace; font-size:.64rem; color:var(--ink); cursor:pointer; border-radius:3px; transition:all .15s; text-align:center; }
+.vbtn:hover { border-color:var(--gold); color:var(--gold-dim); background:rgba(184,134,11,.07); }
+.vbtn.active { background:var(--gold); color:var(--parchment); border-color:var(--gold); }
+.vbtn.sup { color:var(--teal); }
+.vbtn.sup.active { background:var(--teal); color:var(--parchment); border-color:var(--teal); }
+
+/* MAIN */
+.main { padding:1.5rem; }
+
+/* WELCOME */
+.welcome { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:400px; text-align:center; gap:1rem; }
+.welcome .orb { font-size:3rem; color:var(--gold); opacity:.25; }
+.welcome h2 { font-family:'Almendra SC',serif; font-size:1.3rem; color:var(--gold-dim); }
+.welcome p { max-width:380px; font-style:italic; line-height:1.7; color:#5a4a32; font-size:.95rem; }
+.welcome .hint { font-family:'IBM Plex Mono',monospace; font-size:.65rem; letter-spacing:.1em; color:var(--gold-dim); border:1px solid var(--border); padding:.4rem .9rem; border-radius:3px; }
+
+/* VERSE CARD */
+.vcard { border:1px solid var(--border); border-radius:4px; padding:1rem 1.25rem; margin-bottom:1.25rem; position:relative; background:linear-gradient(135deg,rgba(184,134,11,.05),transparent); }
+.vcard::before { content:attr(data-ref); position:absolute; top:-.55rem; left:.9rem; background:var(--parchment); padding:0 .4rem; font-family:'IBM Plex Mono',monospace; font-size:.65rem; color:var(--gold); }
+.vcard .vtext { font-style:italic; line-height:1.8; font-size:1rem; color:#2a1f0f; }
+.vcard .vsource { font-family:'IBM Plex Mono',monospace; font-size:.65rem; color:#9a8060; margin-top:.4rem; }
+
+/* TABS */
+.tab-bar { display:flex; border-bottom:1px solid var(--border); margin-bottom:1.25rem; gap:.25rem; }
+.tab-btn { font-family:'IBM Plex Mono',monospace; font-size:.68rem; letter-spacing:.06em; padding:.5rem .9rem; border:none; background:none; cursor:pointer; color:#7a6040; border-bottom:2px solid transparent; transition:all .15s; }
+.tab-btn.active { color:var(--gold-dim); border-bottom-color:var(--gold); }
+.tab-btn:hover { color:var(--gold-dim); }
+.tab-panel { display:none; }
+.tab-panel.active { display:block; }
+
+/* CROSS-REFS */
+.xref-item { display:flex; align-items:flex-start; gap:.75rem; padding:.65rem 0; border-bottom:1px solid rgba(184,134,11,.15); }
+.xref-item:last-child { border-bottom:none; }
+.xref-num { font-family:'IBM Plex Mono',monospace; font-size:.7rem; background:rgba(184,134,11,.1); color:var(--gold-dim); border:1px solid var(--border); padding:.2rem .5rem; border-radius:3px; cursor:pointer; white-space:nowrap; flex-shrink:0; transition:all .15s; }
+.xref-num:hover { background:var(--gold); color:var(--parchment); }
+.xref-info { flex:1; }
+.xref-theme { font-size:.78rem; font-weight:600; color:var(--teal); margin-bottom:.15rem; }
+.xref-reason { font-size:.82rem; font-style:italic; color:#5a4a32; line-height:1.5; }
+
+/* AI ANALYSIS */
+.ai-btns { display:flex; flex-wrap:wrap; gap:.4rem; margin-bottom:1.25rem; }
+.ai-btn { font-family:'IBM Plex Mono',monospace; font-size:.63rem; letter-spacing:.04em; padding:.35rem .7rem; border:1px solid var(--border); background:none; cursor:pointer; border-radius:3px; color:var(--gold-dim); transition:all .15s; }
+.ai-btn:hover { background:rgba(184,134,11,.1); border-color:var(--gold); }
+.ai-btn.primary { border-color:var(--teal); color:var(--teal); }
+.ai-btn.primary:hover { background:rgba(42,107,107,.1); }
+
+.ai-result { border:1px solid var(--border); border-radius:4px; padding:1.1rem 1.25rem; margin-bottom:1rem; min-height:80px; line-height:1.75; }
+.ai-result-label { font-family:'IBM Plex Mono',monospace; font-size:.62rem; letter-spacing:.12em; text-transform:uppercase; color:var(--gold-dim); margin-bottom:.65rem; padding-bottom:.35rem; border-bottom:1px solid var(--border); }
+.ai-result p { font-size:.95rem; color:#2a1f0f; margin-bottom:.5rem; }
+.ai-result h4 { font-family:'Almendra SC',serif; font-size:.82rem; color:var(--teal); margin:.9rem 0 .3rem; }
+.ai-loading { display:flex; align-items:center; gap:.65rem; color:var(--gold-dim); font-style:italic; font-size:.9rem; }
+.spinner { width:18px; height:18px; border:2px solid var(--border); border-top-color:var(--gold); border-radius:50%; animation:spin .8s linear infinite; flex-shrink:0; }
+@keyframes spin { to { transform:rotate(360deg); } }
+.conclusion-badge { display:inline-block; margin-top:.75rem; padding:.3rem .8rem; border-radius:3px; font-family:'IBM Plex Mono',monospace; font-size:.65rem; letter-spacing:.06em; text-transform:uppercase; }
+.badge-strong { background:rgba(42,107,107,.12); color:var(--teal); border:1px solid rgba(42,107,107,.3); }
+.badge-partial { background:rgba(184,134,11,.1); color:var(--gold-dim); border:1px solid var(--border); }
+.badge-disputed { background:rgba(139,58,15,.1); color:var(--rust); border:1px solid rgba(139,58,15,.25); }
+.badge-diff { background:rgba(184,134,11,.08); color:var(--gold-dim); border:1px solid var(--border); }
+.badge-contra { background:rgba(139,58,15,.14); color:var(--rust); border:1px solid rgba(139,58,15,.3); }
+
+/* CHAT */
+.chat-box { border:1px solid var(--border); border-radius:4px; overflow:hidden; }
+.chat-msgs { padding:.85rem; min-height:120px; max-height:320px; overflow-y:auto; display:flex; flex-direction:column; gap:.65rem; }
+.chat-msgs::-webkit-scrollbar { width:3px; } .chat-msgs::-webkit-scrollbar-thumb { background:var(--border); }
+.msg { padding:.55rem .85rem; border-radius:4px; font-size:.9rem; line-height:1.65; max-width:90%; }
+.msg.user { background:rgba(184,134,11,.12); border:1px solid var(--border); align-self:flex-end; color:#3a2a10; font-style:italic; }
+.msg.ai { background:rgba(42,107,107,.07); border:1px solid rgba(42,107,107,.2); align-self:flex-start; color:#1a2a2a; }
+.msg.thinking { opacity:.6; font-style:italic; font-size:.83rem; }
+.chat-input-row { display:flex; border-top:1px solid var(--border); }
+.chat-input { flex:1; padding:.65rem .9rem; border:none; background:rgba(184,134,11,.04); font-family:'Cormorant Garamond',serif; font-size:.95rem; color:var(--ink); outline:none; resize:none; }
+.chat-send { padding:.65rem 1rem; background:none; border:none; border-left:1px solid var(--border); cursor:pointer; color:var(--gold-dim); font-size:1rem; transition:all .15s; }
+.chat-send:hover { background:rgba(184,134,11,.1); color:var(--gold); }
+.chat-presets { padding:.55rem .75rem; border-top:1px solid var(--border); display:flex; flex-wrap:wrap; gap:.35rem; background:rgba(184,134,11,.02); }
+.preset-chip { font-family:'IBM Plex Mono',monospace; font-size:.6rem; padding:.25rem .55rem; border:1px solid var(--border); border-radius:12px; background:none; cursor:pointer; color:#7a6040; transition:all .15s; }
+.preset-chip:hover { border-color:var(--gold); color:var(--gold-dim); }
+
+@media(max-width:680px){
+  .layout { grid-template-columns:1fr; }
+  .sidebar { position:static; height:auto; border-right:none; border-bottom:1px solid var(--border); }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Confirmation of Previous Scripture</h1>
+  <div class="sub">Quranic Cross-Reference Theme · 16 Primary · 23 Supporting · 120 Pairs</div>
+</div>
+
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sec-label">Primary Confirmation Verses</div>
+    <div class="vgrid" id="primaryGrid"></div>
+    <div class="sec-label">Supporting Validation Verses</div>
+    <div class="vgrid" id="supportingGrid"></div>
+  </aside>
+
+  <main class="main" id="mainArea">
+    <div class="welcome" id="welcomeState">
+      <div class="orb">☽</div>
+      <h2>Select a Verse</h2>
+      <p>Choose any verse from the sidebar to explore cross-references and generate multi-perspectival scholarly analysis.</p>
+      <div class="hint">16 Primary · 23 Supporting · 120 Cross-Reference Pairs</div>
+    </div>
+    <div id="verseArea" style="display:none"></div>
+  </main>
+</div>
+
+<script>
+const API_KEY = 'ANTHROPIC_API_KEY_HERE';
+const MODEL = 'claude-sonnet-4-20250514';
+
+const PRIMARY = ['2:41','2:89','2:91','2:97','2:101','3:3','4:47','5:46','5:48','6:92','10:37','12:111','35:31','46:12','46:30','61:6'];
+const SUPPORTING = ['2:40','2:53','2:87','2:121','2:136','2:285','3:48','3:50','3:81','4:136','5:43','5:44','5:45','5:47','7:157','10:94','21:7','26:196','29:46','32:23','40:53','46:10','57:27'];
+
+const XREF_THEMES = {
+  '2:41':  { theme:'Direct Confirmation Command', reason:'Instructs believing in what was sent down confirming what they already have.' },
+  '2:89':  { theme:'Recognition by People of the Book', reason:'The Quran came confirming what they already possessed, yet was rejected.' },
+  '2:91':  { theme:'Selective Acceptance of Scripture', reason:'They believed earlier scripture but rejected the Quran that confirms it.' },
+  '2:97':  { theme:'Jibreel as Confirming Messenger', reason:'Gabriel brought the Quran confirming prior revelations by divine command.' },
+  '2:101': { theme:'Rejection Despite Confirmation', reason:'A messenger came confirming their scripture; a faction cast it behind their backs.' },
+  '3:3':   { theme:'Sequential Revelation Confirmation', reason:'He sent down the Torah and Gospel before as guidance, then the Quran confirming them.' },
+  '4:47':  { theme:'Call to People of the Book', reason:'Direct address to believe in what was revealed, confirming what they possess.' },
+  '5:46':  { theme:'Gospel Confirming the Torah', reason:'Jesus was sent with the Gospel confirming the Torah before him.' },
+  '5:48':  { theme:'Guardian Over All Scripture', reason:'The Quran is a guardian over prior scripture, confirming and watching over it.' },
+  '6:92':  { theme:'Confirming What Came Before', reason:'The Quran confirms scriptures before it and warns the mother of cities and its surroundings.' },
+  '10:37': { theme:'Cannot Be Fabricated — Confirms Prior', reason:'The Quran cannot be fabricated; it confirms what came before and details the Book.' },
+  '12:111':{ theme:'Confirmation Not Fabrication', reason:'This was not a fabricated account; it is confirmation of what came before it.' },
+  '35:31': { theme:'Truth Confirming in Your Hands', reason:'What is revealed to you is the truth, confirming what came before it.' },
+  '46:12': { theme:'Book of Moses as Prior Witness', reason:'Before it was Moses\' book, a guide and mercy; this Quran confirms it in Arabic.' },
+  '46:30': { theme:'Jinn Recognize the Confirming Book', reason:'The jinn said: We heard a Book revealed after Moses, confirming what came before.' },
+  '61:6':  { theme:'Jesus Foretells the Confirming Prophet', reason:'Jesus announced a messenger coming after him — a direct chain of prophetic confirmation.' },
+  '2:40':  { theme:'Covenant with the Children of Israel', reason:'Supporting: fulfil the covenant; belief in the sent scripture is required.' },
+  '2:53':  { theme:'Moses Given the Torah as Criterion', reason:'Supporting: the Torah was the criterion before, establishing the chain of scripture.' },
+  '2:87':  { theme:'Chain of Messengers and Scripture', reason:'Supporting: messengers were sent successively, each building on prior revelation.' },
+  '2:121': { theme:'Those Who Recite Scripture Truly', reason:'Supporting: those given the Book who recite it as it deserves to be recited.' },
+  '2:136': { theme:'Belief in All Prophets Equally', reason:'Supporting: we believe in all revelations — Torah, Gospel, Quran — without distinction.' },
+  '2:285': { theme:'Messenger Believes in All Revelation', reason:'Supporting: the Prophet believes in Allah, His angels, His books, His messengers.' },
+  '3:48':  { theme:'Jesus Taught Torah and Gospel', reason:'Supporting: God will teach him writing, wisdom, Torah, and Gospel.' },
+  '3:50':  { theme:'Jesus Confirms the Torah', reason:'Supporting: Jesus came confirming the Torah before him and making lawful some things.' },
+  '3:81':  { theme:'Covenant of the Prophets', reason:'Supporting: God took a covenant from every prophet to confirm a future messenger.' },
+  '4:136': { theme:'Believe in All Books Sent Down', reason:'Supporting: command to believe in the Book He sent down and what He sent before.' },
+  '5:43':  { theme:'Torah Has God\'s Judgments', reason:'Supporting: the Torah has the judgment of God — how can they dispute you having it?' },
+  '5:44':  { theme:'Torah Sent with Light and Guidance', reason:'Supporting: the Torah was sent down with light and guidance for the Children of Israel.' },
+  '5:45':  { theme:'Life for Life — Torah\'s Laws', reason:'Supporting: in it God prescribed for them: life for life, eye for eye.' },
+  '5:47':  { theme:'People of the Gospel Judge by It', reason:'Supporting: let the People of the Gospel judge by what God sent down in it.' },
+  '7:157': { theme:'Prophet Described in Torah and Gospel', reason:'Supporting: the unlettered prophet they find written with them in Torah and Gospel.' },
+  '10:94': { theme:'Ask People of Remembrance', reason:'Supporting: if in doubt, ask those who read the Book before you.' },
+  '21:7':  { theme:'All Messengers Were Men Given Revelation', reason:'Supporting: we sent only men inspired before you — ask the people of the reminder.' },
+  '26:196':{ theme:'Mentioned in Prior Scriptures', reason:'Supporting: it is surely in the scriptures of former peoples.' },
+  '29:46': { theme:'Argue Only in the Best Way', reason:'Supporting: we believe in what was sent down to us and sent down to you — our God is one.' },
+  '32:23': { theme:'Moses Given the Book', reason:'Supporting: we gave Moses the Book, so be not in doubt of his meeting it.' },
+  '40:53': { theme:'Moses Given Guidance', reason:'Supporting: we gave Moses the guidance and made the Children of Israel inherit the Book.' },
+  '46:10': { theme:'A Witness from Children of Israel', reason:'Supporting: a witness among the Children of Israel testified to something like it.' },
+  '57:27': { theme:'Jesus and the Gospel of Mercy', reason:'Supporting: we sent Jesus with the Gospel, placing compassion and mercy in the hearts.' },
+};
+
+const PAIRS = {};
+PRIMARY.forEach(v => { PAIRS[v] = []; });
+[['2:41','2:89'],['2:41','2:91'],['2:41','2:97'],['2:41','2:101'],['2:41','3:3'],['2:41','4:47'],['2:41','5:46'],['2:41','5:48'],['2:41','6:92'],['2:41','10:37'],['2:41','12:111'],['2:41','35:31'],['2:41','46:12'],['2:41','46:30'],['2:41','61:6'],
+['2:89','2:91'],['2:89','2:97'],['2:89','2:101'],['2:89','3:3'],['2:89','4:47'],['2:89','5:46'],['2:89','5:48'],['2:89','6:92'],['2:89','10:37'],['2:89','12:111'],['2:89','35:31'],['2:89','46:12'],['2:89','46:30'],['2:89','61:6'],
+['2:91','2:97'],['2:91','2:101'],['2:91','3:3'],['2:91','4:47'],['2:91','5:46'],['2:91','5:48'],['2:91','6:92'],['2:91','10:37'],['2:91','12:111'],['2:91','35:31'],['2:91','46:12'],['2:91','46:30'],['2:91','61:6'],
+['2:97','2:101'],['2:97','3:3'],['2:97','4:47'],['2:97','5:46'],['2:97','5:48'],['2:97','6:92'],['2:97','10:37'],['2:97','12:111'],['2:97','35:31'],['2:97','46:12'],['2:97','46:30'],['2:97','61:6'],
+['2:101','3:3'],['2:101','4:47'],['2:101','5:46'],['2:101','5:48'],['2:101','6:92'],['2:101','10:37'],['2:101','12:111'],['2:101','35:31'],['2:101','46:12'],['2:101','46:30'],['2:101','61:6'],
+['3:3','4:47'],['3:3','5:46'],['3:3','5:48'],['3:3','6:92'],['3:3','10:37'],['3:3','12:111'],['3:3','35:31'],['3:3','46:12'],['3:3','46:30'],['3:3','61:6'],
+['4:47','5:46'],['4:47','5:48'],['4:47','6:92'],['4:47','10:37'],['4:47','12:111'],['4:47','35:31'],['4:47','46:12'],['4:47','46:30'],['4:47','61:6'],
+['5:46','5:48'],['5:46','6:92'],['5:46','10:37'],['5:46','12:111'],['5:46','35:31'],['5:46','46:12'],['5:46','46:30'],['5:46','61:6'],
+['5:48','6:92'],['5:48','10:37'],['5:48','12:111'],['5:48','35:31'],['5:48','46:12'],['5:48','46:30'],['5:48','61:6'],
+['6:92','10:37'],['6:92','12:111'],['6:92','35:31'],['6:92','46:12'],['6:92','46:30'],['6:92','61:6'],
+['10:37','12:111'],['10:37','35:31'],['10:37','46:12'],['10:37','46:30'],['10:37','61:6'],
+['12:111','35:31'],['12:111','46:12'],['12:111','46:30'],['12:111','61:6'],
+['35:31','46:12'],['35:31','46:30'],['35:31','61:6'],
+['46:12','46:30'],['46:12','61:6'],['46:30','61:6']
+].forEach(([a,b]) => { PAIRS[a] && PAIRS[a].push(b); PAIRS[b] && PAIRS[b].push(a); });
+
+const verseChats = {};
+let currentVerse = null;
+
+// Build sidebar
+function buildSidebar() {
+  const pg = document.getElementById('primaryGrid');
+  const sg = document.getElementById('supportingGrid');
+  PRIMARY.forEach(v => {
+    const b = document.createElement('button');
+    b.className='vbtn'; b.textContent=v; b.id='vb_'+v.replace(':','_');
+    b.onclick=()=>openVerse(v); pg.appendChild(b);
+  });
+  SUPPORTING.forEach(v => {
+    const b = document.createElement('button');
+    b.className='vbtn sup'; b.textContent=v; b.id='vb_'+v.replace(':','_');
+    b.onclick=()=>openVerse(v); sg.appendChild(b);
+  });
+}
+
+function setActive(v) {
+  document.querySelectorAll('.vbtn').forEach(b=>b.classList.remove('active'));
+  const b=document.getElementById('vb_'+v.replace(':','_'));
+  if(b) b.classList.add('active');
+}
+
+async function fetchTranslation(verse) {
+  const [s,a]=verse.split(':');
+  try {
+    const r=await fetch(`https://api.alquran.cloud/v1/ayah/${s}:${a}/en.sahih`);
+    const d=await r.json();
+    return d.data&&d.data.text ? d.data.text : null;
+  } catch(e){return null;}
+}
+
+function openVerse(verse) {
+  currentVerse = verse;
+  setActive(verse);
+  document.getElementById('welcomeState').style.display='none';
+  const area = document.getElementById('verseArea');
+  area.style.display='block';
+  if(!verseChats[verse]) verseChats[verse]=[];
+
+  const xrefs = PAIRS[verse]||[];
+  const allRefs = [...PRIMARY,...SUPPORTING].filter(v=>v!==verse);
+  const displayRefs = xrefs.length>0 ? xrefs : allRefs.slice(0,8);
+  const isSupporting = SUPPORTING.includes(verse);
+
+  area.innerHTML = `
+    <div class="vcard" data-ref="Quran ${verse} · ${isSupporting?'Supporting':'Primary'}">
+      <div class="vtext" id="vtext_${verse.replace(':','_')}">
+        <span style="color:#9a8060;font-family:'IBM Plex Mono',monospace;font-size:.75rem;">Loading translation…</span>
+      </div>
+    </div>
+
+    <div class="tab-bar">
+      <button class="tab-btn active" onclick="switchTab('xref','${verse}')">Cross-Refs (${xrefs.length||allRefs.length})</button>
+      <button class="tab-btn" id="aitab_${verse.replace(':','_')}" onclick="switchTab('ai','${verse}')">AI Analysis</button>
+    </div>
+
+    <div class="tab-panel active" id="xref_${verse.replace(':','_')}">
+      <div id="xrefList_${verse.replace(':','_')}">
+        ${displayRefs.map(v=>{
+          const t=XREF_THEMES[v]||{theme:'Confirmation Theme',reason:'Related verse in the Confirmation of Previous Scripture theme.'};
+          return `<div class="xref-item">
+            <button class="xref-num" onclick="openVerse('${v}')">${v}</button>
+            <div class="xref-info">
+              <div class="xref-theme">${t.theme}</div>
+              <div class="xref-reason">${t.reason}</div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+
+    <div class="tab-panel" id="ai_${verse.replace(':','_')}">
+      <div class="ai-btns">
+        <button class="ai-btn primary" onclick="runAI('${verse}','confirmation')">Confirmation Analysis</button>
+        <button class="ai-btn primary" onclick="runAI('${verse}','contradiction')">Contradiction Claims</button>
+        <button class="ai-btn" onclick="runAI('${verse}','muslim')">Muslim Interpretation</button>
+        <button class="ai-btn" onclick="runAI('${verse}','christian')">Christian Interpretation</button>
+        <button class="ai-btn" onclick="runAI('${verse}','historical')">Historical-Critical</button>
+        <button class="ai-btn" onclick="runAI('${verse}','biblical')">Biblical Parallels</button>
+        <button class="ai-btn" onclick="runAI('${verse}','tafsir')">Classical Tafsir</button>
+        <button class="ai-btn" onclick="runAI('${verse}','grammar')">Grammar & Roots</button>
+        <button class="ai-btn" onclick="runAI('${verse}','abrogation')">Abrogation</button>
+        <button class="ai-btn" onclick="runAI('${verse}','hadith')">Related Hadith</button>
+      </div>
+      <div id="aiResult_${verse.replace(':','_')}" class="ai-result" style="display:none"></div>
+      <div class="chat-box">
+        <div class="chat-msgs" id="chatMsgs_${verse.replace(':','_')}"></div>
+        <div class="chat-presets">
+          <button class="preset-chip" onclick="sendChat('${verse}','What earlier scripture is referenced here?')">Earlier scripture</button>
+          <button class="preset-chip" onclick="sendChat('${verse}','What is the closest biblical parallel?')">Biblical parallel</button>
+          <button class="preset-chip" onclick="sendChat('${verse}','How do Muslim scholars interpret this verse?')">Muslim view</button>
+          <button class="preset-chip" onclick="sendChat('${verse}','How would a critic challenge this confirmation claim?')">Critical challenge</button>
+          <button class="preset-chip" onclick="sendChat('${verse}','Is this textual or theological confirmation?')">Textual vs theological</button>
+        </div>
+        <div class="chat-input-row">
+          <textarea class="chat-input" id="chatIn_${verse.replace(':','_')}" placeholder="Ask anything about this verse…" rows="1"
+            onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat('${verse}',null);}"></textarea>
+          <button class="chat-send" onclick="sendChat('${verse}',null)">➤</button>
+        </div>
+      </div>
+    </div>`;
+
+  // Load translation
+  fetchTranslation(verse).then(t=>{
+    const el=document.getElementById('vtext_'+verse.replace(':','_'));
+    if(el&&t) el.innerHTML=`"${t}"<span class="vsource">— Saheeh International</span>`;
+  });
+
+  // Restore chat history
+  renderChatHistory(verse);
+}
+
+function switchTab(tab, verse) {
+  const vk = verse.replace(':','_');
+  document.querySelectorAll(`#xref_${vk},#ai_${vk}`).forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById(`${tab}_${vk}`).classList.add('active');
+  event.target.classList.add('active');
+}
+
+function renderChatHistory(verse) {
+  const vk=verse.replace(':','_');
+  const msgs=document.getElementById('chatMsgs_'+vk);
+  if(!msgs) return;
+  msgs.innerHTML='';
+  (verseChats[verse]||[]).forEach(m=>{
+    const d=document.createElement('div');
+    d.className='msg '+m.role;
+    d.textContent=m.content;
+    msgs.appendChild(d);
+  });
+  msgs.scrollTop=msgs.scrollHeight;
+}
+
+async function runAI(verse,mode) {
+  const vk=verse.replace(':','_');
+  const res=document.getElementById('aiResult_'+vk);
+  res.style.display='block';
+
+  const prompts={
+    confirmation:`Analyze Quran ${verse} under the theme "Confirmation of Previous Scripture". Answer:
+1. What confirmation claim is being made?
+2. Which earlier scripture is referenced?
+3. Closest biblical parallel?
+4. What agreements exist?
+5. What differences exist?
+6. Minor/moderate/substantial differences?
+7. Does evidence support confirmation?
+8. Textual or theological agreement?
+9. Conclusion — one of: Strong Confirmation / Partial Confirmation / Confirmation with Significant Differences / Disputed Confirmation / Apparently Contradictory.
+Be concise and scholarly. Format with clear numbered answers.`,
+    contradiction:`For Quran ${verse}: What contradiction claims are made about this verse's claim to confirm previous scripture? Include: (1) the specific claim, (2) which verses or passages supposedly contradict it, (3) the traditional Muslim response, (4) the critical/academic counter-response. Be balanced.`,
+    muslim:`Classical and contemporary Muslim scholarly interpretations of Quran ${verse} regarding its confirmation of previous scripture. Include major tafsir positions (Ibn Kathir, al-Tabari, al-Qurtubi if relevant) and how they understand the confirmation claim.`,
+    christian:`How would a Christian scholar or theologian interpret the claim in Quran ${verse} that it confirms previous scripture? Include: (1) what a sympathetic ecumenical view would say, (2) what an evangelical/conservative Christian view would say, (3) specific textual agreements or conflicts with New Testament or Old Testament passages.`,
+    historical:`Historical-critical scholarly assessment of Quran ${verse}'s confirmation claim. How do scholars like Wansbrough, Neuwirth, Reynolds, or Donner approach the relationship between the Quran and prior scriptures? What does the evidence actually show?`,
+    biblical:`The closest biblical parallel passages to Quran ${verse}. List specific Bible verses, explain the similarities, and note where the Quranic version agrees, adapts, or diverges from the biblical source material.`,
+    tafsir:`Classical tafsir analysis of Quran ${verse}. What do Ibn Kathir, al-Tabari, al-Zamakhshari, or Fakhr al-Din al-Razi say about this verse's relationship to prior scriptures? Include any disagreements between classical scholars.`,
+    grammar:`Grammar and root word analysis of Quran ${verse}. Focus on the key Arabic terms related to confirmation (e.g. مصدقاً musaddiqan, تصديق tasdiq, بين yadayn). What do the roots reveal about the nature of the confirmation claim?`,
+    abrogation:`Does Quran ${verse} relate to abrogation (naskh) debates? Is this verse considered abrogated or abrogating? What is its status in classical abrogation discussions? How do scholars classify it?`,
+    hadith:`Hadith traditions related to Quran ${verse} and the confirmation of previous scripture. What prophetic traditions address this verse or its theme? Include hadith from Bukhari, Muslim, or other major collections if relevant.`
+  };
+
+  res.innerHTML=`<div class="ai-result-label">${mode.toUpperCase().replace('_',' ')}</div><div class="ai-loading"><div class="spinner"></div><span>Generating analysis…</span></div>`;
+
+  try {
+    const r=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-api-key':API_KEY,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({model:MODEL,max_tokens:1000,messages:[{role:'user',content:prompts[mode]}]})
+    });
+    const d=await r.json();
+    const text=d.content?.map(c=>c.text||'').join('')||'No response.';
+    let html=`<div class="ai-result-label">${mode.toUpperCase().replace('_',' ')}</div>`;
+    // Format numbered lists and detect conclusion
+    const formatted=text
+      .replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')
+      .replace(/\n(\d+)\./g,'<br><strong>$1.</strong>')
+      .replace(/\n/g,'<br>');
+    // Badge for conclusion
+    let badge='';
+    if(mode==='confirmation'){
+      const cats=['Strong Confirmation','Partial Confirmation','Confirmation with Significant Differences','Disputed Confirmation','Apparently Contradictory'];
+      for(const c of cats){
+        if(text.includes(c)){
+          const cls=c.includes('Strong')?'badge-strong':c.includes('Partial')?'badge-partial':c.includes('Contradictory')?'badge-contra':'badge-diff';
+          badge=`<div><span class="conclusion-badge ${cls}">${c}</span></div>`;
+          break;
+        }
+      }
+    }
+    res.innerHTML=html+`<p>${formatted}</p>${badge}`;
+  } catch(e){
+    res.innerHTML=`<div class="ai-result-label">ERROR</div><p style="color:var(--rust)">Failed to load: ${e.message}</p>`;
+  }
+}
+
+async function sendChat(verse, preset) {
+  const vk=verse.replace(':','_');
+  const input=document.getElementById('chatIn_'+vk);
+  const question=preset||input.value.trim();
+  if(!question) return;
+  if(input) input.value='';
+
+  if(!verseChats[verse]) verseChats[verse]=[];
+
+  const msgs=document.getElementById('chatMsgs_'+vk);
+  const addMsg=(role,text)=>{
+    const d=document.createElement('div');
+    d.className='msg '+role; d.textContent=text;
+    msgs.appendChild(d); msgs.scrollTop=msgs.scrollHeight;
+    verseChats[verse].push({role,content:text});
+  };
+
+  addMsg('user',question);
+  const thinking=document.createElement('div');
+  thinking.className='msg ai thinking'; thinking.textContent='Thinking…';
+  msgs.appendChild(thinking); msgs.scrollTop=msgs.scrollHeight;
+
+  const history=verseChats[verse].filter(m=>m.role==='user'||m.role==='ai').map(m=>({role:m.role==='ai'?'assistant':m.role,content:m.content}));
+
+  try {
+    const r=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-api-key':API_KEY,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({
+        model:MODEL,max_tokens:1000,
+        system:`You are a comparative religion and Quranic studies scholar. The user is studying Quran ${verse} under the theme "Confirmation of Previous Scripture." Give concise, scholarly, balanced answers covering Muslim, Christian, and academic perspectives where relevant.`,
+        messages:[...history,{role:'user',content:question}]
+      })
+    });
+    const d=await r.json();
+    const reply=d.content?.map(c=>c.text||'').join('')||'No response.';
+    thinking.remove();
+    addMsg('ai',reply);
+  } catch(e){
+    thinking.remove();
+    addMsg('ai','Error: '+e.message);
+  }
+}
+
+buildSidebar();
+</script>
+</body>
+</html>
