@@ -1,6 +1,6 @@
 
 <!DOCTYPE html>
-<!-- build: v4-rpc-xref -->
+<!-- build: v3-thematic-xref -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -3508,6 +3508,7 @@ function renderVerses(ayas, suraId) {
           <button class="tab-btn" onclick="switchTab(${aya.aya_number},'riwayat',this)">Riwayat</button>
           <button class="tab-btn" id="xref-tab-${aya.aya_number}" onclick="switchTab(${aya.aya_number},'xrefs',this)">Cross-Refs</button>
           <button class="tab-btn" onclick="switchTab(${aya.aya_number},'audio',this);initAudioPanel(${aya.aya_number},${suraId})">🎧 Audio</button>
+          <button class="tab-btn" id="ancient-tab-${aya.aya_number}" onclick="switchTab(${aya.aya_number},'ancient',this);loadAncientPanel(${aya.aya_number},${suraId},aya.aya_number)">Ancient Sources</button>
           <button class="tab-btn" onclick="switchTab(${aya.aya_number},'ai',this)">AI Analysis</button>
         </div>
         <div class="tab-panel active" id="tp-${aya.aya_number}-details">
@@ -3531,6 +3532,11 @@ function renderVerses(ayas, suraId) {
         <div class="tab-panel" id="tp-${aya.aya_number}-audio">
           <div id="audio-panel-${aya.aya_number}" style="padding:14px 16px;">
             <div style="color:#BBB;font-style:italic;font-size:13px;text-align:center;padding:20px;">Tap the 🎧 Audio tab to load the player.</div>
+          </div>
+        </div>
+        <div class="tab-panel" id="tp-${aya.aya_number}-ancient">
+          <div id="ancient-panel-${aya.aya_number}" style="padding:14px 16px;">
+            <div style="color:#BBB;font-style:italic;font-size:13px;text-align:center;padding:20px;">Tap the Ancient Sources tab to load parallels.</div>
           </div>
         </div>
         <div class="tab-panel" id="tp-${aya.aya_number}-ai">
@@ -3677,6 +3683,8 @@ async function toggleVerse(num, suraId, el) {
   loadAsbabPanel(suraId, num);
   // Load hadith connections
   loadHadithPanel(suraId, num);
+  // Inject theme analysis into AI tab
+  injectThemeAnalysis(suraId, num);
 }
 
 function switchTab(num, tab, btn) {
@@ -4558,7 +4566,7 @@ const verseChats = {};
 
 function buildAIPanel(num, arabic, english, tigrinya) {
   if (!verseChats[num]) verseChats[num] = [];
-  return `<div class="ai-box">
+  return `<div id="theme-analysis-inject-${num}" style="margin-bottom:4px;"></div><div class="ai-box">
 
     <!-- Research Buttons -->
     <div style="margin-bottom:12px;">
@@ -13192,6 +13200,7 @@ function renderVerses(ayas, suraId) {
           <button class="tab-btn" onclick="switchTab(${aya.aya_number},'riwayat',this)">Riwayat</button>
           <button class="tab-btn" id="xref-tab-${aya.aya_number}" onclick="switchTab(${aya.aya_number},'xrefs',this)">Cross-Refs</button>
           <button class="tab-btn" onclick="switchTab(${aya.aya_number},'audio',this);initAudioPanel(${aya.aya_number},${suraId})">🎧 Audio</button>
+          <button class="tab-btn" id="ancient-tab-${aya.aya_number}" onclick="switchTab(${aya.aya_number},'ancient',this);loadAncientPanel(${aya.aya_number},${suraId},aya.aya_number)">Ancient Sources</button>
           <button class="tab-btn" onclick="switchTab(${aya.aya_number},'ai',this)">AI Analysis</button>
         </div>
         <div class="tab-panel active" id="tp-${aya.aya_number}-details">
@@ -13215,6 +13224,11 @@ function renderVerses(ayas, suraId) {
         <div class="tab-panel" id="tp-${aya.aya_number}-audio">
           <div id="audio-panel-${aya.aya_number}" style="padding:14px 16px;">
             <div style="color:#BBB;font-style:italic;font-size:13px;text-align:center;padding:20px;">Tap the 🎧 Audio tab to load the player.</div>
+          </div>
+        </div>
+        <div class="tab-panel" id="tp-${aya.aya_number}-ancient">
+          <div id="ancient-panel-${aya.aya_number}" style="padding:14px 16px;">
+            <div style="color:#BBB;font-style:italic;font-size:13px;text-align:center;padding:20px;">Tap the Ancient Sources tab to load parallels.</div>
           </div>
         </div>
         <div class="tab-panel" id="tp-${aya.aya_number}-ai">
@@ -13361,6 +13375,8 @@ async function toggleVerse(num, suraId, el) {
   loadAsbabPanel(suraId, num);
   // Load hadith connections
   loadHadithPanel(suraId, num);
+  // Inject theme analysis into AI tab
+  injectThemeAnalysis(suraId, num);
 }
 
 function switchTab(num, tab, btn) {
@@ -14242,7 +14258,7 @@ const verseChats = {};
 
 function buildAIPanel(num, arabic, english, tigrinya) {
   if (!verseChats[num]) verseChats[num] = [];
-  return `<div class="ai-box">
+  return `<div id="theme-analysis-inject-${num}" style="margin-bottom:4px;"></div><div class="ai-box">
 
     <!-- Research Buttons -->
     <div style="margin-bottom:12px;">
@@ -19187,6 +19203,146 @@ function toggleReadingMode() {
     btn.querySelector('.icon').textContent = on ? '📚' : '🌙';
     btn.querySelector('span:last-child').textContent = on ? 'Exit' : 'Read';
   }
+}
+
+
+async function injectThemeAnalysis(suraId, num) {
+  const el = document.getElementById(`theme-analysis-inject-${num}`);
+  if (!el) return;
+  const analyses = await loadThemeAnalysisForVerse(suraId, num);
+  if (analyses && analyses.length > 0) {
+    el.innerHTML = buildThemeAnalysisHTML(analyses);
+  }
+}
+// ============================================================
+// ANCIENT SOURCES PANEL
+// ============================================================
+async function loadAncientPanel(num, suraId, ayaNum) {
+  const panel = document.getElementById(`ancient-panel-${num}`);
+  if (!panel || !panel.innerHTML.includes('Tap the Ancient Sources')) return;
+
+  panel.innerHTML = '<div style="padding:20px;text-align:center;color:#BBB;"><span class="spinner"></span> Loading ancient sources...</div>';
+
+  try {
+    const rows = await sbFetch('ancient_sources', {
+      select: 'source_title,tradition,approx_date,author,source_type,parallel_summary,similarity_note,difference_note,reference_link',
+      sura: `eq.${suraId}`,
+      aya: `eq.${ayaNum}`,
+      order: 'tradition.asc,source_title.asc'
+    });
+
+    // Also load theme analysis for this verse
+    const themeRows = await sbFetch('thematic_cross_references', {
+      select: 'theme',
+      sura: `eq.${suraId}`,
+      aya: `eq.${ayaNum}`
+    });
+    const themes = [...new Set(themeRows.map(r => r.theme))];
+
+    if (rows.length === 0 && themes.length === 0) {
+      panel.innerHTML = '<div style="color:#BBB;font-style:italic;font-size:13px;padding:20px;text-align:center;">No ancient source parallels recorded for this verse yet.</div>';
+      return;
+    }
+
+    let html = '';
+
+    if (rows.length > 0) {
+      html += `<div style="font-size:11px;font-family:'IBM Plex Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#c9a84c;margin-bottom:12px;padding-bottom:6px;border-bottom:1px solid #333;">Ancient & Pre-Islamic Parallels (${rows.length})</div>`;
+      html += rows.map(r => `
+        <div style="border:1px solid #2a2a2a;border-radius:8px;padding:14px;margin-bottom:12px;background:#1c1c1c;">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:8px;">
+            <div>
+              <div style="font-weight:700;font-size:14px;color:#e8d5a0;">${r.source_title}</div>
+              <div style="font-size:11px;color:#c9a84c;margin-top:2px;">${r.tradition || ''} ${r.approx_date ? '· ' + r.approx_date : ''}</div>
+              ${r.author ? `<div style="font-size:11px;color:#888;margin-top:1px;">Author: ${r.author}</div>` : ''}
+            </div>
+            <span style="font-size:10px;background:#2a2a1a;border:1px solid #444;color:#aaa;padding:2px 7px;border-radius:10px;white-space:nowrap;flex-shrink:0;">${r.source_type || 'Source'}</span>
+          </div>
+          ${r.parallel_summary ? `<div style="font-size:13px;color:#ccc;line-height:1.6;margin-bottom:8px;">${r.parallel_summary}</div>` : ''}
+          ${r.similarity_note ? `<div style="font-size:12px;padding:6px 10px;background:#0d1f0d;border-left:3px solid #4a8a4a;border-radius:0 4px 4px 0;color:#9ec99e;margin-bottom:6px;"><strong style="color:#6bc96b;">Similarity:</strong> ${r.similarity_note}</div>` : ''}
+          ${r.difference_note ? `<div style="font-size:12px;padding:6px 10px;background:#1f0d0d;border-left:3px solid #8a4a4a;border-radius:0 4px 4px 0;color:#c99e9e;margin-bottom:6px;"><strong style="color:#c96b6b;">Difference:</strong> ${r.difference_note}</div>` : ''}
+          ${r.reference_link ? `<a href="${r.reference_link}" target="_blank" style="font-size:11px;color:#7a9fc9;text-decoration:none;">📚 View Source →</a>` : ''}
+        </div>`).join('');
+    } else {
+      html += '<div style="color:#888;font-style:italic;font-size:13px;padding:12px 0;">No ancient source records for this verse. Records exist for related verses — open them to see parallels.</div>';
+    }
+
+    panel.innerHTML = html;
+  } catch(e) {
+    panel.innerHTML = `<div style="color:#c97a7a;font-size:13px;padding:16px;">Could not load ancient sources: ${e.message}</div>`;
+  }
+}
+
+// ============================================================
+// THEME ANALYSIS — wire into AI Analysis tab
+// ============================================================
+async function loadThemeAnalysisForVerse(suraId, ayaNum) {
+  try {
+    const themeRows = await sbFetch('thematic_cross_references', {
+      select: 'theme',
+      sura: `eq.${suraId}`,
+      aya: `eq.${ayaNum}`
+    });
+    const themes = [...new Set(themeRows.map(r => r.theme))];
+    if (themes.length === 0) return null;
+
+    const analyses = [];
+    for (const theme of themes) {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_theme_analysis`, {
+        method: 'POST',
+        headers: { ...HEADERS, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ p_theme: theme })
+      });
+      if (res.ok) {
+        const rows = await res.json();
+        if (rows && rows.length > 0) {
+          analyses.push({ theme, ...rows[0] });
+        }
+      }
+    }
+    return analyses.length > 0 ? analyses : null;
+  } catch(e) { return null; }
+}
+
+function buildThemeAnalysisHTML(analyses) {
+  if (!analyses || analyses.length === 0) return '';
+  return analyses.map(a => `
+    <div style="border:1px solid #2a2a1a;border-radius:8px;padding:14px;margin-bottom:16px;background:#1a1a0f;">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#c9a84c;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #333;">
+        Theme Analysis: ${a.theme}
+      </div>
+      ${a.summary ? `<div style="font-size:13px;color:#ddd;line-height:1.7;margin-bottom:10px;">${a.summary}</div>` : ''}
+      ${a.traditional_interpretation ? `
+        <div style="margin-bottom:8px;">
+          <div style="font-size:11px;font-weight:700;color:#c9a84c;margin-bottom:3px;">Traditional Islamic Interpretation</div>
+          <div style="font-size:12px;color:#bbb;line-height:1.6;">${a.traditional_interpretation}</div>
+        </div>` : ''}
+      ${a.academic_interpretation ? `
+        <div style="margin-bottom:8px;">
+          <div style="font-size:11px;font-weight:700;color:#7a9fc9;margin-bottom:3px;">Academic Interpretation</div>
+          <div style="font-size:12px;color:#bbb;line-height:1.6;">${a.academic_interpretation}</div>
+        </div>` : ''}
+      ${a.historical_context ? `
+        <div style="margin-bottom:8px;">
+          <div style="font-size:11px;font-weight:700;color:#9ec99e;margin-bottom:3px;">Historical Context</div>
+          <div style="font-size:12px;color:#bbb;line-height:1.6;">${a.historical_context}</div>
+        </div>` : ''}
+      ${a.linguistic_notes ? `
+        <div style="margin-bottom:8px;">
+          <div style="font-size:11px;font-weight:700;color:#aaa;margin-bottom:3px;">Linguistic Notes</div>
+          <div style="font-size:12px;color:#bbb;line-height:1.6;">${a.linguistic_notes}</div>
+        </div>` : ''}
+      ${a.study_questions && Array.isArray(a.study_questions) && a.study_questions.length > 0 ? `
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid #2a2a2a;">
+          <div style="font-size:11px;font-weight:700;color:#c9a84c;margin-bottom:6px;">Study Questions</div>
+          ${a.study_questions.map(q => `<div style="font-size:12px;color:#bbb;line-height:1.6;margin-bottom:4px;">• ${q}</div>`).join('')}
+        </div>` : ''}
+      ${a.contradiction_themes && Array.isArray(a.contradiction_themes) && a.contradiction_themes.length > 0 ? `
+        <div style="margin-top:10px;padding:8px 10px;background:#1f0f0f;border:1px solid #4a2a2a;border-radius:6px;">
+          <div style="font-size:11px;font-weight:700;color:#c97a7a;margin-bottom:4px;">Related Tensions</div>
+          ${a.contradiction_themes.map(t => `<span style="font-size:11px;background:#2a1515;border:1px solid #5a3535;color:#c99e9e;padding:2px 7px;border-radius:10px;margin:2px;display:inline-block;">${t}</span>`).join('')}
+        </div>` : ''}
+    </div>`).join('');
 }
 </script>
 </body>
