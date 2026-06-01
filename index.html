@@ -472,6 +472,12 @@ mark.hl-yellow { background:#FFE066;border-radius:2px;padding:0 1px; }
   box-shadow: 0 3px 10px rgba(0,0,0,0.18) !important;
   transform: translateY(-1px) !important;
 }
+.wbw-grid.study .wbw-word {
+  position: relative !important;
+  z-index: 10 !important;
+  -webkit-tap-highlight-color: rgba(106,130,153,0.2) !important;
+  touch-action: manipulation !important;
+}
 .wbw-grid.study .wbw-arabic {
   display: block !important;
   font-size: 30px !important;
@@ -2391,6 +2397,12 @@ img, iframe, table, pre, code, video {
   box-shadow: 0 3px 10px rgba(0,0,0,0.18) !important;
   transform: translateY(-1px) !important;
 }
+.wbw-grid.study .wbw-word {
+  position: relative !important;
+  z-index: 10 !important;
+  -webkit-tap-highlight-color: rgba(106,130,153,0.2) !important;
+  touch-action: manipulation !important;
+}
 .wbw-grid.study .wbw-arabic {
   display: block !important;
   font-size: 30px !important;
@@ -2684,8 +2696,6 @@ img, iframe, table, pre, code, video {
 </style>
 </head>
 <body>
-
-
 <div class="app">
   <div class="sidebar">
     <div class="sidebar-header" style="display:flex;align-items:center;justify-content:space-between;">
@@ -3166,9 +3176,8 @@ async function sbFetch(table, params) {
 
 async function sbSearch(table, select, column, query) {
   const orderCol = table === 'verses' ? 'surah_id' : 'sura_id';
-  // encodeURIComponent encodes * as %2A which breaks PostgREST ilike wildcards
-  // Only encode the query term itself, keep * as literal
-  const encodedQuery = encodeURIComponent(query).replace(/%2A/gi, '*');
+  // Encode the query safely — Ethiopic/Arabic/non-ASCII chars need full encoding
+  const encodedQuery = encodeURIComponent(query);
   const encodedCol = encodeURIComponent(column);
   const encodedSelect = encodeURIComponent(select);
   const url = `${SUPABASE_URL}/rest/v1/${table}?select=${encodedSelect}&${encodedCol}=ilike.*${encodedQuery}*&order=${orderCol}&limit=50`;
@@ -3498,22 +3507,20 @@ function renderVerses(ayas, suraId) {
           ${aya.urdu ? `<div class="lang-urdu" style="margin-top:14px;padding-bottom:0;${!langState.urdu?'display:none':''}"><div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;"><div style="font-size:10px;font-weight:700;letter-spacing:1.2px;color:#2D6A4F;text-transform:uppercase;">Urdu · اردو</div></div><div style="font-size:16px;color:#1A3A2A;line-height:2;font-weight:600;direction:rtl;text-align:right;">${escapeHtml(aya.urdu)}</div></div>` : ''}
         </div>
         <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
-          <span id="depth-badge-${aya.aya_number}" style="font-size:11px;color:#C8A84C;display:none;white-space:nowrap;"></span><button class="verse-study-btn" id="vsb-${aya.aya_number}" onclick="event.stopPropagation();toggleVerseStudy(${aya.aya_number})" title="Toggle word card size for this verse" style="padding:5px 10px;border:1px solid #B8C4D4;border-radius:20px;background:#F2F5FA;cursor:pointer;font-size:11px;color:#7A8FA6;font-weight:700;white-space:nowrap;">📚 Study</button>
+          <button class="verse-study-btn" id="vsb-${aya.aya_number}" onclick="event.stopPropagation();toggleVerseStudy(${aya.aya_number})" title="Toggle word card size for this verse" style="padding:5px 10px;border:1px solid #B8C4D4;border-radius:20px;background:#F2F5FA;cursor:pointer;font-size:11px;color:#7A8FA6;font-weight:700;white-space:nowrap;">📚 Study</button>
           <button class="expand-btn">▼ Details</button>
         </div>
       </div>
       <div class="verse-detail">
         <div class="tab-bar">
-          <button class="tab-btn active" onclick="switchTab(${aya.aya_number},'details',this)">📋 Summary</button>
-          <button class="tab-btn" id="tafsir-tab-${aya.aya_number}" onclick="switchTab(${aya.aya_number},'tafsir',this)">📚 Tafsir</button>
-          <button class="tab-btn" id="asbab-tab-${aya.aya_number}" onclick="switchTab(${aya.aya_number},'asbab',this)">🕰 Asbāb</button>
-          <button class="tab-btn" id="hadith-tab-${aya.aya_number}" onclick="switchTab(${aya.aya_number},'hadith',this)">📿 Hadith</button>
-          <button class="tab-btn" onclick="switchTab(${aya.aya_number},'riwayat',this);loadQiraatPanel(${suraId},${aya.aya_number})">📖 Riwayat</button>
-          <button class="tab-btn" id="xref-tab-${aya.aya_number}" onclick="switchTab(${aya.aya_number},'xrefs',this)">🔗 Cross-Refs</button>
+          <button class="tab-btn active" onclick="switchTab(${aya.aya_number},'details',this)">Summary</button>
+          <button class="tab-btn" id="tafsir-tab-${aya.aya_number}" onclick="switchTab(${aya.aya_number},'tafsir',this)">Tafsir</button>
+          <button class="tab-btn" id="asbab-tab-${aya.aya_number}" onclick="switchTab(${aya.aya_number},'asbab',this)">Asbāb</button>
+          <button class="tab-btn" id="hadith-tab-${aya.aya_number}" onclick="switchTab(${aya.aya_number},'hadith',this)">Hadith</button>
+          <button class="tab-btn" onclick="switchTab(${aya.aya_number},'riwayat',this)">Riwayat</button>
+          <button class="tab-btn" id="xref-tab-${aya.aya_number}" onclick="switchTab(${aya.aya_number},'xrefs',this)">Cross-Refs</button>
           <button class="tab-btn" onclick="switchTab(${aya.aya_number},'audio',this);initAudioPanel(${aya.aya_number},${suraId})">🎧 Audio</button>
-          <button class="tab-btn" id="fiqh-tab-${aya.aya_number}" onclick="switchTab(${aya.aya_number},'fiqh',this);loadFiqhPanel(${aya.aya_number},${suraId})">⚖️ Fiqh</button>
-          <button class="tab-btn" id="ancient-tab-${aya.aya_number}" onclick="switchTab(${aya.aya_number},'ancient',this);loadAncientPanel(${aya.aya_number},${suraId})">🏛 Sources</button>
-          <button class="tab-btn" onclick="switchTab(${aya.aya_number},'ai',this);generateStructuredAnalysis(${suraId},${aya.aya_number},english,arabic)">🧠 Analysis</button>
+          <button class="tab-btn" onclick="switchTab(${aya.aya_number},'ai',this)">AI Analysis</button>
         </div>
         <div class="tab-panel active" id="tp-${aya.aya_number}-details">
           <div class="loading" style="padding:20px;font-size:13px">Loading summary...</div>
@@ -3522,14 +3529,12 @@ function renderVerses(ayas, suraId) {
           <div class="loading" style="padding:20px;font-size:13px"><span class="spinner"></span>Loading tafsir...</div>
         </div>
         <div class="tab-panel" id="tp-${aya.aya_number}-asbab">
-          <div id="sira-panel-${aya.aya_number}"></div>
           <div class="loading" style="padding:20px;font-size:13px"><span class="spinner"></span>Loading asbāb al-nuzūl...</div>
         </div>
         <div class="tab-panel" id="tp-${aya.aya_number}-hadith">
           <div class="loading" style="padding:20px;font-size:13px"><span class="spinner"></span>Loading hadith connections...</div>
         </div>
         <div class="tab-panel" id="tp-${aya.aya_number}-riwayat">
-          <div id="qiraat-panel-${aya.aya_number}" style="margin-bottom:12px;"></div>
           ${buildRiwayatPanel(aya)}
         </div>
         <div class="tab-panel" id="tp-${aya.aya_number}-xrefs">
@@ -3538,16 +3543,6 @@ function renderVerses(ayas, suraId) {
         <div class="tab-panel" id="tp-${aya.aya_number}-audio">
           <div id="audio-panel-${aya.aya_number}" style="padding:14px 16px;">
             <div style="color:#BBB;font-style:italic;font-size:13px;text-align:center;padding:20px;">Tap the 🎧 Audio tab to load the player.</div>
-          </div>
-        </div>
-        <div class="tab-panel" id="tp-${aya.aya_number}-fiqh">
-          <div id="fiqh-panel-${aya.aya_number}" style="padding:14px 16px;">
-            <div style="color:#BBB;font-style:italic;font-size:13px;text-align:center;padding:20px;">Tap the Fiqh tab to load legal rulings.</div>
-          </div>
-        </div>
-        <div class="tab-panel" id="tp-${aya.aya_number}-ancient">
-          <div id="ancient-panel-${aya.aya_number}" style="padding:14px 16px;">
-            <div style="color:#BBB;font-style:italic;font-size:13px;text-align:center;padding:20px;">Tap the Ancient Sources tab to load parallels.</div>
           </div>
         </div>
         <div class="tab-panel" id="tp-${aya.aya_number}-ai">
@@ -3596,18 +3591,15 @@ async function toggleVerse(num, suraId, el) {
   const xrefTab = document.getElementById(`xref-tab-${num}`);
   if (xrefPanel.querySelector('.loading')) {
     try {
-      // Use RPC to get all thematic cross-refs in one call
-      let rows = [];
-      try {
-        const rpcRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_thematic_cross_refs`, {
-          method: 'POST',
-          headers: { ...HEADERS, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ p_sura: suraId, p_aya: num })
-        });
-        rows = rpcRes.ok ? (await rpcRes.json() || []) : [];
-      } catch(e) { rows = []; }
+      // Step 1: find all themes containing this verse
+      const themeRows = await sbFetch('thematic_cross_references', {
+        select: 'theme',
+        sura: `eq.${suraId}`,
+        aya: `eq.${num}`
+      });
+      const themes = [...new Set(themeRows.map(r => r.theme))];
 
-      if (rows.length === 0) {
+      if (themes.length === 0) {
         // Fallback to old flat cross_references table
         try {
           const flatRefs = await sbFetch('cross_references', {
@@ -3634,16 +3626,16 @@ async function toggleVerse(num, suraId, el) {
           xrefPanel.innerHTML = `<div style="color:#BBB;font-style:italic;font-size:13px;padding:20px;text-align:center">No cross-references for this verse.</div>`;
         }
       } else {
-        // Group rows by theme
-        const grouped = {};
-        for (const r of rows) {
-          if (!grouped[r.theme]) grouped[r.theme] = [];
-          grouped[r.theme].push({ sura: r.ref_sura, aya: r.ref_aya });
-        }
         let totalCount = 0;
         let html = '';
         const allOthers = [];
-        for (const [theme, others] of Object.entries(grouped)) {
+        for (const theme of themes) {
+          const verseRows = await sbFetch('thematic_cross_references', {
+            select: 'sura,aya',
+            theme: `eq.${theme}`,
+            order: 'sura.asc,aya.asc'
+          });
+          const others = verseRows.filter(v => !(v.sura == suraId && v.aya == num));
           others.forEach(v => { if (!allOthers.find(x => x.sura==v.sura && x.aya==v.aya)) allOthers.push(v); });
           totalCount += others.length;
           const studyUrl = `study_page.html?theme=${encodeURIComponent(theme)}&sura=${suraId}&aya=${num}`;
@@ -3694,12 +3686,6 @@ async function toggleVerse(num, suraId, el) {
   loadAsbabPanel(suraId, num);
   // Load hadith connections
   loadHadithPanel(suraId, num);
-  // Inject theme analysis into AI tab
-  injectThemeAnalysis(suraId, num);
-  // Load sira context into Asbab tab header
-  loadSiraPanel(suraId, num);
-  // Load research depth badge
-  loadDepthBadge(suraId, num);
 }
 
 function switchTab(num, tab, btn) {
@@ -4581,7 +4567,7 @@ const verseChats = {};
 
 function buildAIPanel(num, arabic, english, tigrinya) {
   if (!verseChats[num]) verseChats[num] = [];
-  return `<div id="theme-analysis-inject-${num}" style="margin-bottom:4px;"></div><div id="ai-structured-${num}" style="margin-bottom:8px;"></div><div class="ai-box">
+  return `<div class="ai-box">
 
     <!-- Research Buttons -->
     <div style="margin-bottom:12px;">
@@ -4854,63 +4840,6 @@ function highlightWord(text, word) {
   const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const regex = new RegExp(`(${escaped})`, 'gi');
   return text.replace(regex, '<mark style="background:#FFE066;color:#0D0D0D;border-radius:3px;padding:0 2px;font-weight:700;">$1</mark>');
-}
-
-
-function renderSearchResults(results, query) {
-  const panel = document.getElementById('searchResultsPanel');
-  const resultsDiv = document.getElementById('searchResults');
-  const countDiv = document.getElementById('searchCount');
-  panel.style.display = 'flex';
-  document.getElementById('verseArea').style.display = 'none';
-
-  if (!results || !results.length) {
-    countDiv.textContent = '0 results';
-    resultsDiv.innerHTML = `<div style="padding:30px;text-align:center;color:#BBB;font-style:italic">
-      No verses found for "${escapeHtml ? escapeHtml(query) : query}".<br>
-      <span style="font-size:12px">Try a different spelling or language.</span>
-    </div>`;
-    return;
-  }
-
-  countDiv.textContent = results.length + ' result' + (results.length !== 1 ? 's' : '');
-
-  function hlAll(text) {
-    if (!text || !query) return text || '';
-    const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    return text.replace(new RegExp('(' + escaped + ')', 'gi'),
-      '<mark style="background:#FFE066;color:#0D0D0D;border-radius:3px;padding:0 2px;font-weight:700;">$1</mark>');
-  }
-
-  resultsDiv.innerHTML = results.map(v => {
-    const suraInfo = (typeof allSuras !== 'undefined') ? allSuras.find(s => (s.sura_id||s.id) === v.sura_id) : null;
-    const ar = hlAll(v.arabic || '');
-    const en = hlAll(v.english || '');
-    const ti = hlAll(v.tigrinya || v.aya_text || '');
-    const am = hlAll(v.amharic || '');
-    const suraNameAr = (typeof ARABIC_NAMES !== 'undefined' && ARABIC_NAMES[v.sura_id]) ? ARABIC_NAMES[v.sura_id] : '';
-    const suraNameEn = suraInfo ? (suraInfo.sura_name_english || suraInfo.sura_name_translated || '') : '';
-    return `
-    <div style="background:#fff;border:1px solid #E8E4DC;border-radius:10px;margin-bottom:10px;overflow:hidden;cursor:pointer;" onclick="gotoResult(${v.sura_id},${v.aya_number},event)">
-      <div style="background:#F2F5FA;border-bottom:1px solid #E8C97B;padding:8px 14px;display:flex;align-items:center;gap:8px;">
-        <div style="width:24px;height:24px;border-radius:50%;background:#8FA3B8;color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0">${v.sura_id}</div>
-        <div style="flex:1;min-width:0;">
-          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-            <span style="font-family:'Amiri',serif;font-size:15px;color:#0D0D0D;font-weight:700">${suraNameAr}</span>
-            <span style="font-size:12px;color:#7A8FA6;font-weight:700">${suraNameEn}</span>
-          </div>
-          <div style="font-size:11px;color:#5A7080;margin-top:1px">Surah ${v.sura_id}, Verse ${v.aya_number}</div>
-        </div>
-        <div style="font-size:12px;font-weight:700;color:#fff;background:#7A8FA6;border-radius:10px;padding:2px 8px;flex-shrink:0">${v.sura_id}:${v.aya_number}</div>
-      </div>
-      <div style="padding:12px 14px;">
-        ${v.arabic  ? `<div style="font-family:'Amiri',serif;font-size:20px;direction:rtl;text-align:right;line-height:1.8;margin-bottom:6px;">${ar}</div>` : ''}
-        ${v.english ? `<div style="font-size:13px;color:#444;line-height:1.6;font-style:italic;margin-bottom:4px;">${en}</div>` : ''}
-        ${(v.tigrinya||v.aya_text) ? `<div style="font-size:12px;color:#5A7080;line-height:1.5;margin-bottom:3px;">${ti}</div>` : ''}
-        ${v.amharic ? `<div style="font-size:12px;color:#6B8355;line-height:1.5;">${am}</div>` : ''}
-      </div>
-    </div>`;
-  }).join('');
 }
 
 async function runWordSearch(query) {
@@ -5436,11 +5365,6 @@ function buildWordByWord(arabicText, translitText, suraId, ayaNum) {
 
 // ── WORD POPUP ───────────────────────────────────────────────────────────────
 function openWbwPopup(btn, word, suraId, ayaNum, wordIdx) {
-  openWordStudy(word, suraId, ayaNum, btn);
-  // Word study bottom sheet handles everything — close old popup if open
-  const oldPopup = document.getElementById('wbwPopup');
-  if (oldPopup) oldPopup.classList.remove('open');
-  return; // word study panel handles the rest
   const overlay = document.getElementById('wbwPopup');
   if (!overlay) return;
   // Decode HTML entities back to Arabic chars
@@ -5490,45 +5414,33 @@ async function loadWbwWordData(word, suraId, ayaNum, wordIdx) {
   const body = document.getElementById('wbwPopupBody');
   const translitEl = document.getElementById('wbwPopupTranslit');
 
-  // Use get_word_analysis RPC (correct column names, diacritic-safe)
-  try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_word_analysis`, {
-      method: 'POST',
-      headers: { ...HEADERS, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ p_sura: suraId, p_aya: ayaNum, p_word: word })
-    });
-    const rows = res.ok ? await res.json() : [];
-    if (rows && rows.length > 0) {
-      const r = rows[0];
-      // Map to expected renderWbwResult format
-      const mapped = {
-        word_arabic: r.arabic_word,
-        root: r.root_word,
-        meaning_english: r.original_meaning,
-        modern_meaning: r.modern_meaning,
-        scholarly_explanation: r.scholarly_explanation,
-        language_origin: r.pre_standard_origin
-      };
-      renderWbwResult(body, mapped, word);
-      // Also show root occurrences
-      openWordStudy(word, suraId, ayaNum);
-      return;
-    }
-  } catch(e) {}
-
-  // Fallback: try by word position
+  // 1. Try lexicon database first (word_analysis table)
   try {
     const rows = await sbFetch('word_analysis', {
-      select: 'arabic_word,root_word,original_meaning,modern_meaning,scholarly_explanation,pre_standard_origin',
+      select: 'word_arabic,root,transliteration,meaning_arabic,meaning_english,modern_meaning,scholarly_explanation,language_origin',
       sura_id: `eq.${suraId}`,
       aya_number: `eq.${ayaNum}`,
       word_position: `eq.${wordIdx}`
     });
     if (rows && rows.length) {
       const r = rows[0];
-      const mapped = { word_arabic: r.arabic_word, root: r.root_word, meaning_english: r.original_meaning, modern_meaning: r.modern_meaning, scholarly_explanation: r.scholarly_explanation };
-      renderWbwResult(body, mapped, word);
-      openWordStudy(word, suraId, ayaNum);
+      if (r.transliteration) translitEl.textContent = r.transliteration;
+      renderWbwResult(body, r, word);
+      return;
+    }
+  } catch(e) {}
+
+  // 2. Search lexicon by Arabic word
+  try {
+    const rows = await sbFetch('word_analysis', {
+      select: 'word_arabic,root,transliteration,meaning_arabic,meaning_english,modern_meaning,scholarly_explanation,language_origin',
+      word_arabic: `eq.${word}`,
+      limit: '1'
+    });
+    if (rows && rows.length) {
+      const r = rows[0];
+      if (r.transliteration) translitEl.textContent = r.transliteration;
+      renderWbwResult(body, r, word);
       return;
     }
   } catch(e) {}
@@ -10202,6 +10114,12 @@ mark.hl-yellow { background:#FFE066;border-radius:2px;padding:0 1px; }
   box-shadow: 0 3px 10px rgba(0,0,0,0.18) !important;
   transform: translateY(-1px) !important;
 }
+.wbw-grid.study .wbw-word {
+  position: relative !important;
+  z-index: 10 !important;
+  -webkit-tap-highlight-color: rgba(106,130,153,0.2) !important;
+  touch-action: manipulation !important;
+}
 .wbw-grid.study .wbw-arabic {
   display: block !important;
   font-size: 30px !important;
@@ -12888,9 +12806,8 @@ async function sbFetch(table, params) {
 
 async function sbSearch(table, select, column, query) {
   const orderCol = table === 'verses' ? 'surah_id' : 'sura_id';
-  // encodeURIComponent encodes * as %2A which breaks PostgREST ilike wildcards
-  // Only encode the query term itself, keep * as literal
-  const encodedQuery = encodeURIComponent(query).replace(/%2A/gi, '*');
+  // Encode the query safely — Ethiopic/Arabic/non-ASCII chars need full encoding
+  const encodedQuery = encodeURIComponent(query);
   const encodedCol = encodeURIComponent(column);
   const encodedSelect = encodeURIComponent(select);
   const url = `${SUPABASE_URL}/rest/v1/${table}?select=${encodedSelect}&${encodedCol}=ilike.*${encodedQuery}*&order=${orderCol}&limit=50`;
@@ -13220,22 +13137,20 @@ function renderVerses(ayas, suraId) {
           ${aya.urdu ? `<div class="lang-urdu" style="margin-top:14px;padding-bottom:0;${!langState.urdu?'display:none':''}"><div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;"><div style="font-size:10px;font-weight:700;letter-spacing:1.2px;color:#2D6A4F;text-transform:uppercase;">Urdu · اردو</div></div><div style="font-size:16px;color:#1A3A2A;line-height:2;font-weight:600;direction:rtl;text-align:right;">${escapeHtml(aya.urdu)}</div></div>` : ''}
         </div>
         <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
-          <span id="depth-badge-${aya.aya_number}" style="font-size:11px;color:#C8A84C;display:none;white-space:nowrap;"></span><button class="verse-study-btn" id="vsb-${aya.aya_number}" onclick="event.stopPropagation();toggleVerseStudy(${aya.aya_number})" title="Toggle word card size for this verse" style="padding:5px 10px;border:1px solid #B8C4D4;border-radius:20px;background:#F2F5FA;cursor:pointer;font-size:11px;color:#7A8FA6;font-weight:700;white-space:nowrap;">📚 Study</button>
+          <button class="verse-study-btn" id="vsb-${aya.aya_number}" onclick="event.stopPropagation();toggleVerseStudy(${aya.aya_number})" title="Toggle word card size for this verse" style="padding:5px 10px;border:1px solid #B8C4D4;border-radius:20px;background:#F2F5FA;cursor:pointer;font-size:11px;color:#7A8FA6;font-weight:700;white-space:nowrap;">📚 Study</button>
           <button class="expand-btn">▼ Details</button>
         </div>
       </div>
       <div class="verse-detail">
         <div class="tab-bar">
-          <button class="tab-btn active" onclick="switchTab(${aya.aya_number},'details',this)">📋 Summary</button>
-          <button class="tab-btn" id="tafsir-tab-${aya.aya_number}" onclick="switchTab(${aya.aya_number},'tafsir',this)">📚 Tafsir</button>
-          <button class="tab-btn" id="asbab-tab-${aya.aya_number}" onclick="switchTab(${aya.aya_number},'asbab',this)">🕰 Asbāb</button>
-          <button class="tab-btn" id="hadith-tab-${aya.aya_number}" onclick="switchTab(${aya.aya_number},'hadith',this)">📿 Hadith</button>
-          <button class="tab-btn" onclick="switchTab(${aya.aya_number},'riwayat',this);loadQiraatPanel(${suraId},${aya.aya_number})">📖 Riwayat</button>
-          <button class="tab-btn" id="xref-tab-${aya.aya_number}" onclick="switchTab(${aya.aya_number},'xrefs',this)">🔗 Cross-Refs</button>
+          <button class="tab-btn active" onclick="switchTab(${aya.aya_number},'details',this)">Summary</button>
+          <button class="tab-btn" id="tafsir-tab-${aya.aya_number}" onclick="switchTab(${aya.aya_number},'tafsir',this)">Tafsir</button>
+          <button class="tab-btn" id="asbab-tab-${aya.aya_number}" onclick="switchTab(${aya.aya_number},'asbab',this)">Asbāb</button>
+          <button class="tab-btn" id="hadith-tab-${aya.aya_number}" onclick="switchTab(${aya.aya_number},'hadith',this)">Hadith</button>
+          <button class="tab-btn" onclick="switchTab(${aya.aya_number},'riwayat',this)">Riwayat</button>
+          <button class="tab-btn" id="xref-tab-${aya.aya_number}" onclick="switchTab(${aya.aya_number},'xrefs',this)">Cross-Refs</button>
           <button class="tab-btn" onclick="switchTab(${aya.aya_number},'audio',this);initAudioPanel(${aya.aya_number},${suraId})">🎧 Audio</button>
-          <button class="tab-btn" id="fiqh-tab-${aya.aya_number}" onclick="switchTab(${aya.aya_number},'fiqh',this);loadFiqhPanel(${aya.aya_number},${suraId})">⚖️ Fiqh</button>
-          <button class="tab-btn" id="ancient-tab-${aya.aya_number}" onclick="switchTab(${aya.aya_number},'ancient',this);loadAncientPanel(${aya.aya_number},${suraId})">🏛 Sources</button>
-          <button class="tab-btn" onclick="switchTab(${aya.aya_number},'ai',this);generateStructuredAnalysis(${suraId},${aya.aya_number},english,arabic)">🧠 Analysis</button>
+          <button class="tab-btn" onclick="switchTab(${aya.aya_number},'ai',this)">AI Analysis</button>
         </div>
         <div class="tab-panel active" id="tp-${aya.aya_number}-details">
           <div class="loading" style="padding:20px;font-size:13px">Loading summary...</div>
@@ -13244,14 +13159,12 @@ function renderVerses(ayas, suraId) {
           <div class="loading" style="padding:20px;font-size:13px"><span class="spinner"></span>Loading tafsir...</div>
         </div>
         <div class="tab-panel" id="tp-${aya.aya_number}-asbab">
-          <div id="sira-panel-${aya.aya_number}"></div>
           <div class="loading" style="padding:20px;font-size:13px"><span class="spinner"></span>Loading asbāb al-nuzūl...</div>
         </div>
         <div class="tab-panel" id="tp-${aya.aya_number}-hadith">
           <div class="loading" style="padding:20px;font-size:13px"><span class="spinner"></span>Loading hadith connections...</div>
         </div>
         <div class="tab-panel" id="tp-${aya.aya_number}-riwayat">
-          <div id="qiraat-panel-${aya.aya_number}" style="margin-bottom:12px;"></div>
           ${buildRiwayatPanel(aya)}
         </div>
         <div class="tab-panel" id="tp-${aya.aya_number}-xrefs">
@@ -13260,16 +13173,6 @@ function renderVerses(ayas, suraId) {
         <div class="tab-panel" id="tp-${aya.aya_number}-audio">
           <div id="audio-panel-${aya.aya_number}" style="padding:14px 16px;">
             <div style="color:#BBB;font-style:italic;font-size:13px;text-align:center;padding:20px;">Tap the 🎧 Audio tab to load the player.</div>
-          </div>
-        </div>
-        <div class="tab-panel" id="tp-${aya.aya_number}-fiqh">
-          <div id="fiqh-panel-${aya.aya_number}" style="padding:14px 16px;">
-            <div style="color:#BBB;font-style:italic;font-size:13px;text-align:center;padding:20px;">Tap the Fiqh tab to load legal rulings.</div>
-          </div>
-        </div>
-        <div class="tab-panel" id="tp-${aya.aya_number}-ancient">
-          <div id="ancient-panel-${aya.aya_number}" style="padding:14px 16px;">
-            <div style="color:#BBB;font-style:italic;font-size:13px;text-align:center;padding:20px;">Tap the Ancient Sources tab to load parallels.</div>
           </div>
         </div>
         <div class="tab-panel" id="tp-${aya.aya_number}-ai">
@@ -13318,18 +13221,15 @@ async function toggleVerse(num, suraId, el) {
   const xrefTab = document.getElementById(`xref-tab-${num}`);
   if (xrefPanel.querySelector('.loading')) {
     try {
-      // Use RPC to get all thematic cross-refs in one call
-      let rows = [];
-      try {
-        const rpcRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_thematic_cross_refs`, {
-          method: 'POST',
-          headers: { ...HEADERS, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ p_sura: suraId, p_aya: num })
-        });
-        rows = rpcRes.ok ? (await rpcRes.json() || []) : [];
-      } catch(e) { rows = []; }
+      // Step 1: find all themes containing this verse
+      const themeRows = await sbFetch('thematic_cross_references', {
+        select: 'theme',
+        sura: `eq.${suraId}`,
+        aya: `eq.${num}`
+      });
+      const themes = [...new Set(themeRows.map(r => r.theme))];
 
-      if (rows.length === 0) {
+      if (themes.length === 0) {
         // Fallback to old flat cross_references table
         try {
           const flatRefs = await sbFetch('cross_references', {
@@ -13356,16 +13256,16 @@ async function toggleVerse(num, suraId, el) {
           xrefPanel.innerHTML = `<div style="color:#BBB;font-style:italic;font-size:13px;padding:20px;text-align:center">No cross-references for this verse.</div>`;
         }
       } else {
-        // Group rows by theme
-        const grouped = {};
-        for (const r of rows) {
-          if (!grouped[r.theme]) grouped[r.theme] = [];
-          grouped[r.theme].push({ sura: r.ref_sura, aya: r.ref_aya });
-        }
         let totalCount = 0;
         let html = '';
         const allOthers = [];
-        for (const [theme, others] of Object.entries(grouped)) {
+        for (const theme of themes) {
+          const verseRows = await sbFetch('thematic_cross_references', {
+            select: 'sura,aya',
+            theme: `eq.${theme}`,
+            order: 'sura.asc,aya.asc'
+          });
+          const others = verseRows.filter(v => !(v.sura == suraId && v.aya == num));
           others.forEach(v => { if (!allOthers.find(x => x.sura==v.sura && x.aya==v.aya)) allOthers.push(v); });
           totalCount += others.length;
           const studyUrl = `study_page.html?theme=${encodeURIComponent(theme)}&sura=${suraId}&aya=${num}`;
@@ -13416,12 +13316,6 @@ async function toggleVerse(num, suraId, el) {
   loadAsbabPanel(suraId, num);
   // Load hadith connections
   loadHadithPanel(suraId, num);
-  // Inject theme analysis into AI tab
-  injectThemeAnalysis(suraId, num);
-  // Load sira context into Asbab tab header
-  loadSiraPanel(suraId, num);
-  // Load research depth badge
-  loadDepthBadge(suraId, num);
 }
 
 function switchTab(num, tab, btn) {
@@ -14303,7 +14197,7 @@ const verseChats = {};
 
 function buildAIPanel(num, arabic, english, tigrinya) {
   if (!verseChats[num]) verseChats[num] = [];
-  return `<div id="theme-analysis-inject-${num}" style="margin-bottom:4px;"></div><div id="ai-structured-${num}" style="margin-bottom:8px;"></div><div class="ai-box">
+  return `<div class="ai-box">
 
     <!-- Research Buttons -->
     <div style="margin-bottom:12px;">
@@ -14576,63 +14470,6 @@ function highlightWord(text, word) {
   const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const regex = new RegExp(`(${escaped})`, 'gi');
   return text.replace(regex, '<mark style="background:#FFE066;color:#0D0D0D;border-radius:3px;padding:0 2px;font-weight:700;">$1</mark>');
-}
-
-
-function renderSearchResults(results, query) {
-  const panel = document.getElementById('searchResultsPanel');
-  const resultsDiv = document.getElementById('searchResults');
-  const countDiv = document.getElementById('searchCount');
-  panel.style.display = 'flex';
-  document.getElementById('verseArea').style.display = 'none';
-
-  if (!results || !results.length) {
-    countDiv.textContent = '0 results';
-    resultsDiv.innerHTML = `<div style="padding:30px;text-align:center;color:#BBB;font-style:italic">
-      No verses found for "${escapeHtml ? escapeHtml(query) : query}".<br>
-      <span style="font-size:12px">Try a different spelling or language.</span>
-    </div>`;
-    return;
-  }
-
-  countDiv.textContent = results.length + ' result' + (results.length !== 1 ? 's' : '');
-
-  function hlAll(text) {
-    if (!text || !query) return text || '';
-    const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    return text.replace(new RegExp('(' + escaped + ')', 'gi'),
-      '<mark style="background:#FFE066;color:#0D0D0D;border-radius:3px;padding:0 2px;font-weight:700;">$1</mark>');
-  }
-
-  resultsDiv.innerHTML = results.map(v => {
-    const suraInfo = (typeof allSuras !== 'undefined') ? allSuras.find(s => (s.sura_id||s.id) === v.sura_id) : null;
-    const ar = hlAll(v.arabic || '');
-    const en = hlAll(v.english || '');
-    const ti = hlAll(v.tigrinya || v.aya_text || '');
-    const am = hlAll(v.amharic || '');
-    const suraNameAr = (typeof ARABIC_NAMES !== 'undefined' && ARABIC_NAMES[v.sura_id]) ? ARABIC_NAMES[v.sura_id] : '';
-    const suraNameEn = suraInfo ? (suraInfo.sura_name_english || suraInfo.sura_name_translated || '') : '';
-    return `
-    <div style="background:#fff;border:1px solid #E8E4DC;border-radius:10px;margin-bottom:10px;overflow:hidden;cursor:pointer;" onclick="gotoResult(${v.sura_id},${v.aya_number},event)">
-      <div style="background:#F2F5FA;border-bottom:1px solid #E8C97B;padding:8px 14px;display:flex;align-items:center;gap:8px;">
-        <div style="width:24px;height:24px;border-radius:50%;background:#8FA3B8;color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0">${v.sura_id}</div>
-        <div style="flex:1;min-width:0;">
-          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-            <span style="font-family:'Amiri',serif;font-size:15px;color:#0D0D0D;font-weight:700">${suraNameAr}</span>
-            <span style="font-size:12px;color:#7A8FA6;font-weight:700">${suraNameEn}</span>
-          </div>
-          <div style="font-size:11px;color:#5A7080;margin-top:1px">Surah ${v.sura_id}, Verse ${v.aya_number}</div>
-        </div>
-        <div style="font-size:12px;font-weight:700;color:#fff;background:#7A8FA6;border-radius:10px;padding:2px 8px;flex-shrink:0">${v.sura_id}:${v.aya_number}</div>
-      </div>
-      <div style="padding:12px 14px;">
-        ${v.arabic  ? `<div style="font-family:'Amiri',serif;font-size:20px;direction:rtl;text-align:right;line-height:1.8;margin-bottom:6px;">${ar}</div>` : ''}
-        ${v.english ? `<div style="font-size:13px;color:#444;line-height:1.6;font-style:italic;margin-bottom:4px;">${en}</div>` : ''}
-        ${(v.tigrinya||v.aya_text) ? `<div style="font-size:12px;color:#5A7080;line-height:1.5;margin-bottom:3px;">${ti}</div>` : ''}
-        ${v.amharic ? `<div style="font-size:12px;color:#6B8355;line-height:1.5;">${am}</div>` : ''}
-      </div>
-    </div>`;
-  }).join('');
 }
 
 async function runWordSearch(query) {
@@ -15158,11 +14995,6 @@ function buildWordByWord(arabicText, translitText, suraId, ayaNum) {
 
 // ── WORD POPUP ───────────────────────────────────────────────────────────────
 function openWbwPopup(btn, word, suraId, ayaNum, wordIdx) {
-  openWordStudy(word, suraId, ayaNum, btn);
-  // Word study bottom sheet handles everything — close old popup if open
-  const oldPopup = document.getElementById('wbwPopup');
-  if (oldPopup) oldPopup.classList.remove('open');
-  return; // word study panel handles the rest
   const overlay = document.getElementById('wbwPopup');
   if (!overlay) return;
   // Decode HTML entities back to Arabic chars
@@ -15212,45 +15044,33 @@ async function loadWbwWordData(word, suraId, ayaNum, wordIdx) {
   const body = document.getElementById('wbwPopupBody');
   const translitEl = document.getElementById('wbwPopupTranslit');
 
-  // Use get_word_analysis RPC (correct column names, diacritic-safe)
-  try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_word_analysis`, {
-      method: 'POST',
-      headers: { ...HEADERS, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ p_sura: suraId, p_aya: ayaNum, p_word: word })
-    });
-    const rows = res.ok ? await res.json() : [];
-    if (rows && rows.length > 0) {
-      const r = rows[0];
-      // Map to expected renderWbwResult format
-      const mapped = {
-        word_arabic: r.arabic_word,
-        root: r.root_word,
-        meaning_english: r.original_meaning,
-        modern_meaning: r.modern_meaning,
-        scholarly_explanation: r.scholarly_explanation,
-        language_origin: r.pre_standard_origin
-      };
-      renderWbwResult(body, mapped, word);
-      // Also show root occurrences
-      openWordStudy(word, suraId, ayaNum);
-      return;
-    }
-  } catch(e) {}
-
-  // Fallback: try by word position
+  // 1. Try lexicon database first (word_analysis table)
   try {
     const rows = await sbFetch('word_analysis', {
-      select: 'arabic_word,root_word,original_meaning,modern_meaning,scholarly_explanation,pre_standard_origin',
+      select: 'word_arabic,root,transliteration,meaning_arabic,meaning_english,modern_meaning,scholarly_explanation,language_origin',
       sura_id: `eq.${suraId}`,
       aya_number: `eq.${ayaNum}`,
       word_position: `eq.${wordIdx}`
     });
     if (rows && rows.length) {
       const r = rows[0];
-      const mapped = { word_arabic: r.arabic_word, root: r.root_word, meaning_english: r.original_meaning, modern_meaning: r.modern_meaning, scholarly_explanation: r.scholarly_explanation };
-      renderWbwResult(body, mapped, word);
-      openWordStudy(word, suraId, ayaNum);
+      if (r.transliteration) translitEl.textContent = r.transliteration;
+      renderWbwResult(body, r, word);
+      return;
+    }
+  } catch(e) {}
+
+  // 2. Search lexicon by Arabic word
+  try {
+    const rows = await sbFetch('word_analysis', {
+      select: 'word_arabic,root,transliteration,meaning_arabic,meaning_english,modern_meaning,scholarly_explanation,language_origin',
+      word_arabic: `eq.${word}`,
+      limit: '1'
+    });
+    if (rows && rows.length) {
+      const r = rows[0];
+      if (r.transliteration) translitEl.textContent = r.transliteration;
+      renderWbwResult(body, r, word);
       return;
     }
   } catch(e) {}
@@ -19266,842 +19086,6 @@ function toggleReadingMode() {
     btn.querySelector('span:last-child').textContent = on ? 'Exit' : 'Read';
   }
 }
-
-
-async function injectThemeAnalysis(suraId, num) {
-  const el = document.getElementById(`theme-analysis-inject-${num}`);
-  if (!el) return;
-  const analyses = await loadThemeAnalysisForVerse(suraId, num);
-  if (analyses && analyses.length > 0) {
-    el.innerHTML = buildThemeAnalysisHTML(analyses);
-  }
-}
-
-function toggleFiqhCard(id) {
-  const el = document.getElementById(id);
-  const arrow = document.getElementById(id + '-arrow');
-  if (!el) return;
-  const open = el.style.display !== 'none';
-  el.style.display = open ? 'none' : 'block';
-  if (arrow) arrow.style.transform = open ? '' : 'rotate(180deg)';
-}
-
-// ============================================================
-// RESEARCH DEPTH BADGE — shown on each verse card
-// ============================================================
-async function loadResearchDepth(num, suraId) {
-  const el = document.getElementById(`research-depth-${num}`);
-  if (!el || el.dataset.loaded) return;
-  el.dataset.loaded = '1';
-  try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_verse_research_depth`, {
-      method: 'POST', headers: { ...HEADERS, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ p_sura: suraId, p_aya: num })
-    });
-    const rows = res.ok ? await res.json() : [];
-    if (!rows || !rows.length) return;
-    const d = rows[0];
-    const score = parseFloat(d.importance_score) || 0;
-    const stars = score > 60 ? 5 : score > 40 ? 4 : score > 25 ? 3 : score > 10 ? 2 : 1;
-    const filledStar = '★';
-    const emptyStar = '☆';
-    el.innerHTML = `
-      <div onclick="toggleResearchDepth(${num})" style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;padding:3px 8px;background:#FDF8EC;border:1px solid #D8C880;border-radius:12px;font-size:11px;color:#7A5C10;font-weight:600;">
-        <span style="letter-spacing:1px;">${filledStar.repeat(stars)}${emptyStar.repeat(5-stars)}</span>
-        <span>Research Depth</span>
-      </div>
-      <div id="rd-detail-${num}" style="display:none;margin-top:6px;padding:10px 12px;background:#FDFAF4;border:1px solid #E0D0A8;border-radius:8px;font-size:12px;">
-        <div style="font-weight:700;color:#7A5C10;margin-bottom:8px;font-size:11px;text-transform:uppercase;letter-spacing:.08em;">Research Coverage</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">
-          ${d.cross_reference_count > 0 ? `<span style="color:#2A5A2A;">🔗 Cross-Refs: ${d.cross_reference_count}</span>` : `<span style="color:#AAA;">🔗 Cross-Refs: —</span>`}
-          ${d.hadith_count > 0 ? `<span style="color:#2A5A2A;">📿 Hadith: ${d.hadith_count}</span>` : `<span style="color:#AAA;">📿 Hadith: —</span>`}
-          ${d.tafsir_count > 0 ? `<span style="color:#2A5A2A;">📚 Tafsir: ${d.tafsir_count}</span>` : `<span style="color:#AAA;">📚 Tafsir: —</span>`}
-          ${d.theme_count > 0 ? `<span style="color:#2A5A2A;">🏷 Themes: ${d.theme_count}</span>` : `<span style="color:#AAA;">🏷 Themes: —</span>`}
-          ${d.sira_count > 0 ? `<span style="color:#2A5A2A;">📜 Sira: ${d.sira_count}</span>` : `<span style="color:#AAA;">📜 Sira: —</span>`}
-          ${d.ancient_source_count > 0 ? `<span style="color:#2A5A2A;">🏛 Sources: ${d.ancient_source_count}</span>` : `<span style="color:#AAA;">🏛 Sources: —</span>`}
-        </div>
-      </div>`;
-  } catch(e) { el.innerHTML = ''; }
-}
-
-function toggleResearchDepth(num) {
-  const el = document.getElementById(`rd-detail-${num}`);
-  if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
-}
-
-// ============================================================
-// SIRA TAB PANEL
-// ============================================================
-async function loadSiraPanel(num, suraId) {
-  const panel = document.getElementById(`sira-panel-${num}`);
-  if (!panel || panel.dataset.loaded) return;
-  panel.dataset.loaded = '1';
-  panel.innerHTML = '<div style="padding:20px;text-align:center;color:#888;"><span class="spinner"></span></div>';
-
-  try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_sira_for_verse`, {
-      method: 'POST', headers: { ...HEADERS, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ p_sura: suraId, p_aya: num })
-    });
-    const rows = res.ok ? await res.json() : [];
-
-    if (!rows || rows.length === 0) {
-      panel.innerHTML = '<div style="color:#AAA;font-style:italic;font-size:13px;padding:20px;text-align:center;">No sira events linked to this verse.</div>';
-      return;
-    }
-
-    const periodLabel = { 'pre-islamic':'Pre-Islamic','meccan-early':'Meccan — Early','meccan-middle':'Meccan — Middle','meccan-late':'Meccan — Late','medinan':'Medinan','conquest':'Conquest Period' };
-
-    let html = `<div style="font-size:11px;font-family:'IBM Plex Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#7A5C10;margin-bottom:14px;padding-bottom:6px;border-bottom:1px solid #D8C890;">Sira Events (${rows.length})</div>`;
-
-    rows.forEach((ev, i) => {
-      const evId = 'sira-ev-' + num + '-' + i;
-      const period = periodLabel[ev.period] || ev.period || '';
-      const figures = Array.isArray(ev.key_figures) ? ev.key_figures.slice(0,4).join(', ') : '';
-      const themes = Array.isArray(ev.themes) ? ev.themes.slice(0,3) : [];
-
-      html += `
-        <div style="border:1px solid #D8C890;border-left:3px solid #C8A84C;border-radius:8px;margin-bottom:10px;overflow:hidden;">
-          <button onclick="toggleSiraEvent('${evId}')" style="width:100%;display:flex;align-items:flex-start;justify-content:space-between;padding:10px 14px;background:#FDFAF4;border:none;cursor:pointer;text-align:left;gap:10px;">
-            <div>
-              <div style="font-weight:700;font-size:13px;color:#2A1A0A;margin-bottom:3px;">${ev.title_en || ''}</div>
-              <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:3px;">
-                ${ev.year_ce ? `<span style="font-size:10px;background:#F5EDD8;border:1px solid #C8A84C;color:#7A5C10;padding:1px 6px;border-radius:8px;">${ev.year_ce} CE</span>` : ''}
-                ${ev.year_ah ? `<span style="font-size:10px;background:#EEF5FA;border:1px solid #A8C8E0;color:#2A5A7A;padding:1px 6px;border-radius:8px;">${ev.year_ah} AH</span>` : ''}
-                ${period ? `<span style="font-size:10px;background:#F0F6F0;border:1px solid #A8C0A8;color:#2A5A2A;padding:1px 6px;border-radius:8px;">${period}</span>` : ''}
-                ${ev.location ? `<span style="font-size:10px;color:#888;">📍 ${ev.location}</span>` : ''}
-              </div>
-            </div>
-            <span id="${evId}-arrow" style="font-size:11px;color:#C8A84C;flex-shrink:0;transition:transform .2s;margin-top:2px;">▼</span>
-          </button>
-          <div id="${evId}" style="display:none;padding:12px 14px;border-top:1px solid #E8D8B8;background:#fff;">
-            ${figures ? `<div style="font-size:12px;color:#555;margin-bottom:8px;">👥 <strong>People:</strong> ${figures}${ev.key_figures && ev.key_figures.length > 4 ? ` +${ev.key_figures.length-4} more` : ''}</div>` : ''}
-            ${themes.length > 0 ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px;">${themes.map(t=>`<span style="font-size:10px;background:#EEF0FA;border:1px solid #A8B8D8;color:#2A3A6A;padding:2px 6px;border-radius:8px;">${t}</span>`).join('')}</div>` : ''}
-            ${ev.story_en ? `<div style="font-size:13px;color:#1A1A1A;line-height:1.75;">${ev.story_en.slice(0,500)}${ev.story_en.length > 500 ? `... <button onclick="this.previousSibling.textContent='';this.parentElement.innerHTML='<span style=\'font-size:13px;color:#1A1A1A;line-height:1.75;\'>${ev.story_en.replace(/'/g,"\'").replace(/"/g,'&quot;')}</span>'" style="font-size:11px;color:#C8A84C;background:none;border:none;cursor:pointer;">Read more</button>` : ''}</div>` : ''}
-          </div>
-        </div>`;
-    });
-
-    panel.innerHTML = html;
-  } catch(e) {
-    panel.innerHTML = `<div style="color:#C06050;font-size:13px;padding:16px;">Could not load sira events: ${e.message}</div>`;
-  }
-}
-
-function toggleSiraEvent(id) {
-  const el = document.getElementById(id);
-  const arrow = document.getElementById(id + '-arrow');
-  if (!el) return;
-  const open = el.style.display !== 'none';
-  el.style.display = open ? 'none' : 'block';
-  if (arrow) arrow.style.transform = open ? '' : 'rotate(180deg)';
-}
-
-// ============================================================
-// IMPROVED ANCIENT SOURCES — grouped by tradition
-// ============================================================
-async function loadAncientPanel(num, suraId) {
-  const panel = document.getElementById(`ancient-panel-${num}`);
-  if (!panel) return;
-  if (panel.dataset.loaded === '1') return;
-  panel.dataset.loaded = '1';
-  panel.innerHTML = '<div style="padding:20px;text-align:center;color:#888;"><span class="spinner"></span></div>';
-
-  try {
-    const url = new URL(`${SUPABASE_URL}/rest/v1/ancient_sources`);
-    url.searchParams.set('select', 'source_title,tradition,approx_date,author,source_type,parallel_summary,similarity_note,difference_note,reference_link');
-    url.searchParams.set('sura', `eq.${suraId}`);
-    url.searchParams.set('aya', `eq.${num}`);
-    url.searchParams.set('order', 'tradition.asc,source_title.asc');
-    const resp = await fetch(url, { headers: HEADERS });
-    const rows = resp.ok ? await resp.json() : [];
-
-    if (!Array.isArray(rows) || rows.length === 0) {
-      panel.innerHTML = '<div style="color:#AAA;font-style:italic;font-size:13px;padding:20px;text-align:center;">No ancient source parallels recorded for this verse.</div>';
-      return;
-    }
-
-    // Group by tradition
-    const groups = {};
-    const tradIcons = {
-      'Rabbinic Jewish Literature': '✡️',
-      'Jewish Second Temple Literature': '✡️',
-      'Jewish Apocalyptic Literature': '✡️',
-      'Jewish-Christian Apocrypha': '📜',
-      'Early Christian Apocrypha': '✝️',
-      'Syriac Christian Literature': '✝️',
-      'Ancient Near Eastern Wisdom': '🏛'
-    };
-    rows.forEach(r => {
-      if (!groups[r.tradition]) groups[r.tradition] = [];
-      groups[r.tradition].push(r);
-    });
-
-    let html = `<div style="font-size:11px;font-family:'IBM Plex Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#7A5C10;margin-bottom:14px;padding-bottom:6px;border-bottom:1px solid #D8C890;">Ancient & Pre-Islamic Parallels (${rows.length})</div>`;
-
-    Object.entries(groups).forEach(([tradition, sources]) => {
-      const icon = tradIcons[tradition] || '📚';
-      html += `<div style="margin-bottom:16px;">
-        <div style="font-size:11px;font-weight:700;color:#2A3A6A;margin-bottom:8px;display:flex;align-items:center;gap:5px;">
-          <span>${icon}</span><span>${tradition}</span>
-          <span style="font-size:10px;background:#EEF0FA;border:1px solid #A8B8D8;color:#2A3A6A;padding:1px 6px;border-radius:8px;">${sources.length}</span>
-        </div>`;
-      sources.forEach((r, i) => {
-        const srcId = 'src-' + num + '-' + Math.random().toString(36).slice(2,6);
-        html += `
-          <div style="border:1px solid #D0C8E0;border-left:3px solid #8A6AB8;border-radius:6px;margin-bottom:6px;overflow:hidden;">
-            <button onclick="toggleAncientSrc('${srcId}')" style="width:100%;display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#F8F4FC;border:none;cursor:pointer;text-align:left;">
-              <div>
-                <div style="font-weight:700;font-size:12px;color:#2A1A4A;">${r.source_title}</div>
-                <div style="font-size:10px;color:#9A8080;margin-top:1px;">${r.approx_date || ''}${r.author ? ' · ' + r.author : ''}</div>
-              </div>
-              <span id="${srcId}-arrow" style="font-size:11px;color:#8A6AB8;transition:transform .2s;">▼</span>
-            </button>
-            <div id="${srcId}" style="display:none;padding:10px 12px;border-top:1px solid #E0D8F0;background:#fff;">
-              ${r.parallel_summary ? `<div style="font-size:13px;color:#1A1A1A;line-height:1.7;margin-bottom:8px;">${r.parallel_summary}</div>` : ''}
-              ${r.similarity_note ? `<div style="font-size:12px;padding:6px 10px;background:#EEF8EE;border-left:3px solid #6BC96B;border-radius:0 4px 4px 0;margin-bottom:5px;color:#1A2A1A;"><strong style="color:#2A6A2A;">Similarity:</strong> ${r.similarity_note}</div>` : ''}
-              ${r.difference_note ? `<div style="font-size:12px;padding:6px 10px;background:#FAF0EE;border-left:3px solid #C96B6B;border-radius:0 4px 4px 0;margin-bottom:5px;color:#2A1A1A;"><strong style="color:#6A2A2A;">Difference:</strong> ${r.difference_note}</div>` : ''}
-              <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
-                ${r.reference_link ? `<a href="${r.reference_link}" target="_blank" style="font-size:11px;color:#2A5A7A;background:#EEF5FA;border:1px solid #A8C8E0;padding:3px 10px;border-radius:10px;text-decoration:none;">📚 Read Source →</a>` : ''}
-                <a href="stories.html?search=${encodeURIComponent(r.source_title)}" target="_blank" style="font-size:11px;color:#7A5C10;background:#FDF5E0;border:1px solid #C8A84C;padding:3px 10px;border-radius:10px;text-decoration:none;">📖 Stories →</a>
-              </div>
-            </div>
-          </div>`;
-      });
-      html += '</div>';
-    });
-
-    panel.innerHTML = html;
-  } catch(e) {
-    panel.innerHTML = `<div style="color:#C06050;font-size:13px;padding:16px;">Error: ${e.message}</div>`;
-  }
-}
-
-function toggleAncientSrc(id) {
-  const el = document.getElementById(id);
-  const arrow = document.getElementById(id + '-arrow');
-  if (!el) return;
-  const open = el.style.display !== 'none';
-  el.style.display = open ? 'none' : 'block';
-  if (arrow) arrow.style.transform = open ? '' : 'rotate(180deg)';
-}
-
-// ============================================================
-// THEME ANALYSIS — wire into AI Analysis tab
-// ============================================================
-async function loadThemeAnalysisForVerse(suraId, ayaNum) {
-  try {
-    const themeRows = await sbFetch('thematic_cross_references', {
-      select: 'theme',
-      sura: `eq.${suraId}`,
-      aya: `eq.${ayaNum}`
-    });
-    const themes = [...new Set(themeRows.map(r => r.theme))];
-    if (themes.length === 0) return null;
-
-    const analyses = [];
-    for (const theme of themes) {
-      const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_theme_analysis`, {
-        method: 'POST',
-        headers: { ...HEADERS, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ p_theme: theme })
-      });
-      if (res.ok) {
-        const rows = await res.json();
-        if (rows && rows.length > 0) {
-          analyses.push({ theme, ...rows[0] });
-        }
-      }
-    }
-    return analyses.length > 0 ? analyses : null;
-  } catch(e) { return null; }
-}
-
-function buildThemeAnalysisHTML(analyses) {
-  if (!analyses || analyses.length === 0) return '';
-  return analyses.map(a => `
-    <div style="border:1px solid #2a2a1a;border-radius:8px;padding:14px;margin-bottom:16px;background:#1a1a0f;">
-      <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#c9a84c;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #333;">
-        Theme Analysis: ${a.theme}
-      </div>
-      ${a.summary ? `<div style="font-size:13px;color:#ddd;line-height:1.7;margin-bottom:10px;">${a.summary}</div>` : ''}
-      ${a.traditional_interpretation ? `
-        <div style="margin-bottom:8px;">
-          <div style="font-size:11px;font-weight:700;color:#c9a84c;margin-bottom:3px;">Traditional Islamic Interpretation</div>
-          <div style="font-size:12px;color:#bbb;line-height:1.6;">${a.traditional_interpretation}</div>
-        </div>` : ''}
-      ${a.academic_interpretation ? `
-        <div style="margin-bottom:8px;">
-          <div style="font-size:11px;font-weight:700;color:#7a9fc9;margin-bottom:3px;">Academic Interpretation</div>
-          <div style="font-size:12px;color:#bbb;line-height:1.6;">${a.academic_interpretation}</div>
-        </div>` : ''}
-      ${a.historical_context ? `
-        <div style="margin-bottom:8px;">
-          <div style="font-size:11px;font-weight:700;color:#9ec99e;margin-bottom:3px;">Historical Context</div>
-          <div style="font-size:12px;color:#bbb;line-height:1.6;">${a.historical_context}</div>
-        </div>` : ''}
-      ${a.linguistic_notes ? `
-        <div style="margin-bottom:8px;">
-          <div style="font-size:11px;font-weight:700;color:#aaa;margin-bottom:3px;">Linguistic Notes</div>
-          <div style="font-size:12px;color:#bbb;line-height:1.6;">${a.linguistic_notes}</div>
-        </div>` : ''}
-      ${a.study_questions && Array.isArray(a.study_questions) && a.study_questions.length > 0 ? `
-        <div style="margin-top:10px;padding-top:10px;border-top:1px solid #2a2a2a;">
-          <div style="font-size:11px;font-weight:700;color:#c9a84c;margin-bottom:6px;">Study Questions</div>
-          ${a.study_questions.map(q => `<div style="font-size:12px;color:#bbb;line-height:1.6;margin-bottom:4px;">• ${q}</div>`).join('')}
-        </div>` : ''}
-      ${a.contradiction_themes && Array.isArray(a.contradiction_themes) && a.contradiction_themes.length > 0 ? `
-        <div style="margin-top:10px;padding:8px 10px;background:#1f0f0f;border:1px solid #4a2a2a;border-radius:6px;">
-          <div style="font-size:11px;font-weight:700;color:#c97a7a;margin-bottom:4px;">Related Tensions</div>
-          ${a.contradiction_themes.map(t => `<span style="font-size:11px;background:#2a1515;border:1px solid #5a3535;color:#c99e9e;padding:2px 7px;border-radius:10px;margin:2px;display:inline-block;">${t}</span>`).join('')}
-        </div>` : ''}
-    </div>`).join('');
-}
-
-// ============================================================
-// FIQH TAB — madhhab_rulings wired to verse
-// ============================================================
-async function loadFiqhPanel(num, suraId) {
-  const panel = document.getElementById(`fiqh-panel-${num}`);
-  if (!panel || panel.dataset.loaded === '1') return;
-  panel.dataset.loaded = '1';
-  panel.innerHTML = '<div style="padding:20px;text-align:center;color:#BBB;"><span class="spinner"></span> Loading fiqh rulings...</div>';
-
-  try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_fiqh_for_verse`, {
-      method: 'POST',
-      headers: { ...HEADERS, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ p_sura: suraId, p_aya: num })
-    });
-    const rows = res.ok ? await res.json() : [];
-
-    if (!rows || rows.length === 0) {
-      panel.innerHTML = '<div style="color:#888;font-style:italic;font-size:13px;padding:20px;text-align:center;">No fiqh rulings recorded for this verse yet.</div>';
-      return;
-    }
-
-    const schools = [
-      { key: 'hanafi', label: 'Ḥanafī', color: '#7A5C10', bg: '#FDF8EC', border: '#E8D4A0' },
-      { key: 'maliki', label: 'Mālikī', color: '#2A5A7A', bg: '#EEF5FA', border: '#A8C8E0' },
-      { key: 'shafii', label: 'Shāfiʿī', color: '#2A5A3A', bg: '#EEF8EE', border: '#A0C8A8' },
-      { key: 'hanbali', label: 'Ḥanbalī', color: '#6A2A2A', bg: '#FAF0EE', border: '#D4A8A8' },
-      { key: 'jafari', label: 'Jaʿfarī (Shīʿa)', color: '#4A2A6A', bg: '#F5EEF8', border: '#C0A8D8' },
-      { key: 'zaydi', label: 'Zaydī', color: '#2A5A5A', bg: '#EEF8F8', border: '#A0C8C8' },
-      { key: 'ibadi', label: 'Ibāḍī', color: '#5A4A2A', bg: '#F8F4EE', border: '#C8B888' },
-      { key: 'mutazila', label: 'Muʿtazila', color: '#3A5A3A', bg: '#F0F6F0', border: '#A8C0A8' },
-      { key: 'salafi', label: 'Salafī', color: '#5A5A2A', bg: '#F6F6EE', border: '#C0C088' },
-    ];
-
-    const schoolKeys = ['hanafi','maliki','shafii','hanbali','jafari','zaydi','ibadi','mutazila','salafi'];
-    let html = '';
-
-    for (const row of rows) {
-      html += `
-        <div style="border:1px solid #D0C0A0;border-radius:10px;padding:14px;margin-bottom:16px;background:#FDFAF4;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
-          <div style="font-weight:700;font-size:13px;color:#2A1A0A;margin-bottom:6px;">${row.topic}</div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">
-            <span style="font-size:10px;background:#F5EDD8;border:1px solid #C8A84C;color:#7A5C10;padding:2px 8px;border-radius:10px;">${row.category || ''}</span>
-            ${row.subcategory ? `<span style="font-size:10px;background:#EEF5EE;border:1px solid #A0C0A0;color:#2A5A3A;padding:2px 8px;border-radius:10px;">${row.subcategory}</span>` : ''}
-            ${row.controversy_level ? `<span style="font-size:10px;background:#FAF0EE;border:1px solid #D4A0A0;color:#6A2A2A;padding:2px 8px;border-radius:10px;">⚡ ${row.controversy_level}</span>` : ''}
-          </div>
-          ${row.brief_description ? `<div style="font-size:12px;color:#666;line-height:1.65;margin-bottom:12px;font-style:italic;padding:8px 10px;background:#F8F4EE;border-radius:6px;">${row.brief_description}</div>` : ''}
-
-          ${schools.filter(s => row[s.key + '_position']).map((s,i) => `
-            <div style="border:1px solid ${s.border};border-left:3px solid ${s.color};border-radius:6px;margin-bottom:6px;overflow:hidden;">
-              <button onclick="toggleFiqhCard('${topicId}-${i}')" style="width:100%;display:flex;align-items:center;justify-content:space-between;padding:9px 12px;background:${s.bg};border:none;cursor:pointer;text-align:left;">
-                <span style="font-size:12px;font-weight:700;color:${s.color};">${s.label}</span>
-                <span id="${topicId}-${i}-arrow" style="font-size:11px;color:${s.color};transition:transform .2s;">▼</span>
-              </button>
-              <div id="${topicId}-${i}" style="display:none;padding:10px 12px;background:#fff;border-top:1px solid ${s.border};">
-                <div style="font-size:13px;color:#1A1A1A;line-height:1.75;">${row[s.key + '_position']}</div>
-                ${s.evidence_key && row[s.evidence_key] ? `<div style="font-size:11px;color:#666;margin-top:8px;padding-top:8px;border-top:1px solid ${s.border};font-style:italic;">📎 ${row[s.evidence_key]}</div>` : ''}
-              </div>
-            </div>`).join('')}
-
-          ${row.consensus ? `
-            <div style="margin-top:10px;padding:10px 12px;background:#EEF8EE;border:1px solid #A0C8A0;border-radius:6px;">
-              <div style="font-size:11px;font-weight:700;color:#2A5A3A;margin-bottom:4px;">Scholarly Consensus</div>
-              <div style="font-size:13px;color:#1A2A1A;line-height:1.65;">${row.consensus}</div>
-            </div>` : ''}
-
-          ${row.key_disagreement ? `
-            <div style="margin-top:8px;padding:10px 12px;background:#FAF0EE;border:1px solid #D4A0A0;border-radius:6px;">
-              <div style="font-size:11px;font-weight:700;color:#6A2A2A;margin-bottom:4px;">Key Disagreement</div>
-              <div style="font-size:13px;color:#2A1A1A;line-height:1.65;">${row.key_disagreement}</div>
-            </div>` : ''}
-
-          ${row.reflection_questions && row.reflection_questions.length > 0 ? `
-            <div style="margin-top:8px;padding:10px 12px;background:#EEF0FA;border:1px solid #A8B8D8;border-radius:6px;">
-              <div style="font-size:11px;font-weight:700;color:#2A3A6A;margin-bottom:6px;">Study Questions</div>
-              ${row.reflection_questions.map(q => `<div style="font-size:12px;color:#2A2A2A;margin-bottom:4px;line-height:1.6;">• ${q}</div>`).join('')}
-            </div>` : ''}
-          </div>
-        </div>`;
-    }
-
-    panel.innerHTML = html;
-  } catch(e) {
-    panel.innerHTML = `<div style="color:#c97a7a;font-size:13px;padding:16px;">Could not load fiqh rulings: ${e.message}</div>`;
-  }
-}
-
-// ============================================================
-// WORD STUDY — tap any Arabic word to see root and analysis
-// ============================================================
-let wordStudySura = null;
-let wordStudyAya = null;
-
-function closeWordStudy() {
-  const overlay = document.getElementById('word-study-overlay');
-  if (!overlay) return;
-  overlay.classList.remove('ws-open');
-  setTimeout(() => { overlay.style.display = 'none'; }, 300);
-  document.querySelectorAll('.ws-highlighted').forEach(el => {
-    el.classList.remove('ws-highlighted');
-    el.style.background = '';
-    el.style.borderRadius = '';
-    el.style.outline = '';
-  });
-}
-
-async function openWordStudy(word, sura, aya, targetEl) {
-  wordStudySura = sura;
-  wordStudyAya = aya;
-  const overlay = document.getElementById('word-study-overlay');
-  const wsWord = document.getElementById('ws-word');
-  const wsRef = document.getElementById('ws-verse-ref');
-  const wsContent = document.getElementById('ws-content');
-  if (!overlay) return;
-
-  // Highlight tapped word
-  document.querySelectorAll('.ws-highlighted').forEach(el => {
-    el.classList.remove('ws-highlighted');
-    el.style.background = '';
-    el.style.outline = '';
-  });
-  if (targetEl) {
-    targetEl.classList.add('ws-highlighted');
-    targetEl.style.background = 'rgba(200,168,76,0.25)';
-    targetEl.style.borderRadius = '4px';
-    targetEl.style.outline = '2px solid rgba(200,168,76,0.6)';
-  }
-
-  // Decode HTML entities
-  const tmp = document.createElement('textarea');
-  tmp.innerHTML = word;
-  const decoded = tmp.value;
-
-  wsWord.textContent = decoded;
-  if (wsRef) wsRef.textContent = sura + ':' + aya;
-  const wordToLookup = decoded || word;
-  wsContent.innerHTML = '<div style="text-align:center;padding:20px;"><span class="spinner"></span></div>';
-  overlay.style.display = 'flex';
-  overlay.style.alignItems = 'flex-end';
-  overlay.style.justifyContent = 'center';
-  // Small delay to ensure display:flex is applied before animation
-  setTimeout(() => overlay.classList.add('ws-open'), 20);
-
-  try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_word_analysis`, {
-      method: 'POST',
-      headers: { ...HEADERS, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ p_sura: sura, p_aya: aya, p_word: wordToLookup || word })
-    });
-    const rows = res.ok ? await res.json() : [];
-    const d = rows && rows.length > 0 ? rows[0] : null;
-
-    if (!d) {
-      wsContent.innerHTML = `<div style="color:#888;font-style:italic;">No analysis recorded for this word yet.</div>`;
-      return;
-    }
-
-    // Load root occurrences
-    let rootHtml = '';
-    if (d.root_word) {
-      const rRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_root_occurrences`, {
-        method: 'POST',
-        headers: { ...HEADERS, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ p_root: d.root_word })
-      });
-      const rRows = rRes.ok ? await rRes.json() : [];
-      if (rRows && rRows.length > 0) {
-        rootHtml = `
-          <div style="margin-top:4px;padding:12px;background:#FDF8EC;border:1px solid #E0C880;border-radius:8px;">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-              <div style="font-size:10px;font-weight:700;color:#7A5C10;text-transform:uppercase;letter-spacing:.1em;">Quran Occurrences</div>
-              <span style="font-size:12px;font-weight:700;color:#7A5C10;background:#FDF0D0;border:1px solid #C8A84C;padding:2px 8px;border-radius:10px;">${rRows.length} verses</span>
-            </div>
-            <div style="display:flex;flex-wrap:wrap;gap:5px;">
-              ${rRows.slice(0,12).map(r => `<span onclick="navToVerse(${r.sura_id},${r.aya_number});closeWordStudy()" style="font-size:11px;background:#fff;border:1px solid #C8A84C;color:#7A5C10;padding:3px 9px;border-radius:10px;cursor:pointer;font-family:'IBM Plex Mono',monospace;">${r.sura_id}:${r.aya_number}</span>`).join('')}
-              ${rRows.length > 12 ? `<button onclick="this.previousElementSibling && (this.previousElementSibling.style.display='flex');this.style.display='none'" style="font-size:11px;background:#C8A84C;border:none;color:#fff;padding:3px 9px;border-radius:10px;cursor:pointer;">+${rRows.length-12} more →</button>` : ''}
-            </div>
-          </div>`;
-      }
-    }
-
-    wsContent.innerHTML = `
-      ${d.root_word ? `<div style="margin-bottom:10px;"><span style="font-size:11px;color:#888;">Root: </span><span style="font-family:'Amiri',serif;font-size:18px;color:#c9a84c;direction:rtl;">${d.root_word}</span></div>` : ''}
-      ${d.part_of_speech ? `<div style="margin-bottom:6px;"><span style="font-size:11px;color:#888;">Part of Speech: </span><span style="font-size:12px;color:#ccc;">${d.part_of_speech}</span></div>` : ''}
-      ${d.original_meaning ? `
-        <div style="margin-bottom:8px;padding:8px 10px;background:#FDF8EC;border-left:3px solid #C8A84C;border-radius:0 4px 4px 0;">
-          <div style="font-size:10px;color:#888;margin-bottom:2px;">Original Meaning</div>
-          <div style="font-size:13px;color:#2A1A0A;line-height:1.6;">${d.original_meaning}</div>
-        </div>` : ''}
-      ${d.modern_meaning ? `
-        <div style="margin-bottom:8px;padding:8px 10px;background:#EEF5FA;border-left:3px solid #6A9FC9;border-radius:0 4px 4px 0;">
-          <div style="font-size:10px;color:#888;margin-bottom:2px;">Modern Meaning</div>
-          <div style="font-size:13px;color:#1A2A3A;line-height:1.6;">${d.modern_meaning}</div>
-        </div>` : ''}
-      ${d.meaning_evolution ? `
-        <div style="margin-bottom:8px;padding:8px 10px;background:#F5EEF8;border-left:3px solid #8A6AB8;border-radius:0 4px 4px 0;">
-          <div style="font-size:10px;color:#888;margin-bottom:2px;">Meaning Evolution</div>
-          <div style="font-size:12px;color:#2A1A3A;line-height:1.6;">${d.meaning_evolution}</div>
-        </div>` : ''}
-      ${d.scholarly_explanation ? `
-        <div style="margin-bottom:8px;">
-          <div style="font-size:10px;color:#888;margin-bottom:3px;">Scholarly Notes</div>
-          <div style="font-size:12px;color:#333;line-height:1.65;">${d.scholarly_explanation}</div>
-        </div>` : ''}
-      ${d.lexicon_sources ? `<div style="font-size:11px;color:#888;margin-top:6px;border-top:1px solid #E8D8B8;padding-top:6px;">Sources: ${d.lexicon_sources}</div>` : ''}
-      ${rootHtml}`;
-  } catch(e) {
-    wsContent.innerHTML = `<div style="color:#c97a7a;font-size:13px;">Error: ${e.message}</div>`;
-  }
-}
-
-// Make Arabic words in verse cards tappable
-function makeWordsTappable(container, sura, aya) {
-  const arabicDivs = container.querySelectorAll('.lang-arabic [lang="ar"], .arabic-text, .aya-arabic, .word-arabic');
-  arabicDivs.forEach(div => {
-    if (div.dataset.wordTap) return;
-    div.dataset.wordTap = '1';
-    // Wrap individual words
-    const text = div.textContent;
-    const words = text.split(/\s+/).filter(w => w.trim());
-    if (words.length > 1) {
-      div.innerHTML = words.map(w =>
-        `<span onclick="openWordStudy('${w.replace(/'/g,"\'")}',${sura},${aya})" style="cursor:pointer;border-radius:3px;transition:background .15s;display:inline;" onmouseover="this.style.background='rgba(201,168,76,0.15)'" onmouseout="this.style.background=''">${w}</span>`
-      ).join(' ');
-    } else {
-      div.style.cursor = 'pointer';
-      div.onclick = () => openWordStudy(text.trim(), sura, aya);
-    }
-  });
-}
-
-// ============================================================
-// RESEARCH DEPTH BADGE
-// ============================================================
-async function loadDepthBadge(suraId, num) {
-  try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_verse_depth`, {
-      method: 'POST',
-      headers: { ...HEADERS, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ p_sura: suraId, p_aya: num })
-    });
-    const rows = res.ok ? await res.json() : [];
-    if (!rows || !rows[0]) return;
-    const d = rows[0];
-    const total = Number(d.theme_count||0) + Number(d.hadith_count||0) +
-      Number(d.tafsir_count||0) + Number(d.sira_count||0) +
-      Number(d.fiqh_count||0) + Number(d.ancient_count||0);
-    if (total === 0) return;
-
-    const score = Number(d.importance_score||0);
-    const stars = score > 60 ? 5 : score > 40 ? 4 : score > 20 ? 3 : score > 8 ? 2 : 1;
-    const starStr = '★'.repeat(stars) + '☆'.repeat(5-stars);
-    const badge = document.getElementById(`depth-badge-${num}`);
-    if (badge) {
-      badge.style.display = 'inline';
-      badge.title = `Themes: ${d.theme_count} · Hadith: ${d.hadith_count} · Tafsir: ${d.tafsir_count} · Fiqh: ${d.fiqh_count} · Sira: ${d.sira_count} · Ancient: ${d.ancient_count}`;
-      badge.textContent = starStr;
-    }
-  } catch(e) {}
-}
-
-// ============================================================
-// SIRA PANEL — loaded into Asbab tab
-// ============================================================
-async function loadSiraPanel(suraId, num) {
-  const panel = document.getElementById(`sira-panel-${num}`);
-  if (!panel) return;
-  try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_sira_for_verse`, {
-      method: 'POST',
-      headers: { ...HEADERS, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ p_sura: suraId, p_aya: num })
-    });
-    const rows = res.ok ? await res.json() : [];
-    if (!rows || rows.length === 0) return;
-
-    const periodLabels = {
-      'meccan-early': 'Early Meccan', 'meccan-mid': 'Middle Meccan',
-      'meccan-late': 'Late Meccan', 'medinan': 'Medinan'
-    };
-
-    let html = `<div style="margin-bottom:14px;">
-      <div style="font-size:11px;font-family:'IBM Plex Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#5A3A0A;margin-bottom:8px;padding-bottom:5px;border-bottom:1px solid #E8D0A0;">
-        🕌 Sira Context · ${rows.length} Event${rows.length>1?'s':''}
-      </div>`;
-
-    rows.forEach(e => {
-      const period = periodLabels[e.period] || e.period || '';
-      const figures = Array.isArray(e.key_figures) ? e.key_figures.slice(0,4).join(', ') : '';
-      html += `
-        <div style="border:1px solid #E8D4A8;border-left:3px solid #C8A84C;border-radius:6px;margin-bottom:10px;overflow:hidden;">
-          <button onclick="toggleSection('sira-body-${num}-${e.event_id}')" style="width:100%;display:flex;justify-content:space-between;align-items:center;padding:9px 12px;background:#FDF8EC;border:none;cursor:pointer;text-align:left;gap:8px;">
-            <div>
-              <div style="font-weight:700;font-size:12px;color:#5A3A0A;">${e.title_en}</div>
-              <div style="font-size:10px;color:#9A7040;margin-top:2px;">${period}${e.year_ce ? ' · ' + e.year_ce + ' CE' : ''}${e.location ? ' · ' + e.location : ''}</div>
-            </div>
-            <span id="sira-body-${num}-${e.event_id}-arrow" style="color:#C8A84C;font-size:11px;flex-shrink:0;">▼</span>
-          </button>
-          <div id="sira-body-${num}-${e.event_id}" style="display:none;padding:10px 12px;background:#fff;border-top:1px solid #E8D4A8;">
-            ${figures ? `<div style="font-size:11px;color:#7A5C30;margin-bottom:8px;">👥 ${figures}</div>` : ''}
-            ${e.story_en ? `<div style="font-size:13px;color:#2A1A0A;line-height:1.75;">${e.story_en}</div>` : ''}
-          </div>
-        </div>`;
-    });
-    html += '</div>';
-    panel.innerHTML = html;
-  } catch(e) {}
-}
-
-// ============================================================
-// QIRAAT PANEL — loaded into Riwayat tab
-// ============================================================
-async function loadQiraatPanel(suraId, num) {
-  const panel = document.getElementById(`qiraat-panel-${num}`);
-  if (!panel || panel.dataset.loaded === '1') return;
-  panel.dataset.loaded = '1';
-  try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_qiraat_for_verse`, {
-      method: 'POST',
-      headers: { ...HEADERS, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ p_sura: suraId, p_aya: num })
-    });
-    const rows = res.ok ? await res.json() : [];
-    if (!rows || rows.length === 0) {
-      panel.innerHTML = '';
-      return;
-    }
-
-    // Group by reader
-    const grouped = {};
-    rows.forEach(r => {
-      const key = r.reader_name_en || r.riwayah_name_en;
-      if (!grouped[key]) grouped[key] = [];
-      grouped[key].push(r);
-    });
-
-    let html = `<div style="margin-bottom:14px;">
-      <div style="font-size:11px;font-family:'IBM Plex Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#2A5A7A;margin-bottom:8px;padding-bottom:5px;border-bottom:1px solid #A8C8E0;">
-        📖 Qirāʾāt Variants · ${rows.length} Reading${rows.length>1?'s':''}
-      </div>`;
-
-    Object.entries(grouped).forEach(([reader, variants]) => {
-      html += `<div style="border:1px solid #A8C8E0;border-left:3px solid #2A5A7A;border-radius:6px;margin-bottom:8px;overflow:hidden;">
-        <div style="padding:8px 12px;background:#EEF5FA;">
-          <div style="font-weight:700;font-size:12px;color:#1A3A5A;">${reader}</div>
-          <div style="font-size:10px;color:#4A7A9A;margin-top:1px;">${variants[0].riwayah_name_en || ''}</div>
-        </div>
-        ${variants.map(v => `
-          <div style="padding:8px 12px;border-top:1px solid #D0E8F0;background:#fff;">
-            ${v.word_position ? `<span style="font-size:10px;color:#7A9FC9;font-family:'IBM Plex Mono',monospace;">Word ${v.word_position}</span>` : ''}
-            <div style="display:flex;gap:12px;align-items:flex-start;margin-top:4px;flex-wrap:wrap;">
-              ${v.base_text ? `<div><div style="font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.08em;">Base</div><div style="font-family:'Amiri',serif;font-size:18px;direction:rtl;">${v.base_text}</div></div>` : ''}
-              ${v.variant_text ? `<div><div style="font-size:9px;color:#2A5A7A;text-transform:uppercase;letter-spacing:.08em;">Variant</div><div style="font-family:'Amiri',serif;font-size:18px;direction:rtl;color:#2A5A7A;">${v.variant_text}</div></div>` : ''}
-            </div>
-            ${v.variant_type ? `<span style="font-size:10px;background:#EEF5FA;border:1px solid #A8C8E0;color:#2A5A7A;padding:1px 7px;border-radius:8px;margin-top:4px;display:inline-block;">${v.variant_type}</span>` : ''}
-            ${v.explanation ? `<div style="font-size:12px;color:#444;margin-top:6px;line-height:1.6;">${v.explanation}</div>` : ''}
-          </div>`).join('')}
-      </div>`;
-    });
-    html += '</div>';
-    panel.innerHTML = html;
-  } catch(e) { panel.innerHTML = ''; }
-}
-
-// ============================================================
-// GENERIC TOGGLE SECTION HELPER
-// ============================================================
-function toggleSection(id) {
-  const el = document.getElementById(id);
-  const arrow = document.getElementById(id + '-arrow');
-  if (!el) return;
-  const open = el.style.display !== 'none';
-  el.style.display = open ? 'none' : 'block';
-  if (arrow) arrow.style.transform = open ? '' : 'rotate(180deg)';
-}
-
-// ============================================================
-// AI ANALYSIS — STRUCTURED RESEARCH REPORT
-// ============================================================
-async function generateStructuredAnalysis(suraId, num, english, arabic) {
-  const container = document.getElementById(`ai-structured-${num}`);
-  if (!container) return;
-  if (container.dataset.loaded === '1') return;
-  container.dataset.loaded = '1';
-  container.innerHTML = '<div style="text-align:center;padding:20px;"><span class="spinner"></span> Building research report from database…</div>';
-
-  // Gather all available data in parallel
-  const [themes, hadiths, tafsirs, sira, fiqh, ancient] = await Promise.allSettled([
-    fetch(`${SUPABASE_URL}/rest/v1/rpc/get_thematic_cross_refs`, {
-      method:'POST', headers:{...HEADERS,'Content-Type':'application/json'},
-      body: JSON.stringify({p_sura:suraId, p_aya:num})
-    }).then(r=>r.json()).catch(()=>[]),
-    fetch(`${SUPABASE_URL}/rest/v1/hadith_connections?sura_id=eq.${suraId}&aya_number=eq.${num}&limit=5`, {
-      headers: HEADERS
-    }).then(r=>r.json()).catch(()=>[]),
-    fetch(`${SUPABASE_URL}/rest/v1/tafsir_entries?sura=eq.${suraId}&aya=eq.${num}&limit=4`, {
-      headers: HEADERS
-    }).then(r=>r.json()).catch(()=>[]),
-    fetch(`${SUPABASE_URL}/rest/v1/rpc/get_sira_for_verse`, {
-      method:'POST', headers:{...HEADERS,'Content-Type':'application/json'},
-      body: JSON.stringify({p_sura:suraId, p_aya:num})
-    }).then(r=>r.json()).catch(()=>[]),
-    fetch(`${SUPABASE_URL}/rest/v1/rpc/get_fiqh_for_verse`, {
-      method:'POST', headers:{...HEADERS,'Content-Type':'application/json'},
-      body: JSON.stringify({p_sura:suraId, p_aya:num})
-    }).then(r=>r.json()).catch(()=>[]),
-    fetch(`${SUPABASE_URL}/rest/v1/ancient_sources?sura=eq.${suraId}&aya=eq.${num}`, {
-      headers: HEADERS
-    }).then(r=>r.json()).catch(()=>[])
-  ]);
-
-  const themeData = themes.value||[];
-  const hadithData = hadiths.value||[];
-  const tafsirData = tafsirs.value||[];
-  const siraData = sira.value||[];
-  const fiqhData = fiqh.value||[];
-  const ancientData = ancient.value||[];
-
-  // Build context string for AI
-  const themeNames = [...new Set(themeData.map(t=>t.theme))];
-  const contextParts = [];
-  if (themeNames.length) contextParts.push(`Themes: ${themeNames.join(', ')}`);
-  if (hadithData.length) contextParts.push(`${hadithData.length} hadith connections exist`);
-  if (tafsirData.length) contextParts.push(`Tafsir from: ${tafsirData.map(t=>t.scholar_name).join(', ')}`);
-  if (siraData.length) contextParts.push(`Sira events: ${siraData.map(s=>s.title_en).join(', ')}`);
-  if (fiqhData.length) contextParts.push(`Fiqh topics: ${fiqhData.map(f=>f.topic).join(', ')}`);
-  if (ancientData.length) contextParts.push(`Ancient sources: ${ancientData.map(a=>a.source_title).join(', ')}`);
-
-  const prompt = `You are a Quranic studies scholar. Analyze verse ${suraId}:${num}.
-
-English: "${english}"
-Arabic: "${arabic}"
-
-Available database data: ${contextParts.join(' | ')}
-${themeNames.length ? 'Themes: ' + themeNames.join(', ') : ''}
-${tafsirData.length ? 'Tafsir scholars available: ' + tafsirData.map(t=>t.scholar_name+' ('+t.tradition+')').join(', ') : ''}
-${fiqhData.length ? 'Fiqh topics: ' + fiqhData.map(f=>f.topic).join('; ') : ''}
-
-Generate a structured research report with these sections (use the actual database data listed above, do not invent):
-1. Summary (2-3 sentences)
-2. Classical Interpretation (what traditional scholars say)
-3. Linguistic Notes (key Arabic terms, roots, meaning)
-4. Historical Context (when and why revealed)
-5. Scholarly Debates (what is contested)
-6. Research Questions (3 key questions for study)
-
-Format: Use markdown headers (##). Be concise and scholarly.`;
-
-  try {
-    const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': API_KEY,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: MODEL, max_tokens: 1000,
-        messages: [{ role: 'user', content: prompt }]
-      })
-    });
-    const aiData = await aiRes.json();
-    const text = aiData.content?.map(c=>c.text||'').join('') || '';
-
-    // Render structured sections
-    let html = '';
-
-    // Database data summary cards at top
-    const dataSummary = [];
-    if (themeNames.length) dataSummary.push(`<span style="font-size:11px;background:#FDF5E0;border:1px solid #C8A84C;color:#7A5C10;padding:2px 8px;border-radius:10px;">🔗 ${themeNames.length} Theme${themeNames.length>1?'s':''}</span>`);
-    if (hadithData.length) dataSummary.push(`<span style="font-size:11px;background:#EEF5FA;border:1px solid #A8C8E0;color:#2A5A7A;padding:2px 8px;border-radius:10px;">📿 ${hadithData.length} Hadith</span>`);
-    if (tafsirData.length) dataSummary.push(`<span style="font-size:11px;background:#F5F0FA;border:1px solid #C0A8D8;color:#4A2A6A;padding:2px 8px;border-radius:10px;">📚 ${tafsirData.length} Tafsir</span>`);
-    if (siraData.length) dataSummary.push(`<span style="font-size:11px;background:#FEF8EC;border:1px solid #D0A84C;color:#6A4A0A;padding:2px 8px;border-radius:10px;">🕌 ${siraData.length} Sira Event${siraData.length>1?'s':''}</span>`);
-    if (fiqhData.length) dataSummary.push(`<span style="font-size:11px;background:#EEF8EE;border:1px solid #A0C8A0;color:#2A5A2A;padding:2px 8px;border-radius:10px;">⚖️ ${fiqhData.length} Fiqh Topic${fiqhData.length>1?'s':''}</span>`);
-    if (ancientData.length) dataSummary.push(`<span style="font-size:11px;background:#F8F4EE;border:1px solid #C8B888;color:#5A4A20;padding:2px 8px;border-radius:10px;">🏛 ${ancientData.length} Source${ancientData.length>1?'s':''}</span>`);
-
-    if (dataSummary.length) {
-      html += `<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:14px;">${dataSummary.join('')}</div>`;
-    }
-
-    // Parse and render markdown sections
-    const sections = text.split(/
-##\s+/).filter(Boolean);
-    sections.forEach((section, i) => {
-      const lines = section.split('
-');
-      const title = lines[0].trim();
-      const body = lines.slice(1).join('
-').trim();
-      if (!body) return;
-      const colors = ['#7A5C10','#2A5A7A','#2A5A3A','#4A2A6A','#6A3A0A','#2A3A6A'];
-      const bgs = ['#FDF8EC','#EEF5FA','#EEF8EE','#F5EEF8','#FAF4EE','#EEF0FA'];
-      const borders = ['#E0C880','#A8C8E0','#A0C8A8','#C0A8D8','#D4A880','#A8B8D8'];
-      const c = colors[i%colors.length], bg = bgs[i%bgs.length], bd = borders[i%borders.length];
-      html += `<div style="border:1px solid ${bd};border-left:3px solid ${c};border-radius:6px;margin-bottom:10px;overflow:hidden;">
-        <button onclick="toggleSection('ai-sec-${num}-${i}')" style="width:100%;display:flex;justify-content:space-between;align-items:center;padding:9px 12px;background:${bg};border:none;cursor:pointer;">
-          <span style="font-size:12px;font-weight:700;color:${c};">${title}</span>
-          <span id="ai-sec-${num}-${i}-arrow" style="font-size:11px;color:${c};">▼</span>
-        </button>
-        <div id="ai-sec-${num}-${i}" style="display:none;padding:10px 12px;background:#fff;border-top:1px solid ${bd};">
-          <div style="font-size:13px;color:#1A1A1A;line-height:1.75;white-space:pre-wrap;">${body.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')}</div>
-        </div>
-      </div>`;
-    });
-
-    // If first section, auto-open summary
-    if (sections.length > 0) {
-      setTimeout(() => {
-        const firstSec = document.getElementById(`ai-sec-${num}-0`);
-        const firstArrow = document.getElementById(`ai-sec-${num}-0-arrow`);
-        if (firstSec) { firstSec.style.display='block'; }
-        if (firstArrow) { firstArrow.style.transform='rotate(180deg)'; }
-      }, 100);
-    }
-
-    container.innerHTML = html;
-  } catch(err) {
-    container.innerHTML = `<div style="color:#c97a7a;padding:12px;font-size:13px;">Analysis failed: ${err.message}</div>`;
-  }
-}
 </script>
-
-<style>
-#word-study-sheet { transform: translate3d(0,100%,0); transition: transform 0.3s cubic-bezier(0.32,0.72,0,1); }
-#word-study-overlay.ws-open #word-study-sheet { transform: translate3d(0,0,0); }
-#word-study-overlay { -webkit-overflow-scrolling: touch; }
-</style>
-<div id="word-study-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:99999;align-items:flex-end;justify-content:center;" onclick="if(event.target===this)closeWordStudy()">
-  <div id="word-study-sheet" style="background:#FDFAF4;border-top:3px solid #C8A84C;border-radius:18px 18px 0 0;width:100%;max-width:680px;height:88vh;display:flex;flex-direction:column;box-shadow:0 -8px 40px rgba(0,0,0,0.25);will-change:transform;">
-    <div style="display:flex;justify-content:center;padding:12px 0 4px;cursor:pointer;" onclick="closeWordStudy()">
-      <div style="width:40px;height:4px;background:#D0C0A0;border-radius:2px;"></div>
-    </div>
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:6px 18px 12px;border-bottom:1px solid #E8D8B8;flex-shrink:0;">
-      <div>
-        <div id="ws-word" style="font-size:34px;font-family:'Amiri',serif;color:#2A1A0A;direction:rtl;line-height:1.3;"></div>
-        <div id="ws-verse-ref" style="font-size:11px;color:#9A8060;font-family:'IBM Plex Mono',monospace;margin-top:2px;"></div>
-      </div>
-      <button onclick="closeWordStudy()" style="background:#F5EDD8;border:1px solid #C8A84C;border-radius:8px;color:#7A5C10;font-size:12px;cursor:pointer;padding:5px 10px;font-weight:600;margin-top:8px;flex-shrink:0;">✕ Close</button>
-    </div>
-    <div id="ws-content" style="flex:1;overflow-y:auto;padding:16px 18px 32px;font-size:13px;color:#2A2A2A;">
-      <div style="text-align:center;padding:40px;"><span class="spinner"></span></div>
-    </div>
-  </div>
-</div>
 </body>
 </html>
