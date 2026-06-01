@@ -19226,14 +19226,15 @@ async function loadAncientPanel(num, suraId) {
   panel.innerHTML = '<div style="padding:20px;text-align:center;color:#BBB;"><span class="spinner"></span> Loading ancient sources...</div>';
 
   try {
-    const rows = await sbFetch('ancient_sources', {
-      select: 'source_title,tradition,approx_date,author,source_type,parallel_summary,similarity_note,difference_note,reference_link',
-      sura: `eq.${suraId}`,
-      aya: `eq.${num}`,
-      order: 'tradition.asc,source_title.asc'
-    });
+    const url = new URL(`${SUPABASE_URL}/rest/v1/ancient_sources`);
+    url.searchParams.set('select', 'source_title,tradition,approx_date,author,source_type,parallel_summary,similarity_note,difference_note,reference_link');
+    url.searchParams.set('sura', `eq.${suraId}`);
+    url.searchParams.set('aya', `eq.${num}`);
+    url.searchParams.set('order', 'tradition.asc,source_title.asc');
+    const resp = await fetch(url, { headers: HEADERS });
+    const rows = resp.ok ? await resp.json() : [];
 
-    if (rows.length === 0) {
+    if (!Array.isArray(rows) || rows.length === 0) {
       panel.innerHTML = '<div style="color:#BBB;font-style:italic;font-size:13px;padding:20px;text-align:center;">No ancient source parallels recorded for this verse yet.</div>';
       return;
     }
