@@ -3508,7 +3508,7 @@ function renderVerses(ayas, suraId) {
           <button class="tab-btn" onclick="switchTab(${aya.aya_number},'riwayat',this)">Riwayat</button>
           <button class="tab-btn" id="xref-tab-${aya.aya_number}" onclick="switchTab(${aya.aya_number},'xrefs',this)">Cross-Refs</button>
           <button class="tab-btn" onclick="switchTab(${aya.aya_number},'audio',this);initAudioPanel(${aya.aya_number},${suraId})">🎧 Audio</button>
-          <button class="tab-btn" id="ancient-tab-${aya.aya_number}" onclick="switchTab(${aya.aya_number},'ancient',this);loadAncientPanel(${aya.aya_number},${suraId},aya.aya_number)">Ancient Sources</button>
+          <button class="tab-btn" id="ancient-tab-${aya.aya_number}" onclick="switchTab(${aya.aya_number},'ancient',this);loadAncientPanel(${aya.aya_number},${suraId})">Ancient Sources</button>
           <button class="tab-btn" onclick="switchTab(${aya.aya_number},'ai',this)">AI Analysis</button>
         </div>
         <div class="tab-panel active" id="tp-${aya.aya_number}-details">
@@ -13200,7 +13200,7 @@ function renderVerses(ayas, suraId) {
           <button class="tab-btn" onclick="switchTab(${aya.aya_number},'riwayat',this)">Riwayat</button>
           <button class="tab-btn" id="xref-tab-${aya.aya_number}" onclick="switchTab(${aya.aya_number},'xrefs',this)">Cross-Refs</button>
           <button class="tab-btn" onclick="switchTab(${aya.aya_number},'audio',this);initAudioPanel(${aya.aya_number},${suraId})">🎧 Audio</button>
-          <button class="tab-btn" id="ancient-tab-${aya.aya_number}" onclick="switchTab(${aya.aya_number},'ancient',this);loadAncientPanel(${aya.aya_number},${suraId},aya.aya_number)">Ancient Sources</button>
+          <button class="tab-btn" id="ancient-tab-${aya.aya_number}" onclick="switchTab(${aya.aya_number},'ancient',this);loadAncientPanel(${aya.aya_number},${suraId})">Ancient Sources</button>
           <button class="tab-btn" onclick="switchTab(${aya.aya_number},'ai',this)">AI Analysis</button>
         </div>
         <div class="tab-panel active" id="tp-${aya.aya_number}-details">
@@ -19217,9 +19217,11 @@ async function injectThemeAnalysis(suraId, num) {
 // ============================================================
 // ANCIENT SOURCES PANEL
 // ============================================================
-async function loadAncientPanel(num, suraId, ayaNum) {
+async function loadAncientPanel(num, suraId) {
   const panel = document.getElementById(`ancient-panel-${num}`);
-  if (!panel || !panel.innerHTML.includes('Tap the Ancient Sources')) return;
+  if (!panel) return;
+  if (panel.dataset.loaded === '1') return;
+  panel.dataset.loaded = '1';
 
   panel.innerHTML = '<div style="padding:20px;text-align:center;color:#BBB;"><span class="spinner"></span> Loading ancient sources...</div>';
 
@@ -19227,28 +19229,19 @@ async function loadAncientPanel(num, suraId, ayaNum) {
     const rows = await sbFetch('ancient_sources', {
       select: 'source_title,tradition,approx_date,author,source_type,parallel_summary,similarity_note,difference_note,reference_link',
       sura: `eq.${suraId}`,
-      aya: `eq.${ayaNum}`,
+      aya: `eq.${num}`,
       order: 'tradition.asc,source_title.asc'
     });
 
-    // Also load theme analysis for this verse
-    const themeRows = await sbFetch('thematic_cross_references', {
-      select: 'theme',
-      sura: `eq.${suraId}`,
-      aya: `eq.${ayaNum}`
-    });
-    const themes = [...new Set(themeRows.map(r => r.theme))];
-
-    if (rows.length === 0 && themes.length === 0) {
+    if (rows.length === 0) {
       panel.innerHTML = '<div style="color:#BBB;font-style:italic;font-size:13px;padding:20px;text-align:center;">No ancient source parallels recorded for this verse yet.</div>';
       return;
     }
 
     let html = '';
 
-    if (rows.length > 0) {
-      html += `<div style="font-size:11px;font-family:'IBM Plex Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#c9a84c;margin-bottom:12px;padding-bottom:6px;border-bottom:1px solid #333;">Ancient & Pre-Islamic Parallels (${rows.length})</div>`;
-      html += rows.map(r => `
+    html += `<div style="font-size:11px;font-family:'IBM Plex Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#c9a84c;margin-bottom:12px;padding-bottom:6px;border-bottom:1px solid #333;">Ancient & Pre-Islamic Parallels (${rows.length})</div>`;
+    html += rows.map(r => `
         <div style="border:1px solid #2a2a2a;border-radius:8px;padding:14px;margin-bottom:12px;background:#1c1c1c;">
           <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:8px;">
             <div>
@@ -19263,9 +19256,6 @@ async function loadAncientPanel(num, suraId, ayaNum) {
           ${r.difference_note ? `<div style="font-size:12px;padding:6px 10px;background:#1f0d0d;border-left:3px solid #8a4a4a;border-radius:0 4px 4px 0;color:#c99e9e;margin-bottom:6px;"><strong style="color:#c96b6b;">Difference:</strong> ${r.difference_note}</div>` : ''}
           ${r.reference_link ? `<a href="${r.reference_link}" target="_blank" style="font-size:11px;color:#7a9fc9;text-decoration:none;">📚 View Source →</a>` : ''}
         </div>`).join('');
-    } else {
-      html += '<div style="color:#888;font-style:italic;font-size:13px;padding:12px 0;">No ancient source records for this verse. Records exist for related verses — open them to see parallels.</div>';
-    }
 
     panel.innerHTML = html;
   } catch(e) {
