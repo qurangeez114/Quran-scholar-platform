@@ -1214,6 +1214,64 @@ body { padding-bottom: 70px; }
   bottom: 80px !important;
 }
 </style>
+<!-- ══ MULTILINGUAL SEARCH ENGINE v3 ══ -->
+<script>
+const ML_SCRIPTS={ethiopic:/[ሀ-፿]/,arabic:/[؀-ۿ]/,somali:/(iyo|waa|ku|ka|la|si|oo|ee|ah|ama|haddii|maxaa)/i,oromo:/(fi|kan|hin|wajjin|akkuma|bara|yeroo|namni)/i,turkish:/[ğüşıöçĞÜŞİÖÇ]|(ve|bir|bu|için|ile|olan|daha|çok)/i};
+function mlDetectLang(q){if(ML_SCRIPTS.ethiopic.test(q))return 'Tigrinya or Amharic';if(ML_SCRIPTS.arabic.test(q))return 'Arabic';if(ML_SCRIPTS.somali.test(q))return 'Somali';if(ML_SCRIPTS.oromo.test(q))return 'Oromo';if(ML_SCRIPTS.turkish.test(q))return 'Turkish';return 'English';}
+function needsTranslation(q){return mlDetectLang(q)!=='English';}
+function normalizeArabic(s){if(!s)return '';return s.replace(/[ً-ْٰۖ-ۭ]/g,'').replace(/[أإآٱ]/g,'ا').replace(/ة/g,'ه').replace(/ى/g,'ي').replace(/ؤ/g,'و').replace(/ئ/g,'ي').replace(/ـ/g,'').trim();}
+let _mlCache={},_mlTimers={};
+async function generateSearchTerms(raw){
+  const key=raw.trim();
+  if(_mlCache[key])return _mlCache[key];
+  const lang=mlDetectLang(key);
+  const terms={original:key,english:lang==='English'?key:'',arabic:lang==='Arabic'?normalizeArabic(key):'',root:'',transliteration:'',lang};
+  if(lang!=='English'){
+    try{
+      const proxy=window.CLAUDE_PROXY||'/.netlify/functions/claude-proxy';
+      const res=await fetch(proxy,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:120,messages:[{role:'user',content:`For the ${lang} word "${key}", return ONLY this JSON, no explanation:
+{"english":"literal English meaning (1-3 words)","arabic":"Arabic equivalent no diacritics","root":"Arabic root 3 letters no diacritics","transliteration":"Latin transliteration"}`}]})});
+      const data=await res.json();
+      const txt=(data?.content?.[0]?.text||'').trim().replace(/^```json|```$/g,'').trim();
+      try{const p=JSON.parse(txt);terms.english=p.english||'';terms.arabic=normalizeArabic(p.arabic||'');terms.root=normalizeArabic(p.root||'');terms.transliteration=p.transliteration||'';}catch(e){const m=txt.match(/"english"\s*:\s*"([^"]+)"/);if(m)terms.english=m[1];}
+    }catch(e){console.warn('[ML]',e);}
+  }
+  _mlCache[key]=terms;
+  return terms;
+}
+function buildSearchArray(terms){
+  const all=[terms.original,terms.english,terms.arabic,terms.root,terms.transliteration,normalizeArabic(terms.original)].filter(t=>t&&t.trim().length>=2);
+  return [...new Set(all)];
+}
+function showTranslationPill(terms,pillId){
+  const el=document.getElementById(pillId);
+  if(!el)return;
+  if(!terms||terms.lang==='English'){el.innerHTML='';return;}
+  const parts=[];
+  if(terms.original)parts.push('<b>'+escapeHtml(terms.original)+'</b>');
+  if(terms.english)parts.push('🇬🇧 '+escapeHtml(terms.english));
+  if(terms.arabic)parts.push('🕌 '+escapeHtml(terms.arabic));
+  if(terms.root)parts.push('🌱 root: '+escapeHtml(terms.root));
+  el.innerHTML='<div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;background:#FFF8DC;border:1px solid #E8C97B;border-radius:20px;padding:4px 12px;font-size:11px;color:#8B5E1A;margin-top:4px;">🌍 '+parts.join(' / ')+'</div>';
+}
+async function detectAndTranslateQuery(raw){const t=await generateSearchTerms(raw);return t.english||raw;}
+function highlightSearchTerms(containerEl,terms){
+  if(!containerEl||!terms||!terms.length)return;
+  containerEl.querySelectorAll('mark.ml-hl').forEach(m=>m.replaceWith(document.createTextNode(m.textContent)));
+  const pattern=terms.map(t=>t.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).filter(Boolean).join('|');
+  if(!pattern)return;
+  const regex=new RegExp('('+pattern+')','gi');
+  const walker=document.createTreeWalker(containerEl,NodeFilter.SHOW_TEXT,null,false);
+  const nodes=[];while(walker.nextNode())nodes.push(walker.currentNode);
+  nodes.forEach(node=>{
+    if(!node.nodeValue.trim()||!regex.test(node.nodeValue))return;
+    regex.lastIndex=0;
+    const span=document.createElement('span');
+    span.innerHTML=node.nodeValue.replace(regex,'<mark class="ml-hl" style="background:#FFE066;color:#0D0D0D;border-radius:3px;padding:0 3px;font-weight:700;box-shadow:0 1px 3px rgba(0,0,0,0.15);">$1</mark>');
+    node.parentNode.replaceChild(span,node);
+  });
+}
+</script>
 </head>
 <body>
 
@@ -1520,28 +1578,28 @@ function setLevel(l) {
   renderTopicList();
 }
 
-let _madTimer;
+let _madTimer, _madTerms = null;
 function filterTopics() {
   const _raw = (document.getElementById('searchInput').value || '').trim();
-  // Immediate raw filter
   _search = _raw.toLowerCase();
   renderTopicList();
-  // Debounce translate for non-latin
   clearTimeout(_madTimer);
-  if (_raw.length >= 2 && needsTranslation && needsTranslation(_raw)) {
+  if (_raw.length >= 2 && needsTranslation(_raw)) {
     const pill = document.getElementById('searchTranslationPill');
     if (pill) pill.innerHTML = '<div style="display:inline-flex;align-items:center;gap:6px;background:#FFF8DC;border:1px solid #E8C97B;border-radius:20px;padding:3px 10px;font-size:11px;color:#8B5E1A;margin-top:4px;">🌍 Translating...</div>';
     _madTimer = setTimeout(async () => {
-      const _translated = await detectAndTranslateQuery(_raw);
-      showTranslationPill(_raw, _translated, 'searchTranslationPill');
-      _search = _translated.toLowerCase();
+      _madTerms = await generateSearchTerms(_raw);
+      const variants = buildSearchArray(_madTerms);
+      showTranslationPill(_madTerms, 'searchTranslationPill');
+      _search = (_madTerms.english || _raw).toLowerCase();
       renderTopicList();
       setTimeout(() => {
         const el = document.getElementById('topicList');
-        if (el && _search) highlightSearchTerms(el, _search.split(/\s+/).filter(Boolean));
+        if (el) highlightSearchTerms(el, variants);
       }, 80);
     }, 700);
   } else {
+    _madTerms = null;
     setTimeout(() => {
       const el = document.getElementById('topicList');
       if (el && _search) highlightSearchTerms(el, _search.split(/\s+/).filter(Boolean));
@@ -2071,230 +2129,8 @@ document.addEventListener('click', function(e) {
 </script>
 
 
-<!-- ══ MULTILINGUAL SEARCH + HIGHLIGHT ENGINE ══ -->
-<script>
-// ============================================================
-// UNIVERSAL MULTILINGUAL SEARCH + HIGHLIGHT ENGINE
-// Detects language, translates to English via Claude, highlights
-// ============================================================
 
-const LANG_DETECT_MAP = {
-  // Ethiopic script → could be Tigrinya or Amharic
-  ethiopic: /[\u1200-\u137F]/,
-  // Arabic script → Arabic
-  arabic: /[\u0600-\u06FF]/,
-  // Somali (Latin + special chars common in Somali)
-  somali: /\b(iyo|waa|ku|ka|la|si|oo|ee|ah|ama|haddii|maxaa|muxuu)\b/i,
-  // Oromo (common Oromo words/patterns)
-  oromo: /\b(fi|kan|hin|wajjin|akkuma|bara|yeroo|namni|uumaa|rabbi)\b/i,
-  // Turkish (common Turkish words + special chars ğüşıöç)
-  turkish: /[ğüşıöçĞÜŞİÖÇ]|\b(ve|bir|bu|için|ile|olan|olan|daha|çok|gibi)\b/i,
-};
 
-let _mlSearchCache = {};
 
-async function detectAndTranslateQuery(rawQuery) {
-  if (!rawQuery || rawQuery.trim().length < 2) return rawQuery;
-  const cacheKey = rawQuery.trim().toLowerCase();
-  if (_mlSearchCache[cacheKey]) return _mlSearchCache[cacheKey];
-
-  // Check if already English (ASCII-dominant, no special scripts)
-  const isEthiopic = LANG_DETECT_MAP.ethiopic.test(rawQuery);
-  const isArabic   = LANG_DETECT_MAP.arabic.test(rawQuery);
-  const isSomali   = !isEthiopic && !isArabic && LANG_DETECT_MAP.somali.test(rawQuery);
-  const isOromo    = !isEthiopic && !isArabic && LANG_DETECT_MAP.oromo.test(rawQuery);
-  const isTurkish  = !isEthiopic && !isArabic && LANG_DETECT_MAP.turkish.test(rawQuery);
-  const needsTranslation = isEthiopic || isArabic || isSomali || isOromo || isTurkish;
-
-  if (!needsTranslation) {
-    _mlSearchCache[cacheKey] = rawQuery;
-    return rawQuery;
-  }
-
-  const detectedLang = isEthiopic ? 'Tigrinya or Amharic'
-    : isArabic ? 'Arabic'
-    : isSomali ? 'Somali'
-    : isOromo  ? 'Oromo'
-    : 'Turkish';
-
-  try {
-    const proxyUrl = window.CLAUDE_PROXY || '/.netlify/functions/claude-proxy';
-    const res = await fetch(proxyUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 60,
-        messages: [{
-          role: 'user',
-          content: `Translate this ${detectedLang} search query to English. Return ONLY the English translation, nothing else, no quotes, no explanation.\n\nQuery: ${rawQuery}`
-        }]
-      })
-    });
-    const data = await res.json();
-    const translated = (data?.content?.[0]?.text || rawQuery).trim();
-    _mlSearchCache[cacheKey] = translated;
-    console.log(`[ML Search] "${rawQuery}" (${detectedLang}) → "${translated}"`);
-    return translated;
-  } catch(e) {
-    console.warn('[ML Search] Translation failed, using raw query', e);
-    return rawQuery;
-  }
-}
-
-// Highlight all occurrences of terms in a container element
-function highlightSearchTerms(containerEl, terms) {
-  if (!containerEl || !terms || !terms.length) return;
-  // Remove existing highlights first
-  containerEl.querySelectorAll('mark.ml-hl').forEach(m => {
-    m.replaceWith(document.createTextNode(m.textContent));
-  });
-  if (!terms.join('').trim()) return;
-
-  const walker = document.createTreeWalker(containerEl, NodeFilter.SHOW_TEXT, null, false);
-  const nodes = [];
-  while (walker.nextNode()) nodes.push(walker.currentNode);
-
-  const pattern = terms
-    .map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-    .filter(Boolean)
-    .join('|');
-  if (!pattern) return;
-  const regex = new RegExp(`(${pattern})`, 'gi');
-
-  nodes.forEach(node => {
-    if (!node.nodeValue.trim()) return;
-    if (!regex.test(node.nodeValue)) return;
-    regex.lastIndex = 0;
-    const span = document.createElement('span');
-    span.innerHTML = node.nodeValue.replace(regex,
-      '<mark class="ml-hl" style="background:#FFE066;color:#0D0D0D;border-radius:3px;padding:0 3px;font-weight:700;box-shadow:0 1px 3px rgba(0,0,0,0.15);">$1</mark>');
-    node.parentNode.replaceChild(span, node);
-  });
-}
-
-// Show a small pill below the search box if translation happened
-function showTranslationPill(originalQuery, translatedQuery, pillContainerId) {
-  const el = document.getElementById(pillContainerId);
-  if (!el) return;
-  if (originalQuery.trim().toLowerCase() === translatedQuery.trim().toLowerCase()) {
-    el.innerHTML = '';
-    return;
-  }
-  el.innerHTML = `<div style="display:inline-flex;align-items:center;gap:6px;background:#FFF8DC;border:1px solid #E8C97B;border-radius:20px;padding:3px 10px;font-size:11px;color:#8B5E1A;margin-top:4px;">
-    🌍 <span>Searching for: <b>${escapeHtml(translatedQuery)}</b></span>
-    <span style="color:#AAA">(translated from: ${escapeHtml(originalQuery)})</span>
-  </div>`;
-}
-
-</script>
-
-<!-- ══ MULTILINGUAL SEARCH + HIGHLIGHT ENGINE v2 ══ -->
-<script>
-const LANG_DETECT_MAP = {
-  ethiopic: /[\u1200-\u137F]/,
-  arabic:   /[\u0600-\u06FF]/,
-  somali:   /\b(iyo|waa|ku|ka|la|si|oo|ee|ah|ama|haddii|maxaa|muxuu)\b/i,
-  oromo:    /\b(fi|kan|hin|wajjin|akkuma|bara|yeroo|namni|uumaa|rabbi)\b/i,
-  turkish:  /[ğüşıöçĞÜŞİÖÇ]|\b(ve|bir|bu|için|ile|olan|daha|çok|gibi)\b/i,
-};
-
-let _mlCache = {};
-let _mlDebounceTimers = {};
-
-function needsTranslation(q) {
-  return Object.values(LANG_DETECT_MAP).some(r => r.test(q));
-}
-
-async function detectAndTranslateQuery(rawQuery) {
-  if (!rawQuery || rawQuery.trim().length < 2) return rawQuery;
-  const key = rawQuery.trim();
-  if (_mlCache[key]) return _mlCache[key];
-  if (!needsTranslation(key)) { _mlCache[key] = key; return key; }
-
-  const isEthiopic = LANG_DETECT_MAP.ethiopic.test(key);
-  const isArabicQ  = LANG_DETECT_MAP.arabic.test(key);
-  const isSomali   = !isEthiopic && !isArabicQ && LANG_DETECT_MAP.somali.test(key);
-  const isOromo    = !isEthiopic && !isArabicQ && LANG_DETECT_MAP.oromo.test(key);
-  const isTurkish  = !isEthiopic && !isArabicQ && LANG_DETECT_MAP.turkish.test(key);
-  const lang = isEthiopic ? 'Tigrinya or Amharic' : isArabicQ ? 'Arabic' 
-             : isSomali ? 'Somali' : isOromo ? 'Oromo' : 'Turkish';
-
-  try {
-    const proxy = window.CLAUDE_PROXY || '/.netlify/functions/claude-proxy';
-    const res = await fetch(proxy, {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 60,
-        messages: [{role:'user', content:
-          `Translate this ${lang} word/phrase to English for Quran search. Return ONLY the English translation, nothing else.\n\nInput: ${key}`
-        }]
-      })
-    });
-    const data = await res.json();
-    const translated = (data?.content?.[0]?.text || key).trim().replace(/^["']|["']$/g,'');
-    _mlCache[key] = translated;
-    console.log(`[ML] "${key}" (${lang}) → "${translated}"`);
-    return translated;
-  } catch(e) {
-    console.warn('[ML] Translation failed:', e);
-    return key;
-  }
-}
-
-// Debounced version — waits 700ms after user stops typing before translating+searching
-function debounceMLSearch(inputId, searchFn, pillId, delay) {
-  delay = delay || 700;
-  return async function() {
-    const raw = document.getElementById(inputId)?.value || '';
-    clearTimeout(_mlDebounceTimers[inputId]);
-    if (raw.trim().length < 2) {
-      showTranslationPill('','', pillId);
-      searchFn(raw, false);
-      return;
-    }
-    // Show typing indicator if non-latin script
-    if (needsTranslation(raw)) {
-      const pill = document.getElementById(pillId);
-      if (pill) pill.innerHTML = '<div style="display:inline-flex;align-items:center;gap:6px;background:#FFF8DC;border:1px solid #E8C97B;border-radius:20px;padding:3px 10px;font-size:11px;color:#8B5E1A;margin-top:4px;">🌍 Translating...</div>';
-    }
-    _mlDebounceTimers[inputId] = setTimeout(async () => {
-      const translated = await detectAndTranslateQuery(raw);
-      showTranslationPill(raw, translated, pillId);
-      searchFn(translated, true);
-    }, delay);
-  };
-}
-
-function showTranslationPill(original, translated, pillId) {
-  const el = document.getElementById(pillId);
-  if (!el) return;
-  if (!original || !translated || original.trim().toLowerCase() === translated.trim().toLowerCase()) {
-    el.innerHTML = ''; return;
-  }
-  el.innerHTML = `<div style="display:inline-flex;align-items:center;gap:6px;background:#FFF8DC;border:1px solid #E8C97B;border-radius:20px;padding:3px 10px;font-size:11px;color:#8B5E1A;margin-top:4px;">🌍 Searching: <b>${escapeHtml(translated)}</b> <span style="color:#AAA">(from: ${escapeHtml(original)})</span></div>`;
-}
-
-function highlightSearchTerms(containerEl, terms) {
-  if (!containerEl || !terms || !terms.length) return;
-  containerEl.querySelectorAll('mark.ml-hl').forEach(m => m.replaceWith(document.createTextNode(m.textContent)));
-  const pattern = terms.map(t => t.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).filter(Boolean).join('|');
-  if (!pattern) return;
-  const regex = new RegExp(`(${pattern})`, 'gi');
-  const walker = document.createTreeWalker(containerEl, NodeFilter.SHOW_TEXT, null, false);
-  const nodes = [];
-  while(walker.nextNode()) nodes.push(walker.currentNode);
-  nodes.forEach(node => {
-    if (!node.nodeValue.trim() || !regex.test(node.nodeValue)) return;
-    regex.lastIndex = 0;
-    const span = document.createElement('span');
-    span.innerHTML = node.nodeValue.replace(regex,
-      '<mark class="ml-hl" style="background:#FFE066;color:#0D0D0D;border-radius:3px;padding:0 3px;font-weight:700;box-shadow:0 1px 3px rgba(0,0,0,0.15);">$1</mark>');
-    node.parentNode.replaceChild(span, node);
-  });
-}
-</script>
 </body>
 </html>
