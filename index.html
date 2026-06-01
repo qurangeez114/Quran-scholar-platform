@@ -9655,7 +9655,7 @@ document.addEventListener('DOMContentLoaded', function(){
   <input type="range" id="brightSlider" min="0.6" max="1.2" step="0.05" value="1"
     oninput="onBright(this.value)">
   <div id="brightVal">100%</div>
-  <button id="themeToggleBtn" onclick="toggleTheme()">🌙 Dark Mode</button>
+  <button id="themeToggleBtn" onclick="window.toggleTheme&&window.toggleTheme()">🌙 Dark Mode</button>
 </div>
 
 <script>
@@ -16820,7 +16820,7 @@ document.addEventListener('DOMContentLoaded', function(){
   <input type="range" id="brightSlider" min="0.6" max="1.2" step="0.05" value="1"
     oninput="onBright(this.value)">
   <div id="brightVal">100%</div>
-  <button id="themeToggleBtn" onclick="toggleTheme()">🌙 Dark Mode</button>
+  <button id="themeToggleBtn" onclick="window.toggleTheme&&window.toggleTheme()">🌙 Dark Mode</button>
 </div>
 
 <script>
@@ -17033,8 +17033,8 @@ const ISA = (() => {
 
 // ── Config ─────────────────────────────────────────────────────────────
 const PROXY   = '/.netlify/functions/claude-proxy';
-const SB_URL  = (typeof SUPABASE_URL !== 'undefined' ? SUPABASE_URL : null) || 'https://ylosytbxpzxzwfzjpaej.supabase.co';
-const SB_KEY  = (typeof SUPABASE_KEY !== 'undefined' ? SUPABASE_KEY : null) || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
+const SB_URL  = (typeof SUPABASE_URL !== 'undefined' ? SUPABASE_URL : '') || 'https://ylosytbxpzxzwfzjpaej.supabase.co';
+const SB_KEY  = (typeof SUPABASE_KEY !== 'undefined' ? SUPABASE_KEY : '') || window.SUPABASE_KEY || '';
 const SB_HDR  = () => ({ apikey: SB_KEY, Authorization: 'Bearer '+SB_KEY, 'Content-Type':'application/json' });
 
 // ── Internal caches ────────────────────────────────────────────────────
@@ -17442,6 +17442,11 @@ async function intelligentSearch(rawQuery, context) {
   }
 
   // Step 4: Run unified RPC
+  // Ensure results panel is visible
+  const _sp = document.getElementById('searchResultsPanel');
+  if (_sp) _sp.style.display = 'flex';
+  const _va = document.getElementById('verseArea');
+  if (_va) _va.style.display = 'none';
   const rows = await runUnifiedSearch(rawQuery, context, variants);
 
   // Step 5: Render results
@@ -17450,11 +17455,8 @@ async function intelligentSearch(rawQuery, context) {
     const total  = renderGrouped(groups, variants, resultsEl);
 
     if (total === 0) {
+      // No results recovery
       renderNoResults(resultsEl, rawQuery, terms);
-      // Re-apply dark mode after render
-      if (typeof window.toggleTheme === 'function' && document.documentElement.getAttribute('data-theme') === 'dark') {
-        setTimeout(() => { try { document.querySelectorAll('[style]').forEach(function(el){var s=el.style;if(s.backgroundColor==='rgb(255, 255, 255)'||s.backgroundColor==='#fff'||s.backgroundColor==='#ffffff'){el.style.backgroundColor='#1b1f24';el.style.color='#f3efe6';}}); } catch(e){} }, 100);
-      }
       // Load AI suggestion asynchronously
       getAISuggestion(rawQuery, terms).then(suggestion => {
         const el  = document.getElementById('isa-ai-text-empty');
@@ -17465,11 +17467,10 @@ async function intelligentSearch(rawQuery, context) {
         }
       });
     } else {
-      // Highlight all matches + re-apply dark mode
+      // Highlight all matches in results
       setTimeout(() => {
-        if (typeof highlightSearchTerms === 'function') highlightSearchTerms(resultsEl, variants);
-        if (document.documentElement.getAttribute('data-theme') === 'dark') {
-          try { document.querySelectorAll('[style]').forEach(function(el){var s=el.style;if(s.backgroundColor==='rgb(255, 255, 255)'||s.backgroundColor==='#fff'){el.style.backgroundColor='#1b1f24';el.style.color='#f3efe6';}}); } catch(e){}
+        if (typeof highlightSearchTerms === 'function') {
+          highlightSearchTerms(resultsEl, variants);
         }
       }, 80);
     }
