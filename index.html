@@ -3110,8 +3110,7 @@ function highlightSearchTerms(containerEl, terms) {
 <script>
 const SUPABASE_URL = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
-window.SUPABASE_KEY = SUPABASE_KEY;
-window.SUPABASE_URL = SUPABASE_URL;
+// ISA uses window.HEADERS (set above)
 
 // Arabic to Latin transliteration using character codes
 function transliterateArabic(text) {
@@ -17038,8 +17037,8 @@ const ISA = (() => {
 // ── Config ─────────────────────────────────────────────────────────────
 const PROXY   = '/.netlify/functions/claude-proxy';
 const SB_URL  = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
-const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
-const SB_HDR  = () => ({ apikey: SB_KEY, Authorization: 'Bearer '+SB_KEY, 'Content-Type':'application/json' });
+const SB_KEY  = ''; // not used — ISA uses window.HEADERS
+const SB_HDR  = () => window.HEADERS ? {...window.HEADERS,'Content-Type':'application/json'} : {};
 
 // ── Internal caches ────────────────────────────────────────────────────
 const _termCache   = {};
@@ -17174,7 +17173,8 @@ async function runUnifiedSearch(query, context, variants) {
   try {
     // Use the page's existing SUPABASE_URL/HEADERS which are proven to work
     const _url = window.SUPABASE_URL || SB_URL;
-    const _hdr = window.HEADERS ? {...window.HEADERS, 'Content-Type':'application/json'} : SB_HDR();
+    if (!window.HEADERS) { console.error('[ISA] window.HEADERS not set'); return []; }
+    const _hdr = {...window.HEADERS, 'Content-Type':'application/json'};
     const res = await fetch(`${_url}/rest/v1/rpc/search_unified_intelligent`, {
       method: 'POST',
       headers: _hdr,
