@@ -2808,8 +2808,7 @@ function buildSearchArray(terms) {
     terms.arabic,
     terms.root,
     terms.transliteration,
-    normalizeArabic(terms.original),
-    ...(terms.related||[]).slice(0,4)
+    normalizeArabic(terms.original) // normalized version of original
   ].filter(t => t && t.trim().length >= 2);
   return [...new Set(all)];
 }
@@ -3041,7 +3040,7 @@ function highlightSearchTerms(containerEl, terms) {
     </div>
 
     <!-- Search Results Panel (overlays verse area) -->
-    <div id="searchResultsPanel" style="display:none;flex-direction:column;flex:1;overflow:hidden;overflow-y:auto;background:#FAFAF7;width:100%;">
+    <div id="searchResultsPanel" style="display:none;flex-direction:column;flex:1;overflow:hidden;background:#FAFAF7;">
       <div style="padding:12px 24px 8px;border-bottom:1px solid #E8E4DC;background:#fff;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
         <div id="searchCount" style="font-size:13px;font-weight:700;color:#8FA3B8"></div>
         <div style="display:flex;gap:8px;align-items:center;">
@@ -3110,7 +3109,6 @@ function highlightSearchTerms(containerEl, terms) {
 <script>
 const SUPABASE_URL = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
-// ISA uses window.HEADERS (set above)
 
 // Arabic to Latin transliteration using character codes
 function transliterateArabic(text) {
@@ -3155,7 +3153,7 @@ const HEADERS = {
   'apikey': SUPABASE_KEY,
   'Authorization': 'Bearer ' + SUPABASE_KEY
 };
-window.HEADERS = HEADERS; // expose for ISA module
+window.HEADERS = HEADERS;
 
 // Generate likely variants of a search term to handle morphology
 // (Tigrinya/Amharic suffixes, Arabic prefixes/suffixes, etc.).
@@ -5041,10 +5039,6 @@ function highlightWord(text, word) {
 }
 
 async function runWordSearch(rawQuery) {
-  // Delegate to intelligentSearch
-  if (typeof intelligentSearch === 'function') {
-    return intelligentSearch(rawQuery, 'index');
-  }
   const panel = document.getElementById('searchResultsPanel');
   const resultsDiv = document.getElementById('searchResults');
   const countDiv = document.getElementById('searchCount');
@@ -9662,7 +9656,7 @@ document.addEventListener('DOMContentLoaded', function(){
   <input type="range" id="brightSlider" min="0.6" max="1.2" step="0.05" value="1"
     oninput="onBright(this.value)">
   <div id="brightVal">100%</div>
-  <button id="themeToggleBtn" onclick="window.toggleTheme&&window.toggleTheme()">🌙 Dark Mode</button>
+  <button id="themeToggleBtn" onclick="toggleTheme()">🌙 Dark Mode</button>
 </div>
 
 <script>
@@ -10369,7 +10363,7 @@ function toggleVerseStudy(num) {
     </div>
 
     <!-- Search Results Panel (overlays verse area) -->
-    <div id="searchResultsPanel" style="display:none;flex-direction:column;flex:1;overflow:hidden;overflow-y:auto;background:#FAFAF7;width:100%;">
+    <div id="searchResultsPanel" style="display:none;flex-direction:column;flex:1;overflow:hidden;background:#FAFAF7;">
       <div style="padding:12px 24px 8px;border-bottom:1px solid #E8E4DC;background:#fff;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
         <div id="searchCount" style="font-size:13px;font-weight:700;color:#8FA3B8"></div>
         <div style="display:flex;gap:8px;align-items:center;">
@@ -12366,10 +12360,6 @@ function highlightWord(text, word) {
 }
 
 async function runWordSearch(rawQuery) {
-  // Delegate to intelligentSearch
-  if (typeof intelligentSearch === 'function') {
-    return intelligentSearch(rawQuery, 'index');
-  }
   const panel = document.getElementById('searchResultsPanel');
   const resultsDiv = document.getElementById('searchResults');
   const countDiv = document.getElementById('searchCount');
@@ -16831,7 +16821,7 @@ document.addEventListener('DOMContentLoaded', function(){
   <input type="range" id="brightSlider" min="0.6" max="1.2" step="0.05" value="1"
     oninput="onBright(this.value)">
   <div id="brightVal">100%</div>
-  <button id="themeToggleBtn" onclick="window.toggleTheme&&window.toggleTheme()">🌙 Dark Mode</button>
+  <button id="themeToggleBtn" onclick="toggleTheme()">🌙 Dark Mode</button>
 </div>
 
 <script>
@@ -17044,9 +17034,9 @@ const ISA = (() => {
 
 // ── Config ─────────────────────────────────────────────────────────────
 const PROXY   = '/.netlify/functions/claude-proxy';
-const SB_URL  = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
-const SB_KEY  = ''; // not used — ISA uses window.HEADERS
-const SB_HDR  = () => window.HEADERS ? {...window.HEADERS,'Content-Type':'application/json'} : {};
+const SB_URL  = window.SUPABASE_URL  || 'https://ylosytbxpzxzwfzjpaej.supabase.co';
+const SB_KEY  = window.SUPABASE_KEY  || window.SB_KEY || '';
+const SB_HDR  = () => ({ apikey: SB_KEY, Authorization: 'Bearer '+SB_KEY, 'Content-Type':'application/json' });
 
 // ── Internal caches ────────────────────────────────────────────────────
 const _termCache   = {};
@@ -17165,13 +17155,6 @@ Keep related terms focused on Quranic/Islamic usage. Return valid JSON only.`
     }
   } catch(e) { console.warn('[ISA] expand failed', e); }
 
-  // Add English stem (prayer→pray, fasting→fast)
-  if (terms.english) {
-    const stem = terms.english.toLowerCase().replace(/ing$|tion$|ers?$|ness$|ment$/,'').trim();
-    if (stem && stem.length >= 3 && stem !== terms.english.toLowerCase()) {
-      terms.related = [...(terms.related||[]), stem];
-    }
-  }
   _termCache[key] = terms;
   return terms;
 }
@@ -17179,29 +17162,20 @@ Keep related terms focused on Quranic/Islamic usage. Return valid JSON only.`
 // ── Step 3: Run unified RPC ───────────────────────────────────────────
 async function runUnifiedSearch(query, context, variants) {
   try {
-    // Use the page's existing SUPABASE_URL/HEADERS which are proven to work
-    const _url = window.SUPABASE_URL || SB_URL;
-    if (!window.HEADERS) { console.error('[ISA] window.HEADERS not set'); return []; }
-    const _hdr = {...window.HEADERS, 'Content-Type':'application/json'};
-    const res = await fetch(`${_url}/rest/v1/rpc/search_unified_intelligent`, {
+    if (!window.HEADERS) { console.error('[ISA] HEADERS not ready'); return []; }
+    const res = await fetch(`${SB_URL}/rest/v1/rpc/search_unified_intelligent`, {
       method: 'POST',
-      headers: _hdr,
+      headers: {...window.HEADERS, 'Content-Type':'application/json'},
       body: JSON.stringify({
         query_text: query,
         search_context: context,
         query_variants: variants
       })
     });
-    if (!res.ok) {
-      console.error('[ISA] RPC error:', res.status, await res.text().catch(()=>''));
-      return [];
-    }
+    if (!res.ok) return [];
     const rows = await res.json();
     return Array.isArray(rows) ? rows : [];
-  } catch(e) {
-    console.error('[ISA] RPC exception:', e);
-    return [];
-  }
+  } catch(e) { return []; }
 }
 
 // ── Step 4: Group results by type ────────────────────────────────────
@@ -17470,11 +17444,6 @@ async function intelligentSearch(rawQuery, context) {
   }
 
   // Step 4: Run unified RPC
-  // Ensure results panel is visible
-  const _sp = document.getElementById('searchResultsPanel');
-  if (_sp) _sp.style.display = 'flex';
-  const _va = document.getElementById('verseArea');
-  if (_va) _va.style.display = 'none';
   const rows = await runUnifiedSearch(rawQuery, context, variants);
 
   // Step 5: Render results
