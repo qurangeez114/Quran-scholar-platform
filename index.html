@@ -2684,6 +2684,18 @@ img, iframe, table, pre, code, video {
 </style>
 </head>
 <body>
+<div id="word-study-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;align-items:flex-end;justify-content:center;" onclick="if(event.target===this)closeWordStudy()">
+  <div style="background:#1a1a1a;border:1px solid #3a3a2a;border-radius:16px 16px 0 0;width:100%;max-width:680px;max-height:80vh;overflow-y:auto;padding:20px 18px 32px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <div style="font-size:28px;font-family:'Amiri',serif;color:#e8d5a0;direction:rtl;" id="ws-word"></div>
+      <button onclick="closeWordStudy()" style="background:none;border:none;color:#888;font-size:20px;cursor:pointer;padding:4px 8px;">✕</button>
+    </div>
+    <div id="ws-content" style="font-size:13px;color:#ccc;line-height:1.7;">
+      <div style="text-align:center;padding:20px;"><span class="spinner"></span></div>
+    </div>
+  </div>
+</div>
+
 <div class="app">
   <div class="sidebar">
     <div class="sidebar-header" style="display:flex;align-items:center;justify-content:space-between;">
@@ -3508,6 +3520,7 @@ function renderVerses(ayas, suraId) {
           <button class="tab-btn" onclick="switchTab(${aya.aya_number},'riwayat',this)">Riwayat</button>
           <button class="tab-btn" id="xref-tab-${aya.aya_number}" onclick="switchTab(${aya.aya_number},'xrefs',this)">Cross-Refs</button>
           <button class="tab-btn" onclick="switchTab(${aya.aya_number},'audio',this);initAudioPanel(${aya.aya_number},${suraId})">🎧 Audio</button>
+          <button class="tab-btn" id="fiqh-tab-${aya.aya_number}" onclick="switchTab(${aya.aya_number},'fiqh',this);loadFiqhPanel(${aya.aya_number},${suraId})">Fiqh</button>
           <button class="tab-btn" id="ancient-tab-${aya.aya_number}" onclick="switchTab(${aya.aya_number},'ancient',this);loadAncientPanel(${aya.aya_number},${suraId})">Ancient Sources</button>
           <button class="tab-btn" onclick="switchTab(${aya.aya_number},'ai',this)">AI Analysis</button>
         </div>
@@ -3532,6 +3545,11 @@ function renderVerses(ayas, suraId) {
         <div class="tab-panel" id="tp-${aya.aya_number}-audio">
           <div id="audio-panel-${aya.aya_number}" style="padding:14px 16px;">
             <div style="color:#BBB;font-style:italic;font-size:13px;text-align:center;padding:20px;">Tap the 🎧 Audio tab to load the player.</div>
+          </div>
+        </div>
+        <div class="tab-panel" id="tp-${aya.aya_number}-fiqh">
+          <div id="fiqh-panel-${aya.aya_number}" style="padding:14px 16px;">
+            <div style="color:#BBB;font-style:italic;font-size:13px;text-align:center;padding:20px;">Tap the Fiqh tab to load legal rulings.</div>
           </div>
         </div>
         <div class="tab-panel" id="tp-${aya.aya_number}-ancient">
@@ -5470,33 +5488,45 @@ async function loadWbwWordData(word, suraId, ayaNum, wordIdx) {
   const body = document.getElementById('wbwPopupBody');
   const translitEl = document.getElementById('wbwPopupTranslit');
 
-  // 1. Try lexicon database first (word_analysis table)
+  // Use get_word_analysis RPC (correct column names, diacritic-safe)
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_word_analysis`, {
+      method: 'POST',
+      headers: { ...HEADERS, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_sura: suraId, p_aya: ayaNum, p_word: word })
+    });
+    const rows = res.ok ? await res.json() : [];
+    if (rows && rows.length > 0) {
+      const r = rows[0];
+      // Map to expected renderWbwResult format
+      const mapped = {
+        word_arabic: r.arabic_word,
+        root: r.root_word,
+        meaning_english: r.original_meaning,
+        modern_meaning: r.modern_meaning,
+        scholarly_explanation: r.scholarly_explanation,
+        language_origin: r.pre_standard_origin
+      };
+      renderWbwResult(body, mapped, word);
+      // Also show root occurrences
+      openWordStudy(word, suraId, ayaNum);
+      return;
+    }
+  } catch(e) {}
+
+  // Fallback: try by word position
   try {
     const rows = await sbFetch('word_analysis', {
-      select: 'word_arabic,root,transliteration,meaning_arabic,meaning_english,modern_meaning,scholarly_explanation,language_origin',
+      select: 'arabic_word,root_word,original_meaning,modern_meaning,scholarly_explanation,pre_standard_origin',
       sura_id: `eq.${suraId}`,
       aya_number: `eq.${ayaNum}`,
       word_position: `eq.${wordIdx}`
     });
     if (rows && rows.length) {
       const r = rows[0];
-      if (r.transliteration) translitEl.textContent = r.transliteration;
-      renderWbwResult(body, r, word);
-      return;
-    }
-  } catch(e) {}
-
-  // 2. Search lexicon by Arabic word
-  try {
-    const rows = await sbFetch('word_analysis', {
-      select: 'word_arabic,root,transliteration,meaning_arabic,meaning_english,modern_meaning,scholarly_explanation,language_origin',
-      word_arabic: `eq.${word}`,
-      limit: '1'
-    });
-    if (rows && rows.length) {
-      const r = rows[0];
-      if (r.transliteration) translitEl.textContent = r.transliteration;
-      renderWbwResult(body, r, word);
+      const mapped = { word_arabic: r.arabic_word, root: r.root_word, meaning_english: r.original_meaning, modern_meaning: r.modern_meaning, scholarly_explanation: r.scholarly_explanation };
+      renderWbwResult(body, mapped, word);
+      openWordStudy(word, suraId, ayaNum);
       return;
     }
   } catch(e) {}
@@ -13200,6 +13230,7 @@ function renderVerses(ayas, suraId) {
           <button class="tab-btn" onclick="switchTab(${aya.aya_number},'riwayat',this)">Riwayat</button>
           <button class="tab-btn" id="xref-tab-${aya.aya_number}" onclick="switchTab(${aya.aya_number},'xrefs',this)">Cross-Refs</button>
           <button class="tab-btn" onclick="switchTab(${aya.aya_number},'audio',this);initAudioPanel(${aya.aya_number},${suraId})">🎧 Audio</button>
+          <button class="tab-btn" id="fiqh-tab-${aya.aya_number}" onclick="switchTab(${aya.aya_number},'fiqh',this);loadFiqhPanel(${aya.aya_number},${suraId})">Fiqh</button>
           <button class="tab-btn" id="ancient-tab-${aya.aya_number}" onclick="switchTab(${aya.aya_number},'ancient',this);loadAncientPanel(${aya.aya_number},${suraId})">Ancient Sources</button>
           <button class="tab-btn" onclick="switchTab(${aya.aya_number},'ai',this)">AI Analysis</button>
         </div>
@@ -13224,6 +13255,11 @@ function renderVerses(ayas, suraId) {
         <div class="tab-panel" id="tp-${aya.aya_number}-audio">
           <div id="audio-panel-${aya.aya_number}" style="padding:14px 16px;">
             <div style="color:#BBB;font-style:italic;font-size:13px;text-align:center;padding:20px;">Tap the 🎧 Audio tab to load the player.</div>
+          </div>
+        </div>
+        <div class="tab-panel" id="tp-${aya.aya_number}-fiqh">
+          <div id="fiqh-panel-${aya.aya_number}" style="padding:14px 16px;">
+            <div style="color:#BBB;font-style:italic;font-size:13px;text-align:center;padding:20px;">Tap the Fiqh tab to load legal rulings.</div>
           </div>
         </div>
         <div class="tab-panel" id="tp-${aya.aya_number}-ancient">
@@ -15162,33 +15198,45 @@ async function loadWbwWordData(word, suraId, ayaNum, wordIdx) {
   const body = document.getElementById('wbwPopupBody');
   const translitEl = document.getElementById('wbwPopupTranslit');
 
-  // 1. Try lexicon database first (word_analysis table)
+  // Use get_word_analysis RPC (correct column names, diacritic-safe)
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_word_analysis`, {
+      method: 'POST',
+      headers: { ...HEADERS, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_sura: suraId, p_aya: ayaNum, p_word: word })
+    });
+    const rows = res.ok ? await res.json() : [];
+    if (rows && rows.length > 0) {
+      const r = rows[0];
+      // Map to expected renderWbwResult format
+      const mapped = {
+        word_arabic: r.arabic_word,
+        root: r.root_word,
+        meaning_english: r.original_meaning,
+        modern_meaning: r.modern_meaning,
+        scholarly_explanation: r.scholarly_explanation,
+        language_origin: r.pre_standard_origin
+      };
+      renderWbwResult(body, mapped, word);
+      // Also show root occurrences
+      openWordStudy(word, suraId, ayaNum);
+      return;
+    }
+  } catch(e) {}
+
+  // Fallback: try by word position
   try {
     const rows = await sbFetch('word_analysis', {
-      select: 'word_arabic,root,transliteration,meaning_arabic,meaning_english,modern_meaning,scholarly_explanation,language_origin',
+      select: 'arabic_word,root_word,original_meaning,modern_meaning,scholarly_explanation,pre_standard_origin',
       sura_id: `eq.${suraId}`,
       aya_number: `eq.${ayaNum}`,
       word_position: `eq.${wordIdx}`
     });
     if (rows && rows.length) {
       const r = rows[0];
-      if (r.transliteration) translitEl.textContent = r.transliteration;
-      renderWbwResult(body, r, word);
-      return;
-    }
-  } catch(e) {}
-
-  // 2. Search lexicon by Arabic word
-  try {
-    const rows = await sbFetch('word_analysis', {
-      select: 'word_arabic,root,transliteration,meaning_arabic,meaning_english,modern_meaning,scholarly_explanation,language_origin',
-      word_arabic: `eq.${word}`,
-      limit: '1'
-    });
-    if (rows && rows.length) {
-      const r = rows[0];
-      if (r.transliteration) translitEl.textContent = r.transliteration;
-      renderWbwResult(body, r, word);
+      const mapped = { word_arabic: r.arabic_word, root: r.root_word, meaning_english: r.original_meaning, modern_meaning: r.modern_meaning, scholarly_explanation: r.scholarly_explanation };
+      renderWbwResult(body, mapped, word);
+      openWordStudy(word, suraId, ayaNum);
       return;
     }
   } catch(e) {}
@@ -19337,6 +19385,194 @@ function buildThemeAnalysisHTML(analyses) {
           ${a.contradiction_themes.map(t => `<span style="font-size:11px;background:#2a1515;border:1px solid #5a3535;color:#c99e9e;padding:2px 7px;border-radius:10px;margin:2px;display:inline-block;">${t}</span>`).join('')}
         </div>` : ''}
     </div>`).join('');
+}
+
+// ============================================================
+// FIQH TAB — madhhab_rulings wired to verse
+// ============================================================
+async function loadFiqhPanel(num, suraId) {
+  const panel = document.getElementById(`fiqh-panel-${num}`);
+  if (!panel || panel.dataset.loaded === '1') return;
+  panel.dataset.loaded = '1';
+  panel.innerHTML = '<div style="padding:20px;text-align:center;color:#BBB;"><span class="spinner"></span> Loading fiqh rulings...</div>';
+
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_fiqh_for_verse`, {
+      method: 'POST',
+      headers: { ...HEADERS, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_sura: suraId, p_aya: num })
+    });
+    const rows = res.ok ? await res.json() : [];
+
+    if (!rows || rows.length === 0) {
+      panel.innerHTML = '<div style="color:#888;font-style:italic;font-size:13px;padding:20px;text-align:center;">No fiqh rulings recorded for this verse yet.</div>';
+      return;
+    }
+
+    const schools = [
+      { key: 'hanafi', label: 'Ḥanafī', color: '#c9a84c', evidence_key: 'hanafi_evidence' },
+      { key: 'maliki', label: 'Mālikī', color: '#7a9fc9', evidence_key: 'maliki_evidence' },
+      { key: 'shafii', label: 'Shāfiʿī', color: '#9ec99e', evidence_key: 'shafii_evidence' },
+      { key: 'hanbali', label: 'Ḥanbalī', color: '#c99e9e', evidence_key: 'hanbali_evidence' },
+      { key: 'jafari', label: 'Jaʿfarī (Shīʿa)', color: '#b09ec9', evidence_key: 'jafari_evidence' },
+      { key: 'zaydi', label: 'Zaydī', color: '#9ec9c9', evidence_key: null },
+      { key: 'ibadi', label: 'Ibāḍī', color: '#c9b99e', evidence_key: null },
+      { key: 'mutazila', label: 'Muʿtazila', color: '#a0b8a0', evidence_key: null },
+      { key: 'salafi', label: 'Salafī', color: '#c9c49e', evidence_key: null },
+    ];
+
+    let html = `<div style="font-size:11px;font-family:'IBM Plex Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#c9a84c;margin-bottom:14px;padding-bottom:6px;border-bottom:1px solid #333;">Fiqh Rulings (${rows.length} topic${rows.length>1?'s':''})</div>`;
+
+    for (const row of rows) {
+      html += `
+        <div style="border:1px solid #2a2a1a;border-radius:10px;padding:14px;margin-bottom:16px;background:#161610;">
+          <div style="font-weight:700;font-size:13px;color:#e8d5a0;margin-bottom:4px;">${row.topic}</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">
+            <span style="font-size:10px;background:#2a2a1a;border:1px solid #4a3a1a;color:#c9a84c;padding:2px 8px;border-radius:10px;">${row.category || ''}</span>
+            ${row.subcategory ? `<span style="font-size:10px;background:#1a2a1a;border:1px solid #2a4a2a;color:#9ec99e;padding:2px 8px;border-radius:10px;">${row.subcategory}</span>` : ''}
+            ${row.controversy_level ? `<span style="font-size:10px;background:#2a1a1a;border:1px solid #5a2a2a;color:#c99e9e;padding:2px 8px;border-radius:10px;">⚡ ${row.controversy_level}</span>` : ''}
+          </div>
+          ${row.brief_description ? `<div style="font-size:12px;color:#aaa;line-height:1.6;margin-bottom:12px;font-style:italic;">${row.brief_description}</div>` : ''}
+
+          ${schools.filter(s => row[s.key + '_position']).map(s => `
+            <div style="border-left:3px solid ${s.color};padding:8px 10px;margin-bottom:8px;background:#1c1c14;border-radius:0 6px 6px 0;">
+              <div style="font-size:11px;font-weight:700;color:${s.color};margin-bottom:4px;letter-spacing:.04em;">${s.label}</div>
+              <div style="font-size:12px;color:#ccc;line-height:1.65;">${row[s.key + '_position']}</div>
+              ${s.evidence_key && row[s.evidence_key] ? `<div style="font-size:11px;color:#888;margin-top:5px;font-style:italic;">Evidence: ${row[s.evidence_key]}</div>` : ''}
+            </div>`).join('')}
+
+          ${row.consensus ? `
+            <div style="margin-top:10px;padding:8px 10px;background:#0f1f0f;border:1px solid #2a4a2a;border-radius:6px;">
+              <div style="font-size:11px;font-weight:700;color:#9ec99e;margin-bottom:4px;">Scholarly Consensus</div>
+              <div style="font-size:12px;color:#bbb;line-height:1.6;">${row.consensus}</div>
+            </div>` : ''}
+
+          ${row.key_disagreement ? `
+            <div style="margin-top:8px;padding:8px 10px;background:#1f0f0f;border:1px solid #4a2a2a;border-radius:6px;">
+              <div style="font-size:11px;font-weight:700;color:#c97a7a;margin-bottom:4px;">Key Disagreement</div>
+              <div style="font-size:12px;color:#bbb;line-height:1.6;">${row.key_disagreement}</div>
+            </div>` : ''}
+
+          ${row.reflection_questions && row.reflection_questions.length > 0 ? `
+            <div style="margin-top:8px;padding:8px 10px;background:#1a1a2a;border:1px solid #2a2a4a;border-radius:6px;">
+              <div style="font-size:11px;font-weight:700;color:#7a9fc9;margin-bottom:6px;">Study Questions</div>
+              ${row.reflection_questions.map(q => `<div style="font-size:12px;color:#bbb;margin-bottom:3px;">• ${q}</div>`).join('')}
+            </div>` : ''}
+        </div>`;
+    }
+
+    panel.innerHTML = html;
+  } catch(e) {
+    panel.innerHTML = `<div style="color:#c97a7a;font-size:13px;padding:16px;">Could not load fiqh rulings: ${e.message}</div>`;
+  }
+}
+
+// ============================================================
+// WORD STUDY — tap any Arabic word to see root and analysis
+// ============================================================
+let wordStudySura = null;
+let wordStudyAya = null;
+
+function closeWordStudy() {
+  const overlay = document.getElementById('word-study-overlay');
+  if (overlay) { overlay.style.display = 'none'; overlay.style.flexDirection = ''; }
+}
+
+async function openWordStudy(word, sura, aya) {
+  wordStudySura = sura;
+  wordStudyAya = aya;
+  const overlay = document.getElementById('word-study-overlay');
+  const wsWord = document.getElementById('ws-word');
+  const wsContent = document.getElementById('ws-content');
+  if (!overlay) return;
+
+  wsWord.textContent = word;
+  wsContent.innerHTML = '<div style="text-align:center;padding:20px;"><span class="spinner"></span></div>';
+  overlay.style.display = 'flex';
+
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_word_analysis`, {
+      method: 'POST',
+      headers: { ...HEADERS, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_sura: sura, p_aya: aya, p_word: word })
+    });
+    const rows = res.ok ? await res.json() : [];
+    const d = rows && rows.length > 0 ? rows[0] : null;
+
+    if (!d) {
+      wsContent.innerHTML = `<div style="color:#888;font-style:italic;">No analysis recorded for this word yet.</div>`;
+      return;
+    }
+
+    // Load root occurrences
+    let rootHtml = '';
+    if (d.root_word) {
+      const rRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_root_occurrences`, {
+        method: 'POST',
+        headers: { ...HEADERS, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ p_root: d.root_word })
+      });
+      const rRows = rRes.ok ? await rRes.json() : [];
+      if (rRows && rRows.length > 0) {
+        rootHtml = `
+          <div style="margin-top:12px;padding-top:12px;border-top:1px solid #2a2a2a;">
+            <div style="font-size:11px;font-weight:700;color:#c9a84c;margin-bottom:6px;">Root Occurrences in Quran (${rRows.length})</div>
+            <div style="display:flex;flex-wrap:wrap;gap:5px;">
+              ${rRows.slice(0,20).map(r => `<span onclick="navToVerse(${r.sura_id},${r.aya_number});closeWordStudy()" style="font-size:11px;background:#1a1a0a;border:1px solid #3a3a1a;color:#c9a84c;padding:2px 8px;border-radius:10px;cursor:pointer;">${r.sura_id}:${r.aya_number}</span>`).join('')}
+              ${rRows.length > 20 ? `<span style="font-size:11px;color:#666;">+${rRows.length-20} more</span>` : ''}
+            </div>
+          </div>`;
+      }
+    }
+
+    wsContent.innerHTML = `
+      ${d.root_word ? `<div style="margin-bottom:10px;"><span style="font-size:11px;color:#888;">Root: </span><span style="font-family:'Amiri',serif;font-size:18px;color:#c9a84c;direction:rtl;">${d.root_word}</span></div>` : ''}
+      ${d.part_of_speech ? `<div style="margin-bottom:6px;"><span style="font-size:11px;color:#888;">Part of Speech: </span><span style="font-size:12px;color:#ccc;">${d.part_of_speech}</span></div>` : ''}
+      ${d.original_meaning ? `
+        <div style="margin-bottom:8px;padding:8px 10px;background:#1a1a0a;border-left:3px solid #c9a84c;border-radius:0 4px 4px 0;">
+          <div style="font-size:10px;color:#888;margin-bottom:2px;">Original Meaning</div>
+          <div style="font-size:13px;color:#e8d5a0;line-height:1.6;">${d.original_meaning}</div>
+        </div>` : ''}
+      ${d.modern_meaning ? `
+        <div style="margin-bottom:8px;padding:8px 10px;background:#0a1a1a;border-left:3px solid #7a9fc9;border-radius:0 4px 4px 0;">
+          <div style="font-size:10px;color:#888;margin-bottom:2px;">Modern Meaning</div>
+          <div style="font-size:13px;color:#b0cce0;line-height:1.6;">${d.modern_meaning}</div>
+        </div>` : ''}
+      ${d.meaning_evolution ? `
+        <div style="margin-bottom:8px;padding:8px 10px;background:#1a0a1a;border-left:3px solid #9e7ac9;border-radius:0 4px 4px 0;">
+          <div style="font-size:10px;color:#888;margin-bottom:2px;">Meaning Evolution</div>
+          <div style="font-size:12px;color:#c0b0d8;line-height:1.6;">${d.meaning_evolution}</div>
+        </div>` : ''}
+      ${d.scholarly_explanation ? `
+        <div style="margin-bottom:8px;">
+          <div style="font-size:10px;color:#888;margin-bottom:3px;">Scholarly Notes</div>
+          <div style="font-size:12px;color:#bbb;line-height:1.65;">${d.scholarly_explanation}</div>
+        </div>` : ''}
+      ${d.lexicon_sources ? `<div style="font-size:11px;color:#666;margin-top:6px;">Sources: ${d.lexicon_sources}</div>` : ''}
+      ${rootHtml}`;
+  } catch(e) {
+    wsContent.innerHTML = `<div style="color:#c97a7a;font-size:13px;">Error: ${e.message}</div>`;
+  }
+}
+
+// Make Arabic words in verse cards tappable
+function makeWordsTappable(container, sura, aya) {
+  const arabicDivs = container.querySelectorAll('.lang-arabic [lang="ar"], .arabic-text, .aya-arabic, .word-arabic');
+  arabicDivs.forEach(div => {
+    if (div.dataset.wordTap) return;
+    div.dataset.wordTap = '1';
+    // Wrap individual words
+    const text = div.textContent;
+    const words = text.split(/\s+/).filter(w => w.trim());
+    if (words.length > 1) {
+      div.innerHTML = words.map(w =>
+        `<span onclick="openWordStudy('${w.replace(/'/g,"\'")}',${sura},${aya})" style="cursor:pointer;border-radius:3px;transition:background .15s;display:inline;" onmouseover="this.style.background='rgba(201,168,76,0.15)'" onmouseout="this.style.background=''">${w}</span>`
+      ).join(' ');
+    } else {
+      div.style.cursor = 'pointer';
+      div.onclick = () => openWordStudy(text.trim(), sura, aya);
+    }
+  });
 }
 </script>
 </body>
