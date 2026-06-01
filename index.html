@@ -5008,6 +5008,64 @@ async function runWordSearch(query) {
         </div>
       </div>`;
     }).join('');
+  
+    // ── Also search Hadith, Madhhab, Sira via unified RPC ───────────────
+    try {
+      const _uniRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/search_unified_intelligent`, {
+        method: 'POST',
+        headers: { ...HEADERS, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query_text: query,
+          search_context: 'index',
+          query_variants: variants.slice(0, 6)
+        })
+      });
+      if (_uniRes.ok) {
+        const _uniRows = await _uniRes.json();
+        if (Array.isArray(_uniRows) && _uniRows.length > 0) {
+          // Filter out verses (already shown), keep other types
+          const _extra = _uniRows.filter(r =>
+            r.result_type !== 'verse' && r.result_type !== 'word' && r.result_type !== 'lexicon'
+          ).slice(0, 30);
+
+          if (_extra.length > 0) {
+            const _ICONS = { hadith:'📜', hadith_corpus:'📜', madhhab:'⚖️', sira:'🌙', topic:'🗂️', contradiction:'🔍' };
+            const _LABELS = { hadith:'Hadith', hadith_corpus:'Hadith Corpus', madhhab:'Madhhab Ruling', sira:'Sīra Event', topic:'Theme', contradiction:'Scholarly Analysis' };
+
+            // Group by type
+            const _grouped = {};
+            _extra.forEach(r => {
+              if (!_grouped[r.result_type]) _grouped[r.result_type] = [];
+              _grouped[r.result_type].push(r);
+            });
+
+            let _extraHtml = '';
+            Object.entries(_grouped).forEach(([type, items]) => {
+              _extraHtml += `<div style="margin:16px 0 8px;padding:6px 0;border-top:2px solid #E8C97B;font-size:11px;font-weight:800;color:#7A8FA6;letter-spacing:0.8px;text-transform:uppercase;">
+                ${_ICONS[type]||'📌'} ${_LABELS[type]||type} (${items.length})
+              </div>`;
+              items.slice(0, 6).forEach(r => {
+                const _snip = (r.snippet||'').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+                const _title = (r.title||'').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+                _extraHtml += `<div style="background:#fff;border:1px solid #E8E4DC;border-radius:10px;margin-bottom:8px;overflow:hidden;cursor:pointer;"
+                  onclick="${r.sura_id&&r.aya_number ? `gotoResult(${r.sura_id||0},${r.aya_number||0},event)` : `window.location.href='${type==='madhhab'?'madhhab':'sira'}.html'`}">
+                  <div style="background:#F8F5EE;border-bottom:1px solid #E8C97B;padding:7px 14px;display:flex;align-items:center;gap:8px;">
+                    <span style="font-size:16px;">${_ICONS[type]||'📌'}</span>
+                    <span style="font-size:12px;font-weight:700;color:#5A3A10;">${_title}</span>
+                    ${r.sura_id && r.aya_number ? `<span style="margin-left:auto;font-size:11px;color:#7A8FA6;font-weight:700;">${r.sura_id}:${r.aya_number}</span>` : ''}
+                  </div>
+                  <div style="padding:10px 14px;font-size:12px;color:#444;line-height:1.6;">${_snip.slice(0,200)}${_snip.length>200?'…':''}</div>
+                  ${r.match_reason ? `<div style="padding:0 14px 8px;font-size:10px;color:#8B9AA8;font-style:italic;">ℹ️ ${r.match_reason}</div>` : ''}
+                </div>`;
+              });
+            });
+
+            resultsDiv.innerHTML += _extraHtml;
+          }
+        }
+      }
+    } catch(_e) { /* unified RPC optional — don't break main results */ }
+
   } catch(e) {
     resultsDiv.innerHTML = `<div style="color:#C0392B;padding:20px">Search error: ${e.message}</div>`;
   }
@@ -14665,6 +14723,64 @@ async function runWordSearch(query) {
         </div>
       </div>`;
     }).join('');
+  
+    // ── Also search Hadith, Madhhab, Sira via unified RPC ───────────────
+    try {
+      const _uniRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/search_unified_intelligent`, {
+        method: 'POST',
+        headers: { ...HEADERS, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query_text: query,
+          search_context: 'index',
+          query_variants: variants.slice(0, 6)
+        })
+      });
+      if (_uniRes.ok) {
+        const _uniRows = await _uniRes.json();
+        if (Array.isArray(_uniRows) && _uniRows.length > 0) {
+          // Filter out verses (already shown), keep other types
+          const _extra = _uniRows.filter(r =>
+            r.result_type !== 'verse' && r.result_type !== 'word' && r.result_type !== 'lexicon'
+          ).slice(0, 30);
+
+          if (_extra.length > 0) {
+            const _ICONS = { hadith:'📜', hadith_corpus:'📜', madhhab:'⚖️', sira:'🌙', topic:'🗂️', contradiction:'🔍' };
+            const _LABELS = { hadith:'Hadith', hadith_corpus:'Hadith Corpus', madhhab:'Madhhab Ruling', sira:'Sīra Event', topic:'Theme', contradiction:'Scholarly Analysis' };
+
+            // Group by type
+            const _grouped = {};
+            _extra.forEach(r => {
+              if (!_grouped[r.result_type]) _grouped[r.result_type] = [];
+              _grouped[r.result_type].push(r);
+            });
+
+            let _extraHtml = '';
+            Object.entries(_grouped).forEach(([type, items]) => {
+              _extraHtml += `<div style="margin:16px 0 8px;padding:6px 0;border-top:2px solid #E8C97B;font-size:11px;font-weight:800;color:#7A8FA6;letter-spacing:0.8px;text-transform:uppercase;">
+                ${_ICONS[type]||'📌'} ${_LABELS[type]||type} (${items.length})
+              </div>`;
+              items.slice(0, 6).forEach(r => {
+                const _snip = (r.snippet||'').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+                const _title = (r.title||'').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+                _extraHtml += `<div style="background:#fff;border:1px solid #E8E4DC;border-radius:10px;margin-bottom:8px;overflow:hidden;cursor:pointer;"
+                  onclick="${r.sura_id&&r.aya_number ? `gotoResult(${r.sura_id||0},${r.aya_number||0},event)` : `window.location.href='${type==='madhhab'?'madhhab':'sira'}.html'`}">
+                  <div style="background:#F8F5EE;border-bottom:1px solid #E8C97B;padding:7px 14px;display:flex;align-items:center;gap:8px;">
+                    <span style="font-size:16px;">${_ICONS[type]||'📌'}</span>
+                    <span style="font-size:12px;font-weight:700;color:#5A3A10;">${_title}</span>
+                    ${r.sura_id && r.aya_number ? `<span style="margin-left:auto;font-size:11px;color:#7A8FA6;font-weight:700;">${r.sura_id}:${r.aya_number}</span>` : ''}
+                  </div>
+                  <div style="padding:10px 14px;font-size:12px;color:#444;line-height:1.6;">${_snip.slice(0,200)}${_snip.length>200?'…':''}</div>
+                  ${r.match_reason ? `<div style="padding:0 14px 8px;font-size:10px;color:#8B9AA8;font-style:italic;">ℹ️ ${r.match_reason}</div>` : ''}
+                </div>`;
+              });
+            });
+
+            resultsDiv.innerHTML += _extraHtml;
+          }
+        }
+      }
+    } catch(_e) { /* unified RPC optional — don't break main results */ }
+
   } catch(e) {
     resultsDiv.innerHTML = `<div style="color:#C0392B;padding:20px">Search error: ${e.message}</div>`;
   }
