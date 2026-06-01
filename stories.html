@@ -570,6 +570,37 @@ async function genAI(){
 
 // Start
 init();
+
+// Auto-search from URL param (e.g. from Ancient Sources tab)
+(function() {
+  const params = new URLSearchParams(window.location.search);
+  const search = params.get('search');
+  const sura = params.get('sura');
+  const aya = params.get('aya');
+  if (search || sura) {
+    window.addEventListener('DOMContentLoaded', function() {
+      setTimeout(function() {
+        // Try search input
+        const searchInput = document.querySelector('input[type="text"], input[placeholder*="earch"], #searchInput, .search-input');
+        if (searchInput && search) {
+          searchInput.value = search;
+          searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+          searchInput.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        // Scroll to first matching story card
+        if (search) {
+          const cards = document.querySelectorAll('[data-story-title], .story-card, .story-title, h2, h3');
+          for (const card of cards) {
+            if (card.textContent.toLowerCase().includes(search.toLowerCase())) {
+              card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              break;
+            }
+          }
+        }
+      }, 800);
+    });
+  }
+})();
 </script>
 </body>
 </html>
