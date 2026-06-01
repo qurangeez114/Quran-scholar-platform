@@ -6255,41 +6255,91 @@ async function loadHadithPanel(sura, aya) {
   const tabBtn = document.getElementById(`hadith-tab-${aya}`);
   const current = traditionState[tradKey(sura, aya, 'hadith')] || 'sunni';
 
-  let directEntries = [];
-  let suraHadith = [];
+  // Helper: convert hadith_corpus row to entry object
+  function corpusRowToEntry(r) {
+    const body = r.text_english || '';
+    const metaParts = [];
+    if (r.narrator) metaParts.push('Narrator: ' + r.narrator);
+    if (r.collection) metaParts.push(r.collection);
+    if (r.hadith_number) metaParts.push('No. ' + r.hadith_number);
+    if (r.book_chapter) metaParts.push(r.book_chapter);
+    const g = (r.grade || '').toLowerCase();
+    const gradeColor = g.includes('sahih') ? '#1A7A48' : g.includes('hasan') ? '#1A6FA8' : g.includes('daif') || g.includes('weak') ? '#C0621A' : '#666';
+    const gradeBg   = g.includes('sahih') ? '#D5F5E3' : g.includes('hasan') ? '#D6EAF8' : g.includes('daif') || g.includes('weak') ? '#FDEBD0' : '#F0F0F0';
+    const gradeBadge = r.grade ? `<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:${gradeBg};color:${gradeColor};border:1px solid ${gradeColor};margin-left:6px;">${r.grade}</span>` : '';
+    return {
+      scholar: (r.collection || 'Hadith') + (gradeBadge ? ' ' + gradeBadge : ''),
+      tradition: r.tradition || 'sunni',
+      text: body,
+      meta: metaParts.join(' · ') || null,
+      isAI: false,
+      aya_number: r.aya_number,
+      arabic: r.text_arabic || ''
+    };
+  }
 
+  let directEntries = [];
+  let suraEntries   = [];
+
+  // 1. Query hadith_corpus for direct verse match
+  try {
+    const rows = await sbFetch('hadith_corpus', {
+      select: 'text_english,text_arabic,narrator,collection,hadith_number,grade,tradition,book_chapter,aya_number',
+      sura_id: `eq.${sura}`,
+      aya_number: `eq.${aya}`,
+      limit: 100
+    });
+    directEntries = rows.map(corpusRowToEntry);
+  } catch {}
+
+  // 2. Also query hadith_connections for direct match (legacy AI-linked entries)
   try {
     const rows = await sbFetch('hadith_connections', {
       select: 'hadith_text,narrator,collection,reference,hadith_grade,tradition,similarity_note,difference_note,aya_number',
       sura_id: `eq.${sura}`,
       aya_number: `eq.${aya}`
     });
-    directEntries = rows.map(rowToHadithEntry);
+    directEntries = directEntries.concat(rows.map(rowToHadithEntry));
   } catch {}
 
+  // 3. If no direct match, fetch sura-level from corpus (up to 80 rows)
   if (directEntries.length === 0) {
     try {
-      const rows = await sbFetch('hadith_connections', {
-        select: 'hadith_text,narrator,collection,reference,hadith_grade,tradition,similarity_note,difference_note,aya_number',
+      const rows = await sbFetch('hadith_corpus', {
+        select: 'text_english,text_arabic,narrator,collection,hadith_number,grade,tradition,book_chapter,aya_number',
         sura_id: `eq.${sura}`,
         order: 'aya_number',
-        limit: 50
+        limit: 80
       });
-      suraHadith = rows.map(rowToHadithEntry);
+      suraEntries = rows.map(corpusRowToEntry);
     } catch {}
+
+    // Also fallback to hadith_connections sura level
+    if (suraEntries.length === 0) {
+      try {
+        const rows = await sbFetch('hadith_connections', {
+          select: 'hadith_text,narrator,collection,reference,hadith_grade,tradition,similarity_note,difference_note,aya_number',
+          sura_id: `eq.${sura}`,
+          order: 'aya_number',
+          limit: 50
+        });
+        suraEntries = rows.map(rowToHadithEntry);
+      } catch {}
+    }
   }
 
+  const totalCount = directEntries.length;
   if (tabBtn) {
-    tabBtn.textContent = directEntries.length > 0
-      ? `Hadith (${directEntries.length})`
-      : (suraHadith.length > 0 ? 'Hadith ◆' : 'Hadith');
+    tabBtn.textContent = totalCount > 0
+      ? `Hadith (${totalCount})`
+      : (suraEntries.length > 0 ? 'Hadith ◆' : 'Hadith');
   }
 
   let html = '';
 
   if (directEntries.length > 0) {
     html += buildTradToggle(sura, aya, 'hadith', current);
-    html += `<div class="hadith-section-divider"><span class="hadith-section-title">Hadith linked to ${sura}:${aya}</span></div>`;
+    html += `<div class="hadith-section-divider"><span class="hadith-section-title">Hadith linked to ${sura}:${aya} (${totalCount})</span></div>`;
     html += renderScholarEntries(directEntries, current, '');
     html += `<button class="hadith-action-btn secondary" onclick="switchToTafsir(${aya})">📖 Read Tafsīr for context</button>`;
     panel.innerHTML = html;
@@ -6298,12 +6348,12 @@ async function loadHadithPanel(sura, aya) {
 
   html += `<div class="hadith-empty-notice">
     <b>No hadith directly linked to ${sura}:${aya}</b><br>
-    <span style="font-weight:500;font-size:12px">This is common — most verses do not have a specific narration tied to them. Below are related hadith from the same sūrah for educational study.</span>
+    <span style="font-weight:500;font-size:12px">Below are related hadith from the same sūrah drawn from the full 68,863-hadith corpus.</span>
   </div>`;
 
-  if (suraHadith.length > 0) {
+  if (suraEntries.length > 0) {
     const grouped = {};
-    suraHadith.forEach(e => {
+    suraEntries.forEach(e => {
       const k = e.aya_number;
       if (!grouped[k]) grouped[k] = [];
       grouped[k].push(e);
@@ -6323,13 +6373,13 @@ async function loadHadithPanel(sura, aya) {
 
     if (verseNumbers.length > 0) {
       const firstVerse = verseNumbers[0];
-      html += `<div class="hadith-section-divider"><span class="hadith-section-title">Sample Hadith from this Sūrah</span></div>`;
-      html += renderScholarEntries(grouped[firstVerse].slice(0, 3), current, '');
+      html += `<div class="hadith-section-divider"><span class="hadith-section-title">Sample Hadith from Sūrah ${sura}</span></div>`;
+      html += renderScholarEntries(grouped[firstVerse].slice(0, 5), current, '');
     }
   } else {
     html += `<div class="hadith-empty-notice" style="background:#F5F3EC">
-      <b>No hadith available for Sūrah ${sura} yet</b><br>
-      <span style="font-weight:500;font-size:12px">The <code>hadith_connections</code> table currently contains 501 entries across the Qur'ān. More are being added.</span>
+      <b>No hadith linked to Sūrah ${sura} yet</b><br>
+      <span style="font-weight:500;font-size:12px">The hadith_corpus table has 68,863 hadiths. Run the linker script to connect more verses.</span>
     </div>`;
   }
 
@@ -15885,41 +15935,91 @@ async function loadHadithPanel(sura, aya) {
   const tabBtn = document.getElementById(`hadith-tab-${aya}`);
   const current = traditionState[tradKey(sura, aya, 'hadith')] || 'sunni';
 
-  let directEntries = [];
-  let suraHadith = [];
+  // Helper: convert hadith_corpus row to entry object
+  function corpusRowToEntry(r) {
+    const body = r.text_english || '';
+    const metaParts = [];
+    if (r.narrator) metaParts.push('Narrator: ' + r.narrator);
+    if (r.collection) metaParts.push(r.collection);
+    if (r.hadith_number) metaParts.push('No. ' + r.hadith_number);
+    if (r.book_chapter) metaParts.push(r.book_chapter);
+    const g = (r.grade || '').toLowerCase();
+    const gradeColor = g.includes('sahih') ? '#1A7A48' : g.includes('hasan') ? '#1A6FA8' : g.includes('daif') || g.includes('weak') ? '#C0621A' : '#666';
+    const gradeBg   = g.includes('sahih') ? '#D5F5E3' : g.includes('hasan') ? '#D6EAF8' : g.includes('daif') || g.includes('weak') ? '#FDEBD0' : '#F0F0F0';
+    const gradeBadge = r.grade ? `<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:${gradeBg};color:${gradeColor};border:1px solid ${gradeColor};margin-left:6px;">${r.grade}</span>` : '';
+    return {
+      scholar: (r.collection || 'Hadith') + (gradeBadge ? ' ' + gradeBadge : ''),
+      tradition: r.tradition || 'sunni',
+      text: body,
+      meta: metaParts.join(' · ') || null,
+      isAI: false,
+      aya_number: r.aya_number,
+      arabic: r.text_arabic || ''
+    };
+  }
 
+  let directEntries = [];
+  let suraEntries   = [];
+
+  // 1. Query hadith_corpus for direct verse match
+  try {
+    const rows = await sbFetch('hadith_corpus', {
+      select: 'text_english,text_arabic,narrator,collection,hadith_number,grade,tradition,book_chapter,aya_number',
+      sura_id: `eq.${sura}`,
+      aya_number: `eq.${aya}`,
+      limit: 100
+    });
+    directEntries = rows.map(corpusRowToEntry);
+  } catch {}
+
+  // 2. Also query hadith_connections for direct match (legacy AI-linked entries)
   try {
     const rows = await sbFetch('hadith_connections', {
       select: 'hadith_text,narrator,collection,reference,hadith_grade,tradition,similarity_note,difference_note,aya_number',
       sura_id: `eq.${sura}`,
       aya_number: `eq.${aya}`
     });
-    directEntries = rows.map(rowToHadithEntry);
+    directEntries = directEntries.concat(rows.map(rowToHadithEntry));
   } catch {}
 
+  // 3. If no direct match, fetch sura-level from corpus (up to 80 rows)
   if (directEntries.length === 0) {
     try {
-      const rows = await sbFetch('hadith_connections', {
-        select: 'hadith_text,narrator,collection,reference,hadith_grade,tradition,similarity_note,difference_note,aya_number',
+      const rows = await sbFetch('hadith_corpus', {
+        select: 'text_english,text_arabic,narrator,collection,hadith_number,grade,tradition,book_chapter,aya_number',
         sura_id: `eq.${sura}`,
         order: 'aya_number',
-        limit: 50
+        limit: 80
       });
-      suraHadith = rows.map(rowToHadithEntry);
+      suraEntries = rows.map(corpusRowToEntry);
     } catch {}
+
+    // Also fallback to hadith_connections sura level
+    if (suraEntries.length === 0) {
+      try {
+        const rows = await sbFetch('hadith_connections', {
+          select: 'hadith_text,narrator,collection,reference,hadith_grade,tradition,similarity_note,difference_note,aya_number',
+          sura_id: `eq.${sura}`,
+          order: 'aya_number',
+          limit: 50
+        });
+        suraEntries = rows.map(rowToHadithEntry);
+      } catch {}
+    }
   }
 
+  const totalCount = directEntries.length;
   if (tabBtn) {
-    tabBtn.textContent = directEntries.length > 0
-      ? `Hadith (${directEntries.length})`
-      : (suraHadith.length > 0 ? 'Hadith ◆' : 'Hadith');
+    tabBtn.textContent = totalCount > 0
+      ? `Hadith (${totalCount})`
+      : (suraEntries.length > 0 ? 'Hadith ◆' : 'Hadith');
   }
 
   let html = '';
 
   if (directEntries.length > 0) {
     html += buildTradToggle(sura, aya, 'hadith', current);
-    html += `<div class="hadith-section-divider"><span class="hadith-section-title">Hadith linked to ${sura}:${aya}</span></div>`;
+    html += `<div class="hadith-section-divider"><span class="hadith-section-title">Hadith linked to ${sura}:${aya} (${totalCount})</span></div>`;
     html += renderScholarEntries(directEntries, current, '');
     html += `<button class="hadith-action-btn secondary" onclick="switchToTafsir(${aya})">📖 Read Tafsīr for context</button>`;
     panel.innerHTML = html;
@@ -15928,12 +16028,12 @@ async function loadHadithPanel(sura, aya) {
 
   html += `<div class="hadith-empty-notice">
     <b>No hadith directly linked to ${sura}:${aya}</b><br>
-    <span style="font-weight:500;font-size:12px">This is common — most verses do not have a specific narration tied to them. Below are related hadith from the same sūrah for educational study.</span>
+    <span style="font-weight:500;font-size:12px">Below are related hadith from the same sūrah drawn from the full 68,863-hadith corpus.</span>
   </div>`;
 
-  if (suraHadith.length > 0) {
+  if (suraEntries.length > 0) {
     const grouped = {};
-    suraHadith.forEach(e => {
+    suraEntries.forEach(e => {
       const k = e.aya_number;
       if (!grouped[k]) grouped[k] = [];
       grouped[k].push(e);
@@ -15953,13 +16053,13 @@ async function loadHadithPanel(sura, aya) {
 
     if (verseNumbers.length > 0) {
       const firstVerse = verseNumbers[0];
-      html += `<div class="hadith-section-divider"><span class="hadith-section-title">Sample Hadith from this Sūrah</span></div>`;
-      html += renderScholarEntries(grouped[firstVerse].slice(0, 3), current, '');
+      html += `<div class="hadith-section-divider"><span class="hadith-section-title">Sample Hadith from Sūrah ${sura}</span></div>`;
+      html += renderScholarEntries(grouped[firstVerse].slice(0, 5), current, '');
     }
   } else {
     html += `<div class="hadith-empty-notice" style="background:#F5F3EC">
-      <b>No hadith available for Sūrah ${sura} yet</b><br>
-      <span style="font-weight:500;font-size:12px">The <code>hadith_connections</code> table currently contains 501 entries across the Qur'ān. More are being added.</span>
+      <b>No hadith linked to Sūrah ${sura} yet</b><br>
+      <span style="font-weight:500;font-size:12px">The hadith_corpus table has 68,863 hadiths. Run the linker script to connect more verses.</span>
     </div>`;
   }
 
