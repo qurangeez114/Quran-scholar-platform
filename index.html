@@ -2808,7 +2808,8 @@ function buildSearchArray(terms) {
     terms.arabic,
     terms.root,
     terms.transliteration,
-    normalizeArabic(terms.original) // normalized version of original
+    normalizeArabic(terms.original),
+    ...(terms.related||[]).slice(0,4)
   ].filter(t => t && t.trim().length >= 2);
   return [...new Set(all)];
 }
@@ -17156,6 +17157,13 @@ Keep related terms focused on Quranic/Islamic usage. Return valid JSON only.`
     }
   } catch(e) { console.warn('[ISA] expand failed', e); }
 
+  // Add English stem (prayer→pray, fasting→fast)
+  if (terms.english) {
+    const stem = terms.english.toLowerCase().replace(/ing$|tion$|ers?$|ness$|ment$/,'').trim();
+    if (stem && stem.length >= 3 && stem !== terms.english.toLowerCase()) {
+      terms.related = [...(terms.related||[]), stem];
+    }
+  }
   _termCache[key] = terms;
   return terms;
 }
