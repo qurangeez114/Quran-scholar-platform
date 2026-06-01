@@ -5066,14 +5066,16 @@ async function runWordSearch(rawQuery) {
     // ── Step 2: Try Supabase RPC (searches ayas + word_analysis) ──
     let rpcResults = [];
     try {
-      const rpcRes = await fetch(\`\${SUPABASE_URL}/rest/v1/rpc/search_multilingual_quran\`, {
+      const rpcRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/search_global_ai`, {
         method: 'POST',
         headers: { ...HEADERS, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query_text: safeQuery, search_terms: searchArray })
+        body: JSON.stringify({ query_text: safeQuery, query_variants: searchArray })
       });
       if (rpcRes.ok) {
         const rows = await rpcRes.json();
-        if (Array.isArray(rows)) rpcResults = rows.map(v => ({...v, tigrinya: v.aya_text, turkish: v.german||v.urdu||'', _source: v.match_source}));
+        if (Array.isArray(rows)) rpcResults = rows
+          .filter(r => r.result_type === 'verse' || r.result_type === 'word' || r.result_type === 'lexicon')
+          .map(v => ({...v, tigrinya: v.aya_text, turkish: v.german||v.urdu||'', _source: v.result_type}));
       }
     } catch(e) { console.warn('[Search] RPC failed, using fallback', e); }
 
@@ -12386,14 +12388,16 @@ async function runWordSearch(rawQuery) {
     // ── Step 2: Try Supabase RPC (searches ayas + word_analysis) ──
     let rpcResults = [];
     try {
-      const rpcRes = await fetch(\`\${SUPABASE_URL}/rest/v1/rpc/search_multilingual_quran\`, {
+      const rpcRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/search_global_ai`, {
         method: 'POST',
         headers: { ...HEADERS, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query_text: safeQuery, search_terms: searchArray })
+        body: JSON.stringify({ query_text: safeQuery, query_variants: searchArray })
       });
       if (rpcRes.ok) {
         const rows = await rpcRes.json();
-        if (Array.isArray(rows)) rpcResults = rows.map(v => ({...v, tigrinya: v.aya_text, turkish: v.german||v.urdu||'', _source: v.match_source}));
+        if (Array.isArray(rows)) rpcResults = rows
+          .filter(r => r.result_type === 'verse' || r.result_type === 'word' || r.result_type === 'lexicon')
+          .map(v => ({...v, tigrinya: v.aya_text, turkish: v.german||v.urdu||'', _source: v.result_type}));
       }
     } catch(e) { console.warn('[Search] RPC failed, using fallback', e); }
 
