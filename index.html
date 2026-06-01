@@ -5456,6 +5456,10 @@ function buildWordByWord(arabicText, translitText, suraId, ayaNum) {
 // ── WORD POPUP ───────────────────────────────────────────────────────────────
 function openWbwPopup(btn, word, suraId, ayaNum, wordIdx) {
   openWordStudy(word, suraId, ayaNum, btn);
+  // Word study bottom sheet handles everything — close old popup if open
+  const oldPopup = document.getElementById('wbwPopup');
+  if (oldPopup) oldPopup.classList.remove('open');
+  return; // word study panel handles the rest
   const overlay = document.getElementById('wbwPopup');
   if (!overlay) return;
   // Decode HTML entities back to Arabic chars
@@ -15173,6 +15177,10 @@ function buildWordByWord(arabicText, translitText, suraId, ayaNum) {
 // ── WORD POPUP ───────────────────────────────────────────────────────────────
 function openWbwPopup(btn, word, suraId, ayaNum, wordIdx) {
   openWordStudy(word, suraId, ayaNum, btn);
+  // Word study bottom sheet handles everything — close old popup if open
+  const oldPopup = document.getElementById('wbwPopup');
+  if (oldPopup) oldPopup.classList.remove('open');
+  return; // word study panel handles the rest
   const overlay = document.getElementById('wbwPopup');
   if (!overlay) return;
   // Decode HTML entities back to Arabic chars
@@ -19674,15 +19682,36 @@ function closeWordStudy() {
   });
 }
 
-async function openWordStudy(word, sura, aya) {
+async function openWordStudy(word, sura, aya, targetEl) {
   wordStudySura = sura;
   wordStudyAya = aya;
   const overlay = document.getElementById('word-study-overlay');
   const wsWord = document.getElementById('ws-word');
+  const wsRef = document.getElementById('ws-verse-ref');
   const wsContent = document.getElementById('ws-content');
   if (!overlay) return;
 
-  wsWord.textContent = word;
+  // Highlight tapped word
+  document.querySelectorAll('.ws-highlighted').forEach(el => {
+    el.classList.remove('ws-highlighted');
+    el.style.background = '';
+    el.style.outline = '';
+  });
+  if (targetEl) {
+    targetEl.classList.add('ws-highlighted');
+    targetEl.style.background = 'rgba(200,168,76,0.25)';
+    targetEl.style.borderRadius = '4px';
+    targetEl.style.outline = '2px solid rgba(200,168,76,0.6)';
+  }
+
+  // Decode HTML entities
+  const tmp = document.createElement('textarea');
+  tmp.innerHTML = word;
+  const decoded = tmp.value;
+
+  wsWord.textContent = decoded;
+  if (wsRef) wsRef.textContent = sura + ':' + aya;
+  const wordToLookup = decoded || word;
   wsContent.innerHTML = '<div style="text-align:center;padding:20px;"><span class="spinner"></span></div>';
   overlay.style.display = 'flex';
   requestAnimationFrame(() => { requestAnimationFrame(() => overlay.classList.add('ws-open')); });
@@ -19691,7 +19720,7 @@ async function openWordStudy(word, sura, aya) {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_word_analysis`, {
       method: 'POST',
       headers: { ...HEADERS, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ p_sura: sura, p_aya: aya, p_word: word })
+      body: JSON.stringify({ p_sura: sura, p_aya: aya, p_word: wordToLookup || word })
     });
     const rows = res.ok ? await res.json() : [];
     const d = rows && rows.length > 0 ? rows[0] : null;
