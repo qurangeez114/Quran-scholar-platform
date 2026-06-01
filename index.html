@@ -3043,7 +3043,7 @@ function highlightSearchTerms(containerEl, terms) {
     </div>
 
     <!-- Search Results Panel (overlays verse area) -->
-    <div id="searchResultsPanel" style="display:none;flex-direction:column;flex:1;overflow:hidden;background:#FAFAF7;">
+    <div id="searchResultsPanel" style="display:none;flex-direction:column;flex:1;overflow-y:auto;background:#FAFAF7;">
       <div style="padding:12px 24px 8px;border-bottom:1px solid #E8E4DC;background:#fff;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
         <div id="searchCount" style="font-size:13px;font-weight:700;color:#8FA3B8"></div>
         <div style="display:flex;gap:8px;align-items:center;">
@@ -3058,8 +3058,7 @@ function highlightSearchTerms(containerEl, terms) {
         </div>
         <div id="topicAnalysisContent" style="padding:16px;font-size:13px;color:#333;line-height:1.7;overflow-y:auto;flex:1;-webkit-overflow-scrolling:touch;"></div>
       </div>
-      <div id="isa-panel" style="padding:8px 16px 0;"></div>
-      <div id="searchResults" style="overflow-y:auto;flex:1;padding:8px 24px 16px;"></div>
+      <div id="searchResults" style="overflow-y:auto;flex:1;padding:8px 16px 16px;"></div>
     </div>
 
     <div class="verse-area" id="verseArea"><div class="loading">Select a sura to begin</div></div>
@@ -10366,7 +10365,7 @@ function toggleVerseStudy(num) {
     </div>
 
     <!-- Search Results Panel (overlays verse area) -->
-    <div id="searchResultsPanel" style="display:none;flex-direction:column;flex:1;overflow:hidden;background:#FAFAF7;">
+    <div id="searchResultsPanel" style="display:none;flex-direction:column;flex:1;overflow-y:auto;background:#FAFAF7;">
       <div style="padding:12px 24px 8px;border-bottom:1px solid #E8E4DC;background:#fff;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
         <div id="searchCount" style="font-size:13px;font-weight:700;color:#8FA3B8"></div>
         <div style="display:flex;gap:8px;align-items:center;">
@@ -17437,8 +17436,16 @@ async function intelligentSearch(rawQuery, context) {
   const variants = buildSearchArray ? buildSearchArray(terms) : [terms.english||rawQuery, terms.arabic, terms.root].filter(Boolean);
   const intent   = detectIntent(rawQuery) || detectIntent(terms.english||'');
 
-  // Step 2: Render assistant panel with terms + suggestions
-  if (panelEl) renderAssistantPanel(panelEl, rawQuery, terms, intent, null);
+  // Step 2: Render assistant panel — insert above searchResultsPanel if isa-panel not found
+  let _isaPanel = document.getElementById('isa-panel');
+  if (!_isaPanel) {
+    _isaPanel = document.createElement('div');
+    _isaPanel.id = 'isa-panel';
+    _isaPanel.style.cssText = 'padding:8px 16px 0;';
+    const _sp = document.getElementById('searchResultsPanel');
+    if (_sp) _sp.parentNode.insertBefore(_isaPanel, _sp);
+  }
+  renderAssistantPanel(_isaPanel, rawQuery, terms, intent, null);
 
   // Step 3: Show translation pill if available
   if (typeof showTranslationPill === 'function' && terms.lang !== 'English') {
