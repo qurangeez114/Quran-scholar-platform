@@ -2725,7 +2725,8 @@ img, iframe, table, pre, code, video {
       <div class="sura-list" id="suraList"><div class="loading"><span class="spinner"></span>Loading...</div></div>
     </div>
     <div id="panel-topics" style="display:none;flex-direction:column;flex:1;overflow:hidden;">
-      <input id="topicSearch" placeholder="Search topics..." oninput="filterTopics()" style="margin:10px 12px;padding:8px 12px;border:1px solid #E8E4DC;border-radius:6px;font-size:13px;background:#FAFAF7;color:#0D0D0D;outline:none;width:calc(100% - 24px);">
+      <input id="topicSearch" placeholder="Search topics... (any language)" oninput="filterTopics()" style="margin:10px 12px;padding:8px 12px;border:1px solid #E8E4DC;border-radius:6px;font-size:13px;background:#FAFAF7;color:#0D0D0D;outline:none;width:calc(100% - 24px);">
+      <div id="topicSearchPill" style="padding:0 12px 4px;"></div>
       <div id="topicList" style="overflow-y:auto;flex:1;padding:4px 0;"></div>
     </div>
     <div id="panel-chrono" style="display:none;flex-direction:column;flex:1;overflow:hidden;">
@@ -2827,7 +2828,7 @@ img, iframe, table, pre, code, video {
       </div>
     </div>
     <div style="background:#F8F6F0;border-bottom:1px solid #E8E4DC;padding:8px 24px;display:flex;gap:8px;align-items:center;flex-shrink:0;">
-      <input id="globalSearch" placeholder="🔍 Search any word in all verses..." oninput="onSearchInput(this.value)"
+      <input id="globalSearch" placeholder="🔍 Search any word in all verses... (any language)" oninput="onSearchInput(this.value)"
         style="flex:1;padding:7px 12px;border:1px solid #E8C97B;border-radius:20px;font-size:13px;background:#fff;outline:none;color:#0D0D0D;">
       <button onclick="document.getElementById('searchResultsPanel').style.display='none';document.getElementById('globalSearch').value=''" 
         id="clearSearch" style="display:none;padding:5px 12px;border:1px solid #E8E4DC;border-radius:20px;background:#fff;font-size:12px;color:#999;cursor:pointer;">✕ Clear</button>
@@ -3295,28 +3296,46 @@ function renderSuraList(suras, searchTerm) {
   }
 }
 
-async function filterSuras() {
+let _suraSearchTimer;
+function filterSuras() {
   const raw = document.getElementById('searchInput').value;
-  const q = (await detectAndTranslateQuery(raw)).toLowerCase();
-  showTranslationPill(raw, q, 'searchTranslationPill');
-  const filtered = allSuras.filter(s =>
-    (s.sura_name || '').toLowerCase().includes(q) ||
-    (s.sura_name_translated || '').toLowerCase().includes(q) ||
-    (s.sura_name_english || '').toLowerCase().includes(q) ||
-    (s.sura_name_tigrinya || '').toLowerCase().includes(q) ||
-    (s.sura_name_amharic || '').toLowerCase().includes(q) ||
-    String(s.sura_id || '').includes(q)
+  // Immediate filter on raw for Latin/numbers
+  const qRaw = raw.toLowerCase();
+  const quickFiltered = allSuras.filter(s =>
+    (s.sura_name || '').toLowerCase().includes(qRaw) ||
+    (s.sura_name_translated || '').toLowerCase().includes(qRaw) ||
+    (s.sura_name_english || '').toLowerCase().includes(qRaw) ||
+    (s.sura_name_tigrinya || '').toLowerCase().includes(qRaw) ||
+    (s.sura_name_amharic || '').toLowerCase().includes(qRaw) ||
+    String(s.sura_id || '').includes(qRaw)
   );
-  renderSuraList(filtered, q);
-  // Keep current sura active and verses visible
+  renderSuraList(quickFiltered, qRaw);
   if (currentSura) {
     const active = document.getElementById('si-' + currentSura);
     if (active) active.classList.add('active');
   }
-  // If only one result, load it automatically
-  if (filtered.length === 1) {
-    const id = filtered[0].sura_id || filtered[0].id;
-    loadSura(id);
+  // If non-latin, debounce translate then re-filter & search verses
+  clearTimeout(_suraSearchTimer);
+  if (raw.trim().length >= 2 && needsTranslation && needsTranslation(raw)) {
+    const pill = document.getElementById('searchTranslationPill');
+    if (pill) pill.innerHTML = '<div style="display:inline-flex;align-items:center;gap:6px;background:#FFF8DC;border:1px solid #E8C97B;border-radius:20px;padding:3px 10px;font-size:11px;color:#8B5E1A;">🌍 Translating...</div>';
+    _suraSearchTimer = setTimeout(async () => {
+      const translated = await detectAndTranslateQuery(raw.trim());
+      showTranslationPill(raw.trim(), translated, 'searchTranslationPill');
+      const q = translated.toLowerCase();
+      const filtered = allSuras.filter(s =>
+        (s.sura_name || '').toLowerCase().includes(q) ||
+        (s.sura_name_translated || '').toLowerCase().includes(q) ||
+        (s.sura_name_english || '').toLowerCase().includes(q) ||
+        String(s.sura_id || '').includes(q)
+      );
+      renderSuraList(filtered, q);
+      if (filtered.length === 1) loadSura(filtered[0].sura_id || filtered[0].id);
+      // Also search verses
+      if (q.length >= 2) runWordSearch(q);
+    }, 700);
+  } else if (quickFiltered.length === 1) {
+    loadSura(quickFiltered[0].sura_id || quickFiltered[0].id);
   }
 }
 
@@ -4839,9 +4858,19 @@ function onSearchInput(val) {
   if (val.trim().length < 2) {
     document.getElementById('searchResultsPanel').style.display = 'none';
     document.getElementById('verseArea').style.display = '';
+    showTranslationPill('','','globalSearchPill');
     return;
   }
-  searchTimeout = setTimeout(() => runWordSearch(val.trim()), 500);
+  // Show translating indicator for non-latin scripts
+  if (needsTranslation && needsTranslation(val)) {
+    const pill = document.getElementById('globalSearchPill');
+    if (pill) pill.innerHTML = '<div style="display:inline-flex;align-items:center;gap:6px;background:#FFF8DC;border:1px solid #E8C97B;border-radius:20px;padding:3px 10px;font-size:11px;color:#8B5E1A;">🌍 Translating...</div>';
+  }
+  searchTimeout = setTimeout(async () => {
+    const translated = await detectAndTranslateQuery(val.trim());
+    showTranslationPill(val.trim(), translated, 'globalSearchPill');
+    runWordSearch(translated);
+  }, 700);
 }
 
 function highlightWord(text, word) {
@@ -7540,15 +7569,15 @@ function filterTopics() {
   const raw = document.getElementById('topicSearch').value;
   const q = raw.trim();
   if (!q) {
-    // Empty: hide concordance results, restore the curated list
     const sp = document.getElementById('searchResultsPanel');
     if (sp) sp.style.display = 'none';
     const va = document.getElementById('verseArea');
     if (va) va.style.display = '';
     renderTopics(allTopics);
+    showTranslationPill('','','topicSearchPill');
     return;
   }
-  // Non-empty: filter the curated list as a hint AND launch concordance.
+  // Immediately filter curated list with raw input
   const lc = q.toLowerCase();
   const filtered = allTopics.filter(t =>
     t.topic.toLowerCase().includes(lc) ||
@@ -7557,11 +7586,19 @@ function filterTopics() {
     (t.ar && t.ar.includes(q))
   );
   renderTopics(filtered);
-  // Debounce concordance call so we don't hammer Supabase on every keystroke
+  // Debounce translation + concordance
   clearTimeout(topicSearchTimer);
-  topicSearchTimer = setTimeout(() => {
-    if (q.length >= 2) runWordSearch(q);
-  }, 350);
+  if (needsTranslation && needsTranslation(q)) {
+    const pill = document.getElementById('topicSearchPill');
+    if (pill) pill.innerHTML = '<div style="display:inline-flex;align-items:center;gap:6px;background:#FFF8DC;border:1px solid #E8C97B;border-radius:20px;padding:3px 10px;font-size:11px;color:#8B5E1A;">🌍 Translating...</div>';
+  }
+  topicSearchTimer = setTimeout(async () => {
+    if (q.length >= 2) {
+      const translated = await detectAndTranslateQuery(q);
+      showTranslationPill(q, translated, 'topicSearchPill');
+      runWordSearch(translated);
+    }
+  }, 700);
 }
 
 function renderTopics(topics) {
@@ -9780,6 +9817,114 @@ function showTranslationPill(originalQuery, translatedQuery, pillContainerId) {
   </div>`;
 }
 
+</script>
+
+<!-- ══ MULTILINGUAL SEARCH + HIGHLIGHT ENGINE v2 ══ -->
+<script>
+const LANG_DETECT_MAP = {
+  ethiopic: /[\u1200-\u137F]/,
+  arabic:   /[\u0600-\u06FF]/,
+  somali:   /\b(iyo|waa|ku|ka|la|si|oo|ee|ah|ama|haddii|maxaa|muxuu)\b/i,
+  oromo:    /\b(fi|kan|hin|wajjin|akkuma|bara|yeroo|namni|uumaa|rabbi)\b/i,
+  turkish:  /[ğüşıöçĞÜŞİÖÇ]|\b(ve|bir|bu|için|ile|olan|daha|çok|gibi)\b/i,
+};
+
+let _mlCache = {};
+let _mlDebounceTimers = {};
+
+function needsTranslation(q) {
+  return Object.values(LANG_DETECT_MAP).some(r => r.test(q));
+}
+
+async function detectAndTranslateQuery(rawQuery) {
+  if (!rawQuery || rawQuery.trim().length < 2) return rawQuery;
+  const key = rawQuery.trim();
+  if (_mlCache[key]) return _mlCache[key];
+  if (!needsTranslation(key)) { _mlCache[key] = key; return key; }
+
+  const isEthiopic = LANG_DETECT_MAP.ethiopic.test(key);
+  const isArabicQ  = LANG_DETECT_MAP.arabic.test(key);
+  const isSomali   = !isEthiopic && !isArabicQ && LANG_DETECT_MAP.somali.test(key);
+  const isOromo    = !isEthiopic && !isArabicQ && LANG_DETECT_MAP.oromo.test(key);
+  const isTurkish  = !isEthiopic && !isArabicQ && LANG_DETECT_MAP.turkish.test(key);
+  const lang = isEthiopic ? 'Tigrinya or Amharic' : isArabicQ ? 'Arabic' 
+             : isSomali ? 'Somali' : isOromo ? 'Oromo' : 'Turkish';
+
+  try {
+    const proxy = window.CLAUDE_PROXY || '/.netlify/functions/claude-proxy';
+    const res = await fetch(proxy, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 60,
+        messages: [{role:'user', content:
+          `Translate this ${lang} word/phrase to English for Quran search. Return ONLY the English translation, nothing else.\n\nInput: ${key}`
+        }]
+      })
+    });
+    const data = await res.json();
+    const translated = (data?.content?.[0]?.text || key).trim().replace(/^["']|["']$/g,'');
+    _mlCache[key] = translated;
+    console.log(`[ML] "${key}" (${lang}) → "${translated}"`);
+    return translated;
+  } catch(e) {
+    console.warn('[ML] Translation failed:', e);
+    return key;
+  }
+}
+
+// Debounced version — waits 700ms after user stops typing before translating+searching
+function debounceMLSearch(inputId, searchFn, pillId, delay) {
+  delay = delay || 700;
+  return async function() {
+    const raw = document.getElementById(inputId)?.value || '';
+    clearTimeout(_mlDebounceTimers[inputId]);
+    if (raw.trim().length < 2) {
+      showTranslationPill('','', pillId);
+      searchFn(raw, false);
+      return;
+    }
+    // Show typing indicator if non-latin script
+    if (needsTranslation(raw)) {
+      const pill = document.getElementById(pillId);
+      if (pill) pill.innerHTML = '<div style="display:inline-flex;align-items:center;gap:6px;background:#FFF8DC;border:1px solid #E8C97B;border-radius:20px;padding:3px 10px;font-size:11px;color:#8B5E1A;margin-top:4px;">🌍 Translating...</div>';
+    }
+    _mlDebounceTimers[inputId] = setTimeout(async () => {
+      const translated = await detectAndTranslateQuery(raw);
+      showTranslationPill(raw, translated, pillId);
+      searchFn(translated, true);
+    }, delay);
+  };
+}
+
+function showTranslationPill(original, translated, pillId) {
+  const el = document.getElementById(pillId);
+  if (!el) return;
+  if (!original || !translated || original.trim().toLowerCase() === translated.trim().toLowerCase()) {
+    el.innerHTML = ''; return;
+  }
+  el.innerHTML = `<div style="display:inline-flex;align-items:center;gap:6px;background:#FFF8DC;border:1px solid #E8C97B;border-radius:20px;padding:3px 10px;font-size:11px;color:#8B5E1A;margin-top:4px;">🌍 Searching: <b>${escapeHtml(translated)}</b> <span style="color:#AAA">(from: ${escapeHtml(original)})</span></div>`;
+}
+
+function highlightSearchTerms(containerEl, terms) {
+  if (!containerEl || !terms || !terms.length) return;
+  containerEl.querySelectorAll('mark.ml-hl').forEach(m => m.replaceWith(document.createTextNode(m.textContent)));
+  const pattern = terms.map(t => t.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).filter(Boolean).join('|');
+  if (!pattern) return;
+  const regex = new RegExp(`(${pattern})`, 'gi');
+  const walker = document.createTreeWalker(containerEl, NodeFilter.SHOW_TEXT, null, false);
+  const nodes = [];
+  while(walker.nextNode()) nodes.push(walker.currentNode);
+  nodes.forEach(node => {
+    if (!node.nodeValue.trim() || !regex.test(node.nodeValue)) return;
+    regex.lastIndex = 0;
+    const span = document.createElement('span');
+    span.innerHTML = node.nodeValue.replace(regex,
+      '<mark class="ml-hl" style="background:#FFE066;color:#0D0D0D;border-radius:3px;padding:0 3px;font-weight:700;box-shadow:0 1px 3px rgba(0,0,0,0.15);">$1</mark>');
+    node.parentNode.replaceChild(span, node);
+  });
+}
 </script>
 </body>
 </htmlPE html>
@@ -12484,7 +12629,8 @@ img, iframe, table, pre, code, video {
       <div class="sura-list" id="suraList"><div class="loading"><span class="spinner"></span>Loading...</div></div>
     </div>
     <div id="panel-topics" style="display:none;flex-direction:column;flex:1;overflow:hidden;">
-      <input id="topicSearch" placeholder="Search topics..." oninput="filterTopics()" style="margin:10px 12px;padding:8px 12px;border:1px solid #E8E4DC;border-radius:6px;font-size:13px;background:#FAFAF7;color:#0D0D0D;outline:none;width:calc(100% - 24px);">
+      <input id="topicSearch" placeholder="Search topics... (any language)" oninput="filterTopics()" style="margin:10px 12px;padding:8px 12px;border:1px solid #E8E4DC;border-radius:6px;font-size:13px;background:#FAFAF7;color:#0D0D0D;outline:none;width:calc(100% - 24px);">
+      <div id="topicSearchPill" style="padding:0 12px 4px;"></div>
       <div id="topicList" style="overflow-y:auto;flex:1;padding:4px 0;"></div>
     </div>
     <div id="panel-chrono" style="display:none;flex-direction:column;flex:1;overflow:hidden;">
@@ -12586,7 +12732,7 @@ img, iframe, table, pre, code, video {
       </div>
     </div>
     <div style="background:#F8F6F0;border-bottom:1px solid #E8E4DC;padding:8px 24px;display:flex;gap:8px;align-items:center;flex-shrink:0;">
-      <input id="globalSearch" placeholder="🔍 Search any word in all verses..." oninput="onSearchInput(this.value)"
+      <input id="globalSearch" placeholder="🔍 Search any word in all verses... (any language)" oninput="onSearchInput(this.value)"
         style="flex:1;padding:7px 12px;border:1px solid #E8C97B;border-radius:20px;font-size:13px;background:#fff;outline:none;color:#0D0D0D;">
       <button onclick="document.getElementById('searchResultsPanel').style.display='none';document.getElementById('globalSearch').value=''" 
         id="clearSearch" style="display:none;padding:5px 12px;border:1px solid #E8E4DC;border-radius:20px;background:#fff;font-size:12px;color:#999;cursor:pointer;">✕ Clear</button>
@@ -13054,28 +13200,46 @@ function renderSuraList(suras, searchTerm) {
   }
 }
 
-async function filterSuras() {
+let _suraSearchTimer;
+function filterSuras() {
   const raw = document.getElementById('searchInput').value;
-  const q = (await detectAndTranslateQuery(raw)).toLowerCase();
-  showTranslationPill(raw, q, 'searchTranslationPill');
-  const filtered = allSuras.filter(s =>
-    (s.sura_name || '').toLowerCase().includes(q) ||
-    (s.sura_name_translated || '').toLowerCase().includes(q) ||
-    (s.sura_name_english || '').toLowerCase().includes(q) ||
-    (s.sura_name_tigrinya || '').toLowerCase().includes(q) ||
-    (s.sura_name_amharic || '').toLowerCase().includes(q) ||
-    String(s.sura_id || '').includes(q)
+  // Immediate filter on raw for Latin/numbers
+  const qRaw = raw.toLowerCase();
+  const quickFiltered = allSuras.filter(s =>
+    (s.sura_name || '').toLowerCase().includes(qRaw) ||
+    (s.sura_name_translated || '').toLowerCase().includes(qRaw) ||
+    (s.sura_name_english || '').toLowerCase().includes(qRaw) ||
+    (s.sura_name_tigrinya || '').toLowerCase().includes(qRaw) ||
+    (s.sura_name_amharic || '').toLowerCase().includes(qRaw) ||
+    String(s.sura_id || '').includes(qRaw)
   );
-  renderSuraList(filtered, q);
-  // Keep current sura active and verses visible
+  renderSuraList(quickFiltered, qRaw);
   if (currentSura) {
     const active = document.getElementById('si-' + currentSura);
     if (active) active.classList.add('active');
   }
-  // If only one result, load it automatically
-  if (filtered.length === 1) {
-    const id = filtered[0].sura_id || filtered[0].id;
-    loadSura(id);
+  // If non-latin, debounce translate then re-filter & search verses
+  clearTimeout(_suraSearchTimer);
+  if (raw.trim().length >= 2 && needsTranslation && needsTranslation(raw)) {
+    const pill = document.getElementById('searchTranslationPill');
+    if (pill) pill.innerHTML = '<div style="display:inline-flex;align-items:center;gap:6px;background:#FFF8DC;border:1px solid #E8C97B;border-radius:20px;padding:3px 10px;font-size:11px;color:#8B5E1A;">🌍 Translating...</div>';
+    _suraSearchTimer = setTimeout(async () => {
+      const translated = await detectAndTranslateQuery(raw.trim());
+      showTranslationPill(raw.trim(), translated, 'searchTranslationPill');
+      const q = translated.toLowerCase();
+      const filtered = allSuras.filter(s =>
+        (s.sura_name || '').toLowerCase().includes(q) ||
+        (s.sura_name_translated || '').toLowerCase().includes(q) ||
+        (s.sura_name_english || '').toLowerCase().includes(q) ||
+        String(s.sura_id || '').includes(q)
+      );
+      renderSuraList(filtered, q);
+      if (filtered.length === 1) loadSura(filtered[0].sura_id || filtered[0].id);
+      // Also search verses
+      if (q.length >= 2) runWordSearch(q);
+    }, 700);
+  } else if (quickFiltered.length === 1) {
+    loadSura(quickFiltered[0].sura_id || quickFiltered[0].id);
   }
 }
 
@@ -14598,9 +14762,19 @@ function onSearchInput(val) {
   if (val.trim().length < 2) {
     document.getElementById('searchResultsPanel').style.display = 'none';
     document.getElementById('verseArea').style.display = '';
+    showTranslationPill('','','globalSearchPill');
     return;
   }
-  searchTimeout = setTimeout(() => runWordSearch(val.trim()), 500);
+  // Show translating indicator for non-latin scripts
+  if (needsTranslation && needsTranslation(val)) {
+    const pill = document.getElementById('globalSearchPill');
+    if (pill) pill.innerHTML = '<div style="display:inline-flex;align-items:center;gap:6px;background:#FFF8DC;border:1px solid #E8C97B;border-radius:20px;padding:3px 10px;font-size:11px;color:#8B5E1A;">🌍 Translating...</div>';
+  }
+  searchTimeout = setTimeout(async () => {
+    const translated = await detectAndTranslateQuery(val.trim());
+    showTranslationPill(val.trim(), translated, 'globalSearchPill');
+    runWordSearch(translated);
+  }, 700);
 }
 
 function highlightWord(text, word) {
@@ -17178,15 +17352,15 @@ function filterTopics() {
   const raw = document.getElementById('topicSearch').value;
   const q = raw.trim();
   if (!q) {
-    // Empty: hide concordance results, restore the curated list
     const sp = document.getElementById('searchResultsPanel');
     if (sp) sp.style.display = 'none';
     const va = document.getElementById('verseArea');
     if (va) va.style.display = '';
     renderTopics(allTopics);
+    showTranslationPill('','','topicSearchPill');
     return;
   }
-  // Non-empty: filter the curated list as a hint AND launch concordance.
+  // Immediately filter curated list with raw input
   const lc = q.toLowerCase();
   const filtered = allTopics.filter(t =>
     t.topic.toLowerCase().includes(lc) ||
@@ -17195,11 +17369,19 @@ function filterTopics() {
     (t.ar && t.ar.includes(q))
   );
   renderTopics(filtered);
-  // Debounce concordance call so we don't hammer Supabase on every keystroke
+  // Debounce translation + concordance
   clearTimeout(topicSearchTimer);
-  topicSearchTimer = setTimeout(() => {
-    if (q.length >= 2) runWordSearch(q);
-  }, 350);
+  if (needsTranslation && needsTranslation(q)) {
+    const pill = document.getElementById('topicSearchPill');
+    if (pill) pill.innerHTML = '<div style="display:inline-flex;align-items:center;gap:6px;background:#FFF8DC;border:1px solid #E8C97B;border-radius:20px;padding:3px 10px;font-size:11px;color:#8B5E1A;">🌍 Translating...</div>';
+  }
+  topicSearchTimer = setTimeout(async () => {
+    if (q.length >= 2) {
+      const translated = await detectAndTranslateQuery(q);
+      showTranslationPill(q, translated, 'topicSearchPill');
+      runWordSearch(translated);
+    }
+  }, 700);
 }
 
 function renderTopics(topics) {
