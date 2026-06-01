@@ -283,6 +283,7 @@ function highlightSearchTerms(containerEl,terms){
     <div class="search-section">
       <div class="search-row">
         <input type="text" class="search-input" id="searchInput" placeholder="Search in any language..." onkeydown="if(event.key==='Enter')doSearch()"/>
+<div id="smartAssistantContainer" style="padding:0 4px;margin-top:6px;"></div>
 <div id="searchTranslationPill" style="margin-top:4px;padding:0 4px;"></div>
         <button class="search-btn" onclick="doSearch()">🔍 Search</button>
       </div>
@@ -540,7 +541,7 @@ async function openHadith(slug,topic){
       <div class="s-meta"><span class="bdg bdg-g">⚙️ Hadith Practice</span><span class="bdg bdg-b">${sources.length} sources</span></div>
     </div>
     <div class="sec"><div class="sec-title">📚 Comparative Sources</div>${srcHTML}</div>`;
-        setTimeout(() => { if (window._storySearchVariants) highlightSearchTerms(area, window._storySearchVariants); }, 60);
+        setTimeout(() => { if (window._storySearchVariants) { highlightSearchTerms(area, window._storySearchVariants); if(typeof showSmartAssistant==="function") showSmartAssistant(document.getElementById("searchInput")?.value||"", window._storySearchVariants, []); } }, 60);
 }
 
 function toggleSrc(hdr){
@@ -680,5 +681,246 @@ init();
 
 
 
+
+<!-- ══ SMART SEARCH ASSISTANT ══ -->
+<script>
+// ═══════════════════════════════════════════════════════════════
+// SMART SEARCH ASSISTANT — Intent-aware, interactive suggestions
+// ═══════════════════════════════════════════════════════════════
+
+let _smartAssistantCache = {};
+let _smartAssistantTimer = null;
+
+// ── Intent categories → related Islamic concepts ──────────────
+const INTENT_MAP = {
+  // Bodily/purity topics → expand to fiqh terms
+  body: {
+    keywords: ['urine','blood','feces','stool','menstruation','period','sweat','semen','vomit','pus','wound','najasa','impure'],
+    expand: ['purification','taharah','wudu','ghusl','najasa','istinja','ritual purity','cleanliness'],
+    suggest_pages: ['madhhab','research'],
+    icon: '🧼'
+  },
+  prayer: {
+    keywords: ['prayer','salah','salat','namaz','worship','prostrate','bow','rukuu','sujood','qibla','adhan','iqama'],
+    expand: ['salah','صلاة','prayer','worship','prostration','mosque','Friday prayer'],
+    suggest_pages: ['read','madhhab','research'],
+    icon: '🕌'
+  },
+  faith: {
+    keywords: ['faith','belief','iman','aqeedah','tawhid','god','allah','monotheism','creed'],
+    expand: ['faith','إيمان','belief','tawhid','aqeedah','monotheism','trust in God'],
+    suggest_pages: ['read','research','topics'],
+    icon: '☪️'
+  },
+  food: {
+    keywords: ['food','eat','drink','halal','haram','pork','alcohol','wine','meat','slaughter','zabiha'],
+    expand: ['halal','haram','food','eating','drinking','slaughter','prohibition'],
+    suggest_pages: ['read','madhhab','research'],
+    icon: '🍖'
+  },
+  death: {
+    keywords: ['death','die','grave','burial','afterlife','resurrection','judgment','hell','paradise','heaven','jannah','jahannam'],
+    expand: ['death','afterlife','resurrection','judgment day','paradise','hell','grave'],
+    suggest_pages: ['read','research','sira'],
+    icon: '⚖️'
+  },
+  family: {
+    keywords: ['marriage','divorce','wife','husband','children','family','nikah','talaq','inheritance','orphan'],
+    expand: ['marriage','family','divorce','inheritance','children','nikah'],
+    suggest_pages: ['read','madhhab','research'],
+    icon: '👨‍👩‍👧'
+  },
+  prophets: {
+    keywords: ['prophet','messenger','nabi','rasul','moses','jesus','abraham','noah','adam','muhammad','ibrahim','isa','musa'],
+    expand: ['prophet','messenger','stories','revelation'],
+    suggest_pages: ['read','stories','sira'],
+    icon: '📜'
+  },
+  money: {
+    keywords: ['money','wealth','zakat','charity','riba','interest','trade','business','loan','debt','sadaqah'],
+    expand: ['zakat','charity','wealth','trade','interest','prohibition'],
+    suggest_pages: ['read','madhhab','research'],
+    icon: '💰'
+  }
+};
+
+function detectIntent(query, terms) {
+  const searchStr = [query, ...(terms || [])].join(' ').toLowerCase();
+  for (const [intent, data] of Object.entries(INTENT_MAP)) {
+    if (data.keywords.some(k => searchStr.includes(k))) {
+      return { intent, ...data };
+    }
+  }
+  return null;
+}
+
+// ── Build the smart assistant panel HTML ──────────────────────
+function buildSmartPanel(query, terms, results, intent) {
+  const hasResults = results && results.length > 0;
+  const searchArr = terms || [query];
+
+  let html = `<div id="smartAssistantPanel" style="
+    background:linear-gradient(135deg,#FDFAF3,#F8F3E8);
+    border:1px solid #E8C97B;border-radius:14px;
+    margin:0 0 14px 0;padding:14px 16px;font-size:13px;
+    box-shadow:0 2px 12px rgba(0,0,0,0.07);
+  ">`;
+
+  // ── Header ──
+  html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+    <span style="font-size:18px;">🔍</span>
+    <span style="font-weight:700;color:#5A3A10;font-size:13px;">Search Assistant</span>
+    <button onclick="document.getElementById('smartAssistantPanel').style.display='none'"
+      style="margin-left:auto;background:none;border:none;color:#AAA;font-size:16px;cursor:pointer;padding:0;line-height:1;">✕</button>
+  </div>`;
+
+  // ── What we understood ──
+  html += `<div style="background:#fff8;border-radius:8px;padding:8px 12px;margin-bottom:10px;border:1px solid #F0E8D0;">
+    <div style="font-size:11px;color:#999;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px;">Understood as</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;">`;
+  searchArr.forEach(t => {
+    html += `<span style="background:#E8C97B33;border:1px solid #E8C97B;border-radius:12px;padding:2px 10px;font-size:12px;color:#7A4F10;font-weight:600;">${escapeHtml(t)}</span>`;
+  });
+  html += `</div></div>`;
+
+  // ── Intent-based expansion ──
+  if (intent) {
+    html += `<div style="margin-bottom:10px;">
+      <div style="font-size:11px;color:#999;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;">${intent.icon} Related Islamic concepts — tap to search</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;">`;
+    intent.expand.forEach(term => {
+      html += `<button onclick="smartRefineSearch('${escapeHtml(term)}')"
+        style="background:#fff;border:1px solid #C8A96B;border-radius:20px;padding:4px 12px;font-size:12px;color:#8B5E1A;cursor:pointer;font-weight:600;transition:background 0.15s;"
+        onmouseover="this.style.background='#FFF8DC'" onmouseout="this.style.background='#fff'">
+        ${escapeHtml(term)}
+      </button>`;
+    });
+    html += `</div></div>`;
+
+    // ── Suggested pages ──
+    if (intent.suggest_pages && intent.suggest_pages.length > 0) {
+      const pageMap = {
+        'read':     { label: 'Quran Verses',  icon: '📖', action: `document.getElementById('globalSearch').focus()` },
+        'madhhab':  { label: 'Madhhab Rulings', icon: '⚖️', action: `window.location.href='madhhab.html?q='+encodeURIComponent(document.getElementById('globalSearch').value)` },
+        'research': { label: 'Research Library', icon: '🔬', action: `window.location.href='research.html?q='+encodeURIComponent(document.getElementById('globalSearch').value)` },
+        'stories':  { label: 'Prophet Stories', icon: '📜', action: `window.location.href='stories.html?q='+encodeURIComponent(document.getElementById('globalSearch').value)` },
+        'sira':     { label: 'Sīra', icon: '🌙', action: `window.location.href='sira.html?q='+encodeURIComponent(document.getElementById('globalSearch').value)` },
+        'topics':   { label: 'Topics', icon: '🗂️', action: `switchSidebarTab&&switchSidebarTab('topics')` },
+      };
+      html += `<div style="margin-bottom:4px;">
+        <div style="font-size:11px;color:#999;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;">📍 Best pages for this topic</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;">`;
+      intent.suggest_pages.forEach(pg => {
+        const p = pageMap[pg];
+        if (!p) return;
+        html += `<button onclick="${p.action}"
+          style="background:#EEF2F7;border:1px solid #C0D0E0;border-radius:20px;padding:4px 12px;font-size:12px;color:#3A5A7A;cursor:pointer;font-weight:600;">
+          ${p.icon} ${p.label}
+        </button>`;
+      });
+      html += `</div></div>`;
+    }
+  }
+
+  // ── If no results: AI-powered suggestion ──
+  if (!hasResults) {
+    html += `<div id="smartAiSuggestion" style="margin-top:10px;padding:10px 12px;background:#F0F7FF;border-radius:8px;border:1px solid #C0D0E0;">
+      <div style="font-size:11px;color:#5A7090;margin-bottom:4px;">💡 Getting AI suggestions...</div>
+      <div id="smartAiText" style="font-size:12px;color:#3A5070;line-height:1.6;"></div>
+    </div>`;
+  }
+
+  html += `</div>`;
+  return html;
+}
+
+// ── Get AI suggestions when no results found ──────────────────
+async function getSmartSuggestion(query, terms) {
+  const cacheKey = query;
+  if (_smartAssistantCache[cacheKey]) return _smartAssistantCache[cacheKey];
+
+  try {
+    const proxy = window.CLAUDE_PROXY || '/.netlify/functions/claude-proxy';
+    const res = await fetch(proxy, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 200,
+        messages: [{
+          role: 'user',
+          content: `A user searched for "${query}" in a Quran study app. No results were found.
+Give them 2-3 helpful suggestions in 2 sentences max:
+1. What Islamic/Quranic topic this relates to
+2. What search terms would find better results (give 3-4 specific Arabic or English terms)
+Be concise and practical. Reply in plain text only.`
+        }]
+      })
+    });
+    const data = await res.json();
+    const text = data?.content?.[0]?.text || '';
+    _smartAssistantCache[cacheKey] = text;
+    return text;
+  } catch(e) {
+    return '';
+  }
+}
+
+// ── Refine search from suggestion chip ───────────────────────
+function smartRefineSearch(term) {
+  const input = document.getElementById('globalSearch') || document.getElementById('searchInput');
+  if (input) {
+    input.value = term;
+    input.dispatchEvent(new Event('input'));
+    // Also trigger search immediately
+    if (typeof runWordSearch === 'function') {
+      clearTimeout(window._searchTimeout);
+      runWordSearch(term);
+    } else if (typeof doSearch === 'function') {
+      doSearch();
+    }
+  }
+}
+
+// ── Main entry: show smart panel ─────────────────────────────
+async function showSmartAssistant(query, terms, results) {
+  const intent = detectIntent(query, terms);
+
+  // Find or create the smart panel container
+  let container = document.getElementById('smartAssistantContainer');
+  if (!container) {
+    const resultsDiv = document.getElementById('searchResults');
+    if (!resultsDiv) return;
+    container = document.createElement('div');
+    container.id = 'smartAssistantContainer';
+    resultsDiv.parentNode.insertBefore(container, resultsDiv);
+  }
+
+  container.innerHTML = buildSmartPanel(query, terms, results, intent);
+
+  // If no results, fetch AI suggestion asynchronously
+  if (!results || !results.length) {
+    const suggestion = await getSmartSuggestion(query, terms);
+    const aiText = document.getElementById('smartAiText');
+    const aiSug = document.getElementById('smartAiSuggestion');
+    if (aiText && suggestion) {
+      document.querySelector('#smartAiSuggestion div:first-child').textContent = '💡 Suggestions:';
+      aiText.textContent = suggestion;
+      // Parse suggested terms from AI response and add as chips
+      const termMatches = suggestion.match(/["'`]([^"'`]+)["'`]/g) || [];
+      if (termMatches.length > 0) {
+        const chipsHtml = termMatches.slice(0, 4).map(m => {
+          const t = m.replace(/["'`]/g, '').trim();
+          return `<button onclick="smartRefineSearch('${escapeHtml(t)}')" style="background:#fff;border:1px solid #C0D0E0;border-radius:20px;padding:3px 10px;font-size:11px;color:#3A5A7A;cursor:pointer;margin:3px 2px;font-weight:600;">${escapeHtml(t)}</button>`;
+        }).join('');
+        aiText.innerHTML = suggestion + `<div style="margin-top:8px;">${chipsHtml}</div>`;
+      }
+    } else if (aiSug && !suggestion) {
+      aiSug.style.display = 'none';
+    }
+  }
+}
+
+</script>
 </body>
 </html>
