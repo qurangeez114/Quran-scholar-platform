@@ -17171,19 +17171,28 @@ Keep related terms focused on Quranic/Islamic usage. Return valid JSON only.`
 // ── Step 3: Run unified RPC ───────────────────────────────────────────
 async function runUnifiedSearch(query, context, variants) {
   try {
-    const res = await fetch(`${SB_URL}/rest/v1/rpc/search_unified_intelligent`, {
+    // Use the page's existing SUPABASE_URL/HEADERS which are proven to work
+    const _url = (typeof SUPABASE_URL !== 'undefined' ? SUPABASE_URL : SB_URL);
+    const _hdr = (typeof HEADERS !== 'undefined' ? {...HEADERS, 'Content-Type':'application/json'} : SB_HDR());
+    const res = await fetch(`${_url}/rest/v1/rpc/search_unified_intelligent`, {
       method: 'POST',
-      headers: SB_HDR(),
+      headers: _hdr,
       body: JSON.stringify({
         query_text: query,
         search_context: context,
         query_variants: variants
       })
     });
-    if (!res.ok) return [];
+    if (!res.ok) {
+      console.error('[ISA] RPC error:', res.status, await res.text().catch(()=>''));
+      return [];
+    }
     const rows = await res.json();
     return Array.isArray(rows) ? rows : [];
-  } catch(e) { return []; }
+  } catch(e) {
+    console.error('[ISA] RPC exception:', e);
+    return [];
+  }
 }
 
 // ── Step 4: Group results by type ────────────────────────────────────
