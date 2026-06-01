@@ -2715,7 +2715,8 @@ img, iframe, table, pre, code, video {
       <button id="tab-sira" onclick="switchSidebarTab('sira')" style="flex:1;padding:9px;font-size:10px;font-weight:700;text-transform:uppercase;border:none;background:#fff;color:#999;cursor:pointer;border-bottom:2px solid transparent;">Sira</button>
     </div>
     <div id="panel-suras" style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
-      <input class="sidebar-search" id="searchInput" placeholder="Search suras..." oninput="filterSuras()">
+      <input class="sidebar-search" id="searchInput" placeholder="Search suras... (any language)" oninput="filterSuras()">
+      <div id="searchTranslationPill"></div>
       <div style="display:flex;gap:6px;padding:0 12px 8px;">
         <input id="gotoSura" type="number" min="1" max="114" placeholder="Sura" onkeydown="if(event.key==='Enter')gotoVerse()" style="width:60px;padding:6px 8px;border:1px solid #E8E4DC;border-radius:6px;font-size:13px;background:#FAFAF7;outline:none;">
         <input id="gotoAya" type="number" min="1" placeholder="Verse" onkeydown="if(event.key==='Enter')gotoVerse()" style="flex:1;padding:6px 8px;border:1px solid #E8E4DC;border-radius:6px;font-size:13px;background:#FAFAF7;outline:none;">
@@ -3265,7 +3266,8 @@ async function init() {
   }
 }
 
-function renderSuraList(suras) {
+function renderSuraList(suras, searchTerm) {
+  const _hlTerms = searchTerm ? searchTerm.split(/\s+/).filter(Boolean) : [];
   const TRANSLIT = ['Al-Faatihah','Al-Baqarah','Aal Imraan','An-Nisaa','Al-Maa\'idah','Al-An\'aam','Al-A\'raaf','Al-Anfaal','At-Tawbah','Yunus','Hud','Yusuf','Ar-Ra\'d','Ibrahim','Al-Hijr','An-Nahl','Al-Isra','Al-Kahf','Maryam','Ta-Ha','Al-Anbiya','Al-Hajj','Al-Mu\'minun','An-Nur','Al-Furqaan','Ash-Shu\'ara','An-Naml','Al-Qasas','Al-Ankabut','Ar-Rum','Luqman','As-Sajdah','Al-Ahzab','Saba','Fatir','Ya-Sin','As-Saffat','Sad','Az-Zumar','Ghafir','Fussilat','Ash-Shura','Az-Zukhruf','Ad-Dukhan','Al-Jathiyah','Al-Ahqaf','Muhammad','Al-Fath','Al-Hujurat','Qaf','Adh-Dhariyat','At-Tur','An-Najm','Al-Qamar','Ar-Rahman','Al-Waqi\'ah','Al-Hadid','Al-Mujadila','Al-Hashr','Al-Mumtahanah','As-Saf','Al-Jumu\'ah','Al-Munafiqun','At-Taghabun','At-Talaq','At-Tahrim','Al-Mulk','Al-Qalam','Al-Haqqah','Al-Ma\'arij','Nuh','Al-Jinn','Al-Muzzammil','Al-Muddathir','Al-Qiyamah','Al-Insan','Al-Mursalat','An-Naba','An-Nazi\'at','Abasa','At-Takwir','Al-Infitar','Al-Mutaffifin','Al-Inshiqaq','Al-Buruj','At-Tariq','Al-A\'la','Al-Ghashiyah','Al-Fajr','Al-Balad','Ash-Shams','Al-Layl','Ad-Duha','Ash-Sharh','At-Tin','Al-\'Alaq','Al-Qadr','Al-Bayyinah','Az-Zalzalah','Al-\'Adiyat','Al-Qari\'ah','At-Takathur','Al-\'Asr','Al-Humazah','Al-Fil','Quraysh','Al-Ma\'un','Al-Kawthar','Al-Kafirun','An-Nasr','Al-Masad','Al-Ikhlas','Al-Falaq','An-Nas'];
   const list = document.getElementById('suraList');
   list.innerHTML = suras.map(s => {
@@ -3286,10 +3288,17 @@ function renderSuraList(suras) {
     </div>`;
   }).join('');
   applyLangState(); updateLangBar();
+  // Highlight search terms in the rendered list
+  if (_hlTerms.length) {
+    const listEl = document.getElementById('suraList');
+    if (listEl) highlightSearchTerms(listEl, _hlTerms);
+  }
 }
 
-function filterSuras() {
-  const q = document.getElementById('searchInput').value.toLowerCase();
+async function filterSuras() {
+  const raw = document.getElementById('searchInput').value;
+  const q = (await detectAndTranslateQuery(raw)).toLowerCase();
+  showTranslationPill(raw, q, 'searchTranslationPill');
   const filtered = allSuras.filter(s =>
     (s.sura_name || '').toLowerCase().includes(q) ||
     (s.sura_name_translated || '').toLowerCase().includes(q) ||
@@ -3298,7 +3307,7 @@ function filterSuras() {
     (s.sura_name_amharic || '').toLowerCase().includes(q) ||
     String(s.sura_id || '').includes(q)
   );
-  renderSuraList(filtered);
+  renderSuraList(filtered, q);
   // Keep current sura active and verses visible
   if (currentSura) {
     const active = document.getElementById('si-' + currentSura);
@@ -6255,91 +6264,41 @@ async function loadHadithPanel(sura, aya) {
   const tabBtn = document.getElementById(`hadith-tab-${aya}`);
   const current = traditionState[tradKey(sura, aya, 'hadith')] || 'sunni';
 
-  // Helper: convert hadith_corpus row to entry object
-  function corpusRowToEntry(r) {
-    const body = r.text_english || '';
-    const metaParts = [];
-    if (r.narrator) metaParts.push('Narrator: ' + r.narrator);
-    if (r.collection) metaParts.push(r.collection);
-    if (r.hadith_number) metaParts.push('No. ' + r.hadith_number);
-    if (r.book_chapter) metaParts.push(r.book_chapter);
-    const g = (r.grade || '').toLowerCase();
-    const gradeColor = g.includes('sahih') ? '#1A7A48' : g.includes('hasan') ? '#1A6FA8' : g.includes('daif') || g.includes('weak') ? '#C0621A' : '#666';
-    const gradeBg   = g.includes('sahih') ? '#D5F5E3' : g.includes('hasan') ? '#D6EAF8' : g.includes('daif') || g.includes('weak') ? '#FDEBD0' : '#F0F0F0';
-    const gradeBadge = r.grade ? `<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:${gradeBg};color:${gradeColor};border:1px solid ${gradeColor};margin-left:6px;">${r.grade}</span>` : '';
-    return {
-      scholar: (r.collection || 'Hadith') + (gradeBadge ? ' ' + gradeBadge : ''),
-      tradition: r.tradition || 'sunni',
-      text: body,
-      meta: metaParts.join(' · ') || null,
-      isAI: false,
-      aya_number: r.aya_number,
-      arabic: r.text_arabic || ''
-    };
-  }
-
   let directEntries = [];
-  let suraEntries   = [];
+  let suraHadith = [];
 
-  // 1. Query hadith_corpus for direct verse match
-  try {
-    const rows = await sbFetch('hadith_corpus', {
-      select: 'text_english,text_arabic,narrator,collection,hadith_number,grade,tradition,book_chapter,aya_number',
-      sura_id: `eq.${sura}`,
-      aya_number: `eq.${aya}`,
-      limit: 100
-    });
-    directEntries = rows.map(corpusRowToEntry);
-  } catch {}
-
-  // 2. Also query hadith_connections for direct match (legacy AI-linked entries)
   try {
     const rows = await sbFetch('hadith_connections', {
       select: 'hadith_text,narrator,collection,reference,hadith_grade,tradition,similarity_note,difference_note,aya_number',
       sura_id: `eq.${sura}`,
       aya_number: `eq.${aya}`
     });
-    directEntries = directEntries.concat(rows.map(rowToHadithEntry));
+    directEntries = rows.map(rowToHadithEntry);
   } catch {}
 
-  // 3. If no direct match, fetch sura-level from corpus (up to 80 rows)
   if (directEntries.length === 0) {
     try {
-      const rows = await sbFetch('hadith_corpus', {
-        select: 'text_english,text_arabic,narrator,collection,hadith_number,grade,tradition,book_chapter,aya_number',
+      const rows = await sbFetch('hadith_connections', {
+        select: 'hadith_text,narrator,collection,reference,hadith_grade,tradition,similarity_note,difference_note,aya_number',
         sura_id: `eq.${sura}`,
         order: 'aya_number',
-        limit: 80
+        limit: 50
       });
-      suraEntries = rows.map(corpusRowToEntry);
+      suraHadith = rows.map(rowToHadithEntry);
     } catch {}
-
-    // Also fallback to hadith_connections sura level
-    if (suraEntries.length === 0) {
-      try {
-        const rows = await sbFetch('hadith_connections', {
-          select: 'hadith_text,narrator,collection,reference,hadith_grade,tradition,similarity_note,difference_note,aya_number',
-          sura_id: `eq.${sura}`,
-          order: 'aya_number',
-          limit: 50
-        });
-        suraEntries = rows.map(rowToHadithEntry);
-      } catch {}
-    }
   }
 
-  const totalCount = directEntries.length;
   if (tabBtn) {
-    tabBtn.textContent = totalCount > 0
-      ? `Hadith (${totalCount})`
-      : (suraEntries.length > 0 ? 'Hadith ◆' : 'Hadith');
+    tabBtn.textContent = directEntries.length > 0
+      ? `Hadith (${directEntries.length})`
+      : (suraHadith.length > 0 ? 'Hadith ◆' : 'Hadith');
   }
 
   let html = '';
 
   if (directEntries.length > 0) {
     html += buildTradToggle(sura, aya, 'hadith', current);
-    html += `<div class="hadith-section-divider"><span class="hadith-section-title">Hadith linked to ${sura}:${aya} (${totalCount})</span></div>`;
+    html += `<div class="hadith-section-divider"><span class="hadith-section-title">Hadith linked to ${sura}:${aya}</span></div>`;
     html += renderScholarEntries(directEntries, current, '');
     html += `<button class="hadith-action-btn secondary" onclick="switchToTafsir(${aya})">📖 Read Tafsīr for context</button>`;
     panel.innerHTML = html;
@@ -6348,12 +6307,12 @@ async function loadHadithPanel(sura, aya) {
 
   html += `<div class="hadith-empty-notice">
     <b>No hadith directly linked to ${sura}:${aya}</b><br>
-    <span style="font-weight:500;font-size:12px">Below are related hadith from the same sūrah drawn from the full 68,863-hadith corpus.</span>
+    <span style="font-weight:500;font-size:12px">This is common — most verses do not have a specific narration tied to them. Below are related hadith from the same sūrah for educational study.</span>
   </div>`;
 
-  if (suraEntries.length > 0) {
+  if (suraHadith.length > 0) {
     const grouped = {};
-    suraEntries.forEach(e => {
+    suraHadith.forEach(e => {
       const k = e.aya_number;
       if (!grouped[k]) grouped[k] = [];
       grouped[k].push(e);
@@ -6373,13 +6332,13 @@ async function loadHadithPanel(sura, aya) {
 
     if (verseNumbers.length > 0) {
       const firstVerse = verseNumbers[0];
-      html += `<div class="hadith-section-divider"><span class="hadith-section-title">Sample Hadith from Sūrah ${sura}</span></div>`;
-      html += renderScholarEntries(grouped[firstVerse].slice(0, 5), current, '');
+      html += `<div class="hadith-section-divider"><span class="hadith-section-title">Sample Hadith from this Sūrah</span></div>`;
+      html += renderScholarEntries(grouped[firstVerse].slice(0, 3), current, '');
     }
   } else {
     html += `<div class="hadith-empty-notice" style="background:#F5F3EC">
-      <b>No hadith linked to Sūrah ${sura} yet</b><br>
-      <span style="font-weight:500;font-size:12px">The hadith_corpus table has 68,863 hadiths. Run the linker script to connect more verses.</span>
+      <b>No hadith available for Sūrah ${sura} yet</b><br>
+      <span style="font-weight:500;font-size:12px">The <code>hadith_connections</code> table currently contains 501 entries across the Qur'ān. More are being added.</span>
     </div>`;
   }
 
@@ -6990,7 +6949,9 @@ function renderLexicon(words) {
 
 async function searchLexicon(q, closeBar) {
   if (closeBar && window.innerWidth <= 768) closeSidebar();
-  const raw = (q || '').trim();
+  const _rawInput = (q || '').trim();
+  const raw = await detectAndTranslateQuery(_rawInput);
+  if (raw !== _rawInput) showTranslationPill(_rawInput, raw, 'searchTranslationPill');
   if (!raw) {
     renderLexicon(lexiconData);
     const sp = document.getElementById('searchResultsPanel');
@@ -9702,6 +9663,124 @@ function toggleVerseStudy(num) {
 }
 </script>
 
+
+<!-- ══ MULTILINGUAL SEARCH + HIGHLIGHT ENGINE ══ -->
+<script>
+// ============================================================
+// UNIVERSAL MULTILINGUAL SEARCH + HIGHLIGHT ENGINE
+// Detects language, translates to English via Claude, highlights
+// ============================================================
+
+const LANG_DETECT_MAP = {
+  // Ethiopic script → could be Tigrinya or Amharic
+  ethiopic: /[\u1200-\u137F]/,
+  // Arabic script → Arabic
+  arabic: /[\u0600-\u06FF]/,
+  // Somali (Latin + special chars common in Somali)
+  somali: /\b(iyo|waa|ku|ka|la|si|oo|ee|ah|ama|haddii|maxaa|muxuu)\b/i,
+  // Oromo (common Oromo words/patterns)
+  oromo: /\b(fi|kan|hin|wajjin|akkuma|bara|yeroo|namni|uumaa|rabbi)\b/i,
+  // Turkish (common Turkish words + special chars ğüşıöç)
+  turkish: /[ğüşıöçĞÜŞİÖÇ]|\b(ve|bir|bu|için|ile|olan|olan|daha|çok|gibi)\b/i,
+};
+
+let _mlSearchCache = {};
+
+async function detectAndTranslateQuery(rawQuery) {
+  if (!rawQuery || rawQuery.trim().length < 2) return rawQuery;
+  const cacheKey = rawQuery.trim().toLowerCase();
+  if (_mlSearchCache[cacheKey]) return _mlSearchCache[cacheKey];
+
+  // Check if already English (ASCII-dominant, no special scripts)
+  const isEthiopic = LANG_DETECT_MAP.ethiopic.test(rawQuery);
+  const isArabic   = LANG_DETECT_MAP.arabic.test(rawQuery);
+  const isSomali   = !isEthiopic && !isArabic && LANG_DETECT_MAP.somali.test(rawQuery);
+  const isOromo    = !isEthiopic && !isArabic && LANG_DETECT_MAP.oromo.test(rawQuery);
+  const isTurkish  = !isEthiopic && !isArabic && LANG_DETECT_MAP.turkish.test(rawQuery);
+  const needsTranslation = isEthiopic || isArabic || isSomali || isOromo || isTurkish;
+
+  if (!needsTranslation) {
+    _mlSearchCache[cacheKey] = rawQuery;
+    return rawQuery;
+  }
+
+  const detectedLang = isEthiopic ? 'Tigrinya or Amharic'
+    : isArabic ? 'Arabic'
+    : isSomali ? 'Somali'
+    : isOromo  ? 'Oromo'
+    : 'Turkish';
+
+  try {
+    const proxyUrl = window.CLAUDE_PROXY || '/.netlify/functions/claude-proxy';
+    const res = await fetch(proxyUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 60,
+        messages: [{
+          role: 'user',
+          content: `Translate this ${detectedLang} search query to English. Return ONLY the English translation, nothing else, no quotes, no explanation.\n\nQuery: ${rawQuery}`
+        }]
+      })
+    });
+    const data = await res.json();
+    const translated = (data?.content?.[0]?.text || rawQuery).trim();
+    _mlSearchCache[cacheKey] = translated;
+    console.log(`[ML Search] "${rawQuery}" (${detectedLang}) → "${translated}"`);
+    return translated;
+  } catch(e) {
+    console.warn('[ML Search] Translation failed, using raw query', e);
+    return rawQuery;
+  }
+}
+
+// Highlight all occurrences of terms in a container element
+function highlightSearchTerms(containerEl, terms) {
+  if (!containerEl || !terms || !terms.length) return;
+  // Remove existing highlights first
+  containerEl.querySelectorAll('mark.ml-hl').forEach(m => {
+    m.replaceWith(document.createTextNode(m.textContent));
+  });
+  if (!terms.join('').trim()) return;
+
+  const walker = document.createTreeWalker(containerEl, NodeFilter.SHOW_TEXT, null, false);
+  const nodes = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode);
+
+  const pattern = terms
+    .map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    .filter(Boolean)
+    .join('|');
+  if (!pattern) return;
+  const regex = new RegExp(`(${pattern})`, 'gi');
+
+  nodes.forEach(node => {
+    if (!node.nodeValue.trim()) return;
+    if (!regex.test(node.nodeValue)) return;
+    regex.lastIndex = 0;
+    const span = document.createElement('span');
+    span.innerHTML = node.nodeValue.replace(regex,
+      '<mark class="ml-hl" style="background:#FFE066;color:#0D0D0D;border-radius:3px;padding:0 3px;font-weight:700;box-shadow:0 1px 3px rgba(0,0,0,0.15);">$1</mark>');
+    node.parentNode.replaceChild(span, node);
+  });
+}
+
+// Show a small pill below the search box if translation happened
+function showTranslationPill(originalQuery, translatedQuery, pillContainerId) {
+  const el = document.getElementById(pillContainerId);
+  if (!el) return;
+  if (originalQuery.trim().toLowerCase() === translatedQuery.trim().toLowerCase()) {
+    el.innerHTML = '';
+    return;
+  }
+  el.innerHTML = `<div style="display:inline-flex;align-items:center;gap:6px;background:#FFF8DC;border:1px solid #E8C97B;border-radius:20px;padding:3px 10px;font-size:11px;color:#8B5E1A;margin-top:4px;">
+    🌍 <span>Searching for: <b>${escapeHtml(translatedQuery)}</b></span>
+    <span style="color:#AAA">(translated from: ${escapeHtml(originalQuery)})</span>
+  </div>`;
+}
+
+</script>
 </body>
 </htmlPE html>
 <html lang="en">
@@ -12395,7 +12474,8 @@ img, iframe, table, pre, code, video {
       <button id="tab-sira" onclick="switchSidebarTab('sira')" style="flex:1;padding:9px;font-size:10px;font-weight:700;text-transform:uppercase;border:none;background:#fff;color:#999;cursor:pointer;border-bottom:2px solid transparent;">Sira</button>
     </div>
     <div id="panel-suras" style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
-      <input class="sidebar-search" id="searchInput" placeholder="Search suras..." oninput="filterSuras()">
+      <input class="sidebar-search" id="searchInput" placeholder="Search suras... (any language)" oninput="filterSuras()">
+      <div id="searchTranslationPill"></div>
       <div style="display:flex;gap:6px;padding:0 12px 8px;">
         <input id="gotoSura" type="number" min="1" max="114" placeholder="Sura" onkeydown="if(event.key==='Enter')gotoVerse()" style="width:60px;padding:6px 8px;border:1px solid #E8E4DC;border-radius:6px;font-size:13px;background:#FAFAF7;outline:none;">
         <input id="gotoAya" type="number" min="1" placeholder="Verse" onkeydown="if(event.key==='Enter')gotoVerse()" style="flex:1;padding:6px 8px;border:1px solid #E8E4DC;border-radius:6px;font-size:13px;background:#FAFAF7;outline:none;">
@@ -12945,7 +13025,8 @@ async function init() {
   }
 }
 
-function renderSuraList(suras) {
+function renderSuraList(suras, searchTerm) {
+  const _hlTerms = searchTerm ? searchTerm.split(/\s+/).filter(Boolean) : [];
   const TRANSLIT = ['Al-Faatihah','Al-Baqarah','Aal Imraan','An-Nisaa','Al-Maa\'idah','Al-An\'aam','Al-A\'raaf','Al-Anfaal','At-Tawbah','Yunus','Hud','Yusuf','Ar-Ra\'d','Ibrahim','Al-Hijr','An-Nahl','Al-Isra','Al-Kahf','Maryam','Ta-Ha','Al-Anbiya','Al-Hajj','Al-Mu\'minun','An-Nur','Al-Furqaan','Ash-Shu\'ara','An-Naml','Al-Qasas','Al-Ankabut','Ar-Rum','Luqman','As-Sajdah','Al-Ahzab','Saba','Fatir','Ya-Sin','As-Saffat','Sad','Az-Zumar','Ghafir','Fussilat','Ash-Shura','Az-Zukhruf','Ad-Dukhan','Al-Jathiyah','Al-Ahqaf','Muhammad','Al-Fath','Al-Hujurat','Qaf','Adh-Dhariyat','At-Tur','An-Najm','Al-Qamar','Ar-Rahman','Al-Waqi\'ah','Al-Hadid','Al-Mujadila','Al-Hashr','Al-Mumtahanah','As-Saf','Al-Jumu\'ah','Al-Munafiqun','At-Taghabun','At-Talaq','At-Tahrim','Al-Mulk','Al-Qalam','Al-Haqqah','Al-Ma\'arij','Nuh','Al-Jinn','Al-Muzzammil','Al-Muddathir','Al-Qiyamah','Al-Insan','Al-Mursalat','An-Naba','An-Nazi\'at','Abasa','At-Takwir','Al-Infitar','Al-Mutaffifin','Al-Inshiqaq','Al-Buruj','At-Tariq','Al-A\'la','Al-Ghashiyah','Al-Fajr','Al-Balad','Ash-Shams','Al-Layl','Ad-Duha','Ash-Sharh','At-Tin','Al-\'Alaq','Al-Qadr','Al-Bayyinah','Az-Zalzalah','Al-\'Adiyat','Al-Qari\'ah','At-Takathur','Al-\'Asr','Al-Humazah','Al-Fil','Quraysh','Al-Ma\'un','Al-Kawthar','Al-Kafirun','An-Nasr','Al-Masad','Al-Ikhlas','Al-Falaq','An-Nas'];
   const list = document.getElementById('suraList');
   list.innerHTML = suras.map(s => {
@@ -12966,10 +13047,17 @@ function renderSuraList(suras) {
     </div>`;
   }).join('');
   applyLangState(); updateLangBar();
+  // Highlight search terms in the rendered list
+  if (_hlTerms.length) {
+    const listEl = document.getElementById('suraList');
+    if (listEl) highlightSearchTerms(listEl, _hlTerms);
+  }
 }
 
-function filterSuras() {
-  const q = document.getElementById('searchInput').value.toLowerCase();
+async function filterSuras() {
+  const raw = document.getElementById('searchInput').value;
+  const q = (await detectAndTranslateQuery(raw)).toLowerCase();
+  showTranslationPill(raw, q, 'searchTranslationPill');
   const filtered = allSuras.filter(s =>
     (s.sura_name || '').toLowerCase().includes(q) ||
     (s.sura_name_translated || '').toLowerCase().includes(q) ||
@@ -12978,7 +13066,7 @@ function filterSuras() {
     (s.sura_name_amharic || '').toLowerCase().includes(q) ||
     String(s.sura_id || '').includes(q)
   );
-  renderSuraList(filtered);
+  renderSuraList(filtered, q);
   // Keep current sura active and verses visible
   if (currentSura) {
     const active = document.getElementById('si-' + currentSura);
@@ -15935,91 +16023,41 @@ async function loadHadithPanel(sura, aya) {
   const tabBtn = document.getElementById(`hadith-tab-${aya}`);
   const current = traditionState[tradKey(sura, aya, 'hadith')] || 'sunni';
 
-  // Helper: convert hadith_corpus row to entry object
-  function corpusRowToEntry(r) {
-    const body = r.text_english || '';
-    const metaParts = [];
-    if (r.narrator) metaParts.push('Narrator: ' + r.narrator);
-    if (r.collection) metaParts.push(r.collection);
-    if (r.hadith_number) metaParts.push('No. ' + r.hadith_number);
-    if (r.book_chapter) metaParts.push(r.book_chapter);
-    const g = (r.grade || '').toLowerCase();
-    const gradeColor = g.includes('sahih') ? '#1A7A48' : g.includes('hasan') ? '#1A6FA8' : g.includes('daif') || g.includes('weak') ? '#C0621A' : '#666';
-    const gradeBg   = g.includes('sahih') ? '#D5F5E3' : g.includes('hasan') ? '#D6EAF8' : g.includes('daif') || g.includes('weak') ? '#FDEBD0' : '#F0F0F0';
-    const gradeBadge = r.grade ? `<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:${gradeBg};color:${gradeColor};border:1px solid ${gradeColor};margin-left:6px;">${r.grade}</span>` : '';
-    return {
-      scholar: (r.collection || 'Hadith') + (gradeBadge ? ' ' + gradeBadge : ''),
-      tradition: r.tradition || 'sunni',
-      text: body,
-      meta: metaParts.join(' · ') || null,
-      isAI: false,
-      aya_number: r.aya_number,
-      arabic: r.text_arabic || ''
-    };
-  }
-
   let directEntries = [];
-  let suraEntries   = [];
+  let suraHadith = [];
 
-  // 1. Query hadith_corpus for direct verse match
-  try {
-    const rows = await sbFetch('hadith_corpus', {
-      select: 'text_english,text_arabic,narrator,collection,hadith_number,grade,tradition,book_chapter,aya_number',
-      sura_id: `eq.${sura}`,
-      aya_number: `eq.${aya}`,
-      limit: 100
-    });
-    directEntries = rows.map(corpusRowToEntry);
-  } catch {}
-
-  // 2. Also query hadith_connections for direct match (legacy AI-linked entries)
   try {
     const rows = await sbFetch('hadith_connections', {
       select: 'hadith_text,narrator,collection,reference,hadith_grade,tradition,similarity_note,difference_note,aya_number',
       sura_id: `eq.${sura}`,
       aya_number: `eq.${aya}`
     });
-    directEntries = directEntries.concat(rows.map(rowToHadithEntry));
+    directEntries = rows.map(rowToHadithEntry);
   } catch {}
 
-  // 3. If no direct match, fetch sura-level from corpus (up to 80 rows)
   if (directEntries.length === 0) {
     try {
-      const rows = await sbFetch('hadith_corpus', {
-        select: 'text_english,text_arabic,narrator,collection,hadith_number,grade,tradition,book_chapter,aya_number',
+      const rows = await sbFetch('hadith_connections', {
+        select: 'hadith_text,narrator,collection,reference,hadith_grade,tradition,similarity_note,difference_note,aya_number',
         sura_id: `eq.${sura}`,
         order: 'aya_number',
-        limit: 80
+        limit: 50
       });
-      suraEntries = rows.map(corpusRowToEntry);
+      suraHadith = rows.map(rowToHadithEntry);
     } catch {}
-
-    // Also fallback to hadith_connections sura level
-    if (suraEntries.length === 0) {
-      try {
-        const rows = await sbFetch('hadith_connections', {
-          select: 'hadith_text,narrator,collection,reference,hadith_grade,tradition,similarity_note,difference_note,aya_number',
-          sura_id: `eq.${sura}`,
-          order: 'aya_number',
-          limit: 50
-        });
-        suraEntries = rows.map(rowToHadithEntry);
-      } catch {}
-    }
   }
 
-  const totalCount = directEntries.length;
   if (tabBtn) {
-    tabBtn.textContent = totalCount > 0
-      ? `Hadith (${totalCount})`
-      : (suraEntries.length > 0 ? 'Hadith ◆' : 'Hadith');
+    tabBtn.textContent = directEntries.length > 0
+      ? `Hadith (${directEntries.length})`
+      : (suraHadith.length > 0 ? 'Hadith ◆' : 'Hadith');
   }
 
   let html = '';
 
   if (directEntries.length > 0) {
     html += buildTradToggle(sura, aya, 'hadith', current);
-    html += `<div class="hadith-section-divider"><span class="hadith-section-title">Hadith linked to ${sura}:${aya} (${totalCount})</span></div>`;
+    html += `<div class="hadith-section-divider"><span class="hadith-section-title">Hadith linked to ${sura}:${aya}</span></div>`;
     html += renderScholarEntries(directEntries, current, '');
     html += `<button class="hadith-action-btn secondary" onclick="switchToTafsir(${aya})">📖 Read Tafsīr for context</button>`;
     panel.innerHTML = html;
@@ -16028,12 +16066,12 @@ async function loadHadithPanel(sura, aya) {
 
   html += `<div class="hadith-empty-notice">
     <b>No hadith directly linked to ${sura}:${aya}</b><br>
-    <span style="font-weight:500;font-size:12px">Below are related hadith from the same sūrah drawn from the full 68,863-hadith corpus.</span>
+    <span style="font-weight:500;font-size:12px">This is common — most verses do not have a specific narration tied to them. Below are related hadith from the same sūrah for educational study.</span>
   </div>`;
 
-  if (suraEntries.length > 0) {
+  if (suraHadith.length > 0) {
     const grouped = {};
-    suraEntries.forEach(e => {
+    suraHadith.forEach(e => {
       const k = e.aya_number;
       if (!grouped[k]) grouped[k] = [];
       grouped[k].push(e);
@@ -16053,13 +16091,13 @@ async function loadHadithPanel(sura, aya) {
 
     if (verseNumbers.length > 0) {
       const firstVerse = verseNumbers[0];
-      html += `<div class="hadith-section-divider"><span class="hadith-section-title">Sample Hadith from Sūrah ${sura}</span></div>`;
-      html += renderScholarEntries(grouped[firstVerse].slice(0, 5), current, '');
+      html += `<div class="hadith-section-divider"><span class="hadith-section-title">Sample Hadith from this Sūrah</span></div>`;
+      html += renderScholarEntries(grouped[firstVerse].slice(0, 3), current, '');
     }
   } else {
     html += `<div class="hadith-empty-notice" style="background:#F5F3EC">
-      <b>No hadith linked to Sūrah ${sura} yet</b><br>
-      <span style="font-weight:500;font-size:12px">The hadith_corpus table has 68,863 hadiths. Run the linker script to connect more verses.</span>
+      <b>No hadith available for Sūrah ${sura} yet</b><br>
+      <span style="font-weight:500;font-size:12px">The <code>hadith_connections</code> table currently contains 501 entries across the Qur'ān. More are being added.</span>
     </div>`;
   }
 
@@ -16670,7 +16708,9 @@ function renderLexicon(words) {
 
 async function searchLexicon(q, closeBar) {
   if (closeBar && window.innerWidth <= 768) closeSidebar();
-  const raw = (q || '').trim();
+  const _rawInput = (q || '').trim();
+  const raw = await detectAndTranslateQuery(_rawInput);
+  if (raw !== _rawInput) showTranslationPill(_rawInput, raw, 'searchTranslationPill');
   if (!raw) {
     renderLexicon(lexiconData);
     const sp = document.getElementById('searchResultsPanel');
