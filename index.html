@@ -3166,8 +3166,9 @@ async function sbFetch(table, params) {
 
 async function sbSearch(table, select, column, query) {
   const orderCol = table === 'verses' ? 'surah_id' : 'sura_id';
-  // Encode the query safely — Ethiopic/Arabic/non-ASCII chars need full encoding
-  const encodedQuery = encodeURIComponent(query);
+  // encodeURIComponent encodes * as %2A which breaks PostgREST ilike wildcards
+  // Only encode the query term itself, keep * as literal
+  const encodedQuery = encodeURIComponent(query).replace(/%2A/gi, '*');
   const encodedCol = encodeURIComponent(column);
   const encodedSelect = encodeURIComponent(select);
   const url = `${SUPABASE_URL}/rest/v1/${table}?select=${encodedSelect}&${encodedCol}=ilike.*${encodedQuery}*&order=${orderCol}&limit=50`;
@@ -12887,8 +12888,9 @@ async function sbFetch(table, params) {
 
 async function sbSearch(table, select, column, query) {
   const orderCol = table === 'verses' ? 'surah_id' : 'sura_id';
-  // Encode the query safely — Ethiopic/Arabic/non-ASCII chars need full encoding
-  const encodedQuery = encodeURIComponent(query);
+  // encodeURIComponent encodes * as %2A which breaks PostgREST ilike wildcards
+  // Only encode the query term itself, keep * as literal
+  const encodedQuery = encodeURIComponent(query).replace(/%2A/gi, '*');
   const encodedCol = encodeURIComponent(column);
   const encodedSelect = encodeURIComponent(select);
   const url = `${SUPABASE_URL}/rest/v1/${table}?select=${encodedSelect}&${encodedCol}=ilike.*${encodedQuery}*&order=${orderCol}&limit=50`;
