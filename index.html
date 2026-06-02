@@ -543,11 +543,19 @@ html[data-theme="dark"] .qhist-lbl { color: #E8E4DC; }
   }
 
   /* ── Build chips HTML ── */
+  function xwebEsc(value) {
+    return String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
   function chip(cls, icon, label, url, fromLabel, fromIcon) {
-    return '<a class="xweb-chip ' + cls + '" href="' + url + '" '
-      + 'onclick="event.preventDefault();xnavGo('' + url.replace(/'/g,"\'") + '',''
-      + (fromLabel||'').replace(/'/g,"\'") + '','' + (fromIcon||'').replace(/'/g,"\'") + '')">'
-      + icon + ' ' + label + '</a>';
+    var args = JSON.stringify([url, fromLabel || '', fromIcon || '']).replace(/'/g, '&#39;');
+    return '<a class="xweb-chip ' + xwebEsc(cls) + '" href="' + xwebEsc(url) + '" '
+      + 'onclick="event.preventDefault();xnavGo.apply(null, ' + args + ')">'
+      + xwebEsc(icon + ' ' + label) + '</a>';
   }
 
   /* ══ MAIN: build cross-web for a sura:aya pair ══
@@ -658,8 +666,10 @@ html[data-theme="dark"] .qhist-lbl { color: #E8E4DC; }
     var h = getHist();
     if(!h.length){ el.innerHTML='<div class="qhist-empty">No history yet — start exploring!</div>'; return; }
     el.innerHTML = h.map(function(item){
-      return '<a class="qhist-item" href="'+esc(item.url)+'" onclick="event.preventDefault();qhistGo(''+esc(item.url)+'')">'
-        +'<span class="qhist-ico">'+(item.icon||'📄')+'</span>'
+      var safeUrl = esc(item.url);
+      var goArg = JSON.stringify(item.url || '').replace(/'/g, '&#39;');
+      return '<a class="qhist-item" href="'+safeUrl+'" onclick="event.preventDefault();qhistGo('+goArg+')">'
+        +'<span class="qhist-ico">'+esc(item.icon||'📄')+'</span>'
         +'<span class="qhist-body">'
         +'<div class="qhist-lbl">'+esc(item.label)+'</div>'
         +'<div class="qhist-sub">'+esc(item.sub)+'</div>'
@@ -1872,7 +1882,7 @@ async function loadSura(id) {
   document.getElementById('verseArea').innerHTML = `<div class="loading"><span class="spinner"></span>Loading verses...</div>`;
 
   try {
-    const [ayas, translitData] = await Promise.all([
+    const [ayas, translitData, arabicData] = await Promise.all([
       sbFetch('ayas', {
         select: 'sura_id,aya_number,arabic,aya_text,arabic_transliteration,arabic_warsh,arabic_qalun,arabic_duri,english,amharic,oromo,somali,german,urdu',
         sura_id: `eq.${id}`,
@@ -1881,13 +1891,21 @@ async function loadSura(id) {
       fetch(`https://api.alquran.cloud/v1/surah/${id}/en.transliteration`)
         .then(r => r.json())
         .then(d => d.data?.ayahs || [])
+        .catch(() => []),
+      fetch(`https://api.alquran.cloud/v1/surah/${id}/quran-uthmani`)
+        .then(r => r.json())
+        .then(d => d.data?.ayahs || [])
         .catch(() => [])
     ]);
-    // Merge transliteration into ayas
+    // Merge transliteration and verified Arabic into ayas.
+    // Important: never use English/Tigrinya translation as Arabic text.
     const translitMap = {};
+    const arabicMap = {};
     translitData.forEach(a => { translitMap[a.numberInSurah] = a.text || ''; });
+    arabicData.forEach(a => { arabicMap[a.numberInSurah] = a.text || ''; });
     ayas.forEach(a => {
       a.arabic_transliteration = translitMap[a.aya_number] || '';
+      a.verified_arabic = arabicMap[a.aya_number] || '';
       a.tigrinya = a.aya_text || '';
     });
     document.getElementById('topMeta').innerHTML = `<span>${info?.number_of_ayas || ayas.length} verses</span>`;
@@ -1899,17 +1917,38 @@ async function loadSura(id) {
   }
 }
 
+function containsArabicText(value) {
+  return /[؀-ۿ]/.test(String(value || ''));
+}
+
+function getSafeArabicText(aya) {
+  const candidates = [
+    aya.verified_arabic,
+    aya.arabic,
+    aya.arabic_text,
+    aya.text_arabic,
+    aya.uthmani,
+    aya.arabic_warsh,
+    aya.arabic_qalun,
+    aya.arabic_duri
+  ];
+  for (const value of candidates) {
+    if (containsArabicText(value)) return value;
+  }
+  return '';
+}
+
 function renderVerses(ayas, suraId) {
   const area = document.getElementById('verseArea');
   const bismillah = '';
   area.innerHTML = bismillah + ayas.map(aya => {
-    const arabic = aya.arabic || aya.aya_text || '';
+    const arabic = getSafeArabicText(aya);
     const english = aya.english || '';
     const tigrinya = aya.tigrinya || aya.aya_text || '';
     const amharic = aya.amharic || '';
     const oromo = aya.oromo || '';
     const somali = aya.somali || '';
-    const translit = aya.arabic_transliteration || transliterateArabic(aya.arabic || aya.aya_text || '');
+    const translit = aya.arabic_transliteration || transliterateArabic(arabic);
     return `
     <div class="verse-card" id="vc-${aya.aya_number}">
       <div class="verse-top" onclick="toggleVerse(${aya.aya_number}, ${suraId}, this)">
