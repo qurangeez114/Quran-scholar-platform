@@ -441,6 +441,76 @@ html[data-theme="dark"] .qhist-lbl { color: #E8E4DC; }
 .qhist-ago { font-family: 'Inconsolata',monospace; font-size: 10px; color: #C4B490; flex-shrink: 0; margin-top: 3px; }
 .qhist-empty { padding: 28px 16px; text-align: center; font-style: italic; color: #A89060; font-size: 15px; font-family: 'EB Garamond',serif; }
 
+.wbw-word {
+  /* Default: plain flowing text — no boxes, no borders */
+  display: inline;
+  cursor: pointer;
+  padding: 0 2px;
+  border-radius: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  transition: background 0.15s;
+}
+.wbw-word:hover, .wbw-word:active {
+  background: #FFF3CD;
+  border-radius: 4px;
+}
+/* Hide translit and english by default — only show in study mode */
+.wbw-translit,
+.wbw-english {
+  display: none;
+}
+.wbw-arabic {
+  font-family: 'Scheherazade New', 'Amiri', serif;
+  font-size: 26px;
+  color: #000000;
+  line-height: 1.9;
+  font-weight: 700;
+  white-space: nowrap;
+  display: inline;
+}
+/* ── STUDY MODE: restore full cards per-verse ── */
+.wbw-grid.study {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 10px 12px !important;
+  padding: 12px 6px 8px !important;
+  direction: rtl !important;
+  justify-content: center !important;
+}
+.wbw-grid.study .wbw-word {
+  display: inline-flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 5px !important;
+  cursor: pointer !important;
+  padding: 12px 10px !important;
+  border-radius: 12px !important;
+  border: 1.5px solid #CBD5E1 !important;
+  background: #FFFFFF !important;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.10) !important;
+  transition: all 0.15s !important;
+  min-width: 80px !important;
+  max-width: 140px !important;
+  min-height: 120px !important;
+}
+.wbw-grid.study .wbw-word:hover,
+.wbw-grid.study .wbw-word:active {
+  background: #EEF2F7 !important;
+  border-color: #3A5A7A !important;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.18) !important;
+  transform: translateY(-1px) !important;
+}
+.wbw-grid.study .wbw-arabic {
+  display: block !important;
+  font-size: 30px !important;
+  line-height: 1.7 !important;
+  white-space: nowrap !important;
+}
+.wbw-grid.study .wbw-translit {
+  display: 
 </style>
 <script>
 /* ═══════════════════════════════════════════════════════════
@@ -1149,6 +1219,126 @@ async function loadAIAnalysis(sura, aya) {
   } catch(e) { console.warn('loadAIAnalysis:', e); }
 }
 
+let wordStudySura = null;
+let wordStudyAya = null;
+
+function closeWordStudy() {
+  const overlay = document.getElementById('word-study-overlay');
+  if (!overlay) return;
+  overlay.classList.remove('ws-open');
+  setTimeout(() => { overlay.style.display = 'none'; }, 300);
+  document.querySelectorAll('.ws-highlighted').forEach(el => {
+    el.classList.remove('ws-highlighted');
+    el.style.background = '';
+    el.style.borderRadius = '';
+    el.style.outline = '';
+  });
+}
+
+async function openWordStudy(word, sura, aya) {
+  wordStudySura = sura;
+  wordStudyAya = aya;
+  const overlay = document.getElementById('word-study-overlay');
+  const wsWord = document.getElementById('ws-word');
+  const wsContent = document.getElementById('ws-content');
+  if (!overlay) return;
+
+  wsWord.textContent = word;
+  wsContent.innerHTML = '<div style="text-align:center;padding:20px;"><span class="spinner"></span></div>';
+  overlay.style.display = 'flex';
+  requestAnimationFrame(() => { requestAnimationFrame(() => overlay.classList.add('ws-open')); });
+
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_word_analysis`, {
+      method: 'POST',
+      headers: { ...HEADERS, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_sura: sura, p_aya: aya, p_word: word })
+    });
+    const rows = res.ok ? await res.json() : [];
+    const d = rows && rows.length > 0 ? rows[0] : null;
+
+    if (!d) {
+      wsContent.innerHTML = `<div style="color:#888;font-style:italic;">No analysis recorded for this word yet.</div>`;
+      return;
+    }
+
+    // Load root occurrences
+    let rootHtml = '';
+    if (d.root_word) {
+      const rRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_root_occurrences`, {
+        method: 'POST',
+        headers: { ...HEADERS, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ p_root: d.root_word })
+      });
+      const rRows = rRes.ok ? await rRes.json() : [];
+      if (rRows && rRows.length > 0) {
+        rootHtml = `
+          <div style="margin-top:4px;padding:12px;background:#FDF8EC;border:1px solid #E0C880;border-radius:8px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+              <div style="font-size:10px;font-weight:700;color:#7A5C10;text-transform:uppercase;letter-spacing:.1em;">Quran Occurrences</div>
+              <span style="font-size:12px;font-weight:700;color:#7A5C10;background:#FDF0D0;border:1px solid #C8A84C;padding:2px 8px;border-radius:10px;">${rRows.length} verses</span>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:5px;">
+              ${rRows.slice(0,12).map(r => `<span onclick="navToVerse(${r.sura_id},${r.aya_number});closeWordStudy()" style="font-size:11px;background:#fff;border:1px solid #C8A84C;color:#7A5C10;padding:3px 9px;border-radius:10px;cursor:pointer;font-family:'IBM Plex Mono',monospace;">${r.sura_id}:${r.aya_number}</span>`).join('')}
+              ${rRows.length > 12 ? `<button onclick="this.previousElementSibling && (this.previousElementSibling.style.display='flex');this.style.display='none'" style="font-size:11px;background:#C8A84C;border:none;color:#fff;padding:3px 9px;border-radius:10px;cursor:pointer;">+${rRows.length-12} more →</button>` : ''}
+            </div>
+          </div>`;
+      }
+    }
+
+    wsContent.innerHTML = `
+      ${d.root_word ? `<div style="margin-bottom:10px;"><span style="font-size:11px;color:#888;">Root: </span><span style="font-family:'Amiri',serif;font-size:18px;color:#c9a84c;direction:rtl;">${d.root_word}</span></div>` : ''}
+      ${d.part_of_speech ? `<div style="margin-bottom:6px;"><span style="font-size:11px;color:#888;">Part of Speech: </span><span style="font-size:12px;color:#ccc;">${d.part_of_speech}</span></div>` : ''}
+      ${d.original_meaning ? `
+        <div style="margin-bottom:8px;padding:8px 10px;background:#FDF8EC;border-left:3px solid #C8A84C;border-radius:0 4px 4px 0;">
+          <div style="font-size:10px;color:#888;margin-bottom:2px;">Original Meaning</div>
+          <div style="font-size:13px;color:#2A1A0A;line-height:1.6;">${d.original_meaning}</div>
+        </div>` : ''}
+      ${d.modern_meaning ? `
+        <div style="margin-bottom:8px;padding:8px 10px;background:#EEF5FA;border-left:3px solid #6A9FC9;border-radius:0 4px 4px 0;">
+          <div style="font-size:10px;color:#888;margin-bottom:2px;">Modern Meaning</div>
+          <div style="font-size:13px;color:#1A2A3A;line-height:1.6;">${d.modern_meaning}</div>
+        </div>` : ''}
+      ${d.meaning_evolution ? `
+        <div style="margin-bottom:8px;padding:8px 10px;background:#F5EEF8;border-left:3px solid #8A6AB8;border-radius:0 4px 4px 0;">
+          <div style="font-size:10px;color:#888;margin-bottom:2px;">Meaning Evolution</div>
+          <div style="font-size:12px;color:#2A1A3A;line-height:1.6;">${d.meaning_evolution}</div>
+        </div>` : ''}
+      ${d.scholarly_explanation ? `
+        <div style="margin-bottom:8px;">
+          <div style="font-size:10px;color:#888;margin-bottom:3px;">Scholarly Notes</div>
+          <div style="font-size:12px;color:#333;line-height:1.65;">${d.scholarly_explanation}</div>
+        </div>` : ''}
+      ${d.lexicon_sources ? `<div style="font-size:11px;color:#888;margin-top:6px;border-top:1px solid #E8D8B8;padding-top:6px;">Sources: ${d.lexicon_sources}</div>` : ''}
+      ${rootHtml}`;
+  } catch(e) {
+    wsContent.innerHTML = `<div style="color:#c97a7a;font-size:13px;">Error: ${e.message}</div>`;
+  }
+}
+
+// Make Arabic words in verse cards tappable
+function makeWordsTappable(container, sura, aya) {
+  const arabicDivs = container.querySelectorAll('.lang-arabic [lang="ar"], .arabic-text, .aya-arabic, .word-arabic');
+  arabicDivs.forEach(div => {
+    if (div.dataset.wordTap) return;
+    div.dataset.wordTap = '1';
+    // Wrap individual words
+    const text = div.textContent;
+    const words = text.split(/\s+/).filter(w => w.trim());
+    if (words.length > 1) {
+      div.innerHTML = words.map(w =>
+        `<span onclick="openWordStudy('${w.replace(/'/g,"\'")}',${sura},${aya})" style="cursor:pointer;border-radius:3px;transition:background .15s;display:inline;" onmouseover="this.style.background='rgba(201,168,76,0.15)'" onmouseout="this.style.background=''">${w}</span>`
+      ).join(' ');
+    } else {
+      div.style.cursor = 'pointer';
+      div.onclick = () => openWordStudy(text.trim(), sura, aya);
+    }
+  });
+}
+
+// ============================================================
+// RESEARCH DEPTH BADGE
+// ============================================================
 function escapeHtml(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -1503,14 +1693,16 @@ function renderVerses(ayas, suraId) {
       <div class="verse-detail">
         <div class="tab-bar">
           <div id="depth-badge-${aya.aya_number}" style="display:none;padding:2px 8px;background:#FDF5DE;border:1px solid #E8C97B;border-radius:10px;font-size:10px;color:#B8902A;font-weight:700;margin-bottom:6px;cursor:pointer;" title="Research depth" onclick="showDepthDetail(${aya.aya_number})"></div>
-          <button class="tab-btn active" onclick="switchTab(${aya.aya_number},'details',this)">Summary</button>
-          <button class="tab-btn" id="tafsir-tab-${aya.aya_number}" onclick="switchTab(${aya.aya_number},'tafsir',this)">Tafsir</button>
-          <button class="tab-btn" id="asbab-tab-${aya.aya_number}" onclick="switchTab(${aya.aya_number},'asbab',this)">Asbāb</button>
-          <button class="tab-btn" id="hadith-tab-${aya.aya_number}" onclick="switchTab(${aya.aya_number},'hadith',this)">Hadith</button>
-          <button class="tab-btn" onclick="switchTab(${aya.aya_number},'riwayat',this)">Riwayat</button>
-          <button class="tab-btn" id="xref-tab-${aya.aya_number}" onclick="switchTab(${aya.aya_number},'xrefs',this)">Cross-Refs</button>
+          <button class="tab-btn active" onclick="switchTab(${aya.aya_number},'details',this)">📋 Summary</button>
+          <button class="tab-btn" id="tafsir-tab-${aya.aya_number}" onclick="switchTab(${aya.aya_number},'tafsir',this)">📚 Tafsir</button>
+          <button class="tab-btn" id="asbab-tab-${aya.aya_number}" onclick="switchTab(${aya.aya_number},'asbab',this)">🕰 Asbāb</button>
+          <button class="tab-btn" id="hadith-tab-${aya.aya_number}" onclick="switchTab(${aya.aya_number},'hadith',this)">📿 Hadith</button>
+          <button class="tab-btn" onclick="switchTab(${aya.aya_number},'riwayat',this);loadQiraatPanel(${suraId},${aya.aya_number})">📖 Riwayat</button>
+          <button class="tab-btn" id="xref-tab-${aya.aya_number}" onclick="switchTab(${aya.aya_number},'xrefs',this)">🔗 Cross-Refs</button>
           <button class="tab-btn" onclick="switchTab(${aya.aya_number},'audio',this);initAudioPanel(${aya.aya_number},${suraId})">🎧 Audio</button>
-          <button class="tab-btn" onclick="switchTab(${aya.aya_number},'ai',this)">AI Analysis</button>
+          <button class="tab-btn" id="fiqh-tab-${aya.aya_number}" onclick="switchTab(${aya.aya_number},'fiqh',this);loadFiqhPanel(${aya.aya_number},${suraId})">⚖️ Fiqh</button>
+          <button class="tab-btn" id="ancient-tab-${aya.aya_number}" onclick="switchTab(${aya.aya_number},'ancient',this);loadAncientPanel(${aya.aya_number},${suraId})">🏛 Sources</button>
+          <button class="tab-btn" onclick="switchTab(${aya.aya_number},'ai',this);generateStructuredAnalysis(${suraId},${aya.aya_number},english,arabic)">🧠 Analysis</button>
         </div>
         <div class="tab-panel active" id="tp-${aya.aya_number}-details">
           <div class="loading" style="padding:20px;font-size:13px">Loading summary...</div>
@@ -1526,6 +1718,16 @@ function renderVerses(ayas, suraId) {
         </div>
         <div class="tab-panel" id="tp-${aya.aya_number}-riwayat">
           ${buildRiwayatPanel(aya)}
+        </div>
+        <div class="tab-panel" id="tp-${aya.aya_number}-fiqh">
+          <div id="fiqh-panel-${aya.aya_number}" style="padding:14px 16px;">
+            <div style="color:#BBB;font-style:italic;font-size:13px;">Loading Fiqh rulings...</div>
+          </div>
+        </div>
+        <div class="tab-panel" id="tp-${aya.aya_number}-ancient">
+          <div id="ancient-panel-${aya.aya_number}" style="padding:14px 16px;">
+            <div style="color:#BBB;font-style:italic;font-size:13px;">Loading ancient sources...</div>
+          </div>
         </div>
         <div class="tab-panel" id="tp-${aya.aya_number}-xrefs">
           <div class="loading" style="padding:20px;font-size:13px"><span class="spinner"></span>Loading cross-references...</div>
@@ -1648,6 +1850,8 @@ async function toggleVerse(num, suraId, el) {
 
   // Load tafsir (table first, AI fallback)
   loadTafsirPanel(suraId, num);
+  // Load Fiqh rulings
+  loadFiqhPanel(num, suraId);
   // Load asbab al-nuzul
   loadAsbabPanel(suraId, num);
   // Load hadith connections
