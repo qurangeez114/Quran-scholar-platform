@@ -367,7 +367,22 @@ function renderVerses() {
 
 function rerenderVerses() {
   if (VERSES.length) renderVerses();
-  if (CONTRADICTIONS.length) renderContradictions();
+  // Always re-render contradictions when language changes
+  // so the side-by-side panels reflect the selected languages
+  const contBox = document.getElementById('contradiction-container');
+  if (contBox && VERSES.length) {
+    if (CONTRADICTIONS.length) {
+      renderContradictions();
+    } else {
+      // Re-render the pairs-from-verses section
+      const warning = contBox.querySelector('div[style*="FFF8DC"]');
+      const warningHtml = warning ? warning.outerHTML : '';
+      contBox.innerHTML = '<div style="padding:14px 0;">'
+        + warningHtml
+        + renderContradictionPairsFromVerses()
+        + '</div>';
+    }
+  }
 }
 
 // ── LOAD HADITH ──────────────────────────────────────────────────────
@@ -567,8 +582,12 @@ function renderContradictionSide(v, label, isA) {
   return '<div style="border:1.5px solid '+(isA?'#1A6FA8':'#C0392B')+';border-radius:8px;overflow:hidden;">'
     + '<div class="side-label '+cls+'">'+v.sura_id+':'+v.aya_number+'</div>'
     + '<div style="padding:8px;">'
-      + (L.ar && v.arabic ? '<div style="font-family:Amiri,serif;font-size:16px;direction:rtl;text-align:right;line-height:1.8;margin-bottom:6px;">'+esc(v.arabic)+'</div>' : '')
-      + (L.en && v.english ? '<div style="font-size:12px;color:#444;line-height:1.6;font-style:italic;">'+esc(v.english)+'</div>' : '')
+      + (L.ar && v.arabic   ? '<div style="font-family:Amiri,serif;font-size:16px;direction:rtl;text-align:right;line-height:1.8;margin-bottom:6px;">'+esc(v.arabic)+'</div>' : '')
+      + (L.en && v.english  ? '<div style="font-size:12px;color:#444;line-height:1.6;font-style:italic;margin-bottom:4px;">'+esc(v.english)+'</div>' : '')
+      + (L.ti && v.aya_text ? '<div style="font-size:14px;font-weight:700;color:#000;line-height:1.8;text-shadow:-1px -1px 0 #fff,1px -1px 0 #fff,-1px 1px 0 #fff,1px 1px 0 #fff;margin-bottom:4px;">'+esc(v.aya_text)+'</div>' : '')
+      + (L.am && v.amharic  ? '<div style="font-size:13px;color:#333;line-height:1.8;margin-bottom:4px;">'+esc(v.amharic)+'</div>' : '')
+      + (L.or && v.oromo    ? '<div style="font-size:12px;color:#555;line-height:1.7;margin-bottom:4px;">'+esc(v.oromo)+'</div>' : '')
+      + (L.so && v.somali   ? '<div style="font-size:12px;color:#555;line-height:1.7;">'+esc(v.somali)+'</div>' : '')
     + '</div>'
     + '</div>';
 }
@@ -588,8 +607,14 @@ function renderContradictions() {
           + '<div style="font-size:11px;color:#888;">'+c.sura+':'+c.aya+' · '+esc(c.category||'')+'</div>'
         + '</div>'
         + '<div style="padding:10px 14px;">'
-          + (v && v.arabic ? '<div style="font-family:Amiri,serif;font-size:18px;direction:rtl;text-align:right;line-height:1.8;margin-bottom:6px;">'+esc(v.arabic)+'</div>' : '')
-          + (v && v.english ? '<div style="font-size:12px;color:#444;font-style:italic;margin-bottom:8px;">'+esc(v.english)+'</div>' : '')
+          + (function(){ const L=getLang(); return ''
+            + (L.ar && v && v.arabic   ? '<div style="font-family:Amiri,serif;font-size:18px;direction:rtl;text-align:right;line-height:1.8;margin-bottom:6px;">'+esc(v.arabic)+'</div>' : '')
+            + (L.en && v && v.english  ? '<div style="font-size:12px;color:#444;font-style:italic;margin-bottom:6px;">'+esc(v.english)+'</div>' : '')
+            + (L.ti && v && v.aya_text ? '<div style="font-size:14px;font-weight:700;color:#000;line-height:1.8;text-shadow:-1px -1px 0 #fff,1px -1px 0 #fff,-1px 1px 0 #fff,1px 1px 0 #fff;margin-bottom:4px;">'+esc(v.aya_text)+'</div>' : '')
+            + (L.am && v && v.amharic  ? '<div style="font-size:13px;color:#333;line-height:1.8;margin-bottom:4px;">'+esc(v.amharic)+'</div>' : '')
+            + (L.or && v && v.oromo    ? '<div style="font-size:12px;color:#555;line-height:1.7;margin-bottom:4px;">'+esc(v.oromo)+'</div>' : '')
+            + (L.so && v && v.somali   ? '<div style="font-size:12px;color:#555;line-height:1.7;">'+esc(v.somali)+'</div>' : '');
+          })()
           + (c.claim ? '<div style="background:#FFF0F0;border-left:3px solid #C0392B;padding:6px 10px;font-size:12px;color:#C0392B;margin-bottom:6px;border-radius:0 6px 6px 0;">⚡ Claim: '+esc(c.claim)+'</div>' : '')
           + (c.reconciliation ? '<div style="background:#F0FFF4;border-left:3px solid #2E7D32;padding:6px 10px;font-size:12px;color:#2E7D32;border-radius:0 6px 6px 0;">🛡 Reconciliation: '+esc(c.reconciliation)+'</div>' : '')
         + '</div>'
@@ -679,6 +704,19 @@ function switchTab(id, btn) {
   document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
   btn.classList.add('active');
   document.getElementById('tab-' + id).classList.add('active');
+  // Re-render language-sensitive content when switching tabs
+  if (id === 'contradiction' && VERSES.length) {
+    if (CONTRADICTIONS.length) renderContradictions();
+    else {
+      const contBox = document.getElementById('contradiction-container');
+      if (contBox && !contBox.querySelector('.contradiction-pair')) {
+        const warning = contBox.querySelector('div[style*="FFF8DC"]');
+        const wHtml = warning ? warning.outerHTML : '';
+        contBox.innerHTML = '<div style="padding:14px 0;">' + wHtml + renderContradictionPairsFromVerses() + '</div>';
+      }
+    }
+  }
+  if (id === 'verses' && VERSES.length) renderVerses();
 }
 
 // ── VERSE ACTIONS ─────────────────────────────────────────────────────
