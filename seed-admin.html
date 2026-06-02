@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Theme Seeder — Quran Scholar Admin</title>
+<style>
+body{font-family:monospace;background:#0f0f0f;color:#00ff41;padding:20px;max-width:800px;margin:0 auto;}
+h1{color:#E8C97B;font-size:18px;}
+.progress{background:#1a1a1a;border:1px solid #333;border-radius:8px;padding:14px;margin-bottom:12px;}
+.bar-wrap{background:#222;border-radius:4px;height:20px;margin:8px 0;overflow:hidden;}
+.bar{background:linear-gradient(90deg,#B8902A,#E8C97B);height:100%;transition:width 0.3s;border-radius:4px;}
+button{background:#B8902A;color:#fff;border:none;padding:10px 20px;border-radius:8px;font-size:14px;cursor:pointer;font-weight:700;margin:4px;}
+button:disabled{background:#444;cursor:not-allowed;}
+.log{background:#111;border:1px solid #333;border-radius:8px;padding:12px;height:350px;overflow-y:auto;font-size:11px;line-height:1.6;}
+.ok{color:#00ff41;}.err{color:#ff4444;}.info{color:#E8C97B;}
+#status{font-size:16px;font-weight:700;color:#E8C97B;margin:10px 0;}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0;}
+.stat{background:#1a1a1a;border:1px solid #333;border-radius:6px;padding:8px;text-align:center;}
+.stat-n{font-size:22px;font-weight:700;color:#E8C97B;}
+.stat-l{font-size:10px;color:#888;}
+</style>
+</head>
+<body>
+<h1>📖 Quran Theme Seeder</h1>
+<p style="color:#888;font-size:12px;">Classifies all 6,211 Quran verses into themes using AI. One sura at a time.</p>
+
+<div class="stats">
+  <div class="stat"><div class="stat-n" id="sn-done">0</div><div class="stat-l">Suras Done</div></div>
+  <div class="stat"><div class="stat-n" id="sn-verses">0</div><div class="stat-l">Assignments Added</div></div>
+  <div class="stat"><div class="stat-n" id="sn-total">6,211</div><div class="stat-l">Total Verses</div></div>
+</div>
+
+<div class="progress">
+  <div>Progress: <span id="pct">0%</span> &mdash; Sura <span id="cur-sura">0</span>/114</div>
+  <div class="bar-wrap"><div class="bar" id="prog-bar" style="width:0%"></div></div>
+</div>
+
+<div id="status">Ready</div>
+
+<div>
+  <button onclick="startSeed()" id="btn-start">&#9654; Start Seeding All 114 Suras</button>
+  <button onclick="stopSeed()" id="btn-stop" disabled>&#9632; Stop</button>
+  <button onclick="clearLog()" style="background:#333;">Clear Log</button>
+</div>
+
+<div style="margin:10px 0;font-size:11px;color:#888;">
+  Start from sura:
+  <input id="start-sura" type="number" min="1" max="114" value="1"
+    style="background:#222;color:#fff;border:1px solid #444;padding:4px 6px;width:60px;border-radius:4px;">
+</div>
+
+<div class="log" id="log"></div>
+
+<script>
+let running = false;
+let surasDone = 0;
+let versesAdded = 0;
+
+function log(msg, cls) {
+  const el = document.getElementById('log');
+  const d = document.createElement('div');
+  d.className = cls || 'ok';
+  d.textContent = new Date().toLocaleTimeString() + '  ' + msg;
+  el.appendChild(d);
+  el.scrollTop = el.scrollHeight;
+}
+
+function clearLog() { document.getElementById('log').innerHTML = ''; }
+
+function updateStats(sura) {
+  document.getElementById('sn-done').textContent = surasDone;
+  document.getElementById('sn-verses').textContent = versesAdded;
+  document.getElementById('cur-sura').textContent = sura;
+  const pct = Math.round((sura / 114) * 100);
+  document.getElementById('pct').textContent = pct + '%';
+  document.getElementById('prog-bar').style.width = pct + '%';
+}
+
+async function seedSura(sura) {
+  const res = await fetch('/.netlify/functions/seed-themes', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sura })
+  });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  return res.json();
+}
+
+async function startSeed() {
+  running = true;
+  surasDone = 0; versesAdded = 0;
+  document.getElementById('btn-start').disabled = true;
+  document.getElementById('btn-stop').disabled = false;
+
+  const startSura = parseInt(document.getElementById('start-sura').value) || 1;
+  log('Starting from Sura ' + startSura, 'info');
+
+  for (let sura = startSura; sura <= 114 && running; sura++) {
+    document.getElementById('status').textContent = 'Processing Sura ' + sura + '/114...';
+    log('Sura ' + sura + ': classifying...', 'info');
+    try {
+      const r = await seedSura(sura);
+      surasDone++;
+      if (r.status === 'already_complete') {
+        log('Sura ' + sura + ': already complete (' + r.total + ' verses)');
+      } else if (r.status === 'done') {
+        versesAdded += r.inserted || 0;
+        log('Sura ' + sura + ': ' + r.unthemed + ' unthemed → ' + r.inserted + ' theme assignments added');
+      } else {
+        log('Sura ' + sura + ': ' + JSON.stringify(r), 'err');
+      }
+    } catch(e) {
+      log('Sura ' + sura + ' ERROR: ' + e.message, 'err');
+    }
+    updateStats(sura);
+    await new Promise(resolve => setTimeout(resolve, 800));
+  }
+
+  running = false;
+  document.getElementById('btn-start').disabled = false;
+  document.getElementById('btn-stop').disabled = true;
+  document.getElementById('status').textContent = '✅ Complete! ' + versesAdded + ' theme assignments added.';
+  log('Done!', 'info');
+}
+
+function stopSeed() {
+  running = false;
+  document.getElementById('status').textContent = 'Stopped';
+  document.getElementById('btn-start').disabled = false;
+  document.getElementById('btn-stop').disabled = true;
+  log('Stopped by user.', 'err');
+}
+</script>
+</body>
+</html>
