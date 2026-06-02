@@ -1430,22 +1430,63 @@ async function toggleVerse(num, suraId, el) {
   const xrefTab = document.getElementById(`xref-tab-${num}`);
   if (xrefPanel.querySelector('.loading')) {
     try {
+      // Fetch direct cross-references
       const refs = await sbFetch('cross_references', {
         select: 'ref_surah,ref_ayah_start,ref_ayah_end',
         source_surah: `eq.${suraId}`,
         source_ayah: `eq.${num}`
       });
-      if (xrefTab) xrefTab.textContent = `Cross-Refs (${refs.length})`;
-      if (refs.length > 0) {
-        xrefPanel.innerHTML = `<div class="xref-grid">${refs.map(r => {
-          const label = r.ref_ayah_start === r.ref_ayah_end
-            ? `${r.ref_surah}:${r.ref_ayah_start}`
-            : `${r.ref_surah}:${r.ref_ayah_start}–${r.ref_ayah_end}`;
-          return `<div class="xref-card" onclick="navToVerse(${r.ref_surah}, ${r.ref_ayah_start})">
-            <div class="xref-ref">${label}</div>
-            <div class="xref-theme">Surah ${r.ref_surah}, Ayah ${r.ref_ayah_start}</div>
-          </div>`;
-        }).join('')}</div>`;
+      // Fetch thematic cross-references (verses sharing same themes)
+      const themeRows = await sbFetch('thematic_cross_references', {
+        select: 'theme,sura,aya',
+        sura: `eq.${suraId}`,
+        aya: `eq.${num}`
+      });
+      const themes = [...new Set(themeRows.map(r => r.theme))];
+      let thematicRefs = [];
+      if (themes.length) {
+        const allThematic = await Promise.all(themes.map(t =>
+          sbFetch('thematic_cross_references', {
+            select: 'theme,sura,aya',
+            theme: `eq.${t}`
+          })
+        ));
+        thematicRefs = allThematic.flat().filter(r => !(r.sura === suraId && r.aya === num));
+      }
+      const total = refs.length + thematicRefs.length;
+      if (xrefTab) xrefTab.textContent = `Cross-Refs (${total})`;
+      if (total > 0) {
+        let html = '';
+        // Direct refs section
+        if (refs.length) {
+          html += `<div style="font-size:11px;font-weight:700;color:#B8902A;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Direct Cross-References (${refs.length})</div>`;
+          html += `<div class="xref-grid">${refs.map(r => {
+            const label = r.ref_ayah_start === r.ref_ayah_end || !r.ref_ayah_end
+              ? `${r.ref_surah}:${r.ref_ayah_start}`
+              : `${r.ref_surah}:${r.ref_ayah_start}–${r.ref_ayah_end}`;
+            return `<div class="xref-card" onclick="navToVerse(${r.ref_surah}, ${r.ref_ayah_start})">
+              <div class="xref-ref">${label}</div>
+              <div class="xref-theme">Surah ${r.ref_surah}</div>
+            </div>`;
+          }).join('')}</div>`;
+        }
+        // Thematic refs grouped by theme
+        if (thematicRefs.length) {
+          const byTheme = {};
+          thematicRefs.forEach(r => { if(!byTheme[r.theme]) byTheme[r.theme]=[]; byTheme[r.theme].push(r); });
+          Object.entries(byTheme).forEach(([theme, verses]) => {
+            html += `<div style="margin-top:14px;">
+              <div style="font-size:11px;font-weight:700;color:#5A7080;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;border-top:1px solid #E8E4DC;padding-top:8px;">🗂 Theme: ${escapeHtml(theme)} (${verses.length} verses)</div>
+              <div class="xref-grid">${verses.map(r =>
+                `<div class="xref-card" onclick="navToVerse(${r.sura}, ${r.aya})">
+                  <div class="xref-ref">${r.sura}:${r.aya}</div>
+                  <div class="xref-theme">Surah ${r.sura}</div>
+                </div>`
+              ).join('')}</div>
+            </div>`;
+          });
+        }
+        xrefPanel.innerHTML = html;
       } else {
         xrefPanel.innerHTML = `<div style="color:#BBB;font-style:italic;font-size:13px;padding:20px;text-align:center">No cross-references for this verse.</div>`;
       }
@@ -2343,13 +2384,21 @@ function buildAIPanel(num, arabic, english, tigrinya) {
   if (!verseChats[num]) verseChats[num] = [];
   return `<div class="ai-box">
     <div style="font-size:12px;color:#6B5A3E;margin-bottom:8px;font-style:italic;font-weight:600">Chat with AI about this verse — ask follow-up questions</div>
+    <div style="margin-bottom:8px;">
+      <button onclick="generateFullResearchReport(${num})" style="width:100%;padding:9px;background:linear-gradient(135deg,#B8902A,#D4A830);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;letter-spacing:0.3px;">📊 Generate Full Research Report</button>
+    </div>
     <div class="ai-presets">
-      <button class="ai-preset" onclick="sendChat(${num},'Analyze the rhetorical devices in this verse')">Rhetorical devices</button>
-      <button class="ai-preset" onclick="sendChat(${num},'Explain the root word meanings')">Root meanings</button>
-      <button class="ai-preset" onclick="sendChat(${num},'Compare Sunni and Shia interpretations')">Sunni vs Shia</button>
-      <button class="ai-preset" onclick="sendChat(${num},'What are the pre-Islamic origins of key words?')">Pre-Islamic origins</button>
-      <button class="ai-preset" onclick="sendChat(${num},'Explain the grammatical structure (I\'rab)')">Grammar</button>
-      <button class="ai-preset" onclick="sendChat(${num},'What Hadith are connected to this verse?')">Related Hadith</button>
+      <button class="ai-preset" onclick="sendChat(${num},'Give a scholarly summary of this verse including classical and modern interpretations')">Summary</button>
+      <button class="ai-preset" onclick="sendChat(${num},'Provide classical tafsir interpretation from Ibn Kathir, Al-Tabari, and Al-Qurtubi')">Classical Tafsir</button>
+      <button class="ai-preset" onclick="sendChat(${num},'Analyze the linguistic and grammatical structure: root words, morphology, and I\'rab')">Linguistic Analysis</button>
+      <button class="ai-preset" onclick="sendChat(${num},'What Hadith are connected to this verse? Include narrator chains')">Hadith Connections</button>
+      <button class="ai-preset" onclick="sendChat(${num},'What Sira events and historical context relate to this verse?')">Sira Context</button>
+      <button class="ai-preset" onclick="sendChat(${num},'Compare Hanafi, Maliki, Shafii, Hanbali, and Jafari positions on this verse')">Madhhab Positions</button>
+      <button class="ai-preset" onclick="sendChat(${num},'Explain the Qira\'at variants for this verse and their theological implications')">Qira\'at Variants</button>
+      <button class="ai-preset" onclick="sendChat(${num},'What external historical sources — Jewish, Christian, Syriac — relate to this verse?')">Historical Sources</button>
+      <button class="ai-preset" onclick="sendChat(${num},'What contradiction claims exist about this verse and how do Muslim scholars respond?')">Contradiction Analysis</button>
+      <button class="ai-preset" onclick="sendChat(${num},'Provide academic observations about this verse from non-Muslim scholarship')">Academic View</button>
+      <button class="ai-preset" onclick="sendChat(${num},'Suggest 5 research questions a scholar should investigate about this verse')">Research Questions</button>
     </div>
     <div id="chat-messages-${num}" style="max-height:320px;overflow-y:auto;margin-bottom:10px;display:flex;flex-direction:column;gap:8px;"></div>
     <div class="ai-input-row">
@@ -2379,6 +2428,83 @@ function renderChatMessages(num) {
     </div>`;
   }).join('');
   container.scrollTop = container.scrollHeight;
+}
+
+
+async function generateFullResearchReport(num) {
+  const card = document.getElementById('vc-' + num);
+  const arabic  = card?.querySelector('.verse-arabic')?.innerText?.trim() || '';
+  const english = card?.querySelector('.verse-english')?.innerText?.trim() || '';
+  const tigrinya= card?.querySelector('.verse-tigrinya')?.innerText?.trim() || '';
+  const prompt = `Generate a comprehensive scholarly research report for Sura ${currentSura}, Verse ${num}.
+
+Arabic: ${arabic}
+English: ${english}
+${tigrinya ? 'Tigrinya: '+tigrinya : ''}
+
+Structure your report with these exact sections:
+
+## 1. Summary
+## 2. Classical Interpretation (Ibn Kathir, Al-Tabari, Al-Qurtubi)
+## 3. Linguistic Analysis (root words, morphology, grammar)
+## 4. Cross-References (related Quranic verses)
+## 5. Hadith Connections (relevant hadiths with narrators)
+## 6. Sira Context (prophetic biography connection)
+## 7. Madhhab Positions (Hanafi, Maliki, Shafi'i, Hanbali, Ja'fari)
+## 8. Qira'at Variants (different readings and their impact)
+## 9. External Historical Sources (Jewish, Christian, Syriac parallels)
+## 10. Contradiction Claims (what critics say)
+## 11. Muslim Responses (scholarly rebuttals)
+## 12. Academic Observations (non-Muslim scholarship)
+## 13. Research Questions (5 questions for further study)
+
+Be detailed and scholarly. Use actual historical sources where known.`;
+
+  if (!verseChats[num]) verseChats[num] = [];
+  verseChats[num].push({ role: 'user', content: '📊 Generate Full Research Report' });
+  renderChatMessages(num);
+  const btn = card?.querySelector('[onclick="generateFullResearchReport(' + num + ')"]');
+  if (btn) { btn.textContent = '⏳ Generating...'; btn.disabled = true; }
+  await sendChatWithPrompt(num, prompt);
+  if (btn) { btn.textContent = '📊 Generate Full Research Report'; btn.disabled = false; }
+}
+
+async function sendChatWithPrompt(num, fullPrompt) {
+  const btn = document.getElementById('ai-btn-' + num);
+  if (btn) btn.disabled = true;
+  const card = document.getElementById('vc-' + num);
+  const container = document.getElementById('chat-messages-' + num);
+  if (container) {
+    const loading = document.createElement('div');
+    loading.id = 'chat-loading-' + num;
+    loading.style.cssText = 'display:flex;justify-content:flex-start;';
+    loading.innerHTML = '<div style="padding:10px 14px;background:#F5F3EC;border-radius:16px 16px 16px 4px;border:2px solid #D4C9A8;"><span class="spinner"></span></div>';
+    container.appendChild(loading);
+    container.scrollTop = container.scrollHeight;
+  }
+  try {
+    const res = await fetch('/.netlify/functions/claude-proxy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 4000,
+        messages: [{ role: 'user', content: fullPrompt }]
+      })
+    });
+    const data = await res.json();
+    const reply = data?.content?.[0]?.text || 'No response.';
+    document.getElementById('chat-loading-' + num)?.remove();
+    if (!verseChats[num]) verseChats[num] = [];
+    verseChats[num].push({ role: 'assistant', content: reply });
+    renderChatMessages(num);
+  } catch(e) {
+    document.getElementById('chat-loading-' + num)?.remove();
+    if (!verseChats[num]) verseChats[num] = [];
+    verseChats[num].push({ role: 'assistant', content: 'Error: ' + e.message });
+    renderChatMessages(num);
+  }
+  if (btn) btn.disabled = false;
 }
 
 function clearChat(num) {
