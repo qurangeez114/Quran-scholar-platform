@@ -1568,91 +1568,35 @@ async function toggleVerse(num, suraId, el) {
       if (xrefTab) xrefTab.textContent = `Cross-Refs (${total})`;
       if (total > 0) {
         let html = '';
-
-        // ── Fetch verse texts for all refs ─────────────────────────
-        const allRefKeys = [
-          ...refs.map(r => ({ sura: r.ref_surah, aya: r.ref_ayah_start })),
-          ...thematicRefs.map(r => ({ sura: r.sura, aya: r.aya }))
-        ];
-        const verseTexts = {};
-        await Promise.all(allRefKeys.map(async ({sura: rs, aya: ra}) => {
-          const key = `${rs}:${ra}`;
-          if (verseTexts[key]) return;
-          try {
-            const rows = await sbFetch('ayas', {
-              select: 'arabic,english,aya_text',
-              sura_id: `eq.${rs}`,
-              aya_number: `eq.${ra}`
-            });
-            verseTexts[key] = rows[0] || {};
-          } catch(e) { verseTexts[key] = {}; }
-        }));
-
-        // Also fetch source verse for AI context
-        const sourceVerseRows = await sbFetch('ayas', {
-          select: 'arabic,english',
-          sura_id: `eq.${suraId}`,
-          aya_number: `eq.${num}`
-        });
-        const sourceVerse = sourceVerseRows[0] || {};
-
-        // Store for AI analysis
-        window[\`xrefData_\${suraId}_\${num}\`] = {
-          source: { sura: suraId, aya: num, arabic: sourceVerse.arabic || '', english: sourceVerse.english || '' },
-          refs: allRefKeys.slice(0, 10).map(({sura: rs, aya: ra}) => {
-            const v = verseTexts[\`\${rs}:\${ra}\`] || {};
-            return { sura: rs, aya: ra, arabic: v.arabic || '', english: v.english || '' };
-          })
-        };
-
-        function makeXrefCard(sura, aya, theme) {
-          const key = `\${sura}:\${aya}`;
-          const v = verseTexts[key] || {};
-          const suraInfo = allSuras.find(s => (s.sura_id||s.id) === sura);
-          const suraName = suraInfo?.sura_name_english || suraInfo?.sura_name_translated || '';
-          return `<div class="xref-card" style="display:block;padding:12px;margin-bottom:8px;border-radius:10px;">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-              <div style="font-weight:800;font-size:14px;color:#B8902A;">\${sura}:\${aya}</div>
-              <div style="display:flex;gap:6px;">
-                <button onclick="navToVerse(\${sura},\${aya})" style="font-size:11px;padding:3px 10px;background:#B8902A;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:700;">Open ↗</button>
-              </div>
-            </div>
-            \${suraName ? `<div style="font-size:11px;color:#7A8FA6;margin-bottom:6px;">Surah \${sura} · \${escapeHtml(suraName)}\${theme?' · '+escapeHtml(theme):''}</div>` : ''}
-            \${v.arabic ? `<div style="font-family:'Amiri',serif;font-size:18px;direction:rtl;text-align:right;line-height:1.8;color:#1a1a1a;border-bottom:1px solid #E8E4DC;margin-bottom:6px;padding-bottom:6px;">\${v.arabic}</div>` : ''}
-            \${v.english ? `<div style="font-size:12px;color:#444;line-height:1.6;font-style:italic;">\${v.english.slice(0,160)}\${v.english.length>160?'…':''}</div>` : ''}
-          </div>`;
-        }
-
-        // Direct refs
+        // Direct refs section
         if (refs.length) {
-          html += `<div style="font-size:11px;font-weight:800;color:#B8902A;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid #E8C97B;">📎 Direct Cross-References (\${refs.length})</div>`;
-          refs.forEach(r => { html += makeXrefCard(r.ref_surah, r.ref_ayah_start, null); });
+          html += `<div style="font-size:11px;font-weight:700;color:#B8902A;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Direct Cross-References (${refs.length})</div>`;
+          html += `<div class="xref-grid">${refs.map(r => {
+            const label = r.ref_ayah_start === r.ref_ayah_end || !r.ref_ayah_end
+              ? `${r.ref_surah}:${r.ref_ayah_start}`
+              : `${r.ref_surah}:${r.ref_ayah_start}–${r.ref_ayah_end}`;
+            return `<div class="xref-card" onclick="navToVerse(${r.ref_surah}, ${r.ref_ayah_start})">
+              <div class="xref-ref">${label}</div>
+              <div class="xref-theme">Surah ${r.ref_surah}</div>
+            </div>`;
+          }).join('')}</div>`;
         }
-
         // Thematic refs grouped by theme
         if (thematicRefs.length) {
           const byTheme = {};
           thematicRefs.forEach(r => { if(!byTheme[r.theme]) byTheme[r.theme]=[]; byTheme[r.theme].push(r); });
           Object.entries(byTheme).forEach(([theme, verses]) => {
-            html += `<div style="margin-top:16px;border-top:2px solid #E8E4DC;padding-top:12px;">
-              <div style="font-size:11px;font-weight:800;color:#5A7080;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;">🗂 Theme: \${escapeHtml(theme)} (\${verses.length} verses)</div>`;
-            verses.slice(0,8).forEach(r => { html += makeXrefCard(r.sura, r.aya, null); });
-            if (verses.length > 8) html += `<div style="font-size:12px;color:#AAA;text-align:center;padding:8px;">+\${verses.length-8} more verses in this theme</div>`;
-            html += `</div>`;
+            html += `<div style="margin-top:14px;">
+              <div style="font-size:11px;font-weight:700;color:#5A7080;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;border-top:1px solid #E8E4DC;padding-top:8px;">🗂 Theme: ${escapeHtml(theme)} (${verses.length} verses)</div>
+              <div class="xref-grid">${verses.map(r =>
+                `<div class="xref-card" onclick="navToVerse(${r.sura}, ${r.aya})">
+                  <div class="xref-ref">${r.sura}:${r.aya}</div>
+                  <div class="xref-theme">Surah ${r.sura}</div>
+                </div>`
+              ).join('')}</div>
+            </div>`;
           });
         }
-
-        // AI Analysis buttons
-        html += `<div style="margin-top:18px;background:linear-gradient(135deg,#FDFAF2,#FBF6E8);border:2px solid #D4A830;border-radius:10px;padding:14px;">
-          <div style="font-size:12px;font-weight:700;color:#6B5A3E;margin-bottom:10px;letter-spacing:0.5px;">🔍 COMPARE · CONTRAST · RECONCILE</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
-            <button onclick="runXrefAI(\${suraId},\${num},'compare')" style="flex:1;min-width:100px;padding:8px;background:#FDF5DE;border:2px solid #B8902A;border-radius:8px;font-size:12px;font-weight:700;color:#B8902A;cursor:pointer;">⚖ Similarities</button>
-            <button onclick="runXrefAI(\${suraId},\${num},'contrast')" style="flex:1;min-width:100px;padding:8px;background:#E8F4FD;border:2px solid #1A6FA8;border-radius:8px;font-size:12px;font-weight:700;color:#1A6FA8;cursor:pointer;">↔ Differences</button>
-            <button onclick="runXrefAI(\${suraId},\${num},'reconcile')" style="flex:1;min-width:100px;padding:8px;background:#FFF0F0;border:2px solid #C0392B;border-radius:8px;font-size:12px;font-weight:700;color:#C0392B;cursor:pointer;">✚ Reconcile</button>
-          </div>
-          <div id="xref-ai-result-\${suraId}-\${num}" style="font-size:13px;color:#1a1a1a;line-height:1.8;"></div>
-        </div>`;
-
         xrefPanel.innerHTML = html;
       } else {
         xrefPanel.innerHTML = `<div style="color:#BBB;font-style:italic;font-size:13px;padding:20px;text-align:center">No cross-references for this verse.</div>`;
@@ -2592,7 +2536,7 @@ function renderChatMessages(num) {
   if (!msgs.length) { container.innerHTML = ''; return; }
   container.innerHTML = msgs.map(m => {
     const isUser = m.role === 'user';
-    const readBtn = !isUser ? `<div style="margin-top:6px;"><button onclick="speakText('${escapeHtml(m.content).replace(/'/g,"\\'").replace(/\`/g,'\\`')}','en',this)" style="font-size:10px;padding:2px 8px;border:1px solid #D4C9A8;border-radius:10px;background:#fff;color:#B8902A;cursor:pointer;">🔊 Read</button></div>` : '';
+    const readBtn = !isUser ? `<div style="margin-top:6px;"><button onclick="speakText('${escapeHtml(m.content).replace(/'/g,"\\'").replace(/`/g,'\\`')}','en',this)" style="font-size:10px;padding:2px 8px;border:1px solid #D4C9A8;border-radius:10px;background:#fff;color:#B8902A;cursor:pointer;">🔊 Read</button></div>` : '';
     return `<div style="display:flex;justify-content:${isUser?'flex-end':'flex-start'};">
       <div style="max-width:85%;padding:10px 14px;border-radius:${isUser?'16px 16px 4px 16px':'16px 16px 16px 4px'};background:${isUser?'#B8902A':'#F5F3EC'};color:${isUser?'#fff':'#1a1a1a'};font-size:14px;line-height:1.6;font-weight:${isUser?'600':'500'};border:${isUser?'none':'2px solid #D4C9A8'};">
         ${escapeHtml(m.content)}
@@ -2603,47 +2547,6 @@ function renderChatMessages(num) {
   container.scrollTop = container.scrollHeight;
 }
 
-
-
-async function runXrefAI(suraId, num, mode) {
-  const resultBox = document.getElementById(`xref-ai-result-${suraId}-${num}`);
-  if (!resultBox) return;
-  const data = window[`xrefData_${suraId}_${num}`];
-  if (!data) { resultBox.innerHTML = '<i style="color:#999;">Load cross-references first.</i>'; return; }
-
-  resultBox.innerHTML = '<span class="spinner"></span> Analyzing...';
-
-  const refList = data.refs.map(r =>
-    `${r.sura}:${r.aya} — ${r.english ? r.english.slice(0,120) : '(no text)'}`
-  ).join('\n');
-
-  const prompts = {
-    compare:   `You are a Quranic scholar. Compare these related verses and explain their SIMILARITIES — shared themes, vocabulary, theological points, and how they reinforce each other:\n\nSource verse (${data.source.sura}:${data.source.aya}): ${data.source.english}\n\nRelated verses:\n${refList}\n\nBe specific and scholarly. 3-4 paragraphs.`,
-    contrast:  `You are a Quranic scholar. Analyze the DIFFERENCES between these cross-referenced verses — how each treats the subject differently, what unique aspects each adds, and how they complement without contradiction:\n\nSource verse (${data.source.sura}:${data.source.aya}): ${data.source.english}\n\nRelated verses:\n${refList}\n\nBe specific. 3-4 paragraphs.`,
-    reconcile: `You are a Quranic scholar. These verses are cross-referenced. Explain how Islamic scholars RECONCILE apparent tensions between them using classical tools: naskh (abrogation), takhsis (specification), historical context, and different subject matters:\n\nSource verse (${data.source.sura}:${data.source.aya}): ${data.source.english}\n\nRelated verses:\n${refList}\n\nProvide a balanced scholarly analysis. 3-4 paragraphs.`
-  };
-
-  try {
-    const res = await fetch('/.netlify/functions/claude-proxy', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 1200,
-        messages: [{ role: 'user', content: prompts[mode] }]
-      })
-    });
-    const json = await res.json();
-    const text = json?.content?.[0]?.text || json?.error?.message || 'No response received.';
-    const labels = { compare: '⚖ SIMILARITIES', contrast: '↔ DIFFERENCES', reconcile: '✚ RECONCILIATION' };
-    const colors = { compare: '#B8902A', contrast: '#1A6FA8', reconcile: '#C0392B' };
-    resultBox.innerHTML = `
-      <div style="font-weight:800;color:${colors[mode]};margin-bottom:8px;font-size:12px;letter-spacing:0.5px;">${labels[mode]}</div>
-      <div style="white-space:pre-wrap;line-height:1.8;">${escapeHtml(text)}</div>`;
-  } catch(e) {
-    resultBox.innerHTML = `<i style="color:#C0392B;">Error: ${e.message}</i>`;
-  }
-}
 
 async function generateFullResearchReport(num) {
   const card = document.getElementById('vc-' + num);
