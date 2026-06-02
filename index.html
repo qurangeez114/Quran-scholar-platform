@@ -1339,6 +1339,79 @@ function makeWordsTappable(container, sura, aya) {
 // ============================================================
 // RESEARCH DEPTH BADGE
 // ============================================================
+// ─── loadCrossReferences ────────────────────────────────────────────
+async function loadCrossReferences(sura, aya) {
+  const panel = document.getElementById('tp-' + aya + '-xrefs');
+  const tab   = document.getElementById('xref-tab-' + aya);
+  if (!panel) return;
+
+  panel.innerHTML = '<div style="padding:20px;font-size:13px;color:#AAA;"><span class="spinner"></span> Loading cross-references...</div>';
+
+  try {
+    const rows = await sbFetch('thematic_cross_references_v2', {
+      select: 'theme,related_sura,related_aya,reason,category',
+      sura:   'eq.' + sura,
+      aya:    'eq.' + aya,
+      order:  'theme'
+    });
+
+    if (!rows.length) {
+      if (tab) tab.textContent = 'Cross-Refs (0)';
+      panel.innerHTML = '<div style="padding:20px;text-align:center;color:#BBB;font-style:italic;font-size:13px;">No cross-references added yet.</div>';
+      return;
+    }
+
+    // Group by theme, deduplicate
+    const byTheme = {};
+    rows.forEach(r => {
+      if (!byTheme[r.theme]) byTheme[r.theme] = [];
+      const key = r.related_sura + ':' + r.related_aya;
+      if (!byTheme[r.theme].find(x => x.related_sura+':'+x.related_aya === key))
+        byTheme[r.theme].push(r);
+    });
+    Object.keys(byTheme).forEach(t => {
+      byTheme[t].sort((a,b) => a.related_sura - b.related_sura || a.related_aya - b.related_aya);
+    });
+
+    const totalVerses = Object.values(byTheme).reduce((s,v) => s + v.length, 0);
+    if (tab) tab.textContent = 'Cross-Refs (' + totalVerses + ')';
+
+    let html = '<div style="padding:12px 16px 4px;font-size:12px;color:#7A8FA6;">This verse belongs to <b>' + Object.keys(byTheme).length + '</b> theme(s). Tap any verse to open it.</div>';
+
+    Object.entries(byTheme).forEach(function(entry) {
+      const theme = entry[0], verses = entry[1];
+      html += '<div style="margin:0 12px 16px;">';
+      html += '<div style="background:linear-gradient(135deg,#FDF5DE,#FAF0C0);border:2px solid #E8C97B;border-radius:10px;padding:10px 14px;margin-bottom:10px;">';
+      html += '<div style="font-size:13px;font-weight:800;color:#5A3A10;">🗂 ' + escapeHtml(theme) + '</div>';
+      html += '<div style="font-size:11px;color:#B8902A;margin-top:2px;">' + verses.length + ' related verse' + (verses.length>1?'s':'') + '</div>';
+      html += '</div>';
+      html += '<div style="display:flex;flex-wrap:wrap;gap:6px;padding:0 4px;">';
+      verses.forEach(function(r) {
+        const si = allSuras.find(function(s){ return (s.sura_id||s.id) === r.related_sura; });
+        const sn = si ? (si.sura_name_english || si.sura_name_translated || '') : '';
+        html += '<button onclick="openVersePopup(' + r.related_sura + ',' + r.related_aya + ')"'
+          + ' title="' + escapeHtml(sn) + (r.reason ? ' — ' + escapeHtml(r.reason) : '') + '"'
+          + ' style="padding:6px 14px;background:#fff;border:2px solid #D4C9A8;border-radius:8px;font-size:13px;font-weight:700;color:#2A3F4E;cursor:pointer;min-width:62px;text-align:center;"'
+          + ' onmouseover="this.style.background='#FDF5DE';this.style.borderColor='#B8902A'"'
+          + ' onmouseout="this.style.background='#fff';this.style.borderColor='#D4C9A8'"'
+          + '>' + r.related_sura + ':' + r.related_aya + '</button>';
+      });
+      html += '</div></div>';
+    });
+
+    panel.innerHTML = html;
+  } catch(e) {
+    console.error('loadCrossReferences:', e);
+    panel.innerHTML = '<div style="padding:20px;text-align:center;color:#C0392B;font-size:13px;">Error loading cross-references.</div>';
+  }
+}
+
+// ─── loadRiwayatPanel (alias for qiraat loading) ────────────────────
+function loadRiwayatPanel(sura, aya) {
+  // Wire to loadVerseQiraat which fetches qiraat_variants
+  loadVerseQiraat(sura, aya);
+}
+
 function escapeHtml(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -1848,6 +1921,8 @@ async function toggleVerse(num, suraId, el) {
     }
   }
 
+  // Load Cross-References
+  loadCrossReferences(suraId, num);
   // Load tafsir (table first, AI fallback)
   loadTafsirPanel(suraId, num);
   // Load Fiqh rulings
@@ -1862,6 +1937,7 @@ async function toggleVerse(num, suraId, el) {
   loadVerseSliraContext(suraId, num);
   // Load qiraat variants into Riwayat panel
   loadVerseQiraat(suraId, num);
+  loadRiwayatPanel(suraId, num);
 }
 
 function switchTab(num, tab, btn) {
@@ -2901,6 +2977,30 @@ ${PROMPTS[sectionId] || 'Analyze this verse in depth.'}
 
 Be specific, scholarly, and cite actual sources where possible.`;
 
+  // Pre-fetch relevant Supabase data for context enrichment
+  let dbContext = '';
+  try {
+    if (sectionId === 'roots' || sectionId === 'grammar') {
+      const words = await sbFetch('word_analysis', {
+        select: 'arabic_word,root_word,original_meaning,modern_meaning',
+        sura_id: 'eq.' + currentSura, aya_number: 'eq.' + num
+      });
+      if (words.length) {
+        dbContext = '\n\nDatabase word analysis for this verse:\n' +
+          words.map(w => w.arabic_word + ' (root: ' + (w.root_word||'') + ') = ' + (w.original_meaning||'')).join('\n');
+      }
+    } else if (sectionId === 'hadith') {
+      const hadiths = await sbFetch('hadith_connections', {
+        select: 'hadith_text,collection,reference,narrator',
+        sura_id: 'eq.' + currentSura, aya_number: 'eq.' + num
+      });
+      if (hadiths.length) {
+        dbContext = '\n\nConnected hadiths from database:\n' +
+          hadiths.slice(0,5).map(h => '[' + (h.collection||'') + '] ' + (h.hadith_text||'').slice(0,200)).join('\n');
+      }
+    }
+  } catch(e) { /* DB context optional */ }
+
   try {
     const res = await fetch('/.netlify/functions/claude-proxy', {
       method: 'POST',
@@ -2908,7 +3008,7 @@ Be specific, scholarly, and cite actual sources where possible.`;
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
         max_tokens: 1500,
-        messages: [{ role: 'user', content: prompt }]
+        messages: [{ role: 'user', content: prompt + dbContext }]
       })
     });
     const data = await res.json();
