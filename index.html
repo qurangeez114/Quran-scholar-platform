@@ -7072,5 +7072,315 @@ document.addEventListener('DOMContentLoaded', addRWButtons);
 })();
 </script>
 
+
+<!-- ═══════════════════════════════════════════════════
+     CROSS-REFERENCE VERSE POPUP MODAL
+     ═══════════════════════════════════════════════════ -->
+<div id="versePopupOverlay" onclick="if(event.target===this)closeVersePopup()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:99998;backdrop-filter:blur(2px);"></div>
+
+<div id="versePopupModal" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:92vw;max-width:520px;max-height:88vh;background:#FAFAF7;border-radius:18px;box-shadow:0 20px 60px rgba(0,0,0,0.35);z-index:99999;overflow:hidden;flex-direction:column;">
+
+  <!-- Header -->
+  <div style="background:linear-gradient(135deg,#1a1a2e,#2d2d44);padding:14px 18px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+    <div>
+      <div id="vpRef" style="font-size:18px;font-weight:800;color:#E8C97B;letter-spacing:0.5px;"></div>
+      <div id="vpSuraName" style="font-size:11px;color:#AAA;margin-top:2px;"></div>
+    </div>
+    <button onclick="closeVersePopup()" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:#fff;width:32px;height:32px;border-radius:50%;font-size:18px;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center;">✕</button>
+  </div>
+
+  <!-- Language selector -->
+  <div style="padding:10px 18px;background:#F0EDE6;border-bottom:1px solid #E8E4DC;flex-shrink:0;overflow-x:auto;white-space:nowrap;">
+    <span style="font-size:10px;font-weight:700;color:#999;text-transform:uppercase;letter-spacing:0.5px;margin-right:8px;">Show:</span>
+    <label style="display:inline-flex;align-items:center;gap:4px;margin-right:10px;cursor:pointer;font-size:12px;font-weight:600;color:#5A3A10;"><input type="checkbox" id="vpLangArabic" checked onchange="renderVersePopupContent()" style="accent-color:#B8902A;"> Arabic</label>
+    <label style="display:inline-flex;align-items:center;gap:4px;margin-right:10px;cursor:pointer;font-size:12px;font-weight:600;color:#5A3A10;"><input type="checkbox" id="vpLangEnglish" checked onchange="renderVersePopupContent()" style="accent-color:#B8902A;"> English</label>
+    <label style="display:inline-flex;align-items:center;gap:4px;margin-right:10px;cursor:pointer;font-size:12px;font-weight:600;color:#5A3A10;"><input type="checkbox" id="vpLangTigrinya" onchange="renderVersePopupContent()" style="accent-color:#B8902A;"> Tigrinya</label>
+    <label style="display:inline-flex;align-items:center;gap:4px;margin-right:10px;cursor:pointer;font-size:12px;font-weight:600;color:#5A3A10;"><input type="checkbox" id="vpLangAmharic" onchange="renderVersePopupContent()" style="accent-color:#B8902A;"> Amharic</label>
+    <label style="display:inline-flex;align-items:center;gap:4px;margin-right:10px;cursor:pointer;font-size:12px;font-weight:600;color:#5A3A10;"><input type="checkbox" id="vpLangOromo" onchange="renderVersePopupContent()" style="accent-color:#B8902A;"> Oromo</label>
+    <label style="display:inline-flex;align-items:center;gap:4px;margin-right:10px;cursor:pointer;font-size:12px;font-weight:600;color:#5A3A10;"><input type="checkbox" id="vpLangSomali" onchange="renderVersePopupContent()" style="accent-color:#B8902A;"> Somali</label>
+  </div>
+
+  <!-- Verse content -->
+  <div id="vpContent" style="padding:18px;overflow-y:auto;flex:1;line-height:1;"></div>
+
+  <!-- Action bar -->
+  <div style="padding:12px 18px;background:#F0EDE6;border-top:1px solid #E8E4DC;display:flex;gap:8px;flex-wrap:wrap;flex-shrink:0;justify-content:center;">
+    <button onclick="vpRead()" title="Read aloud" style="display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 12px;background:#fff;border:1.5px solid #D4C9A8;border-radius:10px;cursor:pointer;min-width:52px;">
+      <span style="font-size:18px;">🔊</span><span style="font-size:9px;color:#666;font-weight:600;">READ</span>
+    </button>
+    <button onclick="vpHighlight()" title="Highlight text" style="display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 12px;background:#fff;border:1.5px solid #D4C9A8;border-radius:10px;cursor:pointer;min-width:52px;">
+      <span style="font-size:18px;">✏️</span><span style="font-size:9px;color:#666;font-weight:600;">HIGHLIGHT</span>
+    </button>
+    <button onclick="vpNote()" title="Add note" style="display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 12px;background:#fff;border:1.5px solid #D4C9A8;border-radius:10px;cursor:pointer;min-width:52px;">
+      <span style="font-size:18px;">📝</span><span style="font-size:9px;color:#666;font-weight:600;">NOTE</span>
+    </button>
+    <button onclick="vpSave()" title="Save to bookmarks" id="vpSaveBtn" style="display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 12px;background:#fff;border:1.5px solid #D4C9A8;border-radius:10px;cursor:pointer;min-width:52px;">
+      <span style="font-size:18px;">🔖</span><span style="font-size:9px;color:#666;font-weight:600;">SAVE</span>
+    </button>
+    <button onclick="vpCopy()" title="Copy verse" id="vpCopyBtn" style="display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 12px;background:#fff;border:1.5px solid #D4C9A8;border-radius:10px;cursor:pointer;min-width:52px;">
+      <span style="font-size:18px;">📋</span><span style="font-size:9px;color:#666;font-weight:600;">COPY</span>
+    </button>
+    <button onclick="vpShare()" title="Share verse" style="display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 12px;background:#fff;border:1.5px solid #D4C9A8;border-radius:10px;cursor:pointer;min-width:52px;">
+      <span style="font-size:18px;">📤</span><span style="font-size:9px;color:#666;font-weight:600;">SHARE</span>
+    </button>
+    <button onclick="vpOpenMain()" title="Open in main reader" style="display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 12px;background:linear-gradient(135deg,#B8902A,#D4A830);border:none;border-radius:10px;cursor:pointer;min-width:52px;">
+      <span style="font-size:18px;">📖</span><span style="font-size:9px;color:#fff;font-weight:700;">OPEN</span>
+    </button>
+  </div>
+
+  <!-- Note input (hidden by default) -->
+  <div id="vpNoteArea" style="display:none;padding:12px 18px;background:#F8F5EE;border-top:1px solid #E8E4DC;flex-shrink:0;">
+    <textarea id="vpNoteText" placeholder="Write your note about this verse..." style="width:100%;padding:10px;border:1.5px solid #D4C9A8;border-radius:8px;font-size:13px;resize:vertical;min-height:70px;background:#fff;box-sizing:border-box;"></textarea>
+    <div style="display:flex;gap:8px;margin-top:6px;">
+      <button onclick="vpSaveNote()" style="flex:1;padding:8px;background:#B8902A;color:#fff;border:none;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer;">Save Note</button>
+      <button onclick="document.getElementById('vpNoteArea').style.display='none'" style="padding:8px 14px;background:#eee;border:none;border-radius:8px;font-size:12px;cursor:pointer;">Cancel</button>
+    </div>
+  </div>
+</div>
+<script>
+// ═══════════════════════════════════════════════════
+// VERSE POPUP MODAL FUNCTIONS
+// ═══════════════════════════════════════════════════
+let _vpData = null; // current verse data
+let _vpSura = 0, _vpAya = 0;
+
+async function openVersePopup(sura, aya) {
+  _vpSura = sura; _vpAya = aya;
+  const overlay = document.getElementById('versePopupOverlay');
+  const modal   = document.getElementById('versePopupModal');
+  const content = document.getElementById('vpContent');
+  const ref     = document.getElementById('vpRef');
+  const suraNameEl = document.getElementById('vpSuraName');
+
+  // Show modal
+  overlay.style.display = 'block';
+  modal.style.display   = 'flex';
+  content.innerHTML = '<div style="text-align:center;padding:30px;color:#AAA;"><span class="spinner"></span> Loading verse...</div>';
+  ref.textContent   = sura + ':' + aya;
+
+  // Fetch verse data
+  try {
+    const rows = await sbFetch('ayas', {
+      select: 'sura_id,aya_number,arabic,arabic_warsh,arabic_qalun,arabic_transliteration,english,aya_text,amharic,oromo,somali,german',
+      sura_id:    'eq.' + sura,
+      aya_number: 'eq.' + aya
+    });
+    _vpData = rows[0] || {};
+
+    // Get sura name
+    const suraInfo = allSuras.find(s => (s.sura_id||s.id) === sura);
+    suraNameEl.textContent = suraInfo
+      ? (suraInfo.sura_name_english || suraInfo.sura_name_translated || 'Surah ' + sura)
+      : 'Surah ' + sura;
+
+    renderVersePopupContent();
+  } catch(e) {
+    content.innerHTML = '<div style="padding:20px;color:#C0392B;">Error loading verse: ' + e.message + '</div>';
+  }
+}
+
+function renderVersePopupContent() {
+  if (!_vpData) return;
+  const showArabic   = document.getElementById('vpLangArabic').checked;
+  const showEnglish  = document.getElementById('vpLangEnglish').checked;
+  const showTigrinya = document.getElementById('vpLangTigrinya').checked;
+  const showAmharic  = document.getElementById('vpLangAmharic').checked;
+  const showOromo    = document.getElementById('vpLangOromo').checked;
+  const showSomali   = document.getElementById('vpLangSomali').checked;
+
+  let html = '';
+
+  if (showArabic && _vpData.arabic) {
+    html += '<div style="margin-bottom:16px;">';
+    html += '<div style="font-size:10px;font-weight:700;color:#B8902A;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Arabic (Hafs)</div>';
+    html += '<div style="font-family:Amiri,serif;font-size:26px;direction:rtl;text-align:right;line-height:2;color:#1a1a1a;">' + escapeHtml(_vpData.arabic) + '</div>';
+    if (_vpData.arabic_warsh) {
+      html += '<div style="margin-top:8px;padding:8px 12px;background:#F0F7F0;border-radius:8px;">';
+      html += '<div style="font-size:9px;color:#2E7D32;font-weight:700;margin-bottom:4px;">WARSH</div>';
+      html += '<div style="font-family:Amiri,serif;font-size:20px;direction:rtl;text-align:right;line-height:1.8;color:#1a1a1a;">' + escapeHtml(_vpData.arabic_warsh) + '</div>';
+      html += '</div>';
+    }
+    if (_vpData.arabic_transliteration) {
+      html += '<div style="font-size:12px;color:#7A8FA6;font-style:italic;margin-top:6px;">' + escapeHtml(_vpData.arabic_transliteration) + '</div>';
+    }
+    html += '</div>';
+  }
+
+  if (showEnglish && _vpData.english) {
+    html += '<div style="margin-bottom:14px;">';
+    html += '<div style="font-size:10px;font-weight:700;color:#1A6FA8;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">English</div>';
+    html += '<div style="font-size:15px;color:#1a1a1a;line-height:1.75;font-style:italic;">' + escapeHtml(_vpData.english) + '</div>';
+    html += '</div>';
+  }
+
+  if (showTigrinya && _vpData.aya_text) {
+    html += '<div style="margin-bottom:14px;">';
+    html += '<div style="font-size:10px;font-weight:700;color:#5A3A10;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Tigrinya · ትግርኛ</div>';
+    html += '<div style="font-size:20px;font-weight:700;color:#000;line-height:1.8;text-shadow:-1px -1px 0 #fff,1px -1px 0 #fff,-1px 1px 0 #fff,1px 1px 0 #fff;">' + escapeHtml(_vpData.aya_text) + '</div>';
+    html += '</div>';
+  }
+
+  if (showAmharic && _vpData.amharic) {
+    html += '<div style="margin-bottom:14px;">';
+    html += '<div style="font-size:10px;font-weight:700;color:#5A3A10;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Amharic · አማርኛ</div>';
+    html += '<div style="font-size:18px;font-weight:600;color:#1a1a1a;line-height:1.8;">' + escapeHtml(_vpData.amharic) + '</div>';
+    html += '</div>';
+  }
+
+  if (showOromo && _vpData.oromo) {
+    html += '<div style="margin-bottom:14px;">';
+    html += '<div style="font-size:10px;font-weight:700;color:#2E7D32;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Oromo</div>';
+    html += '<div style="font-size:14px;color:#1a1a1a;line-height:1.7;">' + escapeHtml(_vpData.oromo) + '</div>';
+    html += '</div>';
+  }
+
+  if (showSomali && _vpData.somali) {
+    html += '<div style="margin-bottom:14px;">';
+    html += '<div style="font-size:10px;font-weight:700;color:#1A5276;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Somali</div>';
+    html += '<div style="font-size:14px;color:#1a1a1a;line-height:1.7;">' + escapeHtml(_vpData.somali) + '</div>';
+    html += '</div>';
+  }
+
+  if (!html) {
+    html = '<div style="text-align:center;padding:20px;color:#AAA;font-style:italic;">Select at least one language above.</div>';
+  }
+
+  document.getElementById('vpContent').innerHTML = html;
+}
+
+function closeVersePopup() {
+  document.getElementById('versePopupOverlay').style.display = 'none';
+  document.getElementById('versePopupModal').style.display   = 'none';
+  document.getElementById('vpNoteArea').style.display = 'none';
+  _vpData = null;
+}
+
+function vpGetText() {
+  if (!_vpData) return '';
+  const parts = [];
+  const ref = 'Quran ' + _vpSura + ':' + _vpAya;
+  parts.push(ref);
+  if (document.getElementById('vpLangArabic').checked && _vpData.arabic) parts.push(_vpData.arabic);
+  if (document.getElementById('vpLangEnglish').checked && _vpData.english) parts.push(_vpData.english);
+  if (document.getElementById('vpLangTigrinya').checked && _vpData.aya_text) parts.push(_vpData.aya_text);
+  if (document.getElementById('vpLangAmharic').checked && _vpData.amharic) parts.push(_vpData.amharic);
+  if (document.getElementById('vpLangOromo').checked && _vpData.oromo) parts.push(_vpData.oromo);
+  if (document.getElementById('vpLangSomali').checked && _vpData.somali) parts.push(_vpData.somali);
+  return parts.join('\n');
+}
+
+function vpRead() {
+  if (!_vpData) return;
+  const text = [
+    _vpData.english || '',
+    _vpData.aya_text || ''
+  ].filter(Boolean).join('. ');
+  if (!text) return;
+  window.speechSynthesis && window.speechSynthesis.cancel();
+  const utt = new SpeechSynthesisUtterance(text);
+  utt.lang = 'en';
+  utt.rate = 0.9;
+  window.speechSynthesis.speak(utt);
+}
+
+function vpHighlight() {
+  const selection = window.getSelection();
+  if (!selection || selection.toString().trim() === '') {
+    alert('Select text in the verse first, then tap Highlight.');
+    return;
+  }
+  const text = selection.toString().trim();
+  const key  = 'vp_hl_' + _vpSura + '_' + _vpAya;
+  const existing = JSON.parse(localStorage.getItem(key) || '[]');
+  existing.push({ text, ts: Date.now() });
+  localStorage.setItem(key, JSON.stringify(existing));
+  // Visual feedback
+  const range = selection.getRangeAt(0);
+  const mark = document.createElement('mark');
+  mark.style.background = '#FFE066';
+  mark.style.borderRadius = '3px';
+  range.surroundContents(mark);
+  selection.removeAllRanges();
+}
+
+function vpNote() {
+  const area = document.getElementById('vpNoteArea');
+  area.style.display = area.style.display === 'none' ? 'block' : 'none';
+  if (area.style.display === 'block') {
+    // Load existing note
+    const key  = 'vp_note_' + _vpSura + '_' + _vpAya;
+    const note = localStorage.getItem(key) || '';
+    document.getElementById('vpNoteText').value = note;
+    document.getElementById('vpNoteText').focus();
+  }
+}
+
+function vpSaveNote() {
+  const text = document.getElementById('vpNoteText').value.trim();
+  const key  = 'vp_note_' + _vpSura + '_' + _vpAya;
+  if (text) {
+    localStorage.setItem(key, text);
+    document.getElementById('vpNoteArea').style.display = 'none';
+    // Toast
+    const t = document.createElement('div');
+    t.style.cssText = 'position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:#2E7D32;color:#fff;padding:8px 18px;border-radius:20px;font-size:13px;font-weight:700;z-index:999999;';
+    t.textContent = '📝 Note saved!';
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), 2000);
+  }
+}
+
+function vpSave() {
+  if (!_vpData) return;
+  const key   = 'vp_saved_' + _vpSura + '_' + _vpAya;
+  const isSaved = localStorage.getItem(key);
+  if (isSaved) {
+    localStorage.removeItem(key);
+    document.getElementById('vpSaveBtn').style.background = '#fff';
+  } else {
+    localStorage.setItem(key, JSON.stringify({ sura: _vpSura, aya: _vpAya, text: vpGetText(), ts: Date.now() }));
+    document.getElementById('vpSaveBtn').style.background = '#FDF5DE';
+  }
+  const t = document.createElement('div');
+  t.style.cssText = 'position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:#B8902A;color:#fff;padding:8px 18px;border-radius:20px;font-size:13px;font-weight:700;z-index:999999;';
+  t.textContent = isSaved ? '🔖 Removed from saves' : '🔖 Saved!';
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2000);
+}
+
+async function vpCopy() {
+  const text = vpGetText();
+  try {
+    await navigator.clipboard.writeText(text);
+    const btn = document.getElementById('vpCopyBtn');
+    btn.innerHTML = '<span style="font-size:18px;">✅</span><span style="font-size:9px;color:#2E7D32;font-weight:600;">COPIED</span>';
+    setTimeout(() => {
+      btn.innerHTML = '<span style="font-size:18px;">📋</span><span style="font-size:9px;color:#666;font-weight:600;">COPY</span>';
+    }, 2000);
+  } catch(e) {
+    prompt('Copy this text:', text);
+  }
+}
+
+async function vpShare() {
+  const text = vpGetText();
+  const url  = window.location.origin + window.location.pathname + '?sura=' + _vpSura + '&aya=' + _vpAya;
+  try {
+    await navigator.share({ title: 'Quran ' + _vpSura + ':' + _vpAya, text: text, url: url });
+  } catch(e) {
+    await navigator.clipboard.writeText(text + '\n' + url).catch(() => prompt('Copy:', text));
+  }
+}
+
+function vpOpenMain() {
+  closeVersePopup();
+  navToVerse(_vpSura, _vpAya);
+}
+
+// Keyboard close
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeVersePopup();
+});
+</script>
 </body>
 </html>
