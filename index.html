@@ -509,8 +509,15 @@ html[data-theme="dark"] .qhist-lbl { color: #E8E4DC; }
   line-height: 1.7 !important;
   white-space: nowrap !important;
 }
-.wbw-grid.study .wbw-translit {
-  display: 
+.wbw-grid.study .wbw-translit,
+.wbw-grid.study .wbw-english {
+  display: block !important;
+  font-size: 11px !important;
+  line-height: 1.25 !important;
+  color: #4A5568 !important;
+  direction: ltr !important;
+  text-align: center !important;
+}
 </style>
 <script>
 /* ═══════════════════════════════════════════════════════════
@@ -712,7 +719,6 @@ html[data-theme="dark"] .qhist-lbl { color: #E8E4DC; }
     btn.id = 'qhist-btn';
     btn.title = 'Your browsing history';
     btn.setAttribute('onclick','qnavToggleHist()');
-    btn.style.position = 'relative';
     btn.innerHTML = '🕐<span id="qhist-badge" class="qhist-badge" style="position:absolute;top:-4px;right:-4px;background:#C03020;color:#fff;border-radius:10px;font-size:10px;font-weight:800;min-width:18px;height:18px;padding:0 4px;display:none;align-items:center;justify-content:center;"></span>';
     document.body.appendChild(btn);
 
@@ -854,6 +860,98 @@ html[data-theme="dark"] .qhist-lbl { color: #E8E4DC; }
   .presentation-actions,
   .add-to-presentation-btn {
     max-width: 100% !important;
+  }
+}
+</style>
+
+
+<style id="final-mobile-controls-fix">
+/* Final mobile control fix: Study and Word-by-Word are independent. */
+.wbw-toggle-btn {
+  background:#FDF8EE;
+  border:1px solid #E8C97B;
+  border-radius:8px;
+  min-width:72px;
+  height:30px;
+  font-size:12px;
+  cursor:pointer;
+  padding:0 8px;
+  flex-shrink:0;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  color:#8B6914;
+  font-weight:800;
+}
+.wbw-toggle-btn.active { background:#B8902A; color:#fff; border-color:#B8902A; }
+.verse-card .verse-actions { width:100%; }
+
+@media (max-width:768px) {
+  .verse-top {
+    grid-template-columns:auto 1fr auto !important;
+    grid-template-areas:
+      "num spacer expand"
+      "tools tools tools"
+      "body body body" !important;
+    padding:12px !important;
+  }
+  .verse-body { padding-top:0 !important; }
+  .verse-actions {
+    grid-area:tools !important;
+    justify-content:center !important;
+    gap:6px !important;
+    margin:4px 0 8px !important;
+    order:-1 !important;
+  }
+  .expand-btn {
+    min-width:74px !important;
+    height:34px !important;
+    padding:0 10px !important;
+    font-size:12px !important;
+  }
+  .wbw-toggle-btn { min-width:84px; height:32px; }
+  .verse-arabic.lang-arabic {
+    width:100% !important;
+    max-width:100% !important;
+    text-align:center !important;
+    overflow-wrap:normal !important;
+  }
+  .wbw-grid.study {
+    display:flex !important;
+    flex-wrap:wrap !important;
+    justify-content:center !important;
+    width:100% !important;
+  }
+  #openResearchWorkspaceBtn {
+    bottom:112px !important;
+    right:10px !important;
+    max-width:136px !important;
+    padding:9px 12px !important;
+    border-radius:12px !important;
+    z-index:900 !important;
+  }
+  #presentationBuilderBtn,
+  .presentation-builder-btn,
+  .presentation-floating-btn,
+  #openPresentationBuilderBtn {
+    bottom:58px !important;
+    right:10px !important;
+    max-width:150px !important;
+    z-index:900 !important;
+  }
+  #qhist-btn {
+    left:10px !important;
+    right:auto !important;
+    bottom:52px !important;
+    z-index:901 !important;
+  }
+  .research-workspace-panel {
+    right:8px !important;
+    left:8px !important;
+    width:auto !important;
+    max-width:none !important;
+    bottom:8px !important;
+    max-height:88vh !important;
   }
 }
 </style>
@@ -1465,6 +1563,37 @@ function makeWordsTappable(container, sura, aya) {
   });
 }
 
+
+function toggleWordByWord(sura, aya, btn) {
+  const div = document.getElementById(`arabic-${sura}-${aya}`);
+  if (!div) return;
+  const raw = div.dataset.rawArabic || div.textContent || '';
+  const isOn = div.dataset.wbw === 'on';
+  if (isOn) {
+    div.dataset.wbw = 'off';
+    div.classList.remove('wbw-grid', 'study');
+    div.textContent = raw;
+    if (btn) {
+      btn.classList.remove('active');
+      btn.textContent = '🔤 Words';
+    }
+    return;
+  }
+  const words = raw.split(/\s+/).filter(Boolean);
+  div.dataset.wbw = 'on';
+  div.classList.add('wbw-grid', 'study');
+  div.innerHTML = words.map((w, i) => {
+    return `<span class="wbw-word" title="Tap for root, original meaning, modern meaning, pronunciation and lexicon" onclick='event.stopPropagation();openWordStudy(${JSON.stringify(w)},${Number(sura)},${Number(aya)})'>` +
+      `<span class="wbw-arabic">${escapeHtml(w)}</span>` +
+      `<span class="wbw-english">Word ${i + 1}</span>` +
+      `</span>`;
+  }).join(' ');
+  if (btn) {
+    btn.classList.add('active');
+    btn.textContent = '↩ Normal';
+  }
+}
+
 // ============================================================
 // RESEARCH DEPTH BADGE
 // ============================================================
@@ -1971,8 +2100,9 @@ function renderVerses(ayas, suraId) {
             <button onclick="event.stopPropagation();openNote(${aya.aya_number},${suraId})" title="Add note" style="background:#FDF8EE;border:1px solid #E8C97B;border-radius:6px;width:32px;height:30px;font-size:14px;cursor:pointer;padding:0;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;">📝</button>
             <button id="copy-${aya.aya_number}" onclick="event.stopPropagation();copyVerse(${aya.aya_number},${suraId})" title="Copy visible languages" style="background:#FDF8EE;border:1px solid #E8C97B;border-radius:6px;width:32px;height:30px;font-size:14px;cursor:pointer;padding:0;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;">📋</button>
             <button onclick="event.stopPropagation();shareVerse(${aya.aya_number},${suraId})" title="Share verse" style="background:#FDF8EE;border:1px solid #E8C97B;border-radius:6px;width:32px;height:30px;font-size:14px;cursor:pointer;padding:0;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;">📤</button>
+            <button id="wbw-btn-${suraId}-${aya.aya_number}" onclick="event.stopPropagation();toggleWordByWord(${suraId},${aya.aya_number},this)" title="Switch Arabic to word-by-word study mode" class="wbw-toggle-btn">🔤 Words</button>
           </div>
-          <div class="verse-arabic lang-arabic" style="${!langState.arabic?'display:none':''}">${arabic}</div>
+          <div id="arabic-${suraId}-${aya.aya_number}" class="verse-arabic lang-arabic" data-raw-arabic="${escapeHtml(arabic)}" data-wbw="off" style="${!langState.arabic?'display:none':''}">${arabic}</div>
           ${translit ? `<div class="lang-translit" style="margin-top:14px;padding-bottom:12px;border-bottom:1px solid #E8DDC0;${!langState.translit?'display:none':''}">
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">
               <div style="font-size:10px;font-weight:700;letter-spacing:1.2px;color:#A88840;text-transform:uppercase;font-style:normal;">Transliteration</div>
