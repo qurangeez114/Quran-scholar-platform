@@ -1360,5 +1360,278 @@ document.addEventListener('DOMContentLoaded', function(){
 <!-- PRESENTATION BUILDER START -->
 <script src="presentation-builder.js"></script>
 <!-- PRESENTATION BUILDER END -->
+<!-- ═══════════════════════════════════════════════════
+     RESEARCH WORKSPACE PANEL
+     ═══════════════════════════════════════════════════ -->
+<style>
+.research-workspace-panel {
+  position: fixed;
+  top: 0; right: 0;
+  width: 420px; max-width: 95vw;
+  height: 100vh;
+  background: #111827;
+  color: white;
+  z-index: 99999;
+  overflow-y: auto;
+  padding: 16px;
+  box-shadow: -6px 0 25px rgba(0,0,0,.45);
+  transition: transform 0.3s ease;
+}
+.research-workspace-panel.hidden { display: none; }
+.research-workspace-header {
+  display: flex; justify-content: space-between; align-items: center;
+  border-bottom: 2px solid gold; margin-bottom: 16px; padding-bottom: 10px;
+}
+.research-workspace-header h2 { font-size: 18px; color: #facc15; margin: 0; }
+.research-workspace-header button {
+  font-size: 28px; background: transparent; color: white; border: none; cursor: pointer; line-height: 1;
+}
+.research-workspace-section {
+  background: #1f2937; border: 1px solid #374151;
+  border-radius: 14px; padding: 12px; margin-bottom: 14px;
+}
+.research-workspace-section h3 {
+  font-size: 13px; color: #facc15; text-transform: uppercase;
+  letter-spacing: 0.5px; margin: 0 0 10px;
+}
+.research-workspace-section input,
+.research-workspace-section textarea {
+  width: 100%; margin: 6px 0; padding: 10px;
+  border-radius: 8px; border: 1px solid #4b5563;
+  background: #0f172a; color: white; font-size: 13px;
+  box-sizing: border-box;
+}
+.research-workspace-section textarea { min-height: 80px; resize: vertical; }
+.rw-btn {
+  background: linear-gradient(135deg, #d4af37, #fff2a8, #b8860b);
+  color: #111; border: none; border-radius: 10px;
+  padding: 8px 14px; font-weight: bold; cursor: pointer;
+  margin-top: 8px; font-size: 12px;
+}
+#openResearchWorkspaceBtn {
+  position: fixed; bottom: 70px; right: 18px;
+  z-index: 99998;
+  background: linear-gradient(135deg, #d4af37, #fff2a8, #b8860b);
+  color: #111; border: none; border-radius: 12px;
+  padding: 10px 16px; font-weight: bold; cursor: pointer;
+  font-size: 12px; box-shadow: 0 4px 15px rgba(212,175,55,0.4);
+}
+.rw-card {
+  border: 1px solid #374151; border-radius: 10px;
+  padding: 10px; margin: 8px 0; background: #0f172a;
+}
+.rw-card h4 { font-size: 13px; margin: 4px 0; color: #f3f4f6; }
+.rw-card p { font-size: 12px; color: #9ca3af; margin: 4px 0; line-height: 1.5; }
+.rw-card small { color: #facc15; font-size: 11px; }
+.rw-collection-active { border-color: #facc15 !important; }
+.save-to-research-btn {
+  background: linear-gradient(135deg, #d4af37, #fff2a8, #b8860b);
+  color: #111; border: none; border-radius: 8px;
+  padding: 4px 10px; font-weight: bold; cursor: pointer;
+  font-size: 11px; margin-top: 6px; display: inline-block;
+}
+</style>
+
+<div id="researchWorkspacePanel" class="research-workspace-panel hidden">
+  <div class="research-workspace-header">
+    <h2>📚 Research Workspace</h2>
+    <button onclick="closeResearchWorkspace()">×</button>
+  </div>
+
+  <div class="research-workspace-section">
+    <h3>Create Collection</h3>
+    <input id="rwCollectionTitle" placeholder="Collection title (e.g. Prayer in Quran)">
+    <textarea id="rwCollectionDescription" placeholder="Description (optional)"></textarea>
+    <button class="rw-btn" onclick="createResearchCollection()">+ Create Collection</button>
+  </div>
+
+  <div class="research-workspace-section">
+    <h3>Your Collections</h3>
+    <div id="rwCollectionsList"><p style="color:#9ca3af;font-size:12px;">Loading...</p></div>
+  </div>
+
+  <div class="research-workspace-section" id="rwActiveSection" style="display:none;">
+    <h3>Active Collection</h3>
+    <div id="rwSelectedCollection"></div>
+    <textarea id="rwNoteBody" placeholder="Write a research note..."></textarea>
+    <button class="rw-btn" onclick="saveResearchNote()">💾 Save Note</button>
+  </div>
+
+  <div class="research-workspace-section" id="rwItemsSection" style="display:none;">
+    <h3>Saved Items & Notes</h3>
+    <div id="rwSavedItems"></div>
+  </div>
+</div>
+
+<button id="openResearchWorkspaceBtn" onclick="openResearchWorkspace()" title="Open Research Workspace">
+  📚 Research
+</button>
+
+<script>
+(function() {
+'use strict';
+
+let _rwCollectionId = null;
+let _rwCollections  = [];
+
+function rwUrl()  { return (typeof SUPABASE_URL !== 'undefined' ? SUPABASE_URL : window.SUPABASE_URL) || ''; }
+function rwHdr()  {
+  if (typeof HEADERS !== 'undefined' && HEADERS && HEADERS.apikey) return {...HEADERS, 'Content-Type':'application/json', Prefer:'return=representation'};
+  const k = window.SUPABASE_KEY || window.SUPABASE_ANON_KEY || '';
+  return { apikey: k, Authorization: 'Bearer '+k, 'Content-Type':'application/json', Prefer:'return=representation' };
+}
+function rwEsc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+window.openResearchWorkspace = function() {
+  document.getElementById('researchWorkspacePanel').classList.remove('hidden');
+  loadRWCollections();
+};
+window.closeResearchWorkspace = function() {
+  document.getElementById('researchWorkspacePanel').classList.add('hidden');
+};
+
+window.createResearchCollection = async function() {
+  const title = document.getElementById('rwCollectionTitle').value.trim();
+  const desc  = document.getElementById('rwCollectionDescription').value.trim();
+  if (!title) { alert('Collection title required'); return; }
+  const res = await fetch(rwUrl()+'/rest/v1/research_collections', {
+    method:'POST', headers: rwHdr(),
+    body: JSON.stringify({ title, description: desc, visibility:'private' })
+  });
+  if (!res.ok) { alert('Could not create collection'); return; }
+  document.getElementById('rwCollectionTitle').value = '';
+  document.getElementById('rwCollectionDescription').value = '';
+  await loadRWCollections();
+};
+
+async function loadRWCollections() {
+  const res = await fetch(rwUrl()+'/rest/v1/research_collections?select=*&order=created_at.desc', { headers: rwHdr() });
+  if (!res.ok) return;
+  _rwCollections = await res.json();
+  const box = document.getElementById('rwCollectionsList');
+  if (!_rwCollections.length) {
+    box.innerHTML = '<p style="color:#9ca3af;font-size:12px;">No collections yet. Create one above.</p>'; return;
+  }
+  box.innerHTML = _rwCollections.map(c => `
+    <div class="rw-card ${c.id===_rwCollectionId?'rw-collection-active':''}" style="cursor:pointer;" onclick="selectRWCollection('${c.id}')">
+      <h4>📁 ${rwEsc(c.title)}</h4>
+      ${c.description ? `<p>${rwEsc(c.description)}</p>` : ''}
+      <small>${new Date(c.created_at).toLocaleDateString()}</small>
+      <button class="rw-btn" style="padding:4px 10px;font-size:11px;margin-top:6px;" onclick="event.stopPropagation();selectRWCollection('${c.id}')">Open</button>
+    </div>`).join('');
+}
+
+window.selectRWCollection = async function(id) {
+  _rwCollectionId = id;
+  const col = _rwCollections.find(c => c.id === id);
+  document.getElementById('rwSelectedCollection').innerHTML = `
+    <div class="rw-card rw-collection-active">
+      <h4>📁 ${rwEsc(col?.title||'')}</h4>
+      ${col?.description ? `<p>${rwEsc(col.description)}</p>` : ''}
+    </div>`;
+  document.getElementById('rwActiveSection').style.display = '';
+  document.getElementById('rwItemsSection').style.display  = '';
+  await loadRWItems();
+  // Refresh collection list to show active
+  await loadRWCollections();
+};
+
+window.saveVerseToResearch = async function(sura, aya, content, title) {
+  if (!_rwCollectionId) {
+    openResearchWorkspace();
+    setTimeout(() => alert('Select a collection first, then save the verse.'), 300);
+    return;
+  }
+  const res = await fetch(rwUrl()+'/rest/v1/research_items', {
+    method:'POST', headers: rwHdr(),
+    body: JSON.stringify({
+      collection_id: _rwCollectionId, item_type:'verse',
+      sura: Number(sura), aya: Number(aya),
+      title: title || `Qur'an ${sura}:${aya}`,
+      content: String(content||'').slice(0,500),
+      source_table:'ayas', source_id:`${sura}:${aya}`
+    })
+  });
+  if (!res.ok) { alert('Could not save verse'); return; }
+  await loadRWItems();
+  // Show brief toast
+  const toast = document.createElement('div');
+  toast.style.cssText = 'position:fixed;bottom:120px;right:20px;background:#d4af37;color:#111;padding:10px 16px;border-radius:10px;font-weight:700;font-size:13px;z-index:999999;';
+  toast.textContent = '✅ Saved to Research Workspace';
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 2500);
+};
+
+window.saveResearchNote = async function() {
+  if (!_rwCollectionId) { alert('Select a collection first'); return; }
+  const body = document.getElementById('rwNoteBody').value.trim();
+  if (!body) { alert('Write a note first'); return; }
+  const res = await fetch(rwUrl()+'/rest/v1/research_notes', {
+    method:'POST', headers: rwHdr(),
+    body: JSON.stringify({ collection_id: _rwCollectionId, note_title:'Research Note', note_body: body })
+  });
+  if (!res.ok) { alert('Could not save note'); return; }
+  document.getElementById('rwNoteBody').value = '';
+  await loadRWItems();
+};
+
+async function loadRWItems() {
+  if (!_rwCollectionId) return;
+  const [iRes, nRes] = await Promise.all([
+    fetch(rwUrl()+`/rest/v1/research_items?select=*&collection_id=eq.${_rwCollectionId}&order=created_at.desc`, { headers: rwHdr() }),
+    fetch(rwUrl()+`/rest/v1/research_notes?select=*&collection_id=eq.${_rwCollectionId}&order=created_at.desc`, { headers: rwHdr() })
+  ]);
+  const items = iRes.ok ? await iRes.json() : [];
+  const notes = nRes.ok ? await nRes.json() : [];
+  const box = document.getElementById('rwSavedItems');
+  if (!items.length && !notes.length) {
+    box.innerHTML = '<p style="color:#9ca3af;font-size:12px;">No saved items yet.</p>'; return;
+  }
+  box.innerHTML =
+    items.map(it => `<div class="rw-card">
+      <small>${rwEsc(it.item_type)}</small>
+      <h4>${rwEsc(it.title||'')}</h4>
+      <p>${rwEsc((it.content||'').slice(0,120))}${(it.content||'').length>120?'…':''}</p>
+      ${it.sura&&it.aya ? `<button class="rw-btn" style="font-size:11px;padding:4px 10px;" onclick="openRWVerse(${it.sura},${it.aya})">Open ${it.sura}:${it.aya}</button>` : ''}
+    </div>`).join('') +
+    notes.map(n => `<div class="rw-card">
+      <small>note</small>
+      <h4>📝 ${rwEsc(n.note_title||'Note')}</h4>
+      <p>${rwEsc(n.note_body||'')}</p>
+    </div>`).join('');
+}
+
+window.openRWVerse = function(sura, aya) {
+  closeResearchWorkspace();
+  if (typeof gotoResult === 'function') { gotoResult(sura, aya, null); return; }
+  if (typeof loadSura  === 'function') { loadSura(sura).then(() => setTimeout(() => { const c=document.getElementById('vc-'+aya); if(c) c.scrollIntoView({behavior:'smooth',block:'center'}); },600)); return; }
+  window.location.href = `index.html?sura=${sura}&aya=${aya}`;
+};
+
+// Add "Save to Research" button on verse cards
+function addRWButtons() {
+  document.querySelectorAll('.verse-card, .ayah-card, [data-sura][data-aya], [data-surah][data-ayah]').forEach(card => {
+    if (card.querySelector('.save-to-research-btn')) return;
+    const sura = card.dataset.sura || card.dataset.surah || card.getAttribute('data-sura') || card.getAttribute('data-surah');
+    const aya  = card.dataset.aya  || card.dataset.ayah  || card.getAttribute('data-aya')  || card.getAttribute('data-ayah');
+    if (!sura || !aya) return;
+    const btn = document.createElement('button');
+    btn.className   = 'save-to-research-btn';
+    btn.textContent = '📚 Save to Research';
+    btn.onclick = function(e) {
+      e.stopPropagation();
+      const text = card.innerText?.slice(0,400)||'';
+      saveVerseToResearch(sura, aya, text, `Qur'an ${sura}:${aya}`);
+    };
+    card.appendChild(btn);
+  });
+}
+
+setInterval(addRWButtons, 2000);
+document.addEventListener('DOMContentLoaded', addRWButtons);
+
+})();
+</script>
+
 </body>
 </html>
