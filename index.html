@@ -1348,11 +1348,10 @@ async function loadCrossReferences(sura, aya) {
   panel.innerHTML = '<div style="padding:20px;font-size:13px;color:#AAA;"><span class="spinner"></span> Loading cross-references...</div>';
 
   try {
+    // Step 1: Fetch thematic refs
     const rows = await sbFetch('thematic_cross_references_v2', {
-      select: 'theme,related_sura,related_aya,reason,category',
-      sura:   'eq.' + sura,
-      aya:    'eq.' + aya,
-      order:  'theme'
+      select: 'theme,related_sura,related_aya,reason',
+      sura: 'eq.' + sura, aya: 'eq.' + aya, order: 'theme'
     });
 
     if (!rows.length) {
@@ -1361,7 +1360,7 @@ async function loadCrossReferences(sura, aya) {
       return;
     }
 
-    // Group by theme, deduplicate
+    // Step 2: Group by theme, deduplicate
     const byTheme = {};
     rows.forEach(r => {
       if (!byTheme[r.theme]) byTheme[r.theme] = [];
@@ -1376,33 +1375,254 @@ async function loadCrossReferences(sura, aya) {
     const totalVerses = Object.values(byTheme).reduce((s,v) => s + v.length, 0);
     if (tab) tab.textContent = 'Cross-Refs (' + totalVerses + ')';
 
-    let html = '<div style="padding:12px 16px 4px;font-size:12px;color:#7A8FA6;">This verse belongs to <b>' + Object.keys(byTheme).length + '</b> theme(s). Tap any verse to open it.</div>';
+    // Step 3: Fetch actual verse texts for all unique refs (batch)
+    const allRefs = [];
+    Object.values(byTheme).forEach(verses => verses.forEach(r => {
+      if (!allRefs.find(x => x.rs===r.related_sura && x.ra===r.related_aya))
+        allRefs.push({rs: r.related_sura, ra: r.related_aya});
+    }));
+
+    const verseTexts = {};
+    // Fetch in batches of 20 using IN filter
+    const suraIds = [...new Set(allRefs.map(x => x.rs))];
+    for (const sid of suraIds) {
+      const ayaIds = allRefs.filter(x => x.rs===sid).map(x => x.ra);
+      try {
+        const vrows = await sbFetch('ayas', {
+          select: 'sura_id,aya_number,arabic,english,aya_text',
+          sura_id: 'eq.' + sid,
+          aya_number: 'in.(' + ayaIds.join(',') + ')'
+        });
+        vrows.forEach(v => { verseTexts[v.sura_id+':'+v.aya_number] = v; });
+      } catch(e) {}
+    }
+
+    // Step 4: Render full verse cards grouped by theme
+    let html = '<div style="padding:10px 14px 4px;font-size:12px;color:#7A8FA6;border-bottom:1px solid #E8E4DC;margin-bottom:4px;">'
+      + 'This verse belongs to <b>' + Object.keys(byTheme).length + '</b> theme'
+      + (Object.keys(byTheme).length>1?'s':'') + ' — '
+      + '<b>' + totalVerses + '</b> related verses. '
+      + 'Tap <b>Open ↗</b> to read any verse with full language options.</div>';
 
     Object.entries(byTheme).forEach(function(entry) {
       const theme = entry[0], verses = entry[1];
-      html += '<div style="margin:0 12px 16px;">';
-      html += '<div style="background:linear-gradient(135deg,#FDF5DE,#FAF0C0);border:2px solid #E8C97B;border-radius:10px;padding:10px 14px;margin-bottom:10px;">';
-      html += '<div style="font-size:13px;font-weight:800;color:#5A3A10;">🗂 ' + escapeHtml(theme) + '</div>';
-      html += '<div style="font-size:11px;color:#B8902A;margin-top:2px;">' + verses.length + ' related verse' + (verses.length>1?'s':'') + '</div>';
-      html += '</div>';
-      html += '<div style="display:flex;flex-wrap:wrap;gap:6px;padding:0 4px;">';
+
+      // Theme header
+      html += '<div style="margin:12px 12px 4px;">'
+        + '<div style="background:linear-gradient(135deg,#FDF5DE,#FAF0C0);border:2px solid #E8C97B;border-radius:10px;padding:10px 14px;">'
+        + '<div style="font-size:13px;font-weight:800;color:#5A3A10;">🗂 ' + escapeHtml(theme) + '</div>'
+        + '<div style="font-size:11px;color:#B8902A;margin-top:2px;">' + verses.length + ' verse' + (verses.length>1?'s':'') + ' in this theme</div>'
+        + '</div></div>';
+
+      // Each verse as a full card
       verses.forEach(function(r) {
-        const si = allSuras.find(function(s){ return (s.sura_id||s.id) === r.related_sura; });
-        const sn = si ? (si.sura_name_english || si.sura_name_translated || '') : '';
-        html += '<button onclick="openVersePopup(' + r.related_sura + ',' + r.related_aya + ')"'
-          + ' title="' + escapeHtml(sn) + '"'
-          + ' class="xref-chip-btn"'
-          + ' style="padding:6px 14px;background:#fff;border:2px solid #D4C9A8;border-radius:8px;font-size:13px;font-weight:700;color:#2A3F4E;cursor:pointer;min-width:62px;text-align:center;"'
-          + '>' + r.related_sura + ':' + r.related_aya + '</button>';
+        const key = r.related_sura + ':' + r.related_aya;
+        const v   = verseTexts[key] || {};
+        const si  = allSuras.find(function(s){ return (s.sura_id||s.id) === r.related_sura; });
+        const sn  = si ? (si.sura_name_english || si.sura_name_translated || '') : 'Surah ' + r.related_sura;
+
+        html += '<div style="margin:6px 12px;background:#fff;border:1.5px solid #E8E4DC;border-radius:12px;overflow:hidden;">';
+
+        // Card header
+        html += '<div style="background:#F8F5EE;padding:8px 14px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #E8E4DC;">'
+          + '<div>'
+            + '<span style="font-size:15px;font-weight:800;color:#B8902A;">' + r.related_sura + ':' + r.related_aya + '</span>'
+            + '<span style="font-size:11px;color:#7A8FA6;margin-left:8px;">' + escapeHtml(sn) + '</span>'
+          + '</div>'
+          + '<button onclick="openVersePopup(' + r.related_sura + ',' + r.related_aya + ')" '
+            + 'style="padding:5px 12px;background:#B8902A;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">'
+            + 'Open ↗</button>'
+          + '</div>';
+
+        // Arabic text
+        if (v.arabic) {
+          html += '<div style="padding:10px 14px 6px;font-family:Amiri,serif;font-size:20px;direction:rtl;text-align:right;line-height:1.9;color:#1a1a1a;border-bottom:1px solid #F5F0E8;">'
+            + escapeHtml(v.arabic) + '</div>';
+        }
+
+        // English text
+        if (v.english) {
+          const snippet = v.english.length > 160 ? v.english.slice(0,160) + '…' : v.english;
+          html += '<div style="padding:8px 14px;font-size:13px;color:#444;line-height:1.7;font-style:italic;">'
+            + escapeHtml(snippet) + '</div>';
+        }
+
+        // Tigrinya if present
+        if (v.aya_text) {
+          html += '<div style="padding:4px 14px 10px;font-size:14px;font-weight:700;color:#000;line-height:1.8;'
+            + 'text-shadow:-1px -1px 0 #fff,1px -1px 0 #fff,-1px 1px 0 #fff,1px 1px 0 #fff;">'
+            + escapeHtml(v.aya_text) + '</div>';
+        }
+
+        html += '</div>'; // end verse card
       });
-      html += '</div></div>';
     });
+
+    // Footer: open all in new view
+    html += '<div style="padding:14px 16px;text-align:center;border-top:1px solid #E8E4DC;margin-top:8px;">'
+      + '<button onclick="openAllXrefVerses(' + sura + ',' + aya + ')" '
+        + 'style="padding:10px 20px;background:linear-gradient(135deg,#1a1a2e,#2d2d44);color:#E8C97B;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">'
+        + '📖 Open All ' + totalVerses + ' Verses in Full View</button>'
+      + '</div>';
 
     panel.innerHTML = html;
   } catch(e) {
     console.error('loadCrossReferences:', e);
     panel.innerHTML = '<div style="padding:20px;text-align:center;color:#C0392B;font-size:13px;">Error loading cross-references.</div>';
   }
+}
+
+// Open all cross-ref verses in a dedicated full-page view
+async function openAllXrefVerses(sura, aya) {
+  // Collect all related verse refs
+  const rows = await sbFetch('thematic_cross_references_v2', {
+    select: 'theme,related_sura,related_aya',
+    sura: 'eq.' + sura, aya: 'eq.' + aya, order: 'theme'
+  }).catch(() => []);
+  if (!rows.length) return;
+
+  // Store in sessionStorage and open full view modal
+  const refs = [];
+  const seen = new Set();
+  rows.forEach(r => {
+    const k = r.related_sura+':'+r.related_aya;
+    if (!seen.has(k)) { seen.add(k); refs.push({sura:r.related_sura, aya:r.related_aya, theme:r.theme}); }
+  });
+  sessionStorage.setItem('xrefVerses', JSON.stringify({source: sura+':'+aya, refs}));
+  openXrefFullView();
+}
+
+function openXrefFullView() {
+  const data = JSON.parse(sessionStorage.getItem('xrefVerses') || 'null');
+  if (!data) return;
+
+  // Create a full-screen overlay
+  let overlay = document.getElementById('xrefFullViewOverlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'xrefFullViewOverlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:#FAFAF7;z-index:99990;overflow-y:auto;';
+    document.body.appendChild(overlay);
+  }
+
+  // Language checkboxes state
+  const langs = [{id:'ar',label:'Arabic',checked:true},{id:'en',label:'English',checked:true},
+                 {id:'ti',label:'Tigrinya',checked:false},{id:'am',label:'Amharic',checked:false},
+                 {id:'or',label:'Oromo',checked:false},{id:'so',label:'Somali',checked:false}];
+
+  const langBar = langs.map(l =>
+    '<label style="display:inline-flex;align-items:center;gap:4px;margin-right:10px;cursor:pointer;font-size:12px;font-weight:600;color:#5A3A10;">'
+    + '<input type="checkbox" id="xfv-lang-'+l.id+'" '+(l.checked?'checked':'')
+    + ' onchange="renderXrefFullView()" style="accent-color:#B8902A;"> '+l.label+'</label>'
+  ).join('');
+
+  overlay.innerHTML =
+    '<div style="position:sticky;top:0;z-index:10;background:#1a1a2e;padding:12px 16px;display:flex;align-items:center;gap:12px;">'
+      + '<button onclick="document.getElementById('xrefFullViewOverlay').style.display='none'" '
+        + 'style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);color:#fff;border-radius:8px;padding:6px 12px;cursor:pointer;font-size:13px;">← Back</button>'
+      + '<div style="font-size:14px;font-weight:700;color:#E8C97B;">Cross-References for ' + data.source + ' (' + data.refs.length + ' verses)</div>'
+    + '</div>'
+    + '<div style="background:#F0EDE6;padding:10px 16px;border-bottom:1px solid #E8E4DC;overflow-x:auto;white-space:nowrap;">'
+      + '<span style="font-size:10px;font-weight:700;color:#999;text-transform:uppercase;margin-right:8px;">Show:</span>'
+      + langBar
+    + '</div>'
+    + '<div id="xfvContent" style="padding:12px;"></div>';
+
+  renderXrefFullView();
+}
+
+async function renderXrefFullView() {
+  const data = JSON.parse(sessionStorage.getItem('xrefVerses') || 'null');
+  if (!data) return;
+  const content = document.getElementById('xfvContent');
+  if (!content) return;
+
+  const showAr = document.getElementById('xfv-lang-ar')?.checked;
+  const showEn = document.getElementById('xfv-lang-en')?.checked;
+  const showTi = document.getElementById('xfv-lang-ti')?.checked;
+  const showAm = document.getElementById('xfv-lang-am')?.checked;
+  const showOr = document.getElementById('xfv-lang-or')?.checked;
+  const showSo = document.getElementById('xfv-lang-so')?.checked;
+
+  content.innerHTML = '<div style="text-align:center;padding:20px;color:#AAA;"><span class="spinner"></span> Loading verses...</div>';
+
+  // Fetch all verse texts
+  const suraIds = [...new Set(data.refs.map(r => r.sura))];
+  const verseTexts = {};
+  for (const sid of suraIds) {
+    const ayaIds = data.refs.filter(r => r.sura===sid).map(r => r.aya);
+    try {
+      const vrows = await sbFetch('ayas', {
+        select: 'sura_id,aya_number,arabic,english,aya_text,amharic,oromo,somali',
+        sura_id: 'eq.'+sid,
+        aya_number: 'in.('+ayaIds.join(',')+')'
+      });
+      vrows.forEach(v => { verseTexts[v.sura_id+':'+v.aya_number] = v; });
+    } catch(e) {}
+  }
+
+  // Group by theme
+  const byTheme = {};
+  data.refs.forEach(r => {
+    if (!byTheme[r.theme]) byTheme[r.theme] = [];
+    byTheme[r.theme].push(r);
+  });
+
+  let html = '';
+  Object.entries(byTheme).forEach(([theme, verses]) => {
+    html += '<div style="margin-bottom:20px;">'
+      + '<div style="background:linear-gradient(135deg,#FDF5DE,#FAF0C0);border:2px solid #E8C97B;border-radius:10px;padding:10px 14px;margin-bottom:10px;">'
+      + '<div style="font-size:13px;font-weight:800;color:#5A3A10;">🗂 '+escapeHtml(theme)+'</div>'
+      + '<div style="font-size:11px;color:#B8902A;">'+verses.length+' verses</div>'
+      + '</div>';
+
+    verses.forEach(r => {
+      const v = verseTexts[r.sura+':'+r.aya] || {};
+      const si = allSuras.find(s => (s.sura_id||s.id)===r.sura);
+      const sn = si ? (si.sura_name_english||si.sura_name_translated||'') : '';
+
+      html += '<div style="background:#fff;border:1.5px solid #E8E4DC;border-radius:12px;margin-bottom:10px;overflow:hidden;">'
+        + '<div style="background:#F8F5EE;padding:8px 14px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #E8E4DC;">'
+          + '<div><span style="font-size:15px;font-weight:800;color:#B8902A;">'+r.sura+':'+r.aya+'</span>'
+          + '<span style="font-size:11px;color:#7A8FA6;margin-left:8px;">'+escapeHtml(sn)+'</span></div>'
+          + '<div style="display:flex;gap:6px;">'
+            + '<button onclick="xfvCopy(''+r.sura+':'+r.aya+'')" style="padding:4px 10px;background:#F0EDE6;border:1px solid #D4C9A8;border-radius:6px;font-size:11px;cursor:pointer;">📋</button>'
+            + '<button onclick="xfvShare(''+r.sura+':'+r.aya+'')" style="padding:4px 10px;background:#F0EDE6;border:1px solid #D4C9A8;border-radius:6px;font-size:11px;cursor:pointer;">📤</button>'
+            + '<button onclick="xfvRead(''+r.sura+':'+r.aya+'')" style="padding:4px 10px;background:#F0EDE6;border:1px solid #D4C9A8;border-radius:6px;font-size:11px;cursor:pointer;">🔊</button>'
+            + '<button onclick="document.getElementById('xrefFullViewOverlay').style.display='none';navToVerse('+r.sura+','+r.aya+')" style="padding:4px 10px;background:#B8902A;color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;">Open</button>'
+          + '</div>'
+        + '</div>'
+        + '<div style="padding:10px 14px;">';
+
+      if (showAr && v.arabic) html += '<div style="font-family:Amiri,serif;font-size:22px;direction:rtl;text-align:right;line-height:2;color:#1a1a1a;margin-bottom:8px;">'+escapeHtml(v.arabic)+'</div>';
+      if (showEn && v.english) html += '<div style="font-size:13px;color:#444;line-height:1.7;font-style:italic;margin-bottom:6px;">'+escapeHtml(v.english)+'</div>';
+      if (showTi && v.aya_text) html += '<div style="font-size:16px;font-weight:700;color:#000;line-height:1.8;text-shadow:-1px -1px 0 #fff,1px -1px 0 #fff,-1px 1px 0 #fff,1px 1px 0 #fff;margin-bottom:4px;">'+escapeHtml(v.aya_text)+'</div>';
+      if (showAm && v.amharic) html += '<div style="font-size:15px;color:#333;line-height:1.8;margin-bottom:4px;">'+escapeHtml(v.amharic)+'</div>';
+      if (showOr && v.oromo) html += '<div style="font-size:13px;color:#444;line-height:1.7;margin-bottom:4px;">'+escapeHtml(v.oromo)+'</div>';
+      if (showSo && v.somali) html += '<div style="font-size:13px;color:#444;line-height:1.7;">'+escapeHtml(v.somali)+'</div>';
+
+      html += '</div></div>';
+    });
+    html += '</div>';
+  });
+
+  content.innerHTML = html;
+}
+
+function xfvCopy(ref) {
+  const data = JSON.parse(sessionStorage.getItem('xrefVerses')||'null');
+  navigator.clipboard.writeText('Quran '+ref).catch(()=>{});
+}
+function xfvShare(ref) {
+  navigator.share ? navigator.share({title:'Quran '+ref, url:window.location.origin+'?ref='+ref}).catch(()=>{}) : navigator.clipboard.writeText(window.location.origin+'?ref='+ref).catch(()=>{});
+}
+function xfvRead(ref) {
+  const parts = ref.split(':');
+  const v = document.querySelector('[data-sura="'+parts[0]+'"][data-aya="'+parts[1]+'"]');
+  const text = v ? v.innerText : ref;
+  window.speechSynthesis && window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text); u.rate=0.9;
+  window.speechSynthesis.speak(u);
 }
 
 // ─── loadRiwayatPanel (alias for qiraat loading) ────────────────────
