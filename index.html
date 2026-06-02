@@ -1411,6 +1411,109 @@ function loadRiwayatPanel(sura, aya) {
   loadVerseQiraat(sura, aya);
 }
 
+async function loadFiqhPanel(num, suraId) {
+  const panel = document.getElementById(`fiqh-panel-${num}`);
+  if (!panel || panel.dataset.loaded === '1') return;
+  panel.dataset.loaded = '1';
+  panel.innerHTML = '<div style="padding:20px;text-align:center;color:#BBB;"><span class="spinner"></span> Loading fiqh rulings...</div>';
+
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_fiqh_for_verse`, {
+      method: 'POST',
+      headers: { ...HEADERS, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_sura: suraId, p_aya: num })
+    });
+    const rows = res.ok ? await res.json() : [];
+
+    if (!rows || rows.length === 0) {
+      panel.innerHTML = '<div style="color:#888;font-style:italic;font-size:13px;padding:20px;text-align:center;">No fiqh rulings recorded for this verse yet.</div>';
+      return;
+    }
+
+    const schools = [
+      { key: 'hanafi', label: 'Ḥanafī', color: '#7A5C10', bg: '#FDF8EC', border: '#E8D4A0' },
+      { key: 'maliki', label: 'Mālikī', color: '#2A5A7A', bg: '#EEF5FA', border: '#A8C8E0' },
+      { key: 'shafii', label: 'Shāfiʿī', color: '#2A5A3A', bg: '#EEF8EE', border: '#A0C8A8' },
+      { key: 'hanbali', label: 'Ḥanbalī', color: '#6A2A2A', bg: '#FAF0EE', border: '#D4A8A8' },
+      { key: 'jafari', label: 'Jaʿfarī (Shīʿa)', color: '#4A2A6A', bg: '#F5EEF8', border: '#C0A8D8' },
+      { key: 'zaydi', label: 'Zaydī', color: '#2A5A5A', bg: '#EEF8F8', border: '#A0C8C8' },
+      { key: 'ibadi', label: 'Ibāḍī', color: '#5A4A2A', bg: '#F8F4EE', border: '#C8B888' },
+      { key: 'mutazila', label: 'Muʿtazila', color: '#3A5A3A', bg: '#F0F6F0', border: '#A8C0A8' },
+      { key: 'salafi', label: 'Salafī', color: '#5A5A2A', bg: '#F6F6EE', border: '#C0C088' },
+    ];
+
+    const schoolKeys = ['hanafi','maliki','shafii','hanbali','jafari','zaydi','ibadi','mutazila','salafi'];
+    let html = '';
+
+    for (const row of rows) {
+      html += `
+        <div style="border:1px solid #D0C0A0;border-radius:10px;padding:14px;margin-bottom:16px;background:#FDFAF4;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
+          <div style="font-weight:700;font-size:13px;color:#2A1A0A;margin-bottom:6px;">${row.topic}</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">
+            <span style="font-size:10px;background:#F5EDD8;border:1px solid #C8A84C;color:#7A5C10;padding:2px 8px;border-radius:10px;">${row.category || ''}</span>
+            ${row.subcategory ? `<span style="font-size:10px;background:#EEF5EE;border:1px solid #A0C0A0;color:#2A5A3A;padding:2px 8px;border-radius:10px;">${row.subcategory}</span>` : ''}
+            ${row.controversy_level ? `<span style="font-size:10px;background:#FAF0EE;border:1px solid #D4A0A0;color:#6A2A2A;padding:2px 8px;border-radius:10px;">⚡ ${row.controversy_level}</span>` : ''}
+          </div>
+          ${row.brief_description ? `<div style="font-size:12px;color:#666;line-height:1.65;margin-bottom:12px;font-style:italic;padding:8px 10px;background:#F8F4EE;border-radius:6px;">${row.brief_description}</div>` : ''}
+
+          ${schools.filter(s => row[s.key + '_position']).map((s,i) => `
+            <div style="border:1px solid ${s.border};border-left:3px solid ${s.color};border-radius:6px;margin-bottom:6px;overflow:hidden;">
+              <button onclick="toggleFiqhCard('${topicId}-${i}')" style="width:100%;display:flex;align-items:center;justify-content:space-between;padding:9px 12px;background:${s.bg};border:none;cursor:pointer;text-align:left;">
+                <span style="font-size:12px;font-weight:700;color:${s.color};">${s.label}</span>
+                <span id="${topicId}-${i}-arrow" style="font-size:11px;color:${s.color};transition:transform .2s;">▼</span>
+              </button>
+              <div id="${topicId}-${i}" style="display:none;padding:10px 12px;background:#fff;border-top:1px solid ${s.border};">
+                <div style="font-size:13px;color:#1A1A1A;line-height:1.75;">${row[s.key + '_position']}</div>
+                ${s.evidence_key && row[s.evidence_key] ? `<div style="font-size:11px;color:#666;margin-top:8px;padding-top:8px;border-top:1px solid ${s.border};font-style:italic;">📎 ${row[s.evidence_key]}</div>` : ''}
+              </div>
+            </div>`).join('')}
+
+          ${row.consensus ? `
+            <div style="margin-top:10px;padding:10px 12px;background:#EEF8EE;border:1px solid #A0C8A0;border-radius:6px;">
+              <div style="font-size:11px;font-weight:700;color:#2A5A3A;margin-bottom:4px;">Scholarly Consensus</div>
+              <div style="font-size:13px;color:#1A2A1A;line-height:1.65;">${row.consensus}</div>
+            </div>` : ''}
+
+          ${row.key_disagreement ? `
+            <div style="margin-top:8px;padding:10px 12px;background:#FAF0EE;border:1px solid #D4A0A0;border-radius:6px;">
+              <div style="font-size:11px;font-weight:700;color:#6A2A2A;margin-bottom:4px;">Key Disagreement</div>
+              <div style="font-size:13px;color:#2A1A1A;line-height:1.65;">${row.key_disagreement}</div>
+            </div>` : ''}
+
+          ${row.reflection_questions && row.reflection_questions.length > 0 ? `
+            <div style="margin-top:8px;padding:10px 12px;background:#EEF0FA;border:1px solid #A8B8D8;border-radius:6px;">
+              <div style="font-size:11px;font-weight:700;color:#2A3A6A;margin-bottom:6px;">Study Questions</div>
+              ${row.reflection_questions.map(q => `<div style="font-size:12px;color:#2A2A2A;margin-bottom:4px;line-height:1.6;">• ${q}</div>`).join('')}
+            </div>` : ''}
+          </div>
+        </div>`;
+    }
+
+    panel.innerHTML = html;
+  } catch(e) {
+    panel.innerHTML = `<div style="color:#c97a7a;font-size:13px;padding:16px;">Could not load fiqh rulings: ${e.message}</div>`;
+  }
+}
+
+// ============================================================
+// WORD STUDY — tap any Arabic word to see root and analysis
+// ============================================================
+let wordStudySura = null;
+let wordStudyAya = null;
+
+function closeWordStudy() {
+  const overlay = document.getElementById('word-study-overlay');
+  if (!overlay) return;
+  overlay.classList.remove('ws-open');
+  setTimeout(() => { overlay.style.display = 'none'; }, 300);
+  document.querySelectorAll('.ws-highlighted').forEach(el => {
+    el.classList.remove('ws-highlighted');
+    el.style.background = '';
+    el.style.borderRadius = '';
+    el.style.outline = '';
+  });
+}
+
 function escapeHtml(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -1922,6 +2025,8 @@ async function toggleVerse(num, suraId, el) {
 
   // Load Cross-References
   loadCrossReferences(suraId, num);
+  // Load AI Analysis (stored DB data)
+  loadAIAnalysis(suraId, num);
   // Load tafsir (table first, AI fallback)
   loadTafsirPanel(suraId, num);
   // Load Fiqh rulings
