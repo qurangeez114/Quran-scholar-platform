@@ -1586,9 +1586,9 @@ async function renderXrefFullView() {
           + '<div><span style="font-size:15px;font-weight:800;color:#B8902A;">'+r.sura+':'+r.aya+'</span>'
           + '<span style="font-size:11px;color:#7A8FA6;margin-left:8px;">'+escapeHtml(sn)+'</span></div>'
           + '<div style="display:flex;gap:6px;">'
-            + '<button onclick="xfvCopy(''+r.sura+':'+r.aya+'')" style="padding:4px 10px;background:#F0EDE6;border:1px solid #D4C9A8;border-radius:6px;font-size:11px;cursor:pointer;">📋</button>'
-            + '<button onclick="xfvShare(''+r.sura+':'+r.aya+'')" style="padding:4px 10px;background:#F0EDE6;border:1px solid #D4C9A8;border-radius:6px;font-size:11px;cursor:pointer;">📤</button>'
-            + '<button onclick="xfvRead(''+r.sura+':'+r.aya+'')" style="padding:4px 10px;background:#F0EDE6;border:1px solid #D4C9A8;border-radius:6px;font-size:11px;cursor:pointer;">🔊</button>'
+            + '<button class="xfv-action" data-action="copy" data-ref="' + r.sura + ':' + r.aya + '" style="padding:4px 10px;background:#F0EDE6;border:1px solid #D4C9A8;border-radius:6px;font-size:11px;cursor:pointer;">📋</button>'
+            + '<button class="xfv-action" data-action="share" data-ref="' + r.sura + ':' + r.aya + '" style="padding:4px 10px;background:#F0EDE6;border:1px solid #D4C9A8;border-radius:6px;font-size:11px;cursor:pointer;">📤</button>'
+            + '<button class="xfv-action" data-action="read" data-ref="' + r.sura + ':' + r.aya + '" style="padding:4px 10px;background:#F0EDE6;border:1px solid #D4C9A8;border-radius:6px;font-size:11px;cursor:pointer;">🔊</button>'
             + '<button onclick="closeXrefView();navToVerse('+r.sura+','+r.aya+')" style="padding:4px 10px;background:#B8902A;color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;">Open</button>'
           + '</div>'
         + '</div>'
@@ -1609,6 +1609,23 @@ async function renderXrefFullView() {
   content.innerHTML = html;
 }
 
+
+document.addEventListener('click', function(e) {
+  const btn = e.target.closest('.xfv-action');
+  if (!btn) return;
+  const ref = btn.dataset.ref;
+  const action = btn.dataset.action;
+  if (!ref) return;
+  if (action === 'copy') navigator.clipboard.writeText('Quran ' + ref).catch(function(){});
+  else if (action === 'share') {
+    navigator.share ? navigator.share({title:'Quran '+ref, url:window.location.origin+'?ref='+ref}).catch(function(){})
+      : navigator.clipboard.writeText(window.location.origin+'?ref='+ref).catch(function(){});
+  } else if (action === 'read') {
+    window.speechSynthesis && window.speechSynthesis.cancel();
+    var u = new SpeechSynthesisUtterance(ref); u.rate=0.9;
+    window.speechSynthesis && window.speechSynthesis.speak(u);
+  }
+});
 function closeXrefView() { var el=document.getElementById("xrefFullViewOverlay"); if(el) el.style.display="none"; }
 function xfvCopy(ref) {
   const data = JSON.parse(sessionStorage.getItem('xrefVerses')||'null');
