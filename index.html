@@ -1109,6 +1109,46 @@ async function loadVerseQiraat(sura, aya) {
   } catch(e) { console.warn('Qiraat:', e); }
 }
 
+// ─── loadAIAnalysis (theme-based join) ────────────────────────────
+async function loadAIAnalysis(sura, aya) {
+  const panel = document.getElementById('tp-' + aya + '-ai');
+  if (!panel) return;
+  try {
+    const themeRows = await sbFetch('thematic_cross_references_v2', {
+      select: 'theme', sura: 'eq.' + sura, aya: 'eq.' + aya
+    });
+    const themes = [...new Set(themeRows.map(r => r.theme))];
+    if (!themes.length) return;
+    const analyses = await Promise.all(themes.slice(0,5).map(t =>
+      sbFetch('ai_analysis', { select: '*', theme: 'eq.' + t, sura: 'eq.0' })
+    ));
+    const rows = analyses.flat();
+    if (!rows.length) return;
+    const seen = new Set();
+    const unique = rows.filter(r => {
+      if (seen.has(r.analysis_title)) return false;
+      seen.add(r.analysis_title); return true;
+    });
+    const existingContent = panel.innerHTML;
+    let html = '<div style="margin-bottom:16px;">';
+    html += '<div style="font-size:11px;font-weight:800;color:#5A3A10;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;padding:8px 14px;background:#FDF5DE;border-radius:8px;">📊 Thematic Analysis (' + unique.length + ' theme' + (unique.length>1?'s':'') + ')</div>';
+    unique.forEach(function(r) {
+      html += '<div style="background:#fff;border:1px solid #E8E4DC;border-radius:10px;margin-bottom:10px;overflow:hidden;">';
+      html += '<div style="padding:10px 14px;border-bottom:1px solid #F0EAD8;">';
+      if (r.theme) html += '<div style="font-size:10px;font-weight:700;color:#B8902A;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">🗂 ' + escapeHtml(r.theme) + '</div>';
+      html += '<div style="font-size:13px;font-weight:800;color:#1a1a1a;">' + escapeHtml(r.analysis_title||'') + '</div>';
+      html += '</div>';
+      html += '<div style="padding:10px 14px;font-size:12px;color:#333;line-height:1.75;">' + escapeHtml(r.analysis_body||'') + '</div>';
+      if (r.critical_note) html += '<div style="margin:0 14px 8px;padding:8px 12px;background:#FFF0F0;border-left:3px solid #C0392B;border-radius:0 6px 6px 0;font-size:12px;color:#C0392B;line-height:1.6;"><b>⚡ Critical Note:</b> ' + escapeHtml(r.critical_note) + '</div>';
+      if (r.contradiction_note) html += '<div style="margin:0 14px 8px;padding:8px 12px;background:#FFF8DC;border-left:3px solid #B8902A;border-radius:0 6px 6px 0;font-size:12px;color:#8B6914;line-height:1.6;"><b>⚠️ Tension:</b> ' + escapeHtml(r.contradiction_note) + '</div>';
+      if (r.apologetic_note) html += '<div style="margin:0 14px 10px;padding:8px 12px;background:#F0FFF4;border-left:3px solid #2E7D32;border-radius:0 6px 6px 0;font-size:12px;color:#2E7D32;line-height:1.6;"><b>🛡 Traditional Response:</b> ' + escapeHtml(r.apologetic_note) + '</div>';
+      html += '</div>';
+    });
+    html += '</div><div style="border-top:2px solid #E8E4DC;padding-top:10px;margin-bottom:6px;font-size:11px;font-weight:700;color:#7A8FA6;text-transform:uppercase;letter-spacing:0.5px;">🤖 AI Research Tools</div>';
+    panel.innerHTML = html + existingContent;
+  } catch(e) { console.warn('loadAIAnalysis:', e); }
+}
+
 function escapeHtml(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
