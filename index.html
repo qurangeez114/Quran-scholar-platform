@@ -999,6 +999,116 @@ function searchVariants(query) {
     .slice(0, 6);
 }
 
+
+// ═══════════════════════════════════════════════════════════
+// RESEARCH DEPTH BADGE
+// ═══════════════════════════════════════════════════════════
+async function loadDepthBadge(sura, aya) {
+  const badge = document.getElementById(`depth-badge-${aya}`);
+  if (!badge || badge.dataset.loaded) return;
+  badge.dataset.loaded = '1';
+  try {
+    const [xrefs, hadith, tafsirR, siraMap, lexR] = await Promise.all([
+      sbFetch('cross_references',{select:'id',source_surah:`eq.${sura}`,source_ayah:`eq.${aya}`,limit:1}),
+      sbFetch('hadith_connections',{select:'id',sura_id:`eq.${sura}`,aya_number:`eq.${aya}`,limit:1}),
+      sbFetch('tafsir',{select:'id',sura_id:`eq.${sura}`,aya_number:`eq.${aya}`,limit:1}),
+      sbFetch('sira_verse_map',{select:'sira_id',sura:`eq.${sura}`,aya:`eq.${aya}`,limit:1}),
+      sbFetch('word_analysis',{select:'id',sura_id:`eq.${sura}`,aya_number:`eq.${aya}`,limit:1})
+    ]);
+    const score = [xrefs.length,hadith.length,tafsirR.length,siraMap.length,lexR.length].filter(Boolean).length;
+    if (score > 0) {
+      const stars = '★'.repeat(score) + '☆'.repeat(5-score);
+      badge.textContent = `${stars} Research Depth`;
+      badge.style.display = 'inline-block';
+      badge.dataset.detail = JSON.stringify({
+        'Cross-Refs': xrefs.length > 0,
+        'Hadith': hadith.length > 0,
+        'Tafsir': tafsirR.length > 0,
+        'Sīra': siraMap.length > 0,
+        'Lexicon': lexR.length > 0
+      });
+    }
+  } catch(e) {}
+}
+
+function showDepthDetail(aya) {
+  const badge = document.getElementById(`depth-badge-${aya}`);
+  if (!badge || !badge.dataset.detail) return;
+  const d = JSON.parse(badge.dataset.detail);
+  const lines = Object.entries(d).map(([k,v]) => `${v?'✅':'—'} ${k}`).join('\n');
+  alert(`Research Depth for verse ${aya}:\n\n${lines}`);
+}
+
+// ═══════════════════════════════════════════════════════════
+// PER-VERSE SIRA CONTEXT (shown in Asbāb tab)
+// ═══════════════════════════════════════════════════════════
+async function loadVerseSliraContext(sura, aya) {
+  try {
+    const maps = await sbFetch('sira_verse_map', {
+      select: 'sira_id,context_note',
+      sura: `eq.${sura}`,
+      aya: `eq.${aya}`
+    });
+    if (!maps.length) return;
+    const siraIds = [...new Set(maps.map(m => m.sira_id))];
+    const events = await Promise.all(siraIds.slice(0,3).map(id =>
+      sbFetch('sira_events', {
+        select: 'id,title_en,title_ar,year_ce,period,location,story_en',
+        id: `eq.${id}`
+      }).then(r => r[0]).catch(() => null)
+    ));
+    const valid = events.filter(Boolean);
+    if (!valid.length) return;
+
+    const asbabPanel = document.getElementById(`tp-${aya}-asbab`);
+    if (!asbabPanel) return;
+    const siraHtml = `<div style="margin-bottom:14px;padding:12px;background:#F8F5EE;border:1px solid #E8C97B;border-radius:10px;">
+      <div style="font-size:11px;font-weight:800;color:#B8902A;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">🌙 Sīra Context</div>
+      ${valid.map(e => `<div style="margin-bottom:10px;">
+        <div style="font-weight:700;font-size:13px;color:#2A3F4E;">${escapeHtml(e.title_en||'')}</div>
+        <div style="font-size:11px;color:#7A8FA6;margin-bottom:4px;">${escapeHtml(e.period||'')} · ${escapeHtml(e.location||'')} · ${e.year_ce ? e.year_ce+' CE' : ''}</div>
+        ${e.story_en ? `<div style="font-size:12px;color:#444;line-height:1.6;">${escapeHtml(e.story_en.slice(0,300))}${e.story_en.length>300?'…':''}</div>` : ''}
+      </div>`).join('')}
+    </div>`;
+
+    // Prepend sira context to asbab panel
+    if (!asbabPanel.querySelector('.sira-context-injected')) {
+      const div = document.createElement('div');
+      div.className = 'sira-context-injected';
+      div.innerHTML = siraHtml;
+      asbabPanel.insertBefore(div, asbabPanel.firstChild);
+    }
+  } catch(e) { console.warn('Sira context:', e); }
+}
+
+// ═══════════════════════════════════════════════════════════
+// PER-VERSE QIRAAT VARIANTS (shown at top of Riwayat tab)
+// ═══════════════════════════════════════════════════════════
+async function loadVerseQiraat(sura, aya) {
+  try {
+    const variants = await sbFetch('qiraat_variants', {
+      select: 'id,variant_text,reader_id,riwayat_id,meaning_impact,translation_difference',
+      sura_id: `eq.${sura}`,
+      aya_number: `eq.${aya}`
+    });
+    if (!variants.length) return;
+
+    const riwayatPanel = document.getElementById(`tp-${aya}-riwayat`);
+    if (!riwayatPanel || riwayatPanel.querySelector('.qiraat-injected')) return;
+
+    const qHtml = `<div class="qiraat-injected" style="margin-bottom:14px;padding:12px;background:#F0F7F0;border:1px solid #7A9A7A;border-radius:10px;">
+      <div style="font-size:11px;font-weight:800;color:#2E7D32;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">📖 Qirāʾāt Variants (${variants.length})</div>
+      ${variants.map(v => `<div style="margin-bottom:10px;padding:8px;background:#fff;border-radius:8px;border:1px solid #B0CDB0;">
+        <div style="font-family:'Amiri',serif;font-size:18px;direction:rtl;text-align:right;margin-bottom:4px;">${escapeHtml(v.variant_text||'')}</div>
+        ${v.meaning_impact ? `<div style="font-size:12px;color:#2E7D32;font-weight:600;">Impact: ${escapeHtml(v.meaning_impact)}</div>` : ''}
+        ${v.translation_difference ? `<div style="font-size:12px;color:#444;">${escapeHtml(v.translation_difference)}</div>` : ''}
+      </div>`).join('')}
+    </div>`;
+
+    riwayatPanel.insertAdjacentHTML('afterbegin', qHtml);
+  } catch(e) { console.warn('Qiraat:', e); }
+}
+
 function escapeHtml(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -1352,6 +1462,7 @@ function renderVerses(ayas, suraId) {
       </div>
       <div class="verse-detail">
         <div class="tab-bar">
+          <div id="depth-badge-${aya.aya_number}" style="display:none;padding:2px 8px;background:#FDF5DE;border:1px solid #E8C97B;border-radius:10px;font-size:10px;color:#B8902A;font-weight:700;margin-bottom:6px;cursor:pointer;" title="Research depth" onclick="showDepthDetail(${aya.aya_number})"></div>
           <button class="tab-btn active" onclick="switchTab(${aya.aya_number},'details',this)">Summary</button>
           <button class="tab-btn" id="tafsir-tab-${aya.aya_number}" onclick="switchTab(${aya.aya_number},'tafsir',this)">Tafsir</button>
           <button class="tab-btn" id="asbab-tab-${aya.aya_number}" onclick="switchTab(${aya.aya_number},'asbab',this)">Asbāb</button>
@@ -1501,6 +1612,12 @@ async function toggleVerse(num, suraId, el) {
   loadAsbabPanel(suraId, num);
   // Load hadith connections
   loadHadithPanel(suraId, num);
+  // Load research depth badge
+  loadDepthBadge(suraId, num);
+  // Load per-verse sira context into Asbab panel
+  loadVerseSliraContext(suraId, num);
+  // Load qiraat variants into Riwayat panel
+  loadVerseQiraat(suraId, num);
 }
 
 function switchTab(num, tab, btn) {
