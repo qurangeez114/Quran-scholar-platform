@@ -1593,75 +1593,72 @@ function toggleWordByWord(sura, aya, btn) {
   div.dataset.wbw = 'on';
   div.classList.add('wbw-grid', 'study');
 
-  // Show skeleton cards immediately while fetching meanings
-  div.innerHTML = words.slice().reverse().map((w, i) => {
-    const pos = words.length - i;
-    return '<span class="wbw-word" data-pos="' + pos + '" onclick=\'event.stopPropagation();openWordStudy(' + JSON.stringify(w) + ',' + Number(sura) + ',' + Number(aya) + ')\'>' +
-      '<span class="wbw-arabic">' + escapeHtml(w) + '</span>' +
-      '<span class="wbw-translit" style="font-size:9px;color:#B8902A;text-align:center;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;font-style:italic;">···</span>' +
-      '<span class="wbw-english" style="font-size:10px;color:#555;text-align:center;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">···</span>' +
-      '</span>';
-  }).join('');
+  // Use quran_words.json for word-level transliteration + meaning
+  var verseKey = Number(sura) + ':' + Number(aya);
+  var qwords = (QURAN_WORDS_READY && QURAN_WORDS && QURAN_WORDS[verseKey]) ? QURAN_WORDS[verseKey] : null;
 
-  // Fetch word meanings + transliteration from word_analysis and ayas
-  (async function() {
-    try {
-      // 1. Fetch word_analysis for meanings and roots
-      const wRows = await sbFetch('word_analysis', {
-        select: 'word_position,original_meaning,root_word,part_of_speech',
-        sura_id: 'eq.' + Number(sura),
-        aya_number: 'eq.' + Number(aya),
-        order: 'word_position'
-      });
-
-      // Build position → {meaning, root} map (pick shortest/best)
-      const labels = {}, roots = {}, pos_of_speech = {};
-      wRows.forEach(function(r) {
-        const pos = r.word_position;
-        const meaning = (r.original_meaning || '').trim();
-        const short = meaning.split(/[,;.(]/)[0].trim().split(' ').slice(0,3).join(' ');
-        if (!labels[pos] || short.length < labels[pos].length) labels[pos] = short || '';
-        if (r.root_word && r.root_word.trim()) roots[pos] = r.root_word.trim();
-        if (r.part_of_speech) pos_of_speech[pos] = r.part_of_speech;
-      });
-
-      // 2. Fetch verse-level transliteration to split by word
-      let translitWords = [];
+  if (qwords && qwords.length) {
+    // Use pre-built word data with Arabic, transliteration, and English
+    div.innerHTML = qwords.map(function(w, i) {
+      var safe = (w.a || '').replace(/'/g,"&#39;").replace(/"/g,'&quot;');
+      var tSpan = w.t ? '<span class="wbw-translit">' + w.t + '</span>' : '';
+      var eSpan = w.e ? '<span class="wbw-english">' + w.e + '</span>' : '<span class="wbw-english"></span>';
+      return '<span class="wbw-word" data-pos="' + (i+1) + '" data-aya="' + Number(aya) + '" onclick="event.stopPropagation();openWordStudy(' + JSON.stringify(w.a||'') + ',' + Number(sura) + ',' + Number(aya) + ')">'
+        + '<span class="wbw-arabic">' + (w.a || '') + '</span>'
+        + tSpan + eSpan
+        + '</span>';
+    }).join('');
+  } else {
+    // Fallback: split Arabic by spaces, fetch meanings async
+    div.innerHTML = words.slice().reverse().map(function(w, i) {
+      var pos = words.length - i;
+      return '<span class="wbw-word" data-pos="' + pos + '" onclick="event.stopPropagation();openWordStudy(' + JSON.stringify(w) + ',' + Number(sura) + ',' + Number(aya) + ')">'
+        + '<span class="wbw-arabic">' + escapeHtml(w) + '</span>'
+        + '<span class="wbw-translit" style="font-size:9px;color:#B8902A;text-align:center;display:block;"></span>'
+        + '<span class="wbw-english" style="font-size:10px;color:#555;text-align:center;display:block;"></span>'
+        + '</span>';
+    }).join('');
+    // Load meanings from word_analysis
+    (async function() {
       try {
-        const ayaRows = await sbFetch('ayas', {
-          select: 'arabic_transliteration',
-          sura_id: 'eq.' + Number(sura),
-          aya_number: 'eq.' + Number(aya)
+        var wRows = await sbFetch('word_analysis', {
+          select: 'word_position,original_meaning,root_word',
+          sura_id: 'eq.' + Number(sura), aya_number: 'eq.' + Number(aya), order: 'word_position'
         });
-        const translit = ayaRows[0] && ayaRows[0].arabic_transliteration
-          ? ayaRows[0].arabic_transliteration.trim() : '';
-        // Only use if it contains Latin letters (real transliteration)
-        if (/[a-zA-Z]/.test(translit)) {
-          translitWords = translit.split(/\s+/).filter(Boolean);
-        }
+        var labels = {};
+        wRows.forEach(function(r) {
+          var m = (r.original_meaning||'').split(/[,;.(]/)[0].trim().split(' ').slice(0,3).join(' ');
+          if (!labels[r.word_position] || m.length < labels[r.word_position].length) labels[r.word_position] = m;
+        });
+        div.querySelectorAll('.wbw-word').forEach(function(span) {
+          var p = parseInt(span.dataset.pos);
+          var el = span.querySelector('.wbw-english');
+          if (el && labels[p]) el.textContent = labels[p];
+        });
       } catch(e) {}
+    })();
+  }
 
-      // 3. Update each word card
-      div.querySelectorAll('.wbw-word').forEach(function(span) {
-        const pos = parseInt(span.dataset.pos);
-        const translitEl = span.querySelector('.wbw-translit');
-        const meaningEl  = span.querySelector('.wbw-english');
-
-        // Transliteration: from verse translit split, or root word as fallback
-        if (translitEl) {
-          const tWord = translitWords.length >= pos ? translitWords[pos - 1] : '';
-          const rootLabel = roots[pos] ? roots[pos] : '';
-          translitEl.textContent = tWord || rootLabel || '';
+  // Load quran_words.json in background if not ready
+  if (!QURAN_WORDS_READY) {
+    ensureQuranWords().then(function() {
+      // Refresh if still showing this verse
+      if (div.dataset.wbw === 'on') {
+        var curKey = Number(sura) + ':' + Number(aya);
+        if (QURAN_WORDS && QURAN_WORDS[curKey]) {
+          var qw = QURAN_WORDS[curKey];
+          div.querySelectorAll('.wbw-word').forEach(function(span, i) {
+            var w = qw[i];
+            if (!w) return;
+            var tEl = span.querySelector('.wbw-translit');
+            var eEl = span.querySelector('.wbw-english');
+            if (tEl) tEl.textContent = w.t || '';
+            if (eEl) eEl.textContent = w.e || '';
+          });
         }
-
-        // Meaning
-        if (meaningEl) meaningEl.textContent = labels[pos] || '';
-      });
-    } catch(e) {
-      div.querySelectorAll('.wbw-translit').forEach(function(el) { el.textContent = ''; });
-      div.querySelectorAll('.wbw-english').forEach(function(el) { el.textContent = ''; });
-    }
-  })();
+      }
+    }).catch(function(){});
+  }
   if (btn) {
     btn.classList.add('active');
     btn.textContent = '↩ Normal';
