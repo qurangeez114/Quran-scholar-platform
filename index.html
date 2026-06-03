@@ -1775,6 +1775,104 @@ function openThemeAnalysis(encodedTheme) {
   window.open('theme-analysis.html?theme=' + encodeURIComponent(theme), '_blank');
 }
 
+
+// ═══ THEMES PANEL ══════════════════════════════════════════════════
+window.suraThemeMap = {};
+var _allThemesList  = [];
+var _themesLoaded   = false;
+
+async function loadSuraThemeMap() {
+  try {
+    var hdr = (window.HEADERS && window.HEADERS.apikey) ? window.HEADERS
+      : { apikey: window.SUPABASE_KEY || '', Authorization: 'Bearer ' + (window.SUPABASE_KEY || '') };
+    var r = await fetch(
+      'https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/thematic_cross_references?select=theme,sura&limit=10000',
+      { headers: hdr }
+    );
+    if (!r.ok) return;
+    var rows = await r.json();
+    var tm = {}, themeV = {}, themeS = {};
+    rows.forEach(function(row) {
+      if (!tm[row.sura]) tm[row.sura] = [];
+      if (!tm[row.sura].includes(row.theme)) tm[row.sura].push(row.theme);
+      themeV[row.theme] = (themeV[row.theme] || 0) + 1;
+      if (!themeS[row.theme]) themeS[row.theme] = new Set();
+      themeS[row.theme].add(row.sura);
+    });
+    window.suraThemeMap = tm;
+    _allThemesList = Object.entries(themeV)
+      .map(function(e) { return { theme: e[0], verse_count: e[1], sura_count: (themeS[e[0]] || new Set()).size }; })
+      .sort(function(a,b) { return b.verse_count - a.verse_count; });
+    if (typeof allSuras !== 'undefined' && allSuras.length) renderSuraList(allSuras);
+  } catch(e) { console.warn('loadSuraThemeMap:', e); }
+}
+
+function loadThemesPanel() {
+  if (!_allThemesList.length) {
+    document.getElementById('themes-list').innerHTML = '<div style="padding:20px;text-align:center;color:#AAA;"><span class="spinner"></span> Loading...</div>';
+    loadSuraThemeMap().then(function() { renderThemesList(_allThemesList); _themesLoaded = true; });
+  } else {
+    renderThemesList(_allThemesList);
+  }
+}
+
+var THEME_CATS = [
+  { pat: /Women/i,                                                         icon: '👩', label: 'Women & Gender' },
+  { pat: /Fight|War|Jihad|Warfare|Disbeliever|Allian/i,                   icon: '⚔️', label: 'Warfare & Jihad' },
+  { pat: /Moses|Abraham|Noah|Jesus|Joseph|Solomon|Prophet|Pharaoh|Khidr/i,icon: '🕌', label: 'Prophets & Stories' },
+  { pat: /Judgment|Hell|Paradise|Resurrect|Afterlife|Barzakh/i,           icon: '⚖️', label: 'Afterlife' },
+  { pat: /Monotheism|Tawhid|Divine|Shirk|Sonship/i,                       icon: '☝️', label: 'Theology' },
+  { pat: /Prayer|Worship|Fasting|Hajj|Charity|Zakat/i,                    icon: '🤲', label: 'Worship' },
+  { pat: /Quran|Scripture|Torah|Gospel|People of the Book|Covenant/i,     icon: '📖', label: 'Scripture' },
+  { pat: /Hypocrites|Apostasy|Opposition|Nifaq/i,                         icon: '⚠️', label: 'Social' },
+  { pat: /Creation|Signs|Nature|Gratitude/i,                              icon: '🌿', label: 'Creation & Signs' },
+];
+function getThemeCat(t) {
+  for (var i=0;i<THEME_CATS.length;i++) { if (THEME_CATS[i].pat.test(t)) return THEME_CATS[i]; }
+  return { icon:'📚', label:'Other' };
+}
+
+function renderThemesList(themes) {
+  var countEl = document.getElementById('themes-count');
+  var listEl  = document.getElementById('themes-list');
+  if (!listEl) return;
+  if (countEl) countEl.textContent = themes.length + ' themes';
+  if (!themes.length) { listEl.innerHTML = '<div style="color:#BBB;font-style:italic;font-size:12px;padding:20px;text-align:center;">No themes found.</div>'; return; }
+
+  var byCategory = {};
+  themes.forEach(function(t) {
+    var c = getThemeCat(t.theme);
+    var key = c.icon + ' ' + c.label;
+    if (!byCategory[key]) byCategory[key] = [];
+    byCategory[key].push(t);
+  });
+
+  var html = '';
+  Object.keys(byCategory).sort().forEach(function(cat) {
+    var items = byCategory[cat];
+    html += '<div style="padding:5px 12px 2px;font-size:10px;font-weight:800;color:#B8902A;text-transform:uppercase;letter-spacing:0.4px;background:#FBF6E8;border-top:1px solid #E8DDC0;border-bottom:1px solid #E8DDC0;">' + escapeHtml(cat) + '</div>';
+    items.forEach(function(t) {
+      html += '<div onclick="openThemeAnalysis(\'' + encodeURIComponent(t.theme) + '\')" style="display:flex;align-items:center;gap:6px;padding:8px 14px;cursor:pointer;border-bottom:1px solid #F5F0E8;" onmouseover="this.style.background=\'#FDF5DE\'" onmouseout="this.style.background=\'\'">'
+        + '<div style="font-size:12px;font-weight:600;color:#2A3F4E;flex:1;line-height:1.4;">' + escapeHtml(t.theme) + '</div>'
+        + '<div style="font-size:10px;color:#B8902A;font-weight:700;white-space:nowrap;">' + t.verse_count + 'v</div>'
+        + '<div style="font-size:11px;color:#B8902A;">↗</div>'
+        + '</div>';
+    });
+  });
+  listEl.innerHTML = html;
+}
+
+function filterThemesList(q) {
+  var cat = document.getElementById('themes-cat-filter') ? document.getElementById('themes-cat-filter').value : '';
+  var filtered = _allThemesList;
+  if (q) filtered = filtered.filter(function(t) { return t.theme.toLowerCase().includes(q.toLowerCase()); });
+  if (cat) filtered = filtered.filter(function(t) { return new RegExp(cat,'i').test(t.theme); });
+  renderThemesList(filtered);
+}
+
+document.addEventListener('DOMContentLoaded', function() { setTimeout(loadSuraThemeMap, 1500); });
+// ═══════════════════════════════════════════════════════════════════
+
 function escapeHtml(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
