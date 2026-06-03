@@ -1783,25 +1783,19 @@ var _themesLoaded   = false;
 
 async function loadSuraThemeMap() {
   try {
-    var hdr = (window.HEADERS && window.HEADERS.apikey) ? window.HEADERS
-      : { apikey: window.SUPABASE_KEY || '', Authorization: 'Bearer ' + (window.SUPABASE_KEY || '') };
-    var r = await fetch(
-      'https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/thematic_cross_references?select=theme,sura&limit=10000',
-      { headers: hdr }
-    );
-    if (!r.ok) return;
-    var rows = await r.json();
+    var rows = await sbFetch('thematic_cross_references', { select: 'theme,sura', order: 'theme', limit: '6000' });
+    if (!Array.isArray(rows) || !rows.length) { console.warn('loadSuraThemeMap: empty'); return; }
     var tm = {}, themeV = {}, themeS = {};
     rows.forEach(function(row) {
       if (!tm[row.sura]) tm[row.sura] = [];
-      if (!tm[row.sura].includes(row.theme)) tm[row.sura].push(row.theme);
+      if (tm[row.sura].indexOf(row.theme) === -1) tm[row.sura].push(row.theme);
       themeV[row.theme] = (themeV[row.theme] || 0) + 1;
       if (!themeS[row.theme]) themeS[row.theme] = new Set();
       themeS[row.theme].add(row.sura);
     });
     window.suraThemeMap = tm;
-    _allThemesList = Object.entries(themeV)
-      .map(function(e) { return { theme: e[0], verse_count: e[1], sura_count: (themeS[e[0]] || new Set()).size }; })
+    _allThemesList = Object.keys(themeV)
+      .map(function(t) { return { theme: t, verse_count: themeV[t], sura_count: themeS[t].size }; })
       .sort(function(a,b) { return b.verse_count - a.verse_count; });
     if (typeof allSuras !== 'undefined' && allSuras.length) renderSuraList(allSuras);
   } catch(e) { console.warn('loadSuraThemeMap:', e); }
