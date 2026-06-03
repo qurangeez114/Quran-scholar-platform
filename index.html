@@ -1605,8 +1605,11 @@ async function ensureQuranWords() {
 
 function wbwTap(el) {
   var word = el.dataset.word || el.querySelector('.wbw-arabic').textContent || '';
-  var sura = parseInt(el.dataset.sura || el.closest('[data-sura]') && el.closest('[data-sura]').dataset.sura || 0);
+  var sura = parseInt(el.dataset.sura || 0);
   var aya  = parseInt(el.dataset.aya || 0);
+  // Mark active card for audio position lookup
+  document.querySelectorAll('.wbw-word').forEach(function(s) { s.classList.remove('ws-active'); });
+  el.classList.add('ws-active');
   if (word && sura && aya) openWordStudy(word, sura, aya);
 }
 
@@ -7277,13 +7280,64 @@ function speakVerseSelected(ayaNum, suraId, btn) {
 }
 
 function wsSpeak() {
-  const word = document.getElementById('ws-word');
-  if (!word || !word.textContent.trim()) return;
-  window.speechSynthesis && window.speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(word.textContent.trim());
-  u.lang = 'ar';
-  u.rate = 0.7;
-  window.speechSynthesis && window.speechSynthesis.speak(u);
+  const wordEl = document.getElementById('ws-word');
+  if (!wordEl || !wordEl.textContent.trim()) return;
+  const word = wordEl.textContent.trim();
+
+  // Try Quran audio CDN for word-by-word pronunciation
+  // Use wordStudySura and wordStudyAya to build the audio URL
+  const sura = wordStudySura || 0;
+  const aya  = wordStudyAya  || 0;
+  const pos  = wordEl.dataset.pos || 1;
+
+  // Method 1: EveryAyah word-by-word audio (most reliable for Arabic)
+  // Format: https://audio.qurancdn.com/wbw/{sura}/{aya}/{word_position}.mp3
+  if (sura && aya) {
+    const btn = document.querySelector('[onclick="wsSpeak()"]');
+    if (btn) { btn.textContent = '⏳ Loading...'; btn.disabled = true; }
+
+    // Try to find word position from the active word card
+    const activeCard = document.querySelector('.wbw-word.ws-active');
+    const wPos = activeCard ? (parseInt(activeCard.dataset.pos) || 1) : 1;
+
+    const urls = [
+      `https://audio.qurancdn.com/wbw/${sura}/${aya}/${wPos}.mp3`,
+      `https://dl.salamquran.com/wbw/${String(sura).padStart(3,'0')}_${String(aya).padStart(3,'0')}_${String(wPos).padStart(3,'0')}.mp3`,
+    ];
+
+    function tryUrl(index) {
+      if (index >= urls.length) {
+        // Fallback to Web Speech API
+        if (btn) { btn.textContent = '🔊 Pronounce'; btn.disabled = false; }
+        trySpeechSynthesis(word);
+        return;
+      }
+      const audio = new Audio(urls[index]);
+      audio.oncanplaythrough = function() {
+        if (btn) { btn.textContent = '🔊 Pronounce'; btn.disabled = false; }
+        audio.play().catch(() => tryUrl(index + 1));
+      };
+      audio.onerror = function() { tryUrl(index + 1); };
+      audio.load();
+    }
+    tryUrl(0);
+  } else {
+    trySpeechSynthesis(word);
+  }
+}
+
+function trySpeechSynthesis(word) {
+  if (!window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  // Try to find Arabic voice
+  const voices = window.speechSynthesis.getVoices();
+  const arVoice = voices.find(v => v.lang.startsWith('ar')) || null;
+  const u = new SpeechSynthesisUtterance(word);
+  u.lang = 'ar-SA';
+  u.rate = 0.6;
+  u.pitch = 1;
+  if (arVoice) u.voice = arVoice;
+  window.speechSynthesis.speak(u);
 }
 
 function wsReadMeaning() {
