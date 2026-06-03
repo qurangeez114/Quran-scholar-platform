@@ -7276,6 +7276,38 @@ function speakVerseSelected(ayaNum, suraId, btn) {
   qgSpeakText(textEl.innerText.trim(), btn, langMap[lang] || 'en-US');
 }
 
+function wsSpeak() {
+  const word = document.getElementById('ws-word');
+  if (!word || !word.textContent.trim()) return;
+  window.speechSynthesis && window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(word.textContent.trim());
+  u.lang = 'ar';
+  u.rate = 0.7;
+  window.speechSynthesis && window.speechSynthesis.speak(u);
+}
+
+function wsReadMeaning() {
+  // Read the original meaning text from ws-content
+  const content = document.getElementById('ws-content');
+  if (!content) return;
+  // Find Original Meaning div
+  const meanings = content.querySelectorAll('[style*="Original Meaning"], div');
+  let text = '';
+  content.querySelectorAll('div').forEach(function(d) {
+    if (d.textContent.includes('Original Meaning') && d.nextElementSibling) {
+      text = d.nextElementSibling.textContent.trim();
+    }
+  });
+  // Fallback: just read all visible text
+  if (!text) text = content.textContent.replace(/\s+/g,' ').trim().slice(0, 200);
+  if (!text) return;
+  window.speechSynthesis && window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'en';
+  u.rate = 0.9;
+  window.speechSynthesis && window.speechSynthesis.speak(u);
+}
+
 function speakText(text, langCode, btn) {
   langCode = langCode || 'en';
   btn = btn || null;
@@ -8306,11 +8338,21 @@ document.addEventListener('keydown', function(e) {
       <div style="width:40px;height:4px;background:#D0C0A0;border-radius:2px;"></div>
     </div>
     <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:6px 18px 12px;border-bottom:1px solid #E8D8B8;">
-      <div>
+      <div style="flex:1;">
         <div id="ws-word" style="font-size:34px;font-family:'Amiri',serif;color:#2A1A0A;direction:rtl;line-height:1.3;"></div>
         <div id="ws-verse-ref" style="font-size:11px;color:#9A8060;font-family:'IBM Plex Mono',monospace;margin-top:2px;"></div>
+        <div style="display:flex;gap:8px;margin-top:8px;">
+          <button onclick="wsSpeak()" title="Pronounce this word in Arabic"
+            style="display:flex;align-items:center;gap:5px;padding:6px 12px;background:#FDF5DE;border:1.5px solid #C8A84C;border-radius:8px;color:#7A5C10;font-size:12px;cursor:pointer;font-weight:600;">
+            🔊 Pronounce
+          </button>
+          <button onclick="wsReadMeaning()" title="Read meaning aloud"
+            style="display:flex;align-items:center;gap:5px;padding:6px 12px;background:#EEF5FA;border:1.5px solid #6A9FC9;border-radius:8px;color:#1A3A5A;font-size:12px;cursor:pointer;font-weight:600;">
+            🔊 Meaning
+          </button>
+        </div>
       </div>
-      <button onclick="closeWordStudy()" style="background:#F5EDD8;border:1px solid #C8A84C;border-radius:8px;color:#7A5C10;font-size:12px;cursor:pointer;padding:5px 10px;font-weight:600;margin-top:6px;">✕</button>
+      <button onclick="closeWordStudy()" style="background:#F5EDD8;border:1px solid #C8A84C;border-radius:8px;color:#7A5C10;font-size:12px;cursor:pointer;padding:5px 10px;font-weight:600;margin-top:6px;flex-shrink:0;">✕</button>
     </div>
     <div id="ws-content" style="flex:1;overflow-y:auto;padding:16px 18px 32px;font-size:13px;color:#2A2A2A;">
       <div style="text-align:center;padding:40px;"><span class="spinner"></span></div>
