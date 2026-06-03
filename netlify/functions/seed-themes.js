@@ -5,12 +5,19 @@ const SB_URL = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
 const ANT_KEY = process.env.ANTHROPIC_API_KEY;
 
-const HDR_SB = {
+const HDR_SB_GET = {
+  apikey: SB_KEY,
+  Authorization: `Bearer ${SB_KEY}`,
+  'Content-Type': 'application/json'
+};
+const HDR_SB_POST = {
   apikey: SB_KEY,
   Authorization: `Bearer ${SB_KEY}`,
   'Content-Type': 'application/json',
   Prefer: 'return=minimal,resolution=ignore-duplicates'
 };
+// Legacy alias
+const HDR_SB = HDR_SB_GET;
 
 const THEMES = [
   'Abrogation','Against the Hypocrites: Nifaq and Its Consequences','Apostasy',
@@ -53,7 +60,7 @@ const THEMES = [
 
 async function sbGet(table, params) {
   const qs = Object.entries(params).map(([k,v]) => `${k}=${encodeURIComponent(v)}`).join('&');
-  const r = await fetch(`${SB_URL}/rest/v1/${table}?${qs}&limit=200`, { headers: HDR_SB });
+  const r = await fetch(`${SB_URL}/rest/v1/${table}?${qs}&limit=200`, { headers: HDR_SB_GET });
   if (!r.ok) return [];
   return r.json().catch(() => []);
 }
@@ -62,7 +69,7 @@ async function sbPost(table, rows) {
   if (!rows.length) return true;
   const r = await fetch(`${SB_URL}/rest/v1/${table}`, {
     method: 'POST',
-    headers: HDR_SB,
+    headers: HDR_SB_POST,
     body: JSON.stringify(rows)
   });
   return r.ok;
