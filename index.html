@@ -1574,6 +1574,34 @@ function makeWordsTappable(container, sura, aya) {
 }
 
 
+var QURAN_WORDS = null;        // full dataset once loaded
+var QURAN_WORDS_LOADING = false;
+var QURAN_WORDS_READY = false;
+var QURAN_WORDS_CALLBACKS = [];
+
+async function ensureQuranWords() {
+  if (QURAN_WORDS_READY) return QURAN_WORDS;
+  if (QURAN_WORDS_LOADING) {
+    return new Promise(function(resolve) {
+      QURAN_WORDS_CALLBACKS.push(resolve);
+    });
+  }
+  QURAN_WORDS_LOADING = true;
+  try {
+    const resp = await fetch('/quran_words.json');
+    QURAN_WORDS = await resp.json();
+    QURAN_WORDS_READY = true;
+    QURAN_WORDS_CALLBACKS.forEach(function(cb) { cb(QURAN_WORDS); });
+    QURAN_WORDS_CALLBACKS = [];
+    console.log('quran_words.json loaded:', Object.keys(QURAN_WORDS).length, 'verses');
+  } catch(e) {
+    console.warn('quran_words.json load failed:', e);
+    QURAN_WORDS = {};
+    QURAN_WORDS_READY = true;
+  }
+  return QURAN_WORDS;
+}
+
 function toggleWordByWord(sura, aya, btn) {
   const div = document.getElementById(`arabic-${sura}-${aya}`);
   if (!div) return;
