@@ -1019,24 +1019,28 @@ html[data-theme="dark"] .qhist-lbl { color: #E8E4DC; }
       </div>
 <div id="panel-themes" style="display:none;flex-direction:column;height:100%;overflow:hidden;">
   <div style="padding:10px 14px;border-bottom:1px solid #E8DDC0;flex-shrink:0;">
-    <input id="themes-search" type="text" placeholder="Search themes..." oninput="filterThemesList(this.value)"
+    <input id="themes-search" type="text" placeholder="Search themes..."
+      oninput="filterThemesList(this.value)"
       style="width:100%;padding:7px 10px;border:1px solid #D4C9A8;border-radius:8px;font-size:13px;background:#FDF8EE;outline:none;color:#333;margin-bottom:7px;">
     <select id="themes-cat-filter" onchange="filterThemesList(document.getElementById('themes-search').value)"
       style="width:100%;padding:6px 10px;border:1px solid #D4C9A8;border-radius:8px;font-size:12px;background:#FDF8EE;outline:none;color:#5A4A3A;font-weight:700;">
       <option value="">📚 All Categories</option>
       <option value="Women">👩 Women &amp; Gender</option>
-      <option value="Fighting|War|Jihad|Warfare|Disbeliever|Allian">⚔️ Warfare &amp; Jihad</option>
-      <option value="Prophets|Moses|Abraham|Noah|Jesus|Joseph|Solomon">🕌 Prophets &amp; Stories</option>
-      <option value="Day of Judgment|Hell|Paradise|Resurrection|Afterlife|Eschatol">⚖️ Afterlife</option>
-      <option value="Monotheism|Tawhid|Divine|Allah|Shirk">☝️ Theology</option>
-      <option value="Prayer|Worship|Fasting|Hajj|Zakat|Charity">🤲 Worship</option>
-      <option value="Quran|Scripture|Torah|Gospel|People of the Book">📖 Scripture</option>
-      <option value="Hypocrites|Apostasy|Opposition">⚠️ Social</option>
+      <option value="Fighting|War|Jihad|Warfare|Disbeliever">⚔️ Warfare &amp; Jihad</option>
+      <option value="Moses|Abraham|Noah|Jesus|Joseph|Solomon|Prophet|Khidr|Pharaoh|Luqman">🕌 Prophets &amp; Stories</option>
+      <option value="Judgment|Hell|Paradise|Resurrection|Afterlife|Eschatol|Barzakh">⚖️ Afterlife</option>
+      <option value="Monotheism|Tawhid|Divine|Shirk|Sonship">☝️ Theology</option>
+      <option value="Prayer|Worship|Fasting|Hajj|Charity|Zakat">🤲 Worship</option>
+      <option value="Quran|Scripture|Torah|Gospel|People of the Book|Covenant">📖 Scripture</option>
+      <option value="Hypocrites|Apostasy|Opposition|Nifaq">⚠️ Social &amp; Political</option>
+      <option value="Creation|Signs|Nature|Gratitude">🌿 Creation &amp; Signs</option>
     </select>
   </div>
-  <div id="themes-count" style="padding:4px 14px;font-size:11px;color:#B8902A;font-weight:700;border-bottom:1px solid #F0EDE6;flex-shrink:0;"></div>
-  <div id="themes-list" style="flex:1;overflow-y:auto;padding:6px 0;">
-    <div style="color:#BBB;font-style:italic;font-size:12px;padding:20px;text-align:center;"><span class="spinner"></span> Loading themes...</div>
+  <div id="themes-count" style="padding:5px 14px;font-size:11px;color:#B8902A;font-weight:700;border-bottom:1px solid #F0EDE6;flex-shrink:0;"></div>
+  <div id="themes-list" style="flex:1;overflow-y:auto;">
+    <div style="color:#BBB;font-style:italic;font-size:12px;padding:20px;text-align:center;">
+      <span class="spinner"></span> Loading themes...
+    </div>
   </div>
 </div>
       <div id="savedList" style="overflow-y:auto;flex:1;padding:4px 0;"><div style="color:#BBB;font-style:italic;font-size:12px;padding:20px;text-align:center">No saved verses yet.<br>Tap 🔖 on any verse to bookmark it.</div></div>
@@ -1771,98 +1775,6 @@ function openThemeAnalysis(encodedTheme) {
   window.open('theme-analysis.html?theme=' + encodeURIComponent(theme), '_blank');
 }
 
-// ── SURA THEME MAP ────────────────────────────────────────────────────
-let suraThemeMap = {}; // sura_id → [theme1, theme2, ...]
-let allThemesList = []; // {theme, verse_count, suras}
-
-async function loadSuraThemeMap() {
-  try {
-    const rows = await sbFetch('thematic_cross_references', {
-      select: 'theme,sura', order: 'theme'
-    });
-    suraThemeMap = {};
-    const themeSuras = {};
-    rows.forEach(r => {
-      if (!suraThemeMap[r.sura]) suraThemeMap[r.sura] = [];
-      if (!suraThemeMap[r.sura].includes(r.theme)) suraThemeMap[r.sura].push(r.theme);
-      if (!themeSuras[r.theme]) themeSuras[r.theme] = new Set();
-      themeSuras[r.theme].add(r.sura);
-    });
-    // Build theme list
-    allThemesList = Object.entries(themeSuras).map(([theme, surasSet]) => ({
-      theme,
-      sura_count: surasSet.size,
-      verse_count: rows.filter(r => r.theme === theme).length
-    })).sort((a,b) => b.verse_count - a.verse_count);
-    // Re-render sura list with badges
-    if (allSuras.length) renderSuraList(allSuras);
-  } catch(e) { console.warn('loadSuraThemeMap:', e); }
-}
-
-// ── THEMES PANEL ─────────────────────────────────────────────────────
-let themesLoaded = false;
-function loadThemesPanel() {
-  if (themesLoaded && allThemesList.length) { renderThemesList(allThemesList); return; }
-  if (allThemesList.length) { renderThemesList(allThemesList); themesLoaded = true; return; }
-  // Load if not yet available
-  loadSuraThemeMap().then(() => { renderThemesList(allThemesList); themesLoaded = true; });
-}
-
-function renderThemesList(themes) {
-  const count = document.getElementById('themes-count');
-  const list  = document.getElementById('themes-list');
-  if (!list) return;
-  if (count) count.textContent = themes.length + ' themes';
-
-  // Group by category
-  const CATS = {
-    'Women': '👩 Women & Gender',
-    'Fighting|War|Jihad|Warfare|Disbeliever|Allian': '⚔️ Warfare & Jihad',
-    'Prophets|Moses|Abraham|Noah|Jesus|Joseph|Solomon': '🕌 Prophets & Stories',
-    'Day of Judgment|Hell|Paradise|Resurrection|Afterlife|Eschatol': '⚖️ Afterlife',
-    'Monotheism|Tawhid|Divine|Allah|Shirk': '☝️ Theology',
-    'Prayer|Worship|Fasting|Hajj|Zakat|Charity': '🤲 Worship',
-    'Quran|Scripture|Torah|Gospel|People of the Book': '📖 Scripture',
-    'Hypocrites|Apostasy|Opposition': '⚠️ Social',
-  };
-
-  function getCat(theme) {
-    for (const [pat, label] of Object.entries(CATS)) {
-      if (new RegExp(pat,'i').test(theme)) return label;
-    }
-    return '📚 Other';
-  }
-
-  const byCategory = {};
-  themes.forEach(t => {
-    const cat = getCat(t.theme);
-    if (!byCategory[cat]) byCategory[cat] = [];
-    byCategory[cat].push(t);
-  });
-
-  let html = '';
-  Object.entries(byCategory).sort().forEach(([cat, items]) => {
-    html += `<div style="padding:6px 12px 2px;font-size:10px;font-weight:800;color:#B8902A;text-transform:uppercase;letter-spacing:0.5px;border-top:1px solid #F0EDE6;">${escapeHtml(cat)}</div>`;
-    items.forEach(t => {
-      html += `<div onclick="openThemeAnalysis('${encodeURIComponent(t.theme)}')"
-        style="display:flex;align-items:center;justify-content:space-between;padding:8px 14px;cursor:pointer;border-bottom:1px solid #F8F5EE;transition:background 0.15s;"
-        onmouseover="this.style.background='#FDF5DE'" onmouseout="this.style.background=''">
-        <div style="font-size:12px;font-weight:600;color:#2A3F4E;flex:1;padding-right:6px;line-height:1.4;">${escapeHtml(t.theme)}</div>
-        <div style="font-size:10px;color:#B8902A;font-weight:700;white-space:nowrap;flex-shrink:0;">${t.verse_count}v</div>
-      </div>`;
-    });
-  });
-  list.innerHTML = html;
-}
-
-function filterThemesList(q) {
-  const cat = document.getElementById('themes-cat-filter')?.value || '';
-  let filtered = allThemesList;
-  if (q) filtered = filtered.filter(t => t.theme.toLowerCase().includes(q.toLowerCase()));
-  if (cat) filtered = filtered.filter(t => new RegExp(cat,'i').test(t.theme));
-  renderThemesList(filtered);
-}
-
 function escapeHtml(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -2052,13 +1964,13 @@ function renderSuraList(suras) {
     const amharic = s.sura_name_amharic || '';
     const english = s.sura_name_english || s.sura_name_translated || s.sura_name || '';
     const arabic = ARABIC_NAMES[id] || s.sura_name || '';
-    const themes = suraThemeMap[id] || [];
-    const themesBadge = themes.length
-      ? `<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:3px;">
-          ${themes.slice(0,2).map(t => `<span style="font-size:9px;padding:1px 6px;background:#FDF5DE;border:1px solid #E8C97B;border-radius:8px;color:#B8902A;font-weight:700;cursor:pointer;" onclick="event.stopPropagation();openThemeAnalysis('${encodeURIComponent(t)}')">${escapeHtml(t.length>22?t.slice(0,22)+'…':t)}</span>`).join('')}
-          ${themes.length > 2 ? `<span style="font-size:9px;padding:1px 6px;background:#F0EDE6;border-radius:8px;color:#888;">+${themes.length-2}</span>` : ''}
-        </div>`
-      : '';
+    const sThemes = (window.suraThemeMap || {})[id] || [];
+    const tBadges = sThemes.length ? `<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:3px;">${
+      sThemes.slice(0,2).map(t =>
+        `<span onclick="event.stopPropagation();openThemeAnalysis('${encodeURIComponent(t)}')"
+          style="font-size:9px;padding:1px 6px;background:#FDF5DE;border:1px solid #E8C97B;border-radius:8px;color:#B8902A;font-weight:700;cursor:pointer;"
+        >${escapeHtml(t.length>22?t.slice(0,22)+'…':t)}</span>`
+      ).join('')}${sThemes.length>2?`<span style="font-size:9px;padding:1px 5px;background:#F0EDE6;border-radius:8px;color:#888;">+${sThemes.length-2}</span>`:''}</div>` : '';
     return `<div class="sura-item" id="si-${id}" onclick="selectSura(${id})">
       <div class="sura-num">${id}</div>
       <div class="sura-info" style="flex:1;min-width:0;">
@@ -2066,14 +1978,12 @@ function renderSuraList(suras) {
         <div class="sura-translated" style="color:#4A3B28;font-weight:700">${escapeHtml(english)}</div>
         ${tigrinya ? `<div class="sura-translated" style="font-family:'Noto Sans Ethiopic',sans-serif;color:#5A4A3A;font-size:12px">${escapeHtml(tigrinya)}</div>` : ''}
         ${amharic ? `<div class="sura-translated" style="font-family:'Noto Sans Ethiopic',sans-serif;color:#6B5A3E;font-size:11px">${escapeHtml(amharic)}</div>` : ''}
-        ${themesBadge}
+        ${tBadges}
       </div>
       <div class="sura-ayas">${s.number_of_ayas || ''}v</div>
     </div>`;
   }).join('');
   applyLangState(); updateLangBar();
-  // Load theme map for badges and Themes panel
-  if (!Object.keys(suraThemeMap).length) loadSuraThemeMap();
 }
 
 function filterSuras() {
@@ -5257,7 +5167,7 @@ function renderSavedList() {
 }
 
 function switchSidebarTab(tab) {
-  ['suras','topics','lexicon','chrono','saved','variants','sira'].forEach(t => {
+  ['suras','topics','lexicon','chrono','saved','variants','themes'].forEach(t => {
     const isCurrent = t === tab;
     const panel = document.getElementById('panel-' + t);
     if (panel) panel.style.display = isCurrent ? 'flex' : 'none';
@@ -5273,7 +5183,7 @@ function switchSidebarTab(tab) {
   if (tab === 'chrono') loadChrono();
   if (tab === 'saved') renderSavedList();
   if (tab === 'variants') loadVariantsPanel();
-  if (tab === 'sira') loadSiraPanel();
+  if (tab === 'themes') loadThemesPanel();
 }
 
 let lexiconData = [];
