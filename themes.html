@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Themes — Quran Scholar</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#FAFAF7;color:#1a1a1a;}
+.top-bar{background:linear-gradient(135deg,#1a1a2e,#2d2d44);padding:12px 16px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100;border-bottom:2px solid #E8C97B;}
+.back-btn{background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.25);color:#fff;border-radius:8px;padding:6px 14px;font-size:13px;cursor:pointer;font-weight:600;text-decoration:none;}
+.top-title{font-size:16px;font-weight:800;color:#E8C97B;flex:1;}
+.top-count{font-size:12px;color:#AAA;}
+.controls{background:#F0EDE6;padding:10px 14px;border-bottom:1px solid #E8E4DC;display:flex;flex-direction:column;gap:8px;position:sticky;top:54px;z-index:99;}
+.search-input{width:100%;padding:9px 14px;border:1.5px solid #D4C9A8;border-radius:10px;font-size:14px;background:#fff;outline:none;color:#1a1a1a;}
+.cat-select{width:100%;padding:8px 12px;border:1.5px solid #D4C9A8;border-radius:10px;font-size:13px;background:#fff;outline:none;color:#5A3A10;font-weight:600;}
+.cat-header{padding:6px 16px 4px;font-size:10px;font-weight:800;color:#B8902A;text-transform:uppercase;letter-spacing:0.5px;background:#FBF6E8;border-top:2px solid #E8DDC0;border-bottom:1px solid #E8DDC0;margin-top:4px;}
+.theme-row{display:flex;align-items:center;padding:11px 16px;cursor:pointer;border-bottom:1px solid #F0EAE0;transition:background 0.15s;}
+.theme-row:active{background:#FDF5DE;}
+.theme-name{flex:1;font-size:13px;font-weight:600;color:#2A3F4E;line-height:1.4;padding-right:8px;}
+.theme-count{font-size:11px;color:#B8902A;font-weight:700;white-space:nowrap;}
+.theme-arrow{font-size:14px;color:#D4C9A8;margin-left:6px;}
+.loading{padding:40px;text-align:center;color:#AAA;font-style:italic;}
+.spinner{display:inline-block;width:20px;height:20px;border:2px solid #E8C97B;border-top-color:#B8902A;border-radius:50%;animation:spin 0.7s linear infinite;margin-right:8px;}
+@keyframes spin{to{transform:rotate(360deg);}}
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <a href="index.html" class="back-btn">← Back</a>
+  <div class="top-title">📚 All Themes</div>
+  <div class="top-count" id="count">Loading...</div>
+</div>
+
+<div class="controls">
+  <input class="search-input" id="searchInput" placeholder="🔍 Search themes..." oninput="filter()">
+  <select class="cat-select" id="catSelect" onchange="filter()">
+    <option value="">All Categories</option>
+    <option value="Women">👩 Women & Gender</option>
+    <option value="Fight|War|Jihad|Warfare|Disbeliever|Allian">⚔️ Warfare & Jihad</option>
+    <option value="Moses|Abraham|Noah|Jesus|Joseph|Solomon|Prophet|Pharaoh|Khidr|Luqman">🕌 Prophets & Stories</option>
+    <option value="Judgment|Hell|Paradise|Resurrect|Afterlife|Barzakh">⚖️ Afterlife</option>
+    <option value="Monotheism|Tawhid|Divine|Shirk|Sonship">☝️ Theology</option>
+    <option value="Prayer|Worship|Fasting|Hajj|Charity|Zakat">🤲 Worship</option>
+    <option value="Quran|Scripture|Torah|Gospel|People of the Book|Covenant">📖 Scripture</option>
+    <option value="Hypocrites|Apostasy|Opposition|Nifaq">⚠️ Social & Political</option>
+    <option value="Creation|Signs|Nature|Gratitude">🌿 Creation & Signs</option>
+  </select>
+</div>
+
+<div id="list"><div class="loading"><span class="spinner"></span>Loading themes...</div></div>
+
+<script>
+const SB_URL = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
+const HDR = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY };
+
+let ALL_THEMES = [];
+
+const CATS = [
+  { pat: /Women/i,                                                          icon:'👩', label:'Women & Gender' },
+  { pat: /Fight|War|Jihad|Warfare|Disbeliever|Allian/i,                    icon:'⚔️', label:'Warfare & Jihad' },
+  { pat: /Moses|Abraham|Noah|Jesus|Joseph|Solomon|Prophet|Pharaoh|Khidr/i, icon:'🕌', label:'Prophets & Stories' },
+  { pat: /Judgment|Hell|Paradise|Resurrect|Afterlife|Barzakh/i,            icon:'⚖️', label:'Afterlife' },
+  { pat: /Monotheism|Tawhid|Divine|Shirk|Sonship/i,                        icon:'☝️', label:'Theology' },
+  { pat: /Prayer|Worship|Fasting|Hajj|Charity|Zakat/i,                     icon:'🤲', label:'Worship' },
+  { pat: /Quran|Scripture|Torah|Gospel|People of the Book|Covenant/i,      icon:'📖', label:'Scripture' },
+  { pat: /Hypocrites|Apostasy|Opposition|Nifaq/i,                          icon:'⚠️', label:'Social & Political' },
+  { pat: /Creation|Signs|Nature|Gratitude/i,                               icon:'🌿', label:'Creation & Signs' },
+];
+function getCat(t) { for (const c of CATS) { if (c.pat.test(t)) return c; } return { icon:'📚', label:'Other' }; }
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+async function load() {
+  // Fetch all rows in pages of 1000
+  let all = [], offset = 0;
+  while (true) {
+    const r = await fetch(`${SB_URL}/rest/v1/thematic_cross_references?select=theme,sura&limit=1000&offset=${offset}&order=theme`, { headers: HDR });
+    if (!r.ok) break;
+    const page = await r.json();
+    if (!Array.isArray(page) || !page.length) break;
+    all = all.concat(page);
+    if (page.length < 1000) break;
+    offset += 1000;
+  }
+
+  // Aggregate
+  const themeV = {}, themeS = {};
+  all.forEach(row => {
+    if (!row || !row.theme) return;
+    themeV[row.theme] = (themeV[row.theme] || 0) + 1;
+    if (!themeS[row.theme]) themeS[row.theme] = new Set();
+    themeS[row.theme].add(row.sura);
+  });
+
+  ALL_THEMES = Object.keys(themeV)
+    .map(t => ({ theme: t, verse_count: themeV[t], sura_count: themeS[t].size }))
+    .sort((a,b) => b.verse_count - a.verse_count);
+
+  document.getElementById('count').textContent = ALL_THEMES.length + ' themes';
+  render(ALL_THEMES);
+}
+
+function render(themes) {
+  const list = document.getElementById('list');
+  document.getElementById('count').textContent = themes.length + ' themes';
+  if (!themes.length) { list.innerHTML = '<div class="loading">No themes found.</div>'; return; }
+
+  // Group by category
+  const byCategory = {};
+  themes.forEach(t => {
+    const c = getCat(t.theme);
+    const key = c.icon + ' ' + c.label;
+    if (!byCategory[key]) byCategory[key] = [];
+    byCategory[key].push(t);
+  });
+
+  let html = '';
+  Object.keys(byCategory).sort().forEach(cat => {
+    html += `<div class="cat-header">${esc(cat)}</div>`;
+    byCategory[cat].forEach(t => {
+      html += `<div class="theme-row" onclick="open_theme('${encodeURIComponent(t.theme)}')">
+        <div class="theme-name">${esc(t.theme)}</div>
+        <div class="theme-count">${t.verse_count}v</div>
+        <div class="theme-arrow">↗</div>
+      </div>`;
+    });
+  });
+  list.innerHTML = html;
+}
+
+function filter() {
+  const q   = document.getElementById('searchInput').value.toLowerCase();
+  const cat = document.getElementById('catSelect').value;
+  let filtered = ALL_THEMES;
+  if (q) filtered = filtered.filter(t => t.theme.toLowerCase().includes(q));
+  if (cat) filtered = filtered.filter(t => new RegExp(cat,'i').test(t.theme));
+  render(filtered);
+}
+
+function open_theme(encoded) {
+  window.location.href = 'theme-analysis.html?theme=' + encoded;
+}
+
+load();
+</script>
+</body>
+</html>
