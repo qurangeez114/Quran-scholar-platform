@@ -1592,12 +1592,37 @@ function toggleWordByWord(sura, aya, btn) {
   const words = raw.split(/\s+/).filter(Boolean);
   div.dataset.wbw = 'on';
   div.classList.add('wbw-grid', 'study');
-  div.innerHTML = words.map((w, i) => {
-    return `<span class="wbw-word" title="Tap for root, original meaning, modern meaning, pronunciation and lexicon" onclick='event.stopPropagation();openWordStudy(${JSON.stringify(w)},${Number(sura)},${Number(aya)})'>` +
-      `<span class="wbw-arabic">${escapeHtml(w)}</span>` +
-      `<span class="wbw-english">Word ${i + 1}</span>` +
-      `</span>`;
-  }).join(' ');
+
+  // Fetch word analysis for labels (meanings), then render RTL
+  (async function() {
+    let wordLabels = {};
+    try {
+      const wRows = await sbFetch('word_analysis', {
+        select: 'word_position,arabic_word,original_meaning,root_word',
+        sura_id: 'eq.' + Number(sura),
+        aya_number: 'eq.' + Number(aya),
+        order: 'word_position'
+      });
+      wRows.forEach(r => {
+        // word_position is 1-based, match to word array
+        const label = r.root_word
+          ? r.root_word
+          : (r.original_meaning || '').split(' ').slice(0,2).join(' ');
+        wordLabels[r.word_position] = label;
+      });
+    } catch(e) {}
+
+    // Arabic is RTL — reverse display order so Word 1 appears on right
+    const rtlWords = [...words].reverse();
+    div.innerHTML = rtlWords.map((w, i) => {
+      const pos = words.length - i; // original 1-based position (rightmost = 1)
+      const label = wordLabels[pos] || wordLabels[i+1] || '';
+      return '<span class="wbw-word" title="Tap for root, original meaning" onclick=\'event.stopPropagation();openWordStudy(' + JSON.stringify(w) + ',' + Number(sura) + ',' + Number(aya) + ')\'>' +
+        '<span class="wbw-arabic">' + escapeHtml(w) + '</span>' +
+        '<span class="wbw-english" style="font-size:10px;color:#888;margin-top:4px;text-align:center;max-width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">' + escapeHtml(label) + '</span>' +
+        '</span>';
+    }).join('');
+  })();
   if (btn) {
     btn.classList.add('active');
     btn.textContent = '↩ Normal';
