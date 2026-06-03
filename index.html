@@ -1461,6 +1461,7 @@ let wordStudySura = null;
 let wordStudyAya = null;
 
 function closeWordStudy() {
+  window._wsCurrentData = null;
   const overlay = document.getElementById('word-study-overlay');
   if (!overlay) return;
   overlay.classList.remove('ws-open');
@@ -1496,9 +1497,12 @@ async function openWordStudy(word, sura, aya) {
     const d = rows && rows.length > 0 ? rows[0] : null;
 
     if (!d) {
+      window._wsCurrentData = null;
       wsContent.innerHTML = `<div style="color:#888;font-style:italic;">No analysis recorded for this word yet.</div>`;
       return;
     }
+    // Store for wsReadMeaning to use
+    window._wsCurrentData = d;
 
     // Load root occurrences
     let rootHtml = '';
@@ -7341,24 +7345,35 @@ function trySpeechSynthesis(word) {
 }
 
 function wsReadMeaning() {
-  // Read the original meaning text from ws-content
-  const content = document.getElementById('ws-content');
-  if (!content) return;
-  // Find Original Meaning div
-  const meanings = content.querySelectorAll('[style*="Original Meaning"], div');
-  let text = '';
-  content.querySelectorAll('div').forEach(function(d) {
-    if (d.textContent.includes('Original Meaning') && d.nextElementSibling) {
-      text = d.nextElementSibling.textContent.trim();
-    }
-  });
-  // Fallback: just read all visible text
-  if (!text) text = content.textContent.replace(/\s+/g,' ').trim().slice(0, 200);
-  if (!text) return;
+  // Build full reading text from stored word data
+  var parts = [];
+  var wordEl = document.getElementById('ws-word');
+  if (wordEl) parts.push('The word is ' + (wordEl.dataset.translit || wordEl.textContent.trim()));
+
+  // Read from stored ws data object
+  if (window._wsCurrentData) {
+    var d = window._wsCurrentData;
+    if (d.original_meaning)    parts.push('Original meaning: ' + d.original_meaning);
+    if (d.modern_meaning && d.modern_meaning !== d.original_meaning)
+                               parts.push('Modern meaning: ' + d.modern_meaning);
+    if (d.root_word)           parts.push('Root: ' + d.root_word);
+    if (d.part_of_speech)      parts.push('Part of speech: ' + d.part_of_speech);
+    if (d.scholarly_explanation) parts.push(d.scholarly_explanation);
+    if (d.meaning_evolution)   parts.push('Meaning evolution: ' + d.meaning_evolution);
+  } else {
+    // Fallback: read all text from content area
+    var content = document.getElementById('ws-content');
+    if (content) parts.push(content.textContent.replace(/\s+/g,' ').trim());
+  }
+
+  var text = parts.join('. ');
+  if (!text.trim()) return;
+
   window.speechSynthesis && window.speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(text);
-  u.lang = 'en';
-  u.rate = 0.9;
+  var u = new SpeechSynthesisUtterance(text);
+  u.lang = 'en-US';
+  u.rate = 0.85;
+  u.pitch = 1;
   window.speechSynthesis && window.speechSynthesis.speak(u);
 }
 
