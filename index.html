@@ -1598,42 +1598,67 @@ function toggleWordByWord(sura, aya, btn) {
     const pos = words.length - i;
     return '<span class="wbw-word" data-pos="' + pos + '" onclick=\'event.stopPropagation();openWordStudy(' + JSON.stringify(w) + ',' + Number(sura) + ',' + Number(aya) + ')\'>' +
       '<span class="wbw-arabic">' + escapeHtml(w) + '</span>' +
-      '<span class="wbw-english" style="font-size:10px;color:#C9A84C;margin-top:4px;text-align:center;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">···</span>' +
+      '<span class="wbw-translit" style="font-size:9px;color:#B8902A;text-align:center;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;font-style:italic;">···</span>' +
+      '<span class="wbw-english" style="font-size:10px;color:#555;text-align:center;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">···</span>' +
       '</span>';
   }).join('');
 
-  // Fetch word meanings from word_analysis and update labels
+  // Fetch word meanings + transliteration from word_analysis and ayas
   (async function() {
     try {
+      // 1. Fetch word_analysis for meanings and roots
       const wRows = await sbFetch('word_analysis', {
-        select: 'word_position,original_meaning,root_word',
+        select: 'word_position,original_meaning,root_word,part_of_speech',
         sura_id: 'eq.' + Number(sura),
         aya_number: 'eq.' + Number(aya),
         order: 'word_position'
       });
 
-      // Build position → best label map
-      // word_analysis has duplicate positions — pick best one (prefer short original_meaning)
-      const labels = {};
+      // Build position → {meaning, root} map (pick shortest/best)
+      const labels = {}, roots = {}, pos_of_speech = {};
       wRows.forEach(function(r) {
         const pos = r.word_position;
         const meaning = (r.original_meaning || '').trim();
-        // Pick shortest clean meaning (e.g. "In (the) name" beats long explanations)
-        const short = meaning.split(/[,;.]/)[0].trim().split(' ').slice(0,3).join(' ');
-        if (!labels[pos] || short.length < labels[pos].length) {
-          labels[pos] = short || '—';
-        }
+        const short = meaning.split(/[,;.(]/)[0].trim().split(' ').slice(0,3).join(' ');
+        if (!labels[pos] || short.length < labels[pos].length) labels[pos] = short || '';
+        if (r.root_word && r.root_word.trim()) roots[pos] = r.root_word.trim();
+        if (r.part_of_speech) pos_of_speech[pos] = r.part_of_speech;
       });
 
-      // Update each word card's label span
+      // 2. Fetch verse-level transliteration to split by word
+      let translitWords = [];
+      try {
+        const ayaRows = await sbFetch('ayas', {
+          select: 'arabic_transliteration',
+          sura_id: 'eq.' + Number(sura),
+          aya_number: 'eq.' + Number(aya)
+        });
+        const translit = ayaRows[0] && ayaRows[0].arabic_transliteration
+          ? ayaRows[0].arabic_transliteration.trim() : '';
+        // Only use if it contains Latin letters (real transliteration)
+        if (/[a-zA-Z]/.test(translit)) {
+          translitWords = translit.split(/\s+/).filter(Boolean);
+        }
+      } catch(e) {}
+
+      // 3. Update each word card
       div.querySelectorAll('.wbw-word').forEach(function(span) {
         const pos = parseInt(span.dataset.pos);
-        const labelEl = span.querySelector('.wbw-english');
-        if (labelEl && labels[pos]) labelEl.textContent = labels[pos];
-        else if (labelEl) labelEl.textContent = '';
+        const translitEl = span.querySelector('.wbw-translit');
+        const meaningEl  = span.querySelector('.wbw-english');
+
+        // Transliteration: from verse translit split, or root word as fallback
+        if (translitEl) {
+          const tWord = translitWords.length >= pos ? translitWords[pos - 1] : '';
+          const rootLabel = roots[pos] ? roots[pos] : '';
+          translitEl.textContent = tWord || rootLabel || '';
+        }
+
+        // Meaning
+        if (meaningEl) meaningEl.textContent = labels[pos] || '';
       });
     } catch(e) {
-      // On error just clear the dots
+      div.querySelectorAll('.wbw-translit').forEach(function(el) { el.textContent = ''; });
       div.querySelectorAll('.wbw-english').forEach(function(el) { el.textContent = ''; });
     }
   })();
