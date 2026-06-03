@@ -1603,6 +1603,13 @@ async function ensureQuranWords() {
   return QURAN_WORDS;
 }
 
+function wbwTap(el) {
+  var word = el.dataset.word || el.querySelector('.wbw-arabic').textContent || '';
+  var sura = parseInt(el.dataset.sura || el.closest('[data-sura]') && el.closest('[data-sura]').dataset.sura || 0);
+  var aya  = parseInt(el.dataset.aya || 0);
+  if (word && sura && aya) openWordStudy(word, sura, aya);
+}
+
 function toggleWordByWord(sura, aya, btn) {
   const div = document.getElementById(`arabic-${sura}-${aya}`);
   if (!div) return;
@@ -1632,7 +1639,7 @@ function toggleWordByWord(sura, aya, btn) {
       var safe = (w.a || '').replace(/'/g,"&#39;").replace(/"/g,'&quot;');
       var tSpan = w.t ? '<span class="wbw-translit">' + w.t + '</span>' : '';
       var eSpan = w.e ? '<span class="wbw-english">' + w.e + '</span>' : '<span class="wbw-english"></span>';
-      return '<span class="wbw-word" data-pos="' + (i+1) + '" data-aya="' + Number(aya) + '" onclick="event.stopPropagation();openWordStudy(' + JSON.stringify(w.a||'') + ',' + Number(sura) + ',' + Number(aya) + ')">'
+      return '<span class="wbw-word" data-pos="' + (i+1) + '" data-aya="' + Number(aya) + '" data-word="' + (w.a||'').replace(/"/g,'&quot;') + '" data-sura="' + Number(sura) + '" onclick="event.stopPropagation();wbwTap(this)">'
         + '<span class="wbw-arabic">' + (w.a || '') + '</span>'
         + tSpan + eSpan
         + '</span>';
@@ -1641,7 +1648,7 @@ function toggleWordByWord(sura, aya, btn) {
     // Fallback: split Arabic by spaces, fetch meanings async
     div.innerHTML = words.map(function(w, i) {
       var pos = i + 1; // natural order, CSS direction:rtl handles display
-      return '<span class="wbw-word" data-pos="' + pos + '" onclick="event.stopPropagation();openWordStudy(' + JSON.stringify(w) + ',' + Number(sura) + ',' + Number(aya) + ')">'
+      return '<span class="wbw-word" data-pos="' + pos + '" data-word="' + escapeHtml(w) + '" data-sura="' + Number(sura) + '" data-aya="' + Number(aya) + '" onclick="event.stopPropagation();wbwTap(this)">'
         + '<span class="wbw-arabic">' + escapeHtml(w) + '</span>'
         + '<span class="wbw-translit" style="font-size:9px;color:#B8902A;text-align:center;display:block;"></span>'
         + '<span class="wbw-english" style="font-size:10px;color:#555;text-align:center;display:block;"></span>'
