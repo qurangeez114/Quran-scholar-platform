@@ -4791,39 +4791,82 @@ function setTradition(sura, aya, tab, tradition) {
   });
 }
 
+// Track tafsir language preference per verse
+const tafsirLangState = {};
+
 async function loadTafsirPanel(sura, aya) {
   const panel = document.getElementById(`tp-${aya}-tafsir`);
   if (!panel || !panel.querySelector('.loading')) return;
   const tabBtn = document.getElementById(`tafsir-tab-${aya}`);
   const current = traditionState[tradKey(sura, aya, 'tafsir')] || 'sunni';
-  let entries = [];
+  const lang = tafsirLangState[`${sura}:${aya}`] || 'both';
+  let allRows = [];
   try {
-    const rows = await sbFetch('tafsir_entries', {
+    allRows = await sbFetch('tafsir_entries', {
       select: 'source_name,scholar_name,tradition,content,scholar_key,language',
       sura: `eq.${sura}`,
-      aya: `eq.${aya}`,
-      language: `eq.en`
+      aya: `eq.${aya}`
     });
-    entries = rows.map(r => ({
-      scholar: r.source_name || r.scholar_name,
-      tradition: r.tradition,
-      text: r.content,
-      meta: r.scholar_name || null,
-      isAI: false
-    }));
   } catch {}
-  if (tabBtn) tabBtn.textContent = entries.length > 0 ? `Tafsir (${entries.length})` : 'Tafsir';
-  if (entries.length === 0) {
-    entries = [{
-      scholar: 'Scholarly Synthesis',
-      tradition: current,
-      text: `No tafsir entries in database for ${sura}:${aya}. Use the AI Analysis tab to generate a linguistic reading, or add classical tafsir (Ibn Kathir, Al-Tabari, Al-Tabatabai) to the tafsir table.`,
-      meta: null,
-      isAI: true
-    }];
+  if (tabBtn) tabBtn.textContent = allRows.length > 0 ? `Tafsir (${allRows.length})` : 'Tafsir';
+
+  function buildTafsirContent(lang) {
+    // Group by scholar_key — pair Arabic + English for same scholar
+    const scholars = {};
+    allRows.forEach(r => {
+      const key = r.scholar_key || r.scholar_name;
+      if (!scholars[key]) scholars[key] = { name: r.source_name || r.scholar_name, tradition: r.tradition, ar: null, en: null };
+      if (r.language === 'ar') scholars[key].ar = r.content;
+      else scholars[key].en = r.content;
+    });
+
+    if (Object.keys(scholars).length === 0) {
+      return `<div class="info-box" style="color:#888;font-style:italic;">No tafsir in database for ${sura}:${aya}. Use the AI Analysis tab instead.</div>`;
+    }
+
+    const hasAr = allRows.some(r => r.language === 'ar');
+    const hasEn = allRows.some(r => r.language === 'en');
+
+    // Lang toggle bar
+    let toggleBar = `<div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;">`;
+    if (hasEn) toggleBar += `<button onclick="setTafsirLang(${sura},${aya},'en')" style="padding:5px 14px;border-radius:20px;border:2px solid ${lang==='en'?'#B8902A':'#D4C9A8'};background:${lang==='en'?'#B8902A':'#fff'};color:${lang==='en'?'#fff':'#666'};font-size:12px;font-weight:700;cursor:pointer;">English</button>`;
+    if (hasAr) toggleBar += `<button onclick="setTafsirLang(${sura},${aya},'ar')" style="padding:5px 14px;border-radius:20px;border:2px solid ${lang==='ar'?'#B8902A':'#D4C9A8'};background:${lang==='ar'?'#B8902A':'#fff'};color:${lang==='ar'?'#fff':'#666'};font-size:12px;font-weight:700;cursor:pointer;">عربي</button>`;
+    if (hasAr && hasEn) toggleBar += `<button onclick="setTafsirLang(${sura},${aya},'both')" style="padding:5px 14px;border-radius:20px;border:2px solid ${lang==='both'?'#B8902A':'#D4C9A8'};background:${lang==='both'?'#B8902A':'#fff'};color:${lang==='both'?'#fff':'#666'};font-size:12px;font-weight:700;cursor:pointer;">Both</button>`;
+    toggleBar += `</div>`;
+
+    let html = toggleBar;
+    Object.entries(scholars).forEach(([key, s]) => {
+      if (current !== 'all' && s.tradition && s.tradition !== current) return;
+      html += `<div class="scholar-entry">`;
+      html += `<div class="scholar-name">${escapeHtml(s.name || key)}</div>`;
+      if ((lang === 'ar' || lang === 'both') && s.ar) {
+        html += `<div class="scholar-body" style="font-family:'Amiri',serif;font-size:18px;direction:rtl;text-align:right;line-height:2;color:#111;margin-bottom:${lang==='both'&&s.en?'10px':'0'}">${escapeHtml(s.ar)}</div>`;
+      }
+      if ((lang === 'en' || lang === 'both') && s.en) {
+        html += `<div class="scholar-body">${escapeHtml(s.en)}</div>`;
+      }
+      if (!s.ar && !s.en) {
+        html += `<div class="scholar-body" style="color:#aaa;font-style:italic;">No content available in selected language.</div>`;
+      }
+      html += `</div>`;
+    });
+    return html;
   }
-  panel.innerHTML = buildTradToggle(sura, aya, 'tafsir', current) +
-    renderScholarEntries(entries, current, 'No tafsir found.');
+
+  panel.innerHTML = buildTradToggle(sura, aya, 'tafsir', current) + buildTafsirContent(lang);
+  // store builder for lang switching
+  panel._buildTafsirContent = buildTafsirContent;
+  panel._tradKey = {sura, aya, current};
+}
+
+function setTafsirLang(sura, aya, lang) {
+  tafsirLangState[`${sura}:${aya}`] = lang;
+  const panel = document.getElementById(`tp-${aya}-tafsir`);
+  if (panel && panel._buildTafsirContent) {
+    const current = traditionState[tradKey(sura, aya, 'tafsir')] || 'sunni';
+    panel.innerHTML = buildTradToggle(sura, aya, 'tafsir', current) + panel._buildTafsirContent(lang);
+    panel._buildTafsirContent = panel._buildTafsirContent; // re-attach
+  }
 }
 
 async function loadAsbabPanel(sura, aya) {
