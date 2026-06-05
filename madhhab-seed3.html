@@ -120,8 +120,9 @@ Object.keys(CATS).forEach(cat => {
 });
 
 async function generateRuling(category, topic) {
-  // Simplified schema to avoid truncation
-  const prompt = "Islamic scholar task. Topic: " + topic + " | Category: " + category + "\n\nReturn ONLY a JSON object. No markdown. No explanation. Fill in real scholarly content:\n{\"topic\":\"" + topic.replace(/"/g,'\\\"'') + "\",\"category\":\"" + category.replace(/"/g,'\\\"'') + "\",\"hanafi\":\"[ruling]\",\"maliki\":\"[ruling]\",\"shafii\":\"[ruling]\",\"hanbali\":\"[ruling]\",\"jafari\":\"[ruling]\",\"zaydi\":\"[ruling]\",\"ibadi\":\"[ruling]\",\"salafi\":\"[ruling]\",\"consensus\":\"[agreement or none]\",\"disagreement\":\"[key dispute]\",\"history\":\"[historical impact]\",\"verses\":[\"2:190\"],\"hadiths\":[\"ref\"]}";
+  const t = topic.replace(/"/g, "'");
+  const c = category.replace(/"/g, "'");
+  const prompt = "You are an Islamic scholar. For the topic: " + t + " (category: " + c + "), provide the ruling from each major school. Return ONLY a valid JSON object with no markdown, no explanation, starting with { and ending with }. Use these exact keys: topic, category, hanafi, maliki, shafii, hanbali, jafari, zaydi, ibadi, salafi, consensus, disagreement, history, verses, hadiths.";
 
   let res, attempts = 0;
   while (attempts < 4) {
@@ -142,21 +143,17 @@ async function generateRuling(category, topic) {
       await new Promise(r => setTimeout(r, wait));
     } else { throw new Error('HTTP ' + res.status); }
   }
-  if (!res.ok) throw new Error('Failed after retries');
+  if (!res.ok) throw new Error('Failed after retries: ' + res.status);
 
   const data = await res.json();
   const raw = (data.content && data.content[0] && data.content[0].text) || '';
-  if (!raw) throw new Error('Empty response from API. Data: ' + JSON.stringify(data).substring(0,100));
+  if (!raw) throw new Error('Empty response. API returned: ' + JSON.stringify(data).substring(0,150));
 
-  // 4-layer parser
-  // Layer 1: direct
+  // Try parsing
   try { return JSON.parse(raw.trim()); } catch(e) {}
-  // Layer 2: strip fences
   try { return JSON.parse(raw.replace(/^```[a-z]*\s*/i,'').replace(/```\s*$/,'').trim()); } catch(e) {}
-  // Layer 3: find outermost braces
-  const s = raw.indexOf('{'), e = raw.lastIndexOf('}');
-  if (s !== -1 && e > s) { try { return JSON.parse(raw.substring(s, e+1)); } catch(e) {} }
-  // Layer 4: brace depth (handles nested braces)
+  const s = raw.indexOf('{'), en = raw.lastIndexOf('}');
+  if (s !== -1 && en > s) { try { return JSON.parse(raw.substring(s, en+1)); } catch(e) {} }
   try {
     let depth=0, start=-1;
     for (let i=0; i<raw.length; i++) {
@@ -164,8 +161,7 @@ async function generateRuling(category, topic) {
       else if (raw[i]==='}' && --depth===0 && start!==-1) { return JSON.parse(raw.substring(start, i+1)); }
     }
   } catch(e) {}
-
-  throw new Error('Parse failed. Response: ' + raw.substring(0, 150));
+  throw new Error('Parse failed: ' + raw.substring(0,120));
 }
 
 async function insertRuling(ruling) {
