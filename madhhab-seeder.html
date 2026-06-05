@@ -141,18 +141,19 @@ async function generateRuling(category, topic) {
   if (!res.ok) { const e = await res.text(); throw new Error('Failed after 4 attempts: '+res.status); }
   const data = await res.json();
   const raw = (data.content&&data.content[0]&&data.content[0].text)||'';
-  const cleaned = raw.replace(/```json\s*/gi,'').replace(/```\s*/g,'').trim();
-  const m = cleaned.match(/\{[\s\S]*\}/);
-  if (!m) {
-    console.log('No JSON found in:', raw.substring(0,200));
-    throw new Error('No JSON in response: ' + raw.substring(0,80));
-  }
+  // Strip markdown fences aggressively
+  let cleaned = raw;
+  cleaned = cleaned.replace(/^```json\s*/i, '').replace(/^```\s*/i, '');
+  cleaned = cleaned.replace(/```\s*$/i, '').trim();
+  // Find JSON object
+  const start = cleaned.indexOf('{');
+  const end = cleaned.lastIndexOf('}');
+  if (start === -1 || end === -1) throw new Error('No JSON in response: ' + raw.substring(0,80));
+  const jsonStr = cleaned.substring(start, end + 1);
   try {
-    return JSON.parse(m[0]);
+    return JSON.parse(jsonStr);
   } catch(e) {
-    // Try fixing common JSON issues
-    const fixed = m[0].replace(/([{,]\s*)(\w+):/g, '$1"$2":').replace(/'/g, '"');
-    return JSON.parse(fixed);
+    throw new Error('JSON parse failed: ' + e.message + ' | ' + jsonStr.substring(0,80));
   }
 }
 
