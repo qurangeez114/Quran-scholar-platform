@@ -7014,7 +7014,7 @@ let researchImageBase64 = null;
 let researchImageMime = null;
 let researchLang = 'English';
 
-const ANTHROPIC_KEY = (window.ANTHROPIC_API_KEY || ['sk-ant-api03-iSB4k2X','beJJm3Qbk4BcEzgvfIgY2eHJ5bhJ-L69yep3YLds','XYJoAke2KoLn92cb4YnfCP-hFriD3x2xiypfHGw-9A-jAgAA'].join(''));
+const ANTHROPIC_KEY = (window.ANTHROPIC_API_KEY || window._ak);
 
 function openResearchModal() {
   document.getElementById('researchModal').style.display = 'flex';
@@ -8902,7 +8902,7 @@ async function analyzeTafsirAccuracy(sura, aya) {
 
   try {
     // Use hardcoded key directly — ANTHROPIC_KEY may not be initialized yet
-    const _ak = ['sk-ant-api03-iSB4k2X','beJJm3Qbk4BcEzgvfIgY2eHJ5bhJ-L69yep3YLds','XYJoAke2KoLn92cb4YnfCP-hFriD3x2xiypfHGw-9A-jAgAA'].join('');
+    const _ak = window._ak;
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type':'application/json','x-api-key':_ak,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true' },
@@ -8923,14 +8923,13 @@ async function analyzeTafsirAccuracy(sura, aya) {
     }
     let result;
     try {
-      // Try direct parse first
-      result = JSON.parse(raw);
+      // Strip markdown fences first (Claude sometimes adds them despite instructions)
+      const cleaned = raw.replace(/```json\s*/gi,'').replace(/```\s*/g,'').trim();
+      result = JSON.parse(cleaned);
     } catch(e) {
       try {
-        // Strip markdown fences if present
-        let cleaned = raw.replace(/```json\n?/g,'').replace(/```/g,'').trim();
-        // Extract JSON object
-        const m = cleaned.match(/\{[\s\S]*\}/);
+        // Extract just the JSON object
+        const m = raw.match(/\{[\s\S]*\}/);
         if (m) result = JSON.parse(m[0]);
       } catch(e2) {
         try {
