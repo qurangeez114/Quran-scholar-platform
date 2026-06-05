@@ -120,7 +120,8 @@ Object.keys(CATS).forEach(cat => {
 });
 
 async function generateRuling(category, topic) {
-  const prompt = "You are an Islamic scholar. Topic: \"" + topic + "\" Category: \"" + category + "\". Return ONLY a raw JSON object with NO markdown, NO backticks, NO explanation. Start immediately with { and end with }. Use this exact structure: {\"topic\":\"" + topic + "\",\"category\":\"" + category + "\",\"hanafi_position\":\"ruling\",\"hanafi_evidence\":\"evidence\",\"maliki_position\":\"ruling\",\"maliki_evidence\":\"evidence\",\"shafii_position\":\"ruling\",\"shafii_evidence\":\"evidence\",\"hanbali_position\":\"ruling\",\"hanbali_evidence\":\"evidence\",\"jafari_position\":\"ruling\",\"zaydi_position\":\"ruling\",\"ibadi_position\":\"ruling\",\"mutazila_position\":\"ruling\",\"salafi_position\":\"ruling\",\"consensus\":\"agreement\",\"key_disagreement\":\"dispute\",\"practical_difference\":\"impact\",\"historical_consequences\":\"history\",\"reformist_view\":\"view\",\"quran_verses\":[\"2:190\"],\"hadith_refs\":[\"hadith\"],\"reflection_questions\":[\"question?\"]}";
+  // Simplified schema to avoid truncation
+  const prompt = "Islamic scholar task. Topic: " + topic + " | Category: " + category + "\n\nReturn ONLY a JSON object. No markdown. No explanation. Fill in real scholarly content:\n{\"topic\":\"" + topic.replace(/"/g,'\\\"'') + "\",\"category\":\"" + category.replace(/"/g,'\\\"'') + "\",\"hanafi\":\"[ruling]\",\"maliki\":\"[ruling]\",\"shafii\":\"[ruling]\",\"hanbali\":\"[ruling]\",\"jafari\":\"[ruling]\",\"zaydi\":\"[ruling]\",\"ibadi\":\"[ruling]\",\"salafi\":\"[ruling]\",\"consensus\":\"[agreement or none]\",\"disagreement\":\"[key dispute]\",\"history\":\"[historical impact]\",\"verses\":[\"2:190\"],\"hadiths\":[\"ref\"]}";
 
   let res, attempts = 0;
   while (attempts < 4) {
@@ -130,7 +131,7 @@ async function generateRuling(category, topic) {
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 900,
+        max_tokens: 1500,
         messages: [{role: 'user', content: prompt}]
       })
     });
@@ -139,41 +140,32 @@ async function generateRuling(category, topic) {
       const wait = attempts * 20000;
       log('⏳ Error ' + res.status + ', waiting ' + (wait/1000) + 's (retry ' + attempts + '/4)');
       await new Promise(r => setTimeout(r, wait));
-    } else {
-      throw new Error('Claude error ' + res.status);
-    }
+    } else { throw new Error('HTTP ' + res.status); }
   }
-  if (!res.ok) throw new Error('Failed after 4 attempts');
+  if (!res.ok) throw new Error('Failed after retries');
 
   const data = await res.json();
   const raw = (data.content && data.content[0] && data.content[0].text) || '';
-  
-  // Try 1: direct parse
-  try { return JSON.parse(raw.trim()); } catch(e1) {}
-  
-  // Try 2: strip markdown fences then parse
-  try {
-    const stripped = raw.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim();
-    return JSON.parse(stripped);
-  } catch(e2) {}
-  
-  // Try 3: find first { to last }
-  try {
-    const s = raw.indexOf('{');
-    const e = raw.lastIndexOf('}');
-    if (s !== -1 && e !== -1) return JSON.parse(raw.substring(s, e + 1));
-  } catch(e3) {}
-  
-  // Try 4: brace depth tracking
-  try {
-    let depth = 0, start = -1;
-    for (let i = 0; i < raw.length; i++) {
-      if (raw[i] === '{') { if (start === -1) start = i; depth++; }
-      else if (raw[i] === '}') { if (--depth === 0 && start !== -1) return JSON.parse(raw.substring(start, i + 1)); }
-    }
-  } catch(e4) {}
+  if (!raw) throw new Error('Empty response from API. Data: ' + JSON.stringify(data).substring(0,100));
 
-  throw new Error('All parse attempts failed. Raw: ' + raw.substring(0, 120));
+  // 4-layer parser
+  // Layer 1: direct
+  try { return JSON.parse(raw.trim()); } catch(e) {}
+  // Layer 2: strip fences
+  try { return JSON.parse(raw.replace(/^```[a-z]*\s*/i,'').replace(/```\s*$/,'').trim()); } catch(e) {}
+  // Layer 3: find outermost braces
+  const s = raw.indexOf('{'), e = raw.lastIndexOf('}');
+  if (s !== -1 && e > s) { try { return JSON.parse(raw.substring(s, e+1)); } catch(e) {} }
+  // Layer 4: brace depth (handles nested braces)
+  try {
+    let depth=0, start=-1;
+    for (let i=0; i<raw.length; i++) {
+      if (raw[i]==='{') { if(start===-1) start=i; depth++; }
+      else if (raw[i]==='}' && --depth===0 && start!==-1) { return JSON.parse(raw.substring(start, i+1)); }
+    }
+  } catch(e) {}
+
+  throw new Error('Parse failed. Response: ' + raw.substring(0, 150));
 }
 
 async function insertRuling(ruling) {
@@ -184,24 +176,27 @@ async function insertRuling(ruling) {
   });
   const topics = await tr.json();
   const tid = topics[0]&&topics[0].id;
-  if (!tid) throw new Error('No topic ID');
+  if (!tid) throw new Error('No topic ID. Response: ' + JSON.stringify(topics).substring(0,100));
 
   await fetch(SB_URL+'/rest/v1/madhhab_rulings', {
     method:'POST',
     headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Prefer':'return=minimal'},
     body: JSON.stringify({
-      topic_id:tid, category:ruling.category,
-      hanafi_position:ruling.hanafi_position, hanafi_evidence:ruling.hanafi_evidence, hanafi_sources:ruling.hadith_refs||[],
-      maliki_position:ruling.maliki_position, maliki_evidence:ruling.maliki_evidence, maliki_sources:[],
-      shafii_position:ruling.shafii_position, shafii_evidence:ruling.shafii_evidence, shafii_sources:[],
-      hanbali_position:ruling.hanbali_position, hanbali_evidence:ruling.hanbali_evidence, hanbali_sources:[],
-      jafari_position:ruling.jafari_position, zaydi_position:ruling.zaydi_position,
-      ibadi_position:ruling.ibadi_position, mutazila_position:ruling.mutazila_position, salafi_position:ruling.salafi_position,
-      consensus:ruling.consensus, key_disagreement:ruling.key_disagreement,
-      practical_difference:ruling.practical_difference, historical_consequences:ruling.historical_consequences,
-      reformist_view:ruling.reformist_view,
-      quran_verses:ruling.quran_verses||[], hadith_refs:ruling.hadith_refs||[],
-      reflection_questions:ruling.reflection_questions||[]
+      topic_id: tid,
+      category: ruling.category,
+      hanafi_position: ruling.hanafi || ruling.hanafi_position || '',
+      maliki_position: ruling.maliki || ruling.maliki_position || '',
+      shafii_position: ruling.shafii || ruling.shafii_position || '',
+      hanbali_position: ruling.hanbali || ruling.hanbali_position || '',
+      jafari_position: ruling.jafari || ruling.jafari_position || '',
+      zaydi_position: ruling.zaydi || ruling.zaydi_position || '',
+      ibadi_position: ruling.ibadi || ruling.ibadi_position || '',
+      salafi_position: ruling.salafi || ruling.salafi_position || '',
+      consensus: ruling.consensus || '',
+      key_disagreement: ruling.disagreement || ruling.key_disagreement || '',
+      historical_consequences: ruling.history || ruling.historical_consequences || '',
+      quran_verses: ruling.verses || ruling.quran_verses || [],
+      hadith_refs: ruling.hadiths || ruling.hadith_refs || []
     })
   });
   return tid;
