@@ -4866,8 +4866,11 @@ function setTafsirLang(sura, aya, lang) {
   const panel = document.getElementById(`tp-${aya}-tafsir`);
   if (panel && panel._buildTafsirContent) {
     const current = traditionState[tradKey(sura, aya, 'tafsir')] || 'sunni';
-    panel.innerHTML = buildTradToggle(sura, aya, 'tafsir', current) + panel._buildTafsirContent(lang);
-    panel._buildTafsirContent = panel._buildTafsirContent; // re-attach
+    const savedRows = panel._allRows;
+    const savedBuilder = panel._buildTafsirContent;
+    panel.innerHTML = buildTradToggle(sura, aya, 'tafsir', current) + savedBuilder(lang);
+    panel._buildTafsirContent = savedBuilder; // re-attach
+    panel._allRows = savedRows; // re-attach rows for accuracy analyzer
   }
 }
 
@@ -8861,11 +8864,27 @@ async function analyzeTafsirAccuracy(sura, aya) {
     if (cached && cached.length > 0) { renderTafsirAnalysis(loadingDiv, cached[0], sura, aya, true); return; }
   } catch(e) {}
 
-  const allRows = panel._allRows;
-  if (!allRows) { loadingDiv.innerHTML = '<div style="color:#c62828;">Close and reopen Tafsir tab first.</div>'; return; }
+  // Get rows — from panel cache or fetch fresh
+  let allRows = panel._allRows;
+  if (!allRows || allRows.length === 0) {
+    loadingDiv.innerHTML = '<div style="color:#2E7D32;font-weight:700;">🔍 Fetching tafsir data...</div>';
+    try {
+      allRows = await sbFetch('tafsir_entries', {
+        select: 'scholar_key,language,content',
+        sura: `eq.${sura}`, aya: `eq.${aya}`
+      });
+      panel._allRows = allRows;
+    } catch(e) {
+      loadingDiv.innerHTML = `<div style="color:#c62828;">Failed to load tafsir data: ${e.message}</div>`;
+      return;
+    }
+  }
   const arRow = allRows.find(r => r.scholar_key === 'ibn_kathir' && r.language === 'ar');
   const enRow = allRows.find(r => r.scholar_key === 'ibn_kathir' && r.language === 'en');
-  if (!arRow || !enRow) { loadingDiv.innerHTML = '<div style="color:#c62828;">Both Arabic and English Ibn Kathir needed.</div>'; return; }
+  if (!arRow || !enRow) {
+    loadingDiv.innerHTML = `<div style="color:#c62828;">Missing ${!arRow?'Arabic':'English'} Ibn Kathir for ${sura}:${aya}.</div>`;
+    return;
+  }
 
   loadingDiv.innerHTML = '<div style="color:#2E7D32;font-weight:700;margin-bottom:8px;">🔍 Analyzing Translation Accuracy...</div><div style="color:#666;font-size:13px;">AI comparing Arabic original with English...</div>';
 
