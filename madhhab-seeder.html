@@ -123,12 +123,22 @@ async function generateRuling(category, topic) {
   const prompt = 'You are an expert Islamic jurist. Generate comparative rulings for: "'+topic+'" under "'+category+'". Respond ONLY with valid JSON (no markdown): {"topic":"'+topic+'","category":"'+category+'","hanafi_position":"detailed Hanafi ruling with classical references","hanafi_evidence":"primary Hanafi evidence","maliki_position":"detailed Maliki ruling","maliki_evidence":"primary Maliki evidence","shafii_position":"detailed Shafii ruling","shafii_evidence":"primary Shafii evidence","hanbali_position":"detailed Hanbali ruling","hanbali_evidence":"primary Hanbali evidence","jafari_position":"Jafari Shia Twelver ruling","zaydi_position":"Zaydi ruling","ibadi_position":"Ibadi ruling","mutazila_position":"Mutazila position","salafi_position":"Contemporary Salafi position","consensus":"areas of agreement across schools","key_disagreement":"core point of dispute","practical_difference":"real-world impact of differences","historical_consequences":"historical persecution conflict or suffering caused by this ruling","reformist_view":"modern reformist Muslim scholars perspective","quran_verses":["2:190"],"hadith_refs":["Bukhari 1234"],"reflection_questions":["Critical question about this ruling?"]}. For topics involving non-Muslims women or slaves be especially thorough about discriminatory rulings and their historical application.';
 
   const _k = ['sk-ant-api03-iSB4k2XbeJJm3Qbk4BcEzgvfIgY2eHJ','5bhJ-L69yep3YLdsXYJoAke2KoLn92cb4YnfCP-hFriD3x2xiypfHGw-9A-jAgAA'].join('');
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method:'POST',
-    headers:{'Content-Type':'application/json','x-api-key':_k,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-    body: JSON.stringify({model:'claude-sonnet-4-6', max_tokens:1800, messages:[{role:'user',content:prompt}]})
-  });
-  if (!res.ok) { const e = await res.text(); throw new Error('Claude error '+res.status+': '+e.substring(0,100)); }
+  let res, attempts = 0;
+  while (attempts < 4) {
+    attempts++;
+    res = await fetch('https://api.anthropic.com/v1/messages', {
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-api-key':_k,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body: JSON.stringify({model:'claude-sonnet-4-6', max_tokens:1800, messages:[{role:'user',content:prompt}]})
+    });
+    if (res.ok) break;
+    if (res.status === 529 || res.status === 502 || res.status === 504 || res.status === 503) {
+      const wait = attempts * 15000;
+      log('⏳ Rate limited, waiting ' + (wait/1000) + 's before retry ' + attempts + '/4...');
+      await new Promise(r => setTimeout(r, wait));
+    } else { const e = await res.text(); throw new Error('Claude error '+res.status+': '+e.substring(0,100)); }
+  }
+  if (!res.ok) { const e = await res.text(); throw new Error('Failed after 4 attempts: '+res.status+': '+e.substring(0,100)); }
   const data = await res.json();
   const raw = (data.content&&data.content[0]&&data.content[0].text)||'';
   const cleaned = raw.replace(/```json\s*/gi,'').replace(/```\s*/g,'').trim();
@@ -189,7 +199,7 @@ async function seedCat(cat) {
       log('✗ '+topic.substring(0,45)+': '+e.message, 'err');
     }
     updateStats();
-    await new Promise(r => setTimeout(r, 600));
+    await new Promise(r => setTimeout(r, 3000));
   }
   catsDone++;
   if (btn) btn.className = 'btn-cat done';
@@ -203,7 +213,7 @@ async function seedAll() {
   for (const cat of Object.keys(CATS)) {
     if (stopped) break;
     await seedCat(cat);
-    await new Promise(r => setTimeout(r, 1000));
+    await new Promise(r => setTimeout(r, 5000));
   }
   if (!stopped) { log('🎉 ALL CATEGORIES DONE!', 'ok'); document.getElementById('progress').textContent = 'Complete!'; }
 }
