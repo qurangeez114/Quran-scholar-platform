@@ -120,8 +120,8 @@ Object.keys(CATS).forEach(cat => {
 });
 
 async function generateRuling(category, topic) {
-  const prompt = `You are an Islamic scholar. Return ONLY a JSON object for the topic "${topic}" in category "${category}". No explanation, no markdown, no text before or after. Just the raw JSON object starting with { and ending with }:
-{"topic":"${topic}","category":"${category}","hanafi_position":"[Hanafi ruling 1-2 sentences]","hanafi_evidence":"[evidence]","maliki_position":"[Maliki ruling]","maliki_evidence":"[evidence]","shafii_position":"[Shafii ruling]","shafii_evidence":"[evidence]","hanbali_position":"[Hanbali ruling]","hanbali_evidence":"[evidence]","jafari_position":"[Jafari/Shia ruling]","zaydi_position":"[Zaydi ruling]","ibadi_position":"[Ibadi ruling]","mutazila_position":"[Mutazila position]","salafi_position":"[Salafi position]","consensus":"[areas of agreement]","key_disagreement":"[main dispute]","practical_difference":"[real-world impact]","historical_consequences":"[persecution or conflict caused]","reformist_view":"[modern reformist view]","quran_verses":["2:190"],"hadith_refs":["relevant hadith"],"reflection_questions":["critical question?"]}`;
+  const prompt = `You are an Islamic scholar. For the topic "${topic}" in category "${category}", provide rulings from all major schools. Return ONLY a JSON object, nothing else. Start your response with { and end with }. Example format:
+{"topic":"example","category":"example","hanafi_position":"ruling","hanafi_evidence":"evidence","maliki_position":"ruling","maliki_evidence":"evidence","shafii_position":"ruling","shafii_evidence":"evidence","hanbali_position":"ruling","hanbali_evidence":"evidence","jafari_position":"ruling","zaydi_position":"ruling","ibadi_position":"ruling","mutazila_position":"ruling","salafi_position":"ruling","consensus":"agreement","key_disagreement":"dispute","practical_difference":"impact","historical_consequences":"history","reformist_view":"reform view","quran_verses":["2:190"],"hadith_refs":["Bukhari 1234"],"reflection_questions":["Question?"]}`;
 
   let res, attempts = 0;
   while (attempts < 4) {
@@ -129,27 +129,33 @@ async function generateRuling(category, topic) {
     res = await fetch('/claude', {
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({model:'claude-haiku-4-5-20251001', max_tokens:800, messages:[{role:'user',content:prompt}]})
+      body: JSON.stringify({model:'claude-haiku-4-5-20251001', max_tokens:900, messages:[{role:'user',content:prompt}]})
     });
     if (res.ok) break;
-    if (res.status === 529 || res.status === 502 || res.status === 504 || res.status === 503) {
+    if ([502,503,504,529].includes(res.status)) {
       const wait = attempts * 20000;
-      log('⏳ Error '+res.status+', waiting ' + (wait/1000) + 's... (retry ' + attempts + '/4)');
+      log('⏳ Error '+res.status+', waiting '+(wait/1000)+'s (retry '+attempts+'/4)');
       await new Promise(r => setTimeout(r, wait));
-    } else { const e = await res.text(); throw new Error('Claude error '+res.status+': '+e.substring(0,100)); }
+    } else { throw new Error('Claude error '+res.status); }
   }
-  if (!res.ok) { const e = await res.text(); throw new Error('Failed after 4 attempts: '+res.status); }
+  if (!res.ok) throw new Error('Failed after 4 attempts: '+res.status);
+
   const data = await res.json();
   const raw = (data.content&&data.content[0]&&data.content[0].text)||'';
-  // Find JSON object directly - most reliable approach
-  const start = raw.indexOf('{');
-  const end = raw.lastIndexOf('}');
-  if (start === -1 || end === -1) throw new Error('No JSON in response: ' + raw.substring(0,80));
+  
+  // Find { and } boundaries
+  let depth = 0, start = -1, end = -1;
+  for (let i = 0; i < raw.length; i++) {
+    if (raw[i] === '{') { if (start === -1) start = i; depth++; }
+    else if (raw[i] === '}') { depth--; if (depth === 0 && start !== -1) { end = i; break; } }
+  }
+  if (start === -1 || end === -1) throw new Error('No JSON object found in: ' + raw.substring(0,100));
+  
   const jsonStr = raw.substring(start, end + 1);
   try {
     return JSON.parse(jsonStr);
   } catch(e) {
-    throw new Error('JSON parse failed: ' + e.message + ' | ' + jsonStr.substring(0,80));
+    throw new Error('Parse error: ' + e.message.substring(0,50));
   }
 }
 
