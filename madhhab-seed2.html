@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Madhhab Seeder</title>
+<style>
+body{font-family:sans-serif;background:#1a1a1a;color:#eee;padding:16px;max-width:600px;margin:0 auto;}
+h1{color:#D4A830;font-size:20px;}
+button{padding:12px 16px;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;width:100%;margin:4px 0;}
+.btn-all{background:#D4A830;color:#000;}
+.btn-stop{background:#c62828;color:#fff;}
+.btn-cat{background:#2a2a2a;color:#D4A830;border:1px solid #D4A830;text-align:left;font-size:12px;padding:8px 12px;}
+.btn-cat.done{background:#1a3a1a;color:#4CAF50;border-color:#4CAF50;}
+.btn-cat.active{background:#3a2a00;color:#FFD700;}
+#log{background:#000;border:1px solid #333;border-radius:8px;padding:12px;height:200px;overflow-y:auto;font-family:monospace;font-size:12px;margin:12px 0;}
+.ok{color:#4CAF50;} .err{color:#f44336;} .info{color:#888;}
+#progress{font-size:13px;color:#D4A830;margin:8px 0;}
+.stats{display:flex;gap:12px;margin:8px 0;}
+.stat{background:#2a2a2a;border-radius:8px;padding:8px 12px;text-align:center;flex:1;}
+.stat-n{font-size:22px;font-weight:700;color:#D4A830;}
+.stat-l{font-size:10px;color:#888;}
+</style>
+</head>
+<body>
+<h1>📚 Madhhab Categories Seeder</h1>
+<p style="color:#888;font-size:13px;">Generates full school-by-school rulings for 49 categories, 490 topics using AI.</p>
+
+<div class="stats">
+  <div class="stat"><div class="stat-n" id="s-done">0</div><div class="stat-l">INSERTED</div></div>
+  <div class="stat"><div class="stat-n" id="s-err">0</div><div class="stat-l">ERRORS</div></div>
+  <div class="stat"><div class="stat-n" id="s-cat">0</div><div class="stat-l">CATEGORIES</div></div>
+</div>
+
+<div id="progress">Ready</div>
+<div id="log"></div>
+
+<button class="btn-all" onclick="seedAll()">🚀 Seed ALL 49 Categories</button>
+<button class="btn-stop" onclick="stopSeed()">⏹ Stop</button>
+
+<div style="margin-top:16px;display:grid;grid-template-columns:1fr 1fr;gap:6px;" id="cat-grid"></div>
+
+<script>
+const SB_URL = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
+
+const CATS = {
+  "Non-Muslim Rights and Dhimma":["Jizya — basis amount and who must pay","Non-Muslims riding horses — classical prohibition","Non-Muslims building new churches","Non-Muslims wearing distinctive dress (ghiyar)","Non-Muslim testimony against a Muslim in court","Blood money (diyya) for a non-Muslim vs Muslim","Non-Muslim serving as judge over Muslims","Non-Muslim holding political authority over Muslims","Employment of non-Muslims by Muslims","Non-Muslims greeting Muslims — ruling on response"],
+  "Non-Muslim Discrimination in Criminal Law":["Qisas — Muslim killed by non-Muslim","Muslim killing a dhimmi — death penalty or not","Blood money differential — Muslim vs non-Muslim vs woman","Non-Muslim cannot be wali of a Muslim","Hudud applied to non-Muslims","Non-Muslim apostasy — same penalty as Muslim","Can a non-Muslim be enslaved by a Muslim state","Non-Muslim prisoner of war — ransom slavery or execution","Non-Muslim as witness — admissibility in Islamic court","Non-Muslim property — wartime vs peacetime rulings"],
+  "Non-Muslim Discrimination in Personal Law":["Wishing non-Muslims well on their holidays","Muslims congratulating non-Muslims on Christmas","Eating food slaughtered by non-Muslims","Eating with non-Muslims at the same table","Visiting sick non-Muslims","Non-Muslim burial — Muslims attending","Praying for forgiveness for deceased non-Muslim parents","Friendship with non-Muslims — tawalli vs muwala","Non-Muslim entering a mosque","Hiring a non-Muslim servant or employee"],
+  "Non-Muslims: Political and Civic Rights":["Non-Muslim as head of a Muslim-majority state","Non-Muslim voting in an Islamic state","Non-Muslim military service in Muslim army","Non-Muslim police officer in Islamic state","Non-Muslim diplomat representing Muslim state","Non-Muslim teacher in Islamic school","Non-Muslim judge — all categories of law","Non-Muslim running for parliament in Muslim country","Non-Muslim mayor or governor","Non-Muslim marriage law — jurisdiction"],
+  "Non-Muslims: Property and Economic Rights":["Confiscating non-Muslim property in jihad","Non-Muslim land ownership in Muslim territory","Business partnership with a non-Muslim","Non-Muslim charging interest to Muslim","Waqf established by a non-Muslim","Non-Muslim inheriting from Muslim","Ghanimah — non-Muslim ally portion","Non-Muslim renting property in Muslim areas","Destroying non-Muslim property in war","Non-Muslim paying extra taxes beyond jizya"],
+  "Non-Muslims: Physical Safety and Violence":["Killing a dhimmi who insults Islam","Killing a dhimmi who insults the Prophet","Muslim killing a non-Muslim — does qisas apply","Non-Muslim right to self-defense against Muslim","Protection of non-Muslim blood in times of war","Collective punishment of non-Muslim community","Torture of non-Muslim prisoners","Killing non-Muslim apostates vs Muslim apostates","Non-Muslim attacks on Muslim — retaliation rules","Non-Muslim converts being harmed — liability"],
+  "Non-Muslims: Religious Practice Rights":["Non-Muslim practicing religion publicly in Muslim state","Non-Muslim building or repairing religious buildings","Non-Muslim ringing church bells in Muslim territory","Non-Muslim proselytizing to Muslims — punishment","Non-Muslim converting a Muslim — death penalty","Non-Muslim displaying religious symbols publicly","Non-Muslim celebrating religious holidays publicly","Non-Muslim funeral rites — restrictions","Non-Muslim religious courts — jurisdiction","Blasphemy by non-Muslim vs by Muslim"],
+  "Christians and Jews (Ahl al-Kitab)":["Status of Christians and Jews vs polytheists","Are Christians and Jews mushrikeen","Jizya from Ahl al-Kitab — conditions","Ahl al-Kitab meat — halal or not","Christian or Jewish woman as wife — conditions","Ahl al-Kitab entering Masjid al-Haram","Inheriting from Christian or Jewish relatives","Christian testimony against a Muslim","Jewish or Christian ruler over Muslims","Modern Ahl al-Kitab — same status as classical"],
+  "Polytheists Atheists and Others":["Mushrik — no right to jizya only Islam or death","Atheist status — same as mushrik","Hindu — mushrik or People of the Book","Zoroastrian (Majusi) — jizya status","Sikh — ruling on status","Buddhist — ruling on status","Polytheist woman — can a Muslim marry her","Polytheist prisoner — slavery or execution","Killing a polytheist who refuses Islam","Atheist blood — no protection in Islamic state"],
+  "Slavery: Acquisition and Ownership":["Capturing non-Muslims in jihad as slaves","Purchasing slaves from non-Muslim traders","Inheriting slaves — rules of transfer","Slave markets — regulation in Islamic law","Enslaving free Muslims accidentally — liability","Child born to slave mother (umm al-walad)","Slave who escapes — owner rights","Enslaving Arab vs non-Arab","Enslaving People of the Book vs polytheists","Gifting slaves — conditions"],
+  "Slavery: Treatment and Rights":["Feeding and clothing slaves — minimum obligations","Beating a slave — permissible limits","Slave right to marry — conditions","Sexual access to female slaves (milk al-yamin)","Slave forced to do prohibited acts","Killing one own slave — punishment or not","Slave property rights — can a slave own anything","Slave testimony in court","Slave right to refuse immoral orders","Medical care obligations for slaves"],
+  "Slavery: Emancipation":["Manumission as expiation (kaffarah)","Partial manumission — validity","Mukatabah (self-purchase agreement)","Tadbeer — manumission upon death binding or revocable","Umm al-walad — automatic freedom at owner death","Emancipating a non-Muslim slave","Revoking manumission — permissibility","Wala patronage bond after emancipation","Collective manumission — rules","State obligation to facilitate emancipation"],
+  "Slavery: Sexual Slavery":["Concubinage (tasarri) with female war captives","Waiting period (istibra) before sexual access to captive","Captive who resists sexual access — owner rights","Pregnancy of a slave concubine — her changed status","Multiple owners sharing a slave — sexual access rules","Child of concubine — free or slave","Selling a concubine after she bears a child","Concubinage vs marriage — legal differences","Sex with a slave one does not own — ruling","Historical scale of Islamic sexual slavery"],
+  "Women: Legal Status and Personhood":["Woman testimony — worth half of a man","Woman blood money (diyya) — half of man","Woman as guardian (wali) — can she contract her own marriage","Woman as judge — all schools","Woman as head of state","Woman legal capacity in financial transactions","Woman right to choose her husband","Woman leaving house without husband permission","Woman right to education","Woman oath — same weight as man or not"],
+  "Women: Marriage Rights and Obligations":["Husband right to prevent wife from working","Husband right to prevent wife from visiting family","Wife obligation of obedience (taa)","Wife right to financial support (nafaqa)","Polygamy — conditions and justice requirement","Polygamy without first wife consent","Co-wife rights — equal treatment obligation","Husband right to take second wife secretly","Wife right to include monogamy clause in contract","Husband right to sex — wife cannot refuse without cause"],
+  "Women: Divorce Rights":["Husband unilateral talaq — no reason required","Wife right to initiate divorce (khul)","Judicial divorce (faskh) — grounds","Wife divorced while pregnant — maintenance","Waiting period (idda) — wife cannot leave home","Husband pronouncing talaq in anger","Delegation of divorce right to wife (isma)","Wife right to divorce for harm (darar)","Divorce by text message or phone — validity","Court-ordered divorce in non-Muslim countries"],
+  "Women: Dress and Modesty":["Niqab (face veil) — obligatory recommended or cultural","Hijab in front of non-Muslim women","Hijab in front of male relatives (mahram)","Awrah of a woman before other women","Awrah of a woman before her husband","Woman voice — is it awrah","Woman wearing perfume in public","Woman wearing men clothing","Makeup and jewelry — permissibility","Revealing clothes in private"],
+  "Women: Sexuality and Reproduction":["Wife right to sexual pleasure — obligation on husband","Birth control — permissibility across schools","Permanent sterilization — tubal ligation or vasectomy","Abortion in case of rape","Abortion to preserve mother health","Female genital cutting — all four Sunni schools","Hymen repair surgery — permissibility","Virginity testing — permissibility","Marital rape — classical ruling","Lesbian acts — punishment across schools"],
+  "Women: Inheritance and Property":["Daughter receiving half of son share — all schools","Wife receiving one-eighth of estate with children","Mother share compared to father share","Woman right to control her own property","Husband access to wife wealth — conditions","Daughter excluded by son in inheritance","Woman right to own businesses","Woman dower (mahr) as her independent property","Non-Muslim wife inheritance from Muslim husband","Apostasy — woman losing inheritance rights"],
+  "Women: Worship and Religious Life":["Woman leading prayer for mixed congregation","Woman leading prayer for women only","Woman Friday prayer — obligatory or not","Woman praying in mosque vs home","Woman itikaf (seclusion in mosque)","Woman fasting without husband permission","Woman performing hajj without mahram","Woman giving fatwa — permissibility","Woman as Islamic scholar — rulings","Woman reciting Quran aloud in public"],
+  "LGBTQ: Male Homosexuality":["Liwat anal sex between men — death penalty basis","Method of execution for liwat","Evidence required for liwat conviction","Liwat between non-Muslims — punishment","Tafkhidh non-penetrative male acts — punishment","Male homosexual attraction vs act — sin or not","Kissing between men — punishment","Effeminate men (mukhannathun) — classical rulings","Cross-dressing by men — punishment","Same-sex desire — does it invalidate testimony"],
+  "LGBTQ: Female Homosexuality":["Sihaq female homosexual acts — punishment across schools","Sihaq — hadd or tazir","Evidence required for sihaq conviction","Female same-sex marriage — ruling","Masculine women (mutarajjilat) — classical rulings","Cross-dressing by women — ruling","Female homosexual attraction — sin or not","Sihaq between non-Muslims — punishment","Historical cases of sihaq prosecution","Reformist Muslim views on female homosexuality"],
+  "LGBTQ: Transgender and Intersex":["Khuntha intersex — legal status determination","Sex reassignment surgery — all schools","Trans woman — prayer hijab marriage rulings","Trans man — marriage and divorce rulings","Intersex inheritance — determination method","Trans person hudud liability","Trans person testimony — admissibility","Hormonal treatment for gender dysphoria","Trans parent custody rights","Reformist approaches to transgender in Islam"],
+  "Apostasy: Definition and Types":["What constitutes apostasy — words actions beliefs","Apostasy by denying a pillar of Islam","Apostasy by joining another religion","Apostasy by atheism","Apostasy by converting to a different sect","Apostasy by denying a hadith","Apostasy for insulting the Prophet","Apostasy by abandoning prayer","Apostasy under duress — valid or not","Private apostasy vs public apostasy"],
+  "Apostasy: Punishment and Process":["Death penalty for apostasy — all school positions","Waiting period before execution — 3 days or not","Repentance accepted or not for apostate","Female apostate — execution or imprisonment","Child apostate — execution or education","Apostate property — confiscation","Apostate marriage — automatically dissolved","Apostate children — custody ruling","Apostate imprisoned indefinitely — Hanafi position","Modern state apostasy laws — Saudi Pakistan Iran"],
+  "Blasphemy: Insulting the Prophet":["Insulting the Prophet — death penalty basis","Taubah accepted for Prophet insult or not","Non-Muslim insulting the Prophet — same penalty","Cartoons of the Prophet — legal ruling","Academic criticism of hadith — apostasy","Doubting the Prophet character — apostasy","Historical execution for Prophet insult","Pakistani blasphemy law — Islamic basis","Salman Rushdie fatwa — legal basis","Online blasphemy — jurisdiction in Islamic law"],
+  "Racial and Ethnic Rulings":["Arab superiority — hadith and scholarly positions","Qurayshi lineage required for caliphate","Non-Arab imam — validity across schools","Kafaa (compatibility) in marriage — tribe and race","Arab refusing to give daughter to non-Arab","Black African ruler — prophetic hadith controversy","Slavery and race in Islamic history","Racial epithets in classical fiqh","Discrimination against converted non-Arabs (mawali)","Reformist responses to racial hadith"],
+  "Prayer and Worship":["Validity of prayer behind an innovator or sinner","Combining prayers while travelling","Witr prayer — obligatory or sunnah","Friday prayer for women","Prayer in a church or synagogue","Missed prayers — obligation to make up","Prayer facing graves","Leading prayer while in a state of minor impurity","Prayer of a convert immediately after shahada","Loud vs silent recitation rules"],
+  "Purification and Ritual Purity":["Touching the Quran without wudu","Wudu with nail polish","Tayammum when water is available but harmful","Dog saliva — najis or not","Pig — degree of impurity across schools","Blood of non-Muslims — ritual status","Wudu broken by touching a woman","Ritual purity of non-Muslims","Ghusl after touching a non-Muslim corpse","Istinja with toilet paper"],
+  "Marriage and Family Law":["Muslim man marrying a Christian or Jewish woman","Muslim woman marrying a non-Muslim man","Mahr minimum amount","Muta temporary marriage — Shia vs Sunni","Marriage without wali guardian","Marriage contract witnessed by non-Muslims","Age of consent for marriage","Non-Muslim women as concubines — classical ruling","Marrying Ahl al-Kitab in a Muslim minority country","Interfaith marriage after conversion"],
+  "Divorce and Separation":["Triple talaq in one sitting — one or three divorces","Khul divorce initiated by wife","Divorce during menstruation — validity","Divorce under coercion","Custody of children after divorce — non-Muslim parent","Divorce finalized by non-Muslim court","Remarriage to divorced wife — halala controversy","Zihar and its kaffarah","Ila abstention oath — maximum period","Wife initiating separation"],
+  "Inheritance and Wills":["Non-Muslim inheriting from a Muslim","Muslim inheriting from a non-Muslim","Apostate inheriting from Muslim relatives","Women receiving half of male share","Inheritance of illegitimate children","Wills — maximum one-third rule","Non-Muslim wife inheriting from Muslim husband","Inheritance by adoption","Simultaneous death — who inherits","Inheritance of a hermaphrodite"],
+  "Food and Drink":["Alcohol in medicine — permissible or not","Gelatin from pigs — halal or haram","Meat slaughtered by Christians and Jews — conditions","Stunning before slaughter — validity of halal","Shellfish and seafood — halal status","Cannabis — haram or merely disliked","Machine-slaughtered chicken","Eating in non-Muslim restaurants","Food with animal derivatives in E-numbers","Energy drinks with trace alcohol"],
+  "Finance and Economics":["Bank interest — riba al-fadl vs riba al-nasia","Islamic mortgage alternatives — tawarruq controversy","Insurance — prohibited or permitted","Cryptocurrency — halal or haram","Stock market investing — conditions","Working in a bank","Financial dealings with non-Muslims — restrictions","Selling to non-Muslims goods for prohibited uses","Pension funds and interest accumulation","Zakat on business inventory"],
+  "Criminal Law and Hudud":["Stoning for adultery — Quranic basis controversy","Amputation for theft — nisab threshold","Apostasy — death penalty basis and conditions","Blasphemy — death penalty across schools","Alcohol consumption — 40 or 80 lashes","False accusation of zina — penalty","Retaliation qisas for bodily injury","Highway robbery hiraba — penalties","Discretionary punishment tazir — scope","Criminal liability of the insane"],
+  "Jihad and Warfare":["Offensive jihad — obligation or lapsed","Jihad against non-Muslim civilians","Suicide bombing — martyrdom or forbidden","Treatment of prisoners of war","Assassination of enemy leaders","Jizyah as alternative to war","Non-Muslim allies in jihad","Land of war vs land of Islam","Conscription — obligation to fight","Targeting infrastructure in enemy territory"],
+  "Governance and Politics":["Caliphate — obligation or ideal","Democracy — shirk or permissible","Non-Muslim citizenship in Islamic state","Muslim minority political participation","Appointing non-Muslims to government positions","Rebellion against unjust Muslim ruler","Islamic constitution vs secular law","Human rights conventions — compatibility with Islam","Nationalism — haram innovation","Taxation beyond zakat — legitimacy"],
+  "Medical and Bioethics":["Organ donation — permissible or not","Abortion — conditions and stages","IVF and assisted reproduction","Sex change operations","Euthanasia and assisted dying","Vaccination — obligation and permissibility","Medical treatment of non-Muslims by Muslim doctors","Non-Muslim doctors treating Muslim patients","Blood transfusion","Autopsy of Muslim bodies"],
+  "Fasting":["Fasting while travelling — obligatory to break or continue","Kaffarah for breaking fast intentionally","Fasting of a non-Muslim who becomes Muslim mid-Ramadan","Medical injections while fasting","Fasting on the Day of Doubt","Making up missed fasts","Fasting of a pregnant woman","Voluntary fasts on Fridays alone","Intention for Ramadan fast","Swallowing saliva while fasting"],
+  "Zakat and Charity":["Zakat on stocks and shares","Giving zakat to non-Muslims","Zakat on debts owed to you","Minimum nisab — gold vs silver standard","Zakat on rental income","Sadaqah to non-Muslim relatives","Zakat al-Fitr — who must pay","Zakat on agricultural produce","Paying zakat to government vs direct distribution","Can a rich person receive zakat in need"],
+  "Children and Minors":["Age of puberty and legal majority across schools","Custody of children of non-Muslim parent","Circumcision — obligation or sunnah","Age of criminal responsibility","Child marriage — minimum age rulings","Adoption — prohibition and legal alternatives","Children born from zina — lineage and rights","Child right to choose religion at maturity","Non-Muslim child raised by Muslim — forced conversion","Education of non-Muslim children under Muslim guardianship"],
+  "Funerary and Death Rites":["Burial of non-Muslims in Muslim cemeteries","Muslim buried in non-Muslim cemetery","Funeral prayer for suicide victims","Funeral prayer for grave sinners","Cremation — absolutely forbidden","Wailing and mourning — permissible limits","Non-Muslim attending Muslim funeral","Muslim attending non-Muslim funeral","Praying over an apostate","Autopsy — obligation to refuse"],
+  "Hajj and Umrah":["Hajj on behalf of a deceased non-Muslim parent","Woman performing hajj without mahram","Non-Muslims entering Mecca — prohibition basis","Non-Muslims entering Medina","Validity of hajj with haram money","Performing hajj multiple times","Umrah as obligatory or recommended","Cutting hair during ihram accidentally","Hajj of a child — does it count","Ihram garments for women"],
+  "Theology and Creed":["Seeing Allah in the afterlife — Ashari vs Mutazila","Creation of the Quran — eternal or created","Free will vs predestination qadar","Intercession shafaa — permissible or shirk","Visiting graves — permissible or bidah","Tawassul through saints","Takfir of grave sinners","Non-Sunni Muslims — kufr or fisq","Status of Companions who fought Ali","Temporary punishment in hellfire"],
+  "Oaths Vows and Contracts":["Oath by other than Allah — minor shirk","Breaking an oath — kaffarah","Contract with a non-Muslim — enforceability","Lying to a non-Muslim — permissibility in war","Taqiyya — concealment of faith","Business contracts under non-Muslim law","Partnerships with non-Muslims","Interest-bearing loans from non-Muslims","Vow to do a prohibited act","Insurance contracts — conditions"],
+  "Quran and Hadith Sciences":["Seven ahruf of the Quran — meaning","Abrogation of Quranic verses by hadith","Hadith rejected by reason — Mutazila position","Weak hadith in practice","Non-Muslim transmitters of hadith","Fabricated hadith — extent and examples","Tafsir by non-Muslims — validity","Quran translation — status as Quran","Hadith contradicting science — interpretation","Matn criticism vs isnad criticism"]
+};
+
+let stopped = false;
+let totalDone = 0, totalErr = 0, catsDone = 0;
+
+function log(msg, type='info') {
+  const el = document.getElementById('log');
+  el.innerHTML += '<div class="'+type+'">'+new Date().toLocaleTimeString()+' '+msg+'</div>';
+  el.scrollTop = el.scrollHeight;
+}
+
+function updateStats() {
+  document.getElementById('s-done').textContent = totalDone;
+  document.getElementById('s-err').textContent = totalErr;
+  document.getElementById('s-cat').textContent = catsDone;
+}
+
+// Build buttons
+const grid = document.getElementById('cat-grid');
+Object.keys(CATS).forEach(cat => {
+  const btn = document.createElement('button');
+  btn.className = 'btn-cat';
+  btn.id = 'btn-'+cat.replace(/[^a-z]/gi,'_');
+  btn.textContent = cat;
+  btn.onclick = () => seedCat(cat);
+  grid.appendChild(btn);
+});
+
+async function generateRuling(category, topic) {
+  const prompt = `You are an Islamic scholar. Return ONLY a JSON object for the topic "${topic}" in category "${category}". No explanation, no markdown, no text before or after. Just the raw JSON object starting with { and ending with }:
+{"topic":"${topic}","category":"${category}","hanafi_position":"[Hanafi ruling 1-2 sentences]","hanafi_evidence":"[evidence]","maliki_position":"[Maliki ruling]","maliki_evidence":"[evidence]","shafii_position":"[Shafii ruling]","shafii_evidence":"[evidence]","hanbali_position":"[Hanbali ruling]","hanbali_evidence":"[evidence]","jafari_position":"[Jafari/Shia ruling]","zaydi_position":"[Zaydi ruling]","ibadi_position":"[Ibadi ruling]","mutazila_position":"[Mutazila position]","salafi_position":"[Salafi position]","consensus":"[areas of agreement]","key_disagreement":"[main dispute]","practical_difference":"[real-world impact]","historical_consequences":"[persecution or conflict caused]","reformist_view":"[modern reformist view]","quran_verses":["2:190"],"hadith_refs":["relevant hadith"],"reflection_questions":["critical question?"]}`;
+
+  let res, attempts = 0;
+  while (attempts < 4) {
+    attempts++;
+    res = await fetch('/claude', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({model:'claude-haiku-4-5-20251001', max_tokens:800, messages:[{role:'user',content:prompt}]})
+    });
+    if (res.ok) break;
+    if (res.status === 529 || res.status === 502 || res.status === 504 || res.status === 503) {
+      const wait = attempts * 20000;
+      log('⏳ Error '+res.status+', waiting ' + (wait/1000) + 's... (retry ' + attempts + '/4)');
+      await new Promise(r => setTimeout(r, wait));
+    } else { const e = await res.text(); throw new Error('Claude error '+res.status+': '+e.substring(0,100)); }
+  }
+  if (!res.ok) { const e = await res.text(); throw new Error('Failed after 4 attempts: '+res.status); }
+  const data = await res.json();
+  const raw = (data.content&&data.content[0]&&data.content[0].text)||'';
+  // Strip markdown fences aggressively
+  let cleaned = raw;
+  cleaned = cleaned.replace(/^```json\s*/i, '').replace(/^```\s*/i, '');
+  cleaned = cleaned.replace(/```\s*$/i, '').trim();
+  // Find JSON object
+  const start = cleaned.indexOf('{');
+  const end = cleaned.lastIndexOf('}');
+  if (start === -1 || end === -1) throw new Error('No JSON in response: ' + raw.substring(0,80));
+  const jsonStr = cleaned.substring(start, end + 1);
+  try {
+    return JSON.parse(jsonStr);
+  } catch(e) {
+    throw new Error('JSON parse failed: ' + e.message + ' | ' + jsonStr.substring(0,80));
+  }
+}
+
+async function insertRuling(ruling) {
+  const tr = await fetch(SB_URL+'/rest/v1/madhhab_topics', {
+    method:'POST',
+    headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Prefer':'return=representation'},
+    body: JSON.stringify({topic:ruling.topic, category:ruling.category, subcategory:ruling.topic})
+  });
+  const topics = await tr.json();
+  const tid = topics[0]&&topics[0].id;
+  if (!tid) throw new Error('No topic ID');
+
+  await fetch(SB_URL+'/rest/v1/madhhab_rulings', {
+    method:'POST',
+    headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Prefer':'return=minimal'},
+    body: JSON.stringify({
+      topic_id:tid, category:ruling.category,
+      hanafi_position:ruling.hanafi_position, hanafi_evidence:ruling.hanafi_evidence, hanafi_sources:ruling.hadith_refs||[],
+      maliki_position:ruling.maliki_position, maliki_evidence:ruling.maliki_evidence, maliki_sources:[],
+      shafii_position:ruling.shafii_position, shafii_evidence:ruling.shafii_evidence, shafii_sources:[],
+      hanbali_position:ruling.hanbali_position, hanbali_evidence:ruling.hanbali_evidence, hanbali_sources:[],
+      jafari_position:ruling.jafari_position, zaydi_position:ruling.zaydi_position,
+      ibadi_position:ruling.ibadi_position, mutazila_position:ruling.mutazila_position, salafi_position:ruling.salafi_position,
+      consensus:ruling.consensus, key_disagreement:ruling.key_disagreement,
+      practical_difference:ruling.practical_difference, historical_consequences:ruling.historical_consequences,
+      reformist_view:ruling.reformist_view,
+      quran_verses:ruling.quran_verses||[], hadith_refs:ruling.hadith_refs||[],
+      reflection_questions:ruling.reflection_questions||[]
+    })
+  });
+  return tid;
+}
+
+async function seedCat(cat) {
+  stopped = false;
+  const btnId = 'btn-'+cat.replace(/[^a-z]/gi,'_');
+  const btn = document.getElementById(btnId);
+  if (btn) btn.className = 'btn-cat active';
+  const topics = CATS[cat];
+  log('▶ Starting: '+cat+' ('+topics.length+' topics)');
+  document.getElementById('progress').textContent = 'Seeding: '+cat;
+  let done = 0;
+  for (const topic of topics) {
+    if (stopped) { log('⏹ Stopped','err'); return; }
+    try {
+      const ruling = await generateRuling(cat, topic);
+      await insertRuling(ruling);
+      done++; totalDone++;
+      log('✓ '+topic.substring(0,55), 'ok');
+    } catch(e) {
+      totalErr++;
+      log('✗ '+topic.substring(0,45)+': '+e.message, 'err');
+    }
+    updateStats();
+    await new Promise(r => setTimeout(r, 3000));
+  }
+  catsDone++;
+  if (btn) btn.className = 'btn-cat done';
+  log('✅ Done: '+cat+' — '+done+'/'+topics.length, 'ok');
+  updateStats();
+}
+
+async function seedAll() {
+  stopped = false;
+  log('🚀 Seeding ALL '+Object.keys(CATS).length+' categories...');
+  for (const cat of Object.keys(CATS)) {
+    if (stopped) break;
+    await seedCat(cat);
+    await new Promise(r => setTimeout(r, 5000));
+  }
+  if (!stopped) { log('🎉 ALL CATEGORIES DONE!', 'ok'); document.getElementById('progress').textContent = 'Complete!'; }
+}
+
+function stopSeed() { stopped = true; log('⏹ Stop requested','err'); }
+</script>
+</body>
+</html>
