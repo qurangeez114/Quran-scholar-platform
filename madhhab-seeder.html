@@ -120,7 +120,8 @@ Object.keys(CATS).forEach(cat => {
 });
 
 async function generateRuling(category, topic) {
-  const prompt = 'Islamic jurist: ruling for "'+topic+'" ('+category+'). JSON only, no markdown: {"topic":"'+topic+'","category":"'+category+'","hanafi_position":"Hanafi ruling","hanafi_evidence":"evidence","maliki_position":"Maliki ruling","maliki_evidence":"evidence","shafii_position":"Shafii ruling","shafii_evidence":"evidence","hanbali_position":"Hanbali ruling","hanbali_evidence":"evidence","jafari_position":"Jafari ruling","zaydi_position":"Zaydi ruling","ibadi_position":"Ibadi ruling","mutazila_position":"Mutazila position","salafi_position":"Salafi position","consensus":"agreement","key_disagreement":"dispute","practical_difference":"real impact","historical_consequences":"historical persecution or conflict","reformist_view":"reformist perspective","quran_verses":["2:190"],"hadith_refs":["Bukhari 1234"],"reflection_questions":["Question?"]}';
+  const prompt = `You are an Islamic scholar. Return ONLY a JSON object for the topic "${topic}" in category "${category}". No explanation, no markdown, no text before or after. Just the raw JSON object starting with { and ending with }:
+{"topic":"${topic}","category":"${category}","hanafi_position":"[Hanafi ruling 1-2 sentences]","hanafi_evidence":"[evidence]","maliki_position":"[Maliki ruling]","maliki_evidence":"[evidence]","shafii_position":"[Shafii ruling]","shafii_evidence":"[evidence]","hanbali_position":"[Hanbali ruling]","hanbali_evidence":"[evidence]","jafari_position":"[Jafari/Shia ruling]","zaydi_position":"[Zaydi ruling]","ibadi_position":"[Ibadi ruling]","mutazila_position":"[Mutazila position]","salafi_position":"[Salafi position]","consensus":"[areas of agreement]","key_disagreement":"[main dispute]","practical_difference":"[real-world impact]","historical_consequences":"[persecution or conflict caused]","reformist_view":"[modern reformist view]","quran_verses":["2:190"],"hadith_refs":["relevant hadith"],"reflection_questions":["critical question?"]}`;
 
   let res, attempts = 0;
   while (attempts < 4) {
@@ -142,8 +143,17 @@ async function generateRuling(category, topic) {
   const raw = (data.content&&data.content[0]&&data.content[0].text)||'';
   const cleaned = raw.replace(/```json\s*/gi,'').replace(/```\s*/g,'').trim();
   const m = cleaned.match(/\{[\s\S]*\}/);
-  if (!m) throw new Error('No JSON in response');
-  return JSON.parse(m[0]);
+  if (!m) {
+    console.log('No JSON found in:', raw.substring(0,200));
+    throw new Error('No JSON in response: ' + raw.substring(0,80));
+  }
+  try {
+    return JSON.parse(m[0]);
+  } catch(e) {
+    // Try fixing common JSON issues
+    const fixed = m[0].replace(/([{,]\s*)(\w+):/g, '$1"$2":').replace(/'/g, '"');
+    return JSON.parse(fixed);
+  }
 }
 
 async function insertRuling(ruling) {
