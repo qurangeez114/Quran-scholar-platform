@@ -8,29 +8,19 @@ exports.handler = async (event) => {
     'Content-Type': 'application/json'
   };
 
-  if (event.httpMethod === 'OPTIONS') {
-    return { statusCode: 200, headers: corsHeaders, body: '' };
-  }
-
-  if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, headers: corsHeaders, body: JSON.stringify({ error: 'Method not allowed' }) };
-  }
+  if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers: corsHeaders, body: '' };
+  if (event.httpMethod !== 'POST') return { statusCode: 405, headers: corsHeaders, body: JSON.stringify({ error: 'Method not allowed' }) };
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    return { statusCode: 500, headers: corsHeaders, body: JSON.stringify({ error: 'Missing ANTHROPIC_API_KEY' }) };
-  }
+  if (!apiKey) return { statusCode: 500, headers: corsHeaders, body: JSON.stringify({ error: 'Missing ANTHROPIC_API_KEY env var' }) };
 
   let body;
-  try {
-    body = JSON.parse(event.body || '{}');
-  } catch {
-    return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: 'Invalid JSON' }) };
-  }
+  try { body = JSON.parse(event.body || '{}'); }
+  catch { return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: 'Invalid JSON' }) }; }
 
   const payload = {
-    model: body.model || 'claude-haiku-4-5-20251001',
-    max_tokens: body.max_tokens || 1000,
+    model: body.model || 'claude-sonnet-4-6',
+    max_tokens: Math.min(body.max_tokens || 1000, 2000),
     messages: body.messages
   };
   if (body.system) payload.system = body.system;
@@ -43,6 +33,7 @@ exports.handler = async (event) => {
       port: 443,
       path: '/v1/messages',
       method: 'POST',
+      timeout: 25000,
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': apiKey,
@@ -55,25 +46,17 @@ exports.handler = async (event) => {
       let data = '';
       res.on('data', chunk => data += chunk);
       res.on('end', () => {
-        // Log non-200 for debugging
-        if (res.statusCode !== 200) {
-          console.error('Anthropic API error:', res.statusCode, data);
-        }
-        resolve({
-          statusCode: res.statusCode,
-          headers: corsHeaders,
-          body: data
-        });
+        resolve({ statusCode: res.statusCode, headers: corsHeaders, body: data });
       });
     });
 
+    req.on('timeout', () => {
+      req.destroy();
+      resolve({ statusCode: 504, headers: corsHeaders, body: JSON.stringify({ error: 'Request timeout' }) });
+    });
+
     req.on('error', (err) => {
-      console.error('Request error:', err.message);
-      resolve({
-        statusCode: 500,
-        headers: corsHeaders,
-        body: JSON.stringify({ error: err.message })
-      });
+      resolve({ statusCode: 500, headers: corsHeaders, body: JSON.stringify({ error: err.message }) });
     });
 
     req.write(payloadStr);
