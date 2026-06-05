@@ -8901,8 +8901,29 @@ async function analyzeTafsirAccuracy(sura, aya) {
     const data = await res.json();
     const raw = data.content?.[0]?.text || '';
     let result;
-    try { result = JSON.parse(raw); } catch(e) { const m = raw.match(/\{[\s\S]*\}/); result = m ? JSON.parse(m[0]) : null; }
-    if (!result) { loadingDiv.innerHTML = `<div style="color:#c62828;">Could not parse response: ${raw.substring(0,200)}</div>`; return; }
+    try {
+      // Try direct parse first
+      result = JSON.parse(raw);
+    } catch(e) {
+      try {
+        // Strip markdown fences if present
+        let cleaned = raw.replace(/```json\n?/g,'').replace(/```/g,'').trim();
+        // Extract JSON object
+        const m = cleaned.match(/\{[\s\S]*\}/);
+        if (m) result = JSON.parse(m[0]);
+      } catch(e2) {
+        try {
+          // Last resort: manually extract fields with regex
+          const get = (k) => { const rx = new RegExp('"' + k + '"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)"'); const mx = raw.match(rx); return mx ? mx[1] : '—'; };
+          const getNum = (k) => { const rx = new RegExp('"' + k + '"\\s*:\\s*([\\d.]+)'); const mx = raw.match(rx); return mx ? parseFloat(mx[1]) : 0; };
+          result = { score: getNum('score'), accurate: get('accurate'), omitted: get('omitted'), mistranslated: get('mistranslated'), concerns: get('concerns'), verdict: get('verdict') };
+        } catch(e3) {
+          loadingDiv.innerHTML = '<div style="color:#c62828;padding:12px;">Analysis received but could not be formatted.<br><br><small>' + raw.substring(0,400) + '</small></div>';
+          return;
+        }
+      }
+    }
+    if (!result) { loadingDiv.innerHTML = '<div style="color:#c62828;">No result returned from AI.</div>'; return; }
 
     // Save to DB
     try {
