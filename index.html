@@ -7011,7 +7011,7 @@ let researchImageBase64 = null;
 let researchImageMime = null;
 let researchLang = 'English';
 
-const ANTHROPIC_KEY = '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';
+const ANTHROPIC_KEY = (window.ANTHROPIC_API_KEY || getAnthropicKey());
 
 function openResearchModal() {
   document.getElementById('researchModal').style.display = 'flex';
@@ -8846,98 +8846,80 @@ function showNavArrows() {
 async function analyzeTafsirAccuracy(sura, aya) {
   const panel = document.getElementById(`tp-${aya}-tafsir`);
   if (!panel) return;
-
-  // Get the stored rows
-  const allRows = panel._allRows;
-  if (!allRows) { alert('Please reopen the Tafsir tab first.'); return; }
-
-  const arRow = allRows.find(r => r.scholar_key === 'ibn_kathir' && r.language === 'ar');
-  const enRow = allRows.find(r => r.scholar_key === 'ibn_kathir' && r.language === 'en');
-
-  if (!arRow || !enRow) {
-    alert('Need both Arabic and English Ibn Kathir to compare. One is missing for this verse.');
-    return;
-  }
-
-  // Show loading state
   const existingAnalysis = document.getElementById(`tafsir-analysis-${sura}-${aya}`);
-  if (existingAnalysis) { existingAnalysis.remove(); return; } // toggle off
+  if (existingAnalysis) { existingAnalysis.remove(); return; }
 
   const loadingDiv = document.createElement('div');
   loadingDiv.id = `tafsir-analysis-${sura}-${aya}`;
   loadingDiv.style.cssText = 'margin-top:16px;padding:16px;background:#F1F8E9;border-radius:12px;border:2px solid #81C784;';
-  loadingDiv.innerHTML = `<div style="color:#2E7D32;font-weight:700;margin-bottom:8px;">🔍 Analyzing Translation Accuracy...</div><div style="color:#666;font-size:13px;">Comparing Arabic original with English translation using AI...</div>`;
+  loadingDiv.innerHTML = '<div style="color:#2E7D32;font-weight:700;margin-bottom:8px;">🔍 Checking saved analysis...</div>';
   panel.appendChild(loadingDiv);
-  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
-  // Truncate to avoid token limits — use first 3000 chars of each
-  const arText = arRow.content.substring(0, 3000);
-  const enText = enRow.content.substring(0, 3000);
+  // Check DB cache first
+  try {
+    const cached = await sbFetch('tafsir_accuracy_analysis', { sura: `eq.${sura}`, aya: `eq.${aya}`, scholar_key: 'eq.ibn_kathir' });
+    if (cached && cached.length > 0) { renderTafsirAnalysis(loadingDiv, cached[0], sura, aya, true); return; }
+  } catch(e) {}
 
-  const prompt = `You are an expert Islamic scholar fluent in Classical Arabic and English. You are analyzing the accuracy of an English translation of Ibn Kathir's Arabic Tafsir (Quranic commentary) for verse ${sura}:${aya}.
+  const allRows = panel._allRows;
+  if (!allRows) { loadingDiv.innerHTML = '<div style="color:#c62828;">Close and reopen Tafsir tab first.</div>'; return; }
+  const arRow = allRows.find(r => r.scholar_key === 'ibn_kathir' && r.language === 'ar');
+  const enRow = allRows.find(r => r.scholar_key === 'ibn_kathir' && r.language === 'en');
+  if (!arRow || !enRow) { loadingDiv.innerHTML = '<div style="color:#c62828;">Both Arabic and English Ibn Kathir needed.</div>'; return; }
 
-ARABIC ORIGINAL (Ibn Kathir):
-${arText}
+  loadingDiv.innerHTML = '<div style="color:#2E7D32;font-weight:700;margin-bottom:8px;">🔍 Analyzing Translation Accuracy...</div><div style="color:#666;font-size:13px;">AI comparing Arabic original with English...</div>';
 
-ENGLISH TRANSLATION:
-${enText}
-
-Please provide a detailed accuracy analysis with the following structure:
-
-1. **Overall Accuracy Score**: X/10
-
-2. **What Was Accurately Translated**: List the key points correctly conveyed
-
-3. **What Was Omitted**: List significant content present in Arabic but missing from English
-
-4. **What Was Mistranslated or Altered**: List any inaccuracies, softened meanings, or changed nuances
-
-5. **Theological/Scholarly Concerns**: Any points where the translation changes the meaning in a way that could mislead readers
-
-6. **Verdict**: Is this translation reliable for scholarly use? Brief summary.
-
-Be precise, scholarly, and cite specific phrases where possible.`;
+  const prompt = `You are an expert Islamic scholar fluent in Classical Arabic. Analyze the accuracy of this English translation of Ibn Kathir tafsir for verse ${sura}:${aya}.
+ARABIC: ${arRow.content.substring(0,2000)}
+ENGLISH: ${enRow.content.substring(0,2000)}
+Respond ONLY with valid JSON, no markdown:
+{"score":7.5,"accurate":"correctly conveyed points","omitted":"missing from English","mistranslated":"inaccuracies or altered meaning","concerns":"theological concerns","verdict":"one sentence reliability verdict"}`;
 
   try {
-    const apiKey = window.ANTHROPIC_API_KEY || localStorage.getItem('anthropic_api_key') || '';
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 1500,
-        messages: [{ role: 'user', content: prompt }]
-      })
+      headers: { 'Content-Type':'application/json','x-api-key': (window.ANTHROPIC_API_KEY || getAnthropicKey()),'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true' },
+      body: JSON.stringify({ model:'claude-sonnet-4-6', max_tokens:700, messages:[{role:'user',content:prompt}] })
     });
-
     const data = await res.json();
-    const analysis = data.content?.[0]?.text || 'Analysis failed.';
+    const raw = data.content?.[0]?.text || '';
+    let result;
+    try { result = JSON.parse(raw); } catch(e) { const m = raw.match(/\{[\s\S]*\}/); result = m ? JSON.parse(m[0]) : null; }
+    if (!result) { loadingDiv.innerHTML = `<div style="color:#c62828;">Could not parse response: ${raw.substring(0,200)}</div>`; return; }
 
-    // Render markdown-style output
-    const formatted = analysis
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-      .replace(/^(\d+\. )/gm, '<br><span style="color:#2E7D32;font-weight:700;">$1</span>')
-      .replace(/
-/g, '<br>');
+    // Save to DB
+    try {
+      const sbUrl = (typeof SUPABASE_URL !== 'undefined' ? SUPABASE_URL : 'https://ylosytbxpzxzwfzjpaej.supabase.co');
+      const sbKey = (typeof SUPABASE_ANON_KEY !== 'undefined' ? SUPABASE_ANON_KEY : 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs');
+      await fetch(sbUrl + '/rest/v1/tafsir_accuracy_analysis', {
+        method:'POST',
+        headers:{'Content-Type':'application/json','apikey':sbKey,'Authorization':'Bearer '+sbKey,'Prefer':'resolution=merge-duplicates'},
+        body: JSON.stringify({ sura, aya, scholar_key:'ibn_kathir', accuracy_score:result.score, accurately_translated:result.accurate, omitted:result.omitted, mistranslated:result.mistranslated, theological_concerns:result.concerns, verdict:result.verdict, full_analysis:raw })
+      });
+    } catch(e) {}
+    renderTafsirAnalysis(loadingDiv, result, sura, aya, false);
+  } catch(e) { loadingDiv.innerHTML = `<div style="color:#c62828;">Error: ${e.message}</div>`; }
+}
 
-    loadingDiv.innerHTML = `
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-        <div style="color:#2E7D32;font-weight:700;font-size:15px;">🔍 Translation Accuracy Analysis — ${sura}:${aya}</div>
-        <button onclick="document.getElementById('tafsir-analysis-${sura}-${aya}').remove()" style="background:none;border:none;color:#999;font-size:18px;cursor:pointer;">✕</button>
-      </div>
-      <div style="font-size:13px;line-height:1.8;color:#222;">${formatted}</div>
-      <div style="margin-top:12px;font-size:11px;color:#999;border-top:1px solid #C8E6C9;padding-top:8px;">
-        Analysis based on first 3,000 characters of each text. Full tafsir may contain additional content.
-      </div>`;
-
-  } catch(e) {
-    loadingDiv.innerHTML = `<div style="color:#c62828;">Error: ${e.message}</div>`;
-  }
+function renderTafsirAnalysis(div, r, sura, aya, fromCache) {
+  const score = parseFloat(r.accuracy_score || r.score || 0);
+  const col = score >= 8 ? '#2E7D32' : score >= 6 ? '#E65100' : '#c62828';
+  const lbl = score >= 8 ? 'Reliable' : score >= 6 ? 'Moderate' : 'Unreliable';
+  div.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;">
+    <div><div style="color:#2E7D32;font-weight:700;font-size:15px;">🔍 Accuracy Analysis — ${sura}:${aya}</div>${fromCache?'<div style="font-size:11px;color:#888;">📦 From saved analysis</div>':''}</div>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <div style="background:${col};color:#fff;font-weight:700;font-size:18px;width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;">${score}</div>
+      <div style="font-size:11px;font-weight:700;color:${col};">${lbl}</div>
+      <button onclick="document.getElementById('tafsir-analysis-${sura}-${aya}').remove()" style="background:none;border:none;color:#999;font-size:20px;cursor:pointer;">✕</button>
+    </div></div>
+  <div style="display:grid;gap:10px;font-size:13px;line-height:1.7;">
+    <div style="background:#fff;border-radius:8px;padding:10px;border-left:4px solid #4CAF50;"><div style="font-weight:700;color:#2E7D32;margin-bottom:4px;">✅ Accurately Translated</div><div>${r.accurately_translated||r.accurate||'—'}</div></div>
+    <div style="background:#fff;border-radius:8px;padding:10px;border-left:4px solid #FF9800;"><div style="font-weight:700;color:#E65100;margin-bottom:4px;">⚠️ Omitted from English</div><div>${r.omitted||'—'}</div></div>
+    <div style="background:#fff;border-radius:8px;padding:10px;border-left:4px solid #F44336;"><div style="font-weight:700;color:#c62828;margin-bottom:4px;">❌ Mistranslated / Altered</div><div>${r.mistranslated||'—'}</div></div>
+    <div style="background:#fff;border-radius:8px;padding:10px;border-left:4px solid #9C27B0;"><div style="font-weight:700;color:#6A1B9A;margin-bottom:4px;">📚 Scholarly Concerns</div><div>${r.theological_concerns||r.concerns||'—'}</div></div>
+    <div style="background:#E8EAF6;border-radius:8px;padding:10px;"><div style="font-weight:700;color:#283593;margin-bottom:4px;">⚖️ Verdict</div><div style="font-style:italic;">${r.verdict||'—'}</div></div>
+  </div>
+  <div style="margin-top:10px;font-size:11px;color:#aaa;">Analysis based on first 2,000 chars of each text.</div>`;
 }
 </script>
 
