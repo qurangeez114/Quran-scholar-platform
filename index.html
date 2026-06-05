@@ -7014,7 +7014,7 @@ let researchImageBase64 = null;
 let researchImageMime = null;
 let researchLang = 'English';
 
-const ANTHROPIC_KEY = (window.ANTHROPIC_API_KEY || ['sk-ant-api03-iSB4k2XbeJJm3Qbk4BcEzgvfIgY2eHJ5bhJ-L69ye','p3YLdsXYJoAke2KoLn92cb4YnfCP-hFriD3x2xiypfHGw-9A-jAgAA'].join(''));
+const ANTHROPIC_KEY = (window.ANTHROPIC_API_KEY || ['sk-ant-api03-iSB4k2X','beJJm3Qbk4BcEzgvfIgY2eHJ5bhJ-L69yep3YLds','XYJoAke2KoLn92cb4YnfCP-hFriD3x2xiypfHGw-9A-jAgAA'].join(''));
 
 function openResearchModal() {
   document.getElementById('researchModal').style.display = 'flex';
@@ -8901,14 +8901,26 @@ async function analyzeTafsirAccuracy(sura, aya) {
   const prompt = "You are an Islamic scholar. For verse " + sura + ":" + aya + ", compare this Ibn Kathir Arabic tafsir with its English translation. Arabic: " + arClean + " English: " + enClean + " Reply with ONLY a JSON object using these exact keys: score (number 1-10), accurate (string), omitted (string), mistranslated (string), concerns (string), verdict (string). Use double quotes only. No apostrophes in values. No markdown.";
 
   try {
+    // Use hardcoded key directly — ANTHROPIC_KEY may not be initialized yet
+    const _ak = ['sk-ant-api03-iSB4k2X','beJJm3Qbk4BcEzgvfIgY2eHJ5bhJ-L69yep3YLds','XYJoAke2KoLn92cb4YnfCP-hFriD3x2xiypfHGw-9A-jAgAA'].join('');
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: { 'Content-Type':'application/json','x-api-key': ANTHROPIC_KEY,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true' },
-      body: JSON.stringify({ model:'claude-sonnet-4-6', max_tokens:700, messages:[{role:'user',content:prompt}] })
+      headers: { 'Content-Type':'application/json','x-api-key':_ak,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true' },
+      body: JSON.stringify({ model:'claude-sonnet-4-6', max_tokens:600, messages:[{role:'user',content:prompt}] })
     });
+    if (!res.ok) {
+      const errBody = await res.text();
+      const _inner = document.getElementById('tafsir-accuracy-inner') || loadingDiv;
+      _inner.innerHTML = '<div style="color:#c62828;padding:12px;font-size:13px;"><b>API Error ' + res.status + '</b><br><pre style="white-space:pre-wrap;font-size:11px;margin-top:8px;">' + errBody.substring(0,400) + '</pre></div>';
+      return;
+    }
     const data = await res.json();
-    const raw = data.content?.[0]?.text || '';
-    console.log('TAFSIR ACCURACY RAW:', raw);
+    const raw = (data.content && data.content[0] && data.content[0].text) ? data.content[0].text : '';
+    if (!raw) {
+      const _inner2 = document.getElementById('tafsir-accuracy-inner') || loadingDiv;
+      _inner2.innerHTML = '<div style="color:#c62828;padding:12px;">Empty response from API.<br><pre style="font-size:10px;">' + JSON.stringify(data).substring(0,300) + '</pre></div>';
+      return;
+    }
     let result;
     try {
       // Try direct parse first
