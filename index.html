@@ -4832,6 +4832,7 @@ async function loadTafsirPanel(sura, aya) {
     if (hasEn) toggleBar += `<button onclick="setTafsirLang(${sura},${aya},'en')" style="padding:5px 14px;border-radius:20px;border:2px solid ${lang==='en'?'#B8902A':'#D4C9A8'};background:${lang==='en'?'#B8902A':'#fff'};color:${lang==='en'?'#fff':'#666'};font-size:12px;font-weight:700;cursor:pointer;">English</button>`;
     if (hasAr) toggleBar += `<button onclick="setTafsirLang(${sura},${aya},'ar')" style="padding:5px 14px;border-radius:20px;border:2px solid ${lang==='ar'?'#B8902A':'#D4C9A8'};background:${lang==='ar'?'#B8902A':'#fff'};color:${lang==='ar'?'#fff':'#666'};font-size:12px;font-weight:700;cursor:pointer;">عربي</button>`;
     if (hasAr && hasEn) toggleBar += `<button onclick="setTafsirLang(${sura},${aya},'both')" style="padding:5px 14px;border-radius:20px;border:2px solid ${lang==='both'?'#B8902A':'#D4C9A8'};background:${lang==='both'?'#B8902A':'#fff'};color:${lang==='both'?'#fff':'#666'};font-size:12px;font-weight:700;cursor:pointer;">Both</button>`;
+    if (hasAr && hasEn) toggleBar += `<button onclick="analyzeTafsirAccuracy(${sura},${aya})" style="padding:5px 14px;border-radius:20px;border:2px solid #2E7D32;background:#E8F5E9;color:#2E7D32;font-size:12px;font-weight:700;cursor:pointer;">🔍 Accuracy</button>`;
     toggleBar += `</div>`;
 
     let html = toggleBar;
@@ -4854,9 +4855,10 @@ async function loadTafsirPanel(sura, aya) {
   }
 
   panel.innerHTML = buildTradToggle(sura, aya, 'tafsir', current) + buildTafsirContent(lang);
-  // store builder for lang switching
+  // store builder for lang switching + rows for accuracy analysis
   panel._buildTafsirContent = buildTafsirContent;
   panel._tradKey = {sura, aya, current};
+  panel._allRows = allRows;
 }
 
 function setTafsirLang(sura, aya, lang) {
@@ -8833,6 +8835,109 @@ function showNavArrows() {
   // Update disabled state
   if (prev) prev.style.opacity = (currentSura <= 1) ? '0.35' : '1';
   if (next) next.style.opacity = (currentSura >= 114) ? '0.35' : '1';
+}
+</script>
+
+
+<script>
+// ══════════════════════════════════════════════════
+// TAFSIR ACCURACY ANALYZER — Ibn Kathir AR vs EN
+// ══════════════════════════════════════════════════
+async function analyzeTafsirAccuracy(sura, aya) {
+  const panel = document.getElementById(`tp-${aya}-tafsir`);
+  if (!panel) return;
+
+  // Get the stored rows
+  const allRows = panel._allRows;
+  if (!allRows) { alert('Please reopen the Tafsir tab first.'); return; }
+
+  const arRow = allRows.find(r => r.scholar_key === 'ibn_kathir' && r.language === 'ar');
+  const enRow = allRows.find(r => r.scholar_key === 'ibn_kathir' && r.language === 'en');
+
+  if (!arRow || !enRow) {
+    alert('Need both Arabic and English Ibn Kathir to compare. One is missing for this verse.');
+    return;
+  }
+
+  // Show loading state
+  const existingAnalysis = document.getElementById(`tafsir-analysis-${sura}-${aya}`);
+  if (existingAnalysis) { existingAnalysis.remove(); return; } // toggle off
+
+  const loadingDiv = document.createElement('div');
+  loadingDiv.id = `tafsir-analysis-${sura}-${aya}`;
+  loadingDiv.style.cssText = 'margin-top:16px;padding:16px;background:#F1F8E9;border-radius:12px;border:2px solid #81C784;';
+  loadingDiv.innerHTML = `<div style="color:#2E7D32;font-weight:700;margin-bottom:8px;">🔍 Analyzing Translation Accuracy...</div><div style="color:#666;font-size:13px;">Comparing Arabic original with English translation using AI...</div>`;
+  panel.appendChild(loadingDiv);
+  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+  // Truncate to avoid token limits — use first 3000 chars of each
+  const arText = arRow.content.substring(0, 3000);
+  const enText = enRow.content.substring(0, 3000);
+
+  const prompt = `You are an expert Islamic scholar fluent in Classical Arabic and English. You are analyzing the accuracy of an English translation of Ibn Kathir's Arabic Tafsir (Quranic commentary) for verse ${sura}:${aya}.
+
+ARABIC ORIGINAL (Ibn Kathir):
+${arText}
+
+ENGLISH TRANSLATION:
+${enText}
+
+Please provide a detailed accuracy analysis with the following structure:
+
+1. **Overall Accuracy Score**: X/10
+
+2. **What Was Accurately Translated**: List the key points correctly conveyed
+
+3. **What Was Omitted**: List significant content present in Arabic but missing from English
+
+4. **What Was Mistranslated or Altered**: List any inaccuracies, softened meanings, or changed nuances
+
+5. **Theological/Scholarly Concerns**: Any points where the translation changes the meaning in a way that could mislead readers
+
+6. **Verdict**: Is this translation reliable for scholarly use? Brief summary.
+
+Be precise, scholarly, and cite specific phrases where possible.`;
+
+  try {
+    const apiKey = window.ANTHROPIC_API_KEY || localStorage.getItem('anthropic_api_key') || '';
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1500,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+
+    const data = await res.json();
+    const analysis = data.content?.[0]?.text || 'Analysis failed.';
+
+    // Render markdown-style output
+    const formatted = analysis
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/^(\d+\. )/gm, '<br><span style="color:#2E7D32;font-weight:700;">$1</span>')
+      .replace(/
+/g, '<br>');
+
+    loadingDiv.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <div style="color:#2E7D32;font-weight:700;font-size:15px;">🔍 Translation Accuracy Analysis — ${sura}:${aya}</div>
+        <button onclick="document.getElementById('tafsir-analysis-${sura}-${aya}').remove()" style="background:none;border:none;color:#999;font-size:18px;cursor:pointer;">✕</button>
+      </div>
+      <div style="font-size:13px;line-height:1.8;color:#222;">${formatted}</div>
+      <div style="margin-top:12px;font-size:11px;color:#999;border-top:1px solid #C8E6C9;padding-top:8px;">
+        Analysis based on first 3,000 characters of each text. Full tafsir may contain additional content.
+      </div>`;
+
+  } catch(e) {
+    loadingDiv.innerHTML = `<div style="color:#c62828;">Error: ${e.message}</div>`;
+  }
 }
 </script>
 
