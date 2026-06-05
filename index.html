@@ -8896,9 +8896,9 @@ async function analyzeTafsirAccuracy(sura, aya) {
 
   loadingDiv.innerHTML = '<div style="color:#2E7D32;font-weight:700;margin-bottom:8px;">🔍 Analyzing Translation Accuracy...</div><div style="color:#666;font-size:13px;">AI comparing Arabic original with English...</div>';
 
-  const arClean = arRow.content.substring(0,2000).replace(/`/g,"'").replace(/\\/g,"");
-  const enClean = enRow.content.substring(0,2000).replace(/`/g,"'").replace(/\\/g,"");
-  const prompt = "You are an expert Islamic scholar fluent in Classical Arabic. Analyze the accuracy of this English translation of Ibn Kathir tafsir for verse " + sura + ":" + aya + ".\nARABIC: " + arClean + "\nENGLISH: " + enClean + '\nRespond ONLY with valid JSON, no markdown, no backticks:\n{"score":7.5,"accurate":"correctly conveyed points","omitted":"missing from English","mistranslated":"inaccuracies","concerns":"theological concerns","verdict":"one sentence"}';
+  const arClean = arRow.content.substring(0,1500).replace(/[`'"\\]/g," ").replace(/\n/g," ").trim();
+  const enClean = enRow.content.substring(0,1500).replace(/[`'"\\]/g," ").replace(/\n/g," ").trim();
+  const prompt = "You are an Islamic scholar. For verse " + sura + ":" + aya + ", compare this Ibn Kathir Arabic tafsir with its English translation. Arabic: " + arClean + " English: " + enClean + " Reply with ONLY a JSON object using these exact keys: score (number 1-10), accurate (string), omitted (string), mistranslated (string), concerns (string), verdict (string). Use double quotes only. No apostrophes in values. No markdown.";
 
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -8908,6 +8908,7 @@ async function analyzeTafsirAccuracy(sura, aya) {
     });
     const data = await res.json();
     const raw = data.content?.[0]?.text || '';
+    console.log('TAFSIR ACCURACY RAW:', raw);
     let result;
     try {
       // Try direct parse first
@@ -8926,7 +8927,8 @@ async function analyzeTafsirAccuracy(sura, aya) {
           const getNum = (k) => { const rx = new RegExp('"' + k + '"\\s*:\\s*([\\d.]+)'); const mx = raw.match(rx); return mx ? parseFloat(mx[1]) : 0; };
           result = { score: getNum('score'), accurate: get('accurate'), omitted: get('omitted'), mistranslated: get('mistranslated'), concerns: get('concerns'), verdict: get('verdict') };
         } catch(e3) {
-          loadingDiv.innerHTML = '<div style="color:#c62828;padding:12px;">Analysis received but could not be formatted.<br><br><small>' + raw.substring(0,400) + '</small></div>';
+          const inner2 = document.getElementById('tafsir-accuracy-inner') || loadingDiv;
+        inner2.innerHTML = '<div style="padding:12px;"><div style="color:#c62828;font-weight:700;margin-bottom:8px;">Parse failed — raw AI response:</div><pre style="font-size:11px;white-space:pre-wrap;word-break:break-all;background:#f5f5f5;padding:8px;border-radius:6px;max-height:300px;overflow-y:auto;">' + raw + '</pre></div>';
           return;
         }
       }
