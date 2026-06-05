@@ -141,15 +141,11 @@ async function generateRuling(category, topic) {
   if (!res.ok) { const e = await res.text(); throw new Error('Failed after 4 attempts: '+res.status); }
   const data = await res.json();
   const raw = (data.content&&data.content[0]&&data.content[0].text)||'';
-  // Strip markdown fences aggressively
-  let cleaned = raw;
-  cleaned = cleaned.replace(/^```json\s*/i, '').replace(/^```\s*/i, '');
-  cleaned = cleaned.replace(/```\s*$/i, '').trim();
-  // Find JSON object
-  const start = cleaned.indexOf('{');
-  const end = cleaned.lastIndexOf('}');
+  // Find JSON object directly - most reliable approach
+  const start = raw.indexOf('{');
+  const end = raw.lastIndexOf('}');
   if (start === -1 || end === -1) throw new Error('No JSON in response: ' + raw.substring(0,80));
-  const jsonStr = cleaned.substring(start, end + 1);
+  const jsonStr = raw.substring(start, end + 1);
   try {
     return JSON.parse(jsonStr);
   } catch(e) {
