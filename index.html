@@ -8888,11 +8888,9 @@ async function analyzeTafsirAccuracy(sura, aya) {
 
   loadingDiv.innerHTML = '<div style="color:#2E7D32;font-weight:700;margin-bottom:8px;">🔍 Analyzing Translation Accuracy...</div><div style="color:#666;font-size:13px;">AI comparing Arabic original with English...</div>';
 
-  const prompt = `You are an expert Islamic scholar fluent in Classical Arabic. Analyze the accuracy of this English translation of Ibn Kathir tafsir for verse ${sura}:${aya}.
-ARABIC: ${arRow.content.substring(0,2000)}
-ENGLISH: ${enRow.content.substring(0,2000)}
-Respond ONLY with valid JSON, no markdown:
-{"score":7.5,"accurate":"correctly conveyed points","omitted":"missing from English","mistranslated":"inaccuracies or altered meaning","concerns":"theological concerns","verdict":"one sentence reliability verdict"}`;
+  const arClean = arRow.content.substring(0,2000).replace(/`/g,"'").replace(/\\/g,"");
+  const enClean = enRow.content.substring(0,2000).replace(/`/g,"'").replace(/\\/g,"");
+  const prompt = "You are an expert Islamic scholar fluent in Classical Arabic. Analyze the accuracy of this English translation of Ibn Kathir tafsir for verse " + sura + ":" + aya + ".\nARABIC: " + arClean + "\nENGLISH: " + enClean + '\nRespond ONLY with valid JSON, no markdown, no backticks:\n{"score":7.5,"accurate":"correctly conveyed points","omitted":"missing from English","mistranslated":"inaccuracies","concerns":"theological concerns","verdict":"one sentence"}';
 
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
