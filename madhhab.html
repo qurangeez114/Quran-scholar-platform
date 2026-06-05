@@ -969,17 +969,23 @@ function renderDetailHeader(topic) {
 function renderSchoolCard(klass, name, position, evidence, sources) {
   if (!position) return '';
   const srcs = (sources||[]).filter(Boolean);
-  return `<div class="school-card ${klass}">
-    <div class="school-name ${klass}">${name}</div>
-    <div class="with-audio">
-      ${audioBtn(position)}
-      <div class="school-pos">${esc(position)}</div>
+  const uid = klass + '_' + Math.random().toString(36).slice(2,7);
+  return `<div class="school-card ${klass}" style="cursor:pointer;" onclick="toggleSchoolCard('${uid}')">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <div class="school-name ${klass}">${name}</div>
+      <span id="arr_${uid}" style="font-size:18px;transition:transform 0.2s;display:inline-block;">▼</span>
     </div>
-    ${evidence?`<div class="with-audio">
-      ${audioBtn(evidence, {size:'sm'})}
-      <div class="school-evidence">${esc(evidence)}</div>
-    </div>`:''}
-    ${srcs.length?`<div class="school-sources">${srcs.map(s=>`<span class="school-source-pill">${esc(s)}</span>`).join('')}</div>`:''}
+    <div id="body_${uid}" style="display:none;margin-top:10px;">
+      <div class="with-audio">
+        ${audioBtn(position)}
+        <div class="school-pos">${esc(position)}</div>
+      </div>
+      ${evidence?`<div class="with-audio" style="margin-top:8px;">
+        ${audioBtn(evidence, {size:'sm'})}
+        <div class="school-evidence">${esc(evidence)}</div>
+      </div>`:''}
+      ${srcs.length?`<div class="school-sources" style="margin-top:8px;">${srcs.map(s=>`<span class="school-source-pill">${esc(s)}</span>`).join('')}</div>`:''}
+    </div>
   </div>`;
 }
 
@@ -1537,6 +1543,18 @@ document.addEventListener('DOMContentLoaded', addRWButtons);
 <script>
 function toggleFabMenu(){var t=document.getElementById('fab-toggle'),i=document.getElementById('fab-items'),b=document.getElementById('fab-backdrop'),o=i.classList.contains('open');if(o){t.classList.remove('open');i.classList.remove('open');b.classList.remove('open');}else{t.classList.add('open');i.classList.add('open');b.classList.add('open');}}
 function closeFabMenu(){document.getElementById('fab-toggle').classList.remove('open');document.getElementById('fab-items').classList.remove('open');document.getElementById('fab-backdrop').classList.remove('open');}
+</script>
+
+
+<script>
+function toggleSchoolCard(uid) {
+  const body = document.getElementById('body_' + uid);
+  const arr  = document.getElementById('arr_'  + uid);
+  if (!body) return;
+  const isOpen = body.style.display !== 'none';
+  body.style.display = isOpen ? 'none' : 'block';
+  if (arr) arr.style.transform = isOpen ? '' : 'rotate(180deg)';
+}
 </script>
 
 </body>
