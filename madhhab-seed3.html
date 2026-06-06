@@ -174,14 +174,23 @@ async function generateRuling(category, topic) {
 }
 
 async function insertRuling(ruling) {
-  const tr = await fetch(SB_URL+'/rest/v1/madhhab_topics', {
+  // Use upsert to skip duplicates
+  const tr = await fetch(SB_URL+'/rest/v1/madhhab_topics?on_conflict=topic,category', {
     method:'POST',
-    headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Prefer':'return=representation'},
+    headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Prefer':'return=representation,resolution=merge-duplicates'},
     body: JSON.stringify({topic:ruling.topic, category:ruling.category, subcategory:ruling.topic})
   });
   const topics = await tr.json();
   const tid = topics[0]&&topics[0].id;
-  if (!tid) throw new Error('No topic ID. Response: ' + JSON.stringify(topics).substring(0,100));
+  if (!tid) {
+    // Try to fetch existing topic ID
+    const existing = await fetch(SB_URL+'/rest/v1/madhhab_topics?topic=eq.'+encodeURIComponent(ruling.topic)+'&category=eq.'+encodeURIComponent(ruling.category)+'&select=id', {
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
+    });
+    const ex = await existing.json();
+    if (!ex[0]||!ex[0].id) throw new Error('No topic ID after upsert');
+    return ex[0].id;
+  }
 
   await fetch(SB_URL+'/rest/v1/madhhab_rulings', {
     method:'POST',
