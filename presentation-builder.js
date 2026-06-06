@@ -30,16 +30,43 @@
 
   function getBasket() {
     const basket = safeParse(localStorage.getItem(BASKET_KEY), null);
-    if (Array.isArray(basket)) return basket;
+    if (Array.isArray(basket) && basket.length > 0) return basket;
     const legacy = safeParse(localStorage.getItem(LEGACY_KEY), []);
-    const normalized = legacy.map(normalizeItem);
-    saveBasket(normalized);
-    return normalized;
+    if (legacy.length > 0) { const normalized = legacy.map(normalizeItem); saveBasket(normalized); return normalized; }
+    return [];
+  }
+
+  async function loadBasketFromCloud() {
+    try {
+      const r = await fetch('https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/presentation_basket?device_id=eq.' + getDeviceId() + '&select=slides', {
+        headers: {'apikey':'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs','Authorization':'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs'}
+      });
+      const data = await r.json();
+      if (data[0] && Array.isArray(data[0].slides) && data[0].slides.length > 0) {
+        try { localStorage.setItem(BASKET_KEY, JSON.stringify(data[0].slides)); } catch(e) {}
+        return data[0].slides;
+      }
+    } catch(e) {}
+    return null;
+  }
+
+  function getDeviceId() {
+    try {
+      let id = localStorage.getItem('qs_device_id');
+      if (!id) { id = 'dev_' + Date.now() + '_' + Math.random().toString(36).slice(2,8); localStorage.setItem('qs_device_id', id); }
+      return id;
+    } catch(e) { return 'dev_default'; }
   }
 
   function saveBasket(items) {
-    localStorage.setItem(BASKET_KEY, JSON.stringify(items));
-    localStorage.setItem(LEGACY_KEY, JSON.stringify(items)); // backward compatibility
+    try { localStorage.setItem(BASKET_KEY, JSON.stringify(items)); } catch(e) {}
+    try { localStorage.setItem(LEGACY_KEY, JSON.stringify(items)); } catch(e) {}
+    // Persist to Supabase
+    fetch('https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/presentation_basket', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json','apikey':'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs','Authorization':'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs','Prefer':'resolution=merge-duplicates'},
+      body: JSON.stringify({ device_id: getDeviceId(), slides: items, updated_at: new Date().toISOString() })
+    }).catch(() => {});
   }
 
   function generateId(prefix) {
