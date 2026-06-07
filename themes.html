@@ -5,6 +5,7 @@
 window.controversyScore=function(v){var t=[v.english,v.aya_text,v.text_english,v.hadith_text,v.topic,v.brief_description,v.content,v.reason_text,v.story_en,v.title_en,v.summary,v.name_english,v.theme].filter(Boolean).join(' ').toLowerCase();var s=0;['kill','slay','smite','amputat','crucif','stone','whip','lash','apostat','slave','captive','concubin','beat.*wife','wife.*beat','fight.*until','jihad','warfare','adulter','zina','thief.*hand','homosexual','liwat','blasphemy','jizya','dhimmi','women.*half','inherit.*half','polygam','nushuz','sex slave','cut hand'].forEach(function(k){try{if(new RegExp(k).test(t))s+=12;}catch(e){}});['divorce','talaq','inheritance','veil','hijab','niqab','disbeliev','infidel','kafir','hellfire','punishment','torment','war','battle','riba','usury','intoxicant','alcohol','honor kill','martyr'].forEach(function(k){if(t.indexOf(k)!==-1)s+=5;});['alhamdulillah','merciful','compassionate','forgiving','be patient'].forEach(function(k){if(t.indexOf(k)!==-1)s-=2;});if(v.controversy_level)s+=(parseInt(v.controversy_level)-1)*4;if(v.human_rights_score!=null)s+=Math.max(0,(5-parseFloat(v.human_rights_score))*2);return s;};
 window.sortByControversy=function(arr){if(!Array.isArray(arr))return arr;return arr.slice().sort(function(a,b){var sa=window.controversyScore(a),sb=window.controversyScore(b);return sb!==sa?sb-sa:((a.sura_id||a.year_ce||0)-(b.sura_id||b.year_ce||0))||((a.aya_number||0)-(b.aya_number||0));});};
 </script>
+
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Themes — Quran Scholar</title>
@@ -103,103 +104,7 @@ body { padding-bottom: 60px !important; }
 
 <div id="list"><div class="loading"><span class="spinner"></span>Loading themes...</div></div>
 
-<script>
-const SB_URL = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
-const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
-const HDR = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY };
 
-let ALL_THEMES = [];
-
-const CATS = [
-  { pat: /Women/i,                                                          icon:'👩', label:'Women & Gender' },
-  { pat: /Fight|War|Jihad|Warfare|Disbeliever|Allian/i,                    icon:'⚔️', label:'Warfare & Jihad' },
-  { pat: /Moses|Abraham|Noah|Jesus|Joseph|Solomon|Prophet|Pharaoh|Khidr/i, icon:'🕌', label:'Prophets & Stories' },
-  { pat: /Judgment|Hell|Paradise|Resurrect|Afterlife|Barzakh/i,            icon:'⚖️', label:'Afterlife' },
-  { pat: /Monotheism|Tawhid|Divine|Shirk|Sonship/i,                        icon:'☝️', label:'Theology' },
-  { pat: /Prayer|Worship|Fasting|Hajj|Charity|Zakat/i,                     icon:'🤲', label:'Worship' },
-  { pat: /Quran|Scripture|Torah|Gospel|People of the Book|Covenant/i,      icon:'📖', label:'Scripture' },
-  { pat: /Hypocrites|Apostasy|Opposition|Nifaq/i,                          icon:'⚠️', label:'Social & Political' },
-  { pat: /Creation|Signs|Nature|Gratitude/i,                               icon:'🌿', label:'Creation & Signs' },
-];
-function getCat(t) { for (const c of CATS) { if (c.pat.test(t)) return c; } return { icon:'📚', label:'Other' }; }
-function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-
-async function load() {
-  // Fetch all rows in pages of 1000
-  let all = [], offset = 0;
-  while (true) {
-    const r = await fetch(`${SB_URL}/rest/v1/thematic_cross_references?select=theme,sura&limit=1000&offset=${offset}&order=theme`, { headers: HDR });
-    if (!r.ok) break;
-    const page = await r.json();
-    if (!Array.isArray(page) || !page.length) break;
-    all = all.concat(page);
-    if (page.length < 1000) break;
-    offset += 1000;
-  }
-
-  // Aggregate
-  const themeV = {}, themeS = {};
-  all.forEach(row => {
-    if (!row || !row.theme) return;
-    themeV[row.theme] = (themeV[row.theme] || 0) + 1;
-    if (!themeS[row.theme]) themeS[row.theme] = new Set();
-    themeS[row.theme].add(row.sura);
-  });
-
-  ALL_THEMES = Object.keys(themeV)
-    .map(t => ({ theme: t, verse_count: themeV[t], sura_count: themeS[t].size }))
-    .sort((a,b) => b.verse_count - a.verse_count);
-
-  document.getElementById('count').textContent = ALL_THEMES.length + ' themes';
-  render(sortByControversy(ALL_THEMES);
-}
-
-function render(themes) {
-  themes = sortByControversy(themes);
-  const list = document.getElementById('list');
-  document.getElementById('count').textContent = themes.length + ' themes';
-  if (!themes.length) { list.innerHTML = '<div class="loading">No themes found.</div>'; return; }
-
-  // Group by category
-  const byCategory = {};
-  themes.forEach(t => {
-    const c = getCat(t.theme);
-    const key = c.icon + ' ' + c.label;
-    if (!byCategory[key]) byCategory[key] = [];
-    byCategory[key].push(t);
-  });
-
-  let html = '';
-  Object.keys(byCategory).sort().forEach(cat => {
-    html += `<div class="cat-header">${esc(cat)}</div>`;
-    byCategory[cat].forEach(t => {
-      html += `<div class="theme-row" onclick="open_theme('${encodeURIComponent(t.theme)}')">
-        <div class="theme-name">${esc(t.theme)}</div>
-        <div class="theme-count">${t.verse_count}v</div>
-        <div class="theme-arrow">↗</div>
-      </div>`;
-    });
-  });
-  list.innerHTML = html;
-}
-
-
-
-function filter() {
-  const q   = document.getElementById('searchInput').value.toLowerCase();
-  const cat = document.getElementById('catSelect').value;
-  let filtered = ALL_THEMES;
-  if (q) filtered = filtered.filter(t => t.theme.toLowerCase().includes(q));
-  if (cat) filtered = filtered.filter(t => new RegExp(cat,'i').test(t.theme));
-  render(filtered);
-}
-
-function open_theme(encoded) {
-  window.location.href = 'theme-analysis.html?theme=' + encoded;
-}
-
-load();
-</script>
 
 <!-- BOTTOM NAV -->
 <nav id="bottom-nav">
