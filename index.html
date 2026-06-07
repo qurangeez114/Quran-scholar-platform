@@ -9040,5 +9040,276 @@ function renderTafsirAnalysis(div, r, sura, aya, fromCache) {
 }
 </script>
 
+
+<!-- ── HISTORY ENGINE v3 UPGRADE — injected after existing engine ── -->
+<style>
+#qhist-drawer { width: min(420px, calc(100vw - 28px)) !important; max-height: 70vh !important; bottom: 124px !important; right: 14px !important; border-radius: 16px !important; box-shadow: 0 12px 48px rgba(0,0,0,0.22) !important; }
+#qhist-drawer .qhist-head { background: linear-gradient(135deg,#FDFAF2,#F8F2DC) !important; }
+.qhist-filter { padding:4px 10px; border:1px solid #E0D8C8; border-radius:14px; font-size:10px; font-weight:700; color:#8B7355; background:#fff; cursor:pointer; white-space:nowrap; font-family:'Inconsolata',monospace; transition:all .15s; display:inline-block; }
+.qhist-filter.active { background:#B8902A !important; color:#fff !important; border-color:#B8902A !important; }
+.qhist-filters { display:flex; gap:4px; padding:8px 14px; border-bottom:1px solid #F0E8D4; overflow-x:auto; -webkit-overflow-scrolling:touch; flex-shrink:0; }
+.qhist-actions button { font-size:10px; background:none; border:1px solid #D4C9A8; border-radius:6px; padding:4px 10px; cursor:pointer; color:#8B7355; font-weight:700; font-family:'Inconsolata',monospace; text-transform:uppercase; transition:all .15s; }
+.qhist-actions button:hover { background:#B8902A; color:#fff; border-color:#B8902A; }
+.qhist-item { display:flex; align-items:flex-start; gap:10px; padding:10px 14px; cursor:pointer; border-bottom:1px solid #F0E8D4; color:inherit; transition:background .12s; position:relative; }
+.qhist-item:hover { background:#FDF5E4; }
+.qhist-ico { font-size:17px; flex-shrink:0; width:28px; height:28px; display:flex; align-items:center; justify-content:center; border-radius:8px; background:#F5F0E4; }
+.qhist-lbl { font-family:'EB Garamond',serif; font-size:15px; font-weight:700; color:#1A1610; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; line-height:1.3; }
+.qhist-sub { font-family:'Inconsolata',monospace; font-size:10px; color:#9A8A70; margin-top:2px; }
+.qhist-tag { display:inline-block; padding:1px 6px; border-radius:4px; font-size:9px; font-weight:700; margin-right:4px; text-transform:uppercase; }
+.qhist-tag.nav{background:#E8F4FD;color:#1A6FA8} .qhist-tag.search{background:#FDEBD0;color:#C0621A} .qhist-tag.study{background:#D5F5E3;color:#1A7A48} .qhist-tag.audio{background:#E8DAEF;color:#6A2A9A} .qhist-tag.note{background:#FFF3CD;color:#8B6914} .qhist-tag.bookmark{background:#FCE4EC;color:#8B1A3A} .qhist-tag.ai{background:#E3F2FD;color:#1A4FA8}
+.qhist-ago { font-family:'Inconsolata',monospace; font-size:10px; color:#C4B490; flex-shrink:0; margin-top:3px; }
+.qhist-share { position:absolute; top:8px; right:8px; opacity:0; transition:opacity .15s; display:flex; gap:4px; }
+.qhist-item:hover .qhist-share { opacity:1; }
+.qhist-share button { width:26px; height:26px; border-radius:6px; border:1px solid #E0D8C8; background:#fff; cursor:pointer; font-size:12px; display:flex; align-items:center; justify-content:center; padding:0; color:#8B7355; }
+.qhist-share button:hover { background:#B8902A; color:#fff; }
+.qhist-empty { padding:32px 16px; text-align:center; color:#A89060; font-size:15px; font-family:'EB Garamond',serif; font-style:italic; }
+.qhist-empty-hint { font-size:11px; color:#C4B490; margin-top:8px; font-style:normal; font-family:'Inconsolata',monospace; }
+#qhist-toast { position:fixed; bottom:130px; left:50%; transform:translateX(-50%) translateY(20px); background:#2A2A2A; color:#fff; padding:10px 20px; border-radius:24px; font-size:13px; font-weight:600; z-index:10000; opacity:0; transition:all .3s; pointer-events:none; white-space:nowrap; }
+#qhist-toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+#qhist-export-modal { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:10001; align-items:center; justify-content:center; }
+#qhist-export-modal.open { display:flex; }
+.qhist-export-box { background:#FFFEF8; border-radius:16px; padding:24px; max-width:480px; width:90%; max-height:80vh; overflow:hidden; display:flex; flex-direction:column; box-shadow:0 20px 60px rgba(0,0,0,0.3); }
+.qhist-export-text { flex:1; overflow-y:auto; background:#F8F5EE; border:1px solid #E0D8C8; border-radius:10px; padding:12px; font-family:'Inconsolata',monospace; font-size:11px; line-height:1.6; color:#4A3B28; white-space:pre-wrap; word-break:break-word; margin-bottom:14px; }
+.qhist-export-actions { display:flex; gap:8px; }
+.qhist-export-actions button { flex:1; padding:10px; border-radius:10px; font-size:13px; font-weight:700; cursor:pointer; border:none; }
+.qhist-export-actions .btn-primary { background:#B8902A; color:#fff; }
+.qhist-export-actions .btn-secondary { background:#F5F0E4; color:#8B7355; border:1px solid #D4C9A8; }
+@media(max-width:768px){ #qhist-drawer{ width:calc(100vw - 28px) !important; max-height:60vh !important; } .qhist-share{opacity:1;} }
+</style>
+<script>
+(function(W){
+  'use strict';
+  var STORAGE_KEY='qnav_hist_v3';
+  var MAX=100;
+  var _hist=[];
+  var _filter='all';
+  var _open=false;
+
+  function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+  function ts(){return Date.now();}
+  function uid(){return 'h_'+ts()+'_'+Math.random().toString(36).slice(2,8);}
+  function ago(t){var s=Math.floor((ts()-t)/1000);if(s<10)return 'just now';if(s<60)return s+'s ago';if(s<3600)return Math.floor(s/60)+'m ago';if(s<86400)return Math.floor(s/3600)+'h ago';if(s<604800)return Math.floor(s/86400)+'d ago';return new Date(t).toLocaleDateString();}
+  function load(){try{var r=localStorage.getItem(STORAGE_KEY);if(r)_hist=JSON.parse(r);}catch(e){_hist=[];}}
+  function save(){try{localStorage.setItem(STORAGE_KEY,JSON.stringify(_hist));}catch(e){}}
+
+  function record(type,label,sub,icon,data){
+    var item={id:uid(),type:type,label:label||'Activity',sub:sub||'',icon:icon||'📄',url:W.location.href,data:data||{},time:ts()};
+    var last=_hist[0];
+    if(last&&last.type===type&&last.label===item.label){_hist[0]=item;}
+    else{_hist.unshift(item);if(_hist.length>MAX)_hist=_hist.slice(0,MAX);}
+    save();updateBadge();
+    if(_open)renderList();
+  }
+  W.advhRecord=record;
+
+  W.advhRecordNav=function(sura,aya,label){record('nav',label||('Sura '+sura+(aya?':'+aya:'')),'Surah '+sura+(aya?', Verse '+aya:''),'📖',{sura:sura,aya:aya,action:'sura_load'});};
+  W.advhRecordSearch=function(query,count){record('search','"'+query.slice(0,40)+(query.length>40?'…':'')+'"',(count||0)+' results','🔍',{query:query,count:count,action:'search'});};
+  W.advhRecordStudy=function(sura,aya,tab){record('study','Sura '+sura+':'+aya,tab+' tab','📚',{sura:sura,aya:aya,tab:tab,action:'tab_open'});};
+  W.advhRecordAudio=function(sura,aya,reciter){record('audio','Sura '+sura+':'+aya,'▶ '+(reciter||'Audio'),'🎧',{sura:sura,aya:aya,action:'audio_play'});};
+  W.advhRecordNote=function(sura,aya){record('note','Sura '+sura+':'+aya,'Note saved','📝',{sura:sura,aya:aya,action:'note_save'});};
+  W.advhRecordBookmark=function(sura,aya,added){record('bookmark','Sura '+sura+':'+aya,added?'Added':'Removed','🔖',{sura:sura,aya:aya,added:added,action:'bookmark_toggle'});};
+  W.advhRecordAI=function(sura,aya,section){record('ai','Sura '+sura+':'+aya,'🤖 '+(section||'AI'),'🧠',{sura:sura,aya:aya,section:section,action:'ai_query'});};
+
+  W.advhRestore=function(id){
+    var item=_hist.find(function(x){return x.id===id;});
+    if(!item||!item.data)return;
+    var d=item.data;
+    toggleDrawer(false);
+    showToast('Restoring: '+item.label);
+    if(d.sura){
+      if(typeof loadSura==='function'){
+        Promise.resolve(loadSura(d.sura)).then(function(){
+          if(!d.aya)return;
+          setTimeout(function(){
+            var card=document.getElementById('vc-'+d.aya);
+            if(card){card.scrollIntoView({behavior:'smooth',block:'center'});if(!card.classList.contains('open')){var top=card.querySelector('.verse-top');if(top)top.click();}}
+            if(d.tab){setTimeout(function(){var btn=document.querySelector('[onclick*="switchTab('+d.aya+'"]');if(btn)btn.click();},600);}
+          },800);
+        });
+      }
+      return;
+    }
+    if(d.action==='search'&&d.query){
+      var si=document.getElementById('globalSearch');
+      if(si){si.value=d.query;si.dispatchEvent(new Event('input'));}
+    }
+  };
+
+  W.advhShare=async function(id,btn){
+    var item=_hist.find(function(x){return x.id===id;});
+    if(!item)return;
+    var text=item.label+'\n'+item.sub;
+    if(navigator.share){try{await navigator.share({title:item.label,text:text});return;}catch(e){if(e.name==='AbortError')return;}}
+    try{await navigator.clipboard.writeText(text);if(btn){var o=btn.innerHTML;btn.innerHTML='✓';setTimeout(function(){btn.innerHTML=o;},1200);}showToast('Copied');}catch(e){}
+  };
+
+  W.advhExport=function(){
+    var modal=document.getElementById('qhist-export-modal');
+    var textEl=document.getElementById('qhist-export-text');
+    if(!modal||!textEl)return;
+    var lines=['QURAN SCHOLAR — ACTIVITY HISTORY','Generated: '+new Date().toLocaleString(),'Total: '+_hist.length,''];
+    _hist.forEach(function(item,i){
+      lines.push('['+(i+1)+'] '+item.icon+' '+item.label);
+      lines.push('    '+item.type.toUpperCase()+' | '+new Date(item.time).toLocaleString());
+      lines.push('    '+item.sub);
+      if(item.data.sura)lines.push('    Sura: '+item.data.sura+(item.data.aya?':'+item.data.aya:''));
+      if(item.data.query)lines.push('    Query: '+item.data.query);
+      lines.push('');
+    });
+    textEl.textContent=lines.join('\n');
+    modal.classList.add('open');
+  };
+
+  W.advhClear=function(){
+    if(!confirm('Clear all '+_hist.length+' history items?'))return;
+    _hist=[];save();updateBadge();renderList();showToast('History cleared');
+  };
+
+  function showToast(msg){
+    var t=document.getElementById('qhist-toast');
+    if(!t){t=document.createElement('div');t.id='qhist-toast';document.body.appendChild(t);}
+    t.textContent=msg;t.classList.add('show');
+    setTimeout(function(){t.classList.remove('show');},2200);
+  }
+  W.advhToast=showToast;
+
+  function updateBadge(){
+    var b=document.getElementById('qhist-badge');
+    if(!b)return;
+    var n=_hist.length;
+    b.textContent=n>99?'99+':n;
+    b.style.display=n?'flex':'none';
+  }
+
+  function toggleDrawer(force){
+    var dr=document.getElementById('qhist-drawer');
+    if(!dr)return;
+    _open=force!==undefined?!!force:!_open;
+    dr.classList.toggle('open',_open);
+    if(_open)renderList();
+  }
+
+  // Override the old toggle — button still works
+  W.qnavToggleHist=function(){toggleDrawer();};
+
+  W.qhistSetFilter=W.advhSetFilter=function(f){
+    _filter=f;
+    document.querySelectorAll('.qhist-filter').forEach(function(el){el.classList.toggle('active',el.dataset.filter===f);});
+    renderList();
+  };
+
+  function renderList(){
+    var el=document.getElementById('qhist-scroll');
+    if(!el)return;
+    var filtered=_filter==='all'?_hist:_hist.filter(function(x){return x.type===_filter;});
+    if(!filtered.length){
+      el.innerHTML='<div class="qhist-empty">'+(_hist.length?'No '+_filter+' activities yet.':'No history yet — start exploring!')+
+        '<div class="qhist-empty-hint">Navigate suras, search, open study tabs, play audio and take notes.</div></div>';
+      return;
+    }
+    el.innerHTML=filtered.map(function(item){
+      return '<div class="qhist-item" onclick="advhRestore(\'' +item.id+ '\')">' +
+        '<div class="qhist-ico">'+item.icon+'</div>' +
+        '<div style="flex:1;min-width:0;">' +
+          '<div class="qhist-lbl">'+esc(item.label)+'</div>' +
+          '<div class="qhist-sub"><span class="qhist-tag '+item.type+'">'+item.type.toUpperCase()+'</span>'+esc(item.sub)+'</div>' +
+        '</div>' +
+        '<div class="qhist-ago">'+ago(item.time)+'</div>' +
+        '<div class="qhist-share" onclick="event.stopPropagation()">' +
+          '<button onclick="advhShare(\'' +item.id+ '\',this)" title="Share">📤</button>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  function upgradeDrawer(){
+    var dr=document.getElementById('qhist-drawer');
+    if(!dr)return;
+    // Replace inner content with upgraded version
+    dr.innerHTML=
+      '<div class="qhist-head">' +
+        '<span class="qhist-title">📖 Activity History</span>' +
+        '<div class="qhist-actions">' +
+          '<button onclick="advhExport()">📤 Export</button>' +
+          '<button onclick="advhClear()">Clear</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="qhist-filters">' +
+        '<span class="qhist-filter active" data-filter="all" onclick="qhistSetFilter(this.dataset.filter)">All</span>' +
+        '<span class="qhist-filter" data-filter="nav" onclick="qhistSetFilter(this.dataset.filter)">📖 Nav</span>' +
+        '<span class="qhist-filter" data-filter="search" onclick="qhistSetFilter(this.dataset.filter)">🔍 Search</span>' +
+        '<span class="qhist-filter" data-filter="study" onclick="qhistSetFilter(this.dataset.filter)">📚 Study</span>' +
+        '<span class="qhist-filter" data-filter="audio" onclick="qhistSetFilter(this.dataset.filter)">🎧 Audio</span>' +
+        '<span class="qhist-filter" data-filter="note" onclick="qhistSetFilter(this.dataset.filter)">📝 Notes</span>' +
+        '<span class="qhist-filter" data-filter="bookmark" onclick="qhistSetFilter(this.dataset.filter)">🔖 Saved</span>' +
+        '<span class="qhist-filter" data-filter="ai" onclick="qhistSetFilter(this.dataset.filter)">🧠 AI</span>' +
+      '</div>' +
+      '<div class="qhist-scroll" id="qhist-scroll"></div>';
+
+    // Add export modal if not present
+    if(!document.getElementById('qhist-export-modal')){
+      var modal=document.createElement('div');
+      modal.id='qhist-export-modal';
+      modal.onclick=function(e){if(e.target===modal)modal.classList.remove('open');};
+      modal.innerHTML=
+        '<div class="qhist-export-box">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
+            '<div style="font-size:16px;font-weight:700;color:#1A1610;">📤 Export History</div>' +
+            '<button onclick="document.getElementById('qhist-export-modal').classList.remove('open')" style="background:none;border:none;font-size:22px;color:#999;cursor:pointer;">×</button>' +
+          '</div>' +
+          '<div class="qhist-export-text" id="qhist-export-text"></div>' +
+          '<div class="qhist-export-actions">' +
+            '<button class="btn-primary" onclick="navigator.clipboard.writeText(document.getElementById('qhist-export-text').textContent).then(function(){advhToast('Copied!')})">📋 Copy</button>' +
+            '<button class="btn-secondary" onclick="document.getElementById('qhist-export-modal').classList.remove('open')">Close</button>' +
+          '</div>' +
+        '</div>';
+      document.body.appendChild(modal);
+    }
+  }
+
+  function hookFunctions(){
+    if(typeof loadSura==='function'&&!loadSura._v3){
+      var o=loadSura;loadSura=async function(id){var r=await o.apply(this,arguments);record('nav','Surah '+id,'Navigation','📖',{sura:id,action:'sura_load'});return r;};loadSura._v3=true;
+    }
+    if(typeof toggleVerse==='function'&&!toggleVerse._v3){
+      var o2=toggleVerse;toggleVerse=async function(num,sid){var card=document.getElementById('vc-'+num);var was=card&&card.classList.contains('open');var r=await o2.apply(this,arguments);if(!was)record('study','Sura '+sid+':'+num,'Opened verse','📚',{sura:sid,aya:num,action:'verse_expand'});return r;};toggleVerse._v3=true;
+    }
+    if(typeof switchTab==='function'&&!switchTab._v3){
+      var o3=switchTab;switchTab=function(num,tab,btn){var r=o3.apply(this,arguments);var s=typeof currentSura!=='undefined'?currentSura:null;record('study','Sura '+(s||'?')+':'+num,tab+' tab','📚',{sura:s,aya:num,tab:tab,action:'tab_open'});return r;};switchTab._v3=true;
+    }
+    if(typeof onSearchInput==='function'&&!onSearchInput._v3){
+      var o4=onSearchInput;onSearchInput=function(val){var r=o4.apply(this,arguments);if(val&&val.trim().length>=2){clearTimeout(W._v3ST);W._v3ST=setTimeout(function(){record('search','"'+val.trim().slice(0,40)+'"','Search','🔍',{query:val.trim(),action:'search'});},1500);}return r;};onSearchInput._v3=true;
+    }
+    if(typeof toggleBookmark==='function'&&!toggleBookmark._v3){
+      var o5=toggleBookmark;toggleBookmark=function(ayaNum,sid){var key='bm_'+sid+'_'+ayaNum;var was=!!localStorage.getItem(key);var r=o5.apply(this,arguments);record('bookmark','Sura '+sid+':'+ayaNum,was?'Removed':'Added','🔖',{sura:sid,aya:ayaNum,added:!was,action:'bookmark_toggle'});return r;};toggleBookmark._v3=true;
+    }
+    if(typeof loadAISection==='function'&&!loadAISection._v3){
+      var o6=loadAISection;loadAISection=function(num,sid){var r=o6.apply(this,arguments);var s=typeof currentSura!=='undefined'?currentSura:null;record('ai','Sura '+(s||'?')+':'+num,sid+' analysis','🧠',{sura:s,aya:num,section:sid,action:'ai_query'});return r;};loadAISection._v3=true;
+    }
+  }
+
+  function init(){
+    load();
+    // Migrate old history format if any
+    try{
+      var old=localStorage.getItem('qnav_hist');
+      if(old&&!_hist.length){
+        var oldItems=JSON.parse(old);
+        oldItems.forEach(function(item){
+          _hist.push({id:uid(),type:item.type||'nav',label:item.label||'Activity',sub:item.sub||'',icon:item.icon||'📖',url:'',data:item.data||{},time:item.time||ts()});
+        });
+        save();
+      }
+    }catch(e){}
+
+    upgradeDrawer();
+    setTimeout(hookFunctions,600);
+    updateBadge();
+    console.log('[History v3] Upgraded with',_hist.length,'items');
+  }
+
+  if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',init);}else{init();}
+})(window);
+</script>
 </body>
 </html>
