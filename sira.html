@@ -977,53 +977,54 @@ async function fetchMadhhabsForEvent(siraId) {
       {headers: HDRS}
     );
     const links = await r.json();
-    if (!links || !links.length) return [];
-    const ids = links.map(l => l.topic_id).join(',');
-    const r2 = await fetch(
-      `${SB_URL}/rest/v1/madhhab_topics?select=id,topic,category,controversy_level&id=in.(${ids})`,
-      {headers: HDRS}
-    );
-    const topics = await r2.json();
-    const byId = {};
-    topics.forEach(t => { byId[t.id] = t; });
-    return links.map(l => ({...l, topic: byId[l.topic_id]})).filter(x => x.topic);
-  } catch (e) {
-    console.error(e);
-    return [];
-  }
-}
-
-// Fetch asbab al-nuzul for the verses linked to this event
-async function fetchAsbabForVerses(verses) {
-  if (!verses || !verses.length) return [];
-  const results = [];
-  try {
-    // Build OR conditions: each verse needs sura_id+aya_number match
-    // PostgREST: use or=(...)
-    const conditions = [];
-    verses.forEach(v => {
-      if (v.applies_to_full_sura) {
-        conditions.push(`and(sura_id.eq.${v.sura})`);
-      } else {
-        conditions.push(`and(sura_id.eq.${v.sura},aya_number.eq.${v.aya})`);
-      }
-    });
-    const orClause = conditions.join(',');
-    const r = await fetch(
-      `${SB_URL}/rest/v1/asbab_al_nuzul?select=id,sura_id,aya_number,reason_text,scholar,source,tradition&or=(${orClause})&limit=200`,
-      {headers: HDRS}
-    );
-    if (r.ok) {
-      const data = await r.json();
-      return data || [];
+    if (links && links.length) {
+      const ids = links.map(l => l.topic_id).join(',');
+      const r2 = await fetch(
+        `${SB_URL}/rest/v1/madhhab_topics?select=id,topic,category,controversy_level&id=in.(${ids})`,
+        {headers: HDRS}
+      );
+      const topics = await r2.json();
+      return topics || [];
     }
-  } catch (e) {
-    console.warn('Asbab fetch error:', e);
-  }
-  return results;
+    // Fallback: use event name keywords to find relevant fiqh topics
+    return await fetchMadhhabsByEventKeyword(siraId);
+  } catch(e) { return []; }
 }
 
-// Fetch tafsir entries for verses linked to this event
+async function fetchMadhhabsByEventKeyword(siraId) {
+  try {
+    const ev = _events.find(function(e) { return String(e.id) === String(siraId); });
+    if (!ev) return [];
+    var txt = ((ev.name_english||'') + ' ' + (ev.period||'')).toLowerCase();
+    var kwMap = {
+      'battle':'Jihad and Warfare','raid':'Jihad and Warfare','expedition':'Jihad and Warfare',
+      'war':'Jihad and Warfare','conquest':'Jihad and Warfare','kill':'Jihad and Warfare',
+      'slave':'Slavery','captive':'Slavery','prisoner':'Slavery',
+      'marriage':'Marriage and Family Law','wife':'Marriage and Family Law',
+      'divorce':'Divorce and Separation','inherit':'Inheritance and Wills',
+      'woman':'Women: Legal Status and Personhood','execution':'Criminal Law and Hudud',
+      'punish':'Criminal Law and Hudud','theft':'Criminal Law and Hudud',
+      'apostasy':'Apostasy','apostate':'Apostasy',
+      'treaty':'Non-Muslim Rights and Dhimma','jew':'Christians and Jews (Ahl al-Kitab)',
+      'christian':'Christians and Jews (Ahl al-Kitab)','revelation':'Quran',
+      'prayer':'Prayer and Worship','fast':'Prayer and Worship'
+    };
+    var category = null;
+    var kws = Object.keys(kwMap);
+    for (var i = 0; i < kws.length; i++) {
+      if (txt.indexOf(kws[i]) !== -1) { category = kwMap[kws[i]]; break; }
+    }
+    if (!category) category = 'Jihad and Warfare';
+    var enc = encodeURIComponent(category);
+    var r = await fetch(
+      `${SB_URL}/rest/v1/madhhab_topics?select=id,topic,category,controversy_level&category=ilike.*${enc}*&order=controversy_level.desc.nullslast&limit=4`,
+      {headers: HDRS}
+    );
+    return r.ok ? await r.json() : [];
+  } catch(e) { return []; }
+}
+
+
 async function fetchTafsirForVerses(verses) {
   if (!verses || !verses.length) return [];
   try {
