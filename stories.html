@@ -93,6 +93,10 @@ html,body {height:100%;background:#0F1623;color:#E8EDF5;font-family:-apple-syste
 .v-ref{font-size:11px;color:var(--gold);margin-top:5px;}
 .ai-box{background:var(--surface);border:1px solid rgba(201,168,76,.3);border-radius:12px;padding:14px;margin:0 14px 20px;}
 .ai-out{font-size:12px;line-height:1.8;color:var(--dim);white-space:pre-wrap;display:none;}
+.fiqh-card{background:rgba(26,74,40,.15);border:1px solid rgba(60,140,80,.3);border-left:3px solid #3c8c50;border-radius:8px;padding:10px 13px;margin-bottom:8px;cursor:pointer;transition:background .15s;}
+.fiqh-card:hover{background:rgba(26,74,40,.25);}
+.fiqh-card-title{font-size:13px;font-weight:700;color:#7de0a0;}
+.fiqh-card-meta{font-size:10px;color:var(--dim);margin-top:3px;letter-spacing:.06em;}
 .ai-btn{background:linear-gradient(135deg,#2D1B4E,#4A2080);color:#B088FF;border:1px solid #4A2080;padding:7px 14px;border-radius:16px;font-size:12px;cursor:pointer;}
 .read-btn{background:linear-gradient(135deg,#1B2A4A,#2C3E6B);color:var(--gold);border:1px solid rgba(201,168,76,.4);border-radius:16px;padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer;}
 .loading{text-align:center;padding:40px;color:var(--dim);}
@@ -412,6 +416,63 @@ async function openStory(story){
     </div>
   `;
   window._curStory=story;
+}
+
+async function loadStoryFiqh(story) {
+  // Extract keywords from story name + category for madhhab search
+  const keywords = [story.name_english, story.category].filter(Boolean).join(' ');
+  const kwMap = {
+    'prayer':'Prayer and Worship','salah':'Prayer and Worship','moses':'Apostasy',
+    'marriage':'Marriage and Family Law','nikah':'Marriage and Family Law',
+    'divorce':'Divorce and Separation','inherit':'Inheritance and Wills',
+    'woman':'Women','mary':'Women: Worship','war':'Jihad and Warfare','jihad':'Jihad and Warfare',
+    'slave':'Slavery','joseph':'Criminal Law and Hudud','david':'State and Politics',
+    'solomon':'State and Politics','jesus':'Christians and Jews','isa':'Christians and Jews',
+    'noah':'Eschatology','adam':'Theology of God','iblis':'Theology of God','satan':'Theology of God',
+    'lut':'LGBTQ','lot':'LGBTQ','food':'Food and Drink','usury':'Banking and Riba',
+    'riba':'Banking and Riba','punishment':'Hudud Punishments','theft':'Criminal Law and Hudud',
+    'zina':'Hudud Punishments','adultery':'Hudud Punishments','prophet':'Blasphemy: Insulting the Prophet',
+    'pilgrimage':'Prayer and Worship','hajj':'Prayer and Worship','fasting':'Prayer and Worship',
+    'sufi':'Sufism and Mysticism','mystic':'Sufism and Mysticism',
+    'creation':'Theology of God','judgment':'Eschatology and the End Times'
+  };
+  const SB_URL2 = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
+  const SB_KEY2 = 'sb_publishable_KtJjJRWQn5a5VMSnAoTQXw_dCwnI6BH';
+  const H2 = {'apikey':SB_KEY2,'Authorization':'Bearer '+SB_KEY2};
+
+  try {
+    const ls = keywords.toLowerCase();
+    let topics = [];
+
+    // Try direct keyword search first
+    const enc = encodeURIComponent(story.name_english.split(' ').slice(0,2).join(' '));
+    const r1 = await fetch(`${SB_URL2}/rest/v1/madhhab_topics?select=id,topic,category&or=(topic.ilike.*${enc}*,brief_description.ilike.*${enc}*)&limit=4`, {headers:H2});
+    if (r1.ok) topics = await r1.json();
+
+    // Fallback: category match
+    if (!topics.length) {
+      for (const kw in kwMap) {
+        if (ls.includes(kw)) {
+          const cat = encodeURIComponent(kwMap[kw]);
+          const r2 = await fetch(`${SB_URL2}/rest/v1/madhhab_topics?select=id,topic,category&category=ilike.*${cat}*&limit=4`, {headers:H2});
+          if (r2.ok) { topics = await r2.json(); if (topics.length) break; }
+        }
+      }
+    }
+
+    const sec = document.getElementById('fiqh-sec');
+    const list = document.getElementById('fiqh-list');
+    if (!sec || !list) return;
+
+    if (!topics.length) return; // silently hide if nothing found
+
+    list.innerHTML = topics.map(t => `
+      <div class="fiqh-card" onclick="location.href='madhhab.html?topic=${encodeURIComponent(t.id)}&from=stories'">
+        <div class="fiqh-card-title">⚖️ ${t.topic}</div>
+        <div class="fiqh-card-meta">${t.category||''} · Tap to read full ruling →</div>
+      </div>`).join('');
+    sec.style.display = 'block';
+  } catch(e) {} // silent fail
 }
 
 async function openHadith(slug,topic){
