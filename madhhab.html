@@ -927,13 +927,13 @@ async function openTopic(topicId) {
     if (!ruling) {
       body.innerHTML = renderDetailHeader(topic) + `
         <div class="sec">
-          <div class="sec-label">⏳ Analysis Pending</div>
-          <div class="sec-body" style="padding:18px;background:var(--p1);border-radius:2px;font-style:italic;color:var(--ink3)">
-            This topic is in the catalog but the deep multi-school analysis has not yet been generated. Run <code>populate_madhhab_rulings.py</code> to populate it.
+          <div class="sec-label">⚙️ Generating Analysis…</div>
+          <div class="sec-body" id="aiGenStatus" style="padding:18px;background:var(--p1);border-radius:2px;font-style:italic;color:var(--ink3)">
+            Asking the scholars… this may take 15–20 seconds and will be cached for all future visitors.
           </div>
         </div>
-        <button class="compare-back" onclick="closeTopic()" style="margin-top:20px">◂ Back to topics</button>
       `;
+      await generateAndSaveRuling(topic, topicId);
       return;
     }
 
@@ -949,6 +949,130 @@ function closeTopic() {
   document.getElementById('detailView').style.display = 'none';
   document.getElementById('listView').style.display = 'block';
   window.scrollTo({top:0, behavior:'smooth'});
+}
+
+async function generateAndSaveRuling(topic, topicId) {
+  const body = document.getElementById('detailBody');
+  const setStatus = (msg) => {
+    const el = document.getElementById('aiGenStatus');
+    if (el) el.textContent = msg;
+  };
+
+  const prompt = `You are an expert Islamic jurisprudence scholar. Generate a comprehensive multi-madhab analysis for this topic.
+
+Topic: "${topic.topic}"
+Category: "${topic.category || ''}"
+Subcategory: "${topic.subcategory || ''}"
+
+Return ONLY valid JSON (no markdown, no backticks) with this exact structure:
+{
+  "hanafi_position": "The Hanafi position in 2-4 sentences",
+  "hanafi_evidence": "Key Quran/hadith evidence used by Hanafis",
+  "hanafi_sources": ["al-Hidaya", "Ibn Abidin"],
+  "maliki_position": "The Maliki position in 2-4 sentences",
+  "maliki_evidence": "Key evidence",
+  "maliki_sources": ["Mukhtasar Khalil"],
+  "shafii_position": "The Shafi'i position in 2-4 sentences",
+  "shafii_evidence": "Key evidence",
+  "shafii_sources": ["al-Umm", "Minhaj al-Talibin"],
+  "hanbali_position": "The Hanbali position in 2-4 sentences",
+  "hanbali_evidence": "Key evidence",
+  "hanbali_sources": ["al-Mughni"],
+  "jafari_position": "The Ja'fari (Twelver Shia) position in 2-4 sentences",
+  "jafari_evidence": "Key evidence",
+  "jafari_sources": ["al-Kafi"],
+  "salafi_position": "The Salafi/Wahhabi position if distinct",
+  "consensus": "What all schools agree on (if anything)",
+  "key_disagreement": "The core point of scholarly disagreement",
+  "practical_difference": "How this disagreement affects Muslim practice in daily life",
+  "historical_consequences": "Historical impact of this disagreement on Muslim communities",
+  "reformist_view": "Modern reformist or progressive Islamic perspective",
+  "quran_verses": ["2:275", "4:3"],
+  "hadith_refs": ["Bukhari 1234", "Muslim 5678"],
+  "reflection_questions": ["Question 1?", "Question 2?", "Question 3?"]
+}`;
+
+  try {
+    setStatus('Contacting AI scholars (step 1/3)…');
+
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+
+    if (!resp.ok) throw new Error('API error: ' + resp.status);
+    const aiData = await resp.json();
+    const raw = aiData.content.find(b => b.type === 'text')?.text || '';
+
+    setStatus('Parsing response (step 2/3)…');
+
+    let ruling;
+    try {
+      const clean = raw.replace(/```json|```/g, '').trim();
+      ruling = JSON.parse(clean);
+    } catch(e) {
+      throw new Error('Could not parse AI response: ' + e.message);
+    }
+
+    setStatus('Saving to database (step 3/3)…');
+
+    // Save to Supabase
+    const saveResp = await fetch(`${SB_URL}/rest/v1/madhhab_rulings`, {
+      method: 'POST',
+      headers: { ...HDRS, 'Prefer': 'return=representation' },
+      body: JSON.stringify({
+        topic_id: topicId,
+        category: topic.category || null,
+        subtopic: topic.subcategory || null,
+        hanafi_position: ruling.hanafi_position || null,
+        hanafi_evidence: ruling.hanafi_evidence || null,
+        hanafi_sources: ruling.hanafi_sources || [],
+        maliki_position: ruling.maliki_position || null,
+        maliki_evidence: ruling.maliki_evidence || null,
+        maliki_sources: ruling.maliki_sources || [],
+        shafii_position: ruling.shafii_position || null,
+        shafii_evidence: ruling.shafii_evidence || null,
+        shafii_sources: ruling.shafii_sources || [],
+        hanbali_position: ruling.hanbali_position || null,
+        hanbali_evidence: ruling.hanbali_evidence || null,
+        hanbali_sources: ruling.hanbali_sources || [],
+        jafari_position: ruling.jafari_position || null,
+        jafari_evidence: ruling.jafari_evidence || null,
+        jafari_sources: ruling.jafari_sources || [],
+        salafi_position: ruling.salafi_position || null,
+        consensus: ruling.consensus || null,
+        key_disagreement: ruling.key_disagreement || null,
+        practical_difference: ruling.practical_difference || null,
+        historical_consequences: ruling.historical_consequences || null,
+        reformist_view: ruling.reformist_view || null,
+        quran_verses: ruling.quran_verses || [],
+        hadith_refs: ruling.hadith_refs || [],
+        reflection_questions: ruling.reflection_questions || []
+      })
+    });
+
+    const saved = await saveResp.json();
+    const savedRuling = Array.isArray(saved) ? saved[0] : saved;
+
+    // Render using existing renderDetail
+    body.innerHTML = renderDetail(topic, { ...ruling, ...savedRuling });
+
+  } catch(e) {
+    body.innerHTML = renderDetailHeader(topic) + `
+      <div class="sec">
+        <div class="sec-label">⚠️ Generation Failed</div>
+        <div class="sec-body" style="padding:18px;background:var(--crimson-s);border-radius:2px;color:var(--crimson)">
+          ${esc(e.message)}. Please try again.
+        </div>
+      </div>
+      <button class="compare-back" onclick="closeTopic()" style="margin-top:20px">◂ Back to topics</button>
+    ` + '</div>';
+  }
 }
 
 function renderDetailHeader(topic) {
