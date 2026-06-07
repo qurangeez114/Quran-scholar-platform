@@ -2516,7 +2516,8 @@ function renderVerses(ayas, suraId) {
             <button onclick="event.stopPropagation();openNote(${aya.aya_number},${suraId})" title="Add note" style="background:#FDF8EE;border:1px solid #E8C97B;border-radius:6px;width:32px;height:30px;font-size:14px;cursor:pointer;padding:0;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;">📝</button>
             <button id="copy-${aya.aya_number}" onclick="event.stopPropagation();copyVerse(${aya.aya_number},${suraId})" title="Copy visible languages" style="background:#FDF8EE;border:1px solid #E8C97B;border-radius:6px;width:32px;height:30px;font-size:14px;cursor:pointer;padding:0;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;">📋</button>
             <button onclick="event.stopPropagation();shareVerse(${aya.aya_number},${suraId})" title="Share verse" style="background:#FDF8EE;border:1px solid #E8C97B;border-radius:6px;width:32px;height:30px;font-size:14px;cursor:pointer;padding:0;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;">📤</button>
-            <button onclick="event.stopPropagation();addVerseToPresentation(${aya.aya_number},${suraId},'${english.replace(/'/g,\'\\\'\')}','${arabic.replace(/'/g,\'\\\'\')}' )" title="Add to Presentation" style="background:#FDF8EE;border:1px solid #C9A85C;border-radius:6px;height:30px;padding:0 8px;font-size:11px;font-weight:700;cursor:pointer;flex-shrink:0;display:inline-flex;align-items:center;color:#B8902A;font-family:Inconsolata,monospace;letter-spacing:.04em;white-space:nowrap;">＋ Slides</button>
+            <button onclick="event.stopPropagation();addVerseToPresentation(${aya.aya_number},${suraId})" title="Add to Presentation" data-sura="${suraId}" data-aya="${aya.aya_number}" style="background:#FDF8EE;border:1px solid #C9A85C;border-radius:6px;height:30px;padding:0 8px;font-size:11px;font-weight:700;cursor:pointer;flex-shrink:0;display:inline-flex;align-items:center;color:#B8902A;font-family:Inconsolata,monospace;">＋</button>
+            
             <button id="wbw-btn-${suraId}-${aya.aya_number}" onclick="event.stopPropagation();toggleWordByWord(${suraId},${aya.aya_number},this)" title="Switch Arabic to word-by-word study mode" class="wbw-toggle-btn">🔤 Words</button>
           </div>
           <div id="arabic-${suraId}-${aya.aya_number}" class="verse-arabic lang-arabic" data-raw-arabic="${escapeHtml(arabic)}" data-wbw="off" style="${!langState.arabic?'display:none':''}">${arabic}</div>
@@ -8376,7 +8377,11 @@ document.addEventListener('DOMContentLoaded', addRWButtons);
 })();
 
 // ── ADD VERSE TO PRESENTATION ──
-function addVerseToPresentation(ayaNum, suraId, english, arabic) {
+function addVerseToPresentation(ayaNum, suraId) {
+  // Get text from already-rendered verse card
+  var card = document.getElementById('vc-' + ayaNum);
+  var english = card ? (card.querySelector('.verse-english') || card.querySelector('[class*="english"]') || {innerText:''}).innerText : '';
+  var arabic = card ? (card.querySelector('.verse-arabic') || card.querySelector('[class*="arabic"]') || {innerText:''}).innerText : '';
   var key = 'presentationBasket';
   var existing = [];
   try { existing = JSON.parse(localStorage.getItem(key)||'[]'); } catch(e){}
