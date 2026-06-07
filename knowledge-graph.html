@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Knowledge Graph — Quran Scholar</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Inconsolata:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg:#08070a;--bg2:#111018;--bg3:#1c1a28;--bg4:#252338;
+  --ink:#e8e4f8;--ink2:#c4bfe0;--ink3:#8a84b0;--ink4:#4a4668;
+  --gold:#c9a85c;--gold-d:#9a7432;--gold-dd:#5a4020;
+  --violet:#7c6fcd;--violet-l:#a99fe8;--violet-s:rgba(124,111,205,.15);
+  --crimson:#c84060;--crimson-l:#e86080;--crimson-s:rgba(200,64,96,.12);
+  --emerald:#2d8a6f;--emerald-l:#52c8a0;--emerald-s:rgba(45,138,111,.12);
+  --amber:#c8860b;--amber-l:#e8a820;--amber-s:rgba(200,134,11,.12);
+  --steel:#5060a0;--steel-l:#8090d0;
+  --r:6px;
+}
+html,body{height:100%;overflow:hidden;background:var(--bg);}
+body{font-family:'Inconsolata',monospace;color:var(--ink);}
+
+/* ── TOP BAR ── */
+.topbar{height:48px;background:rgba(17,16,24,.95);border-bottom:1px solid var(--bg4);display:flex;align-items:center;padding:0 14px;gap:10px;position:fixed;top:0;left:0;right:0;z-index:300;backdrop-filter:blur(8px);}
+.topbar-title{font-family:'Cormorant Garamond',serif;font-size:16px;color:var(--ink);font-weight:400;}
+.topbar-sub{font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink4);}
+
+/* ── SEARCH ── */
+.search-bar{display:flex;gap:6px;align-items:center;flex:1;max-width:420px;margin-left:12px;}
+.search-bar input{flex:1;background:var(--bg3);border:1px solid var(--bg4);border-radius:var(--r);padding:7px 12px;color:var(--ink);font-family:'Inconsolata',monospace;font-size:12px;outline:none;transition:border .15s;}
+.search-bar input:focus{border-color:var(--violet);}
+.search-bar input::placeholder{color:var(--ink4);}
+.search-btn{padding:7px 14px;background:var(--violet);border:none;border-radius:var(--r);color:#fff;font-family:'Inconsolata',monospace;font-size:11px;letter-spacing:.08em;cursor:pointer;transition:background .15s;white-space:nowrap;}
+.search-btn:hover{background:var(--violet-l);}
+
+/* ── NODE TYPE LEGEND ── */
+.legend{position:fixed;top:58px;left:12px;z-index:200;display:flex;flex-direction:column;gap:4px;}
+.leg-item{display:flex;align-items:center;gap:6px;font-size:10px;letter-spacing:.08em;color:var(--ink3);background:rgba(17,16,24,.8);padding:4px 8px;border-radius:4px;backdrop-filter:blur(4px);}
+.leg-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+
+/* ── FILTER CHIPS ── */
+.type-filters{position:fixed;top:58px;right:12px;z-index:200;display:flex;flex-direction:column;gap:4px;align-items:flex-end;}
+.tfilter{font-size:9px;letter-spacing:.1em;text-transform:uppercase;padding:4px 10px;border-radius:4px;border:1px solid;cursor:pointer;transition:all .15s;background:rgba(17,16,24,.8);backdrop-filter:blur(4px);}
+.tfilter.verses{border-color:var(--violet);color:var(--violet-l);}
+.tfilter.fiqh{border-color:var(--gold-d);color:var(--gold);}
+.tfilter.contradictions{border-color:var(--crimson);color:var(--crimson-l);}
+.tfilter.themes{border-color:var(--emerald);color:var(--emerald-l);}
+.tfilter.sira{border-color:var(--steel-l);color:var(--steel-l);}
+.tfilter.off{opacity:.3;}
+
+/* ── GRAPH CANVAS ── */
+#graphCanvas{position:fixed;top:48px;left:0;right:0;bottom:54px;width:100%;height:calc(100% - 102px);}
+svg{width:100%;height:100%;}
+
+/* ── NODE STYLES (SVG) ── */
+.node circle{cursor:pointer;transition:r .2s;}
+.node:hover circle{filter:brightness(1.3);}
+.node text{pointer-events:none;font-family:'Inconsolata',monospace;dominant-baseline:middle;text-anchor:middle;}
+.link{stroke-opacity:.4;}
+
+/* ── INFO PANEL ── */
+.info-panel{position:fixed;bottom:60px;left:0;right:0;background:rgba(17,16,24,.96);border-top:1px solid var(--bg4);backdrop-filter:blur(12px);max-height:45vh;overflow-y:auto;transition:transform .3s;transform:translateY(100%);z-index:250;}
+.info-panel.open{transform:translateY(0);}
+.panel-inner{padding:14px 16px 16px;}
+.panel-type{font-size:9px;letter-spacing:.2em;text-transform:uppercase;margin-bottom:6px;}
+.panel-title{font-family:'Cormorant Garamond',serif;font-size:22px;color:var(--ink);line-height:1.2;margin-bottom:8px;}
+.panel-body{font-size:13.5px;color:var(--ink2);line-height:1.6;margin-bottom:12px;}
+.panel-links{display:flex;gap:8px;flex-wrap:wrap;}
+.panel-link{font-size:10px;letter-spacing:.1em;text-transform:uppercase;padding:5px 12px;border:1px solid var(--bg4);border-radius:4px;color:var(--gold);text-decoration:none;transition:all .15s;cursor:pointer;background:none;}
+.panel-link:hover{border-color:var(--gold-d);background:var(--gold-dd);}
+.panel-close{position:absolute;top:12px;right:14px;background:none;border:none;color:var(--ink4);font-size:20px;cursor:pointer;line-height:1;}
+.connections-label{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink4);margin-bottom:6px;margin-top:10px;}
+.conn-chips{display:flex;flex-wrap:wrap;gap:5px;}
+.conn-chip{font-size:10px;padding:3px 8px;border-radius:3px;cursor:pointer;border:1px solid;transition:all .15s;}
+
+/* ── EMPTY / LOADING ── */
+.center-msg{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;color:var(--ink4);pointer-events:none;z-index:10;}
+.center-msg h2{font-family:'Cormorant Garamond',serif;font-size:28px;color:var(--ink3);font-weight:300;margin-bottom:8px;}
+.center-msg p{font-size:12px;letter-spacing:.1em;color:var(--ink4);}
+.spinner-ring{display:inline-block;width:32px;height:32px;border:2px solid var(--bg4);border-top-color:var(--violet);border-radius:50%;animation:spin .8s linear infinite;margin-bottom:12px;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* ── BOTTOM NAV ── */
+#bottom-nav{position:fixed;bottom:0;left:0;right:0;height:54px;background:rgba(17,16,24,.95);border-top:1px solid var(--bg4);display:flex;z-index:300;}
+.bnav-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;background:none;border:none;cursor:pointer;color:var(--ink4);font-family:'Inconsolata',monospace;font-size:9px;letter-spacing:.06em;text-transform:uppercase;padding:6px 0;transition:color .15s;}
+.bnav-btn:hover,.bnav-btn.active{color:var(--gold);}
+.bni{font-size:17px;line-height:1;}
+
+/* ── QUICK SEEDS ── */
+.seeds{position:fixed;bottom:64px;left:50%;transform:translateX(-50%);display:flex;gap:6px;flex-wrap:wrap;justify-content:center;max-width:96vw;z-index:200;pointer-events:auto;}
+.seed-btn{font-size:10px;letter-spacing:.06em;padding:5px 12px;border-radius:14px;border:1px solid var(--bg4);background:rgba(17,16,24,.8);color:var(--ink3);cursor:pointer;transition:all .15s;white-space:nowrap;backdrop-filter:blur(4px);}
+.seed-btn:hover{border-color:var(--violet);color:var(--violet-l);}
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div>
+    <div class="topbar-title">Knowledge Graph</div>
+    <div class="topbar-sub">Connection explorer</div>
+  </div>
+  <div class="search-bar">
+    <input type="text" id="searchInput" placeholder="Verse (2:256), topic, theme…" onkeydown="if(event.key==='Enter')doSearch()">
+    <button class="search-btn" onclick="doSearch()">Map It</button>
+  </div>
+  <a href="index.html" style="font-size:10px;letter-spacing:.1em;color:var(--ink4);text-decoration:none;margin-left:4px;white-space:nowrap;">← Quran</a>
+</div>
+
+<!-- LEGEND -->
+<div class="legend">
+  <div class="leg-item"><div class="leg-dot" style="background:#7c6fcd;"></div>Verse</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#c9a85c;"></div>Fiqh</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#c84060;"></div>Contradiction</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#2d8a6f;"></div>Theme</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#5060a0;"></div>Sira</div>
+</div>
+
+<!-- TYPE FILTERS -->
+<div class="type-filters" id="typeFilters">
+  <button class="tfilter verses" data-type="verse" onclick="toggleType(this)">📖 Verses</button>
+  <button class="tfilter fiqh" data-type="fiqh" onclick="toggleType(this)">⚖️ Fiqh</button>
+  <button class="tfilter contradictions" data-type="contradiction" onclick="toggleType(this)">⚔️ Tensions</button>
+  <button class="tfilter themes" data-type="theme" onclick="toggleType(this)">🗂️ Themes</button>
+  <button class="tfilter sira" data-type="sira" onclick="toggleType(this)">🕌 Sira</button>
+</div>
+
+<!-- GRAPH -->
+<div id="graphCanvas">
+  <div class="center-msg" id="centerMsg">
+    <h2>Start with any verse, topic, or theme</h2>
+    <p>TYPE A REFERENCE ABOVE · OR TAP A QUICK SEED BELOW</p>
+  </div>
+</div>
+
+<!-- QUICK SEEDS -->
+<div class="seeds" id="seeds">
+  <button class="seed-btn" onclick="seedSearch('2:256')">2:256 No Compulsion</button>
+  <button class="seed-btn" onclick="seedSearch('9:5')">9:5 Sword Verse</button>
+  <button class="seed-btn" onclick="seedSearch('4:34')">4:34 Beat Wives</button>
+  <button class="seed-btn" onclick="seedSearch('apostasy')">Apostasy</button>
+  <button class="seed-btn" onclick="seedSearch('slavery')">Slavery</button>
+  <button class="seed-btn" onclick="seedSearch('jihad')">Jihad</button>
+</div>
+
+<!-- INFO PANEL -->
+<div class="info-panel" id="infoPanel">
+  <div class="panel-inner" id="panelInner"></div>
+  <button class="panel-close" onclick="closePanel()">×</button>
+</div>
+
+<!-- BOTTOM NAV -->
+<nav id="bottom-nav">
+  <button class="bnav-btn" onclick="location.href='index.html'"><span class="bni">📖</span><span>Quran</span></button>
+  <button class="bnav-btn" onclick="location.href='research.html'"><span class="bni">🔬</span><span>Research</span></button>
+  <button class="bnav-btn active" onclick="location.href='knowledge-graph.html'"><span class="bni">🕸️</span><span>Graph</span></button>
+  <button class="bnav-btn" onclick="location.href='contradiction.html'"><span class="bni">⚔️</span><span>Tensions</span></button>
+  <button class="bnav-btn" onclick="location.href='madhhab.html'"><span class="bni">⚖️</span><span>Madhhab</span></button>
+  <button class="bnav-btn" onclick="location.href='sira.html'"><span class="bni">🕌</span><span>Sīra</span></button>
+</nav>
+
+<script>
+var SB_URL = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
+var SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
+var HDRS = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY };
+
+// ── Node colors by type ──
+var NODE_COLOR = {
+  verse: '#7c6fcd',
+  fiqh: '#c9a85c',
+  contradiction: '#c84060',
+  theme: '#2d8a6f',
+  sira: '#5060a0',
+  hadith: '#c8860b'
+};
+var NODE_RADIUS = { verse: 10, fiqh: 12, contradiction: 14, theme: 11, sira: 11, hadith: 9 };
+var hiddenTypes = {};
+
+// ── D3 setup ──
+var svg, sim, linkSel, nodeSel, nodesData = [], linksData = [];
+
+function initSVG() {
+  var canvas = document.getElementById('graphCanvas');
+  d3.select('#graphCanvas svg').remove();
+  svg = d3.select('#graphCanvas').append('svg')
+    .attr('width', canvas.offsetWidth)
+    .attr('height', canvas.offsetHeight);
+
+  // Zoom/pan
+  var g = svg.append('g').attr('class','graph-g');
+  svg.call(d3.zoom().scaleExtent([0.2, 4]).on('zoom', function(event) {
+    g.attr('transform', event.transform);
+  }));
+
+  svg._g = g;
+
+  sim = d3.forceSimulation()
+    .force('link', d3.forceLink().id(function(d){return d.id;}).distance(function(d){return d.dist||80;}).strength(0.6))
+    .force('charge', d3.forceManyBody().strength(-200))
+    .force('center', d3.forceCenter(canvas.offsetWidth/2, canvas.offsetHeight/2))
+    .force('collide', d3.forceCollide().radius(function(d){return (NODE_RADIUS[d.type]||10)+8;}));
+}
+
+function renderGraph(nodes, links) {
+  if (!svg) initSVG();
+  var g = svg._g;
+  g.selectAll('*').remove();
+
+  nodesData = nodes;
+  linksData = links;
+
+  var filtered_nodes = nodes.filter(function(n){ return !hiddenTypes[n.type]; });
+  var visible_ids = new Set(filtered_nodes.map(function(n){return n.id;}));
+  var filtered_links = links.filter(function(l){
+    var s = typeof l.source === 'object' ? l.source.id : l.source;
+    var t = typeof l.target === 'object' ? l.target.id : l.target;
+    return visible_ids.has(s) && visible_ids.has(t);
+  });
+
+  // Links
+  linkSel = g.append('g').selectAll('line')
+    .data(filtered_links).enter().append('line')
+    .attr('class','link')
+    .attr('stroke', function(d){ return d.color||'#4a4668'; })
+    .attr('stroke-width', function(d){ return d.strength||1; });
+
+  // Nodes
+  var nodeG = g.append('g').selectAll('.node')
+    .data(filtered_nodes).enter().append('g')
+    .attr('class','node')
+    .call(d3.drag()
+      .on('start', function(event,d){ if(!event.active) sim.alphaTarget(0.3).restart(); d.fx=d.x; d.fy=d.y; })
+      .on('drag', function(event,d){ d.fx=event.x; d.fy=event.y; })
+      .on('end', function(event,d){ if(!event.active) sim.alphaTarget(0); d.fx=null; d.fy=null; })
+    )
+    .on('click', function(event,d){ event.stopPropagation(); showPanel(d); });
+
+  nodeG.append('circle')
+    .attr('r', function(d){ return d.r || NODE_RADIUS[d.type]||10; })
+    .attr('fill', function(d){ return NODE_COLOR[d.type]||'#888'; })
+    .attr('stroke', function(d){ return d.isCenter ? '#fff' : 'rgba(255,255,255,.15)'; })
+    .attr('stroke-width', function(d){ return d.isCenter ? 2.5 : 1; });
+
+  nodeG.append('text')
+    .attr('y', function(d){ return (NODE_RADIUS[d.type]||10)+12; })
+    .attr('fill', function(d){ return d.isCenter ? '#fff' : 'rgba(220,215,255,.7)'; })
+    .attr('font-size', function(d){ return d.isCenter ? '11' : '9'; })
+    .attr('font-weight', function(d){ return d.isCenter ? '600' : '400'; })
+    .text(function(d){ return d.label; });
+
+  // Pulse animation on center node
+  nodeG.filter(function(d){return d.isCenter;}).append('circle')
+    .attr('r', function(d){ return (NODE_RADIUS[d.type]||10)+4; })
+    .attr('fill','none')
+    .attr('stroke', function(d){ return NODE_COLOR[d.type]||'#888'; })
+    .attr('stroke-width','1.5')
+    .attr('opacity','.5')
+    .style('animation','pulse 2s infinite');
+
+  // Add pulse keyframe once
+  if (!document.getElementById('pulse-style')) {
+    var s=document.createElement('style');
+    s.id='pulse-style';
+    s.textContent='@keyframes pulse{0%,100%{r:14px;opacity:.5;}50%{r:22px;opacity:.1;}}';
+    document.head.appendChild(s);
+  }
+
+  sim.nodes(filtered_nodes).on('tick', function(){
+    linkSel.attr('x1',function(d){return d.source.x;}).attr('y1',function(d){return d.source.y;})
+           .attr('x2',function(d){return d.target.x;}).attr('y2',function(d){return d.target.y;});
+    nodeG.attr('transform',function(d){return 'translate('+d.x+','+d.y+')';});
+  });
+  sim.force('link').links(filtered_links);
+  sim.alpha(0.8).restart();
+}
+
+// ── Data fetching ──
+async function sbGet(path) {
+  var r = await fetch(SB_URL+'/rest/v1/'+path, {headers:HDRS});
+  return r.json();
+}
+
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+async function doSearch() {
+  var q = document.getElementById('searchInput').value.trim();
+  if (!q) return;
+
+  // Show loading
+  document.getElementById('centerMsg').innerHTML = '<div class="spinner-ring"></div><br>Building graph…';
+  document.getElementById('seeds').style.display = 'none';
+  closePanel();
+
+  // Parse verse reference like 2:256 or 2:256-260
+  var verseMatch = q.match(/^(\d+):(\d+)/);
+  if (verseMatch) {
+    await buildVerseGraph(parseInt(verseMatch[1]), parseInt(verseMatch[2]));
+  } else {
+    await buildTopicGraph(q);
+  }
+  document.getElementById('centerMsg').style.display = 'none';
+}
+
+function seedSearch(q) {
+  document.getElementById('searchInput').value = q;
+  doSearch();
+}
+
+async function buildVerseGraph(sura, aya) {
+  var nodes = [], links = [];
+  var centerId = 'v_'+sura+'_'+aya;
+
+  // Fetch verse
+  var verses = await sbGet('ayas?sura_id=eq.'+sura+'&aya_number=eq.'+aya+'&select=sura_id,aya_number,english,arabic');
+  if (!verses.length) { document.getElementById('centerMsg').innerHTML = '<h2>Verse '+sura+':'+aya+' not found</h2>'; document.getElementById('centerMsg').style.display='block'; return; }
+  var v = verses[0];
+
+  nodes.push({ id: centerId, type:'verse', label: sura+':'+aya, isCenter:true, r:16,
+    data: { sura:sura, aya:aya, english: v.english, arabic: v.arabic } });
+
+  // Fetch cross-references (verse→verse)
+  var crossRefs = await sbGet('cross_references?source_surah=eq.'+sura+'&source_ayah=eq.'+aya+'&select=ref_surah,ref_ayah_start&limit=12');
+  crossRefs.forEach(function(cr) {
+    var rid = 'v_'+cr.ref_surah+'_'+cr.ref_ayah_start;
+    if (!nodes.find(function(n){return n.id===rid;})) {
+      nodes.push({id:rid, type:'verse', label:cr.ref_surah+':'+cr.ref_ayah_start, data:{sura:cr.ref_surah,aya:cr.ref_ayah_start}});
+    }
+    links.push({source:centerId, target:rid, color:NODE_COLOR.verse, strength:1.5, dist:70, rel:'cross-reference'});
+  });
+
+  // Fiqh topics linked to this verse
+  var fiqhRows = await sbGet('madhhab_rulings?select=topic_id,quran_verses&not.quran_verses.is.null&limit=200');
+  var linkedFiqh = fiqhRows.filter(function(r) {
+    if (!r.quran_verses) return false;
+    return r.quran_verses.some(function(ref) {
+      var m = String(ref).match(/^(\d+):(\d+)/);
+      return m && parseInt(m[1])===sura && Math.abs(parseInt(m[2])-aya)<=2;
+    });
+  }).slice(0,8);
+
+  if (linkedFiqh.length) {
+    var topicIds = linkedFiqh.map(function(r){return r.topic_id;});
+    var topics = await sbGet('madhhab_topics?select=id,topic,category&id=in.('+topicIds.join(',')+')'+'&limit=8');
+    topics.forEach(function(t) {
+      var fid = 'f_'+t.id;
+      nodes.push({id:fid, type:'fiqh', label: t.topic.substring(0,22), data:t});
+      links.push({source:centerId, target:fid, color:NODE_COLOR.fiqh, strength:2, dist:110, rel:'fiqh ruling'});
+    });
+  }
+
+  // Contradictions involving this verse
+  var contras = await sbGet('contradiction_analysis?select=id,topic,severity,external_references&sura=eq.'+sura+'&limit=4');
+  contras.forEach(function(c) {
+    var cid = 'c_'+c.id;
+    nodes.push({id:cid, type:'contradiction', label: c.topic.substring(0,20), data:c});
+    links.push({source:centerId, target:cid, color:NODE_COLOR.contradiction, strength:2.5, dist:130, rel:'contradiction'});
+  });
+
+  // Themes containing this verse
+  var themes = await sbGet('thematic_cross_references?select=theme&sura=eq.'+sura+'&aya=eq.'+aya+'&limit=5');
+  var seenThemes = new Set();
+  themes.forEach(function(t) {
+    if (seenThemes.has(t.theme)) return;
+    seenThemes.add(t.theme);
+    var tid = 'th_'+t.theme.replace(/\s+/g,'_');
+    nodes.push({id:tid, type:'theme', label: t.theme.substring(0,20), data:{theme:t.theme}});
+    links.push({source:centerId, target:tid, color:NODE_COLOR.theme, strength:1.5, dist:100, rel:'theme'});
+  });
+
+  renderGraph(nodes, links);
+}
+
+async function buildTopicGraph(query) {
+  var nodes = [], links = [];
+
+  // Search fiqh topics
+  var enc = encodeURIComponent(query);
+  var topics = await sbGet('madhhab_topics?select=id,topic,category,controversy_level&or=(topic.ilike.*'+enc+'*,category.ilike.*'+enc+'*)&order=controversy_level.desc.nullslast&limit=1');
+
+  if (topics.length) {
+    var t = topics[0];
+    var centerFid = 'f_'+t.id;
+    nodes.push({id:centerFid, type:'fiqh', label:t.topic.substring(0,22), isCenter:true, r:16, data:t});
+
+    // Find related topics in same category
+    var related = await sbGet('madhhab_topics?select=id,topic,category&category=eq.'+encodeURIComponent(t.category)+'&limit=6&order=controversy_level.desc.nullslast');
+    related.filter(function(r){return r.id!==t.id;}).slice(0,5).forEach(function(r) {
+      var rid = 'f_'+r.id;
+      nodes.push({id:rid, type:'fiqh', label:r.topic.substring(0,22), data:r});
+      links.push({source:centerFid, target:rid, color:NODE_COLOR.fiqh, strength:1, dist:90, rel:'same category'});
+    });
+
+    // Find contradictions mentioning same category keywords
+    var contras = await sbGet('contradiction_analysis?select=id,topic,severity&or=(topic.ilike.*'+enc+'*,category.ilike.*'+enc+'*)&limit=4');
+    contras.forEach(function(c) {
+      var cid = 'c_'+c.id;
+      nodes.push({id:cid, type:'contradiction', label:c.topic.substring(0,20), data:c});
+      links.push({source:centerFid, target:cid, color:NODE_COLOR.contradiction, strength:2, dist:130, rel:'tension'});
+    });
+
+    // Linked verses via madhhab_rulings
+    var rulings = await sbGet('madhhab_rulings?select=quran_verses&topic_id=eq.'+t.id+'&not.quran_verses.is.null&limit=1');
+    if (rulings.length && rulings[0].quran_verses) {
+      rulings[0].quran_verses.slice(0,6).forEach(function(ref) {
+        var m = String(ref).match(/^(\d+):(\d+)/);
+        if (!m) return;
+        var vid = 'v_'+m[1]+'_'+m[2];
+        if (!nodes.find(function(n){return n.id===vid;})) {
+          nodes.push({id:vid, type:'verse', label:m[1]+':'+m[2], data:{sura:parseInt(m[1]),aya:parseInt(m[2])}});
+        }
+        links.push({source:centerFid, target:vid, color:NODE_COLOR.verse, strength:1.5, dist:100, rel:'cited verse'});
+      });
+    }
+
+    renderGraph(nodes, links);
+    return;
+  }
+
+  // Search contradictions
+  var contras = await sbGet('contradiction_analysis?select=id,topic,severity,sura,aya,external_references&or=(topic.ilike.*'+enc+'*,category.ilike.*'+enc+'*)&limit=1');
+  if (contras.length) {
+    var c = contras[0];
+    var centerCid = 'c_'+c.id;
+    nodes.push({id:centerCid, type:'contradiction', label:c.topic.substring(0,22), isCenter:true, r:18, data:c});
+
+    // Main verse
+    var vid = 'v_'+c.sura+'_'+c.aya;
+    nodes.push({id:vid, type:'verse', label:c.sura+':'+c.aya, data:{sura:c.sura,aya:c.aya}});
+    links.push({source:centerCid, target:vid, color:NODE_COLOR.verse, strength:2, dist:90, rel:'source verse'});
+
+    // External refs
+    var refs = [];
+    try { refs = JSON.parse(c.external_references||'[]'); } catch(e){}
+    if (Array.isArray(refs)) refs.slice(0,8).forEach(function(ref){
+      var m=String(ref).match(/^(\d+):(\d+)/);
+      if (!m) return;
+      var rvid='v_'+m[1]+'_'+m[2];
+      if(!nodes.find(function(n){return n.id===rvid;})) nodes.push({id:rvid,type:'verse',label:m[1]+':'+m[2],data:{sura:parseInt(m[1]),aya:parseInt(m[2])}});
+      links.push({source:centerCid,target:rvid,color:NODE_COLOR.verse,strength:1.5,dist:100,rel:'related verse'});
+    });
+
+    renderGraph(nodes, links);
+    return;
+  }
+
+  // Fallback — nothing found
+  document.getElementById('centerMsg').innerHTML = '<h2>Nothing found for "'+esc(query)+'"</h2><p>TRY A VERSE LIKE 2:256 OR A TOPIC LIKE "APOSTASY"</p>';
+  document.getElementById('centerMsg').style.display = 'block';
+}
+
+// ── Panel ──
+function showPanel(d) {
+  var panel = document.getElementById('infoPanel');
+  var inner = document.getElementById('panelInner');
+  var typeColors = { verse:'var(--violet-l)', fiqh:'var(--gold)', contradiction:'var(--crimson-l)', theme:'var(--emerald-l)', sira:'var(--steel-l)' };
+  var col = typeColors[d.type] || 'var(--ink3)';
+
+  var html = '<div class="panel-type" style="color:'+col+'">'+d.type.toUpperCase()+'</div>';
+  html += '<div class="panel-title">'+esc(d.label)+'</div>';
+
+  if (d.type === 'verse' && d.data) {
+    if (d.data.english) html += '<div class="panel-body">'+esc(d.data.english.substring(0,200))+(d.data.english.length>200?'…':'')+'</div>';
+    html += '<div class="panel-links">'
+      + '<a class="panel-link" href="index.html?sura='+d.data.sura+'&aya='+d.data.aya+'&from=knowledge-graph">📖 Open Verse</a>'
+      + '<button class="panel-link" onclick="expandNode(event,\''+d.id+'\','+d.data.sura+','+d.data.aya+')">🕸️ Expand</button>'
+      + '</div>';
+  } else if (d.type === 'fiqh' && d.data) {
+    if (d.data.category) html += '<div class="panel-body" style="font-size:11px;color:var(--ink4);margin-bottom:6px;">'+esc(d.data.category)+'</div>';
+    html += '<div class="panel-links">'
+      + '<a class="panel-link" href="madhhab.html?topic='+encodeURIComponent(d.data.id)+'&from=knowledge-graph">⚖️ Full Ruling</a>'
+      + '<button class="panel-link" onclick="expandFiqhNode(event,\''+d.id+'\','+d.data.id+')">🕸️ Expand</button>'
+      + '</div>';
+  } else if (d.type === 'contradiction' && d.data) {
+    var sevColor = d.data.severity==='high'?'var(--crimson-l)':d.data.severity==='medium'?'var(--amber-l)':'var(--emerald-l)';
+    html += '<div class="panel-body" style="color:'+sevColor+';font-size:11px;">'+esc(d.data.severity||'')+'</div>';
+    html += '<div class="panel-links">'
+      + '<a class="panel-link" href="contradiction.html?id='+d.data.id+'&from=knowledge-graph">⚔️ Open Workspace</a>'
+      + '</div>';
+  } else if (d.type === 'theme' && d.data) {
+    html += '<div class="panel-links">'
+      + '<a class="panel-link" href="theme-analysis.html?theme='+encodeURIComponent(d.data.theme)+'&from=knowledge-graph">🗂️ Theme Analysis</a>'
+      + '</div>';
+  }
+
+  // Connections count
+  var conns = linksData.filter(function(l){
+    var s=typeof l.source==='object'?l.source.id:l.source;
+    var t=typeof l.target==='object'?l.target.id:l.target;
+    return s===d.id||t===d.id;
+  });
+  if (conns.length) html += '<div class="connections-label">'+conns.length+' connections</div>';
+
+  inner.innerHTML = html;
+  panel.classList.add('open');
+}
+
+function closePanel() {
+  document.getElementById('infoPanel').classList.remove('open');
+}
+
+async function expandNode(e, currentId, sura, aya) {
+  e.preventDefault();
+  closePanel();
+  document.getElementById('searchInput').value = sura+':'+aya;
+  await buildVerseGraph(sura, aya);
+  document.getElementById('centerMsg').style.display = 'none';
+}
+
+async function expandFiqhNode(e, currentId, topicId) {
+  e.preventDefault();
+  closePanel();
+  // Find topic name and rebuild graph around it
+  var topics = await sbGet('madhhab_topics?select=id,topic,category&id=eq.'+topicId);
+  if (topics.length) {
+    document.getElementById('searchInput').value = topics[0].topic;
+    await buildTopicGraph(topics[0].topic);
+    document.getElementById('centerMsg').style.display = 'none';
+  }
+}
+
+// ── Type filter toggle ──
+function toggleType(btn) {
+  var type = btn.dataset.type;
+  if (hiddenTypes[type]) {
+    delete hiddenTypes[type];
+    btn.classList.remove('off');
+  } else {
+    hiddenTypes[type] = true;
+    btn.classList.add('off');
+  }
+  if (nodesData.length) renderGraph(nodesData, linksData);
+}
+
+// ── Click outside panel to close ──
+document.getElementById('graphCanvas').addEventListener('click', function() { closePanel(); });
+
+// ── Check deep link ──
+(function() {
+  var p = new URLSearchParams(window.location.search);
+  var q = p.get('q') || p.get('verse') || p.get('topic');
+  if (q) { document.getElementById('searchInput').value = q; setTimeout(doSearch, 300); }
+})();
+</script>
+</body>
+</html>
