@@ -1065,7 +1065,7 @@ Return ONLY valid JSON (no markdown, no backticks) with this exact structure:
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
-        max_tokens: 1000,
+        max_tokens: 2000,
         messages: [{ role: 'user', content: prompt }]
       })
     });
@@ -1078,8 +1078,25 @@ Return ONLY valid JSON (no markdown, no backticks) with this exact structure:
 
     let ruling;
     try {
-      const clean = raw.replace(/```json|```/g, '').trim();
-      ruling = JSON.parse(clean);
+      let clean = raw.replace(/```json|```/g, '').trim();
+      // Try full parse first
+      try {
+        ruling = JSON.parse(clean);
+      } catch(e) {
+        // If truncated, try to fix by closing open JSON
+        const lastBrace = clean.lastIndexOf('}');
+        if (lastBrace > 0) {
+          clean = clean.substring(0, lastBrace + 1);
+          // Count open/close braces to find proper end
+          let depth = 0, endIdx = 0;
+          for (let i = 0; i < clean.length; i++) {
+            if (clean[i] === '{') depth++;
+            else if (clean[i] === '}') { depth--; if (depth === 0) { endIdx = i; break; } }
+          }
+          if (endIdx > 0) clean = clean.substring(0, endIdx + 1);
+        }
+        ruling = JSON.parse(clean);
+      }
     } catch(e) {
       throw new Error('Could not parse AI response: ' + e.message);
     }
