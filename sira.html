@@ -5,7 +5,6 @@
 window.controversyScore=function(v){var t=[v.english,v.aya_text,v.text_english,v.hadith_text,v.topic,v.brief_description,v.content,v.reason_text,v.story_en,v.title_en,v.summary,v.name_english,v.theme].filter(Boolean).join(' ').toLowerCase();var s=0;['kill','slay','smite','amputat','crucif','stone','whip','lash','apostat','slave','captive','concubin','beat.*wife','wife.*beat','fight.*until','jihad','warfare','adulter','zina','thief.*hand','homosexual','liwat','blasphemy','jizya','dhimmi','women.*half','inherit.*half','polygam','nushuz','sex slave','cut hand'].forEach(function(k){try{if(new RegExp(k).test(t))s+=12;}catch(e){}});['divorce','talaq','inheritance','veil','hijab','niqab','disbeliev','infidel','kafir','hellfire','punishment','torment','war','battle','riba','usury','intoxicant','alcohol','honor kill','martyr'].forEach(function(k){if(t.indexOf(k)!==-1)s+=5;});['alhamdulillah','merciful','compassionate','forgiving','be patient'].forEach(function(k){if(t.indexOf(k)!==-1)s-=2;});if(v.controversy_level)s+=(parseInt(v.controversy_level)-1)*4;if(v.human_rights_score!=null)s+=Math.max(0,(5-parseFloat(v.human_rights_score))*2);return s;};
 window.sortByControversy=function(arr){if(!Array.isArray(arr))return arr;return arr.slice().sort(function(a,b){var sa=window.controversyScore(a),sb=window.controversyScore(b);return sb!==sa?sb-sa:((a.sura_id||a.year_ce||0)-(b.sura_id||b.year_ce||0))||((a.aya_number||0)-(b.aya_number||0));});};
 </script>
-
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Sīra — Prophetic Biography | Quran Scholar</title>
@@ -322,9 +321,7 @@ body { padding-bottom: 60px !important; }
   var SB_KEY = 'sb_publishable_KtJjJRWQn5a5VMSnAoTQXw_dCwnI6BH';
   var HDRS   = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY };
 
-  
-
-function sbGet(table, params) {
+  function sbGet(table, params) {
     var url = new URL(SB_URL + '/rest/v1/' + table);
     Object.entries(params).forEach(function(kv){ url.searchParams.set(kv[0], kv[1]); });
     return fetch(url.toString(), { headers: HDRS })
@@ -604,7 +601,770 @@ function sbGet(table, params) {
 
 </div>
 
+<script>
+const SB_URL = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
+const SB_KEY = 'sb_publishable_KtJjJRWQn5a5VMSnAoTQXw_dCwnI6BH';
+const HDRS = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY };
+const esc = s => String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
+// Highlight search term inside escaped HTML — wraps each occurrence in <mark>
+function highlight(text, term) {
+  const escaped = esc(text);
+  if (!term) return escaped;
+  // Escape regex metacharacters in the term itself
+  const safeTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp('(' + safeTerm + ')', 'gi');
+  return escaped.replace(re, '<mark style="background:#FFEB99;color:inherit;padding:0 1px;border-radius:2px">$1</mark>');
+}
+// Base64-encode arbitrary strings for safe use inside HTML attribute onclick values
+const jsq = s => btoa(unescape(encodeURIComponent(String(s||''))));
+const jsqDecode = v => { try { return decodeURIComponent(escape(atob(v))); } catch(e) { return v; } };
+
+let _events = [];
+let _verseMap = {};      // sira_id -> [verses]
+let _hadithMap = {};     // sira_id -> count (full loaded on detail open)
+let _madhhabMap = {};    // sira_id -> count
+
+let _period = 'all';
+let _figure = 'all';
+let _location = 'all';
+let _search = '';
+
+const PERIOD_ORDER = ['pre-islamic','pre-prophetic','meccan-early','meccan','meccan-late','medinan','medinan-early','medinan-late','post-prophetic','other'];
+
+// ============================================================
+// LOAD
+// ============================================================
+async function loadAll() {
+  const tl = document.getElementById('timeline');
+  tl.innerHTML = '<div class="empty-state">Loading Sīra timeline…</div>';
+  try {
+    const results = await Promise.allSettled([
+      fetchAllPages(`sira_events?select=id,title_en,title_ar,period,year_ce,year_ah,story_en,story_ar,key_figures,location,hadith_ref,tafsir_ref&order=year_ce.asc.nullslast`),
+      fetchAllPages(`sira_verse_map?select=sira_id,sura,aya,applies_to_full_sura`),
+      fetchCounts('sira_hadith_map', 'sira_id'),
+      fetchCounts('sira_madhhab_map', 'sira_id')
+    ]);
+
+    const events = results[0].status === 'fulfilled' ? results[0].value : [];
+    const vmaps  = results[1].status === 'fulfilled' ? results[1].value : [];
+    _hadithMap   = results[2].status === 'fulfilled' ? results[2].value : {};
+    _madhhabMap  = results[3].status === 'fulfilled' ? results[3].value : {};
+
+    // Log any failures for diagnostics
+    ['sira_events','sira_verse_map','sira_hadith_map','sira_madhhab_map'].forEach((t,i) => {
+      if (results[i].status === 'rejected') {
+        console.warn(`Sira: ${t} fetch failed:`, results[i].reason);
+      }
+    });
+
+    if (!events.length) {
+      tl.innerHTML = '<div class="empty-state">Could not load Sīra events. Check Supabase RLS policy for sira_events table.</div>';
+      return;
+    }
+
+    _events = events;
+
+    _verseMap = {};
+    (vmaps||[]).forEach(m => {
+      if (!_verseMap[m.sira_id]) _verseMap[m.sira_id] = [];
+      _verseMap[m.sira_id].push(m);
+    });
+
+    renderFilters();
+    renderTimeline();
+
+    // Deep link
+    const params = new URLSearchParams(window.location.search);
+    const tid = params.get('event');
+    if (tid) openEvent(tid);
+  } catch (e) {
+    tl.innerHTML = `<div class="empty-state">Failed to load: ${esc(e.message)}</div>`;
+    console.error(e);
+  }
+}
+
+async function fetchAllPages(query) {
+  const all = [];
+  let offset = 0;
+  try {
+    while (true) {
+      const r = await fetch(`${SB_URL}/rest/v1/${query}&limit=1000&offset=${offset}`, {headers: HDRS});
+      if (!r.ok) {
+        console.warn(`fetchAllPages ${query} status ${r.status}`);
+        break;
+      }
+      const data = await r.json();
+      if (!data || !data.length) break;
+      all.push(...data);
+      if (data.length < 1000) break;
+      offset += 1000;
+    }
+  } catch (e) {
+    console.warn(`fetchAllPages ${query} error:`, e);
+  }
+  return all;
+}
+
+async function fetchCounts(table, groupField) {
+  const counts = {};
+  const all = await fetchAllPages(`${table}?select=${groupField}`);
+  all.forEach(r => {
+    const k = r[groupField];
+    counts[k] = (counts[k] || 0) + 1;
+  });
+  return counts;
+}
+
+// ============================================================
+// FILTER RENDER
+// ============================================================
+function renderFilters() {
+  const periods = [...new Set(_events.map(e => e.period).filter(Boolean))];
+  periods.sort((a,b) => {
+    const ai = PERIOD_ORDER.indexOf(a.toLowerCase());
+    const bi = PERIOD_ORDER.indexOf(b.toLowerCase());
+    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+  });
+
+  const pHtml = '<span class="chip-row-label">Period:</span>' +
+    `<button class="filter-chip ${_period==='all'?'active':''}" onclick="setFilter('period','all')">All (${_events.length})</button>` +
+    periods.map(p => {
+      const c = _events.filter(e=>e.period===p).length;
+      const active = _period === p;
+      return `<button class="filter-chip ${active?'active':''}" onclick="setFilter('period','${jsq(p)}')">${esc(p)} (${c})</button>`;
+    }).join('');
+  document.getElementById('periodChips').innerHTML = pHtml;
+
+  // Figures
+  const figCounts = {};
+  _events.forEach(e => (e.key_figures||[]).forEach(f => { figCounts[f] = (figCounts[f]||0)+1; }));
+  const topFigs = Object.entries(figCounts).sort((a,b)=>b[1]-a[1]).slice(0,12);
+  const fHtml = '<span class="chip-row-label">Figure:</span>' +
+    `<button class="filter-chip ${_figure==='all'?'active':''}" onclick="setFilter('figure','all')">All</button>` +
+    topFigs.map(([f,c]) => {
+      const active = _figure === f;
+      return `<button class="filter-chip ${active?'active':''}" onclick="setFilter('figure','${jsq(f)}')">${esc(f)} (${c})</button>`;
+    }).join('');
+  document.getElementById('figureChips').innerHTML = fHtml;
+
+  // Locations
+  const locCounts = {};
+  _events.forEach(e => { if (e.location) locCounts[e.location] = (locCounts[e.location]||0)+1; });
+  const topLocs = Object.entries(locCounts).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  const lHtml = '<span class="chip-row-label">Location:</span>' +
+    `<button class="filter-chip ${_location==='all'?'active':''}" onclick="setFilter('location','all')">All</button>` +
+    topLocs.map(([l,c]) => {
+      const active = _location === l;
+      return `<button class="filter-chip ${active?'active':''}" onclick="setFilter('location','${jsq(l)}')">${esc(l)} (${c})</button>`;
+    }).join('');
+  document.getElementById('locationChips').innerHTML = lHtml;
+}
+
+function setFilter(type, val) {
+  if (val !== 'all') val = jsqDecode(val);
+  if (type === 'period') _period = val;
+  else if (type === 'figure') _figure = val;
+  else if (type === 'location') _location = val;
+  renderFilters();
+  renderTimeline();
+}
+
+function filterEvents() {
+  _search = (document.getElementById('searchInput').value || '').toLowerCase().trim();
+  renderTimeline();
+}
+
+// ============================================================
+// TIMELINE
+// ============================================================
+function renderTimeline() {
+  let filtered = _events;
+  if (_period !== 'all') filtered = filtered.filter(e => e.period === _period);
+  if (_figure !== 'all') filtered = filtered.filter(e => (e.key_figures||[]).includes(_figure));
+  if (_location !== 'all') filtered = filtered.filter(e => e.location === _location);
+  if (_search) {
+    filtered = filtered.filter(e =>
+      (e.title_en||'').toLowerCase().includes(_search) ||
+      (e.title_ar||'').toLowerCase().includes(_search) ||
+      (e.story_en||'').toLowerCase().includes(_search) ||
+      (e.location||'').toLowerCase().includes(_search) ||
+      (e.key_figures||[]).some(f => f.toLowerCase().includes(_search))
+    );
+  }
+
+  const rm = document.getElementById('resultMeta');
+  let countLabel = `${filtered.length} ${filtered.length===1?'event':'events'}`;
+  if (_search) {
+    countLabel = filtered.length === 0
+      ? `0 results for "${esc(_search)}" — try a different term`
+      : `${filtered.length} ${filtered.length===1?'event':'events'} matching "${esc(_search)}"`;
+  } else if (_period !== 'all' || _figure !== 'all' || _location !== 'all') {
+    countLabel = `${filtered.length} ${filtered.length===1?'event':'events'} (filtered)`;
+  } else {
+    countLabel = `${filtered.length} total events`;
+  }
+  rm.innerHTML = countLabel;
+  rm.style.color = (_search && filtered.length === 0) ? 'var(--crimson)' : '';
+  rm.style.fontWeight = _search ? '500' : '400';
+  rm.style.fontSize = '12px';
+
+  const tl = document.getElementById('timeline');
+  if (!filtered.length) {
+    tl.innerHTML = '<div class="empty-state">No events match these filters.</div>';
+    return;
+  }
+
+  // Group by period
+  const groups = {};
+  filtered.forEach(e => {
+    const p = e.period || 'Other';
+    if (!groups[p]) groups[p] = [];
+    groups[p].push(e);
+  });
+
+  const periodKeys = Object.keys(groups).sort((a,b) => {
+    const ai = PERIOD_ORDER.indexOf(a.toLowerCase());
+    const bi = PERIOD_ORDER.indexOf(b.toLowerCase());
+    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+  });
+
+  let html = '';
+  periodKeys.forEach(p => {
+    const events = groups[p];
+    events.sort((a,b) => (a.year_ce||0) - (b.year_ce||0));
+    html += `<div class="period-header">📅 ${esc(p)} Period <span class="period-count">(${events.length} events)</span></div>`;
+    events.forEach(ev => { html += eventCard(ev); });
+  });
+
+  tl.innerHTML = html;
+}
+
+function eventCard(ev) {
+  const verseCount = (_verseMap[ev.id]||[]).length;
+  const hadithCount = _hadithMap[ev.id] || 0;
+  const madhhabCount = _madhhabMap[ev.id] || 0;
+  // If searching, find a window of the story around the matching term so the user sees the match
+  let preview = (ev.story_en||'').slice(0, 220);
+  if (_search && ev.story_en) {
+    const idx = ev.story_en.toLowerCase().indexOf(_search);
+    if (idx >= 0) {
+      const start = Math.max(0, idx - 60);
+      const end = Math.min(ev.story_en.length, idx + 180);
+      preview = (start > 0 ? '…' : '') + ev.story_en.slice(start, end) + (end < ev.story_en.length ? '…' : '');
+    }
+  }
+  return `<div class="event-card" onclick="openEvent('${esc(ev.id)}')">
+    <div class="event-head">
+      <div class="event-year">
+        ${ev.year_ce !== null && ev.year_ce !== undefined ? ev.year_ce + ' CE' : ''}
+        ${ev.year_ah ? '<br>' + ev.year_ah + ' AH' : ''}
+      </div>
+      <div class="event-titles">
+        <div class="event-title-en">${highlight(ev.title_en||'', _search)}</div>
+        ${ev.title_ar ? `<div class="event-title-ar">${highlight(ev.title_ar, _search)}</div>` : ''}
+        ${preview ? `<div class="event-preview">${highlight(preview, _search)}</div>` : ''}
+      </div>
+    </div>
+    <div class="connections-row">
+      <span class="conn-pill ${verseCount?'has':''}">📖 ${verseCount} verses</span>
+      <span class="conn-pill ${hadithCount?'has':''}">📜 ${hadithCount} hadiths</span>
+      <span class="conn-pill ${madhhabCount?'has':''}">⚖️ ${madhhabCount} rulings</span>
+      ${ev.location ? `<span class="conn-pill">📍 ${highlight(ev.location, _search)}</span>` : ''}
+    </div>
+  </div>`;
+}
+
+// ============================================================
+// EVENT DETAIL
+// ============================================================
+async function openEvent(id) {
+  document.getElementById('listView').style.display = 'none';
+  const dv = document.getElementById('detailView');
+  dv.style.display = 'block';
+  dv.innerHTML = '<div class="empty-state">Loading event…</div>';
+  window.scrollTo({top:0, behavior:'smooth'});
+
+  const ev = _events.find(e => String(e.id) === String(id));
+  if (!ev) {
+    dv.innerHTML = '<div class="empty-state">Event not found.</div>';
+    return;
+  }
+
+  // Update URL
+  const url = new URL(window.location);
+  url.searchParams.set('event', id);
+  history.replaceState(null, '', url);
+
+  // Update breadcrumb
+  updateBreadcrumb(ev);
+
+  // Compute prev/next
+  const sortedEvents = [..._events].sort((a,b) => (a.year_ce||0) - (b.year_ce||0));
+  const idx = sortedEvents.findIndex(e => String(e.id) === String(id));
+  const prev = idx > 0 ? sortedEvents[idx-1] : null;
+  const next = idx >= 0 && idx < sortedEvents.length-1 ? sortedEvents[idx+1] : null;
+
+  // Compute linked verses first so we can fetch their asbab and tafsir
+  const verses = _verseMap[id] || [];
+
+  // Fetch all related data in parallel
+  const [hadiths, madhhabs, asbab, tafsirs] = await Promise.all([
+    fetchHadithsForEvent(id),
+    fetchMadhhabsForEvent(id),
+    fetchAsbabForVerses(verses),
+    fetchTafsirForVerses(verses)
+  ]);
+
+  dv.innerHTML = renderEventDetail(ev, verses, hadiths, madhhabs, asbab, tafsirs, prev, next);
+}
+
+function updateBreadcrumb(ev) {
+  const bc = document.getElementById('breadcrumb');
+  const params = new URLSearchParams(window.location.search);
+  const from = params.get('from');
+  if (from) {
+    let trail = '';
+    if (from === 'quran') {
+      const s = params.get('s'), a = params.get('a');
+      trail = `<a href="index.html?sura=${s}${a?'&aya='+a:''}">← Back to Quran ${s}${a?':'+a:''}</a> · ${esc(ev.title_en)}`;
+    } else if (from === 'research') {
+      trail = `<a href="research.html">← Back to Research</a> · ${esc(ev.title_en)}`;
+    } else if (from === 'madhhab') {
+      const tid = params.get('topic');
+      trail = `<a href="madhhab.html${tid?'?topic='+tid:''}">← Back to Madhhab</a> · ${esc(ev.title_en)}`;
+    } else {
+      trail = `<a href="javascript:closeEvent()">← All Sira Events</a> · ${esc(ev.title_en)}`;
+    }
+    bc.innerHTML = trail;
+    bc.classList.add('show');
+  } else {
+    bc.innerHTML = `<a href="javascript:closeEvent()">← All Sira Events</a> · ${esc(ev.title_en)}`;
+    bc.classList.add('show');
+  }
+}
+
+async function fetchHadithsForEvent(siraId) {
+  try {
+    const r = await fetch(
+      `${SB_URL}/rest/v1/sira_hadith_map?select=hadith_id,collection,relevance_score,context_note&sira_id=eq.${encodeURIComponent(siraId)}&order=relevance_score.desc`,
+      {headers: HDRS}
+    );
+    const links = await r.json();
+    if (!links || !links.length) return [];
+
+    // Fetch hadith details in batches
+    const ids = links.map(l => l.hadith_id);
+    const idChunk = ids.slice(0, 50).join(',');
+    const r2 = await fetch(
+      `${SB_URL}/rest/v1/hadith_corpus?select=id,text_english,text_arabic,collection_name,book,hadith_number,grade&id=in.(${idChunk})`,
+      {headers: HDRS}
+    );
+    const hadiths = await r2.json();
+    const byId = {};
+    hadiths.forEach(h => { byId[h.id] = h; });
+    return links.map(l => ({...l, hadith: byId[l.hadith_id]})).filter(x => x.hadith);
+  } catch (e) {
+    console.error(e);
+    return [];
+  }
+}
+
+async function fetchMadhhabsForEvent(siraId) {
+  try {
+    const r = await fetch(
+      `${SB_URL}/rest/v1/sira_madhhab_map?select=topic_id,relevance_score,context_note&sira_id=eq.${encodeURIComponent(siraId)}&order=relevance_score.desc`,
+      {headers: HDRS}
+    );
+    const links = await r.json();
+    if (!links || !links.length) return [];
+    const ids = links.map(l => l.topic_id).join(',');
+    const r2 = await fetch(
+      `${SB_URL}/rest/v1/madhhab_topics?select=id,topic,category,controversy_level&id=in.(${ids})`,
+      {headers: HDRS}
+    );
+    const topics = await r2.json();
+    const byId = {};
+    topics.forEach(t => { byId[t.id] = t; });
+    return links.map(l => ({...l, topic: byId[l.topic_id]})).filter(x => x.topic);
+  } catch (e) {
+    console.error(e);
+    return [];
+  }
+}
+
+// Fetch asbab al-nuzul for the verses linked to this event
+async function fetchAsbabForVerses(verses) {
+  if (!verses || !verses.length) return [];
+  const results = [];
+  try {
+    // Build OR conditions: each verse needs sura_id+aya_number match
+    // PostgREST: use or=(...)
+    const conditions = [];
+    verses.forEach(v => {
+      if (v.applies_to_full_sura) {
+        conditions.push(`and(sura_id.eq.${v.sura})`);
+      } else {
+        conditions.push(`and(sura_id.eq.${v.sura},aya_number.eq.${v.aya})`);
+      }
+    });
+    const orClause = conditions.join(',');
+    const r = await fetch(
+      `${SB_URL}/rest/v1/asbab_al_nuzul?select=id,sura_id,aya_number,reason_text,scholar,source,tradition&or=(${orClause})&limit=200`,
+      {headers: HDRS}
+    );
+    if (r.ok) {
+      const data = await r.json();
+      return data || [];
+    }
+  } catch (e) {
+    console.warn('Asbab fetch error:', e);
+  }
+  return results;
+}
+
+// Fetch tafsir entries for verses linked to this event
+async function fetchTafsirForVerses(verses) {
+  if (!verses || !verses.length) return [];
+  try {
+    const conditions = [];
+    verses.forEach(v => {
+      if (v.applies_to_full_sura) {
+        conditions.push(`and(sura.eq.${v.sura})`);
+      } else {
+        conditions.push(`and(sura.eq.${v.sura},aya.eq.${v.aya})`);
+      }
+    });
+    const orClause = conditions.join(',');
+    const r = await fetch(
+      `${SB_URL}/rest/v1/tafsir_entries?select=id,sura,aya,content,language,scholar_name,source_name,source_url,theological_position,tradition&or=(${orClause})&limit=200`,
+      {headers: HDRS}
+    );
+    if (r.ok) {
+      const data = await r.json();
+      return data || [];
+    }
+  } catch (e) {
+    console.warn('Tafsir fetch error:', e);
+  }
+  return [];
+}
+
+function renderEventDetail(ev, verses, hadiths, madhhabs, asbab, tafsirs, prev, next) {
+  const sections = [];
+  if (ev.story_en) sections.push({id:'story', label:'📖 Narrative'});
+  if (verses.length) sections.push({id:'verses', label:`📖 Quran Verses (${verses.length})`});
+  if (asbab.length) sections.push({id:'asbab', label:`📅 Asbāb al-Nuzūl (${asbab.length})`});
+  if (tafsirs.length) sections.push({id:'tafsirs', label:`📚 Tafsir (${tafsirs.length})`});
+  if (hadiths.length) sections.push({id:'hadiths', label:`📜 Hadiths (${hadiths.length})`});
+  if (madhhabs.length) sections.push({id:'madhhabs', label:`⚖️ Madhhab Rulings (${madhhabs.length})`});
+
+  return `<div class="event-detail">
+    <button class="back-btn" onclick="closeEvent()">◂ All Sira Events</button>
+
+    <div class="detail-meta">
+      ${ev.year_ce !== null ? ev.year_ce + ' CE' : ''}${ev.year_ah ? ' · ' + ev.year_ah + ' AH' : ''}
+      ${ev.period ? ' · ' + esc(ev.period) + ' Period' : ''}
+    </div>
+    <div class="detail-title-en">${highlight(ev.title_en||'', _search)}</div>
+    ${ev.title_ar ? `<div class="detail-title-ar">${esc(ev.title_ar)}</div>` : ''}
+
+    <div class="detail-meta-row">
+      ${ev.location ? `<span class="meta-chip clickable" onclick="filterByLocation('${jsq(ev.location)}')">📍 ${esc(ev.location)}</span>` : ''}
+      ${(ev.key_figures||[]).map(f => `<span class="meta-chip clickable" onclick="filterByFigure('${jsq(f)}')">👤 ${esc(f)}</span>`).join('')}
+    </div>
+
+    ${sections.length > 1 ? `
+      <div class="jump-nav">
+        <span style="color:var(--ink3)">Jump to:</span>
+        ${sections.map(s => `<a class="jump-link" onclick="document.getElementById('${s.id}').scrollIntoView({behavior:'smooth',block:'start'})">${s.label}</a>`).join('')}
+      </div>` : ''}
+
+    <!-- ACTION BAR -->
+    <div class="action-bar">
+      <button class="action-btn" onclick="readAloud('${esc(ev.id)}')">🔊 READ</button>
+      <button class="action-btn" onclick="toggleHighlight('${esc(ev.id)}')">✏️ HIGHLIGHT</button>
+      <button class="action-btn" onclick="addNote('${esc(ev.id)}')">📝 NOTE</button>
+      <button class="action-btn" id="saveBtn-${esc(ev.id)}" onclick="toggleBookmark('${esc(ev.id)}')">🔖 SAVE</button>
+      <button class="action-btn" onclick="copyEvent('${esc(ev.id)}')">📋 COPY</button>
+      <button class="action-btn" onclick="shareEvent('${esc(ev.id)}')">📤 SHARE</button>
+    </div>
+
+    <!-- STORY -->
+    ${ev.story_en ? `
+      <div class="sec" id="story">
+        <div class="sec-label">📖 Ibn Ishaq's Narrative</div>
+        <div class="story" id="story-text-${esc(ev.id)}">${highlight(ev.story_en, _search)}</div>
+      </div>` : ''}
+
+    ${ev.story_ar ? `
+      <div class="sec">
+        <div class="sec-label">العربية</div>
+        <div class="story-ar">${esc(ev.story_ar)}</div>
+      </div>` : ''}
+
+    <!-- QURAN VERSES -->
+    ${verses.length ? `
+      <div class="sec" id="verses">
+        <div class="sec-label">📖 Quran Verses <span class="sec-count">${verses.length}</span></div>
+        ${verses.map(v => {
+          const ref = v.applies_to_full_sura ? `Sura ${v.sura}` : `${v.sura}:${v.aya}`;
+          const link = v.applies_to_full_sura
+            ? `index.html?sura=${v.sura}&from=sira&event=${encodeURIComponent(ev.id)}`
+            : `index.html?sura=${v.sura}&aya=${v.aya}&from=sira&event=${encodeURIComponent(ev.id)}`;
+          return `<div class="ref-card" onclick="qnavGoSira('${link}','${ref}')">
+            <div class="ref-card-head">
+              <span class="ref-card-tag">📖 QURAN ${ref}</span>
+              <span class="ref-card-tag">Open in Reader →</span>
+            </div>
+            <div class="ref-card-text">Tap to open ${ref} in the Quran reader with verse context, tafsir, and asbāb al-nuzūl.</div>
+          </div>`;
+        }).join('')}
+      </div>` : ''}
+
+    <!-- ASBAB AL-NUZUL -->
+    ${asbab.length ? `
+      <div class="sec" id="asbab">
+        <div class="sec-label">📅 Asbāb al-Nuzūl — Causes of Revelation <span class="sec-count">${asbab.length}</span></div>
+        ${asbab.map(a => {
+          const verseRef = `${a.sura_id}${a.aya_number?':'+a.aya_number:''}`;
+          return `<div class="ref-card" onclick="location.href='index.html?sura=${a.sura_id}${a.aya_number?'&aya='+a.aya_number:''}&from=sira&event=${encodeURIComponent(ev.id)}'">
+            <div class="ref-card-head">
+              <span class="ref-card-tag">📅 QURAN ${esc(verseRef)}${a.scholar?' · '+esc(a.scholar):''}</span>
+              <span class="ref-card-tag">${esc(a.tradition||'')}</span>
+            </div>
+            <div class="ref-card-text">${esc(a.reason_text||'')}</div>
+            ${a.source ? `<div class="ref-card-note">Source: ${esc(a.source)}</div>` : ''}
+          </div>`;
+        }).join('')}
+      </div>` : ''}
+
+    <!-- TAFSIR -->
+    ${tafsirs.length ? `
+      <div class="sec" id="tafsirs">
+        <div class="sec-label">📚 Tafsir — Scholarly Commentary <span class="sec-count">${tafsirs.length}</span></div>
+        ${(() => {
+          // Group by tradition
+          const byTrad = {};
+          tafsirs.forEach(t => {
+            const trad = (t.tradition || 'other').toLowerCase();
+            if (!byTrad[trad]) byTrad[trad] = [];
+            byTrad[trad].push(t);
+          });
+          const tradOrder = ['sunni','shia','mutazila','other'];
+          const tradLabel = {sunni:'Sunni',shia:'Shia',mutazila:"Mu'tazila",other:'Other'};
+          const tradColor = {sunni:'#1A6FA8',shia:'#7B4F2E',mutazila:'#8A6E2E',other:'#666'};
+          return tradOrder.filter(k=>byTrad[k]).map(trad => {
+            const items = byTrad[trad];
+            return `<div style="margin-bottom:14px">
+              <div style="font-family:'Inconsolata',monospace;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:${tradColor[trad]};font-weight:500;margin-bottom:8px">
+                ${tradLabel[trad]} (${items.length})
+              </div>
+              ${items.map(t => {
+                const verseRef = `${t.sura}${t.aya?':'+t.aya:''}`;
+                const content = (t.content||'').slice(0, 400);
+                return `<div class="ref-card" onclick="location.href='index.html?sura=${t.sura}${t.aya?'&aya='+t.aya:''}&from=sira&event=${encodeURIComponent(ev.id)}'">
+                  <div class="ref-card-head">
+                    <span class="ref-card-tag" style="color:${tradColor[trad]}">📚 ${esc(verseRef)} · ${esc(t.scholar_name||'?')}</span>
+                    <span class="ref-card-tag">${esc(t.source_name||'')}</span>
+                  </div>
+                  <div class="ref-card-text">${esc(content)}${(t.content||'').length > 400 ? '…' : ''}</div>
+                  ${t.theological_position ? `<div class="ref-card-note">${esc(t.theological_position)}</div>` : ''}
+                </div>`;
+              }).join('')}
+            </div>`;
+          }).join('');
+        })()}
+      </div>` : ''}
+
+    <!-- HADITHS -->
+    ${hadiths.length ? `
+      <div class="sec" id="hadiths">
+        <div class="sec-label">📜 Linked Hadiths <span class="sec-count">${hadiths.length}</span></div>
+        ${hadiths.map(h => {
+          const text = (h.hadith.text_english || '').slice(0, 400);
+          const stars = '●'.repeat(h.relevance_score||3);
+          return `<div class="ref-card" onclick="location.href='research.html?hadith=${h.hadith_id}&from=sira&event=${encodeURIComponent(ev.id)}'">
+            <div class="ref-card-head">
+              <span class="ref-card-tag">📜 ${esc(h.collection||h.hadith.collection_name||'?')}${h.hadith.hadith_number?' · #'+h.hadith.hadith_number:''}</span>
+              <span class="ref-card-score" title="Relevance ${h.relevance_score}/5">${stars}</span>
+            </div>
+            <div class="ref-card-text">${esc(text)}${h.hadith.text_english.length > 400 ? '…' : ''}</div>
+            ${h.hadith.text_arabic ? `<div class="ref-card-ar">${esc(h.hadith.text_arabic.slice(0,200))}${h.hadith.text_arabic.length > 200 ? '…' : ''}</div>` : ''}
+            ${h.context_note ? `<div class="ref-card-note">${esc(h.context_note)}</div>` : ''}
+          </div>`;
+        }).join('')}
+      </div>` : ''}
+
+    <!-- MADHHAB -->
+    ${madhhabs.length ? `
+      <div class="sec" id="madhhabs">
+        <div class="sec-label">⚖️ Madhhab Rulings Grounded in This Event <span class="sec-count">${madhhabs.length}</span></div>
+        ${madhhabs.map(m => {
+          const lvl = m.topic.controversy_level || 3;
+          const stars = '●'.repeat(lvl) + '○'.repeat(5-lvl);
+          return `<div class="madhhab-link" onclick="location.href='madhhab.html?topic=${m.topic_id}&from=sira&event=${encodeURIComponent(ev.id)}'">
+            <div>
+              <div class="madhhab-link-title">${esc(m.topic.topic)}</div>
+              <div class="madhhab-link-meta">${esc(m.topic.category||'')} · controversy ${stars}</div>
+              ${m.context_note ? `<div class="ref-card-note" style="margin-top:6px">${esc(m.context_note)}</div>` : ''}
+            </div>
+            <div style="font-family:'Inconsolata',monospace;font-size:11px;color:var(--gold);white-space:nowrap">View →</div>
+          </div>`;
+        }).join('')}
+      </div>` : ''}
+
+    <!-- SEQUENTIAL NAV -->
+    <div class="seq-nav">
+      ${prev ? `<a class="seq-btn" onclick="openEvent('${esc(prev.id)}')">
+        <div class="seq-btn-label">◂ Previous Event</div>
+        <div class="seq-btn-title">${esc(prev.title_en)}</div>
+      </a>` : '<div class="seq-btn disabled"></div>'}
+      ${next ? `<a class="seq-btn next" onclick="openEvent('${esc(next.id)}')">
+        <div class="seq-btn-label">Next Event ▸</div>
+        <div class="seq-btn-title">${esc(next.title_en)}</div>
+      </a>` : '<div class="seq-btn disabled"></div>'}
+    </div>
+
+  </div>`;
+}
+
+function closeEvent() {
+  document.getElementById('detailView').style.display = 'none';
+  document.getElementById('listView').style.display = 'block';
+  document.getElementById('breadcrumb').classList.remove('show');
+  const url = new URL(window.location);
+  url.searchParams.delete('event');
+  url.searchParams.delete('from');
+  history.replaceState(null, '', url);
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+function filterByLocation(loc) {
+  loc = jsqDecode(loc);
+  closeEvent();
+  _location = loc;
+  renderFilters();
+  renderTimeline();
+}
+function filterByFigure(fig) {
+  fig = jsqDecode(fig);
+  closeEvent();
+  _figure = fig;
+  renderFilters();
+  renderTimeline();
+}
+
+// ============================================================
+// ACTION BAR FUNCTIONS
+// ============================================================
+function readAloud(id) {
+  const ev = _events.find(e => String(e.id) === String(id));
+  if (!ev || !ev.story_en) return;
+  if ('speechSynthesis' in window) {
+    if (speechSynthesis.speaking) {
+      speechSynthesis.cancel();
+      return;
+    }
+    const u = new SpeechSynthesisUtterance(ev.story_en);
+    u.rate = 0.95;
+    speechSynthesis.speak(u);
+  } else {
+    alert('Text-to-speech not supported in this browser.');
+  }
+}
+
+function toggleHighlight(id) {
+  const sel = window.getSelection();
+  if (!sel || sel.toString().length === 0) {
+    alert('Select text in the narrative first, then tap Highlight.');
+    return;
+  }
+  try {
+    const range = sel.getRangeAt(0);
+    const span = document.createElement('span');
+    span.style.background = '#FFF3A0';
+    span.style.padding = '1px 2px';
+    range.surroundContents(span);
+    saveHighlight(id, sel.toString());
+    sel.removeAllRanges();
+  } catch (e) {
+    alert('Cannot highlight across elements. Try a shorter selection.');
+  }
+}
+
+function saveHighlight(id, text) {
+  const key = 'sira_highlights_' + id;
+  const arr = JSON.parse(localStorage.getItem(key) || '[]');
+  arr.push({text, when: new Date().toISOString()});
+  localStorage.setItem(key, JSON.stringify(arr));
+}
+
+function addNote(id) {
+  const note = prompt('Add your note for this event:');
+  if (!note) return;
+  const key = 'sira_notes_' + id;
+  const arr = JSON.parse(localStorage.getItem(key) || '[]');
+  arr.push({text: note, when: new Date().toISOString()});
+  localStorage.setItem(key, JSON.stringify(arr));
+  alert('Note saved.');
+}
+
+function toggleBookmark(id) {
+  const ev = _events.find(e => String(e.id) === String(id));
+  if (!ev) return;
+  const key = 'bookmarks';
+  const arr = JSON.parse(localStorage.getItem(key) || '[]');
+  const existing = arr.findIndex(b => b.type === 'sira' && String(b.id) === String(id));
+  const btn = document.getElementById('saveBtn-' + id);
+  if (existing >= 0) {
+    arr.splice(existing, 1);
+    if (btn) { btn.textContent = '🔖 SAVE'; btn.classList.remove('active'); }
+  } else {
+    arr.push({type:'sira', id, title: ev.title_en, when: new Date().toISOString()});
+    if (btn) { btn.textContent = '🔖 SAVED'; btn.classList.add('active'); }
+  }
+  localStorage.setItem(key, JSON.stringify(arr));
+}
+
+function copyEvent(id) {
+  const ev = _events.find(e => String(e.id) === String(id));
+  if (!ev) return;
+  const text = `${ev.title_en}${ev.year_ce ? ' ('+ev.year_ce+' CE)' : ''}\n${ev.title_ar||''}\n\n${ev.story_en||''}\n\n— Sira event from Quran Scholar Platform`;
+  navigator.clipboard.writeText(text).then(
+    () => alert('Copied to clipboard.'),
+    () => alert('Copy failed.')
+  );
+}
+
+function shareEvent(id) {
+  const ev = _events.find(e => String(e.id) === String(id));
+  if (!ev) return;
+  const url = `${window.location.origin}${window.location.pathname}?event=${encodeURIComponent(id)}`;
+  if (navigator.share) {
+    navigator.share({title: ev.title_en + ' — Sira', text: ev.title_en, url});
+  } else {
+    navigator.clipboard.writeText(url).then(
+      () => alert('Link copied to clipboard.'),
+      () => alert('Share failed.')
+    );
+  }
+}
+
+// Init bookmark state on detail open
+function refreshSaveButton(id) {
+  const arr = JSON.parse(localStorage.getItem('bookmarks') || '[]');
+  const isBm = arr.some(b => b.type === 'sira' && String(b.id) === String(id));
+  const btn = document.getElementById('saveBtn-' + id);
+  if (btn) {
+    if (isBm) { btn.textContent = '🔖 SAVED'; btn.classList.add('active'); }
+    else { btn.textContent = '🔖 SAVE'; btn.classList.remove('active'); }
+  }
+}
+
+// Boot
+loadAll();
+</script>
 
 <script>
 function qnavGoSira(url, label) {
@@ -1026,8 +1786,6 @@ document.addEventListener('DOMContentLoaded', addRWButtons);
 function toggleFabMenu(){var t=document.getElementById('fab-toggle'),i=document.getElementById('fab-items'),b=document.getElementById('fab-backdrop'),o=i.classList.contains('open');if(o){t.classList.remove('open');i.classList.remove('open');b.classList.remove('open');}else{t.classList.add('open');i.classList.add('open');b.classList.add('open');}}
 function closeFabMenu(){document.getElementById('fab-toggle').classList.remove('open');document.getElementById('fab-items').classList.remove('open');document.getElementById('fab-backdrop').classList.remove('open');}
 </script>
-
-
 
 </body>
 </html>
