@@ -1263,7 +1263,7 @@ async function fetchDBContext(query) {
 
     if (hadithMatches.length)  ctx.hadith_matches   = hadithMatches;
     if (hadithAnalyses.length) ctx.hadith_analyses  = hadithAnalyses;
-    if (madhhabTopics.length)  ctx.madhhab_topics   = madhhabTopics;
+    if (madhhabTopics.length)  ctx.madhhab_topics   = sortByControversy(madhhabTopics);
     if (madhhabRulings.length) ctx.madhhab_rulings  = madhhabRulings;
     if (ayaMatches.length)     ctx.quran_verses     = ayaMatches;
 
@@ -1807,14 +1807,19 @@ async function doSearch() {
     if (currentSource === 'sira') {
       const exactSira   = exactResults.filter(r => r.type === 'sira');
       const relatedSira = relatedResults.filter(r => r.type === 'sira');
-      _siraEvents = [...exactSira, ...relatedSira];
-      renderSiraTimeline(exactSira, relatedSira, q, relatedTerms);
+      const sortedExactSira   = sortByControversy(exactSira);
+      const sortedRelatedSira = sortByControversy(relatedSira);
+      _siraEvents = [...sortedExactSira, ...sortedRelatedSira];
+      renderSiraTimeline(sortedExactSira, sortedRelatedSira, q, relatedTerms);
       allResults = _siraEvents;
       return;
     }
 
-    allResults = [...exactResults, ...relatedResults];
-    renderResults(exactResults, relatedResults, q, relatedTerms);
+    // Sort by controversy before rendering — surfaces critical/debated content first
+    const sortedExact   = sortByControversy(exactResults);
+    const sortedRelated = sortByControversy(relatedResults);
+    allResults = [...sortedExact, ...sortedRelated];
+    renderResults(sortedExact, sortedRelated, q, relatedTerms);
 
   } catch(e) {
     container.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-title">Search error</div><div class="empty-desc">' + e.message + '</div></div>';
