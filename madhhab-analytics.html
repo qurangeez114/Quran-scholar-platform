@@ -156,6 +156,18 @@ body{background:var(--bg);color:var(--ink);font-family:'EB Garamond',serif;min-h
       <div id="byCountry" class="loading"><span class="spinner"></span>Loading…</div>
     </div>
 
+    <!-- By Language -->
+    <div class="card">
+      <div class="card-label">Average Rating by Language</div>
+      <div id="byLanguage" class="loading"><span class="spinner"></span>Loading…</div>
+    </div>
+
+    <!-- By Device -->
+    <div class="card">
+      <div class="card-label">Ratings by Device Type</div>
+      <div id="byDevice" class="loading"><span class="spinner"></span>Loading…</div>
+    </div>
+
     <!-- Time on Topic vs Rating -->
     <div class="card">
       <div class="card-label">Time Spent on Topic vs Rating</div>
@@ -233,7 +245,7 @@ function topicsTable(data) {
 
 async function loadAll() {
   // Set loading states
-  ['ratingDist','byGender','byAge','byCountry','byTime','byCategory','topTopics','highSeverity'].forEach(id => {
+  ['ratingDist','byGender','byAge','byCountry','byLanguage','byDevice','byTime','byCategory','topTopics','highSeverity'].forEach(id => {
     document.getElementById(id).innerHTML = '<div class="loading"><span class="spinner"></span>Loading…</div>';
   });
 
@@ -245,7 +257,7 @@ async function loadAll() {
     ]);
 
     if (!Array.isArray(ratings) || ratings.length === 0) {
-      ['ratingDist','byGender','byAge','byCountry','byTime','byCategory','topTopics','highSeverity'].forEach(id => {
+      ['ratingDist','byGender','byAge','byCountry','byLanguage','byDevice','byTime','byCategory','topTopics','highSeverity'].forEach(id => {
         document.getElementById(id).innerHTML = '<div style="color:var(--ink4);font-style:italic;font-size:14px;padding:10px;">No ratings yet — be the first to rate a topic!</div>';
       });
       document.getElementById('totalRatings').textContent = '0';
@@ -334,6 +346,34 @@ async function loadAll() {
       .map(([k,v]) => ({label:k, value: v.sum/v.count, suffix:` (${v.count})`}))
       .sort((a,b) => b.value - a.value).slice(0,10);
     document.getElementById('byCountry').innerHTML = barChart(topCountries, 'bar-fill-red');
+
+    // 4b. By Language
+    const langData = {};
+    ratings.forEach(r => {
+      const p = profileMap[r.session_id];
+      const lang = (p && p.language && p.language !== 'Unknown') ? p.language : null;
+      if (!lang) return;
+      if (!langData[lang]) langData[lang] = {sum:0,count:0};
+      langData[lang].sum += r.rating; langData[lang].count++;
+    });
+    document.getElementById('byLanguage').innerHTML = barChart(
+      Object.entries(langData).map(([k,v]) => ({label:k, value: v.sum/v.count, suffix:` (${v.count})`})).sort((a,b)=>b.value-a.value).slice(0,8),
+      'bar-fill-bronze'
+    );
+
+    // 4c. By Device
+    const deviceData = {};
+    ratings.forEach(r => {
+      const p = profileMap[r.session_id];
+      const dev = (p && p.device_type) ? p.device_type : null;
+      if (!dev) return;
+      if (!deviceData[dev]) deviceData[dev] = {sum:0,count:0};
+      deviceData[dev].sum += r.rating; deviceData[dev].count++;
+    });
+    document.getElementById('byDevice').innerHTML = barChart(
+      Object.entries(deviceData).map(([k,v]) => ({label:k.charAt(0).toUpperCase()+k.slice(1), value: v.sum/v.count, suffix:` (${v.count})`})).sort((a,b)=>b.count-a.count),
+      'bar-fill-blue'
+    );
 
     // 5. Time vs Rating
     const timeBuckets = {'<30s':{sum:0,count:0},'30-60s':{sum:0,count:0},'1-3min':{sum:0,count:0},'3-10min':{sum:0,count:0},'>10min':{sum:0,count:0}};
