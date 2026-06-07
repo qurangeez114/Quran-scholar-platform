@@ -236,9 +236,73 @@ function filter() {
   render(filtered);
 }
 
-function open_theme(encoded) {
-  window.location.href = 'theme-analysis.html?theme=' + encoded;
+async function open_theme(encoded) {
+  var themeName = decodeURIComponent(encoded);
+  // Show fiqh chips inline before navigating
+  var existingModal = document.getElementById('theme-fiqh-modal');
+  if (existingModal) existingModal.remove();
+
+  var modal = document.createElement('div');
+  modal.id = 'theme-fiqh-modal';
+  modal.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.5);display:flex;align-items:flex-end;justify-content:center;padding-bottom:80px;';
+  modal.innerHTML = '<div style="background:#FDFAF2;border-radius:16px 16px 0 0;width:100%;max-width:600px;max-height:70vh;overflow-y:auto;padding:20px;">' +
+    '<div style="font-family:Inconsolata,monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#B8902A;margin-bottom:8px;">Theme: '+themeName+'</div>' +
+    '<div id="theme-fiqh-list"><div style="text-align:center;padding:20px;color:#888;font-style:italic;">Loading related rulings…</div></div>' +
+    '<div style="display:flex;gap:10px;margin-top:16px;">' +
+      '<button onclick="window.location.href=\'theme-analysis.html?theme='+encoded+'\'" style="flex:1;padding:12px;background:#B8902A;border:none;border-radius:8px;color:#fff;font-family:Inconsolata,monospace;font-size:12px;font-weight:700;cursor:pointer;">Open Full Theme Analysis →</button>' +
+      '<button onclick="document.getElementById(\'theme-fiqh-modal\').remove()" style="padding:12px 16px;background:#F5F0E4;border:1px solid #D4C9A8;border-radius:8px;color:#8B7355;font-family:Inconsolata,monospace;font-size:12px;cursor:pointer;">Close</button>' +
+    '</div>' +
+  '</div>';
+  modal.onclick = function(e) { if (e.target === modal) modal.remove(); };
+  document.body.appendChild(modal);
+
+  // Load relevant fiqh topics
+  try {
+    var txt = themeName.toLowerCase();
+    var kwMap = {
+      'war':'Jihad and Warfare','jihad':'Jihad and Warfare','fight':'Jihad and Warfare',
+      'slave':'Slavery','captive':'Slavery',
+      'wom':'Women: Legal Status and Personhood','gender':'Women: Legal Status and Personhood',
+      'marriage':'Marriage and Family Law','divorce':'Divorce and Separation',
+      'inherit':'Inheritance and Wills',
+      'punish':'Criminal Law and Hudud','law':'Criminal Law and Hudud',
+      'pray':'Prayer and Worship',
+      'apostas':'Apostasy',
+      'non-muslim':'Non-Muslim Rights and Dhimma',
+      'food':'Food and Drink','halal':'Food and Drink',
+      'finance':'Finance and Economics','riba':'Finance and Economics'
+    };
+    var category = null;
+    var kws = Object.keys(kwMap);
+    for (var i = 0; i < kws.length; i++) {
+      if (txt.indexOf(kws[i]) !== -1) { category = kwMap[kws[i]]; break; }
+    }
+    if (!category) category = 'Prayer and Worship';
+    var enc = encodeURIComponent(category);
+    var r = await fetch(SB_URL+'/rest/v1/madhhab_topics?select=id,topic,category,controversy_level&category=ilike.*'+enc+'*&order=controversy_level.desc.nullslast&limit=5', {headers:{apikey:SB_KEY,'Authorization':'Bearer '+SB_KEY}});
+    var topics = r.ok ? await r.json() : [];
+    var list = document.getElementById('theme-fiqh-list');
+    if (!list) return;
+    if (!topics || !topics.length) {
+      list.innerHTML = '<div style="color:#888;font-style:italic;font-size:13px;text-align:center;">No related rulings found.</div>';
+      return;
+    }
+    var lvlColors = {1:'#2E7D32',2:'#F57F17',3:'#E65100',4:'#B71C1C',5:'#6A1B9A'};
+    var lvlLabels = {1:'Acceptable',2:'Concerning',3:'Disturbing',4:'Shocking',5:'Extreme'};
+    list.innerHTML = topics.map(function(t) {
+      var lvl = t.controversy_level || 3;
+      var col = lvlColors[lvl] || '#888';
+      return '<div onclick="window.location.href=\'madhhab.html?topic='+encodeURIComponent(t.id)+'&from=themes\'" style="margin-bottom:8px;padding:11px 13px;background:#fff;border:1px solid #E0D4B0;border-left:3px solid '+col+';border-radius:6px;cursor:pointer;">' +
+        '<div style="font-family:\'EB Garamond\',serif;font-size:15px;font-weight:700;color:#1A1610;">'+t.topic+'</div>' +
+        '<div style="font-family:Inconsolata,monospace;font-size:10px;color:#888;margin-top:3px;"><span style="color:'+col+';font-weight:700;">'+(lvlLabels[lvl]||'')+'</span> · Tap to read full ruling →</div>' +
+      '</div>';
+    }).join('');
+  } catch(e) {
+    var list2 = document.getElementById('theme-fiqh-list');
+    if (list2) list2.innerHTML = '<div style="color:#888;font-style:italic;font-size:13px;text-align:center;">Could not load rulings.</div>';
+  }
 }
+
 
 load();
 </script>
