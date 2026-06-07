@@ -5,7 +5,6 @@
 window.controversyScore=function(v){var t=[v.english,v.aya_text,v.text_english,v.hadith_text,v.topic,v.brief_description,v.content,v.reason_text,v.story_en,v.title_en,v.summary,v.name_english,v.theme].filter(Boolean).join(' ').toLowerCase();var s=0;['kill','slay','smite','amputat','crucif','stone','whip','lash','apostat','slave','captive','concubin','beat.*wife','wife.*beat','fight.*until','jihad','warfare','adulter','zina','thief.*hand','homosexual','liwat','blasphemy','jizya','dhimmi','women.*half','inherit.*half','polygam','nushuz','sex slave','cut hand'].forEach(function(k){try{if(new RegExp(k).test(t))s+=12;}catch(e){}});['divorce','talaq','inheritance','veil','hijab','niqab','disbeliev','infidel','kafir','hellfire','punishment','torment','war','battle','riba','usury','intoxicant','alcohol','honor kill','martyr'].forEach(function(k){if(t.indexOf(k)!==-1)s+=5;});['alhamdulillah','merciful','compassionate','forgiving','be patient'].forEach(function(k){if(t.indexOf(k)!==-1)s-=2;});if(v.controversy_level)s+=(parseInt(v.controversy_level)-1)*4;if(v.human_rights_score!=null)s+=Math.max(0,(5-parseFloat(v.human_rights_score))*2);return s;};
 window.sortByControversy=function(arr){if(!Array.isArray(arr))return arr;return arr.slice().sort(function(a,b){var sa=window.controversyScore(a),sb=window.controversyScore(b);return sb!==sa?sb-sa:((a.sura_id||a.year_ce||0)-(b.sura_id||b.year_ce||0))||((a.aya_number||0)-(b.aya_number||0));});};
 </script>
-
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Quran Scholar — Research Library</title>
@@ -444,8 +443,7 @@ body { padding-bottom: 60px !important; }
   var SB_KEY = 'sb_publishable_KtJjJRWQn5a5VMSnAoTQXw_dCwnI6BH';
   var HDRS   = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY };
 
-  
-function sbGet(table, params) {
+  function sbGet(table, params) {
     var url = new URL(SB_URL + '/rest/v1/' + table);
     Object.entries(params).forEach(function(kv){ url.searchParams.set(kv[0], kv[1]); });
     return fetch(url.toString(), { headers: HDRS })
@@ -951,7 +949,350 @@ function sbGet(table, params) {
 .ai-lang-btn:hover { border-color:#B8902A;color:#B8902A; }
 </style>
 
+<script>
+// ── AI RESEARCH STATE ──────────────────────────────────────────
+// AI key is no longer in the page. All Claude calls go through the
+// Netlify serverless function /.netlify/functions/research, which holds
+// the key as an environment variable.
+const AI_PROXY = '/.netlify/functions/research';
+let aiImageBase64 = null;
+let aiImageMime = null;
+let aiLang = 'English';
 
+function toggleAIResearch() {
+  const panel = document.getElementById('aiResearchPanel');
+  const arrow = document.getElementById('aiToggleArrow');
+  const open = panel.style.display === 'none';
+  panel.style.display = open ? 'block' : 'none';
+  arrow.textContent = open ? '▲' : '▼';
+}
+function selectAILang(btn) {
+  document.querySelectorAll('.ai-lang-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  aiLang = btn.dataset.lang;
+}
+function onAIImageChange(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  aiImageMime = file.type || 'image/jpeg';
+  document.getElementById('aiImageName').textContent = file.name;
+  document.getElementById('aiImageClear').style.display = 'inline-block';
+  const reader = new FileReader();
+  reader.onload = ev => {
+    aiImageBase64 = ev.target.result.split(',')[1];
+    const thumb = document.getElementById('aiThumb');
+    thumb.src = ev.target.result;
+    document.getElementById('aiImagePreview').style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+}
+function clearAIImage() {
+  aiImageBase64 = null; aiImageMime = null;
+  document.getElementById('aiImageInput').value = '';
+  document.getElementById('aiImageName').textContent = 'No image selected';
+  document.getElementById('aiImageClear').style.display = 'none';
+  document.getElementById('aiImagePreview').style.display = 'none';
+}
+function clearAIOutput() {
+  document.getElementById('aiOutput').style.display = 'none';
+  document.getElementById('aiReportBody').innerHTML = '';
+  window._aiReportText = '';
+}
+
+// ── Markdown → HTML renderer (no external lib needed) ──────────
+function renderMarkdown(md) {
+  let html = md
+    // Escape HTML entities first
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    // Headers
+    .replace(/^### (.+)$/gm, '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:17px;color:#4a3520;margin:18px 0 6px;font-weight:600;letter-spacing:.01em;">$1</h3>')
+    .replace(/^## (.+)$/gm,  '<h2 style="font-family:\'Cormorant Garamond\',serif;font-size:20px;color:#2c1f0a;margin:22px 0 8px;font-weight:600;border-bottom:1px solid rgba(120,90,40,0.2);padding-bottom:4px;">$1</h2>')
+    .replace(/^# (.+)$/gm,   '<h1 style="font-family:\'Cormorant Garamond\',serif;font-size:24px;color:#1a1005;margin:0 0 16px;font-weight:600;">$1</h1>')
+    // Bold + italic combo ***text***
+    .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
+    // Bold **text**
+    .replace(/\*\*(.+?)\*\*/g, '<strong style="color:#3a2a10;font-weight:700;">$1</strong>')
+    // Italic *text*
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    // Horizontal rule
+    .replace(/^---$/gm, '<hr style="border:none;border-top:1px solid rgba(120,90,40,0.2);margin:16px 0;">')
+    // ── Quran verse refs: [Q 2:255] → link to index.html
+    .replace(/\[Q\s+(\d+):(\d+)\]/g, (_, s, a) => {
+      const url = `index.html?sura=${s}&aya=${a}&from=research`;
+      return `<a href="${url}" target="_blank" title="Open Quran ${s}:${a}" style="display:inline-flex;align-items:center;gap:3px;padding:1px 7px;background:var(--bronze-ss);border:1px solid var(--bronze-s);border-radius:3px;color:var(--bronze);font-family:'Inconsolata',monospace;font-size:11px;font-weight:700;text-decoration:none;transition:all .15s;" onmouseover="this.style.background='var(--bronze)';this.style.color='#fff'" onmouseout="this.style.background='var(--bronze-ss)';this.style.color='var(--bronze)'">📖 ${s}:${a} ↗</a>`;
+    })
+    // ── Hadith refs: [H Bukhari 56:2787] → search this page
+    .replace(/\[H\s+([^\]]+)\]/g, (_, ref) => {
+      const searchQ = encodeURIComponent(ref.trim());
+      const url = `research.html?q=${searchQ}&source=hadith`;
+      return `<a href="${url}" target="_blank" title="Search hadith: ${ref}" style="display:inline-flex;align-items:center;gap:3px;padding:1px 7px;background:var(--hadith-bg);border:1px solid var(--hadith-border);border-radius:3px;color:var(--hadith);font-family:'Inconsolata',monospace;font-size:11px;font-weight:700;text-decoration:none;transition:all .15s;" onmouseover="this.style.background='var(--hadith)';this.style.color='#fff'" onmouseout="this.style.background='var(--hadith-bg)';this.style.color='var(--hadith)'">📜 ${ref} ↗</a>`;
+    })
+    // Blank lines → paragraph breaks
+    .replace(/\n\n+/g, '</p><p style="margin:0 0 12px;">')
+    // Single newlines → <br> within paragraphs
+    .replace(/\n/g, '<br>');
+  return '<p style="margin:0 0 12px;">' + html + '</p>';
+}
+
+function copyAIReport() {
+  const text = window._aiReportText || document.getElementById('aiReportBody').innerText;
+  if (!text) return;
+  const btn = event?.target;
+  navigator.clipboard.writeText(text).catch(() => {
+    const ta = document.createElement('textarea');
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); document.body.removeChild(ta);
+  });
+  if (btn) { const orig = btn.textContent; btn.textContent = '✓ Copied'; setTimeout(() => btn.textContent = orig, 1400); }
+}
+
+function speakAIReport() {
+  if ('speechSynthesis' in window) {
+    if (window.speechSynthesis.speaking) { window.speechSynthesis.cancel(); return; }
+    const text = window._aiReportText || document.getElementById('aiReportBody').innerText;
+    const utt = new SpeechSynthesisUtterance(text);
+    utt.lang = 'en-US'; utt.rate = 0.9;
+    window.speechSynthesis.speak(utt);
+  }
+}
+
+function saveAIReport() {
+  const text = window._aiReportText || '';
+  if (!text) return;
+  const topic = document.getElementById('aiTextInput').value.trim() || 'AI Research Report';
+  const stored = JSON.parse(localStorage.getItem('research_bm') || '{}');
+  const id = 'ai-report-' + Date.now();
+  stored[id] = { id, type: 'ai', sura_id: '—', aya_number: '—', preview: topic + ': ' + text.slice(0, 100), savedAt: new Date().toISOString() };
+  localStorage.setItem('research_bm', JSON.stringify(stored));
+  renderBookmarks();
+  const btn = document.getElementById('aiSaveBtn');
+  if (btn) { btn.textContent = '🔖 Saved'; btn.classList.add('active'); }
+}
+
+function exportAIReport() {
+  const text = window._aiReportText || '';
+  if (!text) return;
+  const topic = document.getElementById('aiTextInput').value.trim() || 'report';
+  const blob = new Blob([text], { type: 'text/plain' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = 'quran-research-' + topic.slice(0,30).replace(/\s+/g,'-') + '.txt';
+  a.click();
+}
+
+function shareAIReport() {
+  const text = window._aiReportText || '';
+  if (!text) return;
+  const topic = document.getElementById('aiTextInput').value.trim() || 'Quran Research';
+  if (navigator.share) navigator.share({ title: topic, text: text.slice(0, 800) + '\n\nhttps://fascinating-sunburst-516df8.netlify.app' });
+  else navigator.clipboard?.writeText(text).then(() => alert('Report copied to clipboard.'));
+}
+
+async function extractNoteFromImage(base64, mime) {
+  const res = await fetch(AI_PROXY, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-5',
+      max_tokens: 1000,
+      messages: [{ role: 'user', content: [
+        { type: 'image', source: { type: 'base64', media_type: mime, data: base64 } },
+        { type: 'text', text: 'This is a handwritten note about the Quran. Extract all the text exactly as written. Return only the extracted text.' }
+      ]}]
+    })
+  });
+  const data = await res.json();
+  if (data.error) throw new Error(data.error.message || data.error);
+  return data.content.map(c => c.text||'').join('').trim();
+}
+
+async function fetchDBContext(query) {
+  const ctx = { query: query };
+  try {
+    const hdrs = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY };
+    const ref = query.match(/(\d+)\s*[:\s,]\s*(\d+)/);
+
+    // Path A: query contains a specific verse reference like "2:255"
+    if (ref) {
+      const s = parseInt(ref[1]), a = parseInt(ref[2]);
+      ctx.mode = 'verse';
+      ctx.reference = { sura: s, aya: a };
+      const [aya, xref, words, hadith, tafsir, asbab] = await Promise.all([
+        fetch(`${SB_URL}/rest/v1/ayas?sura_id=eq.${s}&aya_number=eq.${a}&select=arabic,english,aya_text,amharic,oromo,somali`, {headers:hdrs}).then(r=>r.json()),
+        fetch(`${SB_URL}/rest/v1/cross_references?sura_id=eq.${s}&aya_number=eq.${a}&select=ref_sura,ref_aya,theme&limit=8`, {headers:hdrs}).then(r=>r.json()),
+        fetch(`${SB_URL}/rest/v1/word_analysis?sura_id=eq.${s}&aya_number=eq.${a}&select=word_arabic,root,meaning_english,language_origin&limit=15`, {headers:hdrs}).then(r=>r.json()),
+        fetch(`${SB_URL}/rest/v1/hadith_connections?sura_id=eq.${s}&aya_number=eq.${a}&select=hadith_text,source,narrator,relevance&limit=5`, {headers:hdrs}).then(r=>r.json()),
+        fetch(`${SB_URL}/rest/v1/tafsir_entries?sura=eq.${s}&aya=eq.${a}&select=scholar_name,content,tradition&limit=5`, {headers:hdrs}).then(r=>r.json()),
+        fetch(`${SB_URL}/rest/v1/asbab_al_nuzul?sura_id=eq.${s}&aya_number=eq.${a}&select=*&limit=3`, {headers:hdrs}).then(r=>r.json()),
+      ]);
+      if (aya?.length)    ctx.verse     = aya[0];
+      if (xref?.length)   ctx.crossrefs = xref;
+      if (words?.length)  ctx.words     = words;
+      if (hadith?.length) ctx.hadith    = hadith;
+      if (tafsir?.length) ctx.tafsir    = tafsir;
+      if (asbab?.length)  ctx.asbab     = asbab;
+      return ctx;
+    }
+
+    // Path B: topic search (e.g. "face of Allah", "body of Allah",
+    // "stoning", "women testimony"). Search across all major tables.
+    // Keep this lean — Netlify functions have a 60s budget and we still
+    // need most of that for Claude to generate the report.
+    ctx.mode = 'topic';
+    const q = encodeURIComponent('*' + query.trim().replace(/\s+/g, ' ') + '*');
+    const qPlain = query.trim();
+
+    // Helper that swallows individual table errors and short-circuits on timeout
+    const SB_TIMEOUT = 8000;   // 8s max per table
+    const safe = (url) => new Promise((resolve) => {
+      const ctl = new AbortController();
+      const t = setTimeout(() => ctl.abort(), SB_TIMEOUT);
+      fetch(url, { headers: hdrs, signal: ctl.signal })
+        .then(r => r.ok ? r.json() : [])
+        .then(j => { clearTimeout(t); resolve(j || []); })
+        .catch(() => { clearTimeout(t); resolve([]); });
+    });
+
+    const [
+      hadithMatches,
+      hadithAnalyses,
+      madhhabTopics,
+      madhhabRulings,
+      ayaMatches,
+    ] = await Promise.all([
+      // 1. Raw hadith text matches (English) - small limit, single column
+      safe(`${SB_URL}/rest/v1/hadith_corpus?select=id,collection,narrator,hadith_number,text_english,grade&text_english=ilike.${q}&limit=8`),
+      // 2. Hadith analyses that touch this topic - search ONE column for speed
+      safe(`${SB_URL}/rest/v1/hadith_analysis?select=hadith_id,authenticity_grade,common_sense_analysis,potential_concerns,human_rights_score,scientific_score&potential_concerns=ilike.${q}&limit=6`),
+      // 3. Madhhab topics matching this term - search ONE column
+      safe(`${SB_URL}/rest/v1/madhhab_topics?select=id,topic,category,subcategory,controversy_level,brief_description&topic=ilike.${q}&limit=6`),
+      // 4. Madhhab rulings - search ONE column
+      safe(`${SB_URL}/rest/v1/madhhab_rulings?select=topic_id,consensus,key_disagreement,hanafi_position,maliki_position,shafii_position,hanbali_position,jafari_position&consensus=ilike.${q}&limit=4`),
+      // 5. Quran verses matching this term in English
+      safe(`${SB_URL}/rest/v1/ayas?select=sura_id,aya_number,arabic,english&english=ilike.${q}&limit=6`),
+    ]);
+
+    if (hadithMatches.length)  ctx.hadith_matches   = hadithMatches;
+    if (hadithAnalyses.length) ctx.hadith_analyses  = hadithAnalyses;
+    if (madhhabTopics.length)  ctx.madhhab_topics   = madhhabTopics;
+    if (madhhabRulings.length) ctx.madhhab_rulings  = madhhabRulings;
+    if (ayaMatches.length)     ctx.quran_verses     = ayaMatches;
+
+    ctx.match_summary = {
+      hadiths:       hadithMatches.length,
+      analyses:      hadithAnalyses.length,
+      madhhab_topics: madhhabTopics.length,
+      madhhab_rulings: madhhabRulings.length,
+      quran_verses:  ayaMatches.length,
+    };
+  } catch(e) { ctx.dbError = e.message; }
+  return ctx;
+}
+
+async function generateReport(query, ctx, lang, translateAll) {
+  const langNote = translateAll
+    ? `Write the full report in ${lang}. Then add a final section "ALL LANGUAGE TRANSLATIONS" with key findings translated into all 7 languages: Arabic, English, Tigrinya, Amharic, Oromo, Somali, Turkish — each clearly labeled.`
+    : `Write the entire report in ${lang}.`;
+
+  // Two different prompts depending on whether the user asked about a
+  // specific verse reference or a general topic/concept.
+  let prompt;
+  const refNote = `
+REFERENCE FORMAT — use these exact formats for all citations so they become clickable links:
+- Quran verses: [Q SURA:AYA] e.g. [Q 2:255] or [Q 24:31]
+- Hadith: [H Collection Book:Number] e.g. [H Bukhari 56:2787] or [H Muslim 1:1]
+Always cite inline right after the claim.`;
+
+  if (ctx.mode === 'verse' && ctx.verse) {
+    prompt = `You are an honest scholar of the Quran. The reader wants the unvarnished truth — contradictions, weak chains, scientific impossibilities, morally troubling content. Don't soften, don't apologize, don't editorialize. Be CONCISE. Aim for 4-6 short paragraphs. FINISH WITHIN 20 SECONDS.
+
+QUERY: ${query}
+
+DATABASE CONTEXT:
+${JSON.stringify(ctx, null, 2).substring(0, 3500)}
+
+Produce a tight report covering, in order:
+
+1. VERSE — Arabic, English, location. If the verse doesn't exist, say so plainly.
+2. CLASSICAL TAFSIR — One paragraph on the main Sunni (al-Tabari, Ibn Kathir) and Shia (al-Tusi, al-Tabarsi) readings. Note disagreements.
+3. HADITH CONNECTIONS — Related hadiths with grades. Flag weak chains.
+4. CONTRADICTIONS — Other verses or hadiths that contradict this. Modern ethical / scientific tensions. Be specific.
+5. MULTI-PERSPECTIVE — One sentence each: Sunni, Shia, Mu'tazila, Sufi, Salafi, reformist.
+6. HONEST CONCLUSION — 3 sentences. No preaching.
+
+${refNote}
+${langNote}`;
+  } else {
+    // Topic / concept query
+    prompt = `You are an honest scholar. The reader wants the unvarnished truth — including contradictions, weak chains, and morally troubling content. Don't soften, don't apologize, don't editorialize. Be CONCISE. Aim for 4-6 short paragraphs total. FINISH WITHIN 20 SECONDS.
+
+TOPIC: ${query}
+
+DATABASE EVIDENCE (cite where used):
+${JSON.stringify(ctx, null, 2).substring(0, 3500)}
+
+Produce a tight scholarly brief covering, in order:
+
+1. WHAT THE SOURCES SAY — Quran verses + key hadiths on this. Note authenticity grades.
+2. CONTRADICTIONS — Specific ones: "Hadith X says Y, but verse Z says not-Y." List the real disagreements.
+3. CLASSICAL SCHOOLS — How Sunni schools (Hanafi/Maliki/Shafi'i/Hanbali), Ja'fari Shia, Mu'tazila, and Salafi handle this in one line each.
+4. HUMAN RIGHTS / SCIENTIFIC LENS — Where database analyses show concerns, surface them. Don't skip women, slaves, minorities, punishment.
+5. REFORMIST VIEW — In 2 sentences: how do Abou El Fadl, Wadud, Fazlur Rahman, Arkoun handle this?
+6. HONEST CONCLUSION — 3 sentences. What's settled, what's contested, what should a thinking reader take.
+
+${refNote}
+${langNote}`;
+  }
+
+  const res = await fetch(AI_PROXY, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 1800,
+      messages: [{ role: 'user', content: prompt }]
+    })
+  });
+  const data = await res.json();
+  if (data.error) throw new Error(data.error.message || data.error);
+  return data.content.map(c => c.text||'').join('').trim();
+}
+
+async function runAIResearch() {
+  const textInput = document.getElementById('aiTextInput').value.trim();
+  const translateAll = document.getElementById('aiTranslateAll').checked;
+  if (!aiImageBase64 && !textInput) { alert('Please upload a photo or type a verse/topic.'); return; }
+
+  document.getElementById('aiOutput').style.display = 'none';
+  document.getElementById('aiError').style.display = 'none';
+  document.getElementById('aiLoading').style.display = 'block';
+  document.getElementById('aiRunBtn').disabled = true;
+
+  try {
+    let query = textInput;
+    if (aiImageBase64) {
+      document.getElementById('aiLoadingMsg').textContent = '📸 Reading handwritten note...';
+      const extracted = await extractNoteFromImage(aiImageBase64, aiImageMime);
+      query = extracted + (textInput ? '\n\nAdditional context: ' + textInput : '');
+    }
+    document.getElementById('aiLoadingMsg').textContent = '📚 Querying Quran database...';
+    const ctx = await fetchDBContext(query);
+    document.getElementById('aiLoadingMsg').textContent = `🔬 Generating report in ${aiLang}...`;
+    const report = await generateReport(query, ctx, aiLang, translateAll);
+    document.getElementById('aiLoading').style.display = 'none';
+    window._aiReportText = report;
+    document.getElementById('aiReportBody').innerHTML = renderMarkdown(report);
+    document.getElementById('aiOutput').style.display = 'block';
+    const saveBtn = document.getElementById('aiSaveBtn');
+    if (saveBtn) { saveBtn.textContent = '🔖 Save'; saveBtn.classList.remove('active'); }
+  } catch(err) {
+    document.getElementById('aiLoading').style.display = 'none';
+    document.getElementById('aiError').style.display = 'block';
+    document.getElementById('aiError').textContent = 'Error: ' + err.message;
+  } finally {
+    document.getElementById('aiRunBtn').disabled = false;
+  }
+}
+</script>
 
 <!-- RESULTS -->
 <div class="results-area">
@@ -1054,7 +1395,1579 @@ function sbGet(table, params) {
   <div class="hl-dot" style="background:#fff;border:2px solid #DDD" onclick="removeHighlight()" title="Remove">✕</div>
 </div>
 
+<script>
+const SB_URL = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
+const SB_KEY = 'sb_publishable_KtJjJRWQn5a5VMSnAoTQXw_dCwnI6BH';
+const HDRS = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY };
+const hdrs = HDRS; // alias so all functions share the same headers object
 
+let currentSource = 'all';
+let currentTrad = 'all';
+let currentNoteId = null;
+let allResults = [];
+
+// ── SOURCE & FILTER ──────────────────────────────────────────────
+function setSource(src, el) {
+  currentSource = src;
+  document.querySelectorAll('.source-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  // collectionFilter and scholarFilter are now hidden — values set by book/scholar chips
+  // document.getElementById('collectionFilter').style.display = ...  (removed)
+  // Toggle Sira panel vs results area
+  const siraPanel = document.getElementById('siraPanel');
+  const resultsArea = document.querySelector('.results-area');
+  const aiSection = document.querySelector('.results-area')?.previousElementSibling;
+  const bookRow = document.getElementById('bookChipsRow');
+  if (src === 'sira') {
+    siraPanel.classList.add('active');
+    if (resultsArea) { resultsArea.style.display = 'none'; resultsArea.style.visibility = 'hidden'; }
+    if (bookRow) bookRow.style.display = 'none';
+  } else {
+    siraPanel.classList.remove('active');
+    if (resultsArea) { resultsArea.style.display = ''; resultsArea.style.visibility = ''; }
+    if (bookRow) bookRow.style.display = 'flex';
+  }
+}
+
+function setTrad(t, el) {
+  currentTrad = t;
+  document.querySelectorAll('.trad-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+}
+
+function setBook(book, btn) {
+  const sel = document.getElementById('collectionFilter');
+  if (sel) sel.value = book;
+  // Clear scholar filter when switching to a hadith book
+  const sch = document.getElementById('scholarFilter');
+  if (sch) sch.value = '';
+  document.querySelectorAll('.book-chip').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  // Switch source to hadith if on tafsir
+  if (currentSource === 'tafsir') {
+    const allTab = document.querySelector('.source-tab.all');
+    if (allTab) setSource('all', allTab);
+  }
+  const q = document.getElementById('searchInput').value.trim();
+  if (q) doSearch();
+}
+
+function setScholar(scholar, btn) {
+  const sch = document.getElementById('scholarFilter');
+  if (sch) sch.value = scholar;
+  // Clear collection filter when switching to tafsir
+  const sel = document.getElementById('collectionFilter');
+  if (sel) sel.value = '';
+  document.querySelectorAll('.book-chip').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  // Switch source to tafsir automatically
+  const tafsirTab = document.querySelector('.source-tab.tafsir');
+  if (tafsirTab) setSource('tafsir', tafsirTab);
+  const q = document.getElementById('searchInput').value.trim();
+  if (q) doSearch();
+}
+
+function siraOrSearch(term, mode) {
+  const btn = document.getElementById('mode-' + mode);
+  if (btn) setMode(mode, btn);
+  document.getElementById('searchInput').value = term;
+  doSearch();
+}
+function quickSearch(term) {
+  document.getElementById('searchInput').value = term;
+  doSearch();
+}
+
+// ── SUPABASE FETCH ───────────────────────────────────────────────
+async function sbFetch(table, params) {
+  const url = new URL(`${SB_URL}/rest/v1/${table}`);
+  Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+  const r = await fetch(url, { headers: HDRS });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.json();
+}
+
+async function sbSearch(table, select, column, q, extra) {
+  // Build list of terms: full phrase + individual words for multi-word queries
+  const terms = [q];
+  if (q.includes(' ')) {
+    q.split(/\s+/).filter(w => w.length >= 3).forEach(w => {
+      if (!terms.includes(w)) terms.push(w);
+    });
+  }
+  const seen = new Set();
+  const results = [];
+  for (const term of terms) {
+    const enc = encodeURIComponent(term);
+    // Use PostgREST OR filter to search ALL relevant text columns at once
+    // This means one request covers every field, not just the one passed in
+    let filterParam;
+    if (table === 'sira_events') {
+      // Search every text field in sira_events in one shot
+      filterParam = `title_en.ilike.*${enc}*,title_ar.ilike.*${enc}*,story_en.ilike.*${enc}*,story_ar.ilike.*${enc}*,location.ilike.*${enc}*,period.ilike.*${enc}*,hadith_ref.ilike.*${enc}*,tafsir_ref.ilike.*${enc}*`;
+    } else if (table === 'hadith_connections') {
+      filterParam = `hadith_text.ilike.*${enc}*,narrator.ilike.*${enc}*,collection.ilike.*${enc}*,reference.ilike.*${enc}*,similarity_note.ilike.*${enc}*`;
+    } else if (table === 'hadith_corpus') {
+      filterParam = `text_english.ilike.*${enc}*,narrator.ilike.*${enc}*,collection.ilike.*${enc}*,hadith_number.ilike.*${enc}*,collection_name.ilike.*${enc}*`;
+    } else if (table === 'tafsir_entries') {
+      filterParam = `content.ilike.*${enc}*,source_name.ilike.*${enc}*,scholar_name.ilike.*${enc}*`;
+    } else if (table === 'asbab_al_nuzul') {
+      filterParam = `reason_text.ilike.*${enc}*,scholar.ilike.*${enc}*,source.ilike.*${enc}*`;
+    } else {
+      // Fallback: single column as before
+      filterParam = `${column}.ilike.*${enc}*`;
+    }
+    const url = new URL(`${SB_URL}/rest/v1/${table}`);
+    url.searchParams.set('select', select);
+    url.searchParams.set('or', `(${filterParam})`);
+    url.searchParams.set('limit', '100');
+    if (extra) Object.entries(extra).forEach(([k,v]) => url.searchParams.set(k, v));
+    try {
+      const r = await fetch(url, { headers: HDRS });
+      if (!r.ok) continue;
+      const rows = await r.json();
+      if (!Array.isArray(rows)) continue;
+      rows.forEach(row => {
+        const key = row.id || JSON.stringify(row);
+        if (!seen.has(key)) { seen.add(key); results.push(row); }
+      });
+    } catch(e) { console.warn('sbSearch error', table, term, e); }
+  }
+  return results;
+}
+
+// ── CONCEPT MAP ─────────────────────────────────────────────────
+const CONCEPT_MAP = {
+  khadijah:    ['wife','marriage','prophet','first believer','merchant','widow','married','khuwaylid'],
+  muhammad:    ['prophet','messenger','nabi','rasul','apostle','seal','pbuh'],
+  aisha:       ['wife','mother of believers','abu bakr','daughter'],
+  'abu bakr':  ['caliph','companion','siddiq','first caliph','father of aisha'],
+  umar:        ['second caliph','khattab','companion','farouq','omar'],
+  uthman:      ['third caliph','affan','companion','quran compilation'],
+  ali:         ['fourth caliph','imam','cousin','son-in-law','fatima','murtada'],
+  fatima:      ['daughter prophet','zahra','ali','household','ahlul bayt'],
+  hamza:       ['uncle','lion','uhud','martyr','asadullah'],
+  bilal:       ['muezzin','slave','ethiopia','adhan','freed'],
+  musa:        ['moses','pharaoh','exodus','torah','israelites','staff','miracles'],
+  moses:       ['musa','pharaoh','exodus','torah','israelites','staff','miracles'],
+  isa:         ['jesus','mary','maryam','gospel','injeel','messiah','miracles'],
+  jesus:       ['isa','mary','maryam','gospel','injeel','messiah','miracles'],
+  ibrahim:     ['abraham','kaaba','ismail','fire','nation','idol','khalilullah'],
+  abraham:     ['ibrahim','kaaba','ismail','fire','nation','idol'],
+  ismail:      ['ishmael','ibrahim','sacrifice','kaaba','mecca','zamzam'],
+  nuh:         ['noah','flood','ark','people','disbelievers'],
+  noah:        ['nuh','flood','ark','people'],
+  adam:        ['creation','paradise','jannah','eve','hawwa','first human','clay'],
+  yusuf:       ['joseph','egypt','brothers','prison','beauty','dream'],
+  joseph:      ['yusuf','egypt','brothers','prison','beauty','dream'],
+  badr:        ['battle','victory','muslims','first battle','angels','quraish','313'],
+  uhud:        ['battle','defeat','hamza','archers','mountain','quraish','companions'],
+  hijra:       ['migration','medina','mecca','yathrib','emigration','companions','622'],
+  khandaq:     ['trench','battle','medina','confederates','ahzab','ditch'],
+  isra:        ['night journey','miraj','jerusalem','al-aqsa','ascension','buraq'],
+  miraj:       ['ascension','night journey','heavens','prayer','obligatory','isra'],
+  revelation:  ['wahy','jibreel','gabriel','quran','nuzul','first','iqra','hira'],
+  conquest:    ['fath','mecca','victory','army','quraish','surrender','idol'],
+  mecca:       ['kaaba','quraish','holy city','haram','fath','birth','conquest'],
+  medina:      ['yathrib','migration','hijra','ansar','mosque','prophet'],
+  jerusalem:   ['quds','al-aqsa','isra','masjid','qibla','night journey'],
+  hira:        ['cave','revelation','first','angel','gabriel','iqra'],
+  prayer:      ['salah','salat','worship','ibadah','five pillars','qiblah','prostration'],
+  fasting:     ['sawm','ramadan','fast','abstain','iftar','suhoor'],
+  charity:     ['zakat','sadaqah','giving','poor','wealth','obligatory','alms'],
+  pilgrimage:  ['hajj','umrah','kaaba','mecca','ihram','tawaf','ritual'],
+  paradise:    ['jannah','garden','heaven','reward','afterlife','eternal','rivers'],
+  hell:        ['jahannam','hellfire','punishment','fire','eternal','torment'],
+  hellfire:    ['jahannam','hell','punishment','fire','eternal','torment'],
+  judgment:    ['qiyamah','resurrection','accountability','hisab','akhira','day'],
+  kill:        ['murder','slay','fight','battle','martyr','qatl','war','execute','death','slain'],
+  war:         ['battle','fight','jihad','ghazwa','military','army','expedition','qital'],
+  death:       ['die','killed','martyr','shaheed','burial','funeral','wafat'],
+  marriage:    ['nikah','wedding','wife','husband','spouse','khadijah','aisha','mahr'],
+  miracle:     ['ayah','sign','karama','supernatural','musa','isa','prophet','staff'],
+  companion:   ['sahabi','sahabah','disciple','follower','abu bakr','umar','ali'],
+  jihad:       ['struggle','war','battle','effort','fight','defend','path of allah'],
+  patience:    ['sabr','endurance','hardship','trial','reward','steadfast'],
+  forgiveness: ['tawba','repentance','mercy','maghfira','pardon','sins'],
+  mercy:       ['rahma','compassion','forgiveness','god','allah','gentle','kind'],
+  women:       ['marriage','wife','mother','daughter','rights','hijab','honor'],
+  children:    ['offspring','sons','daughters','family','orphan','upbringing'],
+  // Fiqh / intimate topics — mapped to proper Islamic terminology
+  dog:         ['animal','companion','guard','hunting','hound','saluki','impure','ruling','fiqh','halal','haram','permissible'],
+  fuck:        ['intercourse','intimacy','nikah','marriage','zina','fornication','adultery','halal','haram','fiqh','ruling','husband','wife','mahram'],
+  sex:         ['intercourse','intimacy','nikah','marriage','zina','fornication','adultery','halal','haram','fiqh','ruling'],
+  intercourse: ['nikah','intimacy','marriage','zina','fornication','halal','haram','fiqh','ruling','husband','wife'],
+  zina:        ['fornication','adultery','intercourse','intimacy','punishment','hadd','prohibition','sin'],
+  rape:        ['assault','coercion','zina','prohibition','punishment','hadd','justice','oppression'],
+  nudity:      ['awrah','covering','hijab','modesty','prohibition','haram'],
+  // Islamic topics / pillars
+  prayer:      ['salah','salat','worship','five pillars','obligatory','ruku','sujud','wudu','qibla'],
+  fasting:     ['sawm','ramadan','fast','month','iftar','suhoor','hunger','night'],
+  zakat:       ['charity','alms','poor','wealth','obligatory','giving','sadaqah','purification'],
+  hajj:        ['pilgrimage','kaaba','mecca','ihram','tawaf','stoning','zamzam','arafat'],
+  shahada:     ['testimony','faith','declaration','la ilaha','muhammad','witness'],
+  tawhid:      ['oneness','monotheism','god','allah','unity','shirk','idol'],
+  shirk:       ['polytheism','idol','associate','partners','disbelief','kufr'],
+  tawbah:      ['repentance','forgiveness','return','sins','mercy','regret'],
+  zuhd:        ['asceticism','detachment','world','simple','piety','worship'],
+  akhira:      ['afterlife','hereafter','death','judgment','paradise','hellfire','soul'],
+  dua:         ['supplication','prayer','request','ask','allah','invoke','beg'],
+  dhikr:       ['remembrance','glorify','tasbih','subhanallah','alhamdulillah','god'],
+  quran:       ['book','revelation','recite','verses','suras','ayah','hafiz','tajweed'],
+  sunnah:      ['hadith','prophet','tradition','practice','way','example'],
+  sharia:      ['law','islamic','ruling','halal','haram','fiqh','jurisprudence'],
+  halal:       ['permissible','lawful','allowed','food','drink','slaughter'],
+  haram:       ['forbidden','prohibited','unlawful','sin','avoid'],
+  taqwa:       ['piety','god-consciousness','fear','righteousness','devout'],
+  iman:        ['faith','belief','pillars','six','angels','books','prophets','day'],
+  islam:       ['submission','religion','five pillars','prophet','quran','ummah'],
+  ummah:       ['community','nation','muslims','believers','people','together'],
+  dawah:       ['call','invite','propagate','spread','preach','non-muslim'],
+  jihad:       ['struggle','effort','fight','defend','self','path','greater','lesser'],
+  sabr:        ['patience','endurance','hardship','trial','steadfast','reward'],
+  shukr:       ['gratitude','thankfulness','blessings','praise','allah'],
+  tawakkul:    ['trust','reliance','allah','depend','accept','outcome'],
+  ikhlas:      ['sincerity','pure','intention','allah','show off','riya'],
+  ihsan:       ['excellence','perfection','worship','as if','see','best'],
+};
+
+
+// ── SEARCH MODE ───────────────────────────────────────────────────
+let currentMode = 'word';
+const MODE_HINTS = {
+  word:    'Searches for exact word or phrase in all texts',
+  who:     'Searches for people — prophets, companions, figures. e.g. Khadijah, Moses, Abu Bakr',
+  what:    'Searches for events and actions. e.g. Battle of Badr, revelation, conquest',
+  where:   'Searches by place or location. e.g. Mecca, Medina, Jerusalem, cave of Hira',
+  when:    'Searches by time period or year. e.g. 622 CE, Meccan period, early Islam',
+  why:     'Searches for reasons and context of revelation (Asbab al-Nuzul)',
+  concept: 'Searches by theme or concept. e.g. patience, mercy, judgment day, miracle',
+  topic:   'Searches by Islamic topic — prayer, fasting, hajj, zakat, marriage, afterlife...',
+};
+
+function setMode(mode, btn) {
+  currentMode = mode;
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const hint = document.getElementById('modeHint');
+  if (hint) hint.textContent = MODE_HINTS[mode] || '';
+  const input = document.getElementById('searchInput');
+  if (!input) return;
+  const placeholders = {
+    word:    'Enter a word or phrase...',
+    who:     'Enter a person\'s name — e.g. Khadijah, Moses, Abu Bakr...',
+    what:    'Enter an event or action — e.g. Battle of Badr, revelation...',
+    where:   'Enter a place — e.g. Mecca, Medina, Jerusalem, cave of Hira...',
+    when:    'Enter a time or period — e.g. 622 CE, Meccan period...',
+    why:     'Enter a topic to find context of revelation...',
+    concept: 'Enter a concept or theme — e.g. patience, mercy, judgment...',
+    topic:   'Enter an Islamic topic — e.g. prayer, fasting, zakat, hajj, marriage...',
+  };
+  input.placeholder = placeholders[mode] || 'Search...';
+}
+
+// ── HELPERS ───────────────────────────────────────────────────────
+function getRelatedTerms(q) {
+  const lower = q.toLowerCase().trim();
+  const related = new Set();
+  if (CONCEPT_MAP[lower]) CONCEPT_MAP[lower].forEach(t => related.add(t));
+  Object.keys(CONCEPT_MAP).forEach(key => {
+    if (key !== lower && (key.includes(lower) || lower.includes(key))) {
+      CONCEPT_MAP[key].forEach(t => related.add(t));
+      related.add(key);
+    }
+  });
+  Object.entries(CONCEPT_MAP).forEach(([key, vals]) => {
+    if (vals.some(v => v === lower || v.includes(lower) || lower.includes(v))) {
+      related.add(key);
+      CONCEPT_MAP[key].forEach(t => related.add(t));
+    }
+  });
+  related.delete(lower);
+  return Array.from(related).slice(0, 10);
+}
+
+// ── SEARCH ───────────────────────────────────────────────────────
+async function doSearch() {
+  const q = document.getElementById('searchInput').value.trim();
+  if (!q) return;
+  const container = document.getElementById('resultsContainer');
+  container.innerHTML = '<div class="loading-msg"><span class="spinner"></span>Searching...</div>';
+  document.getElementById('resultsHeader').style.display = 'none';
+
+  try {
+    const tradFilter = currentTrad !== 'all' ? { tradition: 'eq.' + currentTrad } : {};
+    const collection = document.getElementById('collectionFilter').value;
+    const scholar    = document.getElementById('scholarFilter').value;
+    const relatedTerms = getRelatedTerms(q);
+
+    const exactResults = await fetchAllSources(q, tradFilter, collection, scholar);
+
+    let relatedResults = [];
+    if (relatedTerms.length) {
+      const exactIds = new Set(exactResults.map(r => r.type + '-' + (r._tbl||'') + '-' + r.id));
+      const batches  = await Promise.all(relatedTerms.slice(0,5).map(t => fetchAllSources(t, tradFilter, collection, scholar)));
+      const seen = new Set(exactIds);
+      batches.flat().forEach(r => {
+        const k = r.type + '-' + (r._tbl||'') + '-' + r.id;
+        if (!seen.has(k)) { seen.add(k); relatedResults.push({...r, _related:true}); }
+      });
+    }
+
+    if (currentSource === 'sira') {
+      const exactSira   = exactResults.filter(r => r.type === 'sira');
+      const relatedSira = relatedResults.filter(r => r.type === 'sira');
+      _siraEvents = [...exactSira, ...relatedSira];
+      renderSiraTimeline(exactSira, relatedSira, q, relatedTerms);
+      allResults = _siraEvents;
+      return;
+    }
+
+    var sortedExact=window.sortByControversy(exactResults);
+    var sortedRelated=window.sortByControversy(relatedResults);
+    allResults = [...sortedExact, ...sortedRelated];
+    renderResults(sortedExact, sortedRelated, q, relatedTerms);
+
+  } catch(e) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-title">Search error</div><div class="empty-desc">' + e.message + '</div></div>';
+  }
+}
+
+async function fetchAllSources(q, tradFilter, collection, scholar) {
+  const results = [];
+
+  if (currentSource === 'all' || currentSource === 'hadith') {
+    const hSelect = 'id,sura_id,aya_number,hadith_text,arabic_text,narrator,collection,reference,tradition,similarity_note,hadith_grade';
+    const hExtra  = {...tradFilter};
+    if (collection) hExtra.collection = 'eq.' + collection;
+    const corpSel = 'id,sura_id,aya_number,hadith_text:text_english,arabic_text:text_arabic,narrator,collection,reference:hadith_number,tradition,hadith_grade:grade';
+    const corpExtra = {...tradFilter};
+    if (collection) corpExtra.collection = 'eq.' + collection;
+    // sbSearch now searches all hadith columns via OR in one request each
+    const [hRows, cRows] = await Promise.all([
+      sbSearch('hadith_connections', hSelect, 'hadith_text', q, hExtra),
+      sbSearch('hadith_corpus',      corpSel, 'text_english', q, corpExtra),
+    ]);
+    const tagged = [
+      ...hRows.map(r=>({...r,_tbl:'hc'})),
+      ...cRows.map(r=>({...r,_tbl:'corpus',similarity_note:null}))
+    ];
+    const seen = new Set();
+    tagged.forEach(r => { const k='hc:'+r._tbl+':'+r.id; if(!seen.has(k)){seen.add(k);results.push({type:'hadith',...r});} });
+  }
+
+  if (currentSource === 'all' || currentSource === 'tafsir') {
+    const tSel   = 'id,sura,aya,content,source_name,scholar_name,tradition,language';
+    const tExtra = {language:'eq.en',...tradFilter};
+    if (scholar) tExtra.source_name = 'eq.' + scholar;
+    const tRows = await sbSearch('tafsir_entries', tSel, 'content', q, tExtra);
+    const seen = new Set();
+    tRows.forEach(r => { if(!seen.has(r.id)){seen.add(r.id);results.push({type:'tafsir',...r});} });
+  }
+
+  if (currentSource === 'all' || currentSource === 'sira') {
+    const sSel = 'id,title_en,title_ar,story_en,story_ar,year_ce,year_ah,location,period,key_figures,hadith_ref,tafsir_ref';
+    // sbSearch now uses OR across ALL sira_events columns in one request
+    const sRows = await sbSearch('sira_events', sSel, 'title_en', q, {});
+    const seen = new Set();
+    sRows.forEach(r => { if(!seen.has(r.id)){seen.add(r.id);results.push({type:'sira',...r});} });
+  }
+
+  if (currentSource === 'all' || currentSource === 'asbab') {
+    const aSel   = 'id,sura_id,aya_number,reason_text,scholar,tradition,source';
+    const aExtra = {...tradFilter};
+    const aRows  = await sbSearch('asbab_al_nuzul', aSel, 'reason_text', q, aExtra);
+    const seen = new Set();
+    aRows.forEach(r => { if(!seen.has(r.id)){seen.add(r.id);results.push({type:'asbab',...r});} });
+  }
+
+  return results;
+}
+
+// ── RENDER ───────────────────────────────────────────────────────
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function highlight(text, q) {
+  if (!text || !q) return esc(text);
+  const escaped = q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  return esc(text).replace(new RegExp('(' + escaped + ')', 'gi'), '<mark class="hl-yellow">$1</mark>');
+}
+
+function sectionBanner(icon, title, count, color, bg) {
+  return '<div style="display:flex;align-items:center;gap:10px;margin:18px 0 10px;padding:10px 14px;background:' + bg + ';border-radius:10px;border-left:4px solid ' + color + ';">'
+    + '<span style="font-size:18px;">' + icon + '</span>'
+    + '<div style="flex:1;font-size:13px;font-weight:800;color:' + color + ';letter-spacing:0.3px;">' + title + '</div>'
+    + '<span style="background:' + color + ';color:#fff;border-radius:12px;padding:2px 10px;font-size:11px;font-weight:700;">' + count + '</span>'
+    + '</div>';
+}
+
+function renderResults(exactResults, relatedResults, q, relatedTerms) {
+  const container = document.getElementById('resultsContainer');
+  const header    = document.getElementById('resultsHeader');
+  const total     = exactResults.length + relatedResults.length;
+
+  document.getElementById('resultsCount').textContent =
+    exactResults.length + ' exact · ' + relatedResults.length + ' related  —  "' + q + '"';
+  header.style.display = total ? 'flex' : 'none';
+
+  if (!total) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-title">No results found</div><div class="empty-desc">Try a different word, or switch search mode above.</div></div>';
+    return;
+  }
+
+  let html = '';
+
+  if (exactResults.length) {
+    html += sectionBanner('🎯', 'Exact Matches', exactResults.length, '#B8902A', '#FDF5DE');
+    html += exactResults.map(r => buildCard(r, q, false)).join('');
+  }
+
+  if (relatedResults.length) {
+    const termList = (relatedTerms||[]).slice(0,5).join(', ');
+    html += sectionBanner('🔗', 'Related &amp; Conceptual', relatedResults.length, '#6A1B9A', '#F3E5F5');
+    if (termList) html += '<div style="font-size:11px;color:#6A1B9A;margin:-6px 0 10px 4px;font-style:italic;">Related terms: ' + esc(termList) + '</div>';
+    html += relatedResults.map(r => buildCard(r, q, true)).join('');
+  }
+
+  container.innerHTML = html;
+  // Show topic analysis panel for hadith results
+  showTopicAnalysisPanel(allResults, q);
+  // Async: fetch hadith analysis scores and inject badges into hadith cards
+  setTimeout(() => injectAnalysisScores(), 150);
+}
+
+// ── HADITH ANALYSIS ─────────────────────────────────────────────────────
+// Fetches from hadith_analysis table by hadith_id. Cached per session.
+const _analysisCache = {};
+
+async function fetchAnalysis(hadithId) {
+  if (!hadithId) return null;
+  if (_analysisCache[hadithId] !== undefined) return _analysisCache[hadithId];
+  try {
+    const url = `${SB_URL}/rest/v1/hadith_analysis?hadith_id=eq.${hadithId}&select=*&limit=1`;
+    const res = await fetch(url, {headers: hdrs});
+    const rows = await res.json();
+    _analysisCache[hadithId] = rows && rows.length ? rows[0] : null;
+  } catch(e) {
+    _analysisCache[hadithId] = null;
+  }
+  return _analysisCache[hadithId];
+}
+
+function scoreClass(score, type) {
+  if (!score && score !== 0) return type === 'hr' ? 'score-hr-mid' : 'score-sci-mid';
+  const n = parseFloat(score);
+  if (n >= 7.5) return type === 'hr' ? 'score-hr-high' : 'score-sci-high';
+  if (n >= 5)   return type === 'hr' ? 'score-hr-mid'  : 'score-sci-mid';
+  return type === 'hr' ? 'score-hr-low' : 'score-sci-low';
+}
+
+function gradeClass(grade) {
+  if (!grade) return 'score-grade-unknown';
+  const g = grade.toLowerCase();
+  if (g.includes('sahih')) return 'score-grade-sahih';
+  if (g.includes('hasan')) return 'score-grade-hasan';
+  if (g.includes('da') || g.includes('weak')) return 'score-grade-daif';
+  return 'score-grade-unknown';
+}
+
+function renderAnalysisScores(a) {
+  if (!a) return '';
+  const hr = a.human_rights_score;
+  const sci = a.scientific_score;
+  const grade = a.authenticity_grade;
+  const badges = [];
+  if (grade) badges.push(`<span class="score-badge ${gradeClass(grade)}" title="Authenticity grade">📜 ${esc(grade)}</span>`);
+  if (hr != null) badges.push(`<span class="score-badge ${scoreClass(hr,'hr')}" title="Human Rights compatibility score">⚖️ HR: ${hr}/10</span>`);
+  if (sci != null) badges.push(`<span class="score-badge ${scoreClass(sci,'sci')}" title="Scientific compatibility score">🔬 Sci: ${sci}/10</span>`);
+  if (!badges.length) return '';
+  return `<div class="analysis-scores">${badges.join('')}</div>`;
+}
+
+function renderAnalysisPanel(a, cardId) {
+  if (!a) return '';
+  const sections = [
+    ['Common Sense', a.common_sense_analysis],
+    ['Historical Context', a.historical_context],
+    ['Human Rights', a.human_rights_analysis],
+    ['Human Dignity', a.human_dignity_analysis],
+    ["Women's Rights", a.womens_rights_analysis],
+    ['Science', a.scientific_compatibility],
+    ['Universal vs Specific', a.universal_vs_specific],
+    ['Sunni Interpretation', a.sunni_interpretation],
+    ['Shia Interpretation', a.shia_interpretation],
+    ['Scholarly Debate', a.scholarly_debate],
+    ['Potential Concerns', a.potential_concerns],
+    ['Universal Principles', a.universal_principles],
+  ].filter(([, v]) => v && v.trim());
+
+  if (!sections.length) return '';
+  const inner = sections.map(([label, text]) =>
+    `<div class="analysis-section">
+      <div class="analysis-label">${label}</div>
+      <div class="analysis-text">${esc(text)}</div>
+    </div>`
+  ).join('');
+  return `<div class="analysis-panel" id="ap-${cardId}" style="display:none">
+    <div style="font-size:11px;color:#888;margin-bottom:10px;font-style:italic">⚠ AI-generated analysis for scholarly discussion. Not an authoritative religious ruling.</div>
+    ${inner}
+  </div>
+  <button class="analysis-toggle" onclick="toggleAnalysis('${cardId}')">📊 Show analysis ▼</button>`;
+}
+
+function toggleAnalysis(cardId) {
+  const panel = document.getElementById('ap-' + cardId);
+  const btn = panel ? panel.nextElementSibling : null;
+  if (!panel) return;
+  const open = panel.style.display !== 'none';
+  panel.style.display = open ? 'none' : 'block';
+  if (btn) btn.textContent = open ? '📊 Show analysis ▼' : '📊 Hide analysis ▲';
+}
+
+// After cards render, fetch analysis for each visible hadith card and inject badges
+async function injectAnalysisScores() {
+  const cards = document.querySelectorAll('.result-card[data-hadith-id]');
+  for (const card of cards) {
+    const hadithId = card.dataset.hadithId;
+    const a = await fetchAnalysis(hadithId);
+    const scoresEl = card.querySelector('.analysis-scores-placeholder');
+    const panelEl = card.querySelector('.analysis-panel-placeholder');
+    const cardId = card.id.replace('card-', '');
+    if (scoresEl) scoresEl.outerHTML = renderAnalysisScores(a);
+    if (panelEl) panelEl.outerHTML = renderAnalysisPanel(a, cardId);
+  }
+}
+
+function buildCard(r, q, isRelated) {
+  // Hadith now comes from two tables (hadith_connections + hadith_corpus); the
+  // _tbl tag (set in doSearch) keeps DOM ids and bookmark keys unique across them.
+  const id = r._tbl ? `${r.type}-${r._tbl}-${r.id}` : `${r.type}-${r.id}`;
+  const bm = isBookmarked(id);
+  const noteText = getNote(id);
+  const suraRef = r.sura || r.sura_id;
+  const ayaRef = r.aya || r.aya_number;
+  const currentQ = document.getElementById('searchInput')?.value || '';
+  const verseUrl = (r.type === 'sira')
+    ? `research.html?sira=${encodeURIComponent(r.title_en||'')}`
+    : suraRef ? `index.html?sura=${suraRef}&aya=${ayaRef}&from=research&q=${encodeURIComponent(currentQ)}&source=${encodeURIComponent(currentSource||'all')}` : `index.html`;
+
+  let typePill = '', scholarLine = '', arabicBlock = '', textBlock = '', metaLine = '';
+
+  if (r.type === 'hadith') {
+    typePill = `<span class="source-pill pill-hadith">📜 Hadith</span>`;
+    scholarLine = `<div class="card-scholar">${esc(r.collection||'Hadith')}${r.hadith_grade ? ` <span style="font-size:10px;color:var(--ink4)">(${esc(r.hadith_grade)})</span>` : ''}</div>`;
+    if (r.arabic_text) arabicBlock = `<div class="card-arabic">${esc(r.arabic_text)}</div>`;
+    textBlock = `<div class="card-text" id="text-${id}">${highlight(r.hadith_text, q)}</div>`;
+    const meta = [];
+    if (r.narrator) meta.push(`Narrator: ${esc(r.narrator)}`);
+    if (r.reference) {
+      const refSearch = encodeURIComponent(r.reference);
+      meta.push(`<a href="research.html?q=${refSearch}&source=hadith" style="color:var(--hadith);text-decoration:none;font-style:normal;" title="Search this reference">📖 ${esc(r.reference)} ↗</a>`);
+    }
+    if (suraRef) meta.push(`<a href="${verseUrl}" style="color:var(--bronze);text-decoration:none;font-style:normal;" title="Open verse ${suraRef}:${ayaRef}" onclick="event.preventDefault();qnavGoVerse('${verseUrl}','${suraRef}:${ayaRef}')">🔗 Verse ${suraRef}:${ayaRef} ↗</a>`);
+    if (r.similarity_note) meta.push(`<span style="font-style:italic">${esc(r.similarity_note)}</span>`);
+    metaLine = meta.length ? `<div class="card-meta">${meta.join(' · ')}</div>` : '';
+    // Analysis placeholders — filled asynchronously by injectAnalysisScores()
+    metaLine += `<div class="analysis-scores-placeholder"></div>
+    <div class="analysis-panel-placeholder"></div>`;
+  } else if (r.type === 'sira') {
+    typePill = `<span class="source-pill pill-sira" style="background:#7B4F2E;color:#fff;padding:2px 8px;border-radius:10px;font-size:10px;">📖 Sīra</span>`;
+    scholarLine = `<div class="card-scholar">${esc(r.title_en||'')}</div>`;
+    if (r.title_ar) arabicBlock = `<div class="card-arabic">${esc(r.title_ar)}</div>`;
+    textBlock = `<div class="card-text" id="text-${id}">${highlight(r.story_en || r.title_en || '', q)}</div>`;
+    const smeta = [];
+    if (r.year_ce) smeta.push(r.year_ce + ' CE');
+    if (r.year_ah) smeta.push(r.year_ah + ' AH');
+    if (r.location) smeta.push(r.location);
+    metaLine = smeta.length ? `<div class="card-meta">${smeta.map(esc).join(' · ')}</div>` : '';
+  } else if (r.type === 'tafsir') {
+    typePill = `<span class="source-pill pill-tafsir">📚 Tafsir</span>`;
+    scholarLine = `<div class="card-scholar">${esc(r.source_name||r.scholar_name||'')}</div>`;
+    const fullText = r.content || r.tafsir_text || '';
+    const isLong = fullText.length > 300;
+    const shortText = isLong ? fullText.slice(0, 300) + '...' : fullText;
+    if (!window._cardData) window._cardData = {};
+    window._cardData[id] = fullText;
+    textBlock = '<div class="card-text" id="text-' + id + '">' + highlight(shortText, q) + '</div>';
+    if (isLong) textBlock += '<button onclick="expandCard(\'' + id + '\')" style="font-size:11px;color:var(--gold);background:none;border:none;cursor:pointer;padding:2px 0;">Show more ▼</button>';
+    const suraNum = r.sura || r.sura_id;
+    const ayaNum = r.aya || r.aya_number;
+    const tafsirVerseUrl = suraNum ? `index.html?sura=${suraNum}&aya=${ayaNum}&from=research&q=${encodeURIComponent(currentQ)}&source=tafsir` : '';
+    metaLine = suraNum ? `<div class="card-meta"><a href="${tafsirVerseUrl}" style="color:var(--bronze);text-decoration:none;" title="Open verse ${suraNum}:${ayaNum}" onclick="event.preventDefault();qnavGoVerse('${tafsirVerseUrl}','${suraNum}:${ayaNum}')">🔗 Verse ${suraNum}:${ayaNum} ↗</a>${r.tradition ? ' · ' + esc(r.tradition) : ''}</div>` : '';
+  } else if (r.type === 'asbab') {
+    typePill = `<span class="source-pill pill-asbab">🕰 Asbāb</span>`;
+    scholarLine = `<div class="card-scholar">${esc(r.scholar||'Classical narration')}</div>`;
+    textBlock = `<div class="card-text" id="text-${id}">${highlight(r.reason_text, q)}</div>`;
+    const asbabVerseUrl = suraRef ? `index.html?sura=${suraRef}&aya=${ayaRef}&from=research&q=${encodeURIComponent(currentQ)}&source=asbab` : '';
+    const asbabMeta = [];
+    if (r.source) asbabMeta.push(esc(r.source));
+    if (suraRef) asbabMeta.push(`<a href="${asbabVerseUrl}" style="color:var(--bronze);text-decoration:none;" title="Open verse ${suraRef}:${ayaRef}" onclick="event.preventDefault();qnavGoVerse('${asbabVerseUrl}','${suraRef}:${ayaRef}')">🔗 Verse ${suraRef}:${ayaRef} ↗</a>`);
+    metaLine = asbabMeta.length ? `<div class="card-meta">${asbabMeta.join(' · ')}</div>` : '';
+  }
+
+  const tradPill = r.tradition ? `<span class="trad-pill pill-${r.tradition}">${r.tradition}</span>` : '';
+
+  const relatedBadge = isRelated
+    ? '<span style="background:#F3E5F5;color:#6A1B9A;border:1px solid #CE93D8;border-radius:10px;font-size:9px;font-weight:700;padding:2px 7px;letter-spacing:0.3px;">🔗 RELATED</span>'
+    : '';
+  return `<div class="result-card" id="card-${id}" ${r.type === 'hadith' && r._tbl === 'corpus' && r.id ? `data-hadith-id="${r.id}"` : ''}>
+    <div class="card-header">
+      ${typePill}
+      ${tradPill}
+      ${relatedBadge}
+      ${r.type === 'sira'
+        ? `<a class="verse-ref" href="${verseUrl}" title="Open in Research" onclick="event.preventDefault();qnavGoVerse('${verseUrl}','Sīra')">📖 Sīra ↗</a>`
+        : suraRef ? `<a class="verse-ref" href="${verseUrl}" title="Open verse in Quran platform" onclick="event.preventDefault();qnavGoVerse('${verseUrl}','${suraRef}:${ayaRef}')">  ${suraRef}:${ayaRef} ↗</a>` : ''
+      }
+    </div>
+    <div class="card-body">
+      ${scholarLine}
+      ${arabicBlock}
+      ${textBlock}
+      ${metaLine}
+      ${noteText ? `<div class="card-notes">📝 ${esc(noteText)}</div>` : ''}
+    </div>
+    <div class="card-actions">
+      <button class="action-btn" onclick="speakCard('${id}')">🔊 Read</button>
+      <button class="action-btn" onclick="showHlPicker('${id}',this)">🖊 Highlight</button>
+      <button class="action-btn" onclick="openNote('${id}',this)">📝 Note</button>
+      <button class="action-btn ${bm?'active':''}" id="bm-${id}" onclick="toggleBookmark('${id}',this)">🔖 ${bm?'Saved':'Save'}</button>
+      <button class="action-btn" onclick="copyCard('${id}',this)">📋 Copy</button>
+      <button class="action-btn" onclick="shareCard('${id}')">📤 Share</button>
+    </div>
+  </div>`;
+}
+
+// ── HIGHLIGHT ────────────────────────────────────────────────────
+let hlTargetId = null;
+function showHlPicker(id, btn) {
+  hlTargetId = id;
+  const picker = document.getElementById('hlPicker');
+  const rect = btn.getBoundingClientRect();
+  picker.style.top = (rect.bottom + window.scrollY + 4) + 'px';
+  picker.style.left = rect.left + 'px';
+  picker.classList.add('open');
+  document.addEventListener('click', hideHlPicker, { once: true, capture: true });
+}
+function hideHlPicker(e) {
+  const picker = document.getElementById('hlPicker');
+  if (!picker.contains(e.target)) picker.classList.remove('open');
+}
+function applyHighlight(cls) {
+  if (!hlTargetId) return;
+  const el = document.getElementById('text-' + hlTargetId);
+  if (!el) return;
+  // Wrap selected text or entire text
+  const sel = window.getSelection();
+  if (sel && !sel.isCollapsed && el.contains(sel.anchorNode)) {
+    const range = sel.getRangeAt(0);
+    const mark = document.createElement('mark');
+    mark.className = cls;
+    range.surroundContents(mark);
+    sel.removeAllRanges();
+  } else {
+    // Highlight entire text element
+    el.innerHTML = `<mark class="${cls}">${el.innerHTML}</mark>`;
+  }
+  saveHighlight(hlTargetId, el.innerHTML);
+  document.getElementById('hlPicker').classList.remove('open');
+}
+function removeHighlight() {
+  if (!hlTargetId) return;
+  const el = document.getElementById('text-' + hlTargetId);
+  if (!el) return;
+  el.querySelectorAll('mark').forEach(m => {
+    m.replaceWith(...m.childNodes);
+  });
+  saveHighlight(hlTargetId, el.innerHTML);
+  document.getElementById('hlPicker').classList.remove('open');
+}
+function saveHighlight(id, html) {
+  const stored = JSON.parse(localStorage.getItem('research_hl') || '{}');
+  stored[id] = html;
+  localStorage.setItem('research_hl', JSON.stringify(stored));
+}
+function loadHighlights() {
+  const stored = JSON.parse(localStorage.getItem('research_hl') || '{}');
+  Object.entries(stored).forEach(([id, html]) => {
+    const el = document.getElementById('text-' + id);
+    if (el) el.innerHTML = html;
+  });
+}
+
+// ── NOTES ────────────────────────────────────────────────────────
+function openNote(id, btn) {
+  currentNoteId = id;
+  const r = allResults.find(x => `${x.type}-${x.id}` === id);
+  document.getElementById('noteLabel').textContent = r ? `${r.sura_id}:${r.aya_number}` : id;
+  document.getElementById('noteEditor').innerHTML = getNote(id) || '';
+  document.getElementById('noteModal').classList.add('open');
+}
+function closeNoteModal() { document.getElementById('noteModal').classList.remove('open'); }
+function saveNote() {
+  if (!currentNoteId) return;
+  const html = document.getElementById('noteEditor').innerHTML.trim();
+  const plain = document.getElementById('noteEditor').innerText.trim();
+  const stored = JSON.parse(localStorage.getItem('research_notes') || '{}');
+  if (plain) stored[currentNoteId] = plain;
+  else delete stored[currentNoteId];
+  localStorage.setItem('research_notes', JSON.stringify(stored));
+  // Update note display on card
+  const noteDiv = document.querySelector(`#card-${currentNoteId} .card-notes`);
+  if (noteDiv && plain) noteDiv.innerHTML = '📝 ' + esc(plain);
+  else if (!noteDiv && plain) {
+    const body = document.querySelector(`#card-${currentNoteId} .card-body`);
+    if (body) body.insertAdjacentHTML('beforeend', `<div class="card-notes">📝 ${esc(plain)}</div>`);
+  }
+  closeNoteModal();
+  renderBookmarks();
+}
+function deleteNote() {
+  if (!currentNoteId) return;
+  const stored = JSON.parse(localStorage.getItem('research_notes') || '{}');
+  delete stored[currentNoteId];
+  localStorage.setItem('research_notes', JSON.stringify(stored));
+  const noteDiv = document.querySelector(`#card-${currentNoteId} .card-notes`);
+  if (noteDiv) noteDiv.remove();
+  closeNoteModal();
+  renderBookmarks();
+}
+function shareNote() {
+  const text = document.getElementById('noteEditor').innerText.trim();
+  if (!text) return;
+  if (navigator.share) navigator.share({ title: 'Research Note', text });
+  else navigator.clipboard?.writeText(text).then(() => alert('Note copied to clipboard.'));
+}
+function getNote(id) {
+  const stored = JSON.parse(localStorage.getItem('research_notes') || '{}');
+  return stored[id] || '';
+}
+function nCmd(cmd) { document.getElementById('noteEditor').focus(); document.execCommand(cmd); }
+function nHL(color) {
+  document.getElementById('noteEditor').focus();
+  try { document.execCommand('styleWithCSS', false, true); } catch(e) {}
+  document.execCommand('hiliteColor', false, color);
+}
+
+// ── BOOKMARKS ────────────────────────────────────────────────────
+function isBookmarked(id) {
+  const stored = JSON.parse(localStorage.getItem('research_bm') || '{}');
+  return !!stored[id];
+}
+function toggleBookmark(id, btn) {
+  const stored = JSON.parse(localStorage.getItem('research_bm') || '{}');
+  if (stored[id]) {
+    delete stored[id];
+    btn.textContent = '🔖 Save';
+    btn.classList.remove('active');
+  } else {
+    const r = allResults.find(x => `${x.type}-${x.id}` === id);
+    if (r) stored[id] = { id, type: r.type, sura_id: r.sura_id, aya_number: r.aya_number, preview: (r.hadith_text || r.content || r.tafsir_text || r.reason_text || r.title || '').slice(0, 120), savedAt: new Date().toISOString() };
+    btn.textContent = '🔖 Saved';
+    btn.classList.add('active');
+  }
+  localStorage.setItem('research_bm', JSON.stringify(stored));
+  renderBookmarks();
+}
+function clearAllBookmarks() {
+  if (!confirm('Clear all saved items?')) return;
+  localStorage.removeItem('research_bm');
+  renderBookmarks();
+}
+function toggleBookmarks() {
+  const panel = document.getElementById('bmPanel');
+  panel.classList.toggle('open');
+  renderBookmarks();
+}
+function renderBookmarks() {
+  const stored = JSON.parse(localStorage.getItem('research_bm') || '{}');
+  const items = Object.values(stored);
+  document.getElementById('bmCountLabel').textContent = `${items.length} saved`;
+  document.getElementById('bmToggleBtn').textContent = `🔖 Saved${items.length ? ' (' + items.length + ')' : ''}`;
+  const list = document.getElementById('bmList');
+  if (!items.length) { list.innerHTML = '<div style="color:#BBB;font-style:italic;font-size:12px;padding:16px;text-align:center">No saved items yet.</div>'; return; }
+  list.innerHTML = items.sort((a,b) => new Date(b.savedAt)-new Date(a.savedAt)).map(item => `
+    <div class="bm-item">
+      <div class="bm-ref">${item.type.toUpperCase()} · ${item.sura_id}:${item.aya_number}</div>
+      <div class="bm-preview">${esc(item.preview)}${item.preview.length >= 120 ? '…' : ''}</div>
+      ${getNote(item.id) ? `<div style="font-size:11px;color:var(--gold);margin-top:4px">📝 Has note</div>` : ''}
+    </div>`).join('');
+}
+
+// ── SHARE ────────────────────────────────────────────────────────
+function expandCard(id) {
+  const el = document.getElementById('text-' + id);
+  if (el && window._cardData && window._cardData[id]) {
+    el.textContent = window._cardData[id];
+    if (el.nextElementSibling) el.nextElementSibling.style.display = 'none';
+  }
+}
+
+function speakCard(id) {
+  if ('speechSynthesis' in window) {
+    if (window.speechSynthesis.speaking) {
+      window.speechSynthesis.cancel();
+      window._speakingId = null;
+      return;
+    }
+    const el = document.getElementById('text-' + id);
+    if (!el) return;
+    const text = el.innerText || el.textContent;
+    const utt = new SpeechSynthesisUtterance(text);
+    utt.lang = 'en-US';
+    utt.rate = 0.9;
+    utt.onend = () => { window._speakingId = null; };
+    window._speakingId = id;
+    window.speechSynthesis.speak(utt);
+  }
+}
+
+function copyCard(id, btn) {
+  const r = allResults.find(x => `${x.type}-${x.id}` === id);
+  if (!r) return;
+  const text = [
+    `[${r.type.toUpperCase()}] Quran ${r.sura_id}:${r.aya_number}`,
+    r.type === 'hadith' ? `${r.collection||''} — ${r.reference||''}` :
+    r.type === 'tafsir' ? `${r.source_name||r.author||''}` : `Asbāb — ${r.scholar||''}`,
+    '',
+    r.arabic_text ? r.arabic_text + '\n' : '',
+    r.hadith_text || r.content || r.tafsir_text || r.reason_text || r.title || '',
+    getNote(id) ? '\nNote: ' + getNote(id) : ''
+  ].filter(Boolean).join('\n').trim();
+
+  const orig = btn.textContent;
+  navigator.clipboard?.writeText(text).then(() => {
+    btn.textContent = '✓ Copied';
+    setTimeout(() => { btn.textContent = orig; }, 1200);
+  }).catch(() => {
+    // fallback
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    btn.textContent = '✓ Copied';
+    setTimeout(() => { btn.textContent = orig; }, 1200);
+  });
+}
+
+function shareCard(id) {
+  const r = allResults.find(x => `${x.type}-${x.id}` === id);
+  if (!r) return;
+  const text = [
+    `Quran ${r.sura_id}:${r.aya_number}`,
+    r.type === 'hadith' ? `Hadith — ${r.collection||''}` : r.type === 'tafsir' ? `Tafsir — ${r.source_name||''}` : 'Asbāb al-Nuzūl',
+    '',
+    r.hadith_text || r.content || r.tafsir_text || r.reason_text || r.title || '',
+    r.reference ? `📖 ${r.reference}` : '',
+    '',
+    'https://fascinating-sunburst-516df8.netlify.app'
+  ].filter(Boolean).join('\n');
+  if (navigator.share) navigator.share({ title: `Quran ${r.sura_id}:${r.aya_number}`, text });
+  else navigator.clipboard?.writeText(text).then(() => alert('Copied to clipboard.'));
+}
+
+// ── EXPORT ───────────────────────────────────────────────────────
+function exportResults() {
+  if (!allResults.length) return;
+  const lines = allResults.map(r => [
+    `[${r.type.toUpperCase()}] ${r.sura_id}:${r.aya_number}`,
+    r.type === 'hadith' ? `Collection: ${r.collection||''} | Ref: ${r.reference||''} | Narrator: ${r.narrator||''}` :
+    r.type === 'tafsir' ? `Scholar: ${r.source_name||r.author||''}` : `Scholar: ${r.scholar||''}`,
+    r.hadith_text || r.content || r.tafsir_text || r.reason_text || r.title || '',
+    '---'
+  ].join('\n'));
+  const blob = new Blob([lines.join('\n\n')], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'quran-research-results.txt';
+  a.click();
+}
+
+// ── INIT ─────────────────────────────────────────────────────────
+renderBookmarks();
+
+// ── SIRA RESEARCH ────────────────────────────────────────────────
+let siraLoaded = false;
+let _siraEvents = [];
+let _siraMapsBySira = {};
+
+async function loadSiraResearch() {
+  if (siraLoaded) return;
+  siraLoaded = true;
+  const wrap = document.getElementById('siraTimelineWrap');
+  if (!wrap) { console.error('siraTimelineWrap missing'); return; }
+
+  try {
+    wrap.innerHTML = '<div style="text-align:center;padding:30px;color:#aaa;"><span class="spinner"></span> Loading Sīra timeline...</div>';
+
+    const [events, maps] = await Promise.all([
+      fetch(`${SB_URL}/rest/v1/sira_events?select=*&order=year_ce.asc&limit=2000`, { headers: HDRS }).then(r => r.json()),
+      fetch(`${SB_URL}/rest/v1/sira_verse_map?select=*`, { headers: HDRS }).then(r => r.json())
+    ]);
+
+    console.log('Sira events loaded:', events?.length, 'maps:', maps?.length);
+
+    _siraMapsBySira = {};
+    (maps || []).forEach(m => {
+      if (!_siraMapsBySira[m.sira_id]) _siraMapsBySira[m.sira_id] = [];
+      _siraMapsBySira[m.sira_id].push(m);
+    });
+
+    _siraEvents = events || [];
+
+    if (_siraEvents.length === 0) {
+      // DB is empty — use AI to generate timeline
+      console.log('No Sira events in DB, using AI fallback...');
+      await loadSiraFromAI();
+      return;
+    }
+
+    renderSiraTimeline(_siraEvents);
+    // Also seed the search input with all events so filter works
+    window._siraAllEvents = _siraEvents;
+    const si = document.getElementById('siraSearchInput');
+    if (si) si.value = '';
+
+  } catch(err) {
+    console.error('Sira load error:', err);
+    const w = document.getElementById('siraTimelineWrap');
+    if (w) w.innerHTML = `<div style="padding:20px;color:red;font-weight:700;">Error loading Sīra: ${err.message}</div>`;
+    siraLoaded = false; // allow retry
+  }
+}
+
+async function loadSiraFromAI() {
+  const wrap = document.getElementById('siraTimelineWrap');
+  if (wrap) wrap.innerHTML = '<div style="text-align:center;padding:30px;color:#888;"><span class="spinner"></span> Generating Sīra timeline with AI...</div>';
+
+  try {
+    const res = await fetch(AI_PROXY, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-5',
+        max_tokens: 4000,
+        messages: [{
+          role: 'user',
+          content: `Generate a JSON array of 30 key events from the Sīra (life of Prophet Muhammad ﷺ). Return ONLY valid JSON, no markdown, no explanation.
+
+Each object must have these exact fields:
+{
+  "id": number (1-30),
+  "title_en": "Event title in English",
+  "title_ar": "Event title in Arabic",
+  "story_en": "2-3 sentence description in English",
+  "year_ce": "e.g. 610 CE",
+  "year_ah": "e.g. 1 AH or null",
+  "location": "City or place",
+  "period": one of ["Pre-Islamic","Pre-Prophethood","Early Meccan","Late Meccan","Medinan"],
+  "key_figures": ["name1", "name2"]
+}
+
+Include events from birth to death, covering all periods. Return only the JSON array.`
+        }]
+      })
+    });
+
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message);
+
+    const text = data.content.map(c => c.text || '').join('').trim();
+    const clean = text.replace(/```json|```/g, '').trim();
+    const events = JSON.parse(clean);
+
+    _siraEvents = events;
+    renderSiraTimeline(_siraEvents);
+
+  } catch(err) {
+    console.error('AI Sira fallback error:', err);
+    const w = document.getElementById('siraTimelineWrap');
+    if (w) w.innerHTML = `
+      <div style="text-align:center;padding:30px;">
+        <div style="font-size:36px;margin-bottom:12px;">📚</div>
+        <div style="font-size:15px;font-weight:700;color:#7B4F2E;margin-bottom:8px;">Sīra data not seeded yet</div>
+        <div style="font-size:13px;color:#888;line-height:1.7;">Run the SQL seed file in your Supabase dashboard to populate the timeline.<br>
+        <a href="https://supabase.com/dashboard" target="_blank" style="color:#B8902A;font-weight:700;">Open Supabase →</a></div>
+      </div>`;
+  }
+}
+
+function siraQuick(term) {
+  document.getElementById('siraSearchInput').value = term;
+  filterSiraTimeline(term);
+}
+
+function getEvHaystack(ev) {
+  // Safely flatten all searchable text from a sira event into one lowercase string
+  let kf = '';
+  if (Array.isArray(ev.key_figures))       kf = ev.key_figures.join(' ');
+  else if (typeof ev.key_figures === 'string') kf = ev.key_figures;
+  else if (ev.key_figures)                     kf = JSON.stringify(ev.key_figures);
+  return [
+    ev.title_en || '', ev.title_ar || '',
+    ev.story_en || '', ev.story_ar || '',
+    ev.location || '', ev.period   || '',
+    ev.hadith_ref || '', ev.tafsir_ref || '',
+    kf
+  ].join(' ').toLowerCase();
+}
+
+function filterSiraTimeline(q) {
+  const pool = window._siraAllEvents || _siraEvents;
+  if (!pool.length) return;
+  const term = q.trim().toLowerCase();
+  if (!term) { renderSiraTimeline(pool, [], '', []); return; }
+
+  // Section 1: any field contains the term (simple substring — catches mid-story mentions)
+  const exact = pool.filter(ev => getEvHaystack(ev).includes(term));
+
+  // Section 2: related/conceptual via concept map
+  const relatedTerms = getRelatedTerms(term);
+  const exactIds = new Set(exact.map(ev => ev.id));
+  const related = [];
+  if (relatedTerms.length) {
+    pool.forEach(ev => {
+      if (exactIds.has(ev.id)) return;
+      const hay = getEvHaystack(ev);
+      if (relatedTerms.some(t => hay.includes(t))) related.push(ev);
+    });
+  }
+
+  renderSiraTimeline(exact, related, q, relatedTerms);
+}
+
+function renderSiraTimeline(events, relatedEvents, q, relatedTerms) {
+  // Support both old 1-arg calls (from loadSiraResearch) and new 4-arg calls
+  if (!Array.isArray(relatedEvents)) {
+    // called as renderSiraTimeline(events, q) — old style
+    q = relatedEvents; relatedEvents = []; relatedTerms = [];
+  }
+  const wrap = document.getElementById('siraTimelineWrap');
+  if (!wrap) { console.error('siraTimelineWrap not found'); return; }
+  if (!events || !events.length) {
+    wrap.innerHTML = `<div style="text-align:center;padding:40px;color:#888;"><div style="font-size:40px;margin-bottom:12px">🔍</div><div style="font-size:16px;font-weight:700;">No events found</div><div style="font-size:13px;margin-top:6px;">Try different keywords</div></div>`;
+    return;
+  }
+
+  const periods = {};
+  events.forEach(ev => {
+    const p = ev.period || 'Other';
+    if (!periods[p]) periods[p] = [];
+    periods[p].push(ev);
+  });
+
+  const periodOrder = [
+    'pre-islamic','Pre-Islamic','Pre-Prophethood',
+    'meccan-early','Early Meccan',
+    'meccan-middle','Middle Meccan',
+    'meccan-late','Late Meccan',
+    'medinan','Medinan',
+    'Other'
+  ];
+  let html = `<div style="font-size:12px;color:var(--ink4);margin-bottom:12px;font-weight:700;">${events.length} event${events.length===1?'':'s'}</div><div class="sira-timeline">`;
+
+  periodOrder.forEach(period => {
+    if (!periods[period]) return;
+    const label = period.replace(/-/g,' ').replace(/\b\w/g, c => c.toUpperCase());
+    html += `<div class="sira-period-header">📅 ${label} Period <span style="font-weight:400;opacity:0.8;font-size:11px;">(${periods[period].length})</span></div>`;
+
+    periods[period].forEach(ev => {
+      const vms = _siraMapsBySira[ev.id] || [];
+      const verseChips = vms.map(vm =>
+        vm.applies_to_full_sura
+          ? `<span class="sira-verse-chip" onclick="location.href='index.html?sura=${vm.sura}&from=research&source=sira'">📖 ${vm.sura}:all</span>`
+          : `<span class="sira-verse-chip" onclick="location.href='index.html?sura=${vm.sura}&from=research&aya=${vm.aya}&source=sira'">📖 ${vm.sura}:${vm.aya}</span>`
+      ).join('');
+
+      const titleEn = q ? highlightSira(ev.title_en||'', q) : (ev.title_en||'');
+      const storyEn = q ? highlightSira(ev.story_en||'', q) : (ev.story_en||'');
+
+      html += `
+      <div class="sira-event-card" onclick="toggleSiraEvent(this)">
+        <div class="sira-event-header">
+          <div class="sira-event-year">
+            ${ev.year_ce ? ev.year_ce + ' CE' : ''}
+            ${ev.year_ah && ev.year_ah > 0 ? '<br>' + ev.year_ah + ' AH' : ''}
+          </div>
+          <div class="sira-event-titles">
+            <div class="sira-event-title-en">${titleEn}</div>
+            ${ev.title_ar ? `<div class="sira-event-title-ar">${ev.title_ar}</div>` : ''}
+          </div>
+          <div style="font-size:18px;color:#ccc;padding-top:2px;transition:transform 0.2s;">›</div>
+        </div>
+        <div class="sira-event-body">
+          ${ev.story_en ? `<div class="sira-story-text">${storyEn}</div>` : ''}
+          ${ev.story_ar ? `
+            <div class="sira-section-label">بالعربية</div>
+            <div class="sira-ref-item" style="font-family:'Amiri',serif;font-size:15px;direction:rtl;text-align:right;">${ev.story_ar}</div>
+          ` : ''}
+          ${vms.length ? `
+            <div class="sira-section-label">📖 Related Quran Verses</div>
+            <div style="margin-bottom:8px;">${verseChips}</div>
+          ` : ''}
+          ${ev.location ? `
+            <div class="sira-section-label">📍 Location</div>
+            <div class="sira-ref-item">${ev.location}</div>
+          ` : ''}
+          ${ev.key_figures && ev.key_figures.length ? `
+            <div class="sira-section-label">👥 Key Figures</div>
+            <div class="sira-meta-row">${ev.key_figures.map(f => `<span class="sira-meta-chip">${f}</span>`).join('')}</div>
+          ` : ''}
+          ${ev.hadith_ref ? `
+            <div class="sira-section-label">📜 Hadith Reference</div>
+            <div class="sira-ref-item"><strong>Ref:</strong> ${ev.hadith_ref}</div>
+          ` : ''}
+          ${ev.tafsir_ref ? `
+            <div class="sira-section-label">📚 Tafsir Reference</div>
+            <div class="sira-ref-item"><strong>Ref:</strong> ${ev.tafsir_ref}</div>
+          ` : ''}
+        </div>
+      </div>`;
+    });
+  });
+
+  html += '</div>';
+
+  // ── Section 2: Related Sira events ──────────────────────────
+  if (relatedEvents && relatedEvents.length) {
+    const termList = (relatedTerms||[]).slice(0,5).join(', ');
+    html += '<div style="display:flex;align-items:center;gap:10px;margin:24px 0 10px;padding:10px 14px;background:#F3E5F5;border-radius:10px;border-left:4px solid #6A1B9A;">'
+          + '<span style="font-size:18px;">🔗</span>'
+          + '<div style="flex:1;font-size:13px;font-weight:800;color:#6A1B9A;">Related &amp; Conceptual</div>'
+          + '<span style="background:#6A1B9A;color:#fff;border-radius:12px;padding:2px 10px;font-size:11px;font-weight:700;">' + relatedEvents.length + '</span>'
+          + '</div>';
+    if (termList) html += '<div style="font-size:11px;color:#6A1B9A;margin:-6px 0 10px 4px;font-style:italic;">Related terms: ' + termList + '</div>';
+    html += '<div class="sira-timeline">';
+    const rPeriods = {};
+    relatedEvents.forEach(ev => { const p=ev.period||'Other'; if(!rPeriods[p]) rPeriods[p]=[]; rPeriods[p].push(ev); });
+    periodOrder.forEach(period => {
+      if (!rPeriods[period]) return;
+      const label = period.replace(/-/g,' ').replace(/\b\w/g, c=>c.toUpperCase());
+      html += '<div class="sira-period-header">📅 ' + label + ' Period <span style="font-weight:400;opacity:0.8;font-size:11px;">(' + rPeriods[period].length + ')</span></div>';
+      rPeriods[period].forEach(ev => {
+        const titleEn = q ? highlightSira(ev.title_en||'', q) : (ev.title_en||'');
+        const storyEn = q ? highlightSira(ev.story_en||'', q) : (ev.story_en||'');
+        html += '<div class="sira-event-card" onclick="toggleSiraEvent(this)" style="border-color:#CE93D8;">'
+          + '<div class="sira-event-header">'
+          + '<div class="sira-event-year">' + (ev.year_ce ? ev.year_ce+' CE' : '') + (ev.year_ah && ev.year_ah>0 ? '<br>'+ev.year_ah+' AH' : '') + '</div>'
+          + '<div class="sira-event-titles">'
+          + '<div style="display:flex;align-items:center;gap:6px;">'
+          + '<div class="sira-event-title-en">' + titleEn + '</div>'
+          + '<span style="background:#F3E5F5;color:#6A1B9A;border:1px solid #CE93D8;border-radius:8px;font-size:9px;font-weight:700;padding:1px 6px;white-space:nowrap;">🔗 RELATED</span>'
+          + '</div>'
+          + (ev.title_ar ? '<div class="sira-event-title-ar">' + ev.title_ar + '</div>' : '')
+          + '</div>'
+          + '<div style="font-size:18px;color:#ccc;padding-top:2px;">›</div>'
+          + '</div>'
+          + '<div class="sira-event-body">'
+          + (ev.story_en ? '<div class="sira-story-text">' + storyEn + '</div>' : '')
+          + '</div></div>';
+      });
+    });
+    html += '</div>';
+  }
+
+  wrap.innerHTML = html;
+}
+
+function highlightSira(text, q) {
+  if (!text || !q) return text;
+  const escaped = q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  return text.replace(new RegExp(`(${escaped})`, 'gi'), '<mark class="hl-yellow">$1</mark>');
+}
+
+// ── TOPIC ANALYSIS ──────────────────────────────────────────────────────────
+// Analyzes all hadith results for the current search topic using Claude API.
+// Results are cached in the topic_analysis Supabase table so repeat searches
+// return instantly without another API call.
+
+let _currentAnalysisResults = [];  // hadiths from last search, for analysis
+let _analysisRunning = false;
+
+// Called after every search — shows the panel with stats and Analyze button
+function showTopicAnalysisPanel(results, query) {
+  const panel    = document.getElementById('topicAnalysisPanel');
+  const stats    = document.getElementById('topicAnalysisStats');
+  const btn      = document.getElementById('topicAnalysisBtn');
+  const content  = document.getElementById('topicAnalysisContent');
+  const body     = document.getElementById('topicAnalysisBody');
+  const cached   = document.getElementById('topicAnalysisCached');
+
+  if (!panel || !query || query.trim().length < 2) {
+    if (panel) panel.style.display = 'none';
+    return;
+  }
+
+  // Only show for hadith-type results
+  const hadithResults = results.filter(r => r.type === 'hadith');
+  if (!hadithResults.length) { panel.style.display = 'none'; return; }
+
+  _currentAnalysisResults = hadithResults;
+  _analysisRunning = false;
+
+  // Build stats line
+  const collections = [...new Set(hadithResults.map(r => r.collection).filter(Boolean))];
+  const sunni = hadithResults.filter(r => (r.tradition||'').toLowerCase().includes('sunni')).length;
+  const shia  = hadithResults.filter(r => (r.tradition||'').toLowerCase().includes('shia')).length;
+  stats.textContent = `${hadithResults.length} hadiths · ${collections.length} collections · ${sunni} Sunni · ${shia} Shia`;
+  cached.style.display = 'none';
+  content.style.display = 'none';
+  body.innerHTML = '';
+  btn.textContent = 'Analyze these results ▶';
+  btn.disabled = false;
+  panel.style.display = 'block';
+
+  // Check if we have a cached analysis for this topic
+  checkCachedAnalysis(query.trim().toLowerCase());
+}
+
+async function checkCachedAnalysis(topic) {
+  const btn    = document.getElementById('topicAnalysisBtn');
+  const cached = document.getElementById('topicAnalysisCached');
+  try {
+    const url = `${SB_URL}/rest/v1/topic_analysis?topic=eq.${encodeURIComponent(topic)}&select=*&limit=1`;
+    const res = await fetch(url, {headers: hdrs});
+    const rows = await res.json();
+    if (rows && rows.length) {
+      cached.style.display = 'inline';
+      btn.textContent = 'Show cached analysis ▶';
+      btn.onclick = () => { btn.disabled = true; renderAnalysis(rows[0], true); };
+    }
+  } catch(e) { /* silent */ }
+}
+
+function toggleTopicAnalysis() {
+  const content = document.getElementById('topicAnalysisContent');
+  if (!content) return;
+  if (content.innerHTML.trim() && content.style.display !== 'none') {
+    content.style.display = 'none';
+  } else if (content.innerHTML.trim()) {
+    content.style.display = 'block';
+  }
+}
+
+async function runTopicAnalysis() {
+  if (_analysisRunning) return;
+  _analysisRunning = true;
+
+  const btn    = document.getElementById('topicAnalysisBtn');
+  const content = document.getElementById('topicAnalysisContent');
+  const body   = document.getElementById('topicAnalysisBody');
+  const q      = document.getElementById('searchInput')?.value?.trim() || '';
+
+  btn.textContent = '⏳ Analyzing...';
+  btn.disabled = true;
+  content.style.display = 'block';
+  body.innerHTML = `<div style="padding:20px;text-align:center;color:#8B7355;font-style:italic">
+    <span class="spinner"></span> Claude is reading ${_currentAnalysisResults.length} hadiths about "${esc(q)}"...<br>
+    <span style="font-size:11px;margin-top:6px;display:block">Identifying consensus, contradictions, and conclusions</span>
+  </div>`;
+
+  try {
+    // Check cache first
+    const cacheUrl = `${SB_URL}/rest/v1/topic_analysis?topic=eq.${encodeURIComponent(q.toLowerCase())}&select=*&limit=1`;
+    const cacheRes = await fetch(cacheUrl, {headers: hdrs});
+    const cached   = await cacheRes.json();
+    if (cached && cached.length) {
+      renderAnalysis(cached[0], true);
+      _analysisRunning = false;
+      return;
+    }
+
+    // Build hadith block for Claude
+    const top = _currentAnalysisResults.slice(0, 25);
+    const hadithBlock = top.map((h, i) =>
+      `HADITH ${i+1} — ${h.collection||'?'} (${h.tradition||'?'}) Grade:${h.hadith_grade||'?'}\n` +
+      `${(h.hadith_text||'').slice(0, 350)}`
+    ).join('\n\n');
+
+    const prompt = `You are an Islamic studies scholar. A researcher searched for "${q}" and found ${_currentAnalysisResults.length} hadiths. Analyze the following ${top.length} representative hadiths.
+
+${hadithBlock}
+
+Respond ONLY with valid JSON (no markdown, no preamble):
+{
+  "consensus": "What most hadiths agree on (2-3 sentences)",
+  "contradictions": [
+    {
+      "hadith_a": "Collection + key claim of first position",
+      "hadith_b": "Collection + key claim of contradicting position",
+      "idea_a": "Exact claim A (one sentence)",
+      "idea_b": "Exact claim B (one sentence)",
+      "conflict": "Why these conflict and what it means"
+    }
+  ],
+  "hr_verdict": "Honest assessment of these hadiths against human rights values: dignity, equality, freedom, justice. Note both aligned and problematic aspects.",
+  "science_verdict": "Honest assessment against modern scientific understanding.",
+  "conclusion_can": "What a scholar CAN honestly conclude from this evidence",
+  "conclusion_cant": "What a scholar CANNOT conclude — where evidence is insufficient or contradicted",
+  "quran_verses": ["verse references like 2:188 connected to this topic"]
+}`;
+
+    const claudeRes = await fetch(AI_PROXY, {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({
+        model: "claude-sonnet-4-5",
+        max_tokens: 2000,
+        messages: [{ role: "user", content: prompt }]
+      })
+    });
+
+    const claudeData = await claudeRes.json();
+    let text = claudeData?.content?.[0]?.text || '';
+    text = text.replace(/```json|```/g, '').trim();
+    const analysis = JSON.parse(text);
+
+    // Build the result object matching topic_analysis schema
+    const collections = [...new Set(top.map(r=>r.collection).filter(Boolean))];
+    const result = {
+      topic: q.toLowerCase(),
+      hadith_count: _currentAnalysisResults.length,
+      collections,
+      ...analysis
+    };
+
+    renderAnalysis(result, false);
+
+    // Save to Supabase in background (don't await — don't block the UI)
+    saveTopicAnalysis(result);
+
+  } catch(err) {
+    body.innerHTML = `<div style="padding:16px;color:#A02020;font-size:13px">Analysis failed: ${err.message}. Check your connection and try again.</div>`;
+    btn.textContent = 'Retry ▶';
+    btn.disabled = false;
+    _analysisRunning = false;
+  }
+}
+
+function renderAnalysis(a, fromCache) {
+  const body = document.getElementById('topicAnalysisBody');
+  const btn  = document.getElementById('topicAnalysisBtn');
+  const cached = document.getElementById('topicAnalysisCached');
+
+  if (fromCache) cached.style.display = 'inline';
+  btn.textContent = 'Hide analysis ▲';
+  btn.disabled = false;
+  btn.onclick = toggleTopicAnalysis;
+
+  const contradictions = typeof a.contradictions === 'string'
+    ? JSON.parse(a.contradictions || '[]')
+    : (a.contradictions || []);
+
+  const contSection = contradictions.length ? `
+    <div class="ta-section">
+      <div class="ta-label">⚡ Contradictions Found (${contradictions.length})</div>
+      ${contradictions.map(c => `
+        <div class="ta-contradiction">
+          <div class="ta-contra-row">
+            <div class="ta-contra-cell ta-cell-a">
+              <div class="ta-cell-source">${esc(c.hadith_a||'')}</div>
+              <div class="ta-cell-claim">"${esc(c.idea_a||'')}"</div>
+            </div>
+            <div class="ta-contra-vs">VS</div>
+            <div class="ta-contra-cell ta-cell-b">
+              <div class="ta-cell-source">${esc(c.hadith_b||'')}</div>
+              <div class="ta-cell-claim">"${esc(c.idea_b||'')}"</div>
+            </div>
+          </div>
+          <div class="ta-conflict">${esc(c.conflict||'')}</div>
+        </div>`).join('')}
+    </div>` : '';
+
+  const verses = (a.quran_verses||[]);
+  const verseChips = verses.length ? `
+    <div class="ta-section">
+      <div class="ta-label">📖 Connected Quran Verses</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+        ${verses.map(v => {
+          const parts = String(v).split(':');
+          const s = parseInt(parts[0]), ay = parseInt(parts[1]);
+          if (!s) return '';
+          const q2 = encodeURIComponent(document.getElementById('searchInput')?.value||'');
+          return `<a href="index.html?sura=${s}&aya=${ay||1}&from=research&q=${q2}&source=${encodeURIComponent(currentSource||'all')}"
+                    style="display:inline-block;background:#FDF5DE;border:1px solid var(--gold-border);border-radius:12px;padding:4px 12px;font-size:12px;font-weight:700;color:var(--gold);text-decoration:none"
+                    title="Open verse ${v} in Quran reader">📖 ${esc(v)}</a>`;
+        }).join('')}
+      </div>
+    </div>` : '';
+
+  const avgRow = (a.avg_hr_score || a.avg_sci_score) ? `
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+      ${a.avg_hr_score  != null ? `<span class="score-badge ${scoreClass(a.avg_hr_score,'hr')}">⚖️ Avg HR: ${a.avg_hr_score}/10</span>` : ''}
+      ${a.avg_sci_score != null ? `<span class="score-badge ${scoreClass(a.avg_sci_score,'sci')}">🔬 Avg Sci: ${a.avg_sci_score}/10</span>` : ''}
+      ${a.hadith_count  != null ? `<span class="score-badge" style="background:#F0F0F0;color:#444;border:1px solid #CCC">📜 ${a.hadith_count} hadiths</span>` : ''}
+    </div>` : '';
+
+  // Build tabs — only include sections that have content
+  const tabs = [];
+  if (a.consensus)           tabs.push({ id:'ta_consensus', label:'✅ Consensus',          html: `<div class="ta-text">${esc(a.consensus)}</div>` });
+  if (contradictions.length) tabs.push({ id:'ta_contra',    label:`⚡ Conflicts (${contradictions.length})`, html: contSection });
+  if (a.conclusion_can)      tabs.push({ id:'ta_can',       label:'✓ Can Conclude',        html: `<div class="ta-text ta-can">${esc(a.conclusion_can)}</div>` });
+  if (a.conclusion_cant)     tabs.push({ id:'ta_cant',      label:'✗ Cannot Conclude',     html: `<div class="ta-text ta-cant">${esc(a.conclusion_cant)}</div>` });
+  if (a.hr_verdict)          tabs.push({ id:'ta_hr',        label:'⚖️ Rights',             html: `<div class="ta-text">${esc(a.hr_verdict)}</div>` });
+  if (a.science_verdict)     tabs.push({ id:'ta_sci',       label:'🔬 Science',            html: `<div class="ta-text">${esc(a.science_verdict)}</div>` });
+  if (verses.length)         tabs.push({ id:'ta_verses',    label:'📖 Verses',             html: verseChips });
+
+  const radioGroup = tabs.map((t, i) => `
+    <label style="display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:20px;cursor:pointer;font-size:11px;font-weight:700;border:1px solid var(--gold-border);background:${i===0?'var(--gold)':'transparent'};color:${i===0?'#fff':'#6B5025'};transition:all .2s;" id="label_${t.id}">
+      <input type="radio" name="ta_tab" value="${t.id}" ${i===0?'checked':''} onchange="switchTATab('${t.id}')" style="display:none">
+      ${t.label}
+    </label>`).join('');
+
+  const panels = tabs.map((t, i) => `
+    <div id="panel_${t.id}" style="display:${i===0?'block':'none'};padding-top:10px">
+      ${t.html}
+    </div>`).join('');
+
+  body.innerHTML = `
+    <div style="padding-top:14px">
+      ${fromCache ? '<div style="font-size:10px;color:#2E7D32;font-weight:700;margin-bottom:10px">✓ Cached — instant result</div>' : ''}
+      ${avgRow}
+      <div id="ta_radio_group" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">
+        ${radioGroup}
+      </div>
+      <div id="ta_panels">
+        ${panels}
+      </div>
+      <div style="font-size:10px;color:#AAA;margin-top:12px;font-style:italic">AI-generated scholarly analysis. Not an authoritative religious ruling.</div>
+    </div>`;
+
+  // Inject switchTATab globally once
+  window.switchTATab = function(activeId) {
+    document.querySelectorAll('[id^="panel_ta_"]').forEach(p => p.style.display = 'none');
+    document.querySelectorAll('[id^="label_ta_"]').forEach(l => {
+      const isActive = l.id === 'label_' + activeId;
+      l.style.background = isActive ? 'var(--gold)' : 'transparent';
+      l.style.color = isActive ? '#fff' : '#6B5025';
+    });
+    const panel = document.getElementById('panel_' + activeId);
+    if (panel) panel.style.display = 'block';
+  };
+
+  _analysisRunning = false;
+}
+
+async function saveTopicAnalysis(result) {
+  // Save silently in background — failures are non-critical
+  try {
+    const saveHdrs = {...hdrs, "Prefer": "resolution=merge-duplicates,return=minimal"};
+    const row = {
+      topic: result.topic,
+      hadith_count: result.hadith_count,
+      collections: result.collections,
+      consensus: result.consensus,
+      contradictions: JSON.stringify(result.contradictions || []),
+      hr_verdict: result.hr_verdict,
+      science_verdict: result.science_verdict,
+      conclusion_can: result.conclusion_can,
+      conclusion_cant: result.conclusion_cant,
+      quran_verses: result.quran_verses || [],
+      avg_hr_score: result.avg_hr_score || null,
+      avg_sci_score: result.avg_sci_score || null,
+    };
+    await fetch(`${SB_URL}/rest/v1/topic_analysis`, {
+      method: "POST",
+      headers: saveHdrs,
+      body: JSON.stringify([row])
+    });
+    // Show cached indicator now that it's saved
+    const cachedEl = document.getElementById('topicAnalysisCached');
+    if (cachedEl) cachedEl.style.display = 'inline';
+  } catch(e) { /* silent — background save failure is not user-visible */ }
+}
+
+function toggleSiraEvent(card) {
+  const body = card.querySelector('.sira-event-body');
+  const arrow = card.querySelector('div[style*="font-size:18px"]');
+  const isOpen = body.classList.contains('open');
+  body.classList.toggle('open');
+  if (arrow) arrow.style.transform = isOpen ? '' : 'rotate(90deg)';
+}
+
+// On page load: if we're returning from a verse (?q=... in URL), restore the search
+(function restoreSearchOnReturn() {
+  const params = new URLSearchParams(window.location.search);
+  const q = params.get('q');
+  const source = params.get('source');
+  const sira = params.get('sira');
+  const from = params.get('from');
+  const topicId = params.get('topic');
+  const eventId = params.get('event');
+
+  // Show return banner if we arrived from another page
+  if (from === 'madhhab' && topicId) {
+    const banner = document.getElementById('returnBanner');
+    const link = document.getElementById('returnLink');
+    const desc = document.getElementById('returnDesc');
+    if (banner && link) {
+      link.href = `madhhab.html?topic=${encodeURIComponent(topicId)}`;
+      link.textContent = '◂ Back to Madhhab topic';
+      if (desc) desc.textContent = q ? `Showing hadith search results for "${q}"` : '';
+      banner.classList.add('show');
+    }
+  } else if (from === 'sira' && eventId) {
+    const banner = document.getElementById('returnBanner');
+    const link = document.getElementById('returnLink');
+    const desc = document.getElementById('returnDesc');
+    if (banner && link) {
+      link.href = `sira.html?event=${encodeURIComponent(eventId)}`;
+      link.textContent = '◂ Back to Sira event';
+      if (desc) desc.textContent = q ? `Showing results for "${q}"` : '';
+      banner.classList.add('show');
+    }
+  }
+
+  if (q) {
+    const input = document.getElementById('searchInput');
+    if (input) {
+      input.value = q;
+      if (source && source !== 'all') {
+        const tab = document.querySelector(`.source-tab.${source}`);
+        if (tab) { setSource(source, tab); }
+      }
+      setTimeout(() => doSearch(), 300);
+    }
+  } else if (sira) {
+    const siraTab = document.querySelector('.source-tab.sira');
+    if (siraTab) { setSource('sira', siraTab); loadSiraResearch(); }
+  } else {
+    // Check if returning from a verse — restore saved search state
+    const savedRaw = sessionStorage.getItem('research_saved_state');
+    if (savedRaw) {
+      try {
+        const saved = JSON.parse(savedRaw);
+        if (saved.q) {
+          const input = document.getElementById('searchInput');
+          if (input) input.value = saved.q;
+          // Restore source/trad
+          if (saved.source && saved.source !== 'all') {
+            const tab = document.querySelector('.source-tab.' + saved.source);
+            if (tab) setSource(saved.source, tab);
+          }
+          // Run search then restore scroll
+          setTimeout(() => {
+            doSearch();
+            setTimeout(() => {
+              window.scrollTo(0, saved.scrollY || 0);
+            }, 700);
+          }, 300);
+          // Clear state so it doesn't restore again on fresh visit
+          sessionStorage.removeItem('research_saved_state');
+        }
+      } catch(e) {}
+    }
+  }
+})();
+</script>
 
 <script>
 function qnavGoVerse(url, label) {
@@ -1466,7 +3379,6 @@ document.addEventListener('DOMContentLoaded', addRWButtons);
 function toggleFabMenu(){var t=document.getElementById('fab-toggle'),i=document.getElementById('fab-items'),b=document.getElementById('fab-backdrop'),o=i.classList.contains('open');if(o){t.classList.remove('open');i.classList.remove('open');b.classList.remove('open');}else{t.classList.add('open');i.classList.add('open');b.classList.add('open');}}
 function closeFabMenu(){document.getElementById('fab-toggle').classList.remove('open');document.getElementById('fab-items').classList.remove('open');document.getElementById('fab-backdrop').classList.remove('open');}
 </script>
-
 
 </body>
 </html>
