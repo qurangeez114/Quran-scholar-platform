@@ -1852,48 +1852,42 @@ function toggleSchoolCard(uid) {
 </script>
 
 
+<script>
 // ── CONTROVERSY-FIRST RANKING ──
 window.controversyScore = function(v) {
-  const text = [v.english,v.aya_text,v.text_english,v.hadith_text,v.topic,
-                v.brief_description,v.content,v.reason_text,v.story_en,
-                v.title_en,v.summary,v.name_english,v.theme,v.story]
+  var text = [v.english,v.aya_text,v.text_english,v.hadith_text,v.topic,
+    v.brief_description,v.content,v.reason_text,v.story_en,
+    v.title_en,v.summary,v.name_english,v.theme]
     .filter(Boolean).join(' ').toLowerCase();
-  let score = 0;
-  const critical = ['kill','slay','smite','strike','cut off','amputat','crucif','stone','whip','lash',
-    'apostat','apostasy','slave','captive','concubin','right hand possess',
-    'wife.*beat','beat.*wife','men.*degree','men.*superior',
-    'disbeliev.*hell','fight.*until','jihad','warfare','terror',
-    'do not take.*friend','do not take.*ally',
-    'adulter','zina.*punish','fornication.*lash','thief.*hand','theft.*amputa',
-    'homosexual','liwat','blasphemy.*death','insult.*prophet',
-    'jizya','dhimmi','poll tax','women.*half.*witness','testimony.*two women',
-    'inherit.*half','daughter.*half','marry.*four','polygam','nushuz','idrib',
-    'sex slave','slave.*sex','exile.*death','cut hand'];
-  for (const kw of critical) { if (new RegExp(kw).test(text)) score += 12; }
-  const moderate = ['divorce','talaq','khul','triple.*talaq','inheritance','mahr',
-    'veil','hijab','niqab','disbeliev','infidel','kafir','mushrik',
-    'hellfire','punishment','torment','wrath','war','battle','enemy',
-    'riba','interest','usury','intoxicant','alcohol','wine','forbid',
-    'gender.*court','women.*testimony','slave.*free','music.*forbid',
-    'honor.*kill','martyr.*paradise','die.*path'];
-  for (const kw of moderate) { if (new RegExp(kw).test(text)) score += 5; }
-  const devotional = ['praise.*allah','glory.*allah','bismillah','alhamdulillah',
-    'merciful','compassionate','forgiving','most kind',
-    'be patient','trust.*allah','faith.*heart','believers.*paradise','righteous.*garden'];
-  for (const kw of devotional) { if (new RegExp(kw).test(text)) score -= 2; }
+  var score = 0;
+  var critical = ['kill','slay','smite','cut off','amputat','crucif','stone','whip','lash',
+    'apostat','slave','captive','concubin','right hand possess',
+    'beat.*wife','wife.*beat','men.*degree','fight.*until',
+    'jihad','warfare','terror','adulter','zina','thief.*hand','amputa',
+    'homosexual','liwat','blasphemy','insult.*prophet','jizya','dhimmi',
+    'women.*half.*witness','inherit.*half','polygam','nushuz',
+    'sex slave','cut hand'];
+  for (var i=0;i<critical.length;i++) { try { if (new RegExp(critical[i]).test(text)) score += 12; } catch(e){} }
+  var moderate = ['divorce','talaq','inheritance','veil','hijab','niqab',
+    'disbeliev','infidel','kafir','hellfire','punishment','torment','war','battle',
+    'riba','usury','intoxicant','alcohol','forbid','honor kill','martyr'];
+  for (var j=0;j<moderate.length;j++) { if (text.indexOf(moderate[j]) !== -1) score += 5; }
+  var devotional = ['alhamdulillah','merciful','compassionate','forgiving','be patient','trust in allah'];
+  for (var k=0;k<devotional.length;k++) { if (text.indexOf(devotional[k]) !== -1) score -= 2; }
   if (v.controversy_level) score += (parseInt(v.controversy_level)-1)*4;
   if (v.human_rights_score != null) score += Math.max(0,(5-parseFloat(v.human_rights_score))*2);
-  if (v.potential_concerns && v.potential_concerns.length > 10) score += 4;
+  if (v.potential_concerns && String(v.potential_concerns).length > 10) score += 4;
   return score;
 };
 window.sortByControversy = function(arr) {
-  return arr.slice().sort((a,b) => {
-    const sa=window.controversyScore(a), sb=window.controversyScore(b);
-    if (sb!==sa) return sb-sa;
-    return (a.sura_id||a.year_ce||0)-(b.sura_id||b.year_ce||0)||(a.aya_number||0)-(b.aya_number||0);
+  if (!Array.isArray(arr)) return arr;
+  return arr.slice().sort(function(a,b) {
+    var sa=window.controversyScore(a), sb=window.controversyScore(b);
+    if (sb !== sa) return sb - sa;
+    return ((a.sura_id||a.year_ce||0) - (b.sura_id||b.year_ce||0)) || ((a.aya_number||0) - (b.aya_number||0));
   });
 };
 // ── END CONTROVERSY RANKING ──
-
+</script>
 </body>
 </html>
