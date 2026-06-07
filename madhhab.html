@@ -953,6 +953,8 @@ async function openTopic(topicId) {
     }
 
     body.innerHTML = renderDetail(topic, ruling);
+    window._currentRuling = ruling;
+    injectTopicCrossLinks(topicId, topic.topic, ruling);
   } catch (e) {
     body.innerHTML = `<div class="empty-state">Failed to load: ${e.message}</div>
       <button class="compare-back" onclick="closeTopic()">◂ Back to topics</button>`;
@@ -1075,7 +1077,10 @@ Return ONLY valid JSON (no markdown, no backticks) with this exact structure:
     const savedRuling = Array.isArray(saved) ? saved[0] : saved;
 
     // Render using existing renderDetail
-    body.innerHTML = renderDetail(topic, { ...ruling, ...savedRuling });
+    const mergedRuling = { ...ruling, ...savedRuling };
+    body.innerHTML = renderDetail(topic, mergedRuling);
+    window._currentRuling = mergedRuling;
+    injectTopicCrossLinks(topicId, topic.topic, mergedRuling);
 
   } catch(e) {
     body.innerHTML = renderDetailHeader(topic) + `
@@ -1261,7 +1266,7 @@ function renderDetail(topic, r) {
 }
 
 
-// ── RATING SYSTEM ──
+// ── RATING SYSTEM (silent — no modals, no interruptions) ──
 const RATING_LABELS = {1:'acceptable',2:'concerning',3:'disturbing',4:'shocking',5:'extreme'};
 let _ratingSelections = {};
 let _topicOpenedAt = {};
@@ -1273,6 +1278,75 @@ function getOrCreateSessionId() {
   let sid = localStorage.getItem('msq_session');
   if (!sid) { sid = 'sess_' + Date.now() + '_' + Math.random().toString(36).slice(2,9); localStorage.setItem('msq_session', sid); }
   return sid;
+}
+
+// Silently infer locale signals from browser — no prompts ever
+function inferSilentProfile() {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+    const locale = (navigator.language || navigator.languages && navigator.languages[0] || '').toLowerCase();
+    // Map timezone region to approximate country
+    const tzCountry = tz.includes('Cairo')||tz.includes('Africa/Cairo') ? 'Egypt'
+      : tz.includes('Riyadh')||tz.includes('Asia/Riyadh') ? 'Saudi Arabia'
+      : tz.includes('Baghdad')||tz.includes('Asia/Baghdad') ? 'Iraq'
+      : tz.includes('Tehran')||tz.includes('Asia/Tehran') ? 'Iran'
+      : tz.includes('Karachi')||tz.includes('Asia/Karachi') ? 'Pakistan'
+      : tz.includes('Jakarta')||tz.includes('Asia/Jakarta') ? 'Indonesia'
+      : tz.includes('Dhaka')||tz.includes('Asia/Dhaka') ? 'Bangladesh'
+      : tz.includes('Istanbul')||tz.includes('Europe/Istanbul') ? 'Turkey'
+      : tz.includes('Dubai')||tz.includes('Asia/Dubai') ? 'UAE'
+      : tz.includes('Casablanca') ? 'Morocco'
+      : tz.includes('Algiers') ? 'Algeria'
+      : tz.includes('Tunis') ? 'Tunisia'
+      : tz.includes('Tripoli') ? 'Libya'
+      : tz.includes('Khartoum') ? 'Sudan'
+      : tz.includes('Nairobi') ? 'Kenya'
+      : tz.includes('Lagos') ? 'Nigeria'
+      : tz.includes('London')||locale.startsWith('en-gb') ? 'United Kingdom'
+      : tz.includes('America/New_York')||tz.includes('America/Chicago')||tz.includes('America/Denver')||tz.includes('America/Los_Angeles') ? 'United States'
+      : tz.includes('America/Toronto')||tz.includes('America/Vancouver') ? 'Canada'
+      : tz.includes('Europe/Berlin')||locale.startsWith('de') ? 'Germany'
+      : tz.includes('Europe/Paris')||locale.startsWith('fr') ? 'France'
+      : tz.includes('Europe/Amsterdam') ? 'Netherlands'
+      : tz.includes('Europe/Stockholm') ? 'Sweden'
+      : tz.includes('Australia') ? 'Australia'
+      : tz.split('/')[1]||'Unknown';
+    // Infer language group
+    const lang = locale.startsWith('ar') ? 'Arabic'
+      : locale.startsWith('en') ? 'English'
+      : locale.startsWith('fr') ? 'French'
+      : locale.startsWith('de') ? 'German'
+      : locale.startsWith('tr') ? 'Turkish'
+      : locale.startsWith('ur') ? 'Urdu'
+      : locale.startsWith('fa') ? 'Farsi'
+      : locale.startsWith('id')||locale.startsWith('ms') ? 'Malay/Indonesian'
+      : locale.substring(0,2).toUpperCase();
+    const screenW = screen.width || 0;
+    const deviceType = screenW < 768 ? 'mobile' : screenW < 1200 ? 'tablet' : 'desktop';
+    return { country: tzCountry, language: lang, device_type: deviceType, timezone: tz };
+  } catch(e) { return { country: 'Unknown', language: 'Unknown', device_type: 'unknown', timezone: '' }; }
+}
+
+async function ensureSilentProfile(sessionId) {
+  try {
+    const r = await fetch(SB_URL + '/rest/v1/user_profiles?session_id=eq.' + sessionId + '&select=id', { headers: HDRS });
+    const existing = await r.json();
+    if (existing && existing.length > 0) return; // already saved
+    const profile = inferSilentProfile();
+    await fetch(SB_URL + '/rest/v1/user_profiles', {
+      method: 'POST',
+      headers: Object.assign({}, HDRS, {'Prefer':'return=minimal'}),
+      body: JSON.stringify({
+        session_id: sessionId,
+        country: profile.country,
+        age_group: null,   // never inferred — only filled if user voluntarily sets in profile
+        gender: null,
+        language: profile.language,
+        device_type: profile.device_type,
+        timezone: profile.timezone
+      })
+    });
+  } catch(e) {} // silent fail — never interrupt user
 }
 
 function selectRating(topicId, rating, btn) {
@@ -1293,64 +1367,24 @@ async function submitRating(topicId, topicName, category) {
   const sb = document.getElementById('ratingSubmit_' + topicId);
   if (sb) sb.style.display = 'none';
   try {
-    await ensureUserProfile(sessionId);
+    await ensureSilentProfile(sessionId); // silent — no popup ever
     await fetch(SB_URL + '/rest/v1/topic_ratings', {
       method: 'POST',
       headers: Object.assign({}, HDRS, {'Prefer':'return=minimal'}),
-      body: JSON.stringify({ session_id: sessionId, topic_id: topicId, topic_name: topicName, category: category, rating: rating, rating_label: RATING_LABELS[rating], time_on_topic_seconds: timeOnTopic, time_on_page_seconds: timeOnPage })
+      body: JSON.stringify({
+        session_id: sessionId,
+        topic_id: topicId,
+        topic_name: topicName,
+        category: category,
+        rating: rating,
+        rating_label: RATING_LABELS[rating],
+        time_on_topic_seconds: timeOnTopic,
+        time_on_page_seconds: timeOnPage
+      })
     });
     const done = document.getElementById('ratingDone_' + topicId);
     if (done) done.style.display = 'block';
   } catch(e) { if (sb) { sb.style.display = 'inline-block'; sb.textContent = 'Retry'; } }
-}
-
-async function ensureUserProfile(sessionId) {
-  const r = await fetch(SB_URL + '/rest/v1/user_profiles?session_id=eq.' + sessionId + '&select=id', { headers: HDRS });
-  const existing = await r.json();
-  if (existing && existing.length > 0) return;
-  return new Promise(resolve => showProfileModal(sessionId, resolve));
-}
-
-function showProfileModal(sessionId, onDone) {
-  const modal = document.createElement('div');
-  modal.id = 'profileModal';
-  modal.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(10,8,4,0.88);display:flex;align-items:center;justify-content:center;padding:20px;';
-  modal.innerHTML = '<div style="background:#1a1008;border:1px solid #9a7432;border-radius:4px;padding:28px;max-width:400px;width:100%;">'
-    + '<div style="font-family:Inconsolata,monospace;font-size:9px;letter-spacing:.22em;text-transform:uppercase;color:#c9a85c;margin-bottom:10px;">One-time setup</div>'
-    + '<div style="font-family:Cormorant Garamond,serif;font-size:20px;color:#f5ecd8;margin-bottom:5px;">Help us understand our readers</div>'
-    + '<div style="font-size:13px;color:#a89e8a;margin-bottom:18px;font-style:italic;">Anonymous. Used only for aggregate statistics.</div>'
-    + '<div style="margin-bottom:12px;"><label style="font-family:Inconsolata,monospace;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#9a7432;display:block;margin-bottom:6px;">Age Group</label>'
-    + '<select id="pm_age" style="width:100%;padding:9px;background:#2c1f0e;border:1px solid #6b4f1e;border-radius:3px;color:#f5ecd8;font-size:14px;">'
-    + '<option value="">Prefer not to say</option><option value="under_18">Under 18</option><option value="18_24">18-24</option><option value="25_34">25-34</option><option value="35_44">35-44</option><option value="45_54">45-54</option><option value="55_64">55-64</option><option value="65_plus">65+</option></select></div>'
-    + '<div style="margin-bottom:12px;"><label style="font-family:Inconsolata,monospace;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#9a7432;display:block;margin-bottom:6px;">Gender</label>'
-    + '<select id="pm_gender" style="width:100%;padding:9px;background:#2c1f0e;border:1px solid #6b4f1e;border-radius:3px;color:#f5ecd8;font-size:14px;">'
-    + '<option value="prefer_not">Prefer not to say</option><option value="male">Male</option><option value="female">Female</option><option value="non_binary">Non-binary</option></select></div>'
-    + '<div style="margin-bottom:18px;"><label style="font-family:Inconsolata,monospace;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#9a7432;display:block;margin-bottom:6px;">Country</label>'
-    + '<input id="pm_country" placeholder="e.g. Egypt, Germany, USA" style="width:100%;padding:9px;background:#2c1f0e;border:1px solid #6b4f1e;border-radius:3px;color:#f5ecd8;font-size:14px;outline:none;" /></div>'
-    + '<div style="display:flex;gap:10px;">'
-    + '<button onclick="saveProfile('' + sessionId + '')" style="flex:1;padding:11px;background:#c9a85c;border:none;border-radius:3px;color:#1a1008;font-family:Inconsolata,monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;cursor:pointer;">Save & Continue</button>'
-    + '<button onclick="skipProfile('' + sessionId + '')" style="padding:11px 14px;background:transparent;border:1px solid #6b4f1e;border-radius:3px;color:#9a7432;font-family:Inconsolata,monospace;font-size:11px;cursor:pointer;">Skip</button>'
-    + '</div></div>';
-  document.body.appendChild(modal);
-  window._profileResolve = onDone;
-}
-
-async function saveProfile(sessionId) {
-  const age = document.getElementById('pm_age').value || null;
-  const gender = document.getElementById('pm_gender').value || null;
-  const country = document.getElementById('pm_country').value.trim() || null;
-  try { await fetch(SB_URL + '/rest/v1/user_profiles', { method:'POST', headers: Object.assign({},HDRS,{'Prefer':'return=minimal'}), body: JSON.stringify({session_id:sessionId,age_group:age,gender:gender,country:country}) }); } catch(e){}
-  closeProfileModal();
-}
-
-function skipProfile(sessionId) {
-  fetch(SB_URL + '/rest/v1/user_profiles', { method:'POST', headers: Object.assign({},HDRS,{'Prefer':'return=minimal'}), body: JSON.stringify({session_id:sessionId,age_group:null,gender:null,country:null}) }).catch(()=>{});
-  closeProfileModal();
-}
-
-function closeProfileModal() {
-  const m = document.getElementById('profileModal'); if(m) m.remove();
-  if(window._profileResolve){window._profileResolve();window._profileResolve=null;}
 }
 
 // boot
@@ -1417,26 +1451,25 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 <script>
-/* ── Add cross-web to Madhhab topic panels ── */
-var _origOpenTopic = window.openTopic;
-if (typeof openTopic === 'function') {
-  window.openTopic = function(id, name) {
-    _origOpenTopic(id, name);
-    setTimeout(function() {
-      var panel = document.querySelector('.compare-card') || document.getElementById('compare-' + id);
-      if (!panel || panel.querySelector('.xweb')) return;
-      // Extract verse from quran_verses if present
-      var ruling = window._currentRuling;
-      var verses = ruling ? (ruling.quran_verses || '') : '';
-      var m = String(verses).match(/(\d+):(\d+)/);
-      xwebBuild(panel, 'madhhab', {
-        sura: m ? m[1] : null,
-        aya:  m ? m[2] : null,
-        topicQ: name || '',
-        fromLabel: 'Madhhab: ' + (name||'').substring(0,30), fromIcon: '⚖️'
+/* ── Cross-link injection: fires after topic detail renders ── */
+function injectTopicCrossLinks(topicId, topicName, ruling) {
+  setTimeout(function() {
+    var panel = document.getElementById('detailBody');
+    if (!panel || panel.querySelector('.xweb')) return;
+    var verses = (ruling && ruling.quran_verses) ? ruling.quran_verses : [];
+    var firstVerse = Array.isArray(verses) ? verses[0] : String(verses);
+    var m = String(firstVerse||'').match(/(\d+):(\d+)/);
+    if (typeof W !== 'undefined' && W.xwebBuild) {
+      W.xwebBuild(panel, 'madhhab', {
+        sura: m ? parseInt(m[1]) : null,
+        aya:  m ? parseInt(m[2]) : null,
+        topicQ: topicName || '',
+        q: topicName || '',
+        fromLabel: 'Madhhab: ' + (topicName||'').substring(0,30),
+        fromIcon: '⚖️'
       });
-    }, 400);
-  };
+    }
+  }, 600);
 }
 </script>
 
