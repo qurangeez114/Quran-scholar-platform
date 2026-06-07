@@ -359,5 +359,96 @@ function toggleFabMenu(){var t=document.getElementById('fab-toggle'),i=document.
 function closeFabMenu(){document.getElementById('fab-toggle').classList.remove('open');document.getElementById('fab-items').classList.remove('open');document.getElementById('fab-backdrop').classList.remove('open');}
 </script>
 
+
+<script>
+/* ── UNIVERSAL BACK NAVIGATION ── */
+(function() {
+  var PAGE_LABELS = {
+    'index': '📖 Quran',
+    'research': '🔬 Research',
+    'sira': '🕌 Sira',
+    'stories': '📚 Stories',
+    'madhhab': '⚖️ Madhhab',
+    'themes': '🗂️ Themes'
+  };
+  var PAGE_URLS = {
+    'index': 'index.html',
+    'research': 'research.html',
+    'sira': 'sira.html',
+    'stories': 'stories.html',
+    'madhhab': 'madhhab.html',
+    'themes': 'themes.html'
+  };
+
+  function getFrom() {
+    var p = new URLSearchParams(window.location.search);
+    return p.get('from') || p.get('from_page') || null;
+  }
+
+  function buildBackUrl(from) {
+    var p = new URLSearchParams(window.location.search);
+    var url = PAGE_URLS[from] || from;
+    // Carry over context params
+    var sura = p.get('sura') || p.get('s');
+    var aya = p.get('aya') || p.get('a');
+    var query = p.get('q');
+    var params = [];
+    if (sura) params.push('sura=' + sura + (aya ? '&aya=' + aya : ''));
+    if (query) params.push('q=' + encodeURIComponent(query));
+    return url + (params.length ? '?' + params.join('&') : '');
+  }
+
+  function injectBackBanner() {
+    var from = getFrom();
+    if (!from || !PAGE_LABELS[from]) return;
+
+    var label = PAGE_LABELS[from];
+    var url = buildBackUrl(from);
+
+    var banner = document.createElement('div');
+    banner.id = 'universal-back-banner';
+    banner.style.cssText = 'position:sticky;top:0;z-index:500;background:var(--bg2,#1a1008);border-bottom:1px solid var(--bronze-d,#6b4f1e);padding:8px 16px;display:flex;align-items:center;gap:10px;';
+    banner.innerHTML =
+      '<a href="' + url + '" style="display:inline-flex;align-items:center;gap:6px;font-family:Inconsolata,monospace;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--bronze-ll,#c9a85c);text-decoration:none;padding:6px 12px;border:1px solid var(--bronze-d,#6b4f1e);border-radius:3px;transition:all .2s;" onmouseover="this.style.background='rgba(201,168,92,0.15)'" onmouseout="this.style.background='transparent'">' +
+        '← ' + label +
+      '</a>' +
+      '<span style="font-family:Inconsolata,monospace;font-size:10px;color:var(--ink4,#7a6e58);letter-spacing:.08em;">You came from here</span>';
+
+    // Insert after topbar or at top of body
+    var topbar = document.querySelector('.topbar') || document.querySelector('#topbar') || document.querySelector('header');
+    if (topbar && topbar.nextSibling) {
+      topbar.parentNode.insertBefore(banner, topbar.nextSibling);
+    } else {
+      var body = document.body;
+      body.insertBefore(banner, body.firstChild);
+    }
+  }
+
+  // Also make all outgoing links carry the current page as 'from'
+  function tagOutgoingLinks() {
+    var currentPage = window.location.pathname.split('/').pop().replace('.html','') || 'index';
+    document.querySelectorAll('a[href]').forEach(function(a) {
+      var href = a.getAttribute('href');
+      if (!href) return;
+      var pages = ['index.html','sira.html','research.html','stories.html','madhhab.html','themes.html','theme-analysis.html'];
+      pages.forEach(function(p) {
+        if (href.indexOf(p) === 0 || href.indexOf('./'+p) === 0) {
+          if (href.indexOf('from=') === -1) {
+            var sep = href.indexOf('?') === -1 ? '?' : '&';
+            a.setAttribute('href', href + sep + 'from=' + currentPage);
+          }
+        }
+      });
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() { injectBackBanner(); setTimeout(tagOutgoingLinks, 500); });
+  } else {
+    injectBackBanner();
+    setTimeout(tagOutgoingLinks, 500);
+  }
+})();
+</script>
 </body>
 </html>
