@@ -198,7 +198,7 @@ async function loadCloudProjects(){const h=cloudHeaders();if(!h)return;const cfg
 function renderCloudProjects(items){const box=document.getElementById('cloudProjectList');if(!box)return;if(!items.length){box.innerHTML='<div class="empty">No cloud projects found for this owner/workspace.</div>';return}box.innerHTML=items.map(pr=>`<div class="project-row"><div><div class="project-name">☁️ ${esc(pr.name||pr.title)}</div><div class="project-meta">${(pr.slides||[]).length} slides • ${esc(perspectiveLabels[pr.perspective]||'Academic')} • ${new Date(pr.updated_at||pr.created_at).toLocaleString()}</div></div><div class="item-actions"><button class="btn small" onclick="loadCloudProject('${pr.id}')">Load</button><button class="btn small red" onclick="deleteCloudProject('${pr.id}')">Delete</button></div></div>`).join('')}
 async function loadCloudProject(pid){const h=cloudHeaders();if(!h)return;const cfg=cloudConfig();try{const r=await fetch(`${cfg.url}/rest/v1/${CLOUD_TABLE}?select=*&id=eq.${encodeURIComponent(pid)}&limit=1`,{headers:h});const data=await r.json();if(!r.ok||!data[0])throw new Error(JSON.stringify(data));const pr=data[0];activeProjectId=pr.id;slides=(pr.slides||[]).map(normalize);theme=pr.theme||'academic';perspective=pr.perspective||'academic';document.getElementById('presTitle').value=pr.title||pr.name;document.getElementById('themeSelect').value=theme;const ps=document.getElementById('perspectiveSelect');if(ps)ps.value=perspective;saveBasket();saveProjectSilent({id:pr.id,name:pr.name,title:pr.title,theme:pr.theme,perspective:pr.perspective,slides:pr.slides,updatedAt:pr.updated_at});render();cloudStatus('Cloud project loaded into editor.','ok')}catch(e){cloudStatus('Cloud project load failed. '+e.message,'err')}}
 async function deleteCloudProject(pid){if(!confirm('Delete this project from Supabase cloud?'))return;const h=cloudHeaders();if(!h)return;const cfg=cloudConfig();try{const r=await fetch(`${cfg.url}/rest/v1/${CLOUD_TABLE}?id=eq.${encodeURIComponent(pid)}`,{method:'DELETE',headers:h});if(!r.ok)throw new Error(await r.text());cloudStatus('Cloud project deleted.','ok');loadCloudProjects()}catch(e){cloudStatus('Cloud delete failed. '+e.message,'err')}}
-function deckHTML(printMode=false){const title=esc(document.getElementById('presTitle').value||'Qur’an Study');const css=document.querySelector('style').innerHTML;const deck=exportDeckSlides();return `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><style>${css}.topbar,.panel,.toolbar{display:none}.layout,.center{display:block}.preview-wrap{display:block;padding:0}.slide{width:100vw;height:100vh;border-radius:0;box-shadow:none;page-break-after:always}</style></head><body>${deck.map((s,i)=>slideMarkup(s,i,deck.length,title)).join('')}
+function deckHTML(printMode=false){const title=esc(document.getElementById('presTitle').value||'Qur’an Study');const css=document.querySelector('style').innerHTML;const deck=exportDeckSlides();return `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><style>${css}.topbar,.panel,.toolbar{display:none}.layout,.center{display:block}.preview-wrap{display:block;padding:0}.slide{width:100vw;height:100vh;border-radius:0;box-shadow:none;page-break-after:always}<\/style></head><body>${deck.map((s,i)=>slideMarkup(s,i,deck.length,title)).join('')}
 
 
 
@@ -234,7 +234,7 @@ function deckHTML(printMode=false){const title=esc(document.getElementById('pres
 .fab-item:hover .fab-item-icon{background:#FDF5DE;transform:scale(1.08);}
 #fab-backdrop{display:none;position:fixed;top:0;left:0;width:100%;height:100%;z-index:9998;}
 #fab-backdrop.open{display:block;}
-</style>
+<\/style>
 <div id="fab-backdrop" onclick="closeFabMenu()"></div>
 <div id="fab-menu">
   <button id="fab-toggle" onclick="toggleFabMenu()" title="Quick Actions">＋</button>
@@ -253,7 +253,7 @@ function deckHTML(printMode=false){const title=esc(document.getElementById('pres
 <script>
 function toggleFabMenu(){var t=document.getElementById('fab-toggle'),i=document.getElementById('fab-items'),b=document.getElementById('fab-backdrop'),o=i.classList.contains('open');if(o){t.classList.remove('open');i.classList.remove('open');b.classList.remove('open');}else{t.classList.add('open');i.classList.add('open');b.classList.add('open');}}
 function closeFabMenu(){document.getElementById('fab-toggle').classList.remove('open');document.getElementById('fab-items').classList.remove('open');document.getElementById('fab-backdrop').classList.remove('open');}
-</script>
+<\/script>
 
 <\/body><\/html>`}
 function exportHTML(){if(!slides.length)return alert('No slides to export.');const blob=new Blob([deckHTML()],{type:'text/html'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=(document.getElementById('presTitle').value||'quran-presentation').replace(/[^a-z0-9]+/gi,'-').toLowerCase()+'.html';a.click();URL.revokeObjectURL(a.href)}
