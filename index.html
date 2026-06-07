@@ -1965,7 +1965,8 @@ async function loadFiqhPanel(num, suraId) {
     const rows = res.ok ? await res.json() : [];
 
     if (!rows || rows.length === 0) {
-      panel.innerHTML = '<div style="color:#888;font-style:italic;font-size:13px;padding:20px;text-align:center;">No fiqh rulings recorded for this verse yet.</div>';
+      // Fallback: search by keyword from verse English text
+      await loadFiqhByKeyword(panel, num, suraId);
       return;
     }
 
@@ -2740,6 +2741,84 @@ function switchTab(num, tab, btn) {
   card.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   btn.classList.add('active');
   document.getElementById(`tp-${num}-${tab}`).classList.add('active');
+}
+
+async function loadFiqhByKeyword(panel, num, suraId) {
+  // Get the verse English text to extract keywords
+  try {
+    const verseRes = await fetch(`${SUPABASE_URL}/rest/v1/ayas?sura_id=eq.${suraId}&aya_number=eq.${num}&select=english`, { headers: HEADERS });
+    const verseData = verseRes.ok ? await verseRes.json() : [];
+    const verseText = (verseData[0] && verseData[0].english) ? verseData[0].english.toLowerCase() : '';
+
+    // Map keywords to categories
+    const kwMap = {
+      'kill':'Jihad and Warfare','slay':'Jihad and Warfare','fight':'Jihad and Warfare','war':'Jihad and Warfare','battle':'Jihad and Warfare',
+      'slave':'Slavery','captive':'Slavery','possess':'Slavery',
+      'wife':'Marriage and Family Law','wives':'Marriage and Family Law','marry':'Marriage and Family Law','marriage':'Marriage and Family Law','divorce':'Divorce and Separation',
+      'woman':'Women','women':'Women','female':'Women',
+      'inherit':'Inheritance and Wills',
+      'prayer':'Prayer and Worship','pray':'Prayer and Worship','salah':'Prayer and Worship',
+      'fast':'Fasting','ramadan':'Fasting',
+      'zakat':'Finance and Economics','charity':'Finance and Economics',
+      'pilgrimage':'Hajj','hajj':'Hajj',
+      'wine':'Food and Drink','intoxicant':'Food and Drink','food':'Food and Drink',
+      'punish':'Criminal Law and Hudud','lash':'Criminal Law and Hudud','hand':'Criminal Law and Hudud','thief':'Criminal Law and Hudud',
+      'adulter':'Criminal Law and Hudud','fornication':'Criminal Law and Hudud',
+      'apostat':'Apostasy','unbeliev':'Apostasy',
+      'disbeliev':'Christians and Jews (Ahl al-Kitab)','people of the book':'Christians and Jews (Ahl al-Kitab)',
+      'usury':'Banking and Riba','interest':'Banking and Riba','riba':'Banking and Riba',
+      'witness':'Women: Legal Status','testimony':'Women: Legal Status',
+      'veil':'Women: Dress and Modesty','modesty':'Women: Dress and Modesty',
+      'orphan':'Inheritance and Wills','guardian':'Inheritance and Wills',
+    };
+
+    let category = null;
+    for (const kw in kwMap) {
+      if (verseText.includes(kw)) { category = kwMap[kw]; break; }
+    }
+
+    // Build search query from verse text (first 3 meaningful words)
+    const words = verseText.replace(/[^a-z\s]/g,'').split(/\s+/).filter(w => w.length > 4).slice(0,3).join(' ');
+    let topics = [];
+
+    if (words) {
+      const searchRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/madhhab_topics?select=id,topic,category,subcategory,controversy_level&or=(topic.ilike.*${encodeURIComponent(words)}*,brief_description.ilike.*${encodeURIComponent(words)}*)&order=controversy_level.desc.nullslast&limit=4`,
+        { headers: HEADERS }
+      );
+      if (searchRes.ok) topics = await searchRes.json();
+    }
+
+    if (!topics.length && category) {
+      const catRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/madhhab_topics?select=id,topic,category,subcategory,controversy_level&category=ilike.*${encodeURIComponent(category)}*&order=controversy_level.desc.nullslast&limit=4`,
+        { headers: HEADERS }
+      );
+      if (catRes.ok) topics = await catRes.json();
+    }
+
+    if (!topics.length) {
+      panel.innerHTML = '<div style="color:#888;font-style:italic;font-size:13px;padding:20px;text-align:center;">No fiqh rulings linked to this verse yet.</div>';
+      return;
+    }
+
+    // Show as clickable topic cards linking to madhhab.html
+    const labels = {1:'Acceptable',2:'Concerning',3:'Disturbing',4:'Shocking',5:'Extreme'};
+    const colors = {1:'#2E7D32',2:'#F9A825',3:'#E65100',4:'#B71C1C',5:'#6A1B9A'};
+    panel.innerHTML = '<div style="padding:12px 16px 6px;font-family:Inconsolata,monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#888;">Related Fiqh Topics</div>' +
+      topics.map(t => {
+        const lvl = t.controversy_level || 3;
+        const col = colors[lvl] || '#888';
+        return `<div style="margin:6px 12px;padding:12px 14px;background:#FDFAF2;border:1px solid #E0D4B0;border-left:3px solid ${col};border-radius:6px;cursor:pointer;" onclick="window.open('madhhab.html?topic=${encodeURIComponent(t.id)}&from=index','_blank')">
+          <div style="font-family:'EB Garamond',serif;font-size:15px;font-weight:700;color:#1A1610;">${t.topic}</div>
+          <div style="font-family:Inconsolata,monospace;font-size:10px;color:#888;margin-top:3px;">${t.category||''} · <span style="color:${col};font-weight:700;">${labels[lvl]||''}</span> · Tap to read full ruling →</div>
+        </div>`;
+      }).join('') +
+      '<div style="padding:8px 16px 12px;font-family:Inconsolata,monospace;font-size:10px;color:#BBB;">Based on verse context · <a href="madhhab.html" style="color:#B8902A;">Browse all rulings →</a></div>';
+
+  } catch(e) {
+    panel.innerHTML = '<div style="color:#888;font-style:italic;font-size:13px;padding:20px;text-align:center;">Could not load fiqh rulings.</div>';
+  }
 }
 
 // ============================================================
