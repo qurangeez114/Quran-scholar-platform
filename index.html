@@ -1965,7 +1965,7 @@ async function loadFiqhPanel(num, suraId) {
     const rows = res.ok ? await res.json() : [];
 
     if (!rows || rows.length === 0) {
-      panel.innerHTML = '<div style="color:#888;font-style:italic;font-size:13px;padding:20px;text-align:center;">No fiqh rulings recorded for this verse yet.</div>';
+      await loadFiqhByKeyword(panel, num, suraId);
       return;
     }
 
@@ -6944,6 +6944,69 @@ function restoreVerseHighlights() {
       if (body) body.innerHTML = html;
     }
   });
+}
+
+
+async function loadFiqhByKeyword(panel, num, suraId) {
+  try {
+    var kwMap = {
+      'kill':'Jihad and Warfare','fight':'Jihad and Warfare','slay':'Jihad and Warfare',
+      'slave':'Slavery','captive':'Slavery',
+      'wife':'Marriage and Family Law','marry':'Marriage and Family Law',
+      'divorce':'Divorce and Separation',
+      'wom':'Women: Legal Status and Personhood',
+      'inherit':'Inheritance and Wills',
+      'pray':'Prayer and Worship',
+      'punish':'Criminal Law and Hudud','lash':'Criminal Law and Hudud',
+      'thief':'Criminal Law and Hudud','adulter':'Criminal Law and Hudud',
+      'apostat':'Apostasy',
+      'disbeliev':'Christians and Jews (Ahl al-Kitab)',
+      'usury':'Finance and Economics','interest':'Finance and Economics',
+      'witness':'Women: Legal Status and Personhood',
+      'veil':'Women: Dress and Modesty',
+      'food':'Food and Drink','wine':'Food and Drink',
+      'homosex':'LGBTQ: Male Homosexuality'
+    };
+    var controversialSuras = {
+      2:'Finance and Economics',4:'Women: Legal Status and Personhood',
+      5:'Criminal Law and Hudud',8:'Jihad and Warfare',
+      9:'Jihad and Warfare',24:'Women: Dress and Modesty',
+      33:'Women: Legal Status and Personhood',47:'Jihad and Warfare',
+      60:'Non-Muslim Rights and Dhimma'
+    };
+    var vr = await fetch(SUPABASE_URL+'/rest/v1/ayas?sura_id=eq.'+suraId+'&aya_number=eq.'+num+'&select=english', {headers:HEADERS});
+    var vd = vr.ok ? await vr.json() : [];
+    var txt = (vd[0] && vd[0].english) ? vd[0].english.toLowerCase() : '';
+    var category = null;
+    var kws = Object.keys(kwMap);
+    for (var i=0; i<kws.length; i++) {
+      if (txt.indexOf(kws[i]) !== -1) { category = kwMap[kws[i]]; break; }
+    }
+    if (!category) category = controversialSuras[suraId] || 'Prayer and Worship';
+    var enc = encodeURIComponent(category);
+    var tr = await fetch(SUPABASE_URL+'/rest/v1/madhhab_topics?select=id,topic,category,controversy_level&category=ilike.*'+enc+'*&order=controversy_level.desc.nullslast&limit=5', {headers:HEADERS});
+    var topics = tr.ok ? await tr.json() : [];
+    if (!topics || !topics.length) {
+      panel.innerHTML = '<div style="color:#888;font-style:italic;font-size:13px;padding:20px;text-align:center;">No fiqh rulings found. <a href="madhhab.html" style="color:#B8902A;">Browse all →</a></div>';
+      return;
+    }
+    var lvlLabels = {1:'Acceptable',2:'Concerning',3:'Disturbing',4:'Shocking',5:'Extreme'};
+    var lvlColors = {1:'#2E7D32',2:'#F57F17',3:'#E65100',4:'#B71C1C',5:'#6A1B9A'};
+    var html = '<div style="padding:10px 14px 4px;font-family:Inconsolata,monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#999;">Related Fiqh</div>';
+    for (var j=0; j<topics.length; j++) {
+      var t = topics[j];
+      var lvl = t.controversy_level || 3;
+      var col = lvlColors[lvl] || '#888';
+      html += '<div onclick="window.open(\'madhhab.html?topic='+encodeURIComponent(t.id)+'&from=index\',\'_blank\')" style="margin:5px 12px;padding:11px 13px;background:#FDFAF2;border:1px solid #E0D4B0;border-left:3px solid '+col+';border-radius:6px;cursor:pointer;">';
+      html += '<div style="font-family:\'EB Garamond\',serif;font-size:15px;font-weight:700;color:#1A1610;">'+t.topic+'</div>';
+      html += '<div style="font-family:Inconsolata,monospace;font-size:10px;color:#888;margin-top:3px;"><span style="color:'+col+';font-weight:700;">'+( lvlLabels[lvl]||'' )+'</span> \u00b7 Tap to read full ruling \u2192</div>';
+      html += '</div>';
+    }
+    html += '<div style="padding:6px 14px 12px;font-family:Inconsolata,monospace;font-size:10px;color:#BBB;"><a href="madhhab.html" style="color:#B8902A;">Browse all fiqh rulings \u2192</a></div>';
+    panel.innerHTML = html;
+  } catch(e) {
+    panel.innerHTML = '<div style="color:#888;font-style:italic;font-size:13px;padding:20px;text-align:center;">Could not load fiqh rulings.</div>';
+  }
 }
 
 </script>
