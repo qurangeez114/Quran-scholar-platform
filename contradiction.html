@@ -400,7 +400,8 @@ function render(items) {
             '<a class="cross-link" href="index.html?sura='+c.sura+'&aya='+c.aya+'&from=contradiction">📖 Open Verse '+esc(String(c.sura)+':'+String(c.aya))+'</a>' +
             '<a class="cross-link" href="madhhab.html?from=contradiction">⚖️ Madhhab Rulings</a>' +
             '<a class="cross-link" href="research.html?q='+encodeURIComponent(c.topic||'')+'&from=contradiction">🔬 Research</a>' +
-          '</div>' +
+          '<button onclick="addToPresentation({type:\'research\',id:\'contra_'+c.id+'\',title:esc(c.topic),reference:\'Contradiction Analysis\',text:(c.claim||\'\')+(c.position_a?'\\n\\nTraditional: '+c.position_a:\'\'),arabic:\'\',sourceUrl:\'contradiction.html?id='+c.id+'\'});" style="padding:5px 12px;border:1px solid var(--gold-d);border-radius:4px;color:var(--gold);background:transparent;font-family:Inconsolata,monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;">＋ Presentation</button>' +
+        '</div>' +
 
         '</div>' +
       '</div>' +
@@ -468,6 +469,33 @@ function checkDeepLink() {
 }
 
 load().then(checkDeepLink);
+</script>
+
+<script>
+/* ── UNIVERSAL ADD TO PRESENTATION ── */
+function addToPresentation(item) {
+  var key = 'presentationBasket';
+  var existing = [];
+  try { existing = JSON.parse(localStorage.getItem(key)||'[]'); } catch(e) {}
+  var dup = existing.find(function(s){ return s.id === item.id; });
+  if (dup) { uPresToast('Already in presentation'); return; }
+  existing.push(item);
+  try { localStorage.setItem(key, JSON.stringify(existing)); } catch(e) {}
+  uPresToast('✓ Added · ' + existing.length + ' slides total');
+}
+function uPresToast(msg) {
+  var t = document.getElementById('u-pres-toast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'u-pres-toast';
+    t.style.cssText = 'position:fixed;bottom:70px;left:50%;transform:translateX(-50%) translateY(10px);background:#1a1008;color:#c9a85c;padding:8px 18px;border-radius:20px;font-family:Inconsolata,monospace;font-size:12px;z-index:9999;opacity:0;transition:all .3s;pointer-events:none;border:1px solid #9a7432;white-space:nowrap;';
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.style.opacity = '1'; t.style.transform = 'translateX(-50%) translateY(0)';
+  clearTimeout(t._t);
+  t._t = setTimeout(function(){ t.style.opacity='0'; t.style.transform='translateX(-50%) translateY(10px)'; }, 2200);
+}
 </script>
 </body>
 </html>
