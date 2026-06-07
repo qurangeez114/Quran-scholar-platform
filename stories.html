@@ -5,7 +5,6 @@
 window.controversyScore=function(v){var t=[v.english,v.aya_text,v.text_english,v.hadith_text,v.topic,v.brief_description,v.content,v.reason_text,v.story_en,v.title_en,v.summary,v.name_english,v.theme].filter(Boolean).join(' ').toLowerCase();var s=0;['kill','slay','smite','amputat','crucif','stone','whip','lash','apostat','slave','captive','concubin','beat.*wife','wife.*beat','fight.*until','jihad','warfare','adulter','zina','thief.*hand','homosexual','liwat','blasphemy','jizya','dhimmi','women.*half','inherit.*half','polygam','nushuz','sex slave','cut hand'].forEach(function(k){try{if(new RegExp(k).test(t))s+=12;}catch(e){}});['divorce','talaq','inheritance','veil','hijab','niqab','disbeliev','infidel','kafir','hellfire','punishment','torment','war','battle','riba','usury','intoxicant','alcohol','honor kill','martyr'].forEach(function(k){if(t.indexOf(k)!==-1)s+=5;});['alhamdulillah','merciful','compassionate','forgiving','be patient'].forEach(function(k){if(t.indexOf(k)!==-1)s-=2;});if(v.controversy_level)s+=(parseInt(v.controversy_level)-1)*4;if(v.human_rights_score!=null)s+=Math.max(0,(5-parseFloat(v.human_rights_score))*2);return s;};
 window.sortByControversy=function(arr){if(!Array.isArray(arr))return arr;return arr.slice().sort(function(a,b){var sa=window.controversyScore(a),sb=window.controversyScore(b);return sb!==sa?sb-sa:((a.sura_id||a.year_ce||0)-(b.sura_id||b.year_ce||0))||((a.aya_number||0)-(b.aya_number||0));});};
 </script>
-
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Quranic Stories & Comparative Scripture</title>
@@ -250,7 +249,369 @@ body { padding-bottom: 60px !important; }
   <button class="bn on" onclick="location.href='stories.html'"><span class="bi">📚</span><span>Stories</span></button>
 </nav>
 
+<script>
+const SB_URL='https://ylosytbxpzxzwfzjpaej.supabase.co';
+const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
+const HD={'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY};
 
+async function sb(table,params){
+  const r=await fetch(SB_URL+'/rest/v1/'+table+'?'+params,{headers:HD});
+  return r.json();
+}
+
+let allStories=[];
+const ICONS={prophet:'🕌',event:'⚡',people:'👥',theme:'💡'};
+const CATS=['prophet','event','people','theme'];
+const SNAMES={1:'Al-Fatiha',2:'Al-Baqarah',3:'Ali Imran',4:'An-Nisa',5:'Al-Maidah',6:'Al-Anam',7:'Al-Araf',8:'Al-Anfal',9:'At-Tawbah',10:'Yunus',11:'Hud',12:'Yusuf',14:'Ibrahim',15:'Al-Hijr',17:'Al-Isra',18:'Al-Kahf',19:'Maryam',20:'Ta-Ha',21:'Al-Anbiya',22:'Al-Hajj',26:'Ash-Shuara',27:'An-Naml',28:'Al-Qasas',37:'As-Saffat',71:'Nuh',85:'Al-Buruj'};
+
+function toggleSB(){
+  document.getElementById('sb').classList.toggle('open');
+  document.getElementById('overlay').classList.toggle('open');
+}
+
+function filterSB(q){
+  q=q.toLowerCase();
+  document.querySelectorAll('#sb-list .si').forEach(el=>{
+    el.style.display=el.textContent.toLowerCase().includes(q)?'':'none';
+  });
+}
+
+function tradClass(t){
+  const s=(t||'').split('/')[0].trim();
+  if(/Torah|Bible/i.test(s))return'tT';
+  if(/Talmud/i.test(s))return'tTa';
+  if(/Midrash|Pirkei/i.test(s))return'tM';
+  if(/Apocrypha|Gospel|Enoch|Testament|Jubilees|Pseudo|Dead|Targum|Syriac|Kebra/i.test(s))return'tA';
+  if(/Zoroast|Avesta|Bundah|Arda|Vendidad/i.test(s))return'tZ';
+  return'tO';
+}
+
+async function init(){
+  allStories=await sb('quranic_stories','select=*&order=total_mentions.desc');
+  buildSidebar();
+  // Load hadith topics
+  const htopics=await sb('hadith_comparative','select=topic,slug,category&order=category.asc,topic.asc');
+  const seen=new Set();
+  const uniq=htopics.filter(t=>{if(seen.has(t.slug))return false;seen.add(t.slug);return true;});
+  const catIcons={worship:'🕌',ethics:'⚖️',theology:'📿',prophethood:'🌟',law:'📜',practice:'🤲'};
+  const list=document.getElementById('sb-list');
+  if(list){
+    list.innerHTML+=`<div class="cat" style="margin-top:8px;border-top:1px solid var(--border);padding-top:10px;">⚙️ HADITH PRACTICES</div>`;
+    uniq.forEach(t=>{
+      const div=document.createElement('div');
+      div.className='si';
+      div.innerHTML=`<div class="si-icon" style="background:rgba(74,32,128,.2);">${catIcons[t.category]||'📖'}</div><div class="si-text"><span class="si-en">${t.topic}</span></div>`;
+      div.addEventListener('click',()=>openHadith(t.slug,t.topic));
+      list.appendChild(div);
+    });
+  }
+  // Open first story
+  if(allStories.length) openStory(allStories[0]);
+}
+
+function buildSidebar(){
+  const list=document.getElementById('sb-list');
+  list.innerHTML='';
+  const cats={};
+  allStories.forEach(s=>{
+    const c=s.category||'other';
+    if(!cats[c])cats[c]=[];
+    cats[c].push(s);
+  });
+  [...CATS,...Object.keys(cats).filter(c=>!CATS.includes(c))].forEach(c=>{
+    if(!cats[c])return;
+    const label=document.createElement('div');
+    label.className='cat';
+    label.textContent=c+'s';
+    list.appendChild(label);
+    cats[c].forEach(s=>{
+      const div=document.createElement('div');
+      div.className='si';
+      div.id='si-'+s.slug;
+      div.innerHTML=`<div class="si-icon" style="background:rgba(201,168,76,.15);">${ICONS[s.category]||'📖'}</div><div class="si-text"><span class="si-ar">${s.name_arabic||''}</span><span class="si-en">${s.name_english}</span></div>`;
+      div.addEventListener('click',()=>{
+        openStory(s);
+        if(window.innerWidth<600){toggleSB();}
+      });
+      list.appendChild(div);
+    });
+  });
+}
+
+async function openStory(story){
+  // Highlight
+  document.querySelectorAll('#sb-list .si').forEach(e=>e.classList.remove('on'));
+  const el=document.getElementById('si-'+story.slug);
+  if(el){el.classList.add('on');el.scrollIntoView({block:'nearest'});}
+  // Show browse area
+  document.getElementById('browse').style.display='block';
+  document.getElementById('s-res').style.display='none';
+  const main=document.getElementById('storyMain');
+  main.innerHTML='<div class="loading" style="padding:40px;"><div class="spin"></div></div>';
+  // Fetch sources
+  const sources=await sb('story_sources','story_id=eq.'+story.id+'&select=*&order=tradition.asc');
+  // Fetch verses
+  let verses=[];
+  try{
+    const sv=await sb('story_verses','story_id=eq.'+story.id+'&select=sura_id,aya_number,note&order=sura_id.asc&limit=10');
+    if(sv&&sv.length){
+      verses=await Promise.all(sv.map(v=>sb('ayas','sura_id=eq.'+v.sura_id+'&aya_number=eq.'+v.aya_number+'&select=sura_id,aya_number,arabic,english&limit=1').then(r=>r[0]?{...r[0],note:v.note}:null)));
+      verses=verses.filter(Boolean);
+    }
+  }catch(e){}
+
+  const suras=story.primary_suras||[];
+  const vHTML=verses.length?verses.map(v=>`
+    <div class="v-card">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
+        <span style="color:var(--gold);font-weight:700;font-size:12px;">📖 ${v.sura_id}:${v.aya_number}</span>
+        <span style="color:var(--dim);font-size:11px;">${SNAMES[v.sura_id]||'Surah '+v.sura_id}</span>
+        ${v.note?`<span style="color:var(--dim);font-size:10px;font-style:italic;">— ${v.note}</span>`:''}
+        <a href="index.html?sura=${v.sura_id}&aya=${v.aya_number}&from=stories" style="margin-left:auto;font-size:11px;color:var(--gold);text-decoration:none;">Open →</a>
+      </div>
+      <div class="v-ar">${v.arabic||''}</div>
+      <div class="v-en">${v.english||''}</div>
+    </div>`).join(''):
+    suras.map(s=>`<a href="index.html?sura=${s}&from=stories" style="display:inline-flex;align-items:center;gap:4px;background:var(--surface2);border:1px solid var(--border);border-radius:16px;padding:4px 10px;margin:3px;font-size:12px;color:var(--text);text-decoration:none;">📖 ${s}. ${SNAMES[s]||'Surah '+s}</a>`).join('');
+
+  const srcHTML=sources.length?sources.map(s=>`
+    <div class="src-card">
+      <div class="src-hdr" onclick="this.nextElementSibling.classList.toggle('open');this.querySelector('.arr').textContent=this.nextElementSibling.classList.contains('open')?'▲':'▼';">
+        <span class="trad ${tradClass(s.tradition)}">${s.tradition}</span>
+        <div class="src-info"><div class="src-name">${s.source_name}</div><div class="src-ref">${s.volume?s.volume+' · ':''}${s.reference||''}</div></div>
+        <span class="arr" style="color:var(--dim);font-size:16px;flex-shrink:0;">▼</span>
+      </div>
+      <div class="src-body">
+        <p class="src-sum">${s.summary||''}</p>
+        <div class="cg">
+          <div class="cb cs"><div class="cl">✓ Similarities</div><div class="ct">${s.similarities||'—'}</div></div>
+          <div class="cb cd"><div class="cl">✕ Differences</div><div class="ct">${s.differences||'—'}</div></div>
+        </div>
+        <div class="cb cu" style="margin-top:8px;"><div class="cl">★ Unique to Quran</div><div class="ct">${s.unique_quran||'—'}</div></div>
+        ${s.url?`<div style="margin-top:8px;"><a href="${s.url}" target="_blank" class="src-link">📎 Read source →</a></div>`:''}
+      </div>
+    </div>`).join(''):'<p style="color:var(--dim);font-size:13px;">No comparative sources yet.</p>';
+
+  main.innerHTML=`
+    <div class="s-hdr">
+      <div class="s-ar">${story.name_arabic||''}</div>
+      <div class="s-en">${story.name_english}</div>
+      ${story.name_tigrinya?`<div class="s-ti">${story.name_tigrinya}</div>`:''}
+      <div class="s-meta">
+        <span class="bdg bdg-g">${ICONS[story.category]||'📖'} ${story.category}</span>
+        <span class="bdg bdg-gr">📖 ${story.total_mentions} mentions</span>
+        <span class="bdg bdg-b">${suras.length} Surahs</span>
+        <button class="read-btn" onclick="genAI()">✨ AI Analysis</button>
+      </div>
+      <p class="s-sum">${story.summary||''}</p>
+    </div>
+    <div class="sec">
+      <div class="sec-t">📖 Key Quranic Verses</div>
+      ${vHTML}
+    </div>
+    <div class="sec">
+      <div class="sec-t">📚 Comparative Sources</div>
+      ${srcHTML}
+    </div>
+    <div class="ai-box">
+      <div class="sec-t" style="border:none;margin:0 0 10px;">🤖 AI Deep Analysis</div>
+      <div id="ai-out" class="ai-out"></div>
+      <button class="ai-btn" id="ai-btn" onclick="genAI()">✨ Generate Scholarly Analysis</button>
+    </div>
+    <div class="sec" id="fiqh-sec" style="display:none;">
+      <div class="sec-t">⚖️ Related Fiqh Rulings</div>
+      <div id="fiqh-list"></div>
+    </div>
+  `;
+  window._curStory=story;
+  loadStoryFiqh(story);
+}
+
+async function loadStoryFiqh(story) {
+  // Extract keywords from story name + category for madhhab search
+  const keywords = [story.name_english, story.category].filter(Boolean).join(' ');
+  const kwMap = {
+    'prayer':'Prayer and Worship','salah':'Prayer and Worship','moses':'Apostasy',
+    'marriage':'Marriage and Family Law','nikah':'Marriage and Family Law',
+    'divorce':'Divorce and Separation','inherit':'Inheritance and Wills',
+    'woman':'Women','mary':'Women: Worship','war':'Jihad and Warfare','jihad':'Jihad and Warfare',
+    'slave':'Slavery','joseph':'Criminal Law and Hudud','david':'State and Politics',
+    'solomon':'State and Politics','jesus':'Christians and Jews','isa':'Christians and Jews',
+    'noah':'Eschatology','adam':'Theology of God','iblis':'Theology of God','satan':'Theology of God',
+    'lut':'LGBTQ','lot':'LGBTQ','food':'Food and Drink','usury':'Banking and Riba',
+    'riba':'Banking and Riba','punishment':'Hudud Punishments','theft':'Criminal Law and Hudud',
+    'zina':'Hudud Punishments','adultery':'Hudud Punishments','prophet':'Blasphemy: Insulting the Prophet',
+    'pilgrimage':'Prayer and Worship','hajj':'Prayer and Worship','fasting':'Prayer and Worship',
+    'sufi':'Sufism and Mysticism','mystic':'Sufism and Mysticism',
+    'creation':'Theology of God','judgment':'Eschatology and the End Times'
+  };
+  const SB_URL2 = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
+  const SB_KEY2 = 'sb_publishable_KtJjJRWQn5a5VMSnAoTQXw_dCwnI6BH';
+  const H2 = {'apikey':SB_KEY2,'Authorization':'Bearer '+SB_KEY2};
+
+  try {
+    const ls = keywords.toLowerCase();
+    let topics = [];
+
+    // Try direct keyword search first
+    const enc = encodeURIComponent(story.name_english.split(' ').slice(0,2).join(' '));
+    const r1 = await fetch(`${SB_URL2}/rest/v1/madhhab_topics?select=id,topic,category&or=(topic.ilike.*${enc}*,brief_description.ilike.*${enc}*)&limit=4`, {headers:H2});
+    if (r1.ok) topics = await r1.json();
+
+    // Fallback: category match
+    if (!topics.length) {
+      for (const kw in kwMap) {
+        if (ls.includes(kw)) {
+          const cat = encodeURIComponent(kwMap[kw]);
+          const r2 = await fetch(`${SB_URL2}/rest/v1/madhhab_topics?select=id,topic,category&category=ilike.*${cat}*&limit=4`, {headers:H2});
+          if (r2.ok) { topics = await r2.json(); if (topics.length) break; }
+        }
+      }
+    }
+
+    const sec = document.getElementById('fiqh-sec');
+    const list = document.getElementById('fiqh-list');
+    if (!sec || !list) return;
+
+    if (!topics.length) return; // silently hide if nothing found
+
+    list.innerHTML = topics.map(t => `
+      <div class="fiqh-card" onclick="location.href='madhhab.html?topic=${encodeURIComponent(t.id)}&from=stories'">
+        <div class="fiqh-card-title">⚖️ ${t.topic}</div>
+        <div class="fiqh-card-meta">${t.category||''} · Tap to read full ruling →</div>
+      </div>`).join('');
+    sec.style.display = 'block';
+  } catch(e) {} // silent fail
+}
+
+async function openHadith(slug,topic){
+  document.getElementById('browse').style.display='block';
+  document.getElementById('s-res').style.display='none';
+  const main=document.getElementById('storyMain');
+  main.innerHTML='<div class="loading"><div class="spin"></div></div>';
+  const sources=await sb('hadith_comparative','slug=eq.'+slug+'&select=*&order=tradition.asc');
+  if(!sources.length){main.innerHTML='<p style="padding:20px;color:var(--dim);">No sources found.</p>';return;}
+  const srcHTML=sources.map(s=>`
+    <div class="src-card">
+      <div class="src-hdr" onclick="this.nextElementSibling.classList.toggle('open');this.querySelector('.arr').textContent=this.nextElementSibling.classList.contains('open')?'▲':'▼';">
+        <span class="trad ${tradClass(s.tradition)}">${s.tradition}</span>
+        <div class="src-info"><div class="src-name">${s.source_name}</div><div class="src-ref">${s.volume?s.volume+' · ':''}${s.reference||''}</div></div>
+        <span class="arr" style="color:var(--dim);font-size:16px;flex-shrink:0;">▼</span>
+      </div>
+      <div class="src-body">
+        <div style="background:rgba(201,168,76,.08);border-left:3px solid var(--gold);border-radius:7px;padding:8px 11px;margin-bottom:10px;font-size:12px;color:var(--text);">${s.hadith_text||''}</div>
+        <p class="src-sum">${s.summary||''}</p>
+        <div class="cg">
+          <div class="cb cs"><div class="cl">✓ Similarities</div><div class="ct">${s.similarities||'—'}</div></div>
+          <div class="cb cd"><div class="cl">✕ Differences</div><div class="ct">${s.differences||'—'}</div></div>
+        </div>
+        <div class="cb cu" style="margin-top:8px;"><div class="cl">★ Unique to Islam</div><div class="ct">${s.unique_islam||'—'}</div></div>
+        ${s.url?`<div style="margin-top:8px;"><a href="${s.url}" target="_blank" class="src-link">📎 Read source →</a></div>`:''}
+      </div>
+    </div>`).join('');
+  main.innerHTML=`
+    <div class="s-hdr"><div class="s-en">${topic}</div><div class="s-meta"><span class="bdg bdg-g">⚙️ Hadith Practice</span><span class="bdg bdg-b">${sources.length} sources</span></div></div>
+    <div class="sec"><div class="sec-t">📚 Comparative Sources from Prior Traditions</div>${srcHTML}</div>`;
+}
+
+function qs(q){document.getElementById('s-inp').value=q;doSearch();}
+
+function switchTab(tab,el){
+  document.querySelectorAll('.s-tab').forEach(t=>t.classList.remove('on'));
+  el.classList.add('on');
+  if(tab==='browse'){
+    document.getElementById('s-content').style.display='none';
+    document.getElementById('browse').style.display='block';
+    document.getElementById('s-res').style.display='none';
+  } else {
+    document.getElementById('s-content').style.display='block';
+    document.getElementById('browse').style.display='none';
+  }
+}
+
+async function doSearch(){
+  const q=document.getElementById('s-inp').value.trim();
+  if(!q)return;
+  document.getElementById('s-res').style.display='block';
+  document.getElementById('browse').style.display='none';
+  document.querySelectorAll('.s-tab').forEach((t,i)=>t.classList.toggle('on',i===0));
+  const content=document.getElementById('s-content');
+  content.style.display='block';
+  content.innerHTML='<div class="loading"><div class="spin"></div></div>';
+  const enc=encodeURIComponent(q);
+  const [stSrc,hdSrc,verses]=await Promise.all([
+    sb('story_sources','or=(summary.ilike.*'+enc+'*,similarities.ilike.*'+enc+'*,differences.ilike.*'+enc+'*,source_name.ilike.*'+enc+'*)&select=*,quranic_stories(name_english,slug)&limit=15'),
+    sb('hadith_comparative','or=(topic.ilike.*'+enc+'*,summary.ilike.*'+enc+'*,hadith_text.ilike.*'+enc+'*)&select=*&limit=10'),
+    sb('ayas','or=(english.ilike.*'+enc+'*,arabic.ilike.*'+enc+'*)&select=sura_id,aya_number,arabic,english&limit=5')
+  ]);
+  // Also check story names
+  const matchedStories=allStories.filter(s=>s.name_english.toLowerCase().includes(q.toLowerCase())||(s.summary||'').toLowerCase().includes(q.toLowerCase()));
+  let html='';
+  if(matchedStories.length){
+    html+=`<div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);padding:0 0 8px;">Related Stories</div>`;
+    matchedStories.forEach(s=>{
+      html+=`<div class="sr-card" onclick="openStory(allStories.find(x=>x.slug==='${s.slug}'));document.getElementById('s-res').style.display='none';document.getElementById('browse').style.display='block';" style="cursor:pointer;">
+        <div class="sr-hdr"><span style="font-size:20px;">${ICONS[s.category]||'📖'}</span><div><div class="sr-title">${s.name_arabic||''} — ${s.name_english}</div><div class="sr-meta">${s.total_mentions} mentions · Tap to open</div></div></div>
+        <div class="sr-body"><p style="font-size:12px;color:var(--dim);line-height:1.7;">${(s.summary||'').slice(0,200)}...</p></div></div>`;
+    });
+  }
+  if(stSrc.length){
+    html+=`<div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);padding:12px 0 8px;">Source Comparisons</div>`;
+    stSrc.forEach(s=>{
+      const story=s.quranic_stories||{};
+      html+=`<div class="src-card"><div class="src-hdr" onclick="this.nextElementSibling.classList.toggle('open');this.querySelector('.arr').textContent=this.nextElementSibling.classList.contains('open')?'▲':'▼';"><span class="trad ${tradClass(s.tradition)}">${s.tradition}</span><div class="src-info"><div class="src-name">${s.source_name}</div><div class="src-ref">${story.name_english?'Story: '+story.name_english:''}</div></div><span class="arr" style="color:var(--dim);">▼</span></div><div class="src-body"><p class="src-sum">${s.summary||''}</p><div class="cg"><div class="cb cs"><div class="cl">✓ Similarities</div><div class="ct">${s.similarities||'—'}</div></div><div class="cb cd"><div class="cl">✕ Differences</div><div class="ct">${s.differences||'—'}</div></div></div><div class="cb cu" style="margin-top:8px;"><div class="cl">★ Unique to Quran</div><div class="ct">${s.unique_quran||'—'}</div></div>${s.url?`<div style="margin-top:8px;"><a href="${s.url}" target="_blank" class="src-link">📎 Read source →</a></div>`:''}</div></div>`;
+    });
+  }
+  if(hdSrc.length){
+    html+=`<div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);padding:12px 0 8px;">Hadith Practices</div>`;
+    hdSrc.forEach(s=>{
+      html+=`<div class="src-card"><div class="src-hdr" onclick="this.nextElementSibling.classList.toggle('open');this.querySelector('.arr').textContent=this.nextElementSibling.classList.contains('open')?'▲':'▼';"><span class="trad ${tradClass(s.tradition)}">${s.tradition}</span><div class="src-info"><div class="src-name">${s.topic}</div><div class="src-ref">${s.source_name}</div></div><span class="arr" style="color:var(--dim);">▼</span></div><div class="src-body"><div style="background:rgba(201,168,76,.08);border-left:3px solid var(--gold);border-radius:7px;padding:8px 11px;margin-bottom:8px;font-size:12px;">${s.hadith_text||''}</div><p class="src-sum">${s.summary||''}</p><div class="cg"><div class="cb cs"><div class="cl">✓ Similarities</div><div class="ct">${s.similarities||'—'}</div></div><div class="cb cd"><div class="cl">✕ Differences</div><div class="ct">${s.differences||'—'}</div></div></div><div class="cb cu" style="margin-top:8px;"><div class="cl">★ Unique to Islam</div><div class="ct">${s.unique_islam||'—'}</div></div>${s.url?`<div style="margin-top:8px;"><a href="${s.url}" target="_blank" class="src-link">📎 Read source →</a></div>`:''}</div></div>`;
+    });
+  }
+  if(verses.length){
+    html+=`<div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);padding:12px 0 8px;">Quranic Verses</div>`;
+    verses.forEach(v=>{
+      html+=`<div class="v-card"><div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;"><span style="color:var(--gold);font-weight:700;font-size:12px;">📖 ${v.sura_id}:${v.aya_number}</span><a href="index.html?sura=${v.sura_id}&aya=${v.aya_number}&from=stories" style="margin-left:auto;font-size:11px;color:var(--gold);text-decoration:none;">Open →</a></div><div class="v-ar">${v.arabic||''}</div><div class="v-en">${v.english||''}</div></div>`;
+    });
+  }
+  if(!html){
+    // AI fallback
+    content.innerHTML='<div class="loading"><div class="spin"></div><p style="margin-top:12px;color:var(--dim);">Generating AI comparison for "'+q+'"...</p></div>';
+    try{
+      const res=await fetch('https://qurangeez-quran-scholar-api.hf.space/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,messages:[{role:'user',content:`Find where "${q}" appears in Quran (cite surah:verse), Torah/Bible (cite book chapter:verse), Talmud (cite tractate page), and other sources. For each give: reference, 1-2 sentence summary, similarity with Quran, difference from Quran. Return only JSON array: [{"tradition":"...","source_name":"...","reference":"...","summary":"...","similarities":"...","differences":"...","unique_quran":"...","url":"..."}]`}]})});
+      const d=await res.json();
+      const txt=(d.content?.[0]?.text||'[]').replace(/\`\`\`json|\`\`\`/g,'').trim();
+      let srcs=[];
+      try{srcs=JSON.parse(txt);}catch(e){}
+      if(srcs.length){
+        html=`<div style="font-size:11px;color:var(--dim);padding:0 0 10px;">🤖 AI analysis for "<strong style="color:var(--gold);">${q}</strong>"</div>`;
+        srcs.forEach(s=>{html+=`<div class="src-card"><div class="src-hdr" onclick="this.nextElementSibling.classList.toggle('open');this.querySelector('.arr').textContent=this.nextElementSibling.classList.contains('open')?'▲':'▼';"><span class="trad ${tradClass(s.tradition)}">${s.tradition||'Source'}</span><div class="src-info"><div class="src-name">${s.source_name||''} ${s.reference?'· '+s.reference:''}</div></div><span class="arr" style="color:var(--dim);">▼</span></div><div class="src-body"><p class="src-sum">${s.summary||''}</p><div class="cg"><div class="cb cs"><div class="cl">✓ Similarities</div><div class="ct">${s.similarities||'—'}</div></div><div class="cb cd"><div class="cl">✕ Differences</div><div class="ct">${s.differences||'—'}</div></div></div><div class="cb cu" style="margin-top:8px;"><div class="cl">★ Unique to Quran</div><div class="ct">${s.unique_quran||'—'}</div></div>${s.url?`<div style="margin-top:8px;"><a href="${s.url}" target="_blank" class="src-link">📎 Read source →</a></div>`:''}</div></div>`;});
+        content.innerHTML=html;return;
+      }
+    }catch(e){}
+    content.innerHTML=`<p style="padding:30px;text-align:center;color:var(--dim);">No results found for "<strong>${q}</strong>". Try a different term.</p>`;
+    return;
+  }
+  content.innerHTML=html;
+}
+
+async function genAI(){
+  const story=window._curStory;
+  if(!story)return;
+  const btn=document.getElementById('ai-btn');
+  const out=document.getElementById('ai-out');
+  if(!btn||!out)return;
+  btn.textContent='⏳ Analyzing...';btn.disabled=true;out.style.display='block';out.textContent='Generating...';
+  try{
+    const res=await fetch('https://qurangeez-quran-scholar-api.hf.space/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1200,messages:[{role:'user',content:`Write a scholarly comparative analysis of ${story.name_english} in the Quran vs other traditions. Include: 1) Quranic account key verses, 2) Similarities with other traditions, 3) Key differences, 4) Unique Quranic elements, 5) Scholarly significance. Under 500 words.`}]})});
+    const d=await res.json();
+    out.textContent=d.content?.[0]?.text||'Analysis unavailable.';
+  }catch(e){out.textContent='Error. Please try again.';}
+  btn.textContent='🔄 Regenerate';btn.disabled=false;
+}
+
+init();
+</script>
 
 <!-- PRESENTATION BUILDER START -->
 <script src="presentation-builder.js"></script>
@@ -591,8 +952,6 @@ document.addEventListener('DOMContentLoaded', addRWButtons);
 function toggleFabMenu(){var t=document.getElementById('fab-toggle'),i=document.getElementById('fab-items'),b=document.getElementById('fab-backdrop'),o=i.classList.contains('open');if(o){t.classList.remove('open');i.classList.remove('open');b.classList.remove('open');}else{t.classList.add('open');i.classList.add('open');b.classList.add('open');}}
 function closeFabMenu(){document.getElementById('fab-toggle').classList.remove('open');document.getElementById('fab-items').classList.remove('open');document.getElementById('fab-backdrop').classList.remove('open');}
 </script>
-
-
 
 </body>
 </html>
