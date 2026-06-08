@@ -233,27 +233,22 @@ function toast(msg){
 
 async function load() {
   var wrap = document.getElementById('listWrap');
-  wrap.innerHTML = '<div class="loading-state"><span class="spinner"></span> Loading…</div>';
   var KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
-  var endpoint = 'https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/contradiction_analysis?select=id,topic,contradiction_type,severity,category,sura,aya,claim,position_a,position_b,position_a_holders,position_b_holders,position_a_defense,position_b_defense,sectarian_impact,socratic_questions,external_references,claim_side,counter_side,contradicted_by&order=id.asc&limit=200';
-  fetch(endpoint, {
-    headers: { 'apikey': KEY, 'Authorization': 'Bearer ' + KEY }
-  }).then(function(r) {
-    if (!r.ok) { wrap.innerHTML = '<div class="loading-state" style="color:#e86060;">Error ' + r.status + ' — <button onclick="load()" style="color:#c9a85c;background:none;border:1px solid #c9a85c;padding:4px 10px;cursor:pointer;border-radius:4px;">Retry</button></div>'; return; }
-    return r.json();
-  }).then(function(data) {
-    if (!data) return;
-    _all = Array.isArray(data) ? data : [];
-    if (!_all.length) { wrap.innerHTML = '<div class="loading-state">No data returned.</div>'; return; }
-    document.getElementById('totalCount').textContent = _all.length;
-    document.getElementById('highCount').textContent = _all.filter(function(x){return x.severity==='high';}).length;
-    var types = new Set(_all.map(function(x){return x.contradiction_type;}).filter(Boolean));
-    document.getElementById('typeCount').textContent = types.size;
-    render(_all);
-    checkDeepLink();
-  }).catch(function(err) {
-    wrap.innerHTML = '<div class="loading-state" style="color:#e86060;">Failed: ' + err.message + ' — <button onclick="load()" style="color:#c9a85c;background:none;border:1px solid #c9a85c;padding:4px 10px;cursor:pointer;border-radius:4px;">Retry</button></div>';
-  });
+  var H = {'apikey': KEY, 'Authorization': 'Bearer ' + KEY};
+  fetch('https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/contradiction_analysis?select=*&limit=200', {headers: H})
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      _all = Array.isArray(data) ? data : [];
+      document.getElementById('totalCount').textContent = _all.length;
+      document.getElementById('highCount').textContent = _all.filter(function(x){return x.severity==='high';}).length;
+      var types = new Set(_all.map(function(x){return x.contradiction_type;}).filter(Boolean));
+      document.getElementById('typeCount').textContent = types.size;
+      render(_all);
+      checkDeepLink();
+    })
+    .catch(function(e){
+      wrap.innerHTML = '<div class="loading-state" style="color:#e86060;">Error: ' + e.message + '<br><button onclick="load()" style="margin-top:8px;padding:6px 14px;background:#c84060;border:none;border-radius:4px;color:#fff;cursor:pointer;">Retry</button></div>';
+    });
 }
 
 load();PE html>
