@@ -216,7 +216,7 @@ body{background:var(--bg);color:var(--ink);font-family:'EB Garamond',serif;min-h
 
 <script>
 const SB_URL = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
-const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
+const SB_KEY = 'sb_publishable_KtJjJRWQn5a5VMSnAoTQXw_dCwnI6BH';
 const HDRS = { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY };
 
 var _all = [];
@@ -232,7 +232,10 @@ function toast(msg){
 }
 
 async function load() {
-  var r = await fetch(SB_URL+'/rest/v1/contradiction_analysis?select=*&order=severity.desc.nullslast,id.asc&limit=200', {headers:HDRS});
+  var controller = new AbortController();
+  var timeout = setTimeout(function(){controller.abort();}, 10000);
+  var r = await fetch(SB_URL+'/rest/v1/contradiction_analysis?select=*&order=severity.desc.nullslast,id.asc&limit=200', {headers:HDRS, signal:controller.signal});
+  clearTimeout(timeout);
   if (!r.ok) { document.getElementById('listWrap').innerHTML = '<div class="loading-state">Error loading: ' + r.status + ' ' + r.statusText + '</div>'; return; }
   _all = await r.json();
   if (!Array.isArray(_all)) { document.getElementById('listWrap').innerHTML = '<div class="loading-state">Data error: ' + JSON.stringify(_all).substring(0,100) + '</div>'; return; }
