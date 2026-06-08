@@ -232,6 +232,264 @@ function toast(msg){
 }
 
 async function load() {
+  var wrap = document.getElementById('listWrap');
+  wrap.innerHTML = '<div class="loading-state"><span class="spinner"></span> Loading…</div>';
+  var KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
+  var endpoint = 'https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/contradiction_analysis?select=id,topic,contradiction_type,severity,category,sura,aya,claim,position_a,position_b,position_a_holders,position_b_holders,position_a_defense,position_b_defense,sectarian_impact,socratic_questions,external_references,claim_side,counter_side,contradicted_by&order=id.asc&limit=200';
+  fetch(endpoint, {
+    headers: { 'apikey': KEY, 'Authorization': 'Bearer ' + KEY }
+  }).then(function(r) {
+    if (!r.ok) { wrap.innerHTML = '<div class="loading-state" style="color:#e86060;">Error ' + r.status + ' — <button onclick="load()" style="color:#c9a85c;background:none;border:1px solid #c9a85c;padding:4px 10px;cursor:pointer;border-radius:4px;">Retry</button></div>'; return; }
+    return r.json();
+  }).then(function(data) {
+    if (!data) return;
+    _all = Array.isArray(data) ? data : [];
+    if (!_all.length) { wrap.innerHTML = '<div class="loading-state">No data returned.</div>'; return; }
+    document.getElementById('totalCount').textContent = _all.length;
+    document.getElementById('highCount').textContent = _all.filter(function(x){return x.severity==='high';}).length;
+    var types = new Set(_all.map(function(x){return x.contradiction_type;}).filter(Boolean));
+    document.getElementById('typeCount').textContent = types.size;
+    render(_all);
+    checkDeepLink();
+  }).catch(function(err) {
+    wrap.innerHTML = '<div class="loading-state" style="color:#e86060;">Failed: ' + err.message + ' — <button onclick="load()" style="color:#c9a85c;background:none;border:1px solid #c9a85c;padding:4px 10px;cursor:pointer;border-radius:4px;">Retry</button></div>';
+  });
+}
+
+load();PE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Contradiction Workspace — Quran Scholar</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,500&family=Inconsolata:wght@300;400;500;600;700&family=EB+Garamond:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg:#0d0a06;--bg2:#1a1008;--bg3:#2c1f0e;--bg4:#3d2c14;
+  --ink:#f5ecd8;--ink2:#e8d8b8;--ink3:#c8a878;--ink4:#8a6840;
+  --bronze:#c9a85c;--bronze-d:#9a7432;--bronze-dd:#6b4f1e;
+  --crimson:#c84040;--crimson-l:#e86060;--crimson-s:rgba(200,64,64,.12);
+  --emerald:#2d6a4f;--emerald-l:#52b788;--emerald-s:rgba(45,106,79,.12);
+  --amber:#b8860b;--amber-l:#d4a017;--amber-s:rgba(184,134,11,.12);
+  --steel:#4a5568;--steel-l:#718096;
+  --p1:#f5f0e8;--p2:#e8e0d0;--p3:#d4c9b0;
+  --r:4px;
+  --shadow:0 4px 24px rgba(0,0,0,.4);
+}
+body{background:var(--bg);color:var(--ink);font-family:'EB Garamond',serif;min-height:100vh;overflow-x:hidden;}
+
+/* ── TOP BAR ── */
+.topbar{background:var(--bg2);border-bottom:1px solid var(--bronze-dd);padding:0 16px;height:52px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:200;}
+.topbar-logo{font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--ink);font-weight:500;}
+.topbar-sub{font-family:'Inconsolata',monospace;font-size:9px;letter-spacing:.24em;text-transform:uppercase;color:var(--bronze-d);margin-top:1px;}
+.topbar-back{margin-left:auto;font-family:'Inconsolata',monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--bronze);text-decoration:none;border:1px solid var(--bronze-dd);padding:5px 12px;border-radius:var(--r);transition:all .2s;}
+.topbar-back:hover{background:var(--bronze-dd);}
+
+/* ── HERO ── */
+.hero{padding:28px 20px 20px;border-bottom:1px solid var(--bronze-dd);background:linear-gradient(175deg,var(--bg2),var(--bg));}
+.hero-eye{font-family:'Inconsolata',monospace;font-size:9px;letter-spacing:.28em;text-transform:uppercase;color:var(--crimson-l);margin-bottom:10px;}
+.hero-title{font-family:'Cormorant Garamond',serif;font-size:32px;font-weight:400;color:var(--ink);line-height:1.1;margin-bottom:6px;}
+.hero-desc{font-size:16px;color:var(--ink3);font-style:italic;margin-bottom:16px;}
+.hero-stats{display:flex;gap:16px;flex-wrap:wrap;}
+.stat-chip{background:var(--bg2);border:1px solid var(--bronze-dd);border-radius:var(--r);padding:8px 14px;font-family:'Inconsolata',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;}
+.stat-chip span{font-family:'Cormorant Garamond',serif;font-size:22px;color:var(--bronze);display:block;line-height:1;}
+
+/* ── TOOLBAR ── */
+.toolbar{padding:12px 16px;background:var(--bg2);border-bottom:1px solid var(--bronze-dd);display:flex;gap:8px;align-items:center;flex-wrap:wrap;position:sticky;top:52px;z-index:190;}
+.search-wrap{flex:1;min-width:200px;position:relative;}
+.search-wrap input{width:100%;background:var(--bg3);border:1px solid var(--bronze-dd);border-radius:var(--r);padding:8px 12px 8px 32px;color:var(--ink);font-family:'EB Garamond',serif;font-size:14px;outline:none;}
+.search-wrap input:focus{border-color:var(--bronze);}
+.search-wrap input::placeholder{color:var(--ink4);}
+.search-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--ink4);font-size:13px;}
+.filter-btn{padding:7px 12px;border:1px solid var(--bronze-dd);border-radius:var(--r);background:transparent;color:var(--ink3);font-family:'Inconsolata',monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;transition:all .15s;white-space:nowrap;}
+.filter-btn:hover,.filter-btn.active{background:var(--bronze-dd);color:var(--bronze);border-color:var(--bronze-d);}
+.filter-btn.sev-high.active{background:var(--crimson-s);border-color:var(--crimson);color:var(--crimson-l);}
+.filter-btn.sev-medium.active{background:var(--amber-s);border-color:var(--amber);color:var(--amber-l);}
+.filter-btn.sev-low.active{background:var(--emerald-s);border-color:var(--emerald);color:var(--emerald-l);}
+.result-count{font-family:'Inconsolata',monospace;font-size:10px;color:var(--ink4);letter-spacing:.1em;margin-left:auto;}
+
+/* ── LIST ── */
+.list-wrap{padding:16px;max-width:900px;margin:0 auto;}
+.contra-card{background:var(--bg2);border:1px solid var(--bronze-dd);border-radius:var(--r);margin-bottom:10px;cursor:pointer;transition:all .15s;overflow:hidden;}
+.contra-card:hover{border-color:var(--bronze-d);background:var(--bg3);}
+.contra-card.open{border-color:var(--bronze);}
+.card-header{padding:14px 16px;display:flex;align-items:flex-start;gap:12px;}
+.card-sev{width:4px;border-radius:2px;flex-shrink:0;align-self:stretch;min-height:40px;}
+.sev-high .card-sev{background:var(--crimson);}
+.sev-medium .card-sev{background:var(--amber-l);}
+.sev-low .card-sev{background:var(--emerald-l);}
+.card-main{flex:1;min-width:0;}
+.card-topic{font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:500;color:var(--ink);line-height:1.3;margin-bottom:5px;}
+.card-meta{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+.tag{font-family:'Inconsolata',monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;padding:2px 8px;border-radius:2px;}
+.tag-type{background:var(--bg3);color:var(--ink3);border:1px solid var(--bronze-dd);}
+.tag-high{background:var(--crimson-s);color:var(--crimson-l);border:1px solid rgba(200,64,64,.3);}
+.tag-medium{background:var(--amber-s);color:var(--amber-l);border:1px solid rgba(184,134,11,.3);}
+.tag-low{background:var(--emerald-s);color:var(--emerald-l);border:1px solid rgba(45,106,79,.3);}
+.tag-cat{background:rgba(100,80,40,.2);color:var(--ink3);border:1px solid var(--bronze-dd);}
+.card-verse{font-family:'Inconsolata',monospace;font-size:10px;color:var(--bronze-d);margin-top:4px;}
+.card-arrow{font-size:14px;color:var(--ink4);flex-shrink:0;transition:transform .2s;margin-top:2px;}
+.contra-card.open .card-arrow{transform:rotate(90deg);}
+
+/* ── DETAIL PANEL ── */
+.card-detail{display:none;border-top:1px solid var(--bronze-dd);}
+.contra-card.open .card-detail{display:block;}
+
+.detail-inner{padding:20px;}
+
+/* Claim strip */
+.claim-strip{background:rgba(200,64,64,.06);border:1px solid rgba(200,64,64,.2);border-radius:var(--r);padding:14px 16px;margin-bottom:20px;}
+.claim-label{font-family:'Inconsolata',monospace;font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--crimson-l);margin-bottom:8px;}
+.claim-text{font-size:15px;color:var(--ink2);line-height:1.6;}
+
+/* Position grid */
+.positions-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px;}
+@media(max-width:600px){.positions-grid{grid-template-columns:1fr;}}
+.position-card{border-radius:var(--r);padding:14px;}
+.pos-a{background:rgba(45,106,79,.08);border:1px solid rgba(82,183,136,.25);}
+.pos-b{background:rgba(200,64,64,.06);border:1px solid rgba(200,64,64,.2);}
+.pos-label{font-family:'Inconsolata',monospace;font-size:9px;letter-spacing:.18em;text-transform:uppercase;margin-bottom:8px;}
+.pos-a .pos-label{color:var(--emerald-l);}
+.pos-b .pos-label{color:var(--crimson-l);}
+.pos-text{font-size:14px;line-height:1.6;color:var(--ink2);margin-bottom:8px;}
+.pos-holders{font-family:'Inconsolata',monospace;font-size:10px;color:var(--ink4);font-style:italic;}
+
+/* Sections */
+.detail-section{margin-bottom:18px;}
+.section-label{font-family:'Inconsolata',monospace;font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--bronze);margin-bottom:10px;display:flex;align-items:center;gap:8px;}
+.section-label::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,var(--bronze-dd),transparent);}
+.section-body{font-size:14.5px;line-height:1.7;color:var(--ink2);}
+
+/* Verse chips */
+.verse-chips{display:flex;flex-wrap:wrap;gap:6px;}
+.verse-chip{font-family:'Inconsolata',monospace;font-size:10px;padding:4px 10px;border-radius:2px;cursor:pointer;transition:all .15s;text-decoration:none;}
+.vchip-a{background:var(--emerald-s);color:var(--emerald-l);border:1px solid rgba(82,183,136,.3);}
+.vchip-b{background:var(--crimson-s);color:var(--crimson-l);border:1px solid rgba(200,64,64,.3);}
+.vchip-a:hover{background:rgba(45,106,79,.2);}
+.vchip-b:hover{background:rgba(200,64,64,.2);}
+.verse-chip.neutral{background:var(--bg3);color:var(--ink3);border:1px solid var(--bronze-dd);}
+.verse-chip.neutral:hover{border-color:var(--bronze);}
+
+/* Socratic questions */
+.socratic-list{list-style:none;}
+.socratic-list li{padding:8px 0;border-bottom:1px solid rgba(255,255,255,.04);font-size:14.5px;color:var(--ink2);line-height:1.5;padding-left:16px;position:relative;}
+.socratic-list li::before{content:'?';position:absolute;left:0;color:var(--bronze-d);font-family:'Inconsolata',monospace;font-size:11px;font-weight:700;}
+.socratic-list li:last-child{border-bottom:none;}
+
+/* AI section */
+.ai-panel{background:var(--bg3);border:1px solid var(--bronze-dd);border-radius:var(--r);padding:14px 16px;margin-top:16px;}
+.ai-btns{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;}
+.ai-btn{padding:6px 12px;border-radius:var(--r);border:1px solid;font-family:'Inconsolata',monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;transition:all .15s;background:transparent;}
+.ai-btn-trad{border-color:var(--emerald);color:var(--emerald-l);}
+.ai-btn-trad:hover{background:var(--emerald-s);}
+.ai-btn-crit{border-color:var(--crimson);color:var(--crimson-l);}
+.ai-btn-crit:hover{background:var(--crimson-s);}
+.ai-btn-acad{border-color:var(--bronze-d);color:var(--bronze);}
+.ai-btn-acad:hover{background:rgba(201,168,92,.1);}
+.ai-output{font-size:14px;line-height:1.7;color:var(--ink2);white-space:pre-wrap;display:none;margin-top:10px;padding-top:10px;border-top:1px solid var(--bronze-dd);}
+.ai-output.visible{display:block;}
+.ai-loading{display:none;color:var(--ink4);font-style:italic;font-size:13px;padding:8px 0;}
+.ai-loading.visible{display:block;}
+
+/* Links to other pages */
+.cross-links{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;}
+.cross-link{font-family:'Inconsolata',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;padding:5px 12px;border:1px solid var(--bronze-dd);border-radius:var(--r);color:var(--bronze);text-decoration:none;transition:all .15s;}
+.cross-link:hover{background:var(--bronze-dd);}
+
+/* Impact badge */
+.impact-box{background:rgba(184,134,11,.06);border:1px solid rgba(212,160,23,.2);border-radius:var(--r);padding:12px 14px;margin-bottom:16px;}
+.impact-label{font-family:'Inconsolata',monospace;font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--amber-l);margin-bottom:6px;}
+.impact-text{font-size:13.5px;color:var(--ink3);line-height:1.6;}
+
+/* Empty / loading */
+.loading-state{text-align:center;padding:60px 20px;color:var(--ink4);font-style:italic;}
+.spinner{display:inline-block;width:18px;height:18px;border:2px solid var(--bronze-dd);border-top-color:var(--bronze);border-radius:50%;animation:spin .8s linear infinite;margin-right:8px;vertical-align:middle;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* Bottom Nav */
+#bottom-nav{position:fixed;bottom:0;left:0;right:0;height:54px;background:var(--bg2);border-top:1px solid var(--bronze-dd);display:flex;z-index:300;}
+.bnav-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;background:none;border:none;cursor:pointer;color:var(--ink4);font-family:'Inconsolata',monospace;font-size:9px;letter-spacing:.06em;text-transform:uppercase;padding:6px 0;transition:color .15s;}
+.bnav-btn:hover,.bnav-btn.active{color:var(--bronze);}
+.bni{font-size:18px;line-height:1;}
+.main-content{padding-bottom:70px;}
+
+/* Toast */
+#toast{position:fixed;bottom:70px;left:50%;transform:translateX(-50%) translateY(10px);background:var(--bg3);border:1px solid var(--bronze-d);color:var(--bronze);padding:8px 18px;border-radius:20px;font-family:'Inconsolata',monospace;font-size:11px;letter-spacing:.1em;z-index:999;opacity:0;transition:all .25s;pointer-events:none;white-space:nowrap;}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div>
+    <div class="topbar-logo">Contradiction Workspace</div>
+    <div class="topbar-sub">Where the Quran argues with itself</div>
+  </div>
+  <a href="index.html" class="topbar-back">← Quran</a>
+</div>
+
+<div class="main-content">
+  <div class="hero">
+    <div class="hero-eye">⚔ Textual Tensions · Internal Debates · Abrogation Claims</div>
+    <div class="hero-title">Where the text breaks<br>against itself</div>
+    <div class="hero-desc">Documented contradictions, abrogation claims, and scholarly debates within Islamic sources — with both traditional defenses and critical analyses.</div>
+    <div class="hero-stats">
+      <div class="stat-chip"><span id="totalCount">—</span>Contradictions</div>
+      <div class="stat-chip"><span id="highCount">—</span>High Severity</div>
+      <div class="stat-chip"><span id="typeCount">—</span>Tension Types</div>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <div class="search-wrap">
+      <span class="search-icon">🔍</span>
+      <input type="text" id="searchInput" placeholder="Search topics, verses, categories…" oninput="filterList()">
+    </div>
+    <button class="filter-btn sev-high" data-sev="high" onclick="toggleSev(this)">🔴 High</button>
+    <button class="filter-btn sev-medium" data-sev="medium" onclick="toggleSev(this)">🟡 Medium</button>
+    <button class="filter-btn sev-low" data-sev="low" onclick="toggleSev(this)">🟢 Low</button>
+    <button class="filter-btn" id="btnAbrog" data-type="Abrogation Claim" onclick="toggleType(this)">Abrogation</button>
+    <button class="filter-btn" id="btnIkhti" data-type="Ikhtilaf al-Tafsir" onclick="toggleType(this)">Ikhtilaf</button>
+    <span class="result-count" id="resultCount"></span>
+  </div>
+
+  <div class="list-wrap" id="listWrap">
+    <div class="loading-state"><span class="spinner"></span>Loading contradictions…</div>
+  </div>
+</div>
+
+<nav id="bottom-nav">
+  <button class="bnav-btn" onclick="location.href='index.html'"><span class="bni">📖</span><span>Quran</span></button>
+  <button class="bnav-btn" onclick="location.href='research.html'"><span class="bni">🔬</span><span>Research</span></button>
+  <button class="bnav-btn" onclick="location.href='themes.html'"><span class="bni">🗂️</span><span>Themes</span></button>
+  <button class="bnav-btn active" onclick="location.href='contradiction.html'"><span class="bni">⚔️</span><span>Tensions</span></button>
+  <button class="bnav-btn" onclick="location.href='madhhab.html'"><span class="bni">⚖️</span><span>Madhhab</span></button>
+  <button class="bnav-btn" onclick="location.href='sira.html'"><span class="bni">🕌</span><span>Sīra</span></button>
+
+  <button class="bnav-btn" onclick="location.href='knowledge-graph.html'"><span class="bni">🕸️</span><span>Graph</span></button>
+</nav>
+
+<div id="toast"></div>
+
+<script>
+const SB_URL = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
+const SB_KEY = 'sb_publishable_KtJjJRWQn5a5VMSnAoTQXw_dCwnI6BH';
+const HDRS = { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY };
+
+var _all = [];
+var _sevFilter = null;
+var _typeFilter = null;
+
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function toast(msg){
+  var t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  setTimeout(function(){t.classList.remove('show');},2000);
+}
+
+async function load() {
   try {
     var url = new URL(SB_URL + '/rest/v1/contradiction_analysis');
     url.searchParams.set('select','id,topic,contradiction_type,severity,category,sura,aya,claim,position_a,position_b,position_a_holders,position_b_holders,position_a_defense,position_b_defense,sectarian_impact,socratic_questions,external_references,claim_side,counter_side,contradicted_by');
