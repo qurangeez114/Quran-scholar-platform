@@ -232,8 +232,10 @@ function toast(msg){
 }
 
 async function load() {
-  var r = await fetch(SB_URL+'/rest/v1/contradiction_analysis?select=*&order=severity.desc,id.asc&limit=200', {headers:HDRS});
+  var r = await fetch(SB_URL+'/rest/v1/contradiction_analysis?select=*&order=severity.desc.nullslast,id.asc&limit=200', {headers:HDRS});
+  if (!r.ok) { document.getElementById('listWrap').innerHTML = '<div class="loading-state">Error loading: ' + r.status + ' ' + r.statusText + '</div>'; return; }
   _all = await r.json();
+  if (!Array.isArray(_all)) { document.getElementById('listWrap').innerHTML = '<div class="loading-state">Data error: ' + JSON.stringify(_all).substring(0,100) + '</div>'; return; }
 
   // Stats
   document.getElementById('totalCount').textContent = _all.length;
