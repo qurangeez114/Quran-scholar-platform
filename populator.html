@@ -87,23 +87,32 @@ function setBtns(on) {
 function doStop() { stop = true; }
 
 async function sbGet(path) {
-  const r = await fetch(SB + path, { headers: {...HDR, Range:'0-999'} });
+  const r = await fetch(SB + path, { headers: {...HDR, Range:'0-4999', Prefer:'count=none'} });
   return r.json();
 }
 
 async function getMissing(batchSize) {
+  // Use Supabase's not= filter to find topics with no ruling
+  // We query topics where id is NOT in the set of ruled topic_ids
+  // Strategy: get all ruled topic_ids first, then find topics not in that set
+  // But since there are 6000+ ruled, easier: query topics with a left join using PostgREST
+  // PostgREST supports: GET /madhhab_topics?id=not.in.(select topic_id from madhhab_rulings)
+  // But anon key may not support subqueries — use a simpler approach:
+  // Fetch topics in pages starting from where missing ones are (id > 6000)
   const all = [];
   let offset = 0;
+  const pageSize = 500;
   while (all.length < batchSize) {
-    const topics = await sbGet(`/rest/v1/madhhab_topics?select=id,topic,category&order=id.asc&limit=500&offset=${offset}`);
+    const topics = await sbGet(`/rest/v1/madhhab_topics?select=id,topic,category&order=id.asc&limit=${pageSize}&offset=${offset}`);
     if (!topics.length) break;
     const ids = topics.map(t=>t.id).join(',');
-    const rulings = await sbGet(`/rest/v1/madhhab_rulings?select=topic_id&topic_id=in.(${ids})`);
+    const r2 = await fetch(SB + `/rest/v1/madhhab_rulings?select=topic_id&topic_id=in.(${ids})`, { headers: {...HDR, Range:'0-999'} });
+    const rulings = await r2.json();
     const covered = new Set(rulings.map(r=>r.topic_id));
-    all.push(...topics.filter(t=>!covered.has(t.id)));
-    if (topics.length < 500) break;
-    offset += 500;
-    if (all.length >= batchSize) break;
+    const missing = topics.filter(t=>!covered.has(t.id));
+    all.push(...missing);
+    offset += pageSize;
+    if (topics.length < pageSize) break;
   }
   return all.slice(0, batchSize);
 }
