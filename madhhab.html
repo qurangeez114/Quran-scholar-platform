@@ -10,7 +10,7 @@ window.sortByControversy=function(arr){if(!Array.isArray(arr))return arr;return 
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<!-- RAND:b367b84cee4bd427483b0205ad0449dde36d4ac872d624011815cf5f26b8de5b -->
+<!-- RAND:426bb2d1756998b7 -->
 <title>Madhhab — Quran Scholar Research Library</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Inconsolata:wght@300;400;500&display=swap" rel="stylesheet">
@@ -1437,13 +1437,25 @@ function injectTopicCrossLinks(topicId, topicName, ruling) {
 </script>
 
 <script>
+// Safe fallback in case qhistRecord not loaded yet
+if (typeof qhistRecord === 'undefined') {
+  window.qhistRecord = function(label, url, icon, sub) {
+    try {
+      var h = JSON.parse(localStorage.getItem('qnav_hist')||'[]');
+      h = h.filter(function(x){ return x.url !== url; });
+      h.unshift({ label: label||'Page', url: url||window.location.href, icon: icon||'📄', sub: sub||'', time: Date.now() });
+      if(h.length > 60) h = h.slice(0,60);
+      localStorage.setItem('qnav_hist', JSON.stringify(h));
+    } catch(e) {}
+  };
+}
 document.addEventListener('DOMContentLoaded', function(){
-  qhistRecord('Madhhab', window.location.href, '⚖️', 'Madhhab Comparison');
+  if(typeof qhistRecord === 'function') qhistRecord('Madhhab', window.location.href, '⚖️', 'Madhhab Comparison');
   var origOpen = window.openTopic;
   if(typeof origOpen === 'function'){
     window.openTopic = function(id, name){
       origOpen.apply(this, arguments);
-      if(name) qhistRecord('Madhhab: '+name, window.location.href+'#'+id, '⚖️', 'Madhhab');
+      if(name && typeof qhistRecord === 'function') qhistRecord('Madhhab: '+name, window.location.href+'#'+id, '⚖️', 'Madhhab');
     };
   }
 });
