@@ -549,7 +549,7 @@ function sbGet(table, params) {
 
   <!-- LIST VIEW -->
   <div id="listView">
-    <input id="searchInput" class="search-input" type="text" placeholder="Search topics — e.g. apostasy, slavery, Karbala, women's testimony, FGM…" oninput="filterTopics()" style="margin-bottom:12px;width:100%">
+    <input id="searchInput" class="search-input" type="text" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="Search topics — e.g. apostasy, slavery, Karbala, women's testimony, FGM…" oninput="filterTopics()" style="margin-bottom:12px;width:100%">
 
     <div id="categoryChips" class="chip-row" style="margin-bottom:6px"></div>
 
@@ -772,95 +772,29 @@ async function loadTopics() {
     let offset = 0;
     const pageSize = 1000;
     while (true) {
-      const r = await fetch(
-        `${SB_URL}/rest/v1/madhhab_topics?select=id,topic,category,subcategory,controversy_level,brief_description&order=id.asc&limit=${pageSize}&offset=${offset}`,
-        { headers: HDRS }
-      );
-      if (!r.ok) { 
-          const errText = await r.text();
-          list.innerHTML = '<div style="color:red;padding:20px;font-size:14px;">Load failed: ' + r.status + ' — ' + errText.substring(0,200) + '</div>'; 
-          return; 
-        }
+      const url = `${SB_URL}/rest/v1/madhhab_topics?select=id,topic,category,subcategory,controversy_level,brief_description&order=id.asc&limit=${pageSize}&offset=${offset}`;
+      const r = await fetch(url, { headers: HDRS });
+      if (!r.ok) {
+        const errText = await r.text();
+        list.innerHTML = `<div style="color:red;padding:20px">Error ${r.status}: ${errText.substring(0,300)}</div>`;
+        return;
+      }
       const data = await r.json();
       if (!data || data.length === 0) break;
       all.push(...data);
       if (data.length < pageSize) break;
       offset += pageSize;
     }
+    if (all.length === 0) {
+      list.innerHTML = '<div class="empty-state">No topics found.</div>';
+      return;
+    }
     _topics = all;
     renderCategoryChips();
     renderTopicList();
   } catch (e) {
-    list.innerHTML = `<div class="empty-state">Failed to load: ${e.message}</div>`;
+    document.getElementById('topicList').innerHTML = `<div style="color:red;padding:20px">JS Error: ${e.message}</div>`;
   }
-}
-
-function renderCategoryChips() {
-  const container = document.getElementById('categoryChips');
-  const cats = [...new Set(_topics.map(t => t.category).filter(Boolean))].sort();
-  const all = [['all', `All (${_topics.length})`], ...cats.map(c => [c, `${c} (${_topics.filter(t=>t.category===c).length})`])];
-  container.innerHTML = '<span class="chip-row-label">Category:</span>' + all.map(([k, label]) => {
-    const active = k === _category;
-    return `<button class="cat-chip ${active?'active':''}" onclick="setCategory(${JSON.stringify(k).replace(/"/g,'&quot;')})">${esc(label)}</button>`;
-  }).join('');
-}
-
-function setCategory(c) {
-  _category = c;
-  renderCategoryChips();
-  renderTopicList();
-}
-
-function setLevel(l) {
-  _level = l;
-  document.querySelectorAll('.lvl-chip').forEach(b => {
-    b.classList.toggle('active', String(b.dataset.lvl) === String(l));
-  });
-  renderTopicList();
-}
-
-function filterTopics() {
-  _search = (document.getElementById('searchInput').value || '').toLowerCase().trim();
-  renderTopicList();
-}
-
-function renderTopicList() {
-  const list = document.getElementById('topicList');
-  let filtered = _topics;
-
-  if (_category !== 'all') filtered = filtered.filter(t => t.category === _category);
-  if (_level !== 'all') {
-    const min = parseInt(_level);
-    filtered = filtered.filter(t => (t.controversy_level || 0) >= min);
-  }
-  if (_search) {
-    filtered = filtered.filter(t =>
-      (t.topic||'').toLowerCase().includes(_search) ||
-      (t.brief_description||'').toLowerCase().includes(_search) ||
-      (t.category||'').toLowerCase().includes(_search) ||
-      (t.subcategory||'').toLowerCase().includes(_search)
-    );
-  }
-
-  document.getElementById('resultCount').textContent = `${filtered.length} ${filtered.length===1?'topic':'topics'} found`;
-
-  if (filtered.length === 0) {
-    list.innerHTML = '<div class="empty-state">No topics match these filters.</div>';
-    return;
-  }
-
-  list.innerHTML = filtered.slice(0, 300).map(t => {
-    const lvl = t.controversy_level || 3;
-    const stars = '●'.repeat(lvl) + '○'.repeat(5-lvl);
-    return `<div class="topic-item" onclick="openTopic(${t.id})">
-      <div style="flex:1;min-width:0">
-        <div class="topic-title">${esc(t.topic)}</div>
-        <div class="topic-meta">${esc(t.category||'')}${t.subcategory?' · '+esc(t.subcategory):''}</div>
-        ${t.brief_description?`<div class="topic-desc">${esc(t.brief_description)}</div>`:''}
-      </div>
-      <div class="topic-level" title="Controversy ${lvl}/5">${stars}</div>
-    </div>`;
-  }).join('') + (filtered.length > 300 ? `<div class="empty-state" style="background:var(--p1)">Showing first 300 of ${filtered.length}. Refine search to narrow.</div>` : '');
 }
 
 async function openTopic(topicId) {
