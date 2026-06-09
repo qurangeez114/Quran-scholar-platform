@@ -92,30 +92,25 @@ async function sbGet(path) {
 }
 
 async function getMissing(batchSize) {
-  // Use Supabase's not= filter to find topics with no ruling
-  // We query topics where id is NOT in the set of ruled topic_ids
-  // Strategy: get all ruled topic_ids first, then find topics not in that set
-  // But since there are 6000+ ruled, easier: query topics with a left join using PostgREST
-  // PostgREST supports: GET /madhhab_topics?id=not.in.(select topic_id from madhhab_rulings)
-  // But anon key may not support subqueries — use a simpler approach:
-  // Fetch topics in pages starting from where missing ones are (id > 6000)
+  // Missing topics are IDs 6104-8017 — query directly with id.gte filter
   const all = [];
-  let offset = 0;
-  const pageSize = 500;
+  let lastId = 6103;
+  const pageSize = 200;
   while (all.length < batchSize) {
-    const topics = await sbGet(`/rest/v1/madhhab_topics?select=id,topic,category&order=id.asc&limit=${pageSize}&offset=${offset}`);
-    if (!topics.length) break;
+    const topics = await sbGet(`/rest/v1/madhhab_topics?select=id,topic,category&order=id.asc&limit=${pageSize}&id=gt.${lastId}`);
+    if (!topics || !topics.length) break;
     const ids = topics.map(t=>t.id).join(',');
-    const r2 = await fetch(SB + `/rest/v1/madhhab_rulings?select=topic_id&topic_id=in.(${ids})`, { headers: {...HDR, Range:'0-999'} });
-    const rulings = await r2.json();
-    const covered = new Set(rulings.map(r=>r.topic_id));
+    const rulings = await sbGet(`/rest/v1/madhhab_rulings?select=topic_id&topic_id=in.(${ids})`);
+    const covered = new Set((rulings||[]).map(r=>r.topic_id));
     const missing = topics.filter(t=>!covered.has(t.id));
     all.push(...missing);
-    offset += pageSize;
+    lastId = topics[topics.length-1].id;
     if (topics.length < pageSize) break;
+    if (all.length >= batchSize) break;
   }
   return all.slice(0, batchSize);
 }
+
 
 async function generate(topic, category) {
   const r = await fetch('https://api.anthropic.com/v1/messages', {
