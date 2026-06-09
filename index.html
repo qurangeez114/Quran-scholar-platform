@@ -9314,7 +9314,7 @@ async function loadMadhhabPanel() {
   }
 }
 
-function renderMadhhabPanel() {
+function renderMadhhabPanel(showAll) {
   const body = document.getElementById('madhhab-panel-body');
   let topics = _mpTopics;
   if (_mpCat !== 'all') topics = topics.filter(t => t.category === _mpCat);
@@ -9322,7 +9322,8 @@ function renderMadhhabPanel() {
 
   if (topics.length === 0) { body.innerHTML = '<div class="mloading">No topics found.</div>'; return; }
 
-  body.innerHTML = topics.slice(0, 100).map(t => `
+  const limit = (showAll || _mpSearch) ? topics.length : 100;
+  body.innerHTML = topics.slice(0, limit).map(t => `
     <div class="mtopic-card" id="mtp-${t.id}">
       <div class="mtopic-header" onclick="toggleMadhhabTopic(${t.id})">
         <div>
@@ -9395,8 +9396,9 @@ function filterMadhhabCat(cat, el) {
 }
 
 function searchMadhhabPanel(q) {
-  _mpSearch = q;
-  renderMadhhabPanel();
+  _mpSearch = q.trim();
+  // If searching, show all matches not just first 100
+  renderMadhhabPanel(true);
 }
 
 function scrollToMadhhabTopic(id) {
