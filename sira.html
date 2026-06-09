@@ -1,6 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<script>
+window.controversyScore=function(v){var t=[v.english,v.aya_text,v.text_english,v.hadith_text,v.topic,v.brief_description,v.content,v.reason_text,v.story_en,v.title_en,v.summary,v.name_english,v.theme].filter(Boolean).join(' ').toLowerCase();var s=0;['kill','slay','smite','amputat','crucif','stone','whip','lash','apostat','slave','captive','concubin','beat.*wife','wife.*beat','fight.*until','jihad','warfare','adulter','zina','thief.*hand','homosexual','liwat','blasphemy','jizya','dhimmi','women.*half','inherit.*half','polygam','nushuz','sex slave','cut hand'].forEach(function(k){try{if(new RegExp(k).test(t))s+=12;}catch(e){}});['divorce','talaq','inheritance','veil','hijab','niqab','disbeliev','infidel','kafir','hellfire','punishment','torment','war','battle','riba','usury','intoxicant','alcohol','honor kill','martyr'].forEach(function(k){if(t.indexOf(k)!==-1)s+=5;});['alhamdulillah','merciful','compassionate','forgiving','be patient'].forEach(function(k){if(t.indexOf(k)!==-1)s-=2;});if(v.controversy_level)s+=(parseInt(v.controversy_level)-1)*4;if(v.human_rights_score!=null)s+=Math.max(0,(5-parseFloat(v.human_rights_score))*2);return s;};
+window.sortByControversy=function(arr){if(!Array.isArray(arr))return arr;return arr.slice().sort(function(a,b){var sa=window.controversyScore(a),sb=window.controversyScore(b);return sb!==sa?sb-sa:((a.sura_id||a.year_ce||0)-(b.sura_id||b.year_ce||0))||((a.aya_number||0)-(b.aya_number||0));});};
+</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Sīra — Prophetic Biography | Quran Scholar</title>
@@ -389,21 +393,46 @@ body { padding-bottom: 60px !important; }
       });
     }
 
-    /* 4. Madhhab link — find rulings mentioning this sura:aya or topic */
+    /* 4. Madhhab — search by verse ref, topic keyword, or inferred category */
     if (currentPage !== 'madhhab') {
       var mRef = sura ? (sura + (aya?':'+aya:'')) : '';
       var mSearch = mRef || topicQ || q;
+      var mRows = [];
       if (mSearch) {
-        var mRows = await sbGet('madhhab_topics', {
-          select: 'id,topic',
-          or: '(topic.ilike.*' + encodeURIComponent(mSearch) + '*,brief_description.ilike.*' + encodeURIComponent(mSearch) + '*)',
-          limit: 2
+        mRows = await sbGet('madhhab_topics', {
+          select: 'id,topic,category',
+          or: '(topic.ilike.*' + encodeURIComponent(mSearch) + '*,brief_description.ilike.*' + encodeURIComponent(mSearch) + '*,subcategory.ilike.*' + encodeURIComponent(mSearch) + '*)',
+          limit: 3
         });
-        mRows.forEach(function(t) {
-          var mUrl = 'madhhab.html?topic=' + encodeURIComponent(t.id) + '&from=' + currentPage;
-          chips.push(chip('xweb-madhhab', '⚖️', t.topic.substring(0,28), mUrl, fromLabel, fromIcon));
-        });
+        if (!mRows.length) {
+          var kwMap = {
+            'prayer':'Prayer and Worship','salah':'Prayer and Worship','wudu':'Purification and Ritual Purity',
+            'marriage':'Marriage and Family Law','nikah':'Marriage and Family Law','divorce':'Divorce and Separation',
+            'talaq':'Divorce and Separation','inherit':'Inheritance and Wills','woman':'Women','hijab':'Women: Dress',
+            'slave':'Slavery','apostat':'Apostasy','jihad':'Jihad and Warfare','war':'Jihad and Warfare',
+            'riba':'Banking and Riba','interest':'Banking and Riba','food':'Food and Drink','halal':'Halal and Haram',
+            'music':'Music, Art, and Images','honor':'Honor and Family Violence','christian':'Christians and Jews',
+            'jew':'Christians and Jews','punishment':'Hudud Punishments','gay':'LGBTQ','homosex':'LGBTQ',
+            'heaven':'Eschatology','hell':'Eschatology','hadith':'Hadith Authenticity','sufi':'Sufism',
+            'theology':'Theology of God','state':'State and Politics','politic':'State and Politics'
+          };
+          var ls = mSearch.toLowerCase();
+          for (var kw in kwMap) {
+            if (ls.indexOf(kw) !== -1) {
+              var catRows = await sbGet('madhhab_topics', {
+                select: 'id,topic,category',
+                category: 'ilike.*' + encodeURIComponent(kwMap[kw]) + '*',
+                limit: 3
+              });
+              if (catRows.length) { mRows = catRows; break; }
+            }
+          }
+        }
       }
+      mRows.forEach(function(t) {
+        var mUrl = 'madhhab.html?topic=' + encodeURIComponent(t.id) + '&from=' + currentPage;
+        chips.push(chip('xweb-madhhab', '⚖️', t.topic.substring(0,28), mUrl, fromLabel, fromIcon));
+      });
     }
 
     if (!chips.length) return;
