@@ -776,7 +776,11 @@ async function loadTopics() {
         `${SB_URL}/rest/v1/madhhab_topics?select=id,topic,category,subcategory,controversy_level,brief_description&order=controversy_level.desc,id&limit=${pageSize}&offset=${offset}`,
         { headers: HDRS }
       );
-      if (!r.ok) { console.error('Load failed', r.status); break; }
+      if (!r.ok) { 
+          const errText = await r.text();
+          list.innerHTML = '<div style="color:red;padding:20px;font-size:14px;">Load failed: ' + r.status + ' — ' + errText.substring(0,200) + '</div>'; 
+          return; 
+        }
       const data = await r.json();
       if (!data || data.length === 0) break;
       all.push(...data);
