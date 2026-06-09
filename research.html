@@ -464,10 +464,7 @@ body { padding-bottom: 60px !important; }
 
   /* ── Build chips HTML ── */
   function chip(cls, icon, label, url, fromLabel, fromIcon) {
-    return '<a class="xweb-chip ' + cls + '" href="' + url + '" '
-      + 'onclick="event.preventDefault();xnavGo('' + url.replace(/'/g,"\'") + '',''
-      + (fromLabel||'').replace(/'/g,"\'") + '','' + (fromIcon||'').replace(/'/g,"\'") + '')">'
-      + icon + ' ' + label + '</a>';
+    return '<a class="xweb-chip ' + cls + '" href="' + url + '">' + icon + ' ' + label + '</a>';
   }
 
   /* ══ MAIN: build cross-web for a sura:aya pair ══
@@ -570,109 +567,7 @@ body { padding-bottom: 60px !important; }
 })(window);
 </script>
 
-<script>
-/* ═══ ACTIVITY HISTORY + FLOATING BUTTON ═══ */
-(function(W) {
-  var MAX = 60;
 
-  function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-  function ago(ts){
-    var s=Math.floor((Date.now()-ts)/1000);
-    if(s<60) return 'just now';
-    if(s<3600) return Math.floor(s/60)+'m ago';
-    if(s<86400) return Math.floor(s/3600)+'h ago';
-    return Math.floor(s/86400)+'d ago';
-  }
-  function getHist(){ try{ return JSON.parse(localStorage.getItem('qnav_hist')||'[]'); }catch(e){ return []; } }
-  function saveHist(h){ try{ localStorage.setItem('qnav_hist',JSON.stringify(h)); }catch(e){} }
-
-  /* Record a visit */
-  function record(label, url, icon, sub) {
-    var h = getHist().filter(function(x){ return x.url !== url; });
-    h.unshift({ label: label||'Page', url: url||window.location.href, icon: icon||'📄', sub: sub||'', time: Date.now() });
-    if(h.length > MAX) h = h.slice(0, MAX);
-    saveHist(h);
-    renderList();
-    updateBadge();
-  }
-  W.qhistRecord = record;
-
-  function renderList(){
-    var el = document.getElementById('qhist-scroll');
-    if(!el) return;
-    var h = getHist();
-    if(!h.length){ el.innerHTML='<div class="qhist-empty">No history yet — start exploring!</div>'; return; }
-    el.innerHTML = h.map(function(item){
-      return '<a class="qhist-item" href="'+esc(item.url)+'" onclick="event.preventDefault();qhistGo(''+esc(item.url)+'')">'
-        +'<span class="qhist-ico">'+(item.icon||'📄')+'</span>'
-        +'<span class="qhist-body">'
-        +'<div class="qhist-lbl">'+esc(item.label)+'</div>'
-        +'<div class="qhist-sub">'+esc(item.sub)+'</div>'
-        +'</span>'
-        +'<span class="qhist-ago">'+ago(item.time)+'</span>'
-        +'</a>';
-    }).join('');
-  }
-
-  function updateBadge(){
-    var b = document.getElementById('qhist-badge');
-    if(!b) return;
-    var n = getHist().length;
-    b.textContent = n; b.style.display = n ? 'flex' : 'none';
-  }
-
-  W.qnavToggleHist = function(){
-    var d = document.getElementById('qhist-drawer');
-    if(!d) return;
-    d.classList.toggle('open');
-    if(d.classList.contains('open')) renderList();
-  };
-  W.qnavClearHist = function(){
-    saveHist([]); renderList(); updateBadge();
-  };
-  W.qhistGo = function(url){
-    try{
-      var stack = JSON.parse(sessionStorage.getItem('qnav_stack')||'[]');
-      stack.push({ url: window.location.href, label: document.title, icon: '📄', scrollY: window.scrollY });
-      sessionStorage.setItem('qnav_stack', JSON.stringify(stack));
-    }catch(e){}
-    window.location.href = url;
-  };
-
-  /* Inject HTML */
-  function inject(){
-    if(document.getElementById('qhist-btn')) return;
-
-    var btn = document.createElement('button');
-    btn.id = 'qhist-btn';
-    btn.title = 'Your browsing history';
-    btn.setAttribute('onclick','qnavToggleHist()');
-    btn.style.position = 'relative';
-    btn.innerHTML = '🕐<span id="qhist-badge" class="qhist-badge" style="position:absolute;top:-4px;right:-4px;background:#C03020;color:#fff;border-radius:10px;font-size:10px;font-weight:800;min-width:18px;height:18px;padding:0 4px;display:none;align-items:center;justify-content:center;"></span>';
-    document.body.appendChild(btn);
-
-    var drawer = document.createElement('div');
-    drawer.id = 'qhist-drawer';
-    drawer.innerHTML = '<div class="qhist-head"><span class="qhist-title">📖 Activity History</span><button class="qhist-clearall" onclick="qnavClearHist()">Clear all</button></div><div class="qhist-scroll" id="qhist-scroll"></div>';
-    document.body.appendChild(drawer);
-
-    document.addEventListener('click', function(e){
-      var d = document.getElementById('qhist-drawer');
-      var b = document.getElementById('qhist-btn');
-      if(d && d.classList.contains('open') && !d.contains(e.target) && b && !b.contains(e.target))
-        d.classList.remove('open');
-    });
-
-    updateBadge();
-  }
-
-  if(document.readyState === 'loading'){
-    document.addEventListener('DOMContentLoaded', inject);
-  } else {
-    inject();
-  }
-})(window);
-</script>
 
 </head>
 <body>
