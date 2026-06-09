@@ -797,6 +797,80 @@ async function loadTopics() {
   }
 }
 
+
+function renderCategoryChips() {
+  const el = document.getElementById('categoryChips');
+  if (!el) return;
+  const cats = ['all', ...new Set(_topics.map(t => t.category).filter(Boolean).sort())];
+  el.innerHTML = cats.map(c =>
+    `<button class="chip${_category===c?' active':''}" onclick="setCategory('${c.replace(/'/g,"\\'")}')">
+      ${c==='all'?'All Categories':c}
+    </button>`
+  ).join('');
+}
+
+function setCategory(cat) {
+  _category = cat;
+  renderCategoryChips();
+  renderTopicList();
+}
+
+function filterTopics() {
+  const inp = document.getElementById('searchInput');
+  _search = inp ? inp.value.toLowerCase().trim() : '';
+  renderTopicList();
+}
+
+function setControversy(level) {
+  _level = level;
+  document.querySelectorAll('.ctrl-btn').forEach(b => b.classList.remove('active'));
+  const btn = document.querySelector(`.ctrl-btn[data-level="${level}"]`);
+  if (btn) btn.classList.add('active');
+  renderTopicList();
+}
+
+function renderTopicList() {
+  const list = document.getElementById('topicList');
+  if (!list) return;
+  let filtered = _topics;
+
+  if (_category !== 'all') filtered = filtered.filter(t => t.category === _category);
+  if (_search) filtered = filtered.filter(t =>
+    (t.topic||'').toLowerCase().includes(_search) ||
+    (t.category||'').toLowerCase().includes(_search) ||
+    (t.subcategory||'').toLowerCase().includes(_search) ||
+    (t.brief_description||'').toLowerCase().includes(_search)
+  );
+  if (_level !== 'all') {
+    const min = parseInt(_level);
+    filtered = filtered.filter(t => (t.controversy_level||0) >= min);
+  }
+
+  if (!filtered.length) {
+    list.innerHTML = '<div class="empty-state">No topics found. Try a different search.</div>';
+    return;
+  }
+
+  const countEl = document.getElementById('resultCount');
+  if (countEl) countEl.textContent = filtered.length + ' topics';
+
+  list.innerHTML = filtered.map(t => {
+    const lvl = t.controversy_level || 0;
+    const badge = lvl >= 5 ? 'Highest' : lvl >= 4 ? 'High' : lvl >= 3 ? 'Notable' : 'Documented';
+    const color = lvl >= 5 ? '#8B0000' : lvl >= 4 ? '#b84c00' : lvl >= 3 ? '#7a6000' : '#2d5a2d';
+    return `<div class="topic-card" onclick="openTopic(${t.id})">
+      <div class="topic-title">${t.topic||''}</div>
+      <div class="topic-meta">
+        <span style="color:${color};font-weight:600">${badge}</span>
+        ${t.category ? `<span class="topic-cat">${t.category}</span>` : ''}
+        ${t.subcategory ? `<span class="topic-cat">${t.subcategory}</span>` : ''}
+      </div>
+      ${t.brief_description ? `<div class="topic-desc">${t.brief_description}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+
 async function openTopic(topicId) {
   trackTopicOpen(topicId);
   document.getElementById('listView').style.display = 'none';
