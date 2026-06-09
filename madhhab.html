@@ -1874,5 +1874,121 @@ function toggleSchoolCard(uid) {
   }
 })();
 </script>
+
+<style>
+#madhhab-panel{position:fixed;top:0;left:0;right:0;bottom:0;z-index:99990;display:flex;flex-direction:column;background:#FDFAF4;transform:translateY(100%);transition:transform 0.3s cubic-bezier(0.4,0,0.2,1);}
+#madhhab-panel.open{transform:translateY(0);}
+#mph{display:flex;align-items:center;gap:10px;padding:12px 16px;background:#FDF5DE;border-bottom:1.5px solid #E8DDC0;flex-shrink:0;}
+#mph h2{margin:0;font-size:17px;color:#B8902A;font-family:serif;flex:1;}
+#mpsb{padding:8px 12px;background:#fff;border-bottom:1px solid #E8E4DC;flex-shrink:0;}
+#mpsb input{width:100%;padding:8px 12px;border:1.5px solid #D4C9A8;border-radius:20px;font-size:14px;background:#FDFAF4;outline:none;box-sizing:border-box;}
+#mpcb{display:flex;gap:6px;padding:8px 12px;overflow-x:auto;flex-shrink:0;background:#FDFAF4;border-bottom:1px solid #E8E4DC;}
+.mcc{padding:4px 12px;border-radius:16px;border:1.5px solid #D4C9A8;background:#fff;font-size:11px;font-weight:700;color:#666;white-space:nowrap;cursor:pointer;flex-shrink:0;}
+.mcc.active{background:#B8902A;color:#fff;border-color:#B8902A;}
+#mpb{flex:1;overflow-y:auto;padding:12px;}
+.mtc{background:#fff;border:1px solid #E8E4DC;border-radius:10px;margin-bottom:10px;overflow:hidden;}
+.mth{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;cursor:pointer;gap:8px;}
+.mtt{font-size:14px;font-weight:700;color:#333;flex:1;}
+.mtcat{font-size:10px;color:#B8902A;font-weight:600;margin-top:2px;}
+.mta{font-size:16px;color:#B8902A;transition:transform 0.2s;}
+.mta.open{transform:rotate(180deg);}
+.mtbd{display:none;padding:0 14px 14px;}
+.mtbd.open{display:block;}
+.msr{margin-bottom:8px;padding:8px 10px;background:#FDFAF4;border-radius:8px;border-left:3px solid #D4A830;}
+.msn{font-size:11px;font-weight:700;color:#B8902A;margin-bottom:3px;text-transform:uppercase;}
+.mst{font-size:13px;color:#333;line-height:1.6;}
+.mml{text-align:center;padding:40px;color:#aaa;font-size:14px;}
+</style>
+
+<div id="madhhab-panel">
+  <div id="mph">
+    <span style="font-size:20px;">⚖️</span>
+    <h2>Madhhab Scholar</h2>
+    <button onclick="closeMadhhabPanel()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#999;">✕</button>
+    <a href="madhhab.html" style="background:#B8902A;color:#fff;padding:6px 12px;border-radius:16px;font-size:12px;font-weight:700;text-decoration:none;">Full Page ↗</a>
+  </div>
+  <div id="mpsb"><input id="mp-search" placeholder="🔍 Search topics..." oninput="searchMP(this.value)"></div>
+  <div id="mpcb"><div class="mcc active" onclick="filterMP('all',this)">All</div></div>
+  <div id="mpb"><div class="mml">Loading...</div></div>
+</div>
+
+<script>
+(function(){
+  let _t=[],_r={},_loaded=false,_cat='all',_q='';
+  const SB='https://ylosytbxpzxzwfzjpaej.supabase.co',AK='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
+
+  function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+  window.openMadhhabPanel = async function(tid){
+    document.getElementById('madhhab-panel').classList.add('open');
+    document.body.style.overflow='hidden';
+    if(!_loaded) await _load();
+    if(tid) _scrollTo(tid);
+  };
+
+  window.closeMadhhabPanel = function(){
+    document.getElementById('madhhab-panel').classList.remove('open');
+    document.body.style.overflow='';
+  };
+
+  window.searchMP = function(q){_q=q;_render();};
+
+  window.filterMP = function(cat,el){
+    _cat=cat;
+    document.querySelectorAll('.mcc').forEach(c=>c.classList.remove('active'));
+    if(el) el.classList.add('active');
+    _render();
+  };
+
+  window.toggleMT = async function(id){
+    const body=document.getElementById('mb-'+id);
+    const arr=document.getElementById('ma-'+id);
+    if(!body) return;
+    const open=body.classList.contains('open');
+    if(open){body.classList.remove('open');arr.classList.remove('open');return;}
+    body.classList.add('open');arr.classList.add('open');
+    if(_r[id]){body.innerHTML=_r[id];return;}
+    body.innerHTML='<div style="color:#aaa;padding:8px;font-size:13px;">Loading...</div>';
+    try{
+      const res=await fetch(SB+'/rest/v1/madhhab_rulings?topic_id=eq.'+id+'&select=hanafi_position,maliki_position,shafii_position,hanbali_position,jafari_position,zaydi_position,ibadi_position,salafi_position,consensus,key_disagreement,historical_consequences',{headers:{'apikey':AK,'Authorization':'Bearer '+AK}});
+      const rows=await res.json();
+      const r=rows[0];
+      if(!r){body.innerHTML='<div style="color:#aaa;padding:8px;">No ruling found.</div>';return;}
+      const schools=[['Ḥanafī',r.hanafi_position],['Mālikī',r.maliki_position],['Shāfiʿī',r.shafii_position],['Ḥanbalī',r.hanbali_position],['Jaʿfarī',r.jafari_position],['Zaydī',r.zaydi_position],['Ibāḍī',r.ibadi_position],['Salafī',r.salafi_position]].filter(([,v])=>v);
+      let html=schools.map(([n,t])=>`<div class="msr"><div class="msn">${n}</div><div class="mst">${esc(t)}</div></div>`).join('');
+      if(r.consensus) html+=`<div class="msr" style="border-left-color:#4CAF50"><div class="msn" style="color:#2E7D32">Consensus</div><div class="mst">${esc(r.consensus)}</div></div>`;
+      if(r.historical_consequences) html+=`<div class="msr" style="border-left-color:#c62828"><div class="msn" style="color:#c62828">Historical Impact</div><div class="mst">${esc(r.historical_consequences)}</div></div>`;
+      html+=`<a href="madhhab.html?topic=${id}" style="display:inline-block;margin-top:8px;padding:6px 14px;background:#FDF5DE;border:1.5px solid #D4A830;border-radius:16px;font-size:12px;font-weight:700;color:#B8902A;text-decoration:none;">Open Full Page ↗</a>`;
+      _r[id]=html; body.innerHTML=html;
+    }catch(e){body.innerHTML='<div style="color:#c62828;padding:8px;">Error: '+e.message+'</div>';}
+  };
+
+  async function _load(){
+    try{
+      const res=await fetch(SB+'/rest/v1/madhhab_topics?select=id,topic,category&order=category,topic&limit=2000',{headers:{'apikey':AK,'Authorization':'Bearer '+AK}});
+      _t=await res.json(); _loaded=true;
+      const cats=[...new Set(_t.map(t=>t.category))].sort();
+      const bar=document.getElementById('mpcb');
+      cats.forEach(cat=>{const c=document.createElement('div');c.className='mcc';c.textContent=cat;c.onclick=()=>filterMP(cat,c);bar.appendChild(c);});
+      _render();
+    }catch(e){document.getElementById('mpb').innerHTML='<div class="mml">Error: '+e.message+'</div>';}
+  }
+
+  function _render(){
+    const body=document.getElementById('mpb');
+    let topics=_t;
+    if(_cat!=='all') topics=topics.filter(t=>t.category===_cat);
+    if(_q) topics=topics.filter(t=>t.topic.toLowerCase().includes(_q.toLowerCase())||t.category.toLowerCase().includes(_q.toLowerCase()));
+    if(!topics.length){body.innerHTML='<div class="mml">No topics found.</div>';return;}
+    const show=topics.slice(0,100);
+    body.innerHTML=show.map(t=>`<div class="mtc" id="mt-${t.id}"><div class="mth" onclick="toggleMT(${t.id})"><div><div class="mtt">${esc(t.topic)}</div><div class="mtcat">${esc(t.category)}</div></div><span class="mta" id="ma-${t.id}">▼</span></div><div class="mtbd" id="mb-${t.id}"></div></div>`).join('')+(topics.length>100?`<div class="mml">Showing 100 of ${topics.length}. Use search to narrow.</div>`:'');
+  }
+
+  function _scrollTo(id){
+    setTimeout(()=>{const el=document.getElementById('mt-'+id);if(el){el.scrollIntoView({behavior:'smooth'});toggleMT(id);};},300);
+  }
+})();
+</script>
+
 </body>
 </html>
