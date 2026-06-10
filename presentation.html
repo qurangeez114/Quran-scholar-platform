@@ -291,38 +291,151 @@ const SB_H2={apikey:SB_K2,'Authorization':'Bearer '+SB_K2};
 function toggleManual(){var el=document.getElementById('manualTips');if(el)el.style.display=el.style.display==='none'?'block':'none';}
 async function autoCollectAndBuild(){
   var title=(document.getElementById('presTitle').value||'').trim();
-  if(!title||title==="Untitled Qur'an Study"){alert('Enter a topic title first (e.g. "Women", "Jihad", "Slavery")');return;}
+  if(!title||title==="Untitled Qur'an Study"){alert('Enter a topic title first (e.g. "Women", "Jihad", "Apostasy")');return;}
   var btn=document.querySelector('[onclick="autoCollectAndBuild()"]');
-  if(btn){btn.textContent='Collecting...';btn.disabled=true;}
+  if(btn){btn.innerHTML='⏳ Collecting...';btn.disabled=true;}
+
+  // Progress UI
+  var prog=document.getElementById('autoBuildProgress');
+  if(!prog){
+    prog=document.createElement('div');
+    prog.id='autoBuildProgress';
+    prog.style.cssText='padding:10px 12px;font:700 11px Inter,sans-serif;color:#8a6914;background:#fff8e6;border-bottom:1px solid #e8d48a;display:none;';
+    var slideList=document.querySelector('.slide-list');
+    if(slideList)slideList.parentNode.insertBefore(prog,slideList);
+  }
+  function setProgress(msg){prog.style.display='block';prog.textContent=msg;}
+
   var enc=encodeURIComponent(title);
   var newSlides=[];
+  var counts={verses:0,hadith:0,tafsir:0,fiqh:0,themes:0,contradictions:0,sira:0};
+
   try{
-    var vr=await fetch(SB_URL2+'/rest/v1/ayas?select=sura_id,aya_number,english,arabic&english=ilike.*'+enc+'*&order=sura_id,aya_number&limit=12',{headers:SB_H2});
+    // 1. QURAN VERSES
+    setProgress('📖 Searching Quran verses...');
+    var vr=await fetch(SB_URL2+'/rest/v1/ayas?select=sura_id,aya_number,english,arabic&english=ilike.*'+enc+'*&order=sura_id,aya_number&limit=10',{headers:SB_H2});
     var verses=vr.ok?await vr.json():[];
-    verses.forEach(function(v){newSlides.push({type:'quran',id:'ac_v_'+v.sura_id+'_'+v.aya_number,title:'Quran '+v.sura_id+':'+v.aya_number,reference:'Quran '+v.sura_id+':'+v.aya_number,text:v.english||'',arabic:v.arabic||'',sourceUrl:'index.html?sura='+v.sura_id+'&aya='+v.aya_number});});
-    var fr=await fetch(SB_URL2+'/rest/v1/madhhab_topics?select=id,topic,category,brief_description&or=(topic.ilike.*'+enc+'*,category.ilike.*'+enc+'*)&order=controversy_level.desc.nullslast&limit=8',{headers:SB_H2});
+    verses.forEach(function(v){
+      newSlides.push({type:'quran',id:'ac_v_'+v.sura_id+'_'+v.aya_number,
+        slideTitle:'Quran '+v.sura_id+':'+v.aya_number,
+        title:'Quran '+v.sura_id+':'+v.aya_number,
+        reference:'Quran '+v.sura_id+':'+v.aya_number,
+        text:v.english||'',arabic:v.arabic||'',
+        sourceUrl:'index.html?sura='+v.sura_id+'&aya='+v.aya_number});
+    });
+    counts.verses=verses.length;
+    setProgress('📖 Verses: '+counts.verses+' found. Searching hadith...');
+
+    // 2. HADITH
+    var hr=await fetch(SB_URL2+'/rest/v1/hadith_corpus?select=id,collection,hadith_number,text_english,text_arabic,grade&text_english=ilike.*'+enc+'*&limit=6',{headers:SB_H2});
+    var hadiths=hr.ok?await hr.json():[];
+    hadiths.forEach(function(h){
+      var ref=(h.collection||'Hadith')+(h.hadith_number?' #'+h.hadith_number:'');
+      newSlides.push({type:'hadith',id:'ac_h_'+h.id,
+        slideTitle:ref,title:ref,reference:ref,
+        text:h.text_english||'',arabic:h.text_arabic||'',
+        speakerNotes:'Grade: '+(h.grade||'unknown'),
+        sourceUrl:'research.html?q='+enc});
+    });
+    counts.hadith=hadiths.length;
+    setProgress('📜 Hadith: '+counts.hadith+' found. Searching tafsir...');
+
+    // 3. TAFSIR
+    var tr=await fetch(SB_URL2+'/rest/v1/tafsir_entries?select=id,sura,aya,scholar_name,content&content=ilike.*'+enc+'*&limit=5',{headers:SB_H2});
+    var tafsirs=tr.ok?await tr.json():[];
+    tafsirs.forEach(function(t){
+      newSlides.push({type:'tafsir',id:'ac_t_'+t.id,
+        slideTitle:'Tafsir '+t.sura+':'+t.aya+' — '+t.scholar_name,
+        title:'Tafsir Q'+t.sura+':'+t.aya,
+        reference:t.scholar_name+' on Q'+t.sura+':'+t.aya,
+        text:(t.content||'').substring(0,400),arabic:'',
+        sourceUrl:'index.html?sura='+t.sura+'&aya='+t.aya});
+    });
+    counts.tafsir=tafsirs.length;
+    setProgress('🔬 Tafsir: '+counts.tafsir+' found. Searching fiqh...');
+
+    // 4. FIQH / MADHHAB
+    var fr=await fetch(SB_URL2+'/rest/v1/madhhab_topics?select=id,topic,category,brief_description&or=(topic.ilike.*'+enc+'*,category.ilike.*'+enc+'*)&order=controversy_level.desc.nullslast&limit=6',{headers:SB_H2});
     var topics=fr.ok?await fr.json():[];
-    topics.forEach(function(t){newSlides.push({type:'research',id:'ac_f_'+t.id,title:t.topic,reference:t.category||'Fiqh',text:t.brief_description||'',arabic:'',sourceUrl:'madhhab.html?topic='+encodeURIComponent(t.id)});});
+    topics.forEach(function(t){
+      newSlides.push({type:'madhhab',id:'ac_f_'+t.id,
+        slideTitle:t.topic,title:t.topic,
+        reference:(t.category||'Fiqh'),
+        text:t.brief_description||'',arabic:'',
+        sourceUrl:'madhhab.html?topic='+encodeURIComponent(t.id)});
+    });
+    counts.fiqh=topics.length;
+    setProgress('🕌 Fiqh: '+counts.fiqh+' found. Searching themes...');
+
+    // 5. THEMES
+    var tmr=await fetch(SB_URL2+'/rest/v1/themes?select=id,name,category,description&or=(name.ilike.*'+enc+'*,description.ilike.*'+enc+'*)&limit=4',{headers:SB_H2});
+    var themes=tmr.ok?await tmr.json():[];
+    themes.forEach(function(t){
+      newSlides.push({type:'research',id:'ac_th_'+t.id,
+        slideTitle:'Theme: '+t.name,title:'Theme: '+t.name,
+        reference:(t.category||'Theme'),
+        text:t.description||'',arabic:'',
+        sourceUrl:'themes.html?theme='+encodeURIComponent(t.name)});
+    });
+    counts.themes=themes.length;
+    setProgress('🧠 Themes: '+counts.themes+' found. Searching contradictions...');
+
+    // 6. CONTRADICTIONS
     var cr=await fetch(SB_URL2+'/rest/v1/contradiction_analysis?select=id,topic,claim,position_a,severity&or=(topic.ilike.*'+enc+'*,category.ilike.*'+enc+'*)&limit=4',{headers:SB_H2});
     var contras=cr.ok?await cr.json():[];
-    contras.forEach(function(c){newSlides.push({type:'research',id:'ac_c_'+c.id,title:'Tension: '+c.topic,reference:'Contradiction',text:(c.claim||'')+(c.position_a?'\n\nTraditional: '+c.position_a.substring(0,200):''),arabic:'',sourceUrl:'contradiction.html?id='+c.id});});
-    var sr=await fetch(SB_URL2+'/rest/v1/sira_events?select=id,title_en,summary_en,year_ce&or=(title_en.ilike.*'+enc+'*,summary_en.ilike.*'+enc+'*)&order=year_ce&limit=4',{headers:SB_H2});
+    contras.forEach(function(c){
+      newSlides.push({type:'ai_analysis',id:'ac_c_'+c.id,
+        slideTitle:'Tension: '+c.topic,title:'Tension: '+c.topic,
+        reference:'Contradiction Analysis',
+        text:(c.claim||'')+(c.position_a?'\n\nTraditional: '+c.position_a.substring(0,200):''),
+        arabic:'',sourceUrl:'contradiction.html?id='+c.id});
+    });
+    counts.contradictions=contras.length;
+    setProgress('⚡ Contradictions: '+counts.contradictions+' found. Searching Sira...');
+
+    // 7. SIRA EVENTS
+    var sr=await fetch(SB_URL2+'/rest/v1/sira_events?select=id,title_en,story_en,year_ce&or=(title_en.ilike.*'+enc+'*,story_en.ilike.*'+enc+'*)&order=year_ce&limit=4',{headers:SB_H2});
     var events=sr.ok?await sr.json():[];
-    events.forEach(function(e){newSlides.push({type:'research',id:'ac_s_'+e.id,title:'Sira: '+e.title_en,reference:'Sira Event'+(e.year_ce?' '+e.year_ce+' CE':''),text:e.summary_en||'',arabic:'',sourceUrl:'sira.html?event='+encodeURIComponent(e.id)});});
-    if(!newSlides.length){alert('Nothing found for "'+title+'". Try: women, jihad, slavery, marriage, apostasy');if(btn){btn.innerHTML='&#x1F50D; Auto-Build';btn.disabled=false;}return;}
+    events.forEach(function(e){
+      newSlides.push({type:'sira',id:'ac_s_'+e.id,
+        slideTitle:'Sira: '+e.title_en,title:'Sira: '+e.title_en,
+        reference:'Sira'+(e.year_ce?' '+e.year_ce+' CE':''),
+        text:(e.story_en||'').substring(0,350),arabic:'',
+        sourceUrl:'sira.html?event='+encodeURIComponent(e.id)});
+    });
+    counts.sira=events.length;
+
+    // Done
+    prog.style.display='none';
+    if(!newSlides.length){
+      alert('Nothing found for "'+title+'". Try: women, jihad, slavery, marriage, apostasy');
+      if(btn){btn.innerHTML='🔍 Auto-Build';btn.disabled=false;}
+      return;
+    }
+
     var existing=[];try{existing=JSON.parse(localStorage.getItem(BASKET_KEY)||'[]');}catch(e){}
     var eids=new Set(existing.map(function(s){return s.id;}));
     slides=existing.concat(newSlides.filter(function(s){return !eids.has(s.id);}));
     saveBasket();autoOrganize();
-    alert('Collected '+newSlides.length+' items for "'+title+'":\n  Verses: '+verses.length+'\n  Fiqh: '+topics.length+'\n  Contradictions: '+contras.length+'\n  Sira: '+events.length);
-  }catch(err){alert('Error: '+err.message);}
-  if(btn){btn.innerHTML='&#x1F50D; Auto-Build';btn.disabled=false;}
+
+    var summary='✅ Auto-Build complete for "'+title+'":\n\n'+
+      '📖 Quran verses: '+counts.verses+'\n'+
+      '📜 Hadith: '+counts.hadith+'\n'+
+      '🔬 Tafsir: '+counts.tafsir+'\n'+
+      '🕌 Fiqh rulings: '+counts.fiqh+'\n'+
+      '🧠 Themes: '+counts.themes+'\n'+
+      '⚡ Contradictions: '+counts.contradictions+'\n'+
+      '📅 Sira events: '+counts.sira+'\n\n'+
+      'Total: '+newSlides.length+' slides added.';
+    alert(summary);
+
+  }catch(e){
+    prog.style.display='none';
+    alert('Auto-Build error: '+e.message);
+  }finally{
+    if(btn){btn.innerHTML='🔍 Auto-Build';btn.disabled=false;}
+  }
 }
-
-window.addEventListener('DOMContentLoaded',load);
-
-
-/* ── Monetization gates ── */
 async function gatedExportPDF() {
   const check = await canUseFeature('exportPDF');
   if (!check.allowed) { showUpgradeModal('export'); return; }
