@@ -6892,7 +6892,7 @@ function applyVerseHighlight(cls) {
 
   if (cls === 'remove') {
     // Remove all highlights in this verse
-    card.querySelectorAll('mark.hl-yellow, mark.hl-pink, mark.hl-green').forEach(m => {
+    card.querySelectorAll('mark.hl-yellow, mark.hl-pink, mark.hl-green, mark.hl-blue, mark.hl-orange, mark.hl-purple, mark.hl-teal, mark.hl-red').forEach(m => {
       m.replaceWith(...m.childNodes);
     });
     // Also remove stored highlights
@@ -8670,7 +8670,15 @@ function applyVpColor(colorClass) {
   // Called when user picks a color from the picker opened via vpHighlight
   const picker = document.getElementById('verseHlPicker');
   picker.classList.remove('open');
-  if (!window._vpHlRange || !window._vpHlText) return;
+  if (!window._vpHlRange || !window._vpHlText) {
+    // Fallback: use main verse highlight system if in popup
+    if (colorClass !== 'remove') {
+      _hlSuraId = _vpSura;
+      _hlVerseNum = _vpAya;
+      applyVerseHighlight(colorClass);
+    }
+    return;
+  }
   if (colorClass === 'remove') { window._vpHlRange = null; return; }
   try {
     const mark = document.createElement('mark');
@@ -8682,6 +8690,7 @@ function applyVpColor(colorClass) {
     existing.push({ text: window._vpHlText, color: colorClass, ts: Date.now() });
     localStorage.setItem(key, JSON.stringify(existing));
     window._vpHlRange = null;
+    window._vpHlText = null;
   } catch(e) { console.warn('Highlight error:', e); }
 }
 
