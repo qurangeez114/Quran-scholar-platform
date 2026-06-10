@@ -71,6 +71,7 @@ body { padding-bottom: 60px !important; }
 #presentationFloatBtn { bottom: 72px !important; right: 14px !important; }
 
 </style>
+<script src="monetization.js"></script>
 </head>
 <body>
 <!-- PRESENTATION BUILDER START -->
@@ -82,8 +83,8 @@ body { padding-bottom: 60px !important; }
   <button class="btn blue" onclick="saveProjectCloud()">Save Cloud</button>
   <button class="btn" onclick="loadCloudProjects()">Load Cloud</button>
   <button class="btn primary" onclick="exportHTML()">HTML</button>
-  <button class="btn blue" onclick="exportPDF()">PDF</button>
-  <button class="btn" onclick="exportPPTX()">PPTX</button>
+  <button class="btn blue" onclick="gatedExportPDF()">PDF</button>
+  <button class="btn" onclick="gatedExportPPTX()">PPTX</button>
 </header>
 
 <main class="layout">
@@ -319,6 +320,32 @@ async function autoCollectAndBuild(){
 }
 
 window.addEventListener('DOMContentLoaded',load);
+
+
+/* ── Monetization gates ── */
+async function gatedExportPDF() {
+  const check = await canUseFeature('exportPDF');
+  if (!check.allowed) { showUpgradeModal('export'); return; }
+  exportPDF();
+}
+async function gatedExportPPTX() {
+  const check = await canUseFeature('exportPPTX');
+  if (!check.allowed) { showUpgradeModal('export'); return; }
+  exportPPTX();
+}
+
+/* ── Show plan badge in toolbar ── */
+document.addEventListener('DOMContentLoaded', () => {
+  // inject badge container into toolbar
+  const toolbar = document.querySelector('.toolbar');
+  if (toolbar) {
+    const badge = document.createElement('div');
+    badge.id = 'plan-badge';
+    badge.style.cssText = 'margin-left:auto;display:flex;align-items:center;gap:8px;';
+    toolbar.appendChild(badge);
+    renderReportBadge('plan-badge');
+  }
+});
 
 </script>
 <!-- PRESENTATION BUILDER END -->
