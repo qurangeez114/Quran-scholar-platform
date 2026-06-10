@@ -1026,39 +1026,48 @@ async function generateAndSaveRuling(topic, topicId) {
     if (el) el.textContent = msg;
   };
 
-  const prompt = `You are an expert Islamic jurisprudence scholar. Generate a comprehensive multi-madhab analysis for this topic.
+  const prompt = `You are a senior professor of Islamic jurisprudence with mastery of classical Arabic legal texts. Generate a rigorous, graduate-level scholarly analysis for the following fiqh topic.
 
 Topic: "${topic.topic}"
 Category: "${topic.category || ''}"
 Subcategory: "${topic.subcategory || ''}"
 
+Requirements:
+- Each school's position must cite SPECIFIC classical scholars by name (e.g. Ibn Qudama, al-Nawawi, al-Marghinani, Ibn Rushd)
+- Include actual legal reasoning (ta'lil) from classical texts, not just conclusions
+- Name specific books with volume/chapter where possible
+- Hadith must include collection name and number (e.g. Bukhari 1234, Muslim 5678)
+- Disagreements must identify the exact usul al-fiqh principle at stake (qiyas, istihsan, maslaha, sadd al-dhara'i etc.)
+- Historical consequences must reference real events, dynasties, or legal controversies
+- Reflection questions must be genuinely intellectually challenging
+
 Return ONLY valid JSON (no markdown, no backticks) with this exact structure:
 {
-  "hanafi_position": "The Hanafi position in 2-4 sentences",
-  "hanafi_evidence": "Key Quran/hadith evidence used by Hanafis",
-  "hanafi_sources": ["al-Hidaya", "Ibn Abidin"],
-  "maliki_position": "The Maliki position in 2-4 sentences",
-  "maliki_evidence": "Key evidence",
-  "maliki_sources": ["Mukhtasar Khalil"],
-  "shafii_position": "The Shafi'i position in 2-4 sentences",
-  "shafii_evidence": "Key evidence",
-  "shafii_sources": ["al-Umm", "Minhaj al-Talibin"],
-  "hanbali_position": "The Hanbali position in 2-4 sentences",
-  "hanbali_evidence": "Key evidence",
-  "hanbali_sources": ["al-Mughni"],
-  "jafari_position": "The Ja'fari (Twelver Shia) position in 2-4 sentences",
-  "jafari_evidence": "Key evidence",
-  "jafari_sources": ["al-Kafi"],
-  "salafi_position": "The Salafi/Wahhabi position if distinct",
-  "consensus": "What all schools agree on (if anything)",
-  "key_disagreement": "The core point of scholarly disagreement",
-  "practical_difference": "How this disagreement affects Muslim practice in daily life",
-  "historical_consequences": "Historical impact of this disagreement on Muslim communities",
-  "reformist_view": "Modern reformist or progressive Islamic perspective",
+  "hanafi_position": "Detailed 4-6 sentence position citing al-Marghinani, Ibn Abidin, al-Kasani or other named Hanafi scholars with their specific legal reasoning",
+  "hanafi_evidence": "Specific Quran verses with numbers, hadith with collection and number, and usul principles invoked",
+  "hanafi_sources": ["al-Hidaya (Kitab al-Salat)", "Radd al-Muhtar vol.1", "Bada'i al-Sana'i"],
+  "maliki_position": "Detailed 4-6 sentence position citing Malik, Ibn Rushd, al-Qarafi, Khalil or other named Maliki scholars",
+  "maliki_evidence": "Specific evidence with full citations including amal ahl al-Madina if relevant",
+  "maliki_sources": ["Mukhtasar Khalil", "al-Mudawwana", "Bidayat al-Mujtahid"],
+  "shafii_position": "Detailed 4-6 sentence position citing al-Shafi'i, al-Nawawi, al-Rafi'i or other named Shafi'i scholars",
+  "shafii_evidence": "Specific evidence with full citations",
+  "shafii_sources": ["al-Umm", "Minhaj al-Talibin", "al-Majmu'"],
+  "hanbali_position": "Detailed 4-6 sentence position citing Ahmad ibn Hanbal, Ibn Qudama, Ibn Taymiyya or other named Hanbali scholars",
+  "hanbali_evidence": "Specific evidence with full citations",
+  "hanbali_sources": ["al-Mughni", "al-Insaf", "Kashaf al-Qina'"],
+  "jafari_position": "Detailed 4-6 sentence Ja'fari position citing al-Kulayni, al-Tusi, al-Mufid or other named Imami scholars",
+  "jafari_evidence": "Specific evidence including Imami hadith and Imam narrations",
+  "jafari_sources": ["al-Kafi", "Man La Yahduruh al-Faqih", "al-Tahdhib"],
+  "salafi_position": "Ibn Taymiyya or Ibn al-Qayyim position where meaningfully distinct, with specific text references",
+  "consensus": "Precise statement of ijma' if it exists, naming who declared it, or explanation of why no consensus exists",
+  "key_disagreement": "The exact usul al-fiqh dispute: which methodological principle each school prioritizes and why it leads to different rulings",
+  "practical_difference": "Concrete real-world differences in practice for ordinary Muslims across the schools today",
+  "historical_consequences": "Specific historical events, legal controversies, or political impacts of this disagreement with dates/dynasties",
+  "reformist_view": "Named modern scholars (e.g. Khaled Abou El Fadl, Tariq Ramadan, Amina Wadud) with their specific arguments and textual basis",
   "quran_verses": ["2:275", "4:3"],
-  "hadith_refs": ["Bukhari 1234", "Muslim 5678"],
-  "reflection_questions": ["Question 1?", "Question 2?", "Question 3?"]
-}`;
+  "hadith_refs": ["Bukhari 1234 (Kitab al-Salat)", "Muslim 5678 (Kitab al-Nikah)"],
+  "reflection_questions": ["Five genuinely challenging questions that expose the deeper jurisprudential tensions in this topic"]
+}`
 
   try {
     setStatus('Contacting AI scholars (step 1/3)…');
@@ -1068,7 +1077,7 @@ Return ONLY valid JSON (no markdown, no backticks) with this exact structure:
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'claude-sonnet-4-5',
-        max_tokens: 1000,
+        max_tokens: 2000,
         messages: [{ role: 'user', content: prompt }]
       })
     });
