@@ -19,7 +19,7 @@ exports.handler = async (event) => {
   catch { return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: 'Invalid JSON' }) }; }
 
   const payload = {
-    model: body.model || 'claude-sonnet-4-6',
+    model: body.model || 'claude-sonnet-4-5',
     max_tokens: Math.min(body.max_tokens || 1000, 2000),
     messages: body.messages
   };
