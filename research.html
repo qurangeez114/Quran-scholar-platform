@@ -674,6 +674,7 @@ body { padding-bottom: 60px !important; }
 })(window);
 </script>
 
+<script src="monetization.js"></script>
 </head>
 <body>
 
@@ -858,7 +859,7 @@ body { padding-bottom: 60px !important; }
     <button onclick="toggleAIResearch()" id="aiToggleBtn"
       style="display:flex;align-items:center;gap:10px;padding:10px 16px;border:1px solid rgba(201,168,92,0.3);border-radius:2px;background:rgba(201,168,92,0.08);color:var(--bronze-ll);font-family:'Inconsolata',monospace;font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;cursor:pointer;margin-bottom:0;">
       <span style="width:7px;height:7px;border-radius:50%;background:var(--bronze-ll);box-shadow:0 0 6px var(--bronze-ll);animation:spin 0s,pulse2 2s infinite;display:inline-block;"></span>
-      AI Deep Research <span id="aiToggleArrow" style="opacity:.5;">▼</span>
+      AI Deep Research <div id="ai-report-badge" style="display:inline-block;margin-left:8px;vertical-align:middle;"></div><span id="aiToggleArrow" style="opacity:.5;">▼</span>
     </button>
     <div style="font-family:'EB Garamond',serif;font-size:13px;color:rgba(247,242,233,0.4);margin-top:5px;margin-left:2px;font-style:italic;">Upload a handwritten note or type any topic — scholarly report in 7 languages</div>
 
@@ -910,7 +911,7 @@ body { padding-bottom: 60px !important; }
             Also show all 7 language translations at the end
           </label>
         </div>
-        <button id="aiRunBtn" onclick="runAIResearch()"
+        <button id="aiRunBtn" onclick="gatedRunAIResearch()"
           style="width:100%;padding:11px;background:var(--bronze);color:#fff;border:none;border-radius:2px;font-family:'Inconsolata',monospace;font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;cursor:pointer;">
           Research Now
         </button>
@@ -3474,6 +3475,27 @@ function closeFabMenu(){document.getElementById('fab-toggle').classList.remove('
     setTimeout(tagOutgoingLinks, 500);
   }
 })();
+
+/* ── AI Research gate ── */
+async function gatedRunAIResearch() {
+  const check = await canUseFeature('aiReport');
+  if (!check.allowed) {
+    showUpgradeModal('limit');
+    return;
+  }
+  // Show remaining count before running
+  if (check.plan === 'free' && check.remaining <= 2) {
+    const badge = document.getElementById('ai-report-badge');
+    if (badge) renderReportBadge('ai-report-badge');
+  }
+  incrementReportUsage();
+  runAIResearch();
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  renderReportBadge('ai-report-badge');
+});
+
 </script>
 </body>
 </html>
