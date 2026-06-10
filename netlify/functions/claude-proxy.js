@@ -20,7 +20,7 @@ exports.handler = async (event) => {
 
   const payload = {
     model: body.model || 'claude-sonnet-4-5',
-    max_tokens: Math.min(body.max_tokens || 1000, 2000),
+    max_tokens: Math.min(body.max_tokens || 2000, 4000),
     messages: body.messages
   };
   if (body.system) payload.system = body.system;
