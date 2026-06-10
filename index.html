@@ -365,6 +365,11 @@ body { font-family: 'EB Garamond', Georgia, serif; background: #F5EDD8; color: #
 mark.hl-yellow { background:#FFE066;border-radius:2px;padding:0 1px; }
 mark.hl-pink   { background:#FFB3BA;border-radius:2px;padding:0 1px; }
 mark.hl-green  { background:#BAFFC9;border-radius:2px;padding:0 1px; }
+mark.hl-blue   { background:#BAE8FF;border-radius:2px;padding:0 1px; }
+mark.hl-orange { background:#FFD9A0;border-radius:2px;padding:0 1px; }
+mark.hl-purple { background:#E0BAFF;border-radius:2px;padding:0 1px; }
+mark.hl-teal   { background:#AAFFF0;border-radius:2px;padding:0 1px; }
+mark.hl-red    { background:#FFAAAA;border-radius:2px;padding:0 1px; }
 
 .lang-chip {
   display:inline-flex;align-items:center;gap:4px;
@@ -7383,13 +7388,18 @@ async function runResearch() {
 <!-- VERSE HIGHLIGHT PICKER -->
 <div class="hl-picker-popup" id="verseHlPicker">
   <div class="hl-picker-title">Highlight color</div>
-  <div class="hl-colors">
-    <div class="hl-dot" style="background:#FFE066" onclick="applyVerseHighlight('hl-yellow')" title="Yellow"></div>
-    <div class="hl-dot" style="background:#FFB3BA" onclick="applyVerseHighlight('hl-pink')" title="Pink"></div>
-    <div class="hl-dot" style="background:#BAFFC9" onclick="applyVerseHighlight('hl-green')" title="Green"></div>
-    <div class="hl-dot" style="background:#fff;border:2px solid #DDD" onclick="applyVerseHighlight('remove')" title="Remove">✕</div>
+  <div class="hl-colors" style="flex-wrap:wrap;gap:8px;max-width:220px;">
+    <div class="hl-dot" style="background:#FFE066" onclick="applyVpColor('hl-yellow')" title="Yellow"></div>
+    <div class="hl-dot" style="background:#FFB3BA" onclick="applyVpColor('hl-pink')" title="Pink"></div>
+    <div class="hl-dot" style="background:#BAFFC9" onclick="applyVpColor('hl-green')" title="Green"></div>
+    <div class="hl-dot" style="background:#BAE8FF" onclick="applyVpColor('hl-blue')" title="Blue"></div>
+    <div class="hl-dot" style="background:#FFD9A0" onclick="applyVpColor('hl-orange')" title="Orange"></div>
+    <div class="hl-dot" style="background:#E0BAFF" onclick="applyVpColor('hl-purple')" title="Purple"></div>
+    <div class="hl-dot" style="background:#AAFFF0" onclick="applyVpColor('hl-teal')" title="Teal"></div>
+    <div class="hl-dot" style="background:#FFAAAA" onclick="applyVpColor('hl-red')" title="Red"></div>
+    <div class="hl-dot" style="background:#fff;border:2px solid #DDD;display:flex;align-items:center;justify-content:center;font-size:13px;" onclick="applyVpColor('remove')" title="Remove">✕</div>
   </div>
-  <button class="hl-remove" onclick="applyVerseHighlight('remove')">✕ Remove highlight</button>
+  <button class="hl-remove" onclick="applyVpColor('remove')">✕ Remove highlight</button>
 </div>
 
 
@@ -8632,18 +8642,47 @@ function vpHighlight() {
     alert('Select text in the verse first, then tap Highlight.');
     return;
   }
-  const text = selection.toString().trim();
-  const key  = 'vp_hl_' + _vpSura + '_' + _vpAya;
-  const existing = JSON.parse(localStorage.getItem(key) || '[]');
-  existing.push({ text, ts: Date.now() });
-  localStorage.setItem(key, JSON.stringify(existing));
-  // Visual feedback
-  const range = selection.getRangeAt(0);
-  const mark = document.createElement('mark');
-  mark.style.background = '#FFE066';
-  mark.style.borderRadius = '3px';
-  range.surroundContents(mark);
-  selection.removeAllRanges();
+  // Store the selection range before picker opens
+  if (selection.rangeCount > 0) {
+    window._vpHlRange = selection.getRangeAt(0).cloneRange();
+    window._vpHlText = selection.toString().trim();
+  }
+  // Show color picker near the HIGHLIGHT button
+  const picker = document.getElementById('verseHlPicker');
+  const btn = event.currentTarget || event.target;
+  const rect = btn.getBoundingClientRect();
+  picker.style.left = Math.max(8, rect.left - 20) + 'px';
+  picker.style.top  = (rect.top - picker.offsetHeight - 10) + 'px';
+  picker.style.bottom = 'auto';
+  picker.classList.toggle('open');
+  // Close picker if clicking outside
+  setTimeout(() => {
+    document.addEventListener('click', function closePicker(e) {
+      if (!picker.contains(e.target) && e.target !== btn) {
+        picker.classList.remove('open');
+        document.removeEventListener('click', closePicker);
+      }
+    });
+  }, 100);
+}
+
+function applyVpColor(colorClass) {
+  // Called when user picks a color from the picker opened via vpHighlight
+  const picker = document.getElementById('verseHlPicker');
+  picker.classList.remove('open');
+  if (!window._vpHlRange || !window._vpHlText) return;
+  if (colorClass === 'remove') { window._vpHlRange = null; return; }
+  try {
+    const mark = document.createElement('mark');
+    mark.className = colorClass;
+    window._vpHlRange.surroundContents(mark);
+    // Save to storage
+    const key = 'vp_hl_' + _vpSura + '_' + _vpAya;
+    const existing = JSON.parse(localStorage.getItem(key) || '[]');
+    existing.push({ text: window._vpHlText, color: colorClass, ts: Date.now() });
+    localStorage.setItem(key, JSON.stringify(existing));
+    window._vpHlRange = null;
+  } catch(e) { console.warn('Highlight error:', e); }
 }
 
 function vpNote() {
