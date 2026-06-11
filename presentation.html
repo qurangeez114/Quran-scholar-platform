@@ -90,7 +90,7 @@ body { padding-bottom: 60px !important; }
 <main class="layout">
   <aside class="panel">
     <div class="panel-head"><div class="panel-title">Presentation</div><button class="btn small red" onclick="clearBasket()">Clear Basket</button></div>
-    <div class="field"><label style="margin-top:10px">Slide text language</label><select id="outputLang" onchange="setOutputLang()" style="width:100%;padding:8px;border:1px solid #D4C9A8;border-radius:8px;font-family:'Inter',sans-serif;">
+    <div class="field"><label style="margin-top:10px">Slide text language</label><div class="field"><label style="margin-top:10px">Slide text language (Qur'an verses)</label><select id="outputLang" onchange="setOutputLang()" style="width:100%;padding:8px;border:1px solid #D4C9A8;border-radius:8px;font-family:'Inter',sans-serif;">
   <option value="english">English</option>
   <option value="arabic_only">Arabic only</option>
   <option value="tigrinya">Tigrinya</option>
@@ -98,6 +98,8 @@ body { padding-bottom: 60px !important; }
   <option value="oromo">Oromo</option>
   <option value="somali">Somali</option>
 </select>
+<div id="langAutoNote" style="font-size:11px;color:#8a7a55;margin-top:4px;"></div>
+</div>
 <label>Presentation title</label><input id="presTitle" value="Untitled Qur’an Study" oninput="syncTitle()"></div>
     <div class="field"><label>Design theme</label><select id="themeSelect" onchange="setTheme(this.value)"><option value="academic">Academic Research</option><option value="mosque">Mosque Lecture</option><option value="debate">Debate / Comparison</option><option value="youth">Youth Class</option><option value="dark">Dark Modern</option><option value="manuscript">Ancient Manuscript</option></select></div>
     <div class="field"><label>Presentation perspective</label><select id="perspectiveSelect" onchange="setPerspective(this.value)"><option value="devotional">Devotional / Teaching</option><option value="academic">Academic Research</option><option value="comparative">Comparative Religion</option><option value="madhhab">Madhhab Comparison</option><option value="historical">Historical Analysis</option><option value="debate">Debate Preparation</option><option value="critical">Critical Analysis</option><option value="custom">Custom</option></select></div>
@@ -508,16 +510,40 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 
-/* ── Output language for slide text ── */
-function getOutputLang(){ return localStorage.getItem('qsOutputLang')||'english'; }
+/* ── Output language for slide text (Qur'an verses) ── */
+function detectBrowserVerseLang(){
+  const code = (navigator.language||navigator.userLanguage||'en').toLowerCase().slice(0,2);
+  const map = { ti:'tigrinya', am:'amharic', om:'oromo', so:'somali', ar:'arabic_only' };
+  return map[code] || 'english';
+}
+function getOutputLang(){
+  const saved = localStorage.getItem('qsOutputLang');
+  if (saved) return saved;
+  return detectBrowserVerseLang();
+}
 function setOutputLang(){
   const v=document.getElementById('outputLang').value;
   localStorage.setItem('qsOutputLang', v);
+  document.getElementById('langAutoNote').textContent='';
+  if(typeof renderPreview==='function') renderPreview();
+}
+function resetOutputLangToEnglish(){
+  localStorage.setItem('qsOutputLang','english');
+  const sel=document.getElementById('outputLang');
+  if(sel) sel.value='english';
+  document.getElementById('langAutoNote').textContent='';
   if(typeof renderPreview==='function') renderPreview();
 }
 document.addEventListener('DOMContentLoaded', () => {
   const sel=document.getElementById('outputLang');
-  if(sel) sel.value = getOutputLang();
+  if(sel){
+    const lang = getOutputLang();
+    sel.value = lang;
+    const note=document.getElementById('langAutoNote');
+    if(!localStorage.getItem('qsOutputLang') && lang!=='english'){
+      note.innerHTML = 'Auto-detected from your browser. <a href="#" onclick="resetOutputLangToEnglish();return false;" style="color:#a47b32;text-decoration:underline;">Use English instead</a>';
+    }
+  }
 });
 
 </script>
