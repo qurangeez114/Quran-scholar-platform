@@ -4046,11 +4046,13 @@ async function runWordSearch(query) {
 
     // For multi-word queries, search each word independently then combine
     let searchTerms = [];
+    let wordGroups = []; // array of {word, variants[]} — used to rank verses that match ALL words
     if (safeQuery.includes(' ')) {
       // Add individual words (3+ chars) as separate searches
       const words = safeQuery.split(/\s+/).filter(w => w.length >= 3);
       words.forEach(w => {
         const wVariants = searchVariants(w);
+        wordGroups.push({ word: w, variants: wVariants });
         wVariants.forEach(v => { if (!searchTerms.includes(v)) searchTerms.push(v); });
       });
       // Also try full phrase
@@ -4078,12 +4080,38 @@ async function runWordSearch(query) {
     const allResults = await Promise.all(tasks);
 
     const seen = new Set();
-    const all = allResults.flat().filter(v => {
+    let all = allResults.flat().filter(v => {
       const key = `${v.sura_id}:${v.aya_number}`;
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
-    }).sort(function(a,b){var sa=window.controversyScore(a),sb=window.controversyScore(b);if(sb!==sa)return sb-sa;return(a.sura_id||0)-(b.sura_id||0)||(a.aya_number||0)-(b.aya_number||0);});
+    });
+
+    // ── Rank verses by how many of the searched words they contain ──
+    // (AND-priority: verses matching ALL words float to the top)
+    if (wordGroups.length > 1) {
+      const fieldsToCheck = ['arabic','english','aya_text','amharic','oromo','somali'];
+      all.forEach(v => {
+        let count = 0;
+        wordGroups.forEach(g => {
+          const found = g.variants.some(term => {
+            if (!term || term.length < 2) return false;
+            const re = new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'), 'i');
+            return fieldsToCheck.some(f => v[f] && re.test(v[f]));
+          });
+          if (found) count++;
+        });
+        v._matchCount = count;
+      });
+      all.sort((a,b) => {
+        if (b._matchCount !== a._matchCount) return b._matchCount - a._matchCount;
+        var sa=window.controversyScore(a), sb=window.controversyScore(b);
+        if (sb!==sa) return sb-sa;
+        return (a.sura_id||0)-(b.sura_id||0)||(a.aya_number||0)-(b.aya_number||0);
+      });
+    } else {
+      all = all.sort(function(a,b){var sa=window.controversyScore(a),sb=window.controversyScore(b);if(sb!==sa)return sb-sa;return(a.sura_id||0)-(b.sura_id||0)||(a.aya_number||0)-(b.aya_number||0);});
+    }
 
     countDiv.textContent = `${all.length} verse${all.length===1?'':'s'} found for "${query}"`;
 
