@@ -8477,6 +8477,9 @@ function showToastMsg(msg) {
     <button onclick="vpSave()" title="Save to bookmarks" id="vpSaveBtn" style="display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 12px;background:#fff;border:1.5px solid #D4C9A8;border-radius:10px;cursor:pointer;min-width:52px;">
       <span style="font-size:18px;">🔖</span><span style="font-size:9px;color:#666;font-weight:600;">SAVE</span>
     </button>
+    <button onclick="event.stopPropagation();vpGenerateAd()" title="Generate social media ad" style="display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 12px;background:#fff;border:1.5px solid #D4C9A8;border-radius:10px;cursor:pointer;min-width:52px;">
+      <span style="font-size:18px;">📣</span><span style="font-size:9px;color:#666;font-weight:600;">AD</span>
+    </button>
     <button onclick="vpCopy()" title="Copy verse" id="vpCopyBtn" style="display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 12px;background:#fff;border:1.5px solid #D4C9A8;border-radius:10px;cursor:pointer;min-width:52px;">
       <span style="font-size:18px;">📋</span><span style="font-size:9px;color:#666;font-weight:600;">COPY</span>
     </button>
@@ -8684,6 +8687,68 @@ document.addEventListener('selectionchange', function(){
     }
   }
 });
+
+
+/* ── Social Media Ad Generator ── */
+function vpGenerateAd(){
+  if(!_vpData){ alert('Open a verse first.'); return; }
+  document.getElementById('vpAdOverlay').style.display='flex';
+  document.querySelectorAll('.vpAdPlatform').forEach(b=>{
+    b.style.background = b.dataset.p==='instagram' ? '#a47b32' : '#fff';
+    b.style.color = b.dataset.p==='instagram' ? '#fff' : '#17130c';
+  });
+  vpRenderAd('instagram');
+}
+function closeVpAd(){ document.getElementById('vpAdOverlay').style.display='none'; }
+
+const VP_AD_TEMPLATES = {
+  instagram: {
+    visual: 'Square (1:1) image — Arabic calligraphy of the verse over a soft gradient background (gold/teal), with the English translation as a caption overlay near the bottom.',
+    build: (ref, ar, en) => `✨ ${ref} ✨\n\n"${en}"\n\n${ar}\n\nReflect. Share. Grow in faith. 🌙\n\n#Quran #Islam #QuranVerse #IslamicReminder #Hikma #QuranHikma #DailyQuran #MuslimCommunity`
+  },
+  tiktok: {
+    visual: 'Vertical 9:16 video — Arabic recitation audio playing over the verse text animating word-by-word, ending with "Save this for later 🤍" and your logo.',
+    build: (ref, ar, en) => `${ref} 🤍\n"${en}"\n\nDouble-tap if this spoke to you 🤲\n\n#Quran #Islam #QuranTok #IslamicReminder #Hikma #FYP #Muslim`
+  },
+  facebook: {
+    visual: 'Landscape (1.91:1) image — verse text in elegant typography on a calm background (mosque silhouette or nature), suitable for a shareable post.',
+    build: (ref, ar, en) => `${ref}\n\n"${en}"\n\n${ar}\n\nTake a moment today to reflect on this verse. Visit Qur'an Hikma to explore the full context, tafsir, and related teachings.\n\n#Quran #Islam #Hikma`
+  },
+  x: {
+    visual: 'Square image with the Arabic verse in large calligraphy and a short English line beneath — optimized for the X timeline.',
+    build: (ref, ar, en) => `${ref}\n"${en}"\n\n${ar}\n\n#Quran #Islam #Hikma`
+  }
+};
+
+function vpRenderAd(platform){
+  document.querySelectorAll('.vpAdPlatform').forEach(b=>{
+    const active = b.dataset.p===platform;
+    b.style.background = active ? '#a47b32' : '#fff';
+    b.style.color = active ? '#fff' : '#17130c';
+  });
+  const ref = 'Quran ' + _vpSura + ':' + _vpAya;
+  const ar = (_vpData && _vpData.arabic) || '';
+  const en = (_vpData && _vpData.english) || '';
+  const tpl = VP_AD_TEMPLATES[platform];
+  document.getElementById('vpAdVisual').textContent = tpl.visual;
+  document.getElementById('vpAdCaption').value = tpl.build(ref, ar, en);
+  document.getElementById('vpAdMsg').textContent='';
+}
+
+async function vpAdCopy(){
+  const text = document.getElementById('vpAdCaption').value;
+  try{ await navigator.clipboard.writeText(text); document.getElementById('vpAdMsg').textContent='✅ Copied to clipboard'; }
+  catch(e){ document.getElementById('vpAdMsg').textContent='Could not copy automatically — select and copy manually.'; }
+}
+async function vpAdShare(){
+  const text = document.getElementById('vpAdCaption').value;
+  const url = window.location.origin + window.location.pathname + '?sura=' + _vpSura + '&aya=' + _vpAya;
+  try{
+    await navigator.share({ title:'Quran ' + _vpSura + ':' + _vpAya, text, url });
+  }catch(e){
+    await vpAdCopy();
+  }
+}
 
 function applyVpColor(colorClass) {
   // Called when user picks a color from the picker opened via vpHighlight
@@ -9231,4 +9296,29 @@ function renderTafsirAnalysis(div, r, sura, aya, fromCache) {
 
 <script src="engagement.js"></script>
 </body>
-</html>
+</html
+<!-- AD GENERATOR PANEL -->
+<div id="vpAdOverlay" onclick="if(event.target===this)closeVpAd()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:100010;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:16px;padding:18px;max-width:420px;width:92%;max-height:85vh;overflow-y:auto;font-family:'Inter',sans-serif;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <div style="font-weight:800;font-size:16px;color:#17130c;">📣 Social Media Ad</div>
+      <button onclick="closeVpAd()" style="background:none;border:none;font-size:18px;cursor:pointer;color:#999;">✕</button>
+    </div>
+    <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;">
+      <button class="vpAdPlatform" data-p="instagram" onclick="vpRenderAd('instagram')" style="padding:6px 12px;border-radius:20px;border:1.5px solid #D4C9A8;background:#fff;font-size:12px;font-weight:700;cursor:pointer;">Instagram</button>
+      <button class="vpAdPlatform" data-p="tiktok" onclick="vpRenderAd('tiktok')" style="padding:6px 12px;border-radius:20px;border:1.5px solid #D4C9A8;background:#fff;font-size:12px;font-weight:700;cursor:pointer;">TikTok</button>
+      <button class="vpAdPlatform" data-p="facebook" onclick="vpRenderAd('facebook')" style="padding:6px 12px;border-radius:20px;border:1.5px solid #D4C9A8;background:#fff;font-size:12px;font-weight:700;cursor:pointer;">Facebook</button>
+      <button class="vpAdPlatform" data-p="x" onclick="vpRenderAd('x')" style="padding:6px 12px;border-radius:20px;border:1.5px solid #D4C9A8;background:#fff;font-size:12px;font-weight:700;cursor:pointer;">X</button>
+    </div>
+    <div style="font-size:11px;font-weight:700;color:#8a7a55;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Visual idea</div>
+    <div id="vpAdVisual" style="font-size:13px;color:#5a4f3a;background:#FFF8E6;border:1px solid #E8D48A;border-radius:8px;padding:10px;margin-bottom:12px;"></div>
+    <div style="font-size:11px;font-weight:700;color:#8a7a55;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Caption</div>
+    <textarea id="vpAdCaption" readonly style="width:100%;min-height:160px;padding:10px;border:1px solid #D4C9A8;border-radius:8px;font-size:13px;font-family:inherit;box-sizing:border-box;resize:vertical;"></textarea>
+    <div style="display:flex;gap:8px;margin-top:12px;">
+      <button onclick="vpAdCopy()" style="flex:1;padding:11px;border:none;border-radius:10px;background:#17623a;color:#fff;font:800 13px Inter,sans-serif;cursor:pointer;">📋 Copy</button>
+      <button onclick="vpAdShare()" style="flex:1;padding:11px;border:none;border-radius:10px;background:linear-gradient(135deg,#6b4f1e,#a47b32);color:#fff7df;font:800 13px Inter,sans-serif;cursor:pointer;">📤 Share</button>
+    </div>
+    <div id="vpAdMsg" style="text-align:center;font-size:12px;color:#185b31;margin-top:8px;"></div>
+  </div>
+</div>
+>
