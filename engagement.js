@@ -176,11 +176,13 @@ function showSupportModal(){
   document.getElementById('qs-skip-btn').onclick = ()=>closeModal(true);
   document.getElementById('qs-donate-btn').onclick = async ()=>{
     await saveProfile('donate');
+    localStorage.setItem('qs_supporter','true');
     window.open('https://www.paypal.me/magical19', '_blank');
     closeModal(false);
   };
   document.getElementById('qs-subscribe-btn').onclick = async ()=>{
     await saveProfile('subscribe');
+    localStorage.setItem('qs_supporter','true');
     window.location.href = 'presentation.html'; // or wherever the upgrade modal lives
     closeModal(false);
   };
