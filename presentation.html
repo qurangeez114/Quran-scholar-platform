@@ -90,7 +90,15 @@ body { padding-bottom: 60px !important; }
 <main class="layout">
   <aside class="panel">
     <div class="panel-head"><div class="panel-title">Presentation</div><button class="btn small red" onclick="clearBasket()">Clear Basket</button></div>
-    <div class="field"><label>Presentation title</label><input id="presTitle" value="Untitled Qur’an Study" oninput="syncTitle()"></div>
+    <div class="field"><label style="margin-top:10px">Slide text language</label><select id="outputLang" onchange="setOutputLang()" style="width:100%;padding:8px;border:1px solid #D4C9A8;border-radius:8px;font-family:'Inter',sans-serif;">
+  <option value="english">English</option>
+  <option value="arabic_only">Arabic only</option>
+  <option value="tigrinya">Tigrinya</option>
+  <option value="amharic">Amharic</option>
+  <option value="oromo">Oromo</option>
+  <option value="somali">Somali</option>
+</select>
+<label>Presentation title</label><input id="presTitle" value="Untitled Qur’an Study" oninput="syncTitle()"></div>
     <div class="field"><label>Design theme</label><select id="themeSelect" onchange="setTheme(this.value)"><option value="academic">Academic Research</option><option value="mosque">Mosque Lecture</option><option value="debate">Debate / Comparison</option><option value="youth">Youth Class</option><option value="dark">Dark Modern</option><option value="manuscript">Ancient Manuscript</option></select></div>
     <div class="field"><label>Presentation perspective</label><select id="perspectiveSelect" onchange="setPerspective(this.value)"><option value="devotional">Devotional / Teaching</option><option value="academic">Academic Research</option><option value="comparative">Comparative Religion</option><option value="madhhab">Madhhab Comparison</option><option value="historical">Historical Analysis</option><option value="debate">Debate Preparation</option><option value="critical">Critical Analysis</option><option value="custom">Custom</option></select></div>
     <div class="field">
@@ -186,7 +194,7 @@ function syncTitle(){renderPreview()}
 function setTheme(t){theme=t;localStorage.setItem('qs_presentation_theme',t);renderPreview()}
 function setPerspective(p){perspective=p;localStorage.setItem(PERSPECTIVE_KEY,p);renderPreview()}
 function render(){const list=document.getElementById('slideList');document.getElementById('countBadge').textContent=slides.length+' items';list.innerHTML='';if(!slides.length){list.innerHTML='<div class="empty">No items yet. Go back to the app and tap “+ Add to Presentation”, or add a blank slide.</div>';current=0}else{slides.forEach((s,i)=>{const d=document.createElement('div');d.className='item '+(i===current?'active':'');d.draggable=true;d.ondragstart=e=>e.dataTransfer.setData('text/plain',i);d.ondragover=e=>e.preventDefault();d.ondrop=e=>{e.preventDefault();const from=+e.dataTransfer.getData('text/plain');reorder(from,i)};d.onclick=()=>{current=i;render()};d.innerHTML=`<div class="item-top"><span class="pill ${esc(s.type)}">${esc(typeLabel(s.type))}</span><div><div class="item-title">${esc(s.slideTitle||s.title)}</div><div class="item-ref">${esc(s.reference)}</div></div></div><div class="item-text">${esc(s.text).slice(0,240)}</div><div class="item-actions"><button class="btn small" onclick="event.stopPropagation();duplicateSlide(${i})">Duplicate</button><button class="btn small red" onclick="event.stopPropagation();deleteSlide(${i})">Remove</button></div>`;list.appendChild(d)})}saveBasket();renderPreview();renderEditor()}
-function slideMarkup(s,i,total,title){const arabic=s.arabic?`<div class="slide-arabic">${esc(s.arabic)}</div>`:'';const notes=s.speakerNotes?`<div class="slide-notes">${esc(s.speakerNotes).replace(/\n/g,'<br>')}</div>`:'';const source=s.sourceUrl?`<a class="source-link" href="${esc(s.sourceUrl)}">${esc(s.reference||s.sourceUrl)}</a>`:esc(s.reference);return `<div class="slide theme-${theme}"><div class="slide-header"><div class="slide-title">${esc(s.slideTitle||s.title)}</div><div class="slide-subtitle">${esc(typeLabel(s.type))} • ${esc(perspectiveLabel())}</div></div><div class="slide-body">${arabic}<div class="slide-text">${esc(s.text).replace(/\n/g,'<br>')}</div>${notes}<div class="slide-source">${source}</div></div><div class="slide-footer"><span>${esc(title)}</span><span>${i+1}${total?' / '+total:''}</span></div></div>`}
+function slideMarkup(s,i,total,title){const arabic=s.arabic?`<div class="slide-arabic">${esc(s.arabic)}</div>`:'';const notes=s.speakerNotes?`<div class="slide-notes">${esc(s.speakerNotes).replace(/\n/g,'<br>')}</div>`:'';const source=s.sourceUrl?`<a class="source-link" href="${esc(s.sourceUrl)}">${esc(s.reference||s.sourceUrl)}</a>`:esc(s.reference);return `<div class="slide theme-${theme}"><div class="slide-header"><div class="slide-title">${esc(s.slideTitle||s.title)}</div><div class="slide-subtitle">${esc(typeLabel(s.type))} • ${esc(perspectiveLabel())}</div></div><div class="slide-body">${arabic}<div class="slide-text">${esc(displayText).replace(/\n/g,'<br>')}</div>${notes}<div class="slide-source">${source}</div></div><div class="slide-footer"><span>${esc(title)}</span><span>${i+1}${total?' / '+total:''}</span></div></div>`}
 function renderPreview(){const s=slides[current];const box=document.getElementById('slidePreview');document.getElementById('pos').textContent=slides.length?`${current+1} / ${slides.length}`:'0 / 0';box.className='slide theme-'+theme;if(!s){box.innerHTML='<div class="slide-body"><div class="slide-title">Presentation Builder</div><div class="slide-text">Collect verses, hadith, madhhab rulings, sira events, tafsir, cross-references, and AI analysis from the app.</div></div>';return}box.innerHTML=slideMarkup(s,current,slides.length,document.getElementById('presTitle').value||'Qur’an Study');}
 function renderEditor(){const s=slides[current]||{};document.getElementById('editTitle').value=s.slideTitle||'';document.getElementById('editRef').value=s.reference||'';document.getElementById('editText').value=s.text||'';document.getElementById('editNotes').value=s.speakerNotes||'';document.getElementById('editUrl').value=s.sourceUrl||''}
 function updateCurrent(k,v){if(!slides[current])return;slides[current][k]=v;saveBasket();renderPreview();if(k==='slideTitle'||k==='reference'||k==='text')render()}
@@ -313,7 +321,7 @@ async function autoCollectAndBuild(){
   try{
     // 1. QURAN VERSES
     setProgress('📖 Searching Quran verses...');
-    var vr=await fetch(SB_URL2+'/rest/v1/ayas?select=sura_id,aya_number,english,arabic&english=ilike.*'+enc+'*&order=sura_id,aya_number&limit=10',{headers:SB_H2});
+    var vr=await fetch(SB_URL2+'/rest/v1/ayas?select=sura_id,aya_number,english,arabic,aya_text,amharic,oromo,somali&english=ilike.*'+enc+'*&order=sura_id,aya_number&limit=10',{headers:SB_H2});
     var verses=vr.ok?await vr.json():[];
     verses.forEach(function(v){
       newSlides.push({type:'quran',id:'ac_v_'+v.sura_id+'_'+v.aya_number,
@@ -321,6 +329,7 @@ async function autoCollectAndBuild(){
         title:'Quran '+v.sura_id+':'+v.aya_number,
         reference:'Quran '+v.sura_id+':'+v.aya_number,
         text:v.english||'',arabic:v.arabic||'',
+        translations:{english:v.english||'',tigrinya:v.aya_text||'',amharic:v.amharic||'',oromo:v.oromo||'',somali:v.somali||''},
         sourceUrl:'index.html?sura='+v.sura_id+'&aya='+v.aya_number});
     });
     counts.verses=verses.length;
@@ -489,6 +498,19 @@ document.addEventListener('DOMContentLoaded', () => {
       setTimeout(() => { if (typeof autoCollectAndBuild === 'function') autoCollectAndBuild(); }, 400);
     }
   }
+});
+
+
+/* ── Output language for slide text ── */
+function getOutputLang(){ return localStorage.getItem('qsOutputLang')||'english'; }
+function setOutputLang(){
+  const v=document.getElementById('outputLang').value;
+  localStorage.setItem('qsOutputLang', v);
+  if(typeof renderPreview==='function') renderPreview();
+}
+document.addEventListener('DOMContentLoaded', () => {
+  const sel=document.getElementById('outputLang');
+  if(sel) sel.value = getOutputLang();
 });
 
 </script>
