@@ -8645,14 +8645,15 @@ function vpRead() {
 
 function vpHighlight(event) {
   const selection = window.getSelection();
-  if (!selection || selection.toString().trim() === '') {
-    alert('Select text in the verse first, then tap Highlight.');
-    return;
-  }
-  // Store the selection range before picker opens
-  if (selection.rangeCount > 0) {
+  // Update stored selection if one is currently live
+  if (selection && selection.toString().trim() !== '' && selection.rangeCount > 0) {
     window._vpHlRange = selection.getRangeAt(0).cloneRange();
     window._vpHlText = selection.toString().trim();
+  }
+  // Fall back to last captured selection (mobile toolbar can clear live selection)
+  if (!window._vpHlText || window._vpHlText.trim() === '') {
+    alert('Select text in the verse first, then tap Highlight.');
+    return;
   }
   // Show color picker near the HIGHLIGHT button
   const picker = document.getElementById('verseHlPicker');
@@ -8672,6 +8673,17 @@ function vpHighlight(event) {
     });
   }, 100);
 }
+
+document.addEventListener('selectionchange', function(){
+  const sel = window.getSelection();
+  if (sel && sel.toString().trim() !== '' && sel.rangeCount > 0) {
+    const popup = document.getElementById('versePopupModal');
+    if (popup && popup.style.display !== 'none' && popup.contains(sel.anchorNode)) {
+      window._vpHlRange = sel.getRangeAt(0).cloneRange();
+      window._vpHlText = sel.toString().trim();
+    }
+  }
+});
 
 function applyVpColor(colorClass) {
   // Called when user picks a color from the picker opened via vpHighlight
