@@ -10,9 +10,25 @@ const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 function esc(s){ return String(s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
+function qsIsSupporter(){
+  // 1. Subscribed via monetization.js plan check (cached)
+  try{
+    if(sessionStorage.getItem('qs_plan') === 'premium') return true;
+  }catch(e){}
+  // 2. Donated via engagement support modal
+  try{
+    const eng = JSON.parse(localStorage.getItem('qs_engagement')||'{}');
+    if(eng.profile && eng.profile.asked &&
+       (eng.profile.choice === 'donate' || eng.profile.choice === 'subscribe')) return true;
+    if(localStorage.getItem('qs_supporter') === 'true') return true;
+  }catch(e){}
+  return false;
+}
+
 async function loadAd(){
   const slot = document.getElementById('qs-ad-slot');
   if(!slot) return;
+  if(qsIsSupporter()){ slot.style.display='none'; return; }
   const today = new Date().toISOString().slice(0,10);
   try{
     const url = SB_URL + '/rest/v1/ads?select=*&status=eq.active&limit=50';
