@@ -78,7 +78,8 @@ function getReportsRemaining() {
 async function canUseFeature(feature) {
   const plan = await getUserPlan();
   if (plan === 'premium') return { allowed: true, plan };
-  if (feature === 'exportPDF' || feature === 'exportPPTX') return { allowed: false, plan, reason: 'export' };
+  // TEMPORARY: PDF/PPTX export unlocked for everyone until payments are live
+  if (feature === 'exportPDF' || feature === 'exportPPTX') return { allowed: true, plan };
   if (feature === 'aiReport') {
     const remaining = getReportsRemaining();
     if (remaining > 0) return { allowed: true, plan, remaining };
