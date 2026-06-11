@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Advertise — Qur'an Hikma</title>
+<style>
+  body{font-family:'Inter',sans-serif;background:#FFFEF8;color:#17130c;margin:0;padding:20px;}
+  .wrap{max-width:480px;margin:0 auto;}
+  h1{font-size:22px;font-weight:800;margin-bottom:4px;}
+  p.sub{color:#5a4f3a;font-size:14px;margin-top:0;margin-bottom:20px;line-height:1.5;}
+  label{font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:#8a7a55;display:block;margin:14px 0 6px;}
+  input,select,textarea{width:100%;padding:11px 12px;border:1px solid #D4C9A8;border-radius:10px;
+    font-size:14px;font-family:inherit;box-sizing:border-box;background:#fff;}
+  textarea{min-height:90px;resize:vertical;}
+  button{width:100%;margin-top:20px;padding:14px;border:none;border-radius:12px;
+    background:linear-gradient(135deg,#6b4f1e,#a47b32);color:#fff7df;font:800 15px Inter,sans-serif;cursor:pointer;}
+  button:disabled{opacity:.6;}
+  #status{margin-top:14px;font-size:14px;text-align:center;display:none;padding:12px;border-radius:10px;}
+  #status.ok{background:#e8f3eb;color:#185b31;display:block;}
+  #status.err{background:#fdeaea;color:#a33;display:block;}
+  a.back{display:inline-block;margin-bottom:10px;color:#a47b32;text-decoration:none;font-weight:700;font-size:13px;}
+  .info{background:#fff8e6;border:1px solid #E8D48A;border-radius:10px;padding:12px 14px;font-size:13px;color:#4a3a10;margin-bottom:16px;line-height:1.6;}
+  .info b{display:block;margin-bottom:4px;}
+  .char-count{font-size:11px;color:#999;text-align:right;margin-top:2px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="index.html">← Back to app</a>
+  <h1>📢 Advertise on Qur'an Hikma</h1>
+  <p class="sub">Reach a global audience of students, scholars, and seekers exploring the Qur'an, hadith, and Islamic studies.</p>
+
+  <div class="info">
+    <b>How it works</b>
+    Submit your ad below. Our team reviews every submission for relevance and appropriateness before it goes live (usually within 1-2 business days). We'll contact you via the email provided to arrange placement and payment.
+  </div>
+
+  <form id="adForm">
+    <label>Your name</label>
+    <input id="adName" required placeholder="Full name">
+
+    <label>Email</label>
+    <input id="adEmail" type="email" required placeholder="you@example.com">
+
+    <label>Business / Organization name</label>
+    <input id="adBusiness" required placeholder="e.g. Al-Noor Bookstore">
+
+    <label>Link (where the ad should send people)</label>
+    <input id="adLink" type="url" required placeholder="https://yourwebsite.com">
+
+    <label>Ad text <span style="font-weight:400;text-transform:none;">(short, e.g. 100-140 characters)</span></label>
+    <textarea id="adText" required placeholder="e.g. Authentic Islamic books shipped worldwide. Use code QURAN10 for 10% off!"></textarea>
+    <div class="char-count"><span id="charCount">0</span> / 140</div>
+
+    <label>Image URL <span style="font-weight:400;text-transform:none;">(optional — square, 600x600px recommended)</span></label>
+    <input id="adImage" type="url" placeholder="https://...">
+
+    <label>Preferred start date</label>
+    <input id="adStart" type="date">
+
+    <label>Preferred end date</label>
+    <input id="adEnd" type="date">
+
+    <button id="adSubmit" type="submit">Submit for Review</button>
+    <div id="status"></div>
+  </form>
+</div>
+
+<script>
+const SB_URL='https://ylosytbxpzxzwfzjpaej.supabase.co';
+const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4end' +
+              'mem9qcGFlaiIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzc2MTQ2NTI3LCJleHAiOjIwOTE3MjI1Mjd9.' +
+              'yqigL9ILlXkQ7zi37rX3AUs7vjQB';
+
+const adText = document.getElementById('adText');
+const charCount = document.getElementById('charCount');
+adText.addEventListener('input', ()=>{ charCount.textContent = adText.value.length; });
+
+document.getElementById('adForm').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const btn = document.getElementById('adSubmit');
+  const status = document.getElementById('status');
+  btn.disabled = true; btn.textContent = 'Submitting...';
+  status.className=''; status.style.display='none';
+
+  const payload = {
+    advertiser_name: document.getElementById('adName').value.trim(),
+    email: document.getElementById('adEmail').value.trim(),
+    business_name: document.getElementById('adBusiness').value.trim(),
+    link_url: document.getElementById('adLink').value.trim(),
+    ad_text: adText.value.trim(),
+    image_url: document.getElementById('adImage').value.trim() || null,
+    starts_at: document.getElementById('adStart').value || null,
+    ends_at: document.getElementById('adEnd').value || null,
+    status: 'pending'
+  };
+
+  try{
+    const r = await fetch(SB_URL+'/rest/v1/ads', {
+      method:'POST',
+      headers:{ apikey:SB_KEY, Authorization:'Bearer '+SB_KEY, 'Content-Type':'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if(!r.ok) throw new Error('save failed');
+    status.className='ok';
+    status.textContent="✅ Thanks! Your ad has been submitted for review. We'll email you within 1-2 business days.";
+    document.getElementById('adForm').reset();
+    charCount.textContent='0';
+  }catch(err){
+    status.className='err';
+    status.textContent='⚠️ Something went wrong. Please try again later.';
+  }finally{
+    btn.disabled=false; btn.textContent='Submit for Review';
+    status.style.display='block';
+  }
+});
+</script>
+</body>
+</html>
