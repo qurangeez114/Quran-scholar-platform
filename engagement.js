@@ -176,7 +176,7 @@ function showSupportModal(){
   document.getElementById('qs-skip-btn').onclick = ()=>closeModal(true);
   document.getElementById('qs-donate-btn').onclick = async ()=>{
     await saveProfile('donate');
-    window.open('https://www.buymeacoffee.com/', '_blank');
+    window.open('https://www.paypal.me/magical19', '_blank');
     closeModal(false);
   };
   document.getElementById('qs-subscribe-btn').onclick = async ()=>{
