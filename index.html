@@ -8699,18 +8699,28 @@ function applyVpColor(colorClass) {
     return;
   }
   if (colorClass === 'remove') { window._vpHlRange = null; return; }
+  // Apply visual highlight (robust against multi-element selections)
   try {
     const mark = document.createElement('mark');
     mark.className = colorClass;
-    window._vpHlRange.surroundContents(mark);
-    // Save to storage
+    try {
+      window._vpHlRange.surroundContents(mark);
+    } catch(e1) {
+      // Range spans multiple elements — extract and wrap instead
+      const frag = window._vpHlRange.extractContents();
+      mark.appendChild(frag);
+      window._vpHlRange.insertNode(mark);
+    }
+  } catch(e) { console.warn('Highlight visual error:', e); }
+  // Always save to storage, even if visual wrap failed
+  try {
     const key = 'vp_hl_' + _vpSura + '_' + _vpAya;
     const existing = JSON.parse(localStorage.getItem(key) || '[]');
     existing.push({ text: window._vpHlText, color: colorClass, ts: Date.now() });
     localStorage.setItem(key, JSON.stringify(existing));
-    window._vpHlRange = null;
-    window._vpHlText = null;
-  } catch(e) { console.warn('Highlight error:', e); }
+  } catch(e2) { console.warn('Highlight save error:', e2); }
+  window._vpHlRange = null;
+  window._vpHlText = null;
 }
 
 function vpNote() {
