@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Feedback & Questions — Qur'an Hikma</title>
+<style>
+  body{font-family:'Inter',sans-serif;background:#FFFEF8;color:#17130c;margin:0;padding:20px;}
+  .wrap{max-width:480px;margin:0 auto;}
+  h1{font-size:22px;font-weight:800;margin-bottom:4px;}
+  p.sub{color:#5a4f3a;font-size:14px;margin-top:0;margin-bottom:20px;}
+  label{font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:#8a7a55;display:block;margin:14px 0 6px;}
+  input,select,textarea{width:100%;padding:11px 12px;border:1px solid #D4C9A8;border-radius:10px;
+    font-size:14px;font-family:inherit;box-sizing:border-box;background:#fff;}
+  textarea{min-height:120px;resize:vertical;}
+  button{width:100%;margin-top:20px;padding:14px;border:none;border-radius:12px;
+    background:linear-gradient(135deg,#6b4f1e,#a47b32);color:#fff7df;font:800 15px Inter,sans-serif;cursor:pointer;}
+  button:disabled{opacity:.6;}
+  #status{margin-top:14px;font-size:14px;text-align:center;display:none;padding:12px;border-radius:10px;}
+  #status.ok{background:#e8f3eb;color:#185b31;display:block;}
+  #status.err{background:#fdeaea;color:#a33;display:block;}
+  a.back{display:inline-block;margin-bottom:10px;color:#a47b32;text-decoration:none;font-weight:700;font-size:13px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="index.html">← Back to app</a>
+  <h1>💬 Feedback & Questions</h1>
+  <p class="sub">Found a bug, have a suggestion, or a question about the Qur'an Hikma platform? Send it here — we read every message.</p>
+
+  <form id="fbForm">
+    <label>Name</label>
+    <input id="fbName" placeholder="Your name (optional)">
+
+    <label>Email (optional, if you want a reply)</label>
+    <input id="fbEmail" type="email" placeholder="you@example.com">
+
+    <label>Type</label>
+    <select id="fbCategory">
+      <option value="suggestion">Suggestion / Feature request</option>
+      <option value="bug">Bug report</option>
+      <option value="question">Question</option>
+      <option value="content">Content correction (verse, hadith, translation)</option>
+      <option value="other">Other</option>
+    </select>
+
+    <label>Message</label>
+    <textarea id="fbMessage" placeholder="Tell us what's on your mind..." required></textarea>
+
+    <button id="fbSubmit" type="submit">Send</button>
+    <div id="status"></div>
+  </form>
+</div>
+
+<script>
+const SB_URL='https://ylosytbxpzxzwfzjpaej.supabase.co';
+const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4end' +
+              'mem9qcGFlaiIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzc2MTQ2NTI3LCJleHAiOjIwOTE3MjI1Mjd9.' +
+              'yqigL9ILlXkQ7zi37rX3AUs7vjQB';
+
+document.getElementById('fbForm').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const btn = document.getElementById('fbSubmit');
+  const status = document.getElementById('status');
+  const message = document.getElementById('fbMessage').value.trim();
+  if(!message){ return; }
+
+  btn.disabled = true; btn.textContent = 'Sending...';
+  status.className=''; status.style.display='none';
+
+  const params = new URLSearchParams(window.location.search);
+  const payload = {
+    name: document.getElementById('fbName').value.trim() || null,
+    email: document.getElementById('fbEmail').value.trim() || null,
+    category: document.getElementById('fbCategory').value,
+    message: message,
+    page: document.referrer || params.get('from') || ''
+  };
+
+  try{
+    const r = await fetch(SB_URL+'/rest/v1/feedback_messages', {
+      method:'POST',
+      headers:{ apikey:SB_KEY, Authorization:'Bearer '+SB_KEY, 'Content-Type':'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if(!r.ok) throw new Error('save failed');
+    status.className='ok';
+    status.textContent='✅ Thank you! Your message has been sent.';
+    document.getElementById('fbForm').reset();
+  }catch(err){
+    status.className='err';
+    status.textContent='⚠️ Something went wrong. Please try again later.';
+  }finally{
+    btn.disabled=false; btn.textContent='Send';
+    status.style.display='block';
+  }
+});
+</script>
+</body>
+</html>
