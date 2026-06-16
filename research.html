@@ -1737,6 +1737,51 @@ async function doSearch() {
 async function fetchAllSources(q, tradFilter, collection, scholar) {
   const results = [];
 
+  // Detect verse reference pattern like "96:1" or "2:255" and query by exact sura/aya instead of text search
+  const verseMatch = q.trim().match(/^(\d{1,3})\s*:\s*(\d{1,3})$/);
+  if (verseMatch) {
+    const suraNum = parseInt(verseMatch[1]);
+    const ayaNum  = parseInt(verseMatch[2]);
+
+    if (currentSource === 'all' || currentSource === 'hadith') {
+      const hSelect = 'id,sura_id,aya_number,hadith_text,arabic_text,narrator,collection,reference,tradition,similarity_note,hadith_grade';
+      const hExtra  = {sura_id:'eq.'+suraNum, aya_number:'eq.'+ayaNum, ...tradFilter};
+      if (collection) hExtra.collection = 'eq.' + collection;
+      const corpSel = 'id,sura_id,aya_number,hadith_text:text_english,arabic_text:text_arabic,narrator,collection,reference:hadith_number,tradition,hadith_grade:grade';
+      const corpExtra = {sura_id:'eq.'+suraNum, aya_number:'eq.'+ayaNum, ...tradFilter};
+      if (collection) corpExtra.collection = 'eq.' + collection;
+      const [hRows, cRows] = await Promise.all([
+        sbFetch('hadith_connections', hSelect, hExtra),
+        sbFetch('hadith_corpus', corpSel, corpExtra),
+      ]);
+      const tagged = [
+        ...hRows.map(r=>({...r,_tbl:'hc'})),
+        ...cRows.map(r=>({...r,_tbl:'corpus',similarity_note:null}))
+      ];
+      const seen = new Set();
+      tagged.forEach(r => { const k='hc:'+r._tbl+':'+r.id; if(!seen.has(k)){seen.add(k);results.push({type:'hadith',...r});} });
+    }
+
+    if (currentSource === 'all' || currentSource === 'tafsir') {
+      const tSel   = 'id,sura,aya,content,source_name,scholar_name,tradition,language';
+      const tExtra = {sura:'eq.'+suraNum, aya:'eq.'+ayaNum, language:'eq.en', ...tradFilter};
+      if (scholar) tExtra.source_name = 'eq.' + scholar;
+      const tRows = await sbFetch('tafsir_entries', tSel, tExtra);
+      const seen = new Set();
+      tRows.forEach(r => { if(!seen.has(r.id)){seen.add(r.id);results.push({type:'tafsir',...r});} });
+    }
+
+    if (currentSource === 'all' || currentSource === 'asbab') {
+      const aSel   = 'id,sura_id,aya_number,reason_text,scholar,tradition,source';
+      const aExtra = {sura_id:'eq.'+suraNum, aya_number:'eq.'+ayaNum, ...tradFilter};
+      const aRows  = await sbFetch('asbab_al_nuzul', aSel, aExtra);
+      const seen = new Set();
+      aRows.forEach(r => { if(!seen.has(r.id)){seen.add(r.id);results.push({type:'asbab',...r});} });
+    }
+
+    return results;
+  }
+
   if (currentSource === 'all' || currentSource === 'hadith') {
     const hSelect = 'id,sura_id,aya_number,hadith_text,arabic_text,narrator,collection,reference,tradition,similarity_note,hadith_grade';
     const hExtra  = {...tradFilter};
