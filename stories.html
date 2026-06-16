@@ -396,6 +396,14 @@ async function openStory(story){
   main.innerHTML='<div class="loading" style="padding:40px;"><div class="spin"></div></div>';
   // Fetch sources
   const sources=await sb('story_sources','story_id=eq.'+story.id+'&select=*&order=tradition.asc');
+  // Fetch ancient_sources (verse-level sources for suras in this story)
+  let ancientSources=[];
+  try{
+    if(story.primary_suras&&story.primary_suras.length){
+      const suraFilter=story.primary_suras.map(s=>'sura.eq.'+s).join(',');
+      ancientSources=await sb('ancient_sources','or=('+suraFilter+')&select=*&order=tradition.asc&limit=20');
+    }
+  }catch(e){}
   // Fetch verses
   let verses=[];
   try{
@@ -458,6 +466,7 @@ async function openStory(story){
     <div class="sec">
       <div class="sec-t">📚 Comparative Sources</div>
       ${srcHTML}
+      ${ancientSources.length ? `<div style="margin-top:12px;border-top:1px solid var(--border);padding-top:12px;"><div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--gold);margin-bottom:10px;">📜 Ancient Verse Sources</div>${ancientSources.map(a=>`<div class="src-card"><div class="src-hdr" onclick="this.nextElementSibling.classList.toggle('open');this.querySelector('.arr').textContent=this.nextElementSibling.classList.contains('open')?'▲':'▼';"><span class="trad tO">${a.tradition}</span><div class="src-info"><div class="src-name">${a.source_title}</div><div class="src-ref">${a.approx_date||''} · Verse ${a.sura}:${a.aya}</div></div><span class="arr" style="color:var(--dim);font-size:16px;flex-shrink:0;">▼</span></div><div class="src-body"><p class="src-sum">${a.parallel_summary||''}</p><div class="cg"><div class="cb cs"><div class="cl">✓ Similarities</div><div class="ct">${a.similarity_note||'—'}</div></div><div class="cb cd"><div class="cl">✕ Differences</div><div class="ct">${a.difference_note||'—'}</div></div></div>${a.reference_link?`<div style="margin-top:8px;"><a href="${a.reference_link}" target="_blank" class="src-link">📎 Read source →</a></div>`:''}</div></div>`).join('')}</div>` : ''}
     </div>
     <div class="ai-box">
       <div class="sec-t" style="border:none;margin:0 0 10px;">🤖 AI Deep Analysis</div>
