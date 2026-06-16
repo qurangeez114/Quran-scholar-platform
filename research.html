@@ -2236,7 +2236,6 @@ function openBookmark(id) {
   const item = stored[id];
   if (!item) return;
   if (item.type === 'ai') {
-    // Reopen the AI report inline by re-running research with the saved topic
     const topicMatch = (item.preview || '').split(':')[0];
     const input = document.getElementById('aiTextInput');
     if (input) {
@@ -2246,8 +2245,14 @@ function openBookmark(id) {
       const runBtn = document.querySelector('.ai-run-btn, #aiRunBtn, button[onclick*="runAIResearch"]');
       if (runBtn) runBtn.click();
     }
-  } else if (item.sura_id && item.aya_number && item.sura_id !== '—') {
+    return;
+  }
+  const validSura = item.sura_id && item.sura_id !== '—' && item.sura_id !== 'undefined' && !isNaN(parseInt(item.sura_id));
+  const validAya  = item.aya_number && item.aya_number !== '—' && item.aya_number !== 'undefined' && !isNaN(parseInt(item.aya_number));
+  if (validSura && validAya) {
     window.location.href = `index.html?sura=${item.sura_id}&aya=${item.aya_number}&from=research`;
+  } else {
+    alert('No verse reference saved with this item.');
   }
 }
 function toggleBookmarks() {
@@ -2263,10 +2268,10 @@ function renderBookmarks() {
   const list = document.getElementById('bmList');
   if (!items.length) { list.innerHTML = '<div style="color:#BBB;font-style:italic;font-size:12px;padding:16px;text-align:center">No saved items yet.</div>'; return; }
   list.innerHTML = items.sort((a,b) => new Date(b.savedAt)-new Date(a.savedAt)).map(item => `
-    <div class="bm-item" onclick="openBookmark('${item.id}')" style="cursor:pointer;">
-      <div class="bm-ref">${item.type.toUpperCase()} · ${item.sura_id}:${item.aya_number}</div>
-      <div class="bm-preview">${esc(item.preview)}${item.preview.length >= 120 ? '…' : ''}</div>
-      ${getNote(item.id) ? `<div style="font-size:11px;color:var(--gold);margin-top:4px">📝 Has note</div>` : ''}
+    <div class="bm-item" onclick="openBookmark('${item.id}')" style="cursor:pointer;user-select:none;-webkit-user-select:none;">
+      <div class="bm-ref" style="pointer-events:none;">${item.type.toUpperCase()} · ${item.sura_id}:${item.aya_number}</div>
+      <div class="bm-preview" style="pointer-events:none;">${esc(item.preview)}${item.preview.length >= 120 ? '…' : ''}</div>
+      ${getNote(item.id) ? `<div style="font-size:11px;color:var(--gold);margin-top:4px;pointer-events:none;">📝 Has note</div>` : ''}
     </div>`).join('');
 }
 
