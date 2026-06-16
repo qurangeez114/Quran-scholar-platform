@@ -2231,6 +2231,25 @@ function clearAllBookmarks() {
   localStorage.removeItem('research_bm');
   renderBookmarks();
 }
+function openBookmark(id) {
+  const stored = JSON.parse(localStorage.getItem('research_bm') || '{}');
+  const item = stored[id];
+  if (!item) return;
+  if (item.type === 'ai') {
+    // Reopen the AI report inline by re-running research with the saved topic
+    const topicMatch = (item.preview || '').split(':')[0];
+    const input = document.getElementById('aiTextInput');
+    if (input) {
+      input.value = topicMatch;
+      document.getElementById('bmPanel')?.classList.remove('open');
+      input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const runBtn = document.querySelector('.ai-run-btn, #aiRunBtn, button[onclick*="runAIResearch"]');
+      if (runBtn) runBtn.click();
+    }
+  } else if (item.sura_id && item.aya_number && item.sura_id !== '—') {
+    window.location.href = `index.html?sura=${item.sura_id}&aya=${item.aya_number}&from=research`;
+  }
+}
 function toggleBookmarks() {
   const panel = document.getElementById('bmPanel');
   panel.classList.toggle('open');
@@ -2244,7 +2263,7 @@ function renderBookmarks() {
   const list = document.getElementById('bmList');
   if (!items.length) { list.innerHTML = '<div style="color:#BBB;font-style:italic;font-size:12px;padding:16px;text-align:center">No saved items yet.</div>'; return; }
   list.innerHTML = items.sort((a,b) => new Date(b.savedAt)-new Date(a.savedAt)).map(item => `
-    <div class="bm-item">
+    <div class="bm-item" onclick="openBookmark('${item.id}')" style="cursor:pointer;">
       <div class="bm-ref">${item.type.toUpperCase()} · ${item.sura_id}:${item.aya_number}</div>
       <div class="bm-preview">${esc(item.preview)}${item.preview.length >= 120 ? '…' : ''}</div>
       ${getNote(item.id) ? `<div style="font-size:11px;color:var(--gold);margin-top:4px">📝 Has note</div>` : ''}
