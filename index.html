@@ -178,6 +178,8 @@ body { font-family: 'EB Garamond', Georgia, serif; background: #F5EDD8; color: #
 .badge-qalun { background: #D5F5E3; color: #1A7A48; border: 1px solid #70C090; }
 .badge-duri { background: #E8DAEF; color: #6A2A9A; border: 1px solid #B070D0; }
 .word-diff-duri { background: #E8DAEF; border-radius: 3px; padding: 0 2px; border-bottom: 3px solid #6A2A9A; }
+.badge-shubah { background: #F9E0DD; color: #A8334A; border: 1px solid #D88A95; }
+.word-diff-shubah { background: #F9E0DD; border-radius: 3px; padding: 0 2px; border-bottom: 3px solid #A8334A; }
 .riwayat-text { font-family: 'Amiri', serif; font-size: 22px; direction: rtl; text-align: right; line-height: 2.1; padding: 12px 14px; background: #F5F3EC; border: 2px solid #D4C9A8; border-radius: 8px; color: #111111; }
 .word-diff-hafs { background: #D6EAF8; border-radius: 3px; padding: 0 2px; border-bottom: 3px solid #1A6FA8; }
 .word-diff-warsh { background: #FDEBD0; border-radius: 3px; padding: 0 2px; border-bottom: 3px solid #C0621A; }
@@ -2473,7 +2475,7 @@ async function loadSura(id) {
   try {
     const [ayas, translitData, arabicData] = await Promise.all([
       sbFetch('ayas', {
-        select: 'sura_id,aya_number,arabic,aya_text,arabic_transliteration,arabic_warsh,arabic_qalun,arabic_duri,english,amharic,oromo,somali,german,urdu',
+        select: 'sura_id,aya_number,arabic,aya_text,arabic_transliteration,arabic_warsh,arabic_qalun,arabic_duri,arabic_shubah,english,amharic,oromo,somali,german,urdu',
         sura_id: `eq.${id}`,
         order: 'aya_number'
       }),
@@ -2519,7 +2521,8 @@ function getSafeArabicText(aya) {
     aya.uthmani,
     aya.arabic_warsh,
     aya.arabic_qalun,
-    aya.arabic_duri
+    aya.arabic_duri,
+    aya.arabic_shubah
   ];
   for (const value of candidates) {
     if (containsArabicText(value)) return value;
@@ -2940,39 +2943,43 @@ function pickReference(thisWord, otherWords) {
   return candidates[0];
 }
 
-function highlightDiffs(hafs, warsh, qalun, duri, suraId, ayaNum) {
+function highlightDiffs(hafs, warsh, qalun, duri, shubah, suraId, ayaNum) {
   const hafsWords = (hafs || '').split(/\s+/).filter(Boolean);
   const warshWords = (warsh || '').split(/\s+/).filter(Boolean);
   const qalunWords = (qalun || '').split(/\s+/).filter(Boolean);
   const duriWords = (duri || '').split(/\s+/).filter(Boolean);
-  const maxLen = Math.max(hafsWords.length, warshWords.length, qalunWords.length, duriWords.length);
+  const shubahWords = (shubah || '').split(/\s+/).filter(Boolean);
+  const maxLen = Math.max(hafsWords.length, warshWords.length, qalunWords.length, duriWords.length, shubahWords.length);
 
-  let hafsHtml = '', warshHtml = '', qalunHtml = '', duriHtml = '';
+  let hafsHtml = '', warshHtml = '', qalunHtml = '', duriHtml = '', shubahHtml = '';
 
   for (let i = 0; i < maxLen; i++) {
     const hw = hafsWords[i] || '';
     const ww = warshWords[i] || '';
     const qw = qalunWords[i] || '';
     const dw = duriWords[i] || '';
+    const sw = shubahWords[i] || '';
 
     // Compare the RASM (consonantal skeleton) — diacritics ignored
-    const allSameRasm = rasmEqual(hw, ww) && rasmEqual(ww, qw) && rasmEqual(qw, dw);
+    const allSameRasm = rasmEqual(hw, ww) && rasmEqual(ww, qw) && rasmEqual(qw, dw) && rasmEqual(dw, sw);
 
     if (allSameRasm) {
       hafsHtml += hw + ' ';
       warshHtml += ww + ' ';
       qalunHtml += qw + ' ';
       duriHtml += dw + ' ';
+      shubahHtml += sw + ' ';
     } else {
-      const onClickArgs = `${suraId},${ayaNum},${i},'${hw.replace(/'/g, "\\'")}','${ww.replace(/'/g, "\\'")}','${qw.replace(/'/g, "\\'")}','${dw.replace(/'/g, "\\'")}'`;
+      const onClickArgs = `${suraId},${ayaNum},${i},'${hw.replace(/'/g, "\\'")}','${ww.replace(/'/g, "\\'")}','${qw.replace(/'/g, "\\'")}','${dw.replace(/'/g, "\\'")}','${sw.replace(/'/g, "\\'")}'`;
       const dataAttr = `data-rwa-pos="${suraId}-${ayaNum}-${i}"`;
 
       // Per-reading flag: only highlight if THIS reading's rasm differs
       // from any other
-      const hDiff = !rasmEqual(hw, ww) || !rasmEqual(hw, qw) || !rasmEqual(hw, dw);
-      const wDiff = !rasmEqual(ww, hw) || !rasmEqual(ww, qw) || !rasmEqual(ww, dw);
-      const qDiff = !rasmEqual(qw, hw) || !rasmEqual(qw, ww) || !rasmEqual(qw, dw);
-      const dDiff = !rasmEqual(dw, hw) || !rasmEqual(dw, ww) || !rasmEqual(dw, qw);
+      const hDiff = !rasmEqual(hw, ww) || !rasmEqual(hw, qw) || !rasmEqual(hw, dw) || !rasmEqual(hw, sw);
+      const wDiff = !rasmEqual(ww, hw) || !rasmEqual(ww, qw) || !rasmEqual(ww, dw) || !rasmEqual(ww, sw);
+      const qDiff = !rasmEqual(qw, hw) || !rasmEqual(qw, ww) || !rasmEqual(qw, dw) || !rasmEqual(qw, sw);
+      const dDiff = !rasmEqual(dw, hw) || !rasmEqual(dw, ww) || !rasmEqual(dw, qw) || !rasmEqual(dw, sw);
+      const sDiff = !rasmEqual(sw, hw) || !rasmEqual(sw, ww) || !rasmEqual(sw, qw) || !rasmEqual(sw, dw);
 
       // For each differing word, render with letter-level coloring against
       // the closest "reference" reading.
@@ -2984,26 +2991,27 @@ function highlightDiffs(hafs, warsh, qalun, duri, suraId, ayaNum) {
         return `<span class="${baseCls} word-variant" ${dataAttr} onclick="explainWord(${onClickArgs})" title="Click for technical analysis">${inner}</span> `;
       };
 
-      hafsHtml += wrap(hw, hDiff, 'word-diff-hafs', pickReference(hw, [ww, qw, dw]));
-      warshHtml += wrap(ww, wDiff, 'word-diff-warsh', pickReference(ww, [hw, qw, dw]));
-      qalunHtml += wrap(qw, qDiff, 'word-diff-qalun', pickReference(qw, [hw, ww, dw]));
-      duriHtml += wrap(dw, dDiff, 'word-diff-duri', pickReference(dw, [hw, ww, qw]));
+      hafsHtml += wrap(hw, hDiff, 'word-diff-hafs', pickReference(hw, [ww, qw, dw, sw]));
+      warshHtml += wrap(ww, wDiff, 'word-diff-warsh', pickReference(ww, [hw, qw, dw, sw]));
+      qalunHtml += wrap(qw, qDiff, 'word-diff-qalun', pickReference(qw, [hw, ww, dw, sw]));
+      duriHtml += wrap(dw, dDiff, 'word-diff-duri', pickReference(dw, [hw, ww, qw, sw]));
+      shubahHtml += wrap(sw, sDiff, 'word-diff-shubah', pickReference(sw, [hw, ww, qw, dw]));
     }
   }
-  return { hafsHtml: hafsHtml.trim(), warshHtml: warshHtml.trim(), qalunHtml: qalunHtml.trim(), duriHtml: duriHtml.trim() };
+  return { hafsHtml: hafsHtml.trim(), warshHtml: warshHtml.trim(), qalunHtml: qalunHtml.trim(), duriHtml: duriHtml.trim(), shubahHtml: shubahHtml.trim() };
 }
 
 // ============================================================
 // RIWAYAT PANEL (v2 — with selector)
 // ============================================================
-// User chooses which transmissions to display. The 4 with full
-// text data (Hafs, Warsh, Qalun, Al-Duri ʿan Abi ʿAmr) are
-// active. The other 16 canonical riwayat are listed but disabled
+// User chooses which transmissions to display. The 5 with full
+// text data (Hafs, Warsh, Qalun, Al-Duri ʿan Abi ʿAmr, Shuʿbah ʿan ʿĀṣim) are
+// active. The other 15 canonical riwayat are listed but disabled
 // because their text is not yet in the database.
 // ============================================================
 
 // Default: show the 4 we have data for. Persists per-aya in memory.
-const RIWAYAT_VIS_DEFAULT = { hafs: true, warsh: true, qalun: true, duri: true };
+const RIWAYAT_VIS_DEFAULT = { hafs: true, warsh: true, qalun: true, duri: true, shubah: true };
 window._riwayatVisibility = window._riwayatVisibility || {};
 
 function getRiwayatVisibility(suraId, ayaNum) {
@@ -3035,7 +3043,7 @@ const ALL_RIWAYAT = [
   { key: 'al_susi',            reader: 'Abu Amr al-Basri',     narrator: 'Al-Susi',       region: 'Basra (historical)',       available: false },
   { key: 'hisham',             reader: 'Ibn Amir al-Shami',    narrator: 'Hisham',        region: 'Damascus (historical)',    available: false },
   { key: 'ibn_dhakwan',        reader: 'Ibn Amir al-Shami',    narrator: 'Ibn Dhakwan',   region: 'Damascus (historical)',    available: false },
-  { key: 'shubah',             reader: 'Asim al-Kufi',         narrator: 'Shuʿbah',       region: 'Kufa (historical)',        available: false },
+  { key: 'shubah',             reader: 'Asim al-Kufi',         narrator: 'Shuʿbah',       region: 'Kufa (historical)',        available: true,  varKey: 'shubah' },
   { key: 'hafs',               reader: 'Asim al-Kufi',         narrator: 'Hafs',          region: 'Most common worldwide',    available: true,  varKey: 'hafs' },
   { key: 'khalaf_hamzah',      reader: 'Hamzah al-Kufi',       narrator: 'Khalaf',        region: 'Kufa (historical)',        available: false },
   { key: 'khallad',            reader: 'Hamzah al-Kufi',       narrator: 'Khallad',       region: 'Kufa (historical)',        available: false },
@@ -3067,10 +3075,10 @@ function buildRiwayatSelector(suraId, ayaNum) {
     <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
       <details style="flex:1;min-width:240px;border:1px solid #E8E4DC;border-radius:8px;background:#FDFBF5;padding:8px 10px">
         <summary style="cursor:pointer;font-size:11px;font-weight:700;color:#4A3B28;letter-spacing:0.5px;text-transform:uppercase;outline:none">
-          🎚️ Riwayat selector  <span style="color:#8B7355;font-weight:500;text-transform:none;letter-spacing:0">(${activeCount} of 4 visible · 16 unavailable)</span>
+          🎚️ Riwayat selector  <span style="color:#8B7355;font-weight:500;text-transform:none;letter-spacing:0">(${activeCount} of 5 visible · 15 unavailable)</span>
         </summary>
         <div style="margin-top:8px;font-size:11px;color:#7A6644;line-height:1.5">
-          <div style="margin-bottom:6px">Tap a chip to show/hide. Dashed chips have no text data yet — they belong to the canonical 20 readings (al-Qirāʾāt al-ʿAshr × 2 rawīs).</div>
+          <div style="margin-bottom:6px">Tap a chip to show/hide. Dashed chips have no text data yet — they belong to the canonical 20 readings (al-Qirāʾāt al-ʿAshr × 2 rawīs). 15 of 20 remain unavailable.</div>
           <div style="margin-top:6px">${ALL_RIWAYAT.map(chip).join('')}</div>
         </div>
       </details>
@@ -3098,7 +3106,9 @@ async function fetchVariantData(filter) {
     warsh: { warsh_differs: 'eq.true' },
     qalun: { qalun_differs: 'eq.true' },
     duri:  { duri_differs: 'eq.true' },
-    three: { warsh_differs: 'eq.true', qalun_differs: 'eq.true', duri_differs: 'eq.true' }
+    shubah: { shubah_differs: 'eq.true' },
+    three: { warsh_differs: 'eq.true', qalun_differs: 'eq.true', duri_differs: 'eq.true' },
+    all_five: { warsh_differs: 'eq.true', qalun_differs: 'eq.true', duri_differs: 'eq.true', shubah_differs: 'eq.true' }
   }[filter] || {};
 
   // Supabase / PostgREST hard-caps responses at 1000 rows by default,
@@ -3111,7 +3121,7 @@ async function fetchVariantData(filter) {
 
   while (true) {
     const chunk = await sbFetch('riwayat_variants', {
-      select: 'sura_id,aya_number,word_position,warsh_differs,qalun_differs,duri_differs',
+      select: 'sura_id,aya_number,word_position,warsh_differs,qalun_differs,duri_differs,shubah_differs',
       order: 'sura_id.asc,aya_number.asc,word_position.asc',
       limit: String(PAGE),
       offset: String(offset),
@@ -3138,6 +3148,7 @@ async function fetchVariantData(filter) {
     if (r.warsh_differs) v.pairs.add('W');
     if (r.qalun_differs) v.pairs.add('Q');
     if (r.duri_differs) v.pairs.add('D');
+    if (r.shubah_differs) v.pairs.add('S');
   }
   const byVerse = Array.from(byVerseMap.values());
   variantCache[filter] = { rows: allRows, byVerse };
@@ -3148,10 +3159,11 @@ function variantPairBadge(code) {
   const map = {
     W: { c: '#FDEBD0', fg: '#C0621A', label: 'W' },
     Q: { c: '#D5F5E3', fg: '#1A7A48', label: 'Q' },
-    D: { c: '#E8DAEF', fg: '#6A2A9A', label: 'D' }
+    D: { c: '#E8DAEF', fg: '#6A2A9A', label: 'D' },
+    S: { c: '#F9E0DD', fg: '#A8334A', label: 'S' }
   };
   const x = map[code];
-  const tip = code === 'W' ? 'Warsh differs from Hafs' : code === 'Q' ? 'Qalun differs from Hafs' : 'Al-Duri differs from Hafs';
+  const tip = code === 'W' ? 'Warsh differs from Hafs' : code === 'Q' ? 'Qalun differs from Hafs' : code === 'D' ? 'Al-Duri differs from Hafs' : 'Shuʿbah differs from Hafs';
   return `<span style="display:inline-block;width:18px;height:18px;line-height:18px;text-align:center;background:${x.c};color:${x.fg};border-radius:50%;font-size:10px;font-weight:700;margin-right:2px" title="${tip}">${x.label}</span>`;
 }
 
@@ -3218,8 +3230,8 @@ function renderSignificanceCards(sura, aya) {
     // 'qalun' has no audio source — render an N/A placeholder instead.
     const pushRow = (label, word, meaning, riwayah) => {
       if (!word && !meaning) return;
-      const playBtn = riwayah === 'qalun'
-        ? `<span class="signif-play-na" title="No per-ayah Qalūn audio source available">N/A</span>`
+      const playBtn = (riwayah === 'qalun' || riwayah === 'shubah')
+        ? `<span class="signif-play-na" title="No per-ayah ${riwayah === 'qalun' ? 'Qalūn' : 'Shuʿbah'} audio source available">N/A</span>`
         : `<button class="signif-play"
                    onclick="playSignifAudio(${sura}, ${aya}, '${riwayah}', this)"
                    aria-label="Play verse in ${label}"
@@ -3236,6 +3248,7 @@ function renderSignificanceCards(sura, aya) {
     pushRow('Warsh', e.warsh_word, e.warsh_meaning_en, 'warsh');
     pushRow('Qalūn', e.qalun_word, e.qalun_meaning_en, 'qalun');
     pushRow('Dūrī',  e.duri_word,  e.duri_meaning_en, 'duri');
+    pushRow('Shuʿbah', e.shubah_word, e.shubah_meaning_en, 'shubah');
 
     const sourcesHtml = (e.sources && e.sources.length)
       ? `<div class="signif-sources"><b>Sources</b>${e.sources.map(s => `<span class="signif-source-item">${escHtml(s)}</span>`).join('')}</div>`
@@ -3350,6 +3363,7 @@ async function loadVariantsPanel(filter = variantPanelFilter) {
     { key: 'warsh',   label: 'W ≠ H' },
     { key: 'qalun',   label: 'Q ≠ H' },
     { key: 'duri',    label: 'D ≠ H' },
+    { key: 'shubah',  label: 'S ≠ H' },
     { key: 'three',   label: 'All ≠ H' }
   ];
   if (filtersEl) {
@@ -3459,7 +3473,9 @@ async function openVariantBrowser(initialFilter = 'any') {
     { key: 'warsh', label: 'Warsh ≠ Hafs' },
     { key: 'qalun', label: 'Qalun ≠ Hafs' },
     { key: 'duri',  label: 'Al-Duri ≠ Hafs' },
-    { key: 'three', label: 'All 3 differ from Hafs' }
+    { key: 'shubah', label: 'Shuʿbah ≠ Hafs' },
+    { key: 'three', label: 'All 3 differ from Hafs' },
+    { key: 'all_five', label: 'All 4 differ from Hafs' }
   ];
   const filterEl = document.getElementById('vbFilters');
   filterEl.innerHTML = filters.map(f => `
@@ -3487,13 +3503,15 @@ async function loadVariantBrowser(filter) {
     warsh: { warsh_differs: 'eq.true' },
     qalun: { qalun_differs: 'eq.true' },
     duri:  { duri_differs: 'eq.true' },
-    three: { warsh_differs: 'eq.true', qalun_differs: 'eq.true', duri_differs: 'eq.true' }
+    shubah: { shubah_differs: 'eq.true' },
+    three: { warsh_differs: 'eq.true', qalun_differs: 'eq.true', duri_differs: 'eq.true' },
+    all_five: { warsh_differs: 'eq.true', qalun_differs: 'eq.true', duri_differs: 'eq.true', shubah_differs: 'eq.true' }
   }[filter] || {};
 
   try {
     // Fetch distinct (sura_id, aya_number) pairs that match the filter
     const rows = await sbFetch('riwayat_variants', {
-      select: 'sura_id,aya_number,word_position,hafs_word,warsh_word,qalun_word,duri_word,warsh_differs,qalun_differs,duri_differs',
+      select: 'sura_id,aya_number,word_position,hafs_word,warsh_word,qalun_word,duri_word,shubah_word,warsh_differs,qalun_differs,duri_differs,shubah_differs',
       order: 'sura_id.asc,aya_number.asc,word_position.asc',
       ...filterClause
     });
@@ -3518,6 +3536,7 @@ async function loadVariantBrowser(filter) {
       if (r.warsh_differs) v.pairs.add('W');
       if (r.qalun_differs) v.pairs.add('Q');
       if (r.duri_differs) v.pairs.add('D');
+      if (r.shubah_differs) v.pairs.add('S');
     }
 
     const verseList = Array.from(byVerse.values());
@@ -3527,10 +3546,11 @@ async function loadVariantBrowser(filter) {
       const map = {
         W: { c: '#FDEBD0', fg: '#C0621A', label: 'W' },
         Q: { c: '#D5F5E3', fg: '#1A7A48', label: 'Q' },
-        D: { c: '#E8DAEF', fg: '#6A2A9A', label: 'D' }
+        D: { c: '#E8DAEF', fg: '#6A2A9A', label: 'D' },
+        S: { c: '#F9E0DD', fg: '#A8334A', label: 'S' }
       };
       const x = map[code];
-      return `<span style="display:inline-block;width:18px;height:18px;line-height:18px;text-align:center;background:${x.c};color:${x.fg};border-radius:50%;font-size:10px;font-weight:700;margin-right:2px" title="${code === 'W' ? 'Warsh' : code === 'Q' ? 'Qalun' : 'Al-Duri'} differs from Hafs">${x.label}</span>`;
+      return `<span style="display:inline-block;width:18px;height:18px;line-height:18px;text-align:center;background:${x.c};color:${x.fg};border-radius:50%;font-size:10px;font-weight:700;margin-right:2px" title="${code === 'W' ? 'Warsh' : code === 'Q' ? 'Qalun' : code === 'D' ? 'Al-Duri' : 'Shuʿbah'} differs from Hafs">${x.label}</span>`;
     };
 
     list.innerHTML = verseList.map(v => `
@@ -3555,8 +3575,9 @@ function buildRiwayatPanel(aya) {
   const warsh = aya.arabic_warsh || '';
   const qalun = aya.arabic_qalun || '';
   const duri = aya.arabic_duri || '';
+  const shubah = aya.arabic_shubah || '';
 
-  if (!warsh && !qalun && !duri) {
+  if (!warsh && !qalun && !duri && !shubah) {
     return `<div style="color:#BBB;font-style:italic;font-size:13px;padding:20px;text-align:center">Riwayat data not available for this verse.</div>`;
   }
 
@@ -3567,7 +3588,7 @@ function buildRiwayatPanel(aya) {
   const signifHtml = renderSignificanceCards(aya.sura_id, aya.aya_number);
 
   const vis = getRiwayatVisibility(aya.sura_id, aya.aya_number);
-  const { hafsHtml, warshHtml, qalunHtml, duriHtml } = highlightDiffs(hafs, warsh, qalun, duri, aya.sura_id, aya.aya_number);
+  const { hafsHtml, warshHtml, qalunHtml, duriHtml, shubahHtml } = highlightDiffs(hafs, warsh, qalun, duri, shubah, aya.sura_id, aya.aya_number);
 
   // Stash the aya on the panel element so toggle can re-render
   setTimeout(() => {
@@ -3598,6 +3619,11 @@ function buildRiwayatPanel(aya) {
     <div class="riwayat-section">
       <div class="riwayat-label"><span class="riwayat-badge badge-duri">Al-Duri ʿan Abi ʿAmr</span> <span style="font-size:10px;color:#999">Sudan, West & East Africa</span></div>
       <div class="riwayat-text">${duriHtml}</div>
+    </div>`);
+  if (vis.shubah) sections.push(`
+    <div class="riwayat-section">
+      <div class="riwayat-label"><span class="riwayat-badge badge-shubah">Shuʿbah ʿan ʿĀṣim</span> <span style="font-size:10px;color:#999">Kufa (historical) · al-Shāṭibiyyah</span></div>
+      <div class="riwayat-text">${shubahHtml}</div>
     </div>`);
 
   if (sections.length === 0) {
@@ -4442,7 +4468,7 @@ function closeWordModal(e) {
   }
 }
 
-async function explainWord(suraId, ayaNum, position, hafs, warsh, qalun, duri) {
+async function explainWord(suraId, ayaNum, position, hafs, warsh, qalun, duri, shubah) {
   const modal = document.getElementById('wordModal');
   const modalArabic = document.getElementById('modalArabic');
   const modalBody = document.getElementById('modalBody');
@@ -4450,7 +4476,7 @@ async function explainWord(suraId, ayaNum, position, hafs, warsh, qalun, duri) {
   modal.classList.add('open');
 
   // The "headline" word to display is whichever variant is most distinctive —
-  // for now show all four side by side under the word title.
+  // for now show all five side by side under the word title.
   modalArabic.innerHTML = `<div style="font-size:14px;color:#8B7355;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;margin-bottom:6px">Qirāʾāt comparison</div>
     <div style="font-size:11px;color:#888;font-weight:600">Sura ${suraId}, Verse ${ayaNum}, Word #${position+1}</div>`;
 
@@ -4468,18 +4494,19 @@ async function explainWord(suraId, ayaNum, position, hafs, warsh, qalun, duri) {
     if (Array.isArray(rows) && rows.length) saved = rows[0];
   } catch(e) {}
 
-  // Helper to render the four readings as a side-by-side comparison
+  // Helper to render the five readings as a side-by-side comparison
   const wordRow = (label, color, bg, text, isDifferent) => `
     <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:${bg};border-radius:6px;margin-bottom:6px;border-left:3px solid ${color}">
       <div style="font-size:10px;font-weight:700;letter-spacing:1px;color:${color};text-transform:uppercase;min-width:54px;flex-shrink:0">${label}</div>
       <div style="font-family:'Amiri',serif;font-size:22px;direction:rtl;text-align:right;flex:1;color:#1a1a1a;font-weight:${isDifferent?700:400}">${escapeHtml(text || '—')}</div>
     </div>`;
 
-  const allWords = [hafs, warsh, qalun, duri].filter(Boolean);
+  const allWords = [hafs, warsh, qalun, duri, shubah].filter(Boolean);
   const isHDiff = allWords.some(w => w !== hafs);
   const isWDiff = allWords.some(w => w !== warsh);
   const isQDiff = allWords.some(w => w !== qalun);
   const isDDiff = allWords.some(w => w !== duri);
+  const isSDiff = allWords.some(w => w !== shubah);
 
   const comparisonHtml = `
     <div style="margin:12px 0">
@@ -4487,6 +4514,7 @@ async function explainWord(suraId, ayaNum, position, hafs, warsh, qalun, duri) {
       ${wordRow('Warsh', '#C0621A', '#FDEBD0', warsh, isWDiff)}
       ${wordRow('Qalun', '#1A7A48', '#D5F5E3', qalun, isQDiff)}
       ${wordRow('Duri', '#6A2A9A', '#E8DAEF', duri, isDDiff)}
+      ${wordRow('Shuʿbah', '#A8334A', '#F9E0DD', shubah, isSDiff)}
     </div>`;
 
   if (saved) {
