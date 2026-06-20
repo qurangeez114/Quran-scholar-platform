@@ -101,7 +101,7 @@ body{font-family:'EB Garamond',serif;background:var(--p0);color:var(--ink1);min-
 </div>
 
 <div class="notice">
-  <b>About this feature.</b> Islamic scholarship recognizes ten canonical reciters (qurra'), each transmitted through two chains of narration (riwayat) — twenty authentic readings in total, all considered valid. Differences are typically vowel marks, word forms, or minor phrasing — not changes in meaning. This page currently has verified data for <b>4 of the 20</b> transmissions (Ḥafṣ ʿan ʿĀṣim, Warsh ʿan Nāfiʿ, Qālūn ʿan Nāfiʿ, and Al-Dūrī ʿan Abī ʿAmr). The remaining sixteen will appear automatically as their data is added.
+  <b>About this feature.</b> Islamic scholarship recognizes ten canonical reciters (qurra'), each transmitted through two chains of narration (riwayat) — twenty authentic readings in total, all considered valid. Differences are typically vowel marks, word forms, or minor phrasing — not changes in meaning. This page currently has verified data for <b>4 of the 20</b> transmissions (Ḥafṣ ʿan ʿĀṣim, Warsh ʿan Nāfiʿ, Qālūn ʿan Nāfiʿ, and Al-Dūrī ʿan Abī ʿAmr), plus word-level <b>pronunciation notes for Shuʿbah ʿan ʿĀṣim</b> (documented differences only, not yet a full alternate reading). The remaining transmissions will appear automatically as their data is added.
 </div>
 
 <div class="picker">
@@ -149,7 +149,7 @@ async function init() {
   ]);
 
   document.getElementById('quickVerses').innerHTML = [
-    ['1','1','Al-Fatiha 1:1'],['1','2','Al-Fatiha 1:2'],['2','255',"Ayat al-Kursi"],['112','1',"Al-Ikhlas"]
+    ['1','1','Al-Fatiha 1:1'],['1','2','Al-Fatiha 1:2'],['2','255',"Ayat al-Kursi"],['112','1',"Al-Ikhlas"],['24','61',"An-Nur 24:61 (Shuʿbah)"]
   ].map(([s,a,label]) => `<span class="qv-chip" onclick="quickLoad(${s},${a})">${esc(label)}</span>`).join('');
 
   const params = new URLSearchParams(window.location.search);
@@ -179,9 +179,12 @@ async function loadVerse(sOverride, aOverride) {
   document.getElementById('status').textContent = 'Loading…';
   document.getElementById('content').innerHTML = '';
 
-  const readings = await sbGet('riwayat_readings', `sura_id=eq.${sura}&aya_number=eq.${aya}&select=*&order=word_position.asc`);
+  const [readings, shubahNotes] = await Promise.all([
+    sbGet('riwayat_readings', `sura_id=eq.${sura}&aya_number=eq.${aya}&select=*&order=word_position.asc`),
+    sbGet('riwayat_pronunciation_notes', `sura_id=eq.${sura}&aya_number=eq.${aya}&riwayah_key=eq.shubah_an_asim&select=*`)
+  ]);
 
-  if (!readings.length) {
+  if (!readings.length && !shubahNotes.length) {
     document.getElementById('status').textContent = '';
     document.getElementById('content').innerHTML = `<div class="empty-state">No comparison data yet for ${sura}:${aya}. Try one of the verses above, or check back as more verses are added.</div>`;
     return;
@@ -201,12 +204,12 @@ async function loadVerse(sOverride, aOverride) {
 
   // Reconstruct full Arabic verse text from hafs (baseline) ordering, fallback to first available
   const baselineKey = presentKeys.includes('hafs_an_asim') ? 'hafs_an_asim' : presentKeys[0];
-  const fullVerseText = (byRiwayah[baselineKey] || []).map(r => r.word_text).join(' ');
+  const fullVerseText = baselineKey ? (byRiwayah[baselineKey] || []).map(r => r.word_text).join(' ') : '';
 
   let html = `<div class="verse-block">
-    <div class="verse-ar">${esc(fullVerseText)}</div>
+    ${fullVerseText ? `<div class="verse-ar">${esc(fullVerseText)}</div>` : ''}
     <div class="verse-meta">Sura ${sura} · Verse ${aya} · ${presentKeys.length} of ${RIWAYAT.length} transmissions available</div>
-    <div class="coverage-bar">${RIWAYAT.map(rw => `<span class="dot ${presentKeys.includes(rw.riwayah_key)?'have':'missing'}"></span>`).join('')} <span>${presentKeys.length}/${RIWAYAT.length} transmissions</span></div>`;
+    ${readings.length ? `<div class="coverage-bar">${RIWAYAT.map(rw => `<span class="dot ${presentKeys.includes(rw.riwayah_key)?'have':'missing'}"></span>`).join('')} <span>${presentKeys.length}/${RIWAYAT.length} transmissions</span></div>` : ''}`;
 
   // Render each available riwayah's full reading, highlighting diffs
   presentKeys.forEach(key => {
@@ -230,6 +233,25 @@ async function loadVerse(sOverride, aOverride) {
       </div>
     </div>`;
   });
+
+  if (shubahNotes.length) {
+    html += `<div class="reading-card">
+      <div class="reading-hdr">
+        <div><span class="reading-name">Shuʿbah ʿan ʿĀṣim<span class="ar">شعبة عن عاصم</span></span></div>
+        <div class="reading-region">Pronunciation notes</div>
+      </div>
+      <div class="reading-body">
+        <div style="font-size:13px;color:var(--ink3);font-style:italic;margin-bottom:12px;">Documented pronunciation differences from the Ḥafṣ baseline for this verse (word-level notes, not a full alternate reading).</div>
+        ${shubahNotes.map(n => `
+          <div style="border-top:1px solid var(--p1);padding-top:10px;margin-top:10px;">
+            <div class="reading-text" style="font-size:20px;">${esc(n.word_text)}</div>
+            <div style="font-family:'Scheherazade New',serif;font-size:14px;color:var(--bronze);direction:rtl;text-align:right;margin-top:2px;">${esc(n.rule_description_ar||'')}</div>
+            <div style="font-size:12.5px;color:var(--ink3);margin-top:3px;">${esc(n.rule_description_en||'')}</div>
+            ${n.source ? `<div style="font-family:'Inconsolata',monospace;font-size:9.5px;color:var(--ink4);margin-top:6px;">Source: ${esc(n.source)}${n.citation ? ' · ' + esc(n.citation) : ''}</div>` : ''}
+          </div>`).join('')}
+      </div>
+    </div>`;
+  }
 
   if (missingRiwayat.length) {
     html += `<div class="missing-section">
