@@ -948,12 +948,12 @@ function renderTopicList() {
     filtered = filtered.filter(t => (t.controversy_level || 0) >= min);
   }
   if (_search) {
-    filtered = filtered.filter(t =>
-      (t.topic||'').toLowerCase().includes(_search) ||
-      (t.brief_description||'').toLowerCase().includes(_search) ||
-      (t.category||'').toLowerCase().includes(_search) ||
-      (t.subcategory||'').toLowerCase().includes(_search)
-    );
+    const words = _search.split(/\s+/).filter(Boolean);
+    filtered = filtered.filter(t => {
+      const hay = [t.topic, t.brief_description, t.category, t.subcategory]
+        .filter(Boolean).join(' ').toLowerCase();
+      return words.every(w => hay.includes(w));
+    });
   }
 
   document.getElementById('resultCount').textContent = `${filtered.length} ${filtered.length===1?'topic':'topics'} found`;
