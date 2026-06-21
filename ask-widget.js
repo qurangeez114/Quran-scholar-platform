@@ -76,8 +76,8 @@
 
   function widgetHTML() {
     return '' +
-      '<button id="askqh-fab" aria-label="Ask Quran Hikma" style="position:fixed;bottom:20px;right:20px;width:56px;height:56px;border-radius:50%;background:#8a6d3b;color:#fff;border:none;box-shadow:0 4px 14px rgba(0,0,0,.25);cursor:pointer;font-size:22px;z-index:99998;">💬</button>' +
-      '<div id="askqh-panel" style="display:none;position:fixed;bottom:88px;right:20px;width:340px;max-width:92vw;height:460px;max-height:75vh;background:#fdfaf3;border:1px solid #d5c9a8;border-radius:8px;box-shadow:0 8px 30px rgba(0,0,0,.3);z-index:99999;flex-direction:column;overflow:hidden;font-family:\'EB Garamond\',serif;">' +
+      '<button id="askqh-fab" aria-label="Ask Quran Hikma" style="position:fixed;bottom:74px;right:16px;width:52px;height:52px;border-radius:50%;background:#8a6d3b;color:#fff;border:none;box-shadow:0 4px 14px rgba(0,0,0,.25);cursor:pointer;font-size:20px;z-index:9000;">💬</button>' +
+      '<div id="askqh-panel" style="display:none;position:fixed;bottom:132px;right:16px;width:340px;max-width:92vw;height:420px;max-height:62vh;background:#fdfaf3;border:1px solid #d5c9a8;border-radius:8px;box-shadow:0 8px 30px rgba(0,0,0,.3);z-index:9000;flex-direction:column;overflow:hidden;font-family:\'EB Garamond\',serif;">' +
         '<div style="background:#8a6d3b;color:#fff;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;font-family:\'Inconsolata\',monospace;font-size:13px;letter-spacing:.04em;">' +
           '<span>Ask Quran Hikma</span>' +
           '<button id="askqh-close" style="background:none;border:none;color:#fff;font-size:18px;cursor:pointer;line-height:1;">×</button>' +
