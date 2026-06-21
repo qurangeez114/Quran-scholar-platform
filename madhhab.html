@@ -1154,6 +1154,7 @@ Return ONLY valid JSON (no markdown, no backticks) with this exact structure:
     body.innerHTML = renderDetail(topic, mergedRuling);
     window._currentRuling = mergedRuling;
     injectTopicCrossLinks(topicId, topic.topic, mergedRuling);
+    injectRelatedTopics(topic);
 
   } catch(e) {
     body.innerHTML = renderDetailHeader(topic) + `
@@ -1585,6 +1586,27 @@ document.addEventListener('DOMContentLoaded', function() {
 
 <script>
 /* ── Cross-link injection: fires after topic detail renders ── */
+function injectRelatedTopics(topic) {
+  if (!topic.subcategory) return;
+  const tags = topic.subcategory.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+  if (!tags.length) return;
+  const related = _topics.filter(t => {
+    if (t.id === topic.id || !t.subcategory) return false;
+    const tTags = t.subcategory.split(',').map(s => s.trim().toLowerCase());
+    return tTags.some(tag => tags.includes(tag));
+  }).slice(0, 5);
+  if (!related.length) return;
+  const panel = document.getElementById('detailBody');
+  if (!panel || panel.querySelector('.related-topics')) return;
+  const html = `<div class="sec related-topics">
+    <div class="sec-label">🔗 Related Topics</div>
+    <div class="sec-body" style="display:flex;flex-direction:column;gap:6px;">
+      ${related.map(t => `<a href="#" onclick="openTopic(${t.id});return false;" style="color:var(--bronze);text-decoration:none;padding:8px 10px;border:1px solid var(--p2);border-radius:2px;display:block;font-family:'EB Garamond',serif;">${esc(t.topic)}</a>`).join('')}
+    </div>
+  </div>`;
+  panel.insertAdjacentHTML('beforeend', html);
+}
+
 function injectTopicCrossLinks(topicId, topicName, ruling) {
   setTimeout(function() {
     var panel = document.getElementById('detailBody');
