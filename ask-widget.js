@@ -35,7 +35,7 @@
     if (!words.length) return {};
 
     var results = {};
-    var [topics, ayas, tafsir, hadith, sira, stories, themes, tensions] = await Promise.all([
+    var [topics, ayas, tafsir, hadith, sira, stories, themes, tensions, thematicXref, hadithAnalysis] = await Promise.all([
       sbSearch('madhhab_topics', ['topic', 'brief_description'], question, words, 4),
       sbSearch('ayas', ['translation_en'], question, words, 4),
       sbSearch('tafsir_entries', ['text_english'], question, words, 3),
@@ -43,7 +43,9 @@
       sbSearch('sira_events', ['title_en', 'description_en'], question, words, 3),
       sbSearch('quranic_stories', ['title_en', 'summary'], question, words, 3),
       sbSearch('themes', ['name', 'description'], question, words, 3),
-      sbSearch('tensions', ['name'], question, words, 3)
+      sbSearch('tensions', ['name'], question, words, 3),
+      sbSearch('thematic_cross_references_v2', ['theme', 'reason'], question, words, 3),
+      sbSearch('hadith_analysis', ['hadith_text', 'potential_concerns'], question, words, 3)
     ]);
     if (topics.length) results.madhhab_topics = topics;
     if (ayas.length) results.ayas = ayas;
@@ -53,6 +55,8 @@
     if (stories.length) results.stories = stories;
     if (themes.length) results.themes = themes;
     if (tensions.length) results.tensions = tensions;
+    if (thematicXref.length) results.thematic_cross_references = thematicXref;
+    if (hadithAnalysis.length) results.hadith_analysis = hadithAnalysis;
     return results;
   }
 
@@ -81,6 +85,7 @@
         '<div id="askqh-msgs" style="flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px;font-size:14.5px;line-height:1.5;">' +
           '<div style="color:#7a6f5c;font-style:italic;">Ask about any verse, hadith, madhhab comparison, story, or theme on this site. I\'ll search our database first.</div>' +
         '</div>' +
+        '<button id="askqh-summarize" style="display:none;margin:0 10px 8px;padding:8px;background:#fff;border:1px solid #8a6d3b;color:#8a6d3b;border-radius:4px;cursor:pointer;font-family:\'Inconsolata\',monospace;font-size:11.5px;">📊 Build presentation from this chat</button>' +
         '<div style="display:flex;gap:6px;padding:10px;border-top:1px solid #e4d9c0;">' +
           '<input id="askqh-input" type="text" placeholder="Ask a question…" style="flex:1;padding:8px 10px;border:1px solid #d5c9a8;border-radius:4px;font-family:inherit;font-size:14px;">' +
           '<button id="askqh-send" style="padding:0 14px;background:#8a6d3b;color:#fff;border:none;border-radius:4px;cursor:pointer;">Go</button>' +
@@ -98,6 +103,63 @@
     msgs.appendChild(div);
     msgs.scrollTop = msgs.scrollHeight;
     return div;
+  }
+
+  var conversationLog = []; // { question, answer, searchResults } per exchange, this session only
+
+  function addToPresentationBasket(item) {
+    try {
+      var basket = JSON.parse(localStorage.getItem('presentationBasket') || '[]');
+      if (!Array.isArray(basket)) basket = [];
+      basket.push(item);
+      localStorage.setItem('presentationBasket', JSON.stringify(basket));
+      return true;
+    } catch (e) { return false; }
+  }
+
+  async function buildSessionSummary() {
+    if (!conversationLog.length) return;
+    var btn = document.getElementById('askqh-summarize');
+    if (btn) { btn.disabled = true; btn.textContent = 'Building…'; }
+
+    var transcript = conversationLog.map(function (turn, i) {
+      return 'Q' + (i + 1) + ': ' + turn.question + '\nA' + (i + 1) + ': ' + turn.answer;
+    }).join('\n\n');
+
+    try {
+      var resp = await fetch('/claude', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          max_tokens: 900,
+          system: 'You are summarizing a user\'s research conversation on quranhikma.com into a structured, deeply-researched summary suitable for a presentation slide deck. ' +
+            'Organize by theme. Include specific citations (verse numbers, hadith references, madhhab names) that appeared in the conversation. ' +
+            'Respond ONLY with valid JSON, no markdown fences, in this exact shape: ' +
+            '{"title": "short title for this research session", "sections": [{"heading": "...", "summary": "2-4 sentences", "key_points": ["...", "..."]}]}',
+          messages: [{ role: 'user', content: transcript }]
+        })
+      });
+      if (!resp.ok) throw new Error('API error: ' + resp.status);
+      var data = await resp.json();
+      var text = (data.content || []).filter(function (b) { return b.type === 'text'; }).map(function (b) { return b.text; }).join('');
+      var clean = text.replace(/```json|```/g, '').trim();
+      var parsed = JSON.parse(clean);
+
+      addToPresentationBasket({
+        type: 'research',
+        reference: 'Ask Quran Hikma — ' + new Date().toLocaleDateString(),
+        title: parsed.title || 'Research Session Summary',
+        text: (parsed.sections || []).map(function (s) {
+          return s.heading + ': ' + s.summary + (s.key_points && s.key_points.length ? ' (' + s.key_points.join('; ') + ')' : '');
+        }).join('\n\n')
+      });
+
+      appendMsg('assistant', '✅ Added a structured summary of this conversation to your <strong>Presentation Basket</strong>. Visit the Presentation Builder to view, edit, or export it.');
+    } catch (e) {
+      appendMsg('assistant', '<span style="color:#a33">Could not build summary (' + esc(e.message) + '). Please try again.</span>');
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = '📊 Build presentation from this chat'; }
+    }
   }
 
   async function handleAsk() {
@@ -130,6 +192,9 @@
       var data = await resp.json();
       var text = (data.content || []).filter(function (b) { return b.type === 'text'; }).map(function (b) { return b.text; }).join('\n');
       loadingDiv.innerHTML = esc(text).replace(/\n/g, '<br>');
+      conversationLog.push({ question: question, answer: text });
+      var sumBtn = document.getElementById('askqh-summarize');
+      if (sumBtn) sumBtn.style.display = 'block';
     } catch (e) {
       loadingDiv.innerHTML = '<span style="color:#a33">Sorry, something went wrong (' + esc(e.message) + '). Please try again.</span>';
     }
@@ -149,6 +214,7 @@
       panel.style.display = 'none';
     });
     document.getElementById('askqh-send').addEventListener('click', handleAsk);
+    document.getElementById('askqh-summarize').addEventListener('click', buildSessionSummary);
     document.getElementById('askqh-input').addEventListener('keydown', function (e) {
       if (e.key === 'Enter') handleAsk();
     });
