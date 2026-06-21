@@ -5,6 +5,8 @@
    exists. Floating widget, available on every page.
    ═══════════════════════════════════════════════════════════ */
 (function () {
+  console.log('ask-widget.js loaded');
+
   var SB_URL = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
   var SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
   var HDRS = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY };
@@ -203,6 +205,13 @@
   }
 
   function init() {
+    // TEMP DIAGNOSTIC — remove once widget visibility is confirmed
+    var testMarker = document.createElement('div');
+    testMarker.id = 'askqh-test-marker';
+    testMarker.textContent = 'ASK WIDGET LOADED';
+    testMarker.style.cssText = 'position:fixed;bottom:80px;left:10px;z-index:999999;background:#ff0000;color:#fff;padding:6px 10px;font-family:monospace;font-size:12px;border-radius:4px;';
+    document.body.appendChild(testMarker);
+
     var wrap = document.createElement('div');
     wrap.id = 'askqh-root';
     wrap.innerHTML = widgetHTML();
@@ -231,6 +240,14 @@
     document.getElementById('askqh-input').addEventListener('keydown', function (e) {
       if (e.key === 'Enter') handleAsk();
       e.stopPropagation(); // don't let typing re-toggle the dock header
+    });
+
+    console.log('Ask widget mounted', {
+      dockInDOM: !!document.getElementById('askqh-dock'),
+      dockRect: document.getElementById('askqh-dock') ? document.getElementById('askqh-dock').getBoundingClientRect() : null,
+      dockComputedDisplay: document.getElementById('askqh-dock') ? getComputedStyle(document.getElementById('askqh-dock')).display : null,
+      dockComputedVisibility: document.getElementById('askqh-dock') ? getComputedStyle(document.getElementById('askqh-dock')).visibility : null,
+      dockComputedOpacity: document.getElementById('askqh-dock') ? getComputedStyle(document.getElementById('askqh-dock')).opacity : null
     });
   }
 
