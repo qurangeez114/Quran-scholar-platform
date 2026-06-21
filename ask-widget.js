@@ -204,8 +204,14 @@
 
   function init() {
     var wrap = document.createElement('div');
+    wrap.id = 'askqh-root';
     wrap.innerHTML = widgetHTML();
-    document.body.appendChild(wrap);
+    // Move children directly onto <body> rather than leaving them nested
+    // inside this wrapper — an unstyled ancestor can break position:fixed
+    // if any parent in the chain has a transform/filter applied.
+    while (wrap.firstChild) {
+      document.body.appendChild(wrap.firstChild);
+    }
 
     var head = document.getElementById('askqh-dockhead');
     var body = document.getElementById('askqh-body');
