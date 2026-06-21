@@ -902,6 +902,21 @@ async function loadTopics() {
       offset += pageSize;
     }
     _topics = all;
+
+    // Pull access-frequency data to inform search/list ranking
+    try {
+      const popResp = await fetch(
+        `${SB_URL}/rest/v1/topic_access_log?select=topic_id`,
+        { headers: HDRS }
+      );
+      if (popResp.ok) {
+        const accessRows = await popResp.json();
+        const counts = {};
+        (accessRows || []).forEach(r => { counts[r.topic_id] = (counts[r.topic_id] || 0) + 1; });
+        _topics.forEach(t => { t._popularity = counts[t.id] || 0; });
+      }
+    } catch (e) { /* popularity is a nice-to-have, never block topic loading on it */ }
+
     renderCategoryChips();
     renderTopicList();
   } catch (e) {
@@ -954,6 +969,9 @@ function renderTopicList() {
         .filter(Boolean).join(' ').toLowerCase();
       return words.every(w => hay.includes(w));
     });
+    // Within search results, surface frequently-viewed topics first —
+    // people who searched similar terms before found these most relevant.
+    filtered = filtered.slice().sort((a, b) => (b._popularity || 0) - (a._popularity || 0));
   }
 
   document.getElementById('resultCount').textContent = `${filtered.length} ${filtered.length===1?'topic':'topics'} found`;
