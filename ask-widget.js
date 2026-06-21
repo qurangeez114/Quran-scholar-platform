@@ -76,19 +76,21 @@
 
   function widgetHTML() {
     return '' +
-      '<button id="askqh-fab" aria-label="Ask Quran Hikma" style="position:fixed;bottom:74px;right:16px;width:52px;height:52px;border-radius:50%;background:#8a6d3b;color:#fff;border:none;box-shadow:0 4px 14px rgba(0,0,0,.25);cursor:pointer;font-size:20px;z-index:9000;">💬</button>' +
-      '<div id="askqh-panel" style="display:none;position:fixed;bottom:132px;right:16px;width:340px;max-width:92vw;height:420px;max-height:62vh;background:#fdfaf3;border:1px solid #d5c9a8;border-radius:8px;box-shadow:0 8px 30px rgba(0,0,0,.3);z-index:9000;flex-direction:column;overflow:hidden;font-family:\'EB Garamond\',serif;">' +
-        '<div style="background:#8a6d3b;color:#fff;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;font-family:\'Inconsolata\',monospace;font-size:13px;letter-spacing:.04em;">' +
-          '<span>Ask Quran Hikma</span>' +
-          '<button id="askqh-close" style="background:none;border:none;color:#fff;font-size:18px;cursor:pointer;line-height:1;">×</button>' +
+      '<div id="askqh-dock" style="position:fixed;left:0;right:0;bottom:54px;z-index:9000;background:#fdfaf3;border-top:1.5px solid #d5c9a8;box-shadow:0 -2px 10px rgba(0,0,0,.08);font-family:\'EB Garamond\',serif;transition:height .22s ease;">' +
+        '<div id="askqh-dockhead" style="display:flex;align-items:center;gap:8px;padding:9px 12px;cursor:pointer;">' +
+          '<span style="font-size:16px;">💬</span>' +
+          '<span style="font-family:\'Inconsolata\',monospace;font-size:11.5px;letter-spacing:.05em;color:#7a6f5c;flex:1;">Ask Quran Hikma — verses, hadith, madhhab comparisons…</span>' +
+          '<span id="askqh-caret" style="color:#8a6d3b;font-size:13px;">▲</span>' +
         '</div>' +
-        '<div id="askqh-msgs" style="flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px;font-size:14.5px;line-height:1.5;">' +
-          '<div style="color:#7a6f5c;font-style:italic;">Ask about any verse, hadith, madhhab comparison, story, or theme on this site. I\'ll search our database first.</div>' +
-        '</div>' +
-        '<button id="askqh-summarize" style="display:none;margin:0 10px 8px;padding:8px;background:#fff;border:1px solid #8a6d3b;color:#8a6d3b;border-radius:4px;cursor:pointer;font-family:\'Inconsolata\',monospace;font-size:11.5px;">📊 Build presentation from this chat</button>' +
-        '<div style="display:flex;gap:6px;padding:10px;border-top:1px solid #e4d9c0;">' +
-          '<input id="askqh-input" type="text" placeholder="Ask a question…" style="flex:1;padding:8px 10px;border:1px solid #d5c9a8;border-radius:4px;font-family:inherit;font-size:14px;">' +
-          '<button id="askqh-send" style="padding:0 14px;background:#8a6d3b;color:#fff;border:none;border-radius:4px;cursor:pointer;">Go</button>' +
+        '<div id="askqh-body" style="display:none;flex-direction:column;height:340px;max-height:55vh;border-top:1px solid #e4d9c0;">' +
+          '<div id="askqh-msgs" style="flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px;font-size:14.5px;line-height:1.5;">' +
+            '<div style="color:#7a6f5c;font-style:italic;">Ask about any verse, hadith, madhhab comparison, story, or theme on this site. I\'ll search our database first.</div>' +
+          '</div>' +
+          '<button id="askqh-summarize" style="display:none;margin:0 10px 8px;padding:8px;background:#fff;border:1px solid #8a6d3b;color:#8a6d3b;border-radius:4px;cursor:pointer;font-family:\'Inconsolata\',monospace;font-size:11.5px;">📊 Build presentation from this chat</button>' +
+          '<div style="display:flex;gap:6px;padding:10px;border-top:1px solid #e4d9c0;">' +
+            '<input id="askqh-input" type="text" placeholder="Ask a question…" style="flex:1;padding:8px 10px;border:1px solid #d5c9a8;border-radius:4px;font-family:inherit;font-size:14px;">' +
+            '<button id="askqh-send" style="padding:0 14px;background:#8a6d3b;color:#fff;border:none;border-radius:4px;cursor:pointer;">Go</button>' +
+          '</div>' +
         '</div>' +
       '</div>';
   }
@@ -205,18 +207,24 @@
     wrap.innerHTML = widgetHTML();
     document.body.appendChild(wrap);
 
-    var fab = document.getElementById('askqh-fab');
-    var panel = document.getElementById('askqh-panel');
-    fab.addEventListener('click', function () {
-      panel.style.display = panel.style.display === 'flex' ? 'none' : 'flex';
-    });
-    document.getElementById('askqh-close').addEventListener('click', function () {
-      panel.style.display = 'none';
-    });
+    var head = document.getElementById('askqh-dockhead');
+    var body = document.getElementById('askqh-body');
+    var caret = document.getElementById('askqh-caret');
+    var expanded = false;
+
+    function setExpanded(val) {
+      expanded = val;
+      body.style.display = expanded ? 'flex' : 'none';
+      caret.textContent = expanded ? '▼' : '▲';
+      if (expanded) document.getElementById('askqh-input').focus();
+    }
+
+    head.addEventListener('click', function () { setExpanded(!expanded); });
     document.getElementById('askqh-send').addEventListener('click', handleAsk);
     document.getElementById('askqh-summarize').addEventListener('click', buildSessionSummary);
     document.getElementById('askqh-input').addEventListener('keydown', function (e) {
       if (e.key === 'Enter') handleAsk();
+      e.stopPropagation(); // don't let typing re-toggle the dock header
     });
   }
 
