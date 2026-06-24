@@ -1,30 +1,31 @@
 # Shu'ba Project Progress Log
 
-## Batch: Pages 0695–0714
+## Batch: Pages 0715–0734
 **Date:** 2026-06-24
-**Suras covered:** 45 (Al-Jathiya, complete, 37 ayas), 46 (Al-Ahqaf, complete, 35 ayas), 47 (Muhammad, complete, 38 ayas), 48 (Al-Fath, 1–12)
+**Suras covered:** 48 (Al-Fath, complete, 29 ayas), 49 (Al-Hujurat, complete, 18 ayas), 50 (Qaf, complete, 45 ayas), 51 (Al-Dhariyat, complete, 60 ayas), 52 (Al-Tur, 1–39)
 
-### Variants Applied — 13 rows:
+### Variants Applied — 8 rows:
 
 | Sura:Aya | Rule |
 |----------|------|
-| 45:21 | سَوَآءٌ - تنوين ضم بدل تنوين الفتح |
-| 45:23 | تَذَّكَّرُونَ - تشديد الذال |
-| 45:34 | اتَّخَتُّمْ - إدغام الذال في التاء |
-| 45:35 | هُزُءًا - إبدال الواو همزة |
-| 46:1 | حِمۤ - إمالة |
-| 46:16 | يُنقَبَّلُ - إبدال النون ياء مضمومة |
-| 46:16 | أَحْسَنُ - ضم النون |
-| 46:17 | أُفِّ - حذف التنوين وكسر الفاء |
-| 47:4 | قَاتَلُوا - فتح القاف وألف بعدها وفتح التاء |
-| 47:29 | أَسَرَارَهُمْ - فتح الهمزة |
-| 47:31 | إبدال النون ياء في ثلاثة مواضع |
-| 47:35 | السِّلْمَ - كسر السين |
-| 48:10 | عَلَيْهِ - كسر الهاء |
+| 48:29 | وَرُضْوَانًا - ضم الراء |
+| 50:3 | مُتْنَا - ضم الميم |
+| 50:29 | يَقُولُ - إبدال النون ياء |
+| 51:15 | وَعِيُونٍ - كسر العين |
+| 51:23 | مِثْلُ - ضم اللام |
+| 51:49 | تَذَّكَّرُونَ - تشديد الذال |
+| 52:24 | لُوْلُؤٌ - إبدال الهمزة الأولى واواً ساكنة مدية |
+| 52:37 | الْمُصَيْطِرُونَ - وجه واحد بالصاد |
+
+### Note: Sparse batches
+- Sura 48 (Al-Fath): mostly clean (pages 0715-0717)
+- Sura 49 (Al-Hujurat): entirely clean (pages 0719-0722)
+- Sura 50 (Qaf): 2 variants only
+- Sura 51 (Al-Dhariyat): 3 variants
 
 ### Cumulative Status:
-- Sura 22–47: ✅ Complete
-- Sura 48: 🔄 In progress (ayas 1–12)
+- Sura 22–51: ✅ Complete
+- Sura 52: 🔄 In progress (ayas 1–39)
 
 ### Next batch:
-- Continue from page 0715 (Sura 48, aya 13+)
+- Continue from page 0735 (Sura 52, aya 40+)
