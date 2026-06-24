@@ -1,34 +1,40 @@
 # Shu'ba Project Progress Log
 
-## Batch: Pages 0535–0554
+## Batch: Pages 0555–0574
 **Date:** 2026-06-23
-**Suras covered:** 27 (Al-Naml, 59–93 complete), 28 (Al-Qasas, 1–88 complete), 29 (Al-Ankabut, 1–8 start)
+**Suras covered:** 29 (Al-Ankabut, 9–69 complete), 30 (Al-Rum, 1–60 complete), 31 (Luqman, 1–12)
 
-### Variants Applied — 8 rows:
+### Variants Applied — 16 rows:
 
-| Sura:Aya | Shu'ba Reading | Rule |
-|----------|---------------|------|
-| 27:62 | تَذَّكَّرُونَ | تشديد الذال |
-| 27:84 | ءَاتُوهُ | همزة وبعدها ألف مد بدل، وضم التاء ثم واو مدية |
-| 27:93 | يَعْمَلُونَ | إبدال التاء ياء |
-| 28:1 | طِسم | إمالة فتحة الطاء والألف |
-| 28:31 | رَاهَا | إمالة فتحة الراء والهمزة والألف |
-| 28:32 | الرُّهُبِ | ضم الراء |
-| 28:34 | مَعِيْ | إسكان الياء |
-| 28:82 | لَخُسِفَ | ضم الخاء وكسر السين |
+| Sura:Aya | Rule |
+|----------|------|
+| 29:18 | يَرَوْا - إبدال الياء تاء |
+| 29:25 | اتَّخَتُّمْ - إدغام الذال في التاء |
+| 29:25 | مَّوَدَّةٌ - بالتنوين مع الإقلاب وفتح النون |
+| 29:28 | أَءِنَّكُمْ - زاد همزة استفهام |
+| 29:33 | مُنجُوكَ - إسكان النون مع الإخفاء وتخفيف الجيم |
+| 29:38 | وَثَمُودًا - بالتنوين مع الإدغام وصلاً |
+| 29:41 | الْبِيُوتِ - كسر الباء |
+| 29:50 | ءَايَةٌ - بالإفراد بحذف الألف الثانية |
+| 29:57 | يُرْجَعُونَ - إبدال التاء ياء |
+| 30:11 | يُرْجَعُونَ - إبدال التاء ياء |
+| 30:19 | الْمَيْتِ / الْمَيْتَ - إسكان الياء |
+| 30:22 | لِّلْعٰلَمِينَ - فتح اللام بعد الألف |
+| 30:50 | أَثَرِ - حذف الألف الأولى والثانية |
+| 30:54 | ضَعَفٍ (x3) - فتح الضاد |
+| 31:6 | ضم الذال في وَيَتَّخِذُهَا |
+| 31:6 | هُزُءًا - إبدال الواو همزة |
 
-### Notes on sparse variant pages:
-- Pages 0536-0537 (27:64-85): no margin annotations — text matches Hafs
-- Pages 0540-0543 (28:8-28): no annotations — narrative text, no reading differences
-- Pages 0545-0549 (28:35-65): no annotations visible
-- Pages 0550-0553 (28:66-88): one variant (28:82)
-- Page 0554 (29:1-8): clean opening of Sura 29, no annotations
+### Pages with no new annotations (existing data preserved):
+- 0555 (29:9-13): clean
+- 0563 (29:59-69): clean
+- 0565 (30:1-9): clean Sura 30 opening
+- 0568-0570 (30:26-43): clean
+- 0573 (30:60 / 31:1-5): clean
 
 ### Cumulative Status:
-- Sura 22–26: ✅ Complete
-- Sura 27: ✅ Complete (93 ayas)
-- Sura 28: ✅ Complete (88 ayas)
-- Sura 29: 🔄 In progress (ayas 1–8)
+- Sura 22–30: ✅ Complete
+- Sura 31: 🔄 In progress (ayas 1–12)
 
 ### Next batch:
-- Continue from page 0555 (Sura 29, aya 9+)
+- Continue from page 0575 (Sura 31, aya 13+)
