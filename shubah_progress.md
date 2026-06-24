@@ -1,30 +1,31 @@
 # Shu'ba Project Progress Log
 
-## Batch: Pages 0615–0634
+## Batch: Pages 0635–0654
 **Date:** 2026-06-24
-**Suras covered:** 36 (Ya-Sin, complete, 83 ayas), 37 (Al-Saffat, complete, 182 ayas), 38 (Sad, 1–33)
+**Suras covered:** 38 (Sad, complete, 88 ayas), 39 (Al-Zumar, complete, 75 ayas), 40 (Ghafir, 1–52)
 
-### Variants Applied — 13 rows:
+### Variants Applied — 9 rows:
 
 | Sura:Aya | Rule |
 |----------|------|
-| 36:34 | الْعِيُونِ - كسر العين |
-| 36:35 | عَمِلَتْ - حذف الهاء |
-| 36:52 | مَرْقَدِنَا هٰذَا - بلا سكت وصلاً |
-| 36:67 | مَكَانَاتِهِمْ - زاد ألفاً على الجمع |
-| 37:6 | الْكَوَاكِبَ - فتح الباء |
-| 37:8 | يَسْمَعُونَ - إسكان السين وتخفيف الميم |
-| 37:16 | مُتْنَا - ضم الميم |
-| 37:53 | مُتُّنَا - ضم الميم |
-| 37:55 | فَرَاهُ - إمالة الراء والهمزة والألف |
-| 37:102 | يٰبُنَيِّ - كسر الياء |
-| 37:125 | أَللَّهُ / رَبُّكُمْ / وَرَبُّ - ضم |
-| 37:155 | تَذَّكَّرُونَ - تشديد الذال |
-| 38:23 | وَلِيْ - إسكان الياء |
+| 38:57 | وَغَسَاقٌ - تخفيف السين |
+| 38:69 | لِيْ - إسكان الياء |
+| 39:39 | مَكَانَاتِكُمْ - زاد ألفاً بعد النون على الجمع |
+| 39:61 | بِمَفَازَاتِهِمْ - زاد ألفاً بعد الزاي على الجمع |
+| 40:1 | حِمۤ - إمالة فتحة الحاء والألف |
+| 40:5 | فَأَخَتُّهُمْ - إدغام الذال في التاء |
+| 40:26 | يَظْهَرَ - فتح الياء والهاء |
+| 40:26 | الْفَسَادُ - ضم الدال |
+| 40:36 | فَأَطَّلِعُ - ضم العين |
+
+### Note: Sparse batches
+- Sura 38: mostly clean after aya 57 (pages 0635-0637)
+- Sura 39: clean throughout except two plural form variants (0644, 0647)
+- Sura 40 (Ghafir): حِمۤ imala + a few word-level variants
 
 ### Cumulative Status:
-- Sura 22–37: ✅ Complete
-- Sura 38: 🔄 In progress (ayas 1–33)
+- Sura 22–39: ✅ Complete
+- Sura 40: 🔄 In progress (ayas 1–52)
 
 ### Next batch:
-- Continue from page 0635 (Sura 38, aya 34+)
+- Continue from page 0655 (Sura 40, aya 53+)
