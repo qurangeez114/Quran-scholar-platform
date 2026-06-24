@@ -1,31 +1,28 @@
 # Shu'ba Project Progress Log
 
-## Batch: Pages 0635–0654
+## Batch: Pages 0655–0674
 **Date:** 2026-06-24
-**Suras covered:** 38 (Sad, complete, 88 ayas), 39 (Al-Zumar, complete, 75 ayas), 40 (Ghafir, 1–52)
+**Suras covered:** 40 (Ghafir, complete, 85 ayas), 41 (Fussilat, complete, 54 ayas), 42 (Al-Shura, 1–22)
 
-### Variants Applied — 9 rows:
+### Variants Applied — 11 rows:
 
 | Sura:Aya | Rule |
 |----------|------|
-| 38:57 | وَغَسَاقٌ - تخفيف السين |
-| 38:69 | لِيْ - إسكان الياء |
-| 39:39 | مَكَانَاتِكُمْ - زاد ألفاً بعد النون على الجمع |
-| 39:61 | بِمَفَازَاتِهِمْ - زاد ألفاً بعد الزاي على الجمع |
-| 40:1 | حِمۤ - إمالة فتحة الحاء والألف |
-| 40:5 | فَأَخَتُّهُمْ - إدغام الذال في التاء |
-| 40:26 | يَظْهَرَ - فتح الياء والهاء |
-| 40:26 | الْفَسَادُ - ضم الدال |
-| 40:36 | فَأَطَّلِعُ - ضم العين |
-
-### Note: Sparse batches
-- Sura 38: mostly clean after aya 57 (pages 0635-0637)
-- Sura 39: clean throughout except two plural form variants (0644, 0647)
-- Sura 40 (Ghafir): حِمۤ imala + a few word-level variants
+| 40:40 | يَدْخُلُونَ - ضم الياء وفتح الخاء (مبني للمجهول) |
+| 40:46 | أَدْخِلُوا - فعل أمر بهمزة وصل وضم الخاء |
+| 40:60 | سَيَدْخُلُونَ - ضم الياء وفتح الخاء (مبني للمجهول) |
+| 40:67 | شِيُوخًا - كسر الشين |
+| 41:1 | حِمۤ - إمالة فتحة الحاء والألف |
+| 41:29 | أَرْنَا - إسكان الراء |
+| 41:44 | أَأَعْجَمِيٌّ - تحقيق الهمزة الثانية |
+| 41:47 | ثَمَرَتٍ - بحذف الألف على الإفراد |
+| 42:1 | حِمۤ - إمالة فتحة الحاء والألف |
+| 42:5 | يَنفَطِرْنَ - نون ساكنة بدل التاء وطاء مكسورة مخففة |
+| 42:20 | نُؤْتِهْ - إسكان الهاء |
 
 ### Cumulative Status:
-- Sura 22–39: ✅ Complete
-- Sura 40: 🔄 In progress (ayas 1–52)
+- Sura 22–41: ✅ Complete
+- Sura 42: 🔄 In progress (ayas 1–22)
 
 ### Next batch:
-- Continue from page 0655 (Sura 40, aya 53+)
+- Continue from page 0675 (Sura 42, aya 23+)
