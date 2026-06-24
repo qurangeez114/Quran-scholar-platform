@@ -1,32 +1,28 @@
 # Shu'ba Project Progress Log
 
-## Batch: Pages 0735–0754
+## Batch: Pages 0755–0774
 **Date:** 2026-06-24
-**Suras covered:** 52 (Al-Tur, complete, 49 ayas), 53 (Al-Najm, complete, 62 ayas), 54 (Al-Qamar, complete, 55 ayas), 55 (Al-Rahman, complete, 78 ayas), 56 (Al-Waqi'a, complete, 96 ayas), 57 (Al-Hadid, 1–9)
+**Suras covered:** 57 (Al-Hadid, complete, 29 ayas), 58 (Al-Mujadila, complete, 22 ayas), 59 (Al-Hashr, complete, 24 ayas), 60 (Al-Mumtahana, complete, 13 ayas), 61 (Al-Saff, complete, 14 ayas)
 
 ### Variants Applied — 11 rows:
 
 | Sura:Aya | Rule |
 |----------|------|
-| 53:11 | رَأَا - إمالة الراء والهمزة والألف |
-| 53:13 | رَاهُ - إمالة الراء والهمزة والألف |
-| 53:18 | ❌ DB gap — aya 18 missing from database |
-| 54:12 | عِيُونًا - كسر العين |
-| 55:22 | اللُّوْلُؤُ - إبدال الهمزة الأولى واواً مدية |
-| 55:24 | الْمُنشَآتُ - وجهان: كسر الشين (مقدم) وفتح الشين |
-| 56:23 | اللُّوْلُؤِ - إبدال الهمزة الأولى واواً مدية |
-| 56:37 | عُرْبًا - إسكان الراء |
-| 56:47 | مُتْنَا - ضم الميم |
-| 56:62 | تَذَّكَّرُونَ - تشديد الذال |
-| 56:69 | أَءِنَّا - زاد همزة استفهام |
-| 57:9 | لَرَؤُفٌ - حذف الواو |
-
-### DB note:
-- Sura 53 aya 18 is missing from the database (gap between 17 and 19). Variant cannot be stored.
+| 57:16 | نَزَّلَ - تشديد الزاي |
+| 57:18 | الْمُصَّدِّقِينَ / الْمُصَّدِّقَاتِ - تخفيف الصاد |
+| 57:20 | وَرُضْوَانٌ - ضم الراء |
+| 57:27 | رُأْفَةً - ضم الراء |
+| 57:28 | رُضْوَانِ اللَّهِ - ضم الراء |
+| 58:11 | أَنشِزُوا / فَأَنشِزُوا - وجهان: كسر الشين مقدم |
+| 59:2 | بِيُوتَهُمْ - كسر الباء |
+| 59:8 | وَرُضْوَانًا - ضم الراء |
+| 59:10 | رَؤُفٌ - حذف الواو |
+| 61:6 | بَعْدِيَ - فتح الياء |
+| 61:8 | مُتِمُّ نُورِهِ - تنوين + إدغام + فتح الراء وضم الهاء |
 
 ### Cumulative Status:
-- Sura 22–56: ✅ Complete
-- Sura 57: 🔄 In progress (ayas 1–9)
+- Sura 22–61: ✅ Complete
+- Sura 62+: 🔄 Starting next batch
 
 ### Next batch:
-- Continue from page 0755 (Sura 57, aya 10+)
+- Continue from page 0775 (Sura 62, Al-Jumu'a)
