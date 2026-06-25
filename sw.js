@@ -1,4 +1,4 @@
-const CACHE_NAME = 'quran-hikma-v1';
+const CACHE_NAME = 'quran-hikma-v2';
 const PRECACHE_URLS = [
   '/',
   '/index.html',
