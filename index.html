@@ -3227,33 +3227,85 @@ function renderSignificanceCards(sura, aya) {
 
   const escHtml = (s) => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
-  return entries.map((e, idx) => {
-    const wordRows = [];
-    // Each riwayah row: label, button (or N/A), arabic word, meaning gloss.
-    // The button's onclick fires playSignifAudio(sura, aya, riwayah, btn).
-    // 'qalun' has no audio source — render an N/A placeholder instead.
-    const pushRow = (label, word, meaning, riwayah) => {
-      if (!word && !meaning) return;
-      const playBtn = (riwayah === 'qalun' || riwayah === 'shubah')
-        ? `<span class="signif-play-na" title="No per-ayah ${riwayah === 'qalun' ? 'Qalūn' : 'Shuʿbah'} audio source available">N/A</span>`
-        : `<button class="signif-play"
-                   onclick="playSignifAudio(${sura}, ${aya}, '${riwayah}', this)"
-                   aria-label="Play verse in ${label}"
-                   title="Play verse in ${label}">▶</button>`;
-      wordRows.push(`
-        <div class="signif-word-row">
-          ${playBtn}
-          <span class="signif-word-label">${label}</span>
-          <span class="signif-word-text">${escHtml(word||'—')}</span>
-          <span class="signif-word-meaning">${escHtml(meaning||'')}</span>
-        </div>`);
-    };
-    pushRow('Hafs',  e.hafs_word,  e.hafs_meaning_en, 'hafs');
-    pushRow('Warsh', e.warsh_word, e.warsh_meaning_en, 'warsh');
-    pushRow('Qalūn', e.qalun_word, e.qalun_meaning_en, 'qalun');
-    pushRow('Dūrī',  e.duri_word,  e.duri_meaning_en, 'duri');
-    pushRow('Shuʿbah', e.shubah_word, e.shubah_meaning_en, 'shubah');
+  // Strip diacritics for comparison so حَمِئَةٍ == حَمِئَةٍ etc.
+  const stripDiac = (s) => (s||'').replace(/[\u064B-\u065F\u0670\u0640\u06D6-\u06DC\u06DF-\u06E4\u06E7\u06E8\u06EA-\u06ED]/g, '').trim();
 
+  return entries.map((e) => {
+    // ── 1. Build the 5 riwayat entries ──────────────────────────────────
+    const RIWAYAT = [
+      { key: 'hafs',   label: 'Hafsʿan ʿĀṣim',     word: e.hafs_word,   meaning: e.hafs_meaning_en,   badgeClass: 'badge-hafs',   audio: true  },
+      { key: 'warsh',  label: 'Warsh ʿan Nāfiʿ',    word: e.warsh_word,  meaning: e.warsh_meaning_en,  badgeClass: 'badge-warsh',  audio: true  },
+      { key: 'qalun',  label: 'Qālūn ʿan Nāfiʿ',    word: e.qalun_word,  meaning: e.qalun_meaning_en,  badgeClass: 'badge-qalun',  audio: false },
+      { key: 'duri',   label: 'Al-Dūrī ʿan Abī ʿAmr', word: e.duri_word, meaning: e.duri_meaning_en,  badgeClass: 'badge-duri',   audio: true  },
+      { key: 'shubah', label: 'Shuʿbah ʿan ʿĀṣim',  word: e.shubah_word, meaning: e.shubah_meaning_en, badgeClass: 'badge-shubah', audio: false },
+    ];
+
+    // ── 2. Count unique readings (diacritic-stripped) ────────────────────
+    const uniqueWords = [...new Set(RIWAYAT.map(r => stripDiac(r.word)).filter(Boolean))];
+    const uniqueCount = uniqueWords.length;
+
+    // ── 3. Group riwayat by their reading — assign a group index ─────────
+    const groupOf = {};
+    RIWAYAT.forEach(r => {
+      const norm = stripDiac(r.word);
+      if (!norm) return;
+      groupOf[r.key] = uniqueWords.indexOf(norm);
+    });
+
+    // Group colors (up to 4 groups across our 5 riwayat)
+    const GROUP_COLORS = [
+      { bg: '#D6EAF8', fg: '#1A5276', border: '#7AB8D8' }, // blue  — group 0
+      { bg: '#FDEBD0', fg: '#784212', border: '#E0A060' }, // amber — group 1
+      { bg: '#D5F5E3', fg: '#1A5C38', border: '#70C090' }, // green — group 2
+      { bg: '#E8DAEF', fg: '#5B2C8D', border: '#B070D0' }, // purple— group 3
+    ];
+
+    // ── 4. Build the reading rows ────────────────────────────────────────
+    const wordRows = RIWAYAT.map(r => {
+      if (!r.word && !r.meaning) return '';
+      const gi = groupOf[r.key] ?? 0;
+      const col = GROUP_COLORS[gi % GROUP_COLORS.length];
+      const playBtn = r.audio
+        ? `<button class="signif-play"
+               onclick="playSignifAudio(${sura}, ${aya}, '${r.key}', this)"
+               aria-label="Play in ${escHtml(r.label)}"
+               title="Play verse in ${escHtml(r.label)}">▶</button>`
+        : `<span class="signif-play-na" title="No per-ayah audio for ${escHtml(r.label)}">N/A</span>`;
+
+      return `
+        <div class="signif-word-row" style="border-left:3px solid ${col.border};padding-left:8px;margin-bottom:6px">
+          ${playBtn}
+          <span class="signif-word-label">
+            <span class="riwayat-badge ${r.badgeClass}" style="font-size:9px;padding:2px 6px">${escHtml(r.label)}</span>
+          </span>
+          <span class="signif-word-text" style="background:${col.bg};color:${col.fg};border-radius:4px;padding:1px 6px">${escHtml(r.word||'—')}</span>
+          <span class="signif-word-meaning">${escHtml(r.meaning||'')}</span>
+        </div>`;
+    }).join('');
+
+    // ── 5. Build the cross-comparison matrix (every pair) ────────────────
+    const pairs = [];
+    for (let i = 0; i < RIWAYAT.length; i++) {
+      for (let j = i + 1; j < RIWAYAT.length; j++) {
+        const a = RIWAYAT[i], b = RIWAYAT[j];
+        if (!a.word || !b.word) continue;
+        const same = stripDiac(a.word) === stripDiac(b.word);
+        pairs.push(`<span style="display:inline-block;padding:2px 7px;margin:2px;border-radius:10px;font-size:10px;font-weight:700;
+          background:${same ? '#F0F9F0' : '#FFF0F0'};
+          color:${same ? '#1A7A48' : '#A02020'};
+          border:1px solid ${same ? '#70C090' : '#E08080'}">
+          ${escHtml(a.label.split(' ')[0])} ${same ? '=' : '≠'} ${escHtml(b.label.split(' ')[0])}
+        </span>`);
+      }
+    }
+
+    // ── 6. Unique reading count badge ────────────────────────────────────
+    const countBadge = `<span style="display:inline-block;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:800;
+      background:#4A3B28;color:#fff;margin-left:8px">
+      ${uniqueCount} unique reading${uniqueCount !== 1 ? 's' : ''}
+    </span>`;
+
+    // ── 7. Assemble card ─────────────────────────────────────────────────
     const sourcesHtml = (e.sources && e.sources.length)
       ? `<div class="signif-sources"><b>Sources</b>${e.sources.map(s => `<span class="signif-source-item">${escHtml(s)}</span>`).join('')}</div>`
       : '';
@@ -3265,10 +3317,12 @@ function renderSignificanceCards(sura, aya) {
     return `
     <div class="signif-card">
       <div class="signif-header">
-        <div class="signif-title">⚠ Significant Variant — ${wordRef}</div>
+        <div class="signif-title">⚠ Significant Variant — ${wordRef} ${countBadge}</div>
         <span class="signif-cat ${escHtml(e.category)}">${escHtml(e.category)}</span>
       </div>
-      <div class="signif-words">${wordRows.join('')}</div>
+      <div class="signif-words" style="gap:0">${wordRows}</div>
+      <div style="margin:8px 0 6px;font-size:10px;font-weight:700;color:#8B7355;text-transform:uppercase;letter-spacing:0.5px">Reading agreement</div>
+      <div style="margin-bottom:10px;line-height:2">${pairs.join('')}</div>
       <div class="signif-explanation">${escHtml(e.explanation_en)}</div>
       ${sourcesHtml}
     </div>`;
