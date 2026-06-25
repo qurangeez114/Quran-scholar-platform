@@ -84,10 +84,127 @@ body{font-family:'EB Garamond',serif;background:var(--p0);color:var(--ink1);min-
 .rc-body{padding:14px 16px;}
 .rc-text{font-family:'Scheherazade New',serif;font-size:clamp(20px,4.5vw,26px);direction:rtl;text-align:right;line-height:2.2;margin-bottom:10px;}
 
-/* ── DIFF WORD: color + underline + pulse on load ── */
-@keyframes diffPulse{0%{box-shadow:0 0 0 0 currentColor;}60%{box-shadow:0 0 0 5px transparent;}100%{box-shadow:0 0 0 0 transparent;}}
-.dw{border-radius:4px;padding:2px 6px;border-bottom:2px solid;cursor:pointer;transition:filter .15s;animation:diffPulse .9s ease-out 1;}
-.dw:hover{filter:brightness(.88);}
+/* ════════════════════════════════════
+   ANIMATION SYSTEM
+   ════════════════════════════════════ */
+
+/* 1. Card slide-in — staggered per card */
+@keyframes cardIn{
+  from{opacity:0;transform:translateY(18px);}
+  to  {opacity:1;transform:translateY(0);}
+}
+.rc{animation:cardIn .38s cubic-bezier(.22,.68,0,1.2) both;}
+.rc:nth-child(1){animation-delay:.05s;}
+.rc:nth-child(2){animation-delay:.13s;}
+.rc:nth-child(3){animation-delay:.21s;}
+.rc:nth-child(4){animation-delay:.29s;}
+.rc:nth-child(5){animation-delay:.37s;}
+.rc:nth-child(6){animation-delay:.45s;}
+
+/* 2. Diff-summary slide down */
+@keyframes summaryIn{
+  from{opacity:0;transform:translateY(-10px);}
+  to  {opacity:1;transform:translateY(0);}
+}
+.diff-summary{animation:summaryIn .28s ease-out both;}
+
+/* 3. Diff word: entrance flash → breathing glow loop */
+@keyframes dwFlash{
+  0%  {opacity:0;transform:scale(.82);}
+  55% {opacity:1;transform:scale(1.08);}
+  100%{opacity:1;transform:scale(1);}
+}
+@keyframes dwGlow{
+  0%,100%{box-shadow:0 0 0 0 rgba(0,0,0,0);}
+  50%    {box-shadow:0 0 7px 2px var(--glow-color);}
+}
+.dw{
+  border-radius:4px;
+  padding:2px 7px;
+  border-bottom:2px solid;
+  cursor:pointer;
+  display:inline-block;
+  position:relative;
+  /* entrance */
+  animation:dwFlash .5s cubic-bezier(.22,.68,0,1.3) both, dwGlow 2.4s ease-in-out 0.6s infinite;
+  transition:transform .12s, filter .12s;
+}
+.dw:hover{transform:scale(1.12);filter:brightness(.88);}
+.dw:active{transform:scale(.96);}
+
+/* glow colors per riwayah */
+.dw-hafs  {background:var(--cb-hafs);  color:var(--c-hafs);  border-color:var(--c-hafs);  --glow-color:rgba(26,82,118,.35);}
+.dw-warsh {background:var(--cb-warsh); color:var(--c-warsh); border-color:var(--c-warsh); --glow-color:rgba(120,66,18,.35);}
+.dw-qalun {background:var(--cb-qalun); color:var(--c-qalun); border-color:var(--c-qalun); --glow-color:rgba(26,92,56,.35);}
+.dw-duri  {background:var(--cb-duri);  color:var(--c-duri);  border-color:var(--c-duri);  --glow-color:rgba(91,44,141,.35);}
+.dw-shubah{background:var(--cb-shubah);color:var(--c-shubah);border-color:var(--c-shubah);--glow-color:rgba(168,51,74,.35);}
+
+/* stagger glow phase per riwayah so they don't all pulse together */
+.dw-hafs  {animation-delay:0s,   .6s;}
+.dw-warsh {animation-delay:.08s, .9s;}
+.dw-qalun {animation-delay:.16s, 1.2s;}
+.dw-duri  {animation-delay:.24s, .75s;}
+.dw-shubah{animation-delay:.32s, 1.05s;}
+
+/* 4. Animated underline draw on diff words */
+.dw::after{
+  content:'';
+  position:absolute;
+  bottom:-2px;left:0;right:0;
+  height:2px;
+  background:currentColor;
+  transform:scaleX(0);
+  transform-origin:right;
+  animation:underlineDraw .5s cubic-bezier(.22,.68,0,1.2) both;
+}
+@keyframes underlineDraw{
+  from{transform:scaleX(0);transform-origin:right;}
+  to  {transform:scaleX(1);transform-origin:right;}
+}
+.dw-hafs::after  {animation-delay:.15s;}
+.dw-warsh::after {animation-delay:.23s;}
+.dw-qalun::after {animation-delay:.31s;}
+.dw-duri::after  {animation-delay:.39s;}
+.dw-shubah::after{animation-delay:.47s;}
+
+/* 5. Changed letter highlight inside word */
+.dl{
+  border-radius:2px;
+  padding:0 1px;
+  font-weight:700;
+  position:relative;
+}
+@keyframes letterPop{
+  0%  {background:rgba(255,220,0,.0);}
+  40% {background:rgba(255,220,0,.55);}
+  100%{background:rgba(255,220,0,.0);}
+}
+.dl{animation:letterPop 1.2s ease-out .6s both;}
+
+/* 6. Strip slide-down */
+@keyframes stripIn{
+  from{opacity:0;transform:translateY(-100%);}
+  to  {opacity:1;transform:translateY(0);}
+}
+#cmp-strip.visible{animation:stripIn .25s ease-out both;}
+
+/* 7. Modal sheet slide-up */
+@keyframes sheetUp{
+  from{transform:translateY(100%);}
+  to  {transform:translateY(0);}
+}
+#word-modal.open .wm-sheet{animation:sheetUp .28s cubic-bezier(.22,.68,0,1.1) both;}
+
+/* 8. Sig card expand */
+@keyframes sigBodyOpen{
+  from{opacity:0;transform:translateY(-6px);}
+  to  {opacity:1;transform:translateY(0);}
+}
+.sig-card.expanded .sig-body{animation:sigBodyOpen .22s ease-out both;}
+
+/* 9. Explain result fade-in */
+@keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
+.explain-result{animation:fadeIn .3s ease-out both;}
 .dw-hafs  {background:var(--cb-hafs);  color:var(--c-hafs);  border-color:var(--c-hafs);}
 .dw-warsh {background:var(--cb-warsh); color:var(--c-warsh); border-color:var(--c-warsh);}
 .dw-qalun {background:var(--cb-qalun); color:var(--c-qalun); border-color:var(--c-qalun);}
@@ -961,6 +1078,22 @@ async function loadVerse(sO,aO){
   </div>`;
 
   document.getElementById('content').innerHTML=html;
+
+  // Re-trigger stagger animations by forcing reflow on each .rc
+  document.querySelectorAll('#content .rc').forEach((el, i) => {
+    el.style.animationDelay = `${0.05 + i * 0.08}s`;
+    // Force reflow so animation restarts
+    el.style.animation = 'none';
+    void el.offsetWidth;
+    el.style.animation = '';
+    el.style.animationDelay = `${0.05 + i * 0.08}s`;
+  });
+  // Re-trigger diff word animations
+  document.querySelectorAll('#content .dw').forEach((el) => {
+    el.style.animation = 'none';
+    void el.offsetWidth;
+    el.style.animation = '';
+  });
 }
 
 async function explainDiff(btn,key,label,sura,aya){
@@ -1058,9 +1191,18 @@ async function renderSigList(){
 }
 
 function toggleSig(el){
+  const wasOpen = el.classList.contains('expanded');
   el.classList.toggle('expanded');
   const body=el.querySelector('.sig-body');
-  body.style.display=el.classList.contains('expanded')?'block':'none';
+  if(!wasOpen){
+    body.style.display='block';
+    // Re-trigger animation
+    body.style.animation='none';
+    void body.offsetWidth;
+    body.style.animation='';
+  } else {
+    body.style.display='none';
+  }
 }
 
 initCompare();
