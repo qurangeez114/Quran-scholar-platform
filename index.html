@@ -2982,14 +2982,18 @@ function highlightDiffs(hafs, warsh, qalun, duri, shubah, suraId, ayaNum, soosi=
       const onClickArgs = `${suraId},${ayaNum},${i},'${hw.replace(/'/g,"\\'")}','${ww.replace(/'/g,"\\'")}','${qw.replace(/'/g,"\\'")}','${dw.replace(/'/g,"\\'")}','${sw.replace(/'/g,"\\'")}'`;
       const dataAttr = `data-rwa-pos="${suraId}-${ayaNum}-${i}"`;
 
-      const hDiff  = !rasmEqual(hw,ww)||!rasmEqual(hw,qw)||!rasmEqual(hw,dw)||!rasmEqual(hw,sw)||!rasmEqual(hw,oow)||!rasmEqual(hw,bw)||!rasmEqual(hw,kw);
-      const wDiff  = !rasmEqual(ww,hw)||!rasmEqual(ww,qw)||!rasmEqual(ww,dw)||!rasmEqual(ww,sw);
-      const qDiff  = !rasmEqual(qw,hw)||!rasmEqual(qw,ww)||!rasmEqual(qw,dw)||!rasmEqual(qw,sw);
-      const dDiff  = !rasmEqual(dw,hw)||!rasmEqual(dw,ww)||!rasmEqual(dw,qw)||!rasmEqual(dw,sw);
-      const sDiff  = !rasmEqual(sw,hw)||!rasmEqual(sw,ww)||!rasmEqual(sw,qw)||!rasmEqual(sw,dw);
-      const ooDiff = oow && (!rasmEqual(oow,hw)||!rasmEqual(oow,ww)||!rasmEqual(oow,qw)||!rasmEqual(oow,dw));
-      const bDiff  = bw  && (!rasmEqual(bw,hw) ||!rasmEqual(bw,ww) ||!rasmEqual(bw,qw) ||!rasmEqual(bw,dw));
-      const kDiff  = kw  && (!rasmEqual(kw,hw) ||!rasmEqual(kw,ww) ||!rasmEqual(kw,qw) ||!rasmEqual(kw,dw));
+      // Only compare non-empty words — empty string means that riwayah
+      // has a different word count at this position (verse split difference),
+      // not a real consonantal difference with the other riwayat
+      const neq = (a, b) => a && b && !rasmEqual(a, b);
+      const hDiff  = neq(hw,ww)||neq(hw,qw)||neq(hw,dw)||neq(hw,sw)||neq(hw,oow)||neq(hw,bw)||neq(hw,kw);
+      const wDiff  = neq(ww,hw)||neq(ww,qw)||neq(ww,dw)||neq(ww,sw);
+      const qDiff  = neq(qw,hw)||neq(qw,ww)||neq(qw,dw)||neq(qw,sw);
+      const dDiff  = neq(dw,hw)||neq(dw,ww)||neq(dw,qw)||neq(dw,sw);
+      const sDiff  = neq(sw,hw)||neq(sw,ww)||neq(sw,qw)||neq(sw,dw);
+      const ooDiff = oow && (neq(oow,hw)||neq(oow,ww)||neq(oow,qw)||neq(oow,dw));
+      const bDiff  = bw  && (neq(bw,hw) ||neq(bw,ww) ||neq(bw,qw) ||neq(bw,dw));
+      const kDiff  = kw  && (neq(kw,hw) ||neq(kw,ww) ||neq(kw,qw) ||neq(kw,dw));
 
       const wrap = (word, isDiff, baseCls, refWord) => {
         if (!isDiff) return word+' ';
