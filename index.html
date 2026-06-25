@@ -3032,12 +3032,18 @@ function getRiwayatVisibility(suraId, ayaNum) {
   const key = `${suraId}-${ayaNum}`;
   if (!window._riwayatVisibility[key]) {
     window._riwayatVisibility[key] = { ...RIWAYAT_VIS_DEFAULT };
+  } else {
+    // Ensure newly added riwayat keys are present in stale cached objects
+    for (const k of Object.keys(RIWAYAT_VIS_DEFAULT)) {
+      if (!(k in window._riwayatVisibility[key])) {
+        window._riwayatVisibility[key][k] = RIWAYAT_VIS_DEFAULT[k];
+      }
+    }
   }
   return window._riwayatVisibility[key];
 }
 
 function toggleRiwayat(suraId, ayaNum, key) {
-  if (key === 'shubah') return; // Shu'ba is always displayed
   const vis = getRiwayatVisibility(suraId, ayaNum);
   vis[key] = !vis[key];
   // Re-render just the riwayat panel
@@ -3126,7 +3132,7 @@ async function fetchVariantData(filter) {
     bazzi:  { hafs_bazzi_differ:   'eq.true' },
     qumbul: { hafs_qumbul_differ:  'eq.true' },
     three:  { warsh_differs: 'eq.true', qalun_differs: 'eq.true', duri_differs: 'eq.true' },
-    all_five: { warsh_differs: 'eq.true', qalun_differs: 'eq.true', duri_differs: 'eq.true', shubah_differs: 'eq.true' }
+    all_five: { warsh_differs: 'eq.true', qalun_differs: 'eq.true', duri_differs: 'eq.true', shubah_differs: 'eq.true', hafs_soosi_differ: 'eq.true', hafs_bazzi_differ: 'eq.true', hafs_qumbul_differ: 'eq.true' }
   }[filter] || {};
 
   // Supabase / PostgREST hard-caps responses at 1000 rows by default,
@@ -3586,7 +3592,7 @@ async function loadVariantBrowser(filter) {
     bazzi:  { hafs_bazzi_differ:   'eq.true' },
     qumbul: { hafs_qumbul_differ:  'eq.true' },
     three:  { warsh_differs: 'eq.true', qalun_differs: 'eq.true', duri_differs: 'eq.true' },
-    all_five: { warsh_differs: 'eq.true', qalun_differs: 'eq.true', duri_differs: 'eq.true', shubah_differs: 'eq.true' }
+    all_five: { warsh_differs: 'eq.true', qalun_differs: 'eq.true', duri_differs: 'eq.true', shubah_differs: 'eq.true', hafs_soosi_differ: 'eq.true', hafs_bazzi_differ: 'eq.true', hafs_qumbul_differ: 'eq.true' }
   }[filter] || {};
 
   try {
