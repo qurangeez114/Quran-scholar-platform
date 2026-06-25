@@ -3025,7 +3025,7 @@ function highlightDiffs(hafs, warsh, qalun, duri, shubah, suraId, ayaNum, soosi=
 // ============================================================
 
 // Default: show the 4 we have data for. Persists per-aya in memory.
-const RIWAYAT_VIS_DEFAULT = { hafs: true, warsh: true, qalun: true, duri: true, shubah: true, soosi: false, bazzi: false, qumbul: false };
+const RIWAYAT_VIS_DEFAULT = { hafs: true, warsh: true, qalun: true, duri: true, shubah: true, soosi: true, bazzi: true, qumbul: true };
 window._riwayatVisibility = window._riwayatVisibility || {};
 
 function getRiwayatVisibility(suraId, ayaNum) {
@@ -3245,14 +3245,17 @@ function renderSignificanceCards(sura, aya) {
   const stripDiac = (s) => (s||'').replace(/[\u064B-\u065F\u0670\u0640\u06D6-\u06DC\u06DF-\u06E4\u06E7\u06E8\u06EA-\u06ED]/g, '').trim();
 
   return entries.map((e) => {
-    // ── 1. Build the 5 riwayat entries ──────────────────────────────────
+    // ── 1. Build all 8 riwayat entries ──────────────────────────────────
     const RIWAYAT = [
-      { key: 'hafs',   label: 'Hafsʿan ʿĀṣim',     word: e.hafs_word,   meaning: e.hafs_meaning_en,   badgeClass: 'badge-hafs',   audio: true  },
-      { key: 'warsh',  label: 'Warsh ʿan Nāfiʿ',    word: e.warsh_word,  meaning: e.warsh_meaning_en,  badgeClass: 'badge-warsh',  audio: true  },
-      { key: 'qalun',  label: 'Qālūn ʿan Nāfiʿ',    word: e.qalun_word,  meaning: e.qalun_meaning_en,  badgeClass: 'badge-qalun',  audio: false },
-      { key: 'duri',   label: 'Al-Dūrī ʿan Abī ʿAmr', word: e.duri_word, meaning: e.duri_meaning_en,  badgeClass: 'badge-duri',   audio: true  },
-      { key: 'shubah', label: 'Shuʿbah ʿan ʿĀṣim',  word: e.shubah_word, meaning: e.shubah_meaning_en, badgeClass: 'badge-shubah', audio: false },
-    ];
+      { key: 'hafs',   label: 'Ḥafṣ ʿan ʿĀṣim',        word: e.hafs_word,   meaning: e.hafs_meaning_en,   badgeClass: 'badge-hafs',   audio: true  },
+      { key: 'warsh',  label: 'Warsh ʿan Nāfiʿ',         word: e.warsh_word,  meaning: e.warsh_meaning_en,  badgeClass: 'badge-warsh',  audio: true  },
+      { key: 'qalun',  label: 'Qālūn ʿan Nāfiʿ',         word: e.qalun_word,  meaning: e.qalun_meaning_en,  badgeClass: 'badge-qalun',  audio: false },
+      { key: 'duri',   label: 'Al-Dūrī ʿan Abī ʿAmr',    word: e.duri_word,   meaning: e.duri_meaning_en,   badgeClass: 'badge-duri',   audio: true  },
+      { key: 'shubah', label: 'Shuʿbah ʿan ʿĀṣim',       word: e.shubah_word, meaning: e.shubah_meaning_en, badgeClass: 'badge-shubah', audio: false },
+      { key: 'soosi',  label: 'Al-Sūsī ʿan Abī ʿAmr',    word: e.soosi_word,  meaning: e.soosi_meaning_en,  badgeClass: 'badge-soosi',  audio: false },
+      { key: 'bazzi',  label: 'Al-Bazzī ʿan Ibn Kathīr',  word: e.bazzi_word,  meaning: e.bazzi_meaning_en,  badgeClass: 'badge-bazzi',  audio: false },
+      { key: 'qumbul', label: 'Qunbul ʿan Ibn Kathīr',    word: e.qumbul_word, meaning: e.qumbul_meaning_en, badgeClass: 'badge-qumbul', audio: false },
+    ].filter(r => r.word); // only show riwayat that have a word for this variant
 
     // ── 2. Count unique readings (diacritic-stripped) ────────────────────
     const uniqueWords = [...new Set(RIWAYAT.map(r => stripDiac(r.word)).filter(Boolean))];
@@ -3611,10 +3614,13 @@ async function loadVariantBrowser(filter) {
       if (!byVerse.has(key)) byVerse.set(key, { sura: r.sura_id, aya: r.aya_number, count: 0, pairs: new Set() });
       const v = byVerse.get(key);
       v.count++;
-      if (r.warsh_differs) v.pairs.add('W');
-      if (r.qalun_differs) v.pairs.add('Q');
-      if (r.duri_differs) v.pairs.add('D');
-      if (r.shubah_differs) v.pairs.add('S');
+      if (r.warsh_differs)       v.pairs.add('W');
+      if (r.qalun_differs)       v.pairs.add('Q');
+      if (r.duri_differs)        v.pairs.add('D');
+      if (r.shubah_differs)      v.pairs.add('S');
+      if (r.hafs_soosi_differ)   v.pairs.add('Sū');
+      if (r.hafs_bazzi_differ)   v.pairs.add('Bz');
+      if (r.hafs_qumbul_differ)  v.pairs.add('Qb');
     }
 
     const verseList = Array.from(byVerse.values());
@@ -3622,13 +3628,16 @@ async function loadVariantBrowser(filter) {
 
     const pairBadge = (code) => {
       const map = {
-        W: { c: '#FDEBD0', fg: '#C0621A', label: 'W' },
-        Q: { c: '#D5F5E3', fg: '#1A7A48', label: 'Q' },
-        D: { c: '#E8DAEF', fg: '#6A2A9A', label: 'D' },
-        S: { c: '#F9E0DD', fg: '#A8334A', label: 'S' }
+        W:  { c: '#FDEBD0', fg: '#C0621A', label: 'W',  title: 'Warsh differs from Ḥafṣ' },
+        Q:  { c: '#D5F5E3', fg: '#1A7A48', label: 'Q',  title: 'Qālūn differs from Ḥafṣ' },
+        D:  { c: '#E8DAEF', fg: '#6A2A9A', label: 'D',  title: 'Al-Dūrī differs from Ḥafṣ' },
+        S:  { c: '#F9E0DD', fg: '#A8334A', label: 'S',  title: 'Shuʿbah differs from Ḥafṣ' },
+        'Sū': { c: '#D5F5F0', fg: '#1A7A6A', label: 'Sū', title: 'Al-Sūsī differs from Ḥafṣ' },
+        Bz: { c: '#F5D5E8', fg: '#7A1A4A', label: 'Bz', title: 'Al-Bazzī differs from Ḥafṣ' },
+        Qb: { c: '#E0D5F5', fg: '#4A1A7A', label: 'Qb', title: 'Qunbul differs from Ḥafṣ' },
       };
       const x = map[code];
-      return `<span style="display:inline-block;width:18px;height:18px;line-height:18px;text-align:center;background:${x.c};color:${x.fg};border-radius:50%;font-size:10px;font-weight:700;margin-right:2px" title="${code === 'W' ? 'Warsh' : code === 'Q' ? 'Qalun' : code === 'D' ? 'Al-Duri' : 'Shuʿbah'} differs from Hafs">${x.label}</span>`;
+      return `<span style="display:inline-block;padding:0 4px;height:18px;line-height:18px;text-align:center;background:${x.c};color:${x.fg};border-radius:9px;font-size:9px;font-weight:700;margin-right:2px" title="${x.title}">${x.label}</span>`;
     };
 
     list.innerHTML = verseList.map(v => `
