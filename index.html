@@ -2815,20 +2815,36 @@ function switchTab(num, tab, btn) {
 // ta marbuta (ة → ه) for fairness in comparison.
 // ============================================================
 
-const ARABIC_DIACRITICS_RE = /[\u064B-\u065F\u0670\u0610-\u061A\u06D6-\u06ED\u08D3-\u08FF]/g;
+// Two diacritics regexes:
+// DISPLAY: strips everything including superscript alif U+0670 (used for charDiff display)
+// COMPARE: preserves U+0670 superscript alif — it marks consonantal length differences
+//          e.g. مَٰلِكِ (Maalik/Owner) vs مَلِكِ (Malik/King) differ ONLY by U+0670
+const ARABIC_DIACRITICS_RE         = /[\u064B-\u065F\u0670\u0610-\u061A\u06D6-\u06ED\u08D3-\u08FF]/g;
+const ARABIC_DIACRITICS_COMPARE_RE = /[\u064B-\u065F\u0610-\u061A\u06D6-\u06ED\u08D3-\u08FF]/g;
 
 function stripDiacritics(word) {
+  // For DISPLAY: strips everything including superscript alif
   if (!word) return '';
   return word
     .replace(ARABIC_DIACRITICS_RE, '')   // remove all harakat/tashkeel
     .replace(/ـ/g, '')                    // tatweel
-    .replace(/[\u200C-\u200F\u202A-\u202E]/g, ''); // bidi marks
+    .replace(/[\u200C-\u200F\u202A-\u202E\u200B]/g, ''); // bidi/zero-width marks
+}
+
+function stripDiacriticsForCompare(word) {
+  // For COMPARISON: preserves U+0670 superscript alif (consonantal length marker)
+  // This ensures مَٰلِكِ (Maalik) ≠ مَلِكِ (Malik) in rasm comparison
+  if (!word) return '';
+  return word
+    .replace(ARABIC_DIACRITICS_COMPARE_RE, '') // keep U+0670
+    .replace(/ـ/g, '')
+    .replace(/[\u200C-\u200F\u202A-\u202E\u200B]/g, '');
 }
 
 function normalizeForCompare(word) {
   // Aggressive normalization for "is this the same letter?" question
   // Used only for diff detection, NOT for display.
-  let s = stripDiacritics(word);
+  let s = stripDiacriticsForCompare(word); // use compare version — preserves U+0670
   // Step 1: collapse multi-char alif-hamza sequences to bare alif.
   // ء + ا  → ا   (hamza followed by alif)
   // ا + ء  → ا   (alif followed by hamza)
