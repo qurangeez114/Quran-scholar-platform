@@ -2821,10 +2821,13 @@ function switchTab(num, tab, btn) {
 //          e.g. مَٰلِكِ (Maalik/Owner) vs مَلِكِ (Malik/King) differ ONLY by U+0670
 const ARABIC_DIACRITICS_RE         = /[\u064B-\u065F\u0670\u0610-\u061A\u06D6-\u06ED\u08D3-\u08FF]/g;
 const ARABIC_DIACRITICS_COMPARE_RE = /[\u064B-\u065F\u0610-\u061A\u06D6-\u06ED\u08D3-\u08FF]/g;
+// Non-global version for .test() calls — avoids lastIndex state corruption bug
+const ARABIC_DIACRITICS_TEST_RE    = /[\u064B-\u065F\u0670\u0610-\u061A\u06D6-\u06ED\u08D3-\u08FF]/;
 
 function stripDiacritics(word) {
   // For DISPLAY: strips everything including superscript alif
   if (!word) return '';
+  ARABIC_DIACRITICS_RE.lastIndex = 0;
   return word
     .replace(ARABIC_DIACRITICS_RE, '')   // remove all harakat/tashkeel
     .replace(/ـ/g, '')                    // tatweel
@@ -2835,6 +2838,7 @@ function stripDiacriticsForCompare(word) {
   // For COMPARISON: preserves U+0670 superscript alif (consonantal length marker)
   // This ensures مَٰلِكِ (Maalik) ≠ مَلِكِ (Malik) in rasm comparison
   if (!word) return '';
+  ARABIC_DIACRITICS_COMPARE_RE.lastIndex = 0;
   return word
     .replace(ARABIC_DIACRITICS_COMPARE_RE, '') // keep U+0670
     .replace(/ـ/g, '')
@@ -2930,7 +2934,7 @@ function charDiff(primary, reference) {
   const out = [];
   let stripIdx = 0;
   for (const ch of primary.split('')) {
-    if (ARABIC_DIACRITICS_RE.test(ch) || ch === 'ـ') {
+    if (ARABIC_DIACRITICS_TEST_RE.test(ch) || ch === 'ـ') {
       // Diacritic / tatweel — attach to the previous letter's status
       out.push({ c: ch, extra: out.length ? out[out.length - 1].extra : false });
       ARABIC_DIACRITICS_RE.lastIndex = 0; // reset state of /g regex test
