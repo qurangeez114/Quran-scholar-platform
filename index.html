@@ -7075,6 +7075,18 @@ init();
 let _hlVerseNum = null;
 let _hlSuraId = null;
 
+// Unified highlight dispatcher — called by all color picker dots
+function applyHlColor(colorClass) {
+  // If opened from verse popup (vpHighlight), use applyVpColor
+  if (window._hlFromPopup) {
+    window._hlFromPopup = false;
+    applyVpColor(colorClass);
+  } else {
+    // Opened from card's 🖊 button, use applyVerseHighlight
+    applyVerseHighlight(colorClass);
+  }
+}
+
 function showVerseHlPicker(ayaNum, suraId, btn) {
   _hlVerseNum = ayaNum;
   _hlSuraId = suraId;
@@ -7606,21 +7618,21 @@ async function runResearch() {
 <div class="hl-picker-popup" id="verseHlPicker">
   <div class="hl-picker-title">Highlight color</div>
   <div class="hl-colors" style="flex-wrap:wrap;gap:8px;max-width:260px;">
-    <div class="hl-dot" style="background:#FFE500" onclick="applyVpColor('hl-yellow')" title="Yellow"></div>
-    <div class="hl-dot" style="background:#FF85A1" onclick="applyVpColor('hl-pink')" title="Pink"></div>
-    <div class="hl-dot" style="background:#7BFF8A" onclick="applyVpColor('hl-green')" title="Green"></div>
-    <div class="hl-dot" style="background:#70CFFF" onclick="applyVpColor('hl-blue')" title="Blue"></div>
-    <div class="hl-dot" style="background:#FFB347" onclick="applyVpColor('hl-orange')" title="Orange"></div>
-    <div class="hl-dot" style="background:#C97FFF" onclick="applyVpColor('hl-purple')" title="Purple"></div>
-    <div class="hl-dot" style="background:#2EFFD9" onclick="applyVpColor('hl-teal')" title="Teal"></div>
-    <div class="hl-dot" style="background:#FF6B6B" onclick="applyVpColor('hl-red')" title="Red"></div>
-    <div class="hl-dot" style="background:#FF7F50" onclick="applyVpColor('hl-coral')" title="Coral"></div>
-    <div class="hl-dot" style="background:#CCFF00" onclick="applyVpColor('hl-lime')" title="Lime"></div>
-    <div class="hl-dot" style="background:#FFC200" onclick="applyVpColor('hl-gold')" title="Gold"></div>
-    <div class="hl-dot" style="background:#9B7FFF" onclick="applyVpColor('hl-lavender')" title="Lavender"></div>
-    <div class="hl-dot" style="background:#fff;border:2px solid #DDD;display:flex;align-items:center;justify-content:center;font-size:13px;" onclick="applyVpColor('remove')" title="Remove">✕</div>
+    <div class="hl-dot" style="background:#FFE500" onclick="applyHlColor('hl-yellow')" title="Yellow"></div>
+    <div class="hl-dot" style="background:#FF85A1" onclick="applyHlColor('hl-pink')" title="Pink"></div>
+    <div class="hl-dot" style="background:#7BFF8A" onclick="applyHlColor('hl-green')" title="Green"></div>
+    <div class="hl-dot" style="background:#70CFFF" onclick="applyHlColor('hl-blue')" title="Blue"></div>
+    <div class="hl-dot" style="background:#FFB347" onclick="applyHlColor('hl-orange')" title="Orange"></div>
+    <div class="hl-dot" style="background:#C97FFF" onclick="applyHlColor('hl-purple')" title="Purple"></div>
+    <div class="hl-dot" style="background:#2EFFD9" onclick="applyHlColor('hl-teal')" title="Teal"></div>
+    <div class="hl-dot" style="background:#FF6B6B" onclick="applyHlColor('hl-red')" title="Red"></div>
+    <div class="hl-dot" style="background:#FF7F50" onclick="applyHlColor('hl-coral')" title="Coral"></div>
+    <div class="hl-dot" style="background:#CCFF00" onclick="applyHlColor('hl-lime')" title="Lime"></div>
+    <div class="hl-dot" style="background:#FFC200" onclick="applyHlColor('hl-gold')" title="Gold"></div>
+    <div class="hl-dot" style="background:#9B7FFF" onclick="applyHlColor('hl-lavender')" title="Lavender"></div>
+    <div class="hl-dot" style="background:#fff;border:2px solid #DDD;display:flex;align-items:center;justify-content:center;font-size:13px;" onclick="applyHlColor('remove')" title="Remove">✕</div>
   </div>
-  <button class="hl-remove" onclick="applyVpColor('remove')">✕ Remove highlight</button>
+  <button class="hl-remove" onclick="applyHlColor('remove')">✕ Remove highlight</button>
 </div>
 
 
@@ -8869,12 +8881,11 @@ function vpRead() {
 
 function vpHighlight(event) {
   const selection = window.getSelection();
-  // Capture live selection if any
   if (selection && selection.toString().trim() !== '' && selection.rangeCount > 0) {
     window._vpHlRange = selection.getRangeAt(0).cloneRange();
     window._vpHlText = selection.toString().trim();
   }
-  // Show color picker regardless (no text selection required — whole verse highlights)
+  window._hlFromPopup = true; // flag so applyHlColor routes to applyVpColor
   const picker = document.getElementById('verseHlPicker');
   const btn = event.currentTarget || event.target;
   const rect = btn.getBoundingClientRect();
