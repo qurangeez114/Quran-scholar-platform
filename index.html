@@ -394,6 +394,23 @@ mark.hl-orange { background:#FFD9A0;border-radius:2px;padding:0 1px; }
 mark.hl-purple { background:#E0BAFF;border-radius:2px;padding:0 1px; }
 mark.hl-teal   { background:#AAFFF0;border-radius:2px;padding:0 1px; }
 mark.hl-red    { background:#FFAAAA;border-radius:2px;padding:0 1px; }
+mark.hl-coral  { background:#FFCBA4;border-radius:2px;padding:0 1px; }
+mark.hl-lime   { background:#DEFF9A;border-radius:2px;padding:0 1px; }
+mark.hl-gold   { background:#FFE999;border-radius:2px;padding:0 1px; }
+mark.hl-lavender { background:#D4BBFF;border-radius:2px;padding:0 1px; }
+/* Verse-card level highlight (no text selected) */
+.verse-card.vhl-yellow  { background:#FFFBE6 !important; border-left:4px solid #FFE066 !important; }
+.verse-card.vhl-pink    { background:#FFF0F2 !important; border-left:4px solid #FFB3BA !important; }
+.verse-card.vhl-green   { background:#F0FFF4 !important; border-left:4px solid #BAFFC9 !important; }
+.verse-card.vhl-blue    { background:#EFF9FF !important; border-left:4px solid #BAE8FF !important; }
+.verse-card.vhl-orange  { background:#FFF8EE !important; border-left:4px solid #FFD9A0 !important; }
+.verse-card.vhl-purple  { background:#FAF0FF !important; border-left:4px solid #E0BAFF !important; }
+.verse-card.vhl-teal    { background:#F0FFFC !important; border-left:4px solid #AAFFF0 !important; }
+.verse-card.vhl-red     { background:#FFF0F0 !important; border-left:4px solid #FFAAAA !important; }
+.verse-card.vhl-coral   { background:#FFF5EE !important; border-left:4px solid #FFCBA4 !important; }
+.verse-card.vhl-lime    { background:#F8FFEA !important; border-left:4px solid #DEFF9A !important; }
+.verse-card.vhl-gold    { background:#FFFBEA !important; border-left:4px solid #FFE999 !important; }
+.verse-card.vhl-lavender { background:#F5F0FF !important; border-left:4px solid #D4BBFF !important; }
 
 .lang-chip {
   display:inline-flex;align-items:center;gap:4px;
@@ -7079,45 +7096,44 @@ function applyVerseHighlight(cls) {
   const card = document.getElementById('vc-' + _hlVerseNum);
   if (!card) return;
 
-  const sel = window.getSelection();
-  const hasSelection = sel && !sel.isCollapsed && card.contains(sel.anchorNode);
+  const ALL_HL_CLASSES = ['vhl-yellow','vhl-pink','vhl-green','vhl-blue','vhl-orange','vhl-purple','vhl-teal','vhl-red','vhl-coral','vhl-lime','vhl-gold','vhl-lavender'];
 
   if (cls === 'remove') {
-    // Remove all highlights in this verse
-    card.querySelectorAll('mark.hl-yellow, mark.hl-pink, mark.hl-green, mark.hl-blue, mark.hl-orange, mark.hl-purple, mark.hl-teal, mark.hl-red').forEach(m => {
-      m.replaceWith(...m.childNodes);
-    });
-    // Also remove stored highlights
+    // Remove card-level highlight
+    card.classList.remove(...ALL_HL_CLASSES);
+    // Also remove any inline mark highlights
+    card.querySelectorAll('mark[class^="hl-"]').forEach(m => m.replaceWith(...m.childNodes));
+    // Remove from storage
     const stored = JSON.parse(localStorage.getItem('verse_highlights') || '{}');
     delete stored[_hlSuraId + ':' + _hlVerseNum];
     localStorage.setItem('verse_highlights', JSON.stringify(stored));
     return;
   }
 
+  // Remove any previous card highlight class
+  card.classList.remove(...ALL_HL_CLASSES);
+
+  const sel = window.getSelection();
+  const hasSelection = sel && !sel.isCollapsed && card.contains(sel.anchorNode);
+
   if (hasSelection) {
-    // Highlight selected text only
+    // Highlight selected text inline
     try {
       const range = sel.getRangeAt(0);
       const mark = document.createElement('mark');
       mark.className = cls;
-      range.surroundContents(mark);
+      try { range.surroundContents(mark); }
+      catch(e) {
+        const frag = range.extractContents();
+        mark.appendChild(frag);
+        range.insertNode(mark);
+      }
       sel.removeAllRanges();
     } catch(e) {}
   } else {
-    // Highlight all language blocks — target last div (actual text) inside each
-    const langClasses = ['lang-arabic','lang-translit','lang-english','lang-tigrinya','lang-amharic','lang-oromo','lang-somali'];
-    langClasses.forEach(lc => {
-      const langEl = card.querySelector('.' + lc);
-      if (!langEl || langEl.style.display === 'none') return;
-      // The actual text is in the last div child
-      const divs = langEl.querySelectorAll('div');
-      const textEl = divs.length ? divs[divs.length - 1] : langEl;
-      const mark = document.createElement('mark');
-      mark.className = cls;
-      mark.innerHTML = textEl.innerHTML;
-      textEl.innerHTML = '';
-      textEl.appendChild(mark);
-    });
+    // Apply background color to the whole verse card
+    const vhlClass = 'v' + cls; // e.g. hl-yellow → vhl-yellow
+    card.classList.add(vhlClass);
   }
 
   // Save to localStorage
@@ -7127,20 +7143,29 @@ function applyVerseHighlight(cls) {
 function saveVerseHighlight(suraId, ayaNum, card) {
   const stored = JSON.parse(localStorage.getItem('verse_highlights') || '{}');
   const key = suraId + ':' + ayaNum;
-  // Save the HTML of the verse body
+  const ALL_HL_CLASSES = ['vhl-yellow','vhl-pink','vhl-green','vhl-blue','vhl-orange','vhl-purple','vhl-teal','vhl-red','vhl-coral','vhl-lime','vhl-gold','vhl-lavender'];
+  const activeClass = ALL_HL_CLASSES.find(c => card.classList.contains(c)) || null;
   const body = card.querySelector('.verse-body');
-  if (body) stored[key] = body.innerHTML;
+  stored[key] = { cls: activeClass, html: body ? body.innerHTML : null };
   localStorage.setItem('verse_highlights', JSON.stringify(stored));
 }
 
 function restoreVerseHighlights() {
   const stored = JSON.parse(localStorage.getItem('verse_highlights') || '{}');
-  Object.entries(stored).forEach(([key, html]) => {
+  Object.entries(stored).forEach(([key, val]) => {
     const [sura, aya] = key.split(':');
     const card = document.getElementById('vc-' + aya);
-    if (card) {
+    if (!card) return;
+    // Support old format (plain string html) and new format ({cls, html})
+    if (typeof val === 'string') {
       const body = card.querySelector('.verse-body');
-      if (body) body.innerHTML = html;
+      if (body) body.innerHTML = val;
+    } else {
+      if (val.cls) card.classList.add(val.cls);
+      if (val.html) {
+        const body = card.querySelector('.verse-body');
+        if (body) body.innerHTML = val.html;
+      }
     }
   });
 }
@@ -7580,7 +7605,7 @@ async function runResearch() {
 <!-- VERSE HIGHLIGHT PICKER -->
 <div class="hl-picker-popup" id="verseHlPicker">
   <div class="hl-picker-title">Highlight color</div>
-  <div class="hl-colors" style="flex-wrap:wrap;gap:8px;max-width:220px;">
+  <div class="hl-colors" style="flex-wrap:wrap;gap:8px;max-width:260px;">
     <div class="hl-dot" style="background:#FFE066" onclick="applyVpColor('hl-yellow')" title="Yellow"></div>
     <div class="hl-dot" style="background:#FFB3BA" onclick="applyVpColor('hl-pink')" title="Pink"></div>
     <div class="hl-dot" style="background:#BAFFC9" onclick="applyVpColor('hl-green')" title="Green"></div>
@@ -7589,6 +7614,10 @@ async function runResearch() {
     <div class="hl-dot" style="background:#E0BAFF" onclick="applyVpColor('hl-purple')" title="Purple"></div>
     <div class="hl-dot" style="background:#AAFFF0" onclick="applyVpColor('hl-teal')" title="Teal"></div>
     <div class="hl-dot" style="background:#FFAAAA" onclick="applyVpColor('hl-red')" title="Red"></div>
+    <div class="hl-dot" style="background:#FFCBA4" onclick="applyVpColor('hl-coral')" title="Coral"></div>
+    <div class="hl-dot" style="background:#DEFF9A" onclick="applyVpColor('hl-lime')" title="Lime"></div>
+    <div class="hl-dot" style="background:#FFE999" onclick="applyVpColor('hl-gold')" title="Gold"></div>
+    <div class="hl-dot" style="background:#D4BBFF" onclick="applyVpColor('hl-lavender')" title="Lavender"></div>
     <div class="hl-dot" style="background:#fff;border:2px solid #DDD;display:flex;align-items:center;justify-content:center;font-size:13px;" onclick="applyVpColor('remove')" title="Remove">✕</div>
   </div>
   <button class="hl-remove" onclick="applyVpColor('remove')">✕ Remove highlight</button>
@@ -8840,17 +8869,12 @@ function vpRead() {
 
 function vpHighlight(event) {
   const selection = window.getSelection();
-  // Update stored selection if one is currently live
+  // Capture live selection if any
   if (selection && selection.toString().trim() !== '' && selection.rangeCount > 0) {
     window._vpHlRange = selection.getRangeAt(0).cloneRange();
     window._vpHlText = selection.toString().trim();
   }
-  // Fall back to last captured selection (mobile toolbar can clear live selection)
-  if (!window._vpHlText || window._vpHlText.trim() === '') {
-    alert('Select text in the verse first, then tap Highlight.');
-    return;
-  }
-  // Show color picker near the HIGHLIGHT button
+  // Show color picker regardless (no text selection required — whole verse highlights)
   const picker = document.getElementById('verseHlPicker');
   const btn = event.currentTarget || event.target;
   const rect = btn.getBoundingClientRect();
@@ -8946,38 +8970,57 @@ function applyVpColor(colorClass) {
   // Called when user picks a color from the picker opened via vpHighlight
   const picker = document.getElementById('verseHlPicker');
   picker.classList.remove('open');
-  if (!window._vpHlRange || !window._vpHlText) {
-    // Fallback: use main verse highlight system if in popup
-    if (colorClass !== 'remove') {
-      _hlSuraId = _vpSura;
-      _hlVerseNum = _vpAya;
-      applyVerseHighlight(colorClass);
+
+  const ALL_VHL = ['vhl-yellow','vhl-pink','vhl-green','vhl-blue','vhl-orange','vhl-purple','vhl-teal','vhl-red','vhl-coral','vhl-lime','vhl-gold','vhl-lavender'];
+
+  if (colorClass === 'remove') {
+    // Remove from verse popup context
+    if (_vpSura && _vpAya) {
+      _hlSuraId = _vpSura; _hlVerseNum = _vpAya;
+      const card = document.getElementById('vc-' + _vpAya);
+      if (card) {
+        card.classList.remove(...ALL_VHL);
+        card.querySelectorAll('mark[class^="hl-"]').forEach(m => m.replaceWith(...m.childNodes));
+        saveVerseHighlight(_vpSura, _vpAya, card);
+      }
     }
+    window._vpHlRange = null; window._vpHlText = null;
     return;
   }
-  if (colorClass === 'remove') { window._vpHlRange = null; return; }
-  // Apply visual highlight (robust against multi-element selections)
-  try {
-    const mark = document.createElement('mark');
-    mark.className = colorClass;
+
+  // If there's a captured text selection, wrap it inline
+  if (window._vpHlRange && window._vpHlText) {
     try {
-      window._vpHlRange.surroundContents(mark);
-    } catch(e1) {
-      // Range spans multiple elements — extract and wrap instead
-      const frag = window._vpHlRange.extractContents();
-      mark.appendChild(frag);
-      window._vpHlRange.insertNode(mark);
+      const mark = document.createElement('mark');
+      mark.className = colorClass;
+      try {
+        window._vpHlRange.surroundContents(mark);
+      } catch(e1) {
+        const frag = window._vpHlRange.extractContents();
+        mark.appendChild(frag);
+        window._vpHlRange.insertNode(mark);
+      }
+    } catch(e) { console.warn('Highlight visual error:', e); }
+    // Save inline highlight
+    try {
+      const key = 'vp_hl_' + _vpSura + '_' + _vpAya;
+      const existing = JSON.parse(localStorage.getItem(key) || '[]');
+      existing.push({ text: window._vpHlText, color: colorClass, ts: Date.now() });
+      localStorage.setItem(key, JSON.stringify(existing));
+    } catch(e2) { console.warn('Highlight save error:', e2); }
+    window._vpHlRange = null; window._vpHlText = null;
+  } else {
+    // No text selected — highlight the whole verse card
+    _hlSuraId = _vpSura;
+    _hlVerseNum = _vpAya;
+    const card = document.getElementById('vc-' + _vpAya);
+    if (card) {
+      card.classList.remove(...ALL_VHL);
+      card.classList.add('v' + colorClass); // e.g. hl-yellow → vhl-yellow
+      saveVerseHighlight(_vpSura, _vpAya, card);
     }
-  } catch(e) { console.warn('Highlight visual error:', e); }
-  // Always save to storage, even if visual wrap failed
-  try {
-    const key = 'vp_hl_' + _vpSura + '_' + _vpAya;
-    const existing = JSON.parse(localStorage.getItem(key) || '[]');
-    existing.push({ text: window._vpHlText, color: colorClass, ts: Date.now() });
-    localStorage.setItem(key, JSON.stringify(existing));
-  } catch(e2) { console.warn('Highlight save error:', e2); }
-  window._vpHlRange = null;
-  window._vpHlText = null;
+  }
+}
 }
 
 function vpNote() {
