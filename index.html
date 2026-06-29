@@ -2741,7 +2741,9 @@ async function toggleVerse(num, suraId, el) {
         const allThematic = await Promise.all(themes.map(t =>
           sbFetch('thematic_cross_references', {
             select: 'theme,sura,aya',
-            theme: `eq.${t}`
+            theme: `eq.${t}`,
+            limit: 50,
+            order: 'sura'
           })
         ));
         thematicRefs = allThematic.flat().filter(r => !(r.sura === suraId && r.aya === num));
@@ -2783,7 +2785,8 @@ async function toggleVerse(num, suraId, el) {
       } else {
         xrefPanel.innerHTML = `<div style="color:#BBB;font-style:italic;font-size:13px;padding:20px;text-align:center">No cross-references for this verse.</div>`;
       }
-    } catch {
+    } catch(err) {
+      console.error('Cross-ref error:', err);
       xrefPanel.innerHTML = `<div style="color:#BBB;font-style:italic;font-size:13px;padding:20px;text-align:center">Could not load cross-references.</div>`;
     }
   }
