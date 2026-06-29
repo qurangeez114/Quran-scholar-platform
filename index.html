@@ -2101,6 +2101,31 @@ async function loadFiqhPanel(num, suraId) {
   panel.innerHTML = '<div style="padding:20px;text-align:center;color:#BBB;"><span class="spinner"></span> Loading fiqh rulings...</div>';
 
   try {
+    // Load sources table once for link matching
+    const sourcesRes = await fetch(`${SUPABASE_URL}/rest/v1/sources?select=title,author,url`, { headers: HEADERS });
+    const sourcesDb = sourcesRes.ok ? await sourcesRes.json() : [];
+
+    // Helper: match a source name against sources table and return link HTML
+    function renderSourceLinks(sourceNames) {
+      if (!sourceNames || !sourceNames.length) return '';
+      return '<div style="margin-top:10px;padding-top:8px;border-top:1px solid #E8E0D0;">' +
+        '<div style="font-size:10px;font-weight:800;letter-spacing:0.8px;color:#8B6914;text-transform:uppercase;margin-bottom:6px;">📚 Sources</div>' +
+        sourceNames.map(name => {
+          const match = sourcesDb.find(s =>
+            name.toLowerCase().includes(s.author?.split(' ').pop()?.toLowerCase() || '____') ||
+            name.toLowerCase().includes(s.title?.toLowerCase().split(' ')[0] || '____') ||
+            s.title?.toLowerCase().includes(name.toLowerCase().split('(')[0].trim().toLowerCase()) ||
+            s.author?.toLowerCase().includes(name.toLowerCase().split('(')[0].trim().toLowerCase())
+          );
+          const label = `<span style="font-size:11px;color:#1A1A1A;font-style:italic;">${name}</span>`;
+          if (match?.url) {
+            return `<a href="${match.url}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:4px;margin:2px 4px 2px 0;padding:3px 8px;background:#FFF8E8;border:1px solid #D4B84A;border-radius:12px;text-decoration:none;font-size:11px;color:#7A5010;font-weight:600;">🔗 ${name.split('(')[0].trim()}</a>`;
+          }
+          return `<span style="display:inline-flex;align-items:center;gap:4px;margin:2px 4px 2px 0;padding:3px 8px;background:#F5F0E8;border:1px solid #D0C8B8;border-radius:12px;font-size:11px;color:#5A4A3A;">${name.split('(')[0].trim()}</span>`;
+        }).join('') +
+        '</div>';
+    }
+
     const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_fiqh_for_verse`, {
       method: 'POST',
       headers: { ...HEADERS, 'Content-Type': 'application/json' },
@@ -2149,7 +2174,8 @@ async function loadFiqhPanel(num, suraId) {
               </button>
               <div id="${cardId}" style="display:none;padding:10px 12px;background:#fff;border-top:1px solid ${s.border};">
                 <div style="font-size:13px;color:#1A1A1A;line-height:1.75;">${row[s.key + '_position']}</div>
-                ${s.evidence_key && row[s.evidence_key] ? `<div style="font-size:11px;color:#666;margin-top:8px;padding-top:8px;border-top:1px solid ${s.border};font-style:italic;">📎 ${row[s.evidence_key]}</div>` : ''}
+                ${row[s.key + '_evidence'] ? `<div style="font-size:12px;color:#444;margin-top:8px;padding:8px 10px;background:#F8F4EE;border-radius:6px;border-left:3px solid #C8A84C;line-height:1.65;">📎 ${row[s.key + '_evidence']}</div>` : ''}
+                ${renderSourceLinks(row[s.key + '_sources'])}
               </div>
             </div>`;
           }).join('')}
