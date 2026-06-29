@@ -26,8 +26,11 @@ function selectCat(el){
   document.getElementById('cat-dropdown').style.display='none';
   document.removeEventListener('click',closeCatDrop);
   window._catFilterVal=el.dataset.val;
-  filter();
+  // If data already loaded, filter now; otherwise load() will call filter() when ready
+  if (ALL_THEMES && ALL_THEMES.length) filter();
 }
+
+function filterThemesList(q) { filter(); }
 
 </script>
 <meta charset="UTF-8">
@@ -273,7 +276,13 @@ async function load() {
     .sort((a,b) => b.verse_count - a.verse_count);
 
   document.getElementById('count').textContent = ALL_THEMES.length + ' themes';
-  render(sortByControversy(ALL_THEMES));
+
+  // If a category filter is active, apply it; otherwise render all
+  if (window._catFilterVal) {
+    filter();
+  } else {
+    render(sortByControversy(ALL_THEMES));
+  }
 }
 
 function render(themes) {
@@ -351,23 +360,20 @@ function sortByControversy(arr) {
 
 function filter() {
   if (!ALL_THEMES || !ALL_THEMES.length) {
-    // Data still loading — retry after a moment
-    setTimeout(filter, 400);
+    // Data still loading — wait and retry once more
+    setTimeout(filter, 600);
     return;
   }
-  const q   = (document.getElementById('searchInput').value || '').toLowerCase().trim();
-  const cat = window._catFilterVal || document.getElementById('catSelect')?.value || '';
+  const q   = (document.getElementById('searchInput')?.value || '').toLowerCase().trim();
+  const cat = window._catFilterVal || '';
   let filtered = ALL_THEMES;
   if (q) filtered = filtered.filter(t => t.theme.toLowerCase().includes(q));
   if (cat) {
     const parts = cat.split('|');
-    filtered = filtered.filter(t => parts.some(p => t.theme.toLowerCase().includes(p.toLowerCase())));
+    filtered = filtered.filter(t => parts.some(p => t.theme.toLowerCase().includes(p.toLowerCase().trim())));
   }
   render(filtered);
 }
-
-// Alias for custom dropdown
-function filterThemesList(q) { filter(); }
 
 async function open_theme(encoded) {
   var themeName = decodeURIComponent(encoded);
