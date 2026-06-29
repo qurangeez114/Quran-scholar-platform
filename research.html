@@ -2304,7 +2304,7 @@ function speakCard(id) {
 }
 
 function copyCard(id, btn) {
-  const r = allResults.find(x => `${x.type}-${x.id}` === id);
+  const r = findResultById(id);
   if (!r) return;
   const text = [
     `[${r.type.toUpperCase()}] Quran ${r.sura_id}:${r.aya_number}`,
@@ -2335,8 +2335,16 @@ function copyCard(id, btn) {
   });
 }
 
+
+function findResultById(id) {
+  // id format: type-tbl-dbid OR type-dbid
+  return allResults.find(x => {
+    const xid = x._tbl ? `${x.type}-${x._tbl}-${x.id}` : `${x.type}-${x.id}`;
+    return xid === id;
+  });
+}
 function shareCard(id) {
-  const r = allResults.find(x => `${x.type}-${x.id}` === id);
+  const r = findResultById(id);
   if (!r) return;
   const text = [
     `Quran ${r.sura_id}:${r.aya_number}`,
@@ -2345,7 +2353,7 @@ function shareCard(id) {
     r.hadith_text || r.content || r.tafsir_text || r.reason_text || r.title || '',
     r.reference ? `📖 ${r.reference}` : '',
     '',
-    'https://fascinating-sunburst-516df8.netlify.app'
+    'https://quranhikma.com'
   ].filter(Boolean).join('\n');
   if (navigator.share) navigator.share({ title: `Quran ${r.sura_id}:${r.aya_number}`, text });
   else navigator.clipboard?.writeText(text).then(() => alert('Copied to clipboard.'));
@@ -3101,19 +3109,26 @@ if (typeof renderResults === 'function') {
 document.addEventListener('DOMContentLoaded', function(){
   var p = new URLSearchParams(window.location.search);
   var q = p.get('q') || '';
-  qhistRecord('Research'+(q?': "'+q+'"':''), window.location.href, '🔬', 'Research Library');
-  // Also record each search
-  var origSearch = window.doSearch;
-  if(typeof origSearch === 'function'){
-    window.doSearch = function(){
-      origSearch.apply(this, arguments);
+  qhistRecord('Research'+(q?': "'+q+'"':''), window.location.href, '\U0001f52c', 'Research Library');
+
+  function recordSearch() {
+    var inp = document.getElementById('searchInput');
+    var q2 = inp ? inp.value.trim() : '';
+    if (q2) {
       setTimeout(function(){
-        var inp = document.getElementById('searchInput');
-        var q2 = inp ? inp.value.trim() : '';
-        if(q2) qhistRecord('Search: "'+q2+'"', window.location.href, '🔬', 'Research Library');
-      }, 300);
-    };
+        qhistRecord('Search: "'+q2+'"', window.location.href, '\U0001f52c', 'Research Library');
+      }, 600);
+    }
   }
+  setTimeout(function(){
+    var inp = document.getElementById('searchInput');
+    if (inp) inp.addEventListener('keydown', function(e){ if(e.key==='Enter') recordSearch(); });
+    document.querySelectorAll('button').forEach(function(b){
+      if((b.onclick||'').toString().includes('search')||(b.getAttribute('onclick')||'').includes('search')){
+        b.addEventListener('click', recordSearch);
+      }
+    });
+  }, 500);
 });
 </script>
 
