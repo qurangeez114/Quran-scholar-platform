@@ -5107,23 +5107,67 @@ function emptyTabMessage(tab, entryType) {
   return `<div class="tradition-empty-state" style="color:#BBB;font-style:italic;font-size:13px;padding:20px;text-align:center">No ${entryType} found.</div>`;
 }
 
+// Map collection names to sunnah.com or archive.org URLs
+const HADITH_SOURCES_MAP = {
+  'sahih al-bukhari': 'https://sunnah.com/bukhari',
+  'bukhari': 'https://sunnah.com/bukhari',
+  'sahih muslim': 'https://sunnah.com/muslim',
+  'muslim': 'https://sunnah.com/muslim',
+  'sunan abu dawud': 'https://sunnah.com/abudawud',
+  'abu dawud': 'https://sunnah.com/abudawud',
+  'jami at-tirmidhi': 'https://sunnah.com/tirmidhi',
+  'jami al-tirmidhi': 'https://sunnah.com/tirmidhi',
+  'tirmidhi': 'https://sunnah.com/tirmidhi',
+  'sunan an-nasai': 'https://sunnah.com/nasai',
+  "sunan al-nasa'i": 'https://sunnah.com/nasai',
+  'nasai': 'https://sunnah.com/nasai',
+  'sunan ibn majah': 'https://sunnah.com/ibnmajah',
+  'ibn majah': 'https://sunnah.com/ibnmajah',
+  'muwatta malik': 'https://sunnah.com/malik',
+  "al-muwatta": 'https://sunnah.com/malik',
+  'malik': 'https://sunnah.com/malik',
+  'musnad ahmad': 'https://archive.org/search?query=musnad+ahmad+ibn+hanbal',
+  'ahmad': 'https://archive.org/search?query=musnad+ahmad+ibn+hanbal',
+  'riyad al-salihin': 'https://sunnah.com/riyadussalihin',
+  'bulugh al-maram': 'https://sunnah.com/bulugh',
+  'mishkat al-masabih': 'https://archive.org/search?query=mishkat+al-masabih',
+  'al-adab al-mufrad': 'https://sunnah.com/adab',
+  'shamael muhammadiyah': 'https://sunnah.com/shamail',
+  'forty hadith nawawi': 'https://sunnah.com/nawawi40',
+};
+
+function getHadithSourceUrl(collection) {
+  if (!collection) return null;
+  const key = collection.toLowerCase();
+  for (const [k, url] of Object.entries(HADITH_SOURCES_MAP)) {
+    if (key.includes(k)) return url;
+  }
+  return null;
+}
+
 function renderScholarEntries(entries, tradition, fallbackMsg) {
   // If there are no entries matching this tab, show fallback (which may already
   // be an honest empty-state message constructed by emptyTabMessage).
   if (!hasEntriesForTab(entries, tradition)) {
     return fallbackMsg;
   }
-  return entries.map((e, idx) => `
+  return entries.map((e, idx) => {
+    const sourceUrl = getHadithSourceUrl(e.scholar || '');
+    const verifyLink = sourceUrl
+      ? `<a href="${sourceUrl}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:3px;padding:2px 8px;background:#E8F4FD;border:1px solid #7FB3D3;border-radius:10px;font-size:10px;font-weight:700;color:#1A6FA8;text-decoration:none;margin-left:4px;">🔗 Verify Source</a>`
+      : e.isAI ? `<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 8px;background:#FEF9E7;border:1px solid #F0B429;border-radius:10px;font-size:10px;font-weight:700;color:#8A6A00;">⚠️ AI Synthesis — no direct link</span>` : '';
+    return `
     <div class="scholar-entry" data-tradition="${e.tradition || ''}" style="${!traditionMatchesTab(e.tradition, tradition) ? 'display:none' : ''}">
       <div class="scholar-name" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
         <span>${e.scholar || 'Unknown'}</span>
         <span class="source-badge ${e.isAI ? 'source-ai' : 'source-sourced'}">${e.isAI ? 'AI Synthesis' : 'Sourced'}</span>
+        ${verifyLink}
         <button onclick="speakScholarEntry(this)" data-text="${escapeHtml(e.text).replace(/"/g,'&quot;')}" style="padding:3px 8px;border:1px solid #D4C9A8;border-radius:12px;background:#FDF8EE;color:#B8902A;font-size:10px;font-weight:700;cursor:pointer;flex-shrink:0;">🔊</button>
       </div>
       <div class="scholar-body">${formatScholarlyText(escapeHtml(e.text)).replace(/\n/g,'<br><br>')}</div>
       ${e.meta ? `<div class="scholar-meta">${escapeHtml(e.meta)}</div>` : ''}
     </div>
-  `).join('');
+  `}).join('');
 }
 
 function buildTradToggle(sura, aya, tab, current) {
