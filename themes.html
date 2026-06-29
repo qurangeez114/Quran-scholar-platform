@@ -4,6 +4,31 @@
 <script>
 window.controversyScore=function(v){var t=[v.english,v.aya_text,v.text_english,v.hadith_text,v.topic,v.brief_description,v.content,v.reason_text,v.story_en,v.title_en,v.summary,v.name_english,v.theme].filter(Boolean).join(' ').toLowerCase();var s=0;['kill','slay','smite','amputat','crucif','stone','whip','lash','apostat','slave','captive','concubin','beat.*wife','wife.*beat','fight.*until','jihad','warfare','adulter','zina','thief.*hand','homosexual','liwat','blasphemy','jizya','dhimmi','women.*half','inherit.*half','polygam','nushuz','sex slave','cut hand'].forEach(function(k){try{if(new RegExp(k).test(t))s+=12;}catch(e){}});['divorce','talaq','inheritance','veil','hijab','niqab','disbeliev','infidel','kafir','hellfire','punishment','torment','war','battle','riba','usury','intoxicant','alcohol','honor kill','martyr'].forEach(function(k){if(t.indexOf(k)!==-1)s+=5;});['alhamdulillah','merciful','compassionate','forgiving','be patient'].forEach(function(k){if(t.indexOf(k)!==-1)s-=2;});if(v.controversy_level)s+=(parseInt(v.controversy_level)-1)*4;if(v.human_rights_score!=null)s+=Math.max(0,(5-parseFloat(v.human_rights_score))*2);return s;};
 window.sortByControversy=function(arr){if(!Array.isArray(arr))return arr;return arr.slice().sort(function(a,b){var sa=window.controversyScore(a),sb=window.controversyScore(b);return sb!==sa?sb-sa:((a.sura_id||a.year_ce||0)-(b.sura_id||b.year_ce||0))||((a.aya_number||0)-(b.aya_number||0));});};
+
+function toggleCatDrop(){
+  const d=document.getElementById('cat-dropdown');
+  d.style.display=d.style.display==='none'?'block':'none';
+  if(d.style.display==='block'){
+    setTimeout(()=>document.addEventListener('click',closeCatDrop),50);
+  }
+}
+function closeCatDrop(e){
+  const w=document.getElementById('cat-filter-wrap');
+  if(w&&!w.contains(e.target)){
+    document.getElementById('cat-dropdown').style.display='none';
+    document.removeEventListener('click',closeCatDrop);
+  }
+}
+function selectCat(el){
+  document.querySelectorAll('.cat-item').forEach(i=>i.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('cat-filter-label').textContent=el.textContent.trim();
+  document.getElementById('cat-dropdown').style.display='none';
+  document.removeEventListener('click',closeCatDrop);
+  window._catFilterVal=el.dataset.val;
+  filter();
+}
+
 </script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
@@ -78,7 +103,14 @@ body { padding-bottom: 60px !important; }
 #openResearchWorkspaceBtn { bottom: 130px !important; right: 14px !important; }
 #presentationFloatBtn { bottom: 72px !important; right: 14px !important; }
 
-</style>
+
+  .cat-group-lbl{padding:5px 12px 3px;font-size:10px;font-weight:800;color:#B8902A;letter-spacing:0.5px;background:#FDF0D0;border-top:1px solid #E8DDC0;margin-top:2px;}
+  .cat-item{padding:10px 14px;font-size:13px;color:#3A2A1A;cursor:pointer;border-bottom:1px solid #F0EDE6;}
+  .cat-item:active,.cat-item:hover{background:#FFF3D0;}
+  .cat-item.active{background:#FFF3D0;color:#B8902A;font-weight:700;}
+  .cat-item-all{font-weight:700;}
+
+  </style>
 </head>
 <body>
 
@@ -91,18 +123,85 @@ body { padding-bottom: 60px !important; }
 
 <div class="controls">
   <input class="search-input" id="searchInput" placeholder="🔍 Search themes..." oninput="filter()">
-  <select class="cat-select" id="catSelect" onchange="filter()">
-    <option value="">All Categories</option>
-    <option value="Women">👩 Women & Gender</option>
-    <option value="Fight|War|Jihad|Warfare|Disbeliever|Allian">⚔️ Warfare & Jihad</option>
-    <option value="Moses|Abraham|Noah|Jesus|Joseph|Solomon|Prophet|Pharaoh|Khidr|Luqman">🕌 Prophets & Stories</option>
-    <option value="Judgment|Hell|Paradise|Resurrect|Afterlife|Barzakh">⚖️ Afterlife</option>
-    <option value="Monotheism|Tawhid|Divine|Shirk|Sonship">☝️ Theology</option>
-    <option value="Prayer|Worship|Fasting|Hajj|Charity|Zakat">🤲 Worship</option>
-    <option value="Quran|Scripture|Torah|Gospel|People of the Book|Covenant">📖 Scripture</option>
-    <option value="Hypocrites|Apostasy|Opposition|Nifaq">⚠️ Social & Political</option>
-    <option value="Creation|Signs|Nature|Gratitude">🌿 Creation & Signs</option>
-  </select>
+  <div id="cat-filter-wrap" style="position:relative;">
+    <button id="cat-filter-btn" onclick="toggleCatDrop()" style="width:100%;padding:8px 12px;border:1.5px solid #D4C9A8;border-radius:10px;font-size:13px;background:#fff;color:#5A3A10;font-weight:600;text-align:left;cursor:pointer;display:flex;justify-content:space-between;align-items:center;">
+      <span id="cat-filter-label">📚 All Categories</span><span>▾</span>
+    </button>
+    <div id="cat-dropdown" style="display:none;position:absolute;top:40px;left:0;right:0;background:#FDF8EE;border:1.5px solid #D4C9A8;border-radius:10px;z-index:9999;max-height:60vh;overflow-y:auto;box-shadow:0 4px 20px rgba(0,0,0,0.15);">
+      <div class="cat-item cat-item-all active" data-val="" onclick="selectCat(this)">📚 All Categories</div>
+      <div class="cat-group-lbl">── THEOLOGY & FAITH ──</div>
+      <div class="cat-item" data-val="Monotheism|Tawhid" onclick="selectCat(this)">☝️ Monotheism & Tawhid</div>
+      <div class="cat-item" data-val="Divine Attr|Names of Allah|Sovereignty|Omniscience" onclick="selectCat(this)">🌟 Divine Attributes</div>
+      <div class="cat-item" data-val="Shirk|Polytheist|Idolater|Sonship" onclick="selectCat(this)">🚫 Shirk & Polytheism</div>
+      <div class="cat-item" data-val="Predestination|Guidance|Straight Path" onclick="selectCat(this)">🔮 Predestination & Guidance</div>
+      <div class="cat-item" data-val="Satan|Iblis" onclick="selectCat(this)">👿 Satan & Iblis</div>
+      <div class="cat-item" data-val="Angels|Spiritual Being" onclick="selectCat(this)">👼 Angels & Spiritual Beings</div>
+      <div class="cat-item" data-val="Intercession" onclick="selectCat(this)">🤝 Intercession</div>
+      <div class="cat-item" data-val="Abrogation|Muhkam|Mutashabih|Unseen" onclick="selectCat(this)">📐 Muhkam, Mutashabih & Abrogation</div>
+      <div class="cat-group-lbl">── QURAN & REVELATION ──</div>
+      <div class="cat-item" data-val="Quran as Guidance|Miracle|Quran Self" onclick="selectCat(this)">📖 Quran as Guidance & Miracle</div>
+      <div class="cat-item" data-val="Prophethood|Revelation|Muhammads Authority|Muhammad Foretold" onclick="selectCat(this)">🕊️ Prophethood & Revelation</div>
+      <div class="cat-item" data-val="People of the Book|Confirmation|Alteration|Concealment" onclick="selectCat(this)">📜 People of the Book</div>
+      <div class="cat-item" data-val="Torah|Gospel|No Change|Scripture" onclick="selectCat(this)">✡️ Torah, Gospel & Scripture</div>
+      <div class="cat-group-lbl">── PROPHETS & STORIES ──</div>
+      <div class="cat-item" data-val="Moses|Exodus|Pharaoh|Aaron" onclick="selectCat(this)">🪄 Moses, Pharaoh & Exodus</div>
+      <div class="cat-item" data-val="Abraham|Isaac|Ishmael|Sacrifice" onclick="selectCat(this)">🕌 Abraham & Family</div>
+      <div class="cat-item" data-val="Noah|Flood" onclick="selectCat(this)">🚢 Noah & the Flood</div>
+      <div class="cat-item" data-val="Jesus|Mary|Messiah" onclick="selectCat(this)">✝️ Jesus & Mary</div>
+      <div class="cat-item" data-val="Joseph Story" onclick="selectCat(this)">🌾 Joseph</div>
+      <div class="cat-item" data-val="Solomon|David|Goliath" onclick="selectCat(this)">👑 Solomon & David</div>
+      <div class="cat-item" data-val="Hud|Ad |Salih|Thamud|Shuayb|Midian|Lot|Destroyed" onclick="selectCat(this)">⚡ Destroyed Nations</div>
+      <div class="cat-item" data-val="Khidr|Cave|Dhul|Zachariah|John|Job|Luqman" onclick="selectCat(this)">🧭 Other Prophets</div>
+      <div class="cat-item" data-val="Stories of the Prophets|Miracles|Signs of Prophets" onclick="selectCat(this)">📚 Stories of the Prophets</div>
+      <div class="cat-group-lbl">── AFTERLIFE ──</div>
+      <div class="cat-item" data-val="Day of Judgment|Resurrection|Accountability on the Day" onclick="selectCat(this)">⚖️ Day of Judgment</div>
+      <div class="cat-item" data-val="Hell|Hellfire|Punishment of Disbelievers" onclick="selectCat(this)">🔥 Hell & Hellfire</div>
+      <div class="cat-item" data-val="Paradise|Paradise Rewards" onclick="selectCat(this)">🌿 Paradise & Rewards</div>
+      <div class="cat-item" data-val="Barzakh|Afterlife States|Eschatol|Hour|Signs of the Last Day" onclick="selectCat(this)">🌙 Barzakh & End Times</div>
+      <div class="cat-item" data-val="Scale of Deeds|Martyrdom|Shahada" onclick="selectCat(this)">⚖️ Scale, Martyrdom & Deeds</div>
+      <div class="cat-group-lbl">── WORSHIP & PRACTICE ──</div>
+      <div class="cat-item" data-val="Prayer|Ritual Purity|Prayer Conditions" onclick="selectCat(this)">🙏 Prayer & Purity</div>
+      <div class="cat-item" data-val="Fasting|Ramadan" onclick="selectCat(this)">🌙 Fasting & Ramadan</div>
+      <div class="cat-item" data-val="Hajj|Sacred Rites" onclick="selectCat(this)">🕋 Hajj & Sacred Rites</div>
+      <div class="cat-item" data-val="Charity|Spending|Zakat" onclick="selectCat(this)">💰 Charity & Zakat</div>
+      <div class="cat-item" data-val="Tawbah|Repentance|Forgiveness|Mercy" onclick="selectCat(this)">💚 Tawbah & Forgiveness</div>
+      <div class="cat-group-lbl">── WARFARE & JIHAD ──</div>
+      <div class="cat-item" data-val="Fighting War Jihad|Warfare Commands|Alliances" onclick="selectCat(this)">⚔️ Warfare Commands</div>
+      <div class="cat-item" data-val="Fighting Disbelievers" onclick="selectCat(this)">🛡️ Fighting Disbelievers</div>
+      <div class="cat-item" data-val="Jihad of the Heart|Self-Purification" onclick="selectCat(this)">❤️ Jihad of the Heart</div>
+      <div class="cat-item" data-val="Religious Freedom vs Fighting|Self-Defense" onclick="selectCat(this)">🕊️ Religious Freedom & Defense</div>
+      <div class="cat-item" data-val="Do Not Take Disbelievers as Allies" onclick="selectCat(this)">🚫 No Alliances with Disbelievers</div>
+      <div class="cat-group-lbl">── SOCIAL & POLITICAL ──</div>
+      <div class="cat-item" data-val="Hypocrites|Nifaq" onclick="selectCat(this)">🎭 Hypocrites & Nifaq</div>
+      <div class="cat-item" data-val="Opposition to Muhammad|Forgiveness and Patience" onclick="selectCat(this)">⚠️ Opposition to the Prophet</div>
+      <div class="cat-item" data-val="Apostasy|Leaving the Faith|Ridda" onclick="selectCat(this)">↩️ Apostasy</div>
+      <div class="cat-item" data-val="Brotherhood|Unity|Community|Leadership|Governance|Persecution" onclick="selectCat(this)">🏛️ Community & Leadership</div>
+      <div class="cat-item" data-val="Migration|Hijra|Exile|Peace|Coexistence|Relations with Non" onclick="selectCat(this)">🌍 Migration & Coexistence</div>
+      <div class="cat-item" data-val="Obedience to Allah|Obedience to the Messenger" onclick="selectCat(this)">✅ Obedience to Allah & Messenger</div>
+      <div class="cat-item" data-val="Punishment for Opposing|Punishment of Disbelievers in This Life" onclick="selectCat(this)">⚡ Divine Punishment & Warning</div>
+      <div class="cat-group-lbl">── WOMEN & FAMILY LAW ──</div>
+      <div class="cat-item" data-val="Women and Marriage|Women: Marriage|Polygam|Divorce|Guardianship|Domestic|Nushuz" onclick="selectCat(this)">👩 Marriage & Divorce</div>
+      <div class="cat-item" data-val="Women: Inheritance|Women: Testimony|Women: Moral|Women: Spiritual" onclick="selectCat(this)">⚖️ Women: Rights & Equality</div>
+      <div class="cat-item" data-val="Women: Veiling|Modesty" onclick="selectCat(this)">🧕 Veiling & Modesty</div>
+      <div class="cat-item" data-val="Women: Captive|Female Captive|Right Hand" onclick="selectCat(this)">🔒 Captive Women & Slavery</div>
+      <div class="cat-item" data-val="Women W011|Women W012|Women W013|Women W017|Women W018|Women W019|Women W020" onclick="selectCat(this)">📋 Women: Misc Issues</div>
+      <div class="cat-group-lbl">── LAW & ETHICS ──</div>
+      <div class="cat-item" data-val="Family Law|Inheritance|Orphan|Testimony|Witness|Legal Retribution" onclick="selectCat(this)">📋 Family, Inheritance & Justice</div>
+      <div class="cat-item" data-val="Slavery|Captive|Economic Justice|Fair Trade|Usury|Riba" onclick="selectCat(this)">💼 Economic & Social Justice</div>
+      <div class="cat-item" data-val="Food Laws|Halal|Intoxicant|Gambling|Prohibition" onclick="selectCat(this)">🍽️ Food Laws & Prohibitions</div>
+      <div class="cat-item" data-val="Privacy|Household|Ritual Purity" onclick="selectCat(this)">🏠 Privacy & Household</div>
+      <div class="cat-group-lbl">── CHARACTER & SPIRITUALITY ──</div>
+      <div class="cat-item" data-val="Patience|Trial|Characteristics of the Righteous|Moral|Virtue|Humility|Piety|Righteousness" onclick="selectCat(this)">💎 Character & Virtue</div>
+      <div class="cat-item" data-val="Gratitude|Ingratitude|Thanklessness" onclick="selectCat(this)">🙏 Gratitude & Ingratitude</div>
+      <div class="cat-item" data-val="Fear of Allah|Taqwa" onclick="selectCat(this)">😇 Fear of Allah</div>
+      <div class="cat-item" data-val="Companions|Virtues|The Companions" onclick="selectCat(this)">🌟 The Companions</div>
+      <div class="cat-item" data-val="Spirit|Ruh|Soul|Spiritual" onclick="selectCat(this)">✨ Spirit & Soul</div>
+      <div class="cat-group-lbl">── CREATION & SIGNS ──</div>
+      <div class="cat-item" data-val="Signs of Allah in Nature|Creation of Humanity|Generational Succession" onclick="selectCat(this)">🌍 Signs in Creation</div>
+      <div class="cat-item" data-val="Transience of Worldly|Worldly Life vs Hereafter|Parable|False Security" onclick="selectCat(this)">⏳ Transience of Worldly Life</div>
+      <div class="cat-item" data-val="Covenant|Promise|Religion of Truth|Prevailing" onclick="selectCat(this)">📿 Covenant & Divine Promise</div>
+    </div>
+  </div>
 </div>
 
 <div id="list"><div class="loading"><span class="spinner"></span>Loading themes...</div></div>
