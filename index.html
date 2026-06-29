@@ -1957,12 +1957,54 @@ async function loadCrossReferences(sura, aya) {
   panel.innerHTML = '<div style="padding:20px;font-size:13px;color:#AAA;"><span class="spinner"></span> Loading cross-references...</div>';
 
   try {
-    const rows = await sbFetch('thematic_cross_references_v2', {
+    let rows = await sbFetch('thematic_cross_references_v2', {
       select: 'theme,related_sura,related_aya,reason,category',
       sura:   'eq.' + sura,
       aya:    'eq.' + aya,
       order:  'theme'
     });
+
+    // Fall back to old table if v2 has no data for this verse
+    if (!rows.length) {
+      const oldThemeRows = await sbFetch('thematic_cross_references', {
+        select: 'theme,sura,aya',
+        sura: 'eq.' + sura,
+        aya:  'eq.' + aya
+      });
+      const themes = [...new Set(oldThemeRows.map(r => r.theme))];
+      if (themes.length) {
+        const allThematic = await Promise.all(themes.map(t =>
+          sbFetch('thematic_cross_references', {
+            select: 'theme,sura,aya',
+            theme: 'eq.' + t,
+            limit: 50,
+            order: 'sura'
+          })
+        ));
+        const related = allThematic.flat().filter(r => !(r.sura === sura && r.aya === aya));
+        // Convert old format to v2 format
+        rows = related.map(r => ({
+          theme: r.theme,
+          related_sura: r.sura,
+          related_aya: r.aya,
+          reason: 'Thematic cross-reference',
+          category: r.theme
+        }));
+        // Also add direct cross-references
+        const direct = await sbFetch('cross_references', {
+          select: 'ref_surah,ref_ayah_start,ref_ayah_end',
+          source_surah: 'eq.' + sura,
+          source_ayah:  'eq.' + aya
+        });
+        direct.forEach(r => rows.unshift({
+          theme: 'Direct Cross-Reference',
+          related_sura: r.ref_surah,
+          related_aya: r.ref_ayah_start,
+          reason: 'Direct reference',
+          category: 'Direct Cross-Reference'
+        }));
+      }
+    }
 
     if (!rows.length) {
       if (tab) tab.textContent = 'Cross-Refs (0)';
