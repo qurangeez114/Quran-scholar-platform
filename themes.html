@@ -82,11 +82,11 @@ body { padding-bottom: 60px !important; }
 </head>
 <body>
 
-<div class="top-bar">
+<div class="top-bar" style="display:flex;align-items:center;gap:10px;">
   <a href="index.html" class="back-btn">← Back</a>
-  <button onclick="openDonateModal()" title="Donate or Subscribe" style="flex-shrink:0;padding:7px 14px;border:2px solid #B8902A;border-radius:20px;background:#B8902A;color:#fff;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:5px;">❤️ Donate</button>
-  <div class="top-title">📚 All Themes</div>
+  <div class="top-title" style="flex:1;">📚 All Themes</div>
   <div class="top-count" id="count">Loading...</div>
+  <button onclick="openDonateModal()" title="Donate or Subscribe" style="flex-shrink:0;padding:7px 14px;border:2px solid #B8902A;border-radius:20px;background:#B8902A;color:#fff;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:5px;">❤️ Donate</button>
 </div>
 
 <div class="controls">
@@ -232,13 +232,24 @@ function sortByControversy(arr) {
 // ── END CONTROVERSY RANKING ──
 
 function filter() {
-  const q   = document.getElementById('searchInput').value.toLowerCase();
-  const cat = document.getElementById('catSelect').value;
+  if (!ALL_THEMES || !ALL_THEMES.length) {
+    // Data still loading — retry after a moment
+    setTimeout(filter, 400);
+    return;
+  }
+  const q   = (document.getElementById('searchInput').value || '').toLowerCase().trim();
+  const cat = window._catFilterVal || document.getElementById('catSelect')?.value || '';
   let filtered = ALL_THEMES;
   if (q) filtered = filtered.filter(t => t.theme.toLowerCase().includes(q));
-  if (cat) filtered = filtered.filter(t => new RegExp(cat,'i').test(t.theme));
+  if (cat) {
+    const parts = cat.split('|');
+    filtered = filtered.filter(t => parts.some(p => t.theme.toLowerCase().includes(p.toLowerCase())));
+  }
   render(filtered);
 }
+
+// Alias for custom dropdown
+function filterThemesList(q) { filter(); }
 
 async function open_theme(encoded) {
   var themeName = decodeURIComponent(encoded);
