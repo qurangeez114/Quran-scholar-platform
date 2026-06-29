@@ -389,7 +389,56 @@ async function open_theme(encoded) {
   modal.onclick = function(e) { if (e.target === modal) modal.remove(); };
   document.body.appendChild(modal);
 
-  // Load relevant fiqh topics
+  // For prophet/story themes — show verses by chapter and link to full analysis
+  var prophetKeywords = ['adam','noah','ibrahim','abraham','moses','musa','jesus','isa','joseph','yusuf',
+    'solomon','sulayman','david','dawud','lot','lut','hud','salih','shuayb','jonah','yunus',
+    'zachariah','john','mary','maryam','ishmael','ismail','isaac','ishaq','job','ayyub',
+    'idris','enoch','khidr','luqman','dhul','garden of eden','flood','exodus','pharaoh'];
+  var isProphetTheme = prophetKeywords.some(function(k){ return themeName.toLowerCase().indexOf(k) !== -1; });
+
+  if (isProphetTheme) {
+    // Fetch the actual verses for this theme
+    var list = document.getElementById('theme-fiqh-list');
+    if (list) list.innerHTML = '<div style="text-align:center;padding:12px;color:#888;font-style:italic;">Loading verses...</div>';
+    try {
+      var vRows = await fetch(SB_URL+'/rest/v1/thematic_cross_references?select=sura,aya&theme=eq.'+encodeURIComponent(themeName)+'&order=sura,aya', {headers:{apikey:SB_KEY,'Authorization':'Bearer '+SB_KEY}});
+      var verses = vRows.ok ? await vRows.json() : [];
+      // Get unique sura:aya pairs
+      var seen = {}; var pairs = [];
+      verses.forEach(function(v){ var k=v.sura+':'+v.aya; if(!seen[k]){seen[k]=1;pairs.push(v);} });
+      pairs.sort(function(a,b){ return a.sura-b.sura||a.aya-b.aya; });
+      if (list) {
+        if (!pairs.length) {
+          list.innerHTML = '<div style="color:#888;font-style:italic;font-size:13px;text-align:center;">No verses found for this theme.</div>';
+        } else {
+          // Group by sura
+          var bySura = {}; pairs.forEach(function(v){ if(!bySura[v.sura]) bySura[v.sura]=[]; bySura[v.sura].push(v.aya); });
+          var suraNames = {1:'Al-Fatiha',2:'Al-Baqara',3:'Al-Imran',4:'An-Nisa',5:'Al-Maida',6:'Al-Anam',7:'Al-Araf',
+            8:'Al-Anfal',9:'At-Tawba',10:'Yunus',11:'Hud',12:'Yusuf',13:'Ar-Rad',14:'Ibrahim',15:'Al-Hijr',
+            17:'Al-Isra',18:'Al-Kahf',19:'Maryam',20:'Ta-Ha',21:'Al-Anbiya',23:'Al-Muminun',26:'Ash-Shuara',
+            27:'An-Naml',28:'Al-Qasas',29:'Al-Ankabut',32:'As-Sajda',36:'Ya-Sin',37:'As-Saffat',
+            38:'Sad',39:'Az-Zumar',40:'Ghafir',51:'Adh-Dhariyat',54:'Al-Qamar',66:'At-Tahrim',
+            71:'Nuh',79:'An-Naziat'};
+          var html = '<div style="font-size:11px;color:#888;margin-bottom:10px;font-family:Inconsolata,monospace;">'+pairs.length+' verses across '+Object.keys(bySura).length+' suras</div>';
+          Object.keys(bySura).sort(function(a,b){return a-b;}).forEach(function(sura){
+            var name = suraNames[sura] || 'Sura '+sura;
+            var ayas = bySura[sura];
+            html += '<div onclick="window.location.href='index.html?sura='+sura+''" style="margin-bottom:8px;padding:10px 13px;background:#fff;border:1px solid #E0D4B0;border-left:4px solid #B8902A;border-radius:6px;cursor:pointer;">';
+            html += '<div style="font-weight:700;color:#1A1610;font-size:14px;">Sura '+sura+' — '+name+'</div>';
+            html += '<div style="font-family:Inconsolata,monospace;font-size:11px;color:#B8902A;margin-top:3px;">Ayas: '+ayas.join(', ')+'</div>';
+            html += '</div>';
+          });
+          list.innerHTML = html;
+        }
+      }
+    } catch(e) {
+      var list2 = document.getElementById('theme-fiqh-list');
+      if(list2) list2.innerHTML = '<div style="color:#c00;font-size:13px;">Error loading verses.</div>';
+    }
+    return;
+  }
+
+  // For non-prophet themes — load relevant fiqh topics
   try {
     var txt = themeName.toLowerCase();
     var kwMap = {
@@ -410,7 +459,7 @@ async function open_theme(encoded) {
     for (var i = 0; i < kws.length; i++) {
       if (txt.indexOf(kws[i]) !== -1) { category = kwMap[kws[i]]; break; }
     }
-    if (!category) category = 'Prayer and Worship';
+    if (!category) category = null;
     var enc = encodeURIComponent(category);
     var r = await fetch(SB_URL+'/rest/v1/madhhab_topics?select=id,topic,category,controversy_level&category=ilike.*'+enc+'*&order=controversy_level.desc.nullslast&limit=5', {headers:{apikey:SB_KEY,'Authorization':'Bearer '+SB_KEY}});
     var topics = r.ok ? await r.json() : [];
