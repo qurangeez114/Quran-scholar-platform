@@ -250,30 +250,12 @@ function getCat(t) { for (const c of CATS) { if (c.pat.test(t)) return c; } retu
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
 async function load() {
-  // Fetch all rows in pages of 1000
-  let all = [], offset = 0;
-  while (true) {
-    const r = await fetch(`${SB_URL}/rest/v1/thematic_cross_references?select=theme,sura&limit=1000&offset=${offset}&order=theme`, { headers: HDR });
-    if (!r.ok) break;
-    const page = await r.json();
-    if (!Array.isArray(page) || !page.length) break;
-    all = all.concat(page);
-    if (page.length < 1000) break;
-    offset += 1000;
-  }
+  // Single fast query to materialized view (443 rows instead of 10,000+)
+  const r = await fetch(`${SB_URL}/rest/v1/theme_summary?select=theme,verse_count,sura_count&order=verse_count.desc&limit=500`, { headers: HDR });
+  if (!r.ok) { document.getElementById('count').textContent = 'Error loading'; return; }
+  const rows = await r.json();
 
-  // Aggregate
-  const themeV = {}, themeS = {};
-  all.forEach(row => {
-    if (!row || !row.theme) return;
-    themeV[row.theme] = (themeV[row.theme] || 0) + 1;
-    if (!themeS[row.theme]) themeS[row.theme] = new Set();
-    themeS[row.theme].add(row.sura);
-  });
-
-  ALL_THEMES = Object.keys(themeV)
-    .map(t => ({ theme: t, verse_count: themeV[t], sura_count: themeS[t].size }))
-    .sort((a,b) => b.verse_count - a.verse_count);
+  ALL_THEMES = rows.filter(row => row && row.theme);
 
   document.getElementById('count').textContent = ALL_THEMES.length + ' themes';
 
