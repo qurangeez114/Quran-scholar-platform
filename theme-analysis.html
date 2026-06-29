@@ -184,10 +184,55 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 <!-- TABS -->
 <div class="tabs">
   <button class="tab-btn active" onclick="switchTab('verses',this)">📖 All Verses</button>
-  <button class="tab-btn" onclick="switchTab('contradiction',this)">⚡ Contradiction Analysis</button>
+  <button class="tab-btn" onclick="switchTab('biblical',this)">📜 Biblical Comparison</button>
+  <button class="tab-btn" onclick="switchTab('linguistic',this)">🔤 Linguistic Analysis</button>
+  <button class="tab-btn" onclick="switchTab('contradiction',this)">⚡ Contradictions</button>
   <button class="tab-btn" onclick="switchTab('hadith',this)">📜 Hadith</button>
-  <button class="tab-btn" onclick="switchTab('fiqh',this)">⚖️ Fiqh Rulings</button>
+  <button class="tab-btn" onclick="switchTab('fiqh',this)">⚖️ Fiqh</button>
   <button class="tab-btn" onclick="switchTab('ai',this)">🤖 AI Analysis</button>
+</div>
+
+<!-- TAB: BIBLICAL COMPARISON -->
+<div id="tab-biblical" class="tab-content">
+  <div style="padding:10px 0 14px;font-size:12px;color:#7A8FA6;">
+    How this Quranic narrative compares to Biblical, Jewish (Talmudic), and other ancient sources — similarities, differences, and what scholars say.
+  </div>
+  <div class="ai-box">
+    <div class="ai-box-title">📜 Biblical & Source Comparison</div>
+    <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px;">
+      <button class="ai-btn" onclick="runThemeAI('biblical_compare')" style="background:#FDF5DE;border-color:#B8902A;color:#5A3A10;">📖 Quran vs Bible — Side by Side</button>
+      <button class="ai-btn" onclick="runThemeAI('jewish_sources')" style="background:#F0F8FF;border-color:#1A5276;color:#1A5276;">✡️ Jewish Sources (Torah, Talmud, Midrash)</button>
+      <button class="ai-btn" onclick="runThemeAI('christian_sources')" style="background:#F0FFF4;border-color:#2E7D32;color:#2E7D32;">✝️ Christian Tradition & Interpretation</button>
+      <button class="ai-btn" onclick="runThemeAI('pre_islamic')" style="background:#FFF4E0;border-color:#8B5E1A;color:#8B5E1A;">🏛️ Pre-Islamic Arabian Context</button>
+      <button class="ai-btn" onclick="runThemeAI('source_critical')" style="background:#FFF0F0;border-color:#C0392B;color:#C0392B;">🔬 Source-Critical Analysis (Isrāʾīliyyāt)</button>
+      <button class="ai-btn" onclick="runThemeAI('unique_quran')" style="background:#F5F0FF;border-color:#5A3A8B;color:#5A3A8B;">✨ What is Unique to the Quran?</button>
+    </div>
+    <div id="ai-biblical-result" style="display:none;">
+      <div id="ai-biblical-label" style="font-size:11px;font-weight:800;color:#B8902A;text-transform:uppercase;margin-bottom:8px;"></div>
+      <div id="ai-biblical-text" style="font-size:14px;line-height:1.8;color:#1A1A1A;white-space:pre-wrap;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- TAB: LINGUISTIC ANALYSIS -->
+<div id="tab-linguistic" class="tab-content">
+  <div style="padding:10px 0 14px;font-size:12px;color:#7A8FA6;">
+    Arabic grammatical analysis, word roots, rhetorical devices, and how the language shapes meaning.
+  </div>
+  <div class="ai-box">
+    <div class="ai-box-title">🔤 Linguistic & Grammatical Analysis</div>
+    <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px;">
+      <button class="ai-btn" onclick="runThemeAI('grammar')" style="background:#FDF5DE;border-color:#B8902A;color:#5A3A10;">📝 Grammar & Syntax Analysis</button>
+      <button class="ai-btn" onclick="runThemeAI('word_roots')" style="background:#F0F8FF;border-color:#1A5276;color:#1A5276;">🌱 Key Word Roots (Morphology)</button>
+      <button class="ai-btn" onclick="runThemeAI('rhetoric')" style="background:#F0FFF4;border-color:#2E7D32;color:#2E7D32;">🎭 Rhetorical Devices (Balaghah)</button>
+      <button class="ai-btn" onclick="runThemeAI('variant_readings')" style="background:#FFF4E0;border-color:#8B5E1A;color:#8B5E1A;">📖 Qiraat Variants & Impact on Meaning</button>
+      <button class="ai-btn" onclick="runThemeAI('depiction')" style="background:#F5F0FF;border-color:#5A3A8B;color:#5A3A8B;">🎨 How the Story is Depicted vs Other Versions</button>
+    </div>
+    <div id="ai-linguistic-result" style="display:none;">
+      <div id="ai-linguistic-label" style="font-size:11px;font-weight:800;color:#B8902A;text-transform:uppercase;margin-bottom:8px;"></div>
+      <div id="ai-linguistic-text" style="font-size:14px;line-height:1.8;color:#1A1A1A;white-space:pre-wrap;"></div>
+    </div>
+  </div>
 </div>
 
 <!-- TAB: ALL VERSES -->
@@ -650,9 +695,17 @@ function renderContradictions() {
 
 // ── AI ANALYSIS ──────────────────────────────────────────────────────
 async function runThemeAI(mode) {
-  const label = document.getElementById('ai-theme-label');
-  const body  = document.getElementById('ai-theme-body');
-  const box   = document.getElementById('ai-theme-result');
+  // Determine which container to use
+  const isBiblical = ['biblical_compare','jewish_sources','christian_sources','pre_islamic','source_critical','unique_quran'].includes(mode);
+  const isLinguistic = ['grammar','word_roots','rhetoric','variant_readings','depiction'].includes(mode);
+
+  const labelId = isBiblical ? 'ai-biblical-label' : isLinguistic ? 'ai-linguistic-label' : 'ai-theme-label';
+  const bodyId  = isBiblical ? 'ai-biblical-text'  : isLinguistic ? 'ai-linguistic-text'  : 'ai-theme-body';
+  const boxId   = isBiblical ? 'ai-biblical-result' : isLinguistic ? 'ai-linguistic-result' : 'ai-theme-result';
+
+  const label = document.getElementById(labelId);
+  const body  = document.getElementById(bodyId);
+  const box   = document.getElementById(boxId);
 
   const LABELS = {
     summary:     '📊 Theme Summary',
@@ -660,7 +713,18 @@ async function runThemeAI(mode) {
     reconcile:   '🛡 Traditional Reconciliation',
     academic:    '🎓 Academic Analysis',
     humanrights: '⚖️ Human Rights & Ethics',
-    historical:  '🏛️ Historical Context'
+    historical:  '🏛️ Historical Context',
+    biblical_compare: '📖 Quran vs Bible Comparison',
+    jewish_sources:   '✡️ Jewish Sources',
+    christian_sources:'✝️ Christian Tradition',
+    pre_islamic:      '🏛️ Pre-Islamic Arabian Context',
+    source_critical:  '🔬 Source-Critical Analysis',
+    unique_quran:     '✨ Unique to the Quran',
+    grammar:          '📝 Grammar & Syntax',
+    word_roots:       '🌱 Word Roots (Morphology)',
+    rhetoric:         '🎭 Rhetorical Devices',
+    variant_readings: '📖 Qiraat Variants',
+    depiction:        '🎨 Narrative Depiction'
   };
 
   const verseList = VERSES.slice(0,12).map(v => v.sura_id+':'+v.aya_number + ' — ' + (v.english||'').slice(0,100)).join('\n');
@@ -672,7 +736,20 @@ async function runThemeAI(mode) {
     reconcile: `You are a classical Islamic scholar. For the theme "${THEME}":\n\nVerses:\n${verseList}\n\nExplain how classical Muslim scholars reconcile apparent tensions and contradictions in this theme. Use tools like: naskh (abrogation), takhsis (specification), historical context, different subject matters, and prophetic sunnah. Be specific about which scholars said what. 4-5 paragraphs.`,
     academic: `You are an academic scholar of Islamic studies. Analyze the theme "${THEME}" from a critical academic perspective:\n\nVerses:\n${verseList}\n\nInclude: modern Orientalist scholarship (Watt, Wansbrough, Crone), contemporary Muslim reformist scholars, historical-critical methodology, and what academic consensus (if any) says about this theme's historical development. Be balanced and scholarly. 4-5 paragraphs.`,
     humanrights: `Analyze the theme "${THEME}" from the perspective of modern international human rights law and ethics:\n\nVerses:\n${verseList}\n\nHow do international human rights organizations, Muslim human rights scholars, and secular academics evaluate this theme? What tensions exist with UDHR Articles? What are the responses from Muslim human rights advocates? Be specific and balanced. 4 paragraphs.`,
-    historical: `You are a historian of early Islam. Analyze the theme "${THEME}" in its 7th century historical context:\n\nVerses:\n${verseList}\n\nAddress: What was happening in Arabia and the Hijaz when these verses were revealed? What were the social, political, and military circumstances? How did the first Muslim community understand and apply these verses? What later historical developments changed their interpretation? 4-5 paragraphs.`
+    historical: `You are a historian of early Islam. Analyze the theme "${THEME}" in its 7th century historical context:\n\nVerses:\n${verseList}\n\nAddress: What was happening in Arabia and the Hijaz when these verses were revealed? What were the social, political, and military circumstances? How did the first Muslim community understand and apply these verses? What later historical developments changed their interpretation? 4-5 paragraphs.`,
+    // Biblical comparison prompts
+    biblical_compare: `You are a comparative religion scholar. Compare the Quranic narrative of "${THEME}" with the Biblical account:\n\nQuranic Verses:\n${verseList}\n\nProvide a detailed side-by-side comparison:\n1. List each major event/detail as it appears in the Quran vs Genesis/Bible\n2. Key similarities — what both traditions agree on\n3. Key differences — what the Quran adds, omits, or changes\n4. Scholarly theories about why these differences exist\n5. What Muslim exegetes (mufassirun) say about the differences\nBe specific, cite chapter/verse from both scriptures. 5-6 paragraphs.`,
+    jewish_sources: `You are a scholar of Jewish studies and Islamic origins. Analyze "${THEME}" in relation to Jewish sources:\n\nQuranic Verses:\n${verseList}\n\nExamine:\n1. Torah (Genesis/Exodus) parallels\n2. Talmudic traditions (Babylonian and Jerusalem Talmud)\n3. Midrashic literature (Bereishit Rabbah, Pirkei DeRabbi Eliezer)\n4. The concept of Isrāʾīliyyāt — Jewish stories that entered Islamic tradition\n5. What classical Islamic scholars said about using Jewish sources\n6. Academic scholarship on the relationship (Geiger, Speyer, Sidersky)\nBe specific with sources. 5-6 paragraphs.`,
+    christian_sources: `You are a scholar of Christian theology and Islamic studies. Analyze "${THEME}" in relation to Christian tradition:\n\nQuranic Verses:\n${verseList}\n\nExamine:\n1. New Testament and early Christian parallels\n2. Church Fathers' interpretations (Origen, Augustine, etc.)\n3. Syriac Christian sources (Ephrem the Syrian, Cave of Treasures)\n4. How Christian theology differs from the Quranic version\n5. What Muslim scholars say in response to Christian interpretations\n5-6 paragraphs.`,
+    pre_islamic: `You are a scholar of pre-Islamic Arabian history. Analyze "${THEME}" in the pre-Islamic Arabian context:\n\nQuranic Verses:\n${verseList}\n\nExamine:\n1. What did pre-Islamic Arabs know about this story?\n2. Evidence from Jahiliyya poetry and oral tradition\n3. Jewish and Christian communities in Arabia (Hijaz, Yemen, Khaybar)\n4. How the Quran engages with existing Arabian knowledge of this narrative\n5. What archaeological and historical evidence exists\n5 paragraphs.`,
+    source_critical: `You are an academic applying source-critical methodology to "${THEME}":\n\nQuranic Verses:\n${verseList}\n\nApply historical-critical analysis:\n1. What are the possible literary sources for this Quranic narrative?\n2. How do scholars like Wansbrough, Crone, Luxenberg analyze this?\n3. What is the traditional Muslim response to source-critical approaches?\n4. What does the evidence suggest about oral vs written transmission?\n5. How does this narrative evolve across different Quranic passages?\n5-6 paragraphs. Be academically rigorous and balanced.`,
+    unique_quran: `You are a Quranic studies scholar. Analyze what is UNIQUE to the Quranic version of "${THEME}":\n\nQuranic Verses:\n${verseList}\n\nIdentify:\n1. Elements present in the Quran but absent from all other sources\n2. Theological emphases unique to the Quranic telling\n3. Details the Quran deliberately changes from Biblical/Jewish accounts and why\n4. What these unique elements reveal about the Quran's theological agenda\n5. Classical tafsir on the unique Quranic elements\n4-5 paragraphs.`,
+    // Linguistic prompts
+    grammar: `You are an Arabic grammar scholar (nahw/sarf expert). Analyze the grammar and syntax of the Quranic verses about "${THEME}":\n\nVerses:\n${verseList}\n\nAnalyze:\n1. Verb forms and tenses used — what do they convey?\n2. Sentence structure — are these nominal or verbal sentences?\n3. Use of definite/indefinite articles\n4. Pronoun usage and antecedents\n5. Conditional structures (if any)\n6. How grammar choices affect meaning and interpretation\nBe specific, cite individual words and their grammatical function. 4-5 paragraphs.`,
+    word_roots: `You are an Arabic lexicographer. Analyze the key word roots (جذور) in the Quranic verses about "${THEME}":\n\nVerses:\n${verseList}\n\nFor each key term:\n1. Give the Arabic root (3-letter root)\n2. Semantic range of the root\n3. How classical dictionaries (Lane's Lexicon, Lisan al-Arab) define it\n4. How different word forms from the same root appear in the Quran\n5. Translation challenges and how different scholars handle them\nFocus on 5-8 most important terms. Include Arabic text where relevant. 5 paragraphs.`,
+    rhetoric: `You are a Quranic rhetoric scholar (balaghah expert). Analyze the rhetorical devices in the Quranic narrative of "${THEME}":\n\nVerses:\n${verseList}\n\nIdentify and explain:\n1. Metaphors (isti'ara) and similes (tashbih)\n2. Ellipsis (hadhf) — what is deliberately left unsaid\n3. Repetition (tikrar) and its effect\n4. Chiasm and ring composition\n5. Narrative perspective shifts\n6. How these devices serve the theological message\n4-5 paragraphs. Be specific with examples from the verses.`,
+    variant_readings: `You are a Qiraat scholar. Analyze how variant Quranic readings (qiraat) affect the meaning of "${THEME}":\n\nVerses:\n${verseList}\n\nExamine:\n1. Known variant readings (Hafs, Warsh, Qalun, Ibn Kathir, etc.) for these verses\n2. How different readings change the meaning\n3. Which reading is most common and why\n4. What the variant readings reveal about early Quranic transmission\n5. Classical scholars' views on which reading is preferred\nBe specific about which qira'a and which word. 4-5 paragraphs.`,
+    depiction: `You are a narratology scholar specializing in religious texts. Analyze HOW the story of "${THEME}" is depicted in the Quran compared to other versions:\n\nQuranic Verses:\n${verseList}\n\nAnalyze:\n1. Narrative structure — how is the story told? (linear, fragmented, allusive?)\n2. What details are emphasized vs omitted compared to other tellings\n3. Character portrayal — how are the characters depicted?\n4. Emotional and psychological depth in the Quranic telling\n5. How the Quran's audience was expected to already know the story\n6. Literary techniques unique to Quranic narrative style\n5 paragraphs.`
   };
 
   box.style.display = 'block';
