@@ -757,7 +757,7 @@ async function runThemeAI(mode) {
     depiction:        '🎨 Narrative Depiction'
   };
 
-  const verseList = VERSES.map(v => v.sura_id+':'+v.aya_number + ' — ' + (v.english||'')).join('\n');
+  const verseList = VERSES.slice(0,25).map(v => v.sura_id+':'+v.aya_number + ' — ' + (v.english||'').slice(0,180)).join('\n');
   const hadithSample = HADITH.slice(0,3).map(h => '['+h.collection+'] '+(h.hadith_text||'').slice(0,150)).join('\n');
 
   const PROMPTS = {
@@ -768,7 +768,7 @@ async function runThemeAI(mode) {
     humanrights: `Analyze the theme "${THEME}" from the perspective of modern international human rights law and ethics:\n\nVerses:\n${verseList}\n\nHow do international human rights organizations, Muslim human rights scholars, and secular academics evaluate this theme? What tensions exist with UDHR Articles? What are the responses from Muslim human rights advocates? Be specific and balanced. 4 paragraphs.`,
     historical: `You are a historian of early Islam. Analyze the theme "${THEME}" in its 7th century historical context:\n\nVerses:\n${verseList}\n\nAddress: What was happening in Arabia and the Hijaz when these verses were revealed? What were the social, political, and military circumstances? How did the first Muslim community understand and apply these verses? What later historical developments changed their interpretation? 4-5 paragraphs.`,
     // Internal Quran-vs-Quran comparison prompts (priority — before external comparison)
-    internal_compare: `You are a Quranic scholar specializing in narrative analysis across suras. The story of "${THEME}" appears in multiple places in the Quran.\n\nAll verses (grouped, with sura:aya references):\n${verseList}\n\nFirst, group these verses by which sura/passage they belong to (e.g. "Sura 2 telling", "Sura 7 telling", "Sura 20 telling", "Sura 38 telling", etc.) — there are likely 3-6 distinct retellings.\n\nThen build a SCENE-BY-SCENE COMPARISON TABLE across those Quranic passages only (no Bible yet). For each major narrative beat, show:\n- How Sura X tells it (cite sura:aya)\n- How Sura Y tells it (cite sura:aya)\n- Grade: ✅ SAME DETAILS | 🟡 COMPATIBLE BUT DIFFERENT EMPHASIS | 🟠 APPARENT TENSION | 🔴 ONLY IN ONE PASSAGE\n\nEnd with an overall INTERNAL CONSISTENCY SCORE out of 100 and a paragraph justifying it. Be exhaustive — use every verse provided.`,
+    internal_compare: `You are a Quranic scholar. The story of "${THEME}" appears in multiple suras.\n\nVerses (sura:aya — text):\n${verseList}\n\nGroup these by sura/passage (likely 3-6 distinct retellings). Build a CONCISE scene-by-scene comparison table: for each major narrative beat, list which sura(s) cover it and a one-line grade: ✅ SAME | 🟡 DIFFERENT EMPHASIS | 🟠 TENSION | 🔴 ONLY ONE PASSAGE. End with an internal consistency score /100 and 2-3 sentence justification. Be concise — use short table rows, not long paragraphs.`,
 
     internal_emphasis: `You are a Quranic scholar. The story of "${THEME}" is retold in several different suras of the Quran.\n\nVerses:\n${verseList}\n\nFor each distinct retelling (by sura), explain:\n1. What specific aspect of the story does this sura emphasize, and what does it leave out?\n2. What is the rhetorical/theological purpose of that sura's version (e.g. warning, comfort, legal precedent, theological proof)?\n3. How does the audience and context of that sura (early Meccan vs late Medinan, etc.) shape which details are included?\nGive a clear sura-by-sura breakdown. 5-6 paragraphs total, organized by sura.`,
 
@@ -804,7 +804,7 @@ async function runThemeAI(mode) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'claude-sonnet-4-5-20250929',
-        max_tokens: 4000,
+        max_tokens: 1800,
         messages: [{ role: 'user', content: PROMPTS[mode] }]
       })
     });
