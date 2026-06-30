@@ -727,7 +727,7 @@ async function runThemeAI(mode) {
     depiction:        '🎨 Narrative Depiction'
   };
 
-  const verseList = VERSES.slice(0,12).map(v => v.sura_id+':'+v.aya_number + ' — ' + (v.english||'').slice(0,100)).join('\n');
+  const verseList = VERSES.map(v => v.sura_id+':'+v.aya_number + ' — ' + (v.english||'')).join('\n');
   const hadithSample = HADITH.slice(0,3).map(h => '['+h.collection+'] '+(h.hadith_text||'').slice(0,150)).join('\n');
 
   const PROMPTS = {
@@ -738,11 +738,11 @@ async function runThemeAI(mode) {
     humanrights: `Analyze the theme "${THEME}" from the perspective of modern international human rights law and ethics:\n\nVerses:\n${verseList}\n\nHow do international human rights organizations, Muslim human rights scholars, and secular academics evaluate this theme? What tensions exist with UDHR Articles? What are the responses from Muslim human rights advocates? Be specific and balanced. 4 paragraphs.`,
     historical: `You are a historian of early Islam. Analyze the theme "${THEME}" in its 7th century historical context:\n\nVerses:\n${verseList}\n\nAddress: What was happening in Arabia and the Hijaz when these verses were revealed? What were the social, political, and military circumstances? How did the first Muslim community understand and apply these verses? What later historical developments changed their interpretation? 4-5 paragraphs.`,
     // Biblical comparison prompts
-    biblical_compare: `You are a comparative religion scholar. Compare the Quranic narrative of "${THEME}" with the Biblical account:\n\nQuranic Verses:\n${verseList}\n\nProvide a detailed side-by-side comparison:\n1. List each major event/detail as it appears in the Quran vs Genesis/Bible\n2. Key similarities — what both traditions agree on\n3. Key differences — what the Quran adds, omits, or changes\n4. Scholarly theories about why these differences exist\n5. What Muslim exegetes (mufassirun) say about the differences\nBe specific, cite chapter/verse from both scriptures. 5-6 paragraphs.`,
+    biblical_compare: `You are a comparative religion scholar. Compare the Quranic narrative of "${THEME}" with the Biblical account, verse by verse and chapter by chapter.\n\nQuranic Verses (with sura:aya references):\n${verseList}\n\nStructure your response EXACTLY as follows:\n\n## 1. SCENE-BY-SCENE COMPARISON TABLE\nFor each major narrative beat (creation, naming, the prohibition, the temptation, the fall, expulsion, repentance, etc.), state:\n- The Quranic version (with exact sura:aya citation)\n- The Biblical version (with exact Genesis chapter:verse citation)\n- A similarity grade using this scale: ✅ IDENTICAL (same event, same details) | 🟡 SIMILAR (same event, different details) | 🟠 DIVERGENT (same event, contradictory details) | 🔴 ABSENT (one source has it, the other doesn't) | ⭐ UNIQUE TO QURAN (no Biblical parallel at all)\n\n## 2. OVERALL SIMILARITY SCORE\nGive a numeric score out of 100 for how closely the Quranic narrative tracks the Biblical one overall, with a one-paragraph justification.\n\n## 3. KEY DIFFERENCES EXPLAINED\nFor the 3-5 most significant divergences, explain: what differs, why scholars think it differs (theological agenda, oral transmission, deliberate correction), and cite specific verses on both sides.\n\n## 4. WHAT MUSLIM EXEGETES SAY\nSummarize how classical mufassirun (Ibn Kathir, Tabari, Qurtubi) explain the differences from the Biblical account.\n\nBe specific, cite chapter/verse from both scriptures throughout. This must be rigorous and exhaustive — do not skip any verse provided.`,
     jewish_sources: `You are a scholar of Jewish studies and Islamic origins. Analyze "${THEME}" in relation to Jewish sources:\n\nQuranic Verses:\n${verseList}\n\nExamine:\n1. Torah (Genesis/Exodus) parallels\n2. Talmudic traditions (Babylonian and Jerusalem Talmud)\n3. Midrashic literature (Bereishit Rabbah, Pirkei DeRabbi Eliezer)\n4. The concept of Isrāʾīliyyāt — Jewish stories that entered Islamic tradition\n5. What classical Islamic scholars said about using Jewish sources\n6. Academic scholarship on the relationship (Geiger, Speyer, Sidersky)\nBe specific with sources. 5-6 paragraphs.`,
     christian_sources: `You are a scholar of Christian theology and Islamic studies. Analyze "${THEME}" in relation to Christian tradition:\n\nQuranic Verses:\n${verseList}\n\nExamine:\n1. New Testament and early Christian parallels\n2. Church Fathers' interpretations (Origen, Augustine, etc.)\n3. Syriac Christian sources (Ephrem the Syrian, Cave of Treasures)\n4. How Christian theology differs from the Quranic version\n5. What Muslim scholars say in response to Christian interpretations\n5-6 paragraphs.`,
     pre_islamic: `You are a scholar of pre-Islamic Arabian history. Analyze "${THEME}" in the pre-Islamic Arabian context:\n\nQuranic Verses:\n${verseList}\n\nExamine:\n1. What did pre-Islamic Arabs know about this story?\n2. Evidence from Jahiliyya poetry and oral tradition\n3. Jewish and Christian communities in Arabia (Hijaz, Yemen, Khaybar)\n4. How the Quran engages with existing Arabian knowledge of this narrative\n5. What archaeological and historical evidence exists\n5 paragraphs.`,
-    source_critical: `You are an academic applying source-critical methodology to "${THEME}":\n\nQuranic Verses:\n${verseList}\n\nApply historical-critical analysis:\n1. What are the possible literary sources for this Quranic narrative?\n2. How do scholars like Wansbrough, Crone, Luxenberg analyze this?\n3. What is the traditional Muslim response to source-critical approaches?\n4. What does the evidence suggest about oral vs written transmission?\n5. How does this narrative evolve across different Quranic passages?\n5-6 paragraphs. Be academically rigorous and balanced.`,
+    source_critical: `You are an academic applying source-critical methodology to "${THEME}":\n\nQuranic Verses:\n${verseList}\n\nApply historical-critical analysis:\n1. What are the possible literary sources for this Quranic narrative? Rate each proposed source's influence: STRONG (direct textual parallel) | MODERATE (thematic parallel, different wording) | WEAK (speculative connection) | NONE (no plausible source identified)\n2. How do scholars like Wansbrough, Crone, Luxenberg analyze this?\n3. What is the traditional Muslim response to source-critical approaches?\n4. What does the evidence suggest about oral vs written transmission?\n5. How does this narrative evolve across different Quranic passages (give a chronological/revelatory-order comparison if Meccan vs Medinan suras are both involved)?\n5-6 paragraphs. Be academically rigorous and balanced. Cite all verses by sura:aya.`,
     unique_quran: `You are a Quranic studies scholar. Analyze what is UNIQUE to the Quranic version of "${THEME}":\n\nQuranic Verses:\n${verseList}\n\nIdentify:\n1. Elements present in the Quran but absent from all other sources\n2. Theological emphases unique to the Quranic telling\n3. Details the Quran deliberately changes from Biblical/Jewish accounts and why\n4. What these unique elements reveal about the Quran's theological agenda\n5. Classical tafsir on the unique Quranic elements\n4-5 paragraphs.`,
     // Linguistic prompts
     grammar: `You are an Arabic grammar scholar (nahw/sarf expert). Analyze the grammar and syntax of the Quranic verses about "${THEME}":\n\nVerses:\n${verseList}\n\nAnalyze:\n1. Verb forms and tenses used — what do they convey?\n2. Sentence structure — are these nominal or verbal sentences?\n3. Use of definite/indefinite articles\n4. Pronoun usage and antecedents\n5. Conditional structures (if any)\n6. How grammar choices affect meaning and interpretation\nBe specific, cite individual words and their grammatical function. 4-5 paragraphs.`,
@@ -762,16 +762,20 @@ async function runThemeAI(mode) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 2000,
+        model: 'claude-sonnet-4-5-20250929',
+        max_tokens: 4000,
         messages: [{ role: 'user', content: PROMPTS[mode] }]
       })
     });
     const data = await res.json();
-    const text = data?.content?.[0]?.text || 'No response received.';
+    if (data?.error) {
+      body.innerHTML = '<span style="color:#C0392B;">⚠️ API Error: ' + (data.error.message || JSON.stringify(data.error)) + '</span>';
+      return;
+    }
+    const text = data?.content?.[0]?.text || 'No response received. Raw: ' + JSON.stringify(data).slice(0,200);
     body.textContent = text;
   } catch(e) {
-    body.textContent = 'Error: ' + e.message;
+    body.innerHTML = '<span style="color:#C0392B;">⚠️ Network Error: ' + e.message + '</span>';
   }
 }
 
