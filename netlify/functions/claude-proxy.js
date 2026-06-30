@@ -52,7 +52,7 @@ exports.handler = async (event) => {
 
     req.on('timeout', () => {
       req.destroy();
-      resolve({ statusCode: 504, headers: corsHeaders, body: JSON.stringify({ error: 'Request timeout' }) });
+      resolve({ statusCode: 504, headers: corsHeaders, body: JSON.stringify({ error: 'Request timeout after 55s — try a shorter analysis or fewer verses' }) });
     });
 
     req.on('error', (err) => {
