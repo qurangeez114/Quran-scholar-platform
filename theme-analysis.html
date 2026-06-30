@@ -184,12 +184,35 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 <!-- TABS -->
 <div class="tabs">
   <button class="tab-btn active" onclick="switchTab('verses',this)">📖 All Verses</button>
+  <button class="tab-btn" onclick="switchTab('internal',this)">🔄 Within Quran</button>
   <button class="tab-btn" onclick="switchTab('biblical',this)">📜 Biblical Comparison</button>
   <button class="tab-btn" onclick="switchTab('linguistic',this)">🔤 Linguistic Analysis</button>
   <button class="tab-btn" onclick="switchTab('contradiction',this)">⚡ Contradictions</button>
   <button class="tab-btn" onclick="switchTab('hadith',this)">📜 Hadith</button>
   <button class="tab-btn" onclick="switchTab('fiqh',this)">⚖️ Fiqh</button>
   <button class="tab-btn" onclick="switchTab('ai',this)">🤖 AI Analysis</button>
+</div>
+
+<!-- TAB: WITHIN QURAN (PRIORITY — compare the story across suras first) -->
+<div id="tab-internal" class="tab-content">
+  <div style="padding:10px 0 14px;font-size:12px;color:#7A8FA6;">
+    The same story is told across several suras in the Quran, often with different details, emphasis, or sequence. Compare those tellings against each other before looking outside the Quran.
+  </div>
+  <div class="ai-box">
+    <div class="ai-box-title">🔄 Cross-Sura Comparison (Quran vs Quran)</div>
+    <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px;">
+      <button class="ai-btn" onclick="runThemeAI('internal_compare')" style="background:#FDF5DE;border-color:#B8902A;color:#5A3A10;">📊 Scene-by-Scene Table Across Suras</button>
+      <button class="ai-btn" onclick="runThemeAI('internal_emphasis')" style="background:#F0F8FF;border-color:#1A5276;color:#1A5276;">🎯 What Each Sura Emphasizes &amp; Why</button>
+      <button class="ai-btn" onclick="runThemeAI('internal_sequence')" style="background:#F0FFF4;border-color:#2E7D32;color:#2E7D32;">🔢 Narrative Sequence &amp; Order of Events</button>
+      <button class="ai-btn" onclick="runThemeAI('internal_tensions')" style="background:#FFF0F0;border-color:#C0392B;color:#C0392B;">⚡ Apparent Internal Tensions or Gaps</button>
+      <button class="ai-btn" onclick="runThemeAI('internal_chronology')" style="background:#FFF4E0;border-color:#8B5E1A;color:#8B5E1A;">📅 Meccan vs Medinan — Revelatory Order</button>
+      <button class="ai-btn" onclick="runThemeAI('internal_reconcile')" style="background:#F5F0FF;border-color:#5A3A8B;color:#5A3A8B;">🛡 Classical Reconciliation of Differences</button>
+    </div>
+    <div id="ai-internal-result" style="display:none;">
+      <div id="ai-internal-label" style="font-size:11px;font-weight:800;color:#B8902A;text-transform:uppercase;margin-bottom:8px;"></div>
+      <div id="ai-internal-text" style="font-size:14px;line-height:1.8;color:#1A1A1A;white-space:pre-wrap;"></div>
+    </div>
+  </div>
 </div>
 
 <!-- TAB: BIBLICAL COMPARISON -->
@@ -696,12 +719,13 @@ function renderContradictions() {
 // ── AI ANALYSIS ──────────────────────────────────────────────────────
 async function runThemeAI(mode) {
   // Determine which container to use
+  const isInternal = ['internal_compare','internal_emphasis','internal_sequence','internal_tensions','internal_chronology','internal_reconcile'].includes(mode);
   const isBiblical = ['biblical_compare','jewish_sources','christian_sources','pre_islamic','source_critical','unique_quran'].includes(mode);
   const isLinguistic = ['grammar','word_roots','rhetoric','variant_readings','depiction'].includes(mode);
 
-  const labelId = isBiblical ? 'ai-biblical-label' : isLinguistic ? 'ai-linguistic-label' : 'ai-theme-label';
-  const bodyId  = isBiblical ? 'ai-biblical-text'  : isLinguistic ? 'ai-linguistic-text'  : 'ai-theme-body';
-  const boxId   = isBiblical ? 'ai-biblical-result' : isLinguistic ? 'ai-linguistic-result' : 'ai-theme-result';
+  const labelId = isInternal ? 'ai-internal-label' : isBiblical ? 'ai-biblical-label' : isLinguistic ? 'ai-linguistic-label' : 'ai-theme-label';
+  const bodyId  = isInternal ? 'ai-internal-text'  : isBiblical ? 'ai-biblical-text'  : isLinguistic ? 'ai-linguistic-text'  : 'ai-theme-body';
+  const boxId   = isInternal ? 'ai-internal-result' : isBiblical ? 'ai-biblical-result' : isLinguistic ? 'ai-linguistic-result' : 'ai-theme-result';
 
   const label = document.getElementById(labelId);
   const body  = document.getElementById(bodyId);
@@ -714,6 +738,12 @@ async function runThemeAI(mode) {
     academic:    '🎓 Academic Analysis',
     humanrights: '⚖️ Human Rights & Ethics',
     historical:  '🏛️ Historical Context',
+    internal_compare:    '📊 Scene-by-Scene Across Suras',
+    internal_emphasis:   '🎯 Emphasis by Sura',
+    internal_sequence:   '🔢 Narrative Sequence',
+    internal_tensions:   '⚡ Internal Tensions',
+    internal_chronology: '📅 Revelatory Chronology',
+    internal_reconcile:  '🛡 Classical Reconciliation',
     biblical_compare: '📖 Quran vs Bible Comparison',
     jewish_sources:   '✡️ Jewish Sources',
     christian_sources:'✝️ Christian Tradition',
@@ -737,7 +767,18 @@ async function runThemeAI(mode) {
     academic: `You are an academic scholar of Islamic studies. Analyze the theme "${THEME}" from a critical academic perspective:\n\nVerses:\n${verseList}\n\nInclude: modern Orientalist scholarship (Watt, Wansbrough, Crone), contemporary Muslim reformist scholars, historical-critical methodology, and what academic consensus (if any) says about this theme's historical development. Be balanced and scholarly. 4-5 paragraphs.`,
     humanrights: `Analyze the theme "${THEME}" from the perspective of modern international human rights law and ethics:\n\nVerses:\n${verseList}\n\nHow do international human rights organizations, Muslim human rights scholars, and secular academics evaluate this theme? What tensions exist with UDHR Articles? What are the responses from Muslim human rights advocates? Be specific and balanced. 4 paragraphs.`,
     historical: `You are a historian of early Islam. Analyze the theme "${THEME}" in its 7th century historical context:\n\nVerses:\n${verseList}\n\nAddress: What was happening in Arabia and the Hijaz when these verses were revealed? What were the social, political, and military circumstances? How did the first Muslim community understand and apply these verses? What later historical developments changed their interpretation? 4-5 paragraphs.`,
-    // Biblical comparison prompts
+    // Internal Quran-vs-Quran comparison prompts (priority — before external comparison)
+    internal_compare: `You are a Quranic scholar specializing in narrative analysis across suras. The story of "${THEME}" appears in multiple places in the Quran.\n\nAll verses (grouped, with sura:aya references):\n${verseList}\n\nFirst, group these verses by which sura/passage they belong to (e.g. "Sura 2 telling", "Sura 7 telling", "Sura 20 telling", "Sura 38 telling", etc.) — there are likely 3-6 distinct retellings.\n\nThen build a SCENE-BY-SCENE COMPARISON TABLE across those Quranic passages only (no Bible yet). For each major narrative beat, show:\n- How Sura X tells it (cite sura:aya)\n- How Sura Y tells it (cite sura:aya)\n- Grade: ✅ SAME DETAILS | 🟡 COMPATIBLE BUT DIFFERENT EMPHASIS | 🟠 APPARENT TENSION | 🔴 ONLY IN ONE PASSAGE\n\nEnd with an overall INTERNAL CONSISTENCY SCORE out of 100 and a paragraph justifying it. Be exhaustive — use every verse provided.`,
+
+    internal_emphasis: `You are a Quranic scholar. The story of "${THEME}" is retold in several different suras of the Quran.\n\nVerses:\n${verseList}\n\nFor each distinct retelling (by sura), explain:\n1. What specific aspect of the story does this sura emphasize, and what does it leave out?\n2. What is the rhetorical/theological purpose of that sura's version (e.g. warning, comfort, legal precedent, theological proof)?\n3. How does the audience and context of that sura (early Meccan vs late Medinan, etc.) shape which details are included?\nGive a clear sura-by-sura breakdown. 5-6 paragraphs total, organized by sura.`,
+
+    internal_sequence: `You are a Quranic scholar reconstructing narrative chronology. The story of "${THEME}" is told across multiple suras, not always in story order.\n\nVerses:\n${verseList}\n\nReconstruct:\n1. The full chronological sequence of events in the story, drawing details from every sura that mentions it\n2. Which sura supplies which specific event/detail (cite sura:aya for each event)\n3. Where the suras overlap in covering the same event\n4. Where a detail appears in only ONE sura and nowhere else\nPresent as a numbered timeline of events with citations. Then add a short paragraph on what this fragmented-but-complementary structure suggests about how the Quran assumes audience familiarity with the story.`,
+
+    internal_tensions: `You are a critical Quranic scholar. Identify ALL apparent internal tensions, contradictions, or unexplained gaps in how "${THEME}" is told ACROSS different suras of the Quran (not compared to outside sources — purely Quran vs Quran).\n\nVerses:\n${verseList}\n\nFor each tension found:\n1. State the two (or more) passages that seem to conflict or not fully align (cite sura:aya for each)\n2. Explain precisely what the apparent inconsistency is\n3. Rate its severity: 🔴 MAJOR (hard to reconcile) | 🟠 MODERATE (reconcilable with effort) | 🟡 MINOR (likely just different emphasis, not a real tension)\n4. Note if classical tafsir already addresses this specific point\nBe rigorous and do not avoid difficult material — list every tension you can find, even minor ones. If genuinely none exist beyond stylistic variation, say so clearly and explain why the retellings are considered fully consistent.`,
+
+    internal_chronology: `You are a scholar of Quranic revelation order (asbab al-nuzul and chronology). The story of "${THEME}" appears in suras from different periods of revelation.\n\nVerses:\n${verseList}\n\nFor each sura involved:\n1. Classify it as Meccan or Medinan, and give its approximate position in the standard revelation chronology (early Meccan, middle Meccan, late Meccan, or Medinan)\n2. Explain what is added, changed, or emphasized differently as the story is retold LATER vs EARLIER in the revelation timeline\n3. Discuss whether there is a discernible development or refinement of the narrative over time, or whether earlier and later versions are essentially static\n4. Note what mainstream Islamic scholarship and Western academic chronology (Nöldeke/Schwally ordering) each say about this sequence\n5 paragraphs, with clear sura-by-sura referencing.`,
+
+    internal_reconcile: `You are a classical Islamic scholar (mufassir) reconciling the different Quranic tellings of "${THEME}".\n\nVerses:\n${verseList}\n\nUsing classical tafsir methodology, explain:\n1. How scholars like Ibn Kathir, al-Tabari, and al-Qurtubi reconcile any apparent differences between the various sura tellings of this story\n2. What principles of tafsir are invoked (e.g. ijmal wa tafsil — general then detailed; takmilah — each passage completing the other; different audiences requiring different emphasis)\n3. Whether the differences are considered substantive or purely stylistic/rhetorical by the classical tradition\n4. A final scholarly verdict: do the multiple Quranic accounts of this story form ONE coherent narrative when read together, or are there points still debated among exegetes?\n4-5 paragraphs, citing specific scholars and their works.`,
     biblical_compare: `You are a comparative religion scholar. Compare the Quranic narrative of "${THEME}" with the Biblical account, verse by verse and chapter by chapter.\n\nQuranic Verses (with sura:aya references):\n${verseList}\n\nStructure your response EXACTLY as follows:\n\n## 1. SCENE-BY-SCENE COMPARISON TABLE\nFor each major narrative beat (creation, naming, the prohibition, the temptation, the fall, expulsion, repentance, etc.), state:\n- The Quranic version (with exact sura:aya citation)\n- The Biblical version (with exact Genesis chapter:verse citation)\n- A similarity grade using this scale: ✅ IDENTICAL (same event, same details) | 🟡 SIMILAR (same event, different details) | 🟠 DIVERGENT (same event, contradictory details) | 🔴 ABSENT (one source has it, the other doesn't) | ⭐ UNIQUE TO QURAN (no Biblical parallel at all)\n\n## 2. OVERALL SIMILARITY SCORE\nGive a numeric score out of 100 for how closely the Quranic narrative tracks the Biblical one overall, with a one-paragraph justification.\n\n## 3. KEY DIFFERENCES EXPLAINED\nFor the 3-5 most significant divergences, explain: what differs, why scholars think it differs (theological agenda, oral transmission, deliberate correction), and cite specific verses on both sides.\n\n## 4. WHAT MUSLIM EXEGETES SAY\nSummarize how classical mufassirun (Ibn Kathir, Tabari, Qurtubi) explain the differences from the Biblical account.\n\nBe specific, cite chapter/verse from both scriptures throughout. This must be rigorous and exhaustive — do not skip any verse provided.`,
     jewish_sources: `You are a scholar of Jewish studies and Islamic origins. Analyze "${THEME}" in relation to Jewish sources:\n\nQuranic Verses:\n${verseList}\n\nExamine:\n1. Torah (Genesis/Exodus) parallels\n2. Talmudic traditions (Babylonian and Jerusalem Talmud)\n3. Midrashic literature (Bereishit Rabbah, Pirkei DeRabbi Eliezer)\n4. The concept of Isrāʾīliyyāt — Jewish stories that entered Islamic tradition\n5. What classical Islamic scholars said about using Jewish sources\n6. Academic scholarship on the relationship (Geiger, Speyer, Sidersky)\nBe specific with sources. 5-6 paragraphs.`,
     christian_sources: `You are a scholar of Christian theology and Islamic studies. Analyze "${THEME}" in relation to Christian tradition:\n\nQuranic Verses:\n${verseList}\n\nExamine:\n1. New Testament and early Christian parallels\n2. Church Fathers' interpretations (Origen, Augustine, etc.)\n3. Syriac Christian sources (Ephrem the Syrian, Cave of Treasures)\n4. How Christian theology differs from the Quranic version\n5. What Muslim scholars say in response to Christian interpretations\n5-6 paragraphs.`,
