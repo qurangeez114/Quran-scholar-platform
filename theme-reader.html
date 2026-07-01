@@ -613,34 +613,123 @@ function renderComparison(d) {
 async function runAuthenticityAnalysis() {
   const box = document.getElementById('authentic-result');
   box.innerHTML = '<div style="text-align:center;padding:20px;"><span class="spinner"></span> Analyzing authenticity...</div>';
-  const verseList = ALL_VERSES.slice(0,10).map(v => v.sura_id+':'+v.aya_number+' — '+(v.english||'').slice(0,100)).join('\n');
+
+  // Check DB first
+  const cached = await loadFromDB('authenticity_analysis');
+  if (cached) {
+    try {
+      const d = typeof cached === 'string' ? JSON.parse(cached) : cached;
+      box.innerHTML = '<div style="font-size:10px;color:#27AE60;font-weight:700;padding:4px 0 8px;">✅ Loaded from database</div>' + renderAuthenticity(d);
+      return;
+    } catch(e) {}
+  }
 
   const verseList2 = ALL_VERSES.slice(0,6).map(v => v.sura_id+':'+v.aya_number+' — '+(v.english||'').slice(0,80)).join('\n');
-  const prompt2 = `Briefly analyze authenticity: Quranic vs Hadith accounts of "${THEME}".
 
-Quran verses:
-${verseList2}
+  const prompt2 = `Analyze authenticity of Quranic vs Hadith accounts of "${THEME}".
 
-In 4 short paragraphs cover:
-1. What hadith adds that Quran doesn't say (with examples)
-2. Which hadith details are likely Israiliyyat (Jewish/Christian sources)
-3. Classical Islamic answer on using hadith alongside Quran
-4. Critical verdict: which narrative is more reliable and why
+Quran verses: ${verseList2}
 
-Be direct and honest. Max 300 words total.`;
+Return ONLY valid JSON (no markdown):
+{
+  "hadith_additions": [
+    {"claim": "<what hadith adds not in Quran>", "example": "<specific hadith detail>", "source": "<collection name and number if known>", "source_url": "<https://sunnah.com/... if applicable>"}
+  ],
+  "israiliyyat": [
+    {"claim": "<what is likely from Jewish/Christian sources>", "parallel": "<specific Torah/Bible/Talmud parallel>", "source_url": "<https://sunnah.com/... or https://archive.org/... if applicable>"}
+  ],
+  "classical_position": "<1-2 sentences on classical Islamic view of using hadith for this topic>",
+  "critical_verdict": "<2-3 sentences honest scholarly verdict on which is more reliable>",
+  "key_sources": [
+    {"title": "<scholar or book name>", "point": "<what they say>", "url": "<https://... if verifiable online>"}
+  ]
+}
+Max 3 items per array. Be specific — cite actual hadith numbers where possible.`;
 
   try {
     const res = await fetch(PROXY, { method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ model:'claude-sonnet-4-5-20250929', max_tokens:500, messages:[{role:'user',content:prompt2}] }) });
+      body: JSON.stringify({ model:'claude-sonnet-4-5-20250929', max_tokens:800, messages:[{role:'user',content:prompt2}] }) });
     const data = await res.json();
     if (data?.error) { box.innerHTML='<div style="color:#C0392B;padding:10px;">⚠️ '+(typeof data.error==='string'?data.error:(data.error?.message||JSON.stringify(data.error)))+'</div>'; return; }
-    const text = data?.content?.[0]?.text||'';
-    if (!text) { box.innerHTML='<div style="color:#C0392B;padding:10px;">⚠️ Empty response. Please try again.</div>'; return; }
-    box.innerHTML = `<div style="padding:14px;font-size:13px;line-height:1.8;color:#1A1A1A;white-space:pre-wrap;">${text}</div>`;
+    let raw = (data?.content?.[0]?.text||'').replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
+    if (!raw) { box.innerHTML='<div style="color:#C0392B;padding:10px;">⚠️ Empty response. Please try again.</div>'; return; }
+    let d;
+    try { d = JSON.parse(raw); }
+    catch(pe) {
+      // Fallback: render as markdown→html
+      box.innerHTML = '<div style="padding:14px;font-size:13px;line-height:1.8;">' + raw.replace(/##\s+(.+)/g,'<h3 style="font-size:14px;font-weight:800;color:#B8902A;margin:12px 0 4px;">$1</h3>').replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/\n\n/g,'</p><p style="margin-bottom:10px;">').replace(/^/,'<p style="margin-bottom:10px;">') + '</p></div>';
+      return;
+    }
+    box.innerHTML = renderAuthenticity(d);
+    saveToDB('authenticity_analysis', JSON.stringify(d));
   } catch(e) {
     box.innerHTML = '<div style="color:#C0392B;padding:10px;">⚠️ '+(e?.message||String(e)||'Network error')+'<br><small style="color:#888;">Check your connection and try again.</small></div>';
   }
 }
+
+function renderAuthenticity(d) {
+  let html = '';
+
+  // Hadith additions
+  if (d.hadith_additions?.length) {
+    html += `<div style="margin-bottom:14px;"><div style="font-size:11px;font-weight:800;color:#1A5276;padding:8px 12px;background:#EAF2FF;border-radius:8px 8px 0 0;">➕ What Hadith Adds (not in Quran)</div>`;
+    d.hadith_additions.forEach(a => {
+      html += `<div style="padding:10px 12px;border:1px solid #AED6F1;border-top:none;background:#FFF;">
+        <div style="font-weight:700;font-size:12px;color:#1A5276;margin-bottom:4px;">${a.claim}</div>
+        <div style="font-size:11px;color:#555;margin-bottom:4px;font-style:italic;">📿 ${a.example}</div>
+        ${a.source_url ? `<a href="${a.source_url}" target="_blank" style="font-size:10px;color:#1A6FA8;font-weight:700;text-decoration:none;padding:2px 7px;border:1px solid #AED6F1;border-radius:8px;background:#EAF2FF;">🔗 ${a.source||'Verify'}</a>` : a.source ? `<span style="font-size:10px;color:#888;">${a.source}</span>` : ''}
+      </div>`;
+    });
+    html += '</div>';
+  }
+
+  // Israiliyyat
+  if (d.israiliyyat?.length) {
+    html += `<div style="margin-bottom:14px;"><div style="font-size:11px;font-weight:800;color:#7D6608;padding:8px 12px;background:#FEF9E7;border-radius:8px 8px 0 0;">📜 Probable Israiliyyat (Jewish/Christian Sources)</div>`;
+    d.israiliyyat.forEach(i => {
+      html += `<div style="padding:10px 12px;border:1px solid #F9E79F;border-top:none;background:#FFF;">
+        <div style="font-weight:700;font-size:12px;color:#7D6608;margin-bottom:4px;">${i.claim}</div>
+        <div style="font-size:11px;color:#555;margin-bottom:4px;">📖 Parallel: <em>${i.parallel}</em></div>
+        ${i.source_url ? `<a href="${i.source_url}" target="_blank" style="font-size:10px;color:#7D6608;font-weight:700;text-decoration:none;padding:2px 7px;border:1px solid #F9E79F;border-radius:8px;background:#FEF9E7;">🔗 Verify</a>` : ''}
+      </div>`;
+    });
+    html += '</div>';
+  }
+
+  // Classical position
+  if (d.classical_position) {
+    html += `<div style="padding:12px;background:#F0FFF4;border:1px solid #ABEBC6;border-radius:8px;margin-bottom:12px;">
+      <div style="font-size:11px;font-weight:800;color:#1E8449;margin-bottom:6px;">📚 Classical Islamic Position</div>
+      <div style="font-size:12px;color:#333;line-height:1.7;">${d.classical_position}</div>
+    </div>`;
+  }
+
+  // Key sources
+  if (d.key_sources?.length) {
+    html += `<div style="margin-bottom:14px;"><div style="font-size:11px;font-weight:800;color:#5A3A10;padding:8px 12px;background:#FDF5DE;border-radius:8px 8px 0 0;">📚 Key Scholarly Sources</div>`;
+    d.key_sources.forEach(s => {
+      html += `<div style="padding:10px 12px;border:1px solid #E8D8A0;border-top:none;background:#FFF;display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+        <div>
+          <div style="font-weight:700;font-size:12px;color:#5A3A10;">${s.title}</div>
+          <div style="font-size:11px;color:#555;margin-top:2px;">${s.point}</div>
+        </div>
+        ${s.url ? `<a href="${s.url}" target="_blank" style="flex-shrink:0;font-size:10px;color:#B8902A;font-weight:700;text-decoration:none;padding:2px 7px;border:1px solid #E8D8A0;border-radius:8px;background:#FDF5DE;white-space:nowrap;">🔗 Source</a>` : ''}
+      </div>`;
+    });
+    html += '</div>';
+  }
+
+  // Critical verdict
+  if (d.critical_verdict) {
+    html += `<div style="padding:14px;background:#1A1A1A;border-radius:8px;margin-bottom:12px;">
+      <div style="font-size:11px;font-weight:800;color:#FFD700;margin-bottom:8px;">⚖️ Critical Scholarly Verdict</div>
+      <div style="font-size:13px;color:#EEE;line-height:1.75;">${d.critical_verdict}</div>
+    </div>`;
+  }
+
+  return html || '<div style="padding:14px;color:#888;">No structured data returned.</div>';
+}
+
 
 function addToPresentation(key) {
   const [s,a] = key.split(':');
