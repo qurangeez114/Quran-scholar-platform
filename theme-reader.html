@@ -434,6 +434,39 @@ async function loadHadith() {
       }
     });
   }
+
+  // Fallback 1: extract keywords from actual verse text
+  if (data.length < 3 && ALL_VERSES.length > 0) {
+    const stopWords2 = new Set(['and','the','of','in','a','an','to','for','with','from','by','on','at','as','or','is','that','this','his','her','they','them','their','have','been','were','will','who','what','when','said','upon','allah','indeed','those','which','your']);
+    const verseWords = ALL_VERSES.slice(0,3)
+      .flatMap(v => (v.english||'').toLowerCase().split(/\W+/))
+      .filter(w => w.length > 5 && !stopWords2.has(w))
+      .map(w => w.replace(/[^a-z]/g,''))
+      .filter(w => w.length > 5);
+    const uniqueVerseWords = [...new Set(verseWords)].slice(0,4);
+    for (const kw of uniqueVerseWords) {
+      if (data.length >= 15) break;
+      const result = await fetch(
+        `${SB_URL}/rest/v1/hadith_corpus?select=collection,hadith_number,grade,text_english,source_url,narrator&text_english=ilike.*${encodeURIComponent(kw)}*&order=grade&limit=10`,
+        { headers: HDR }
+      ).then(r => r.ok ? r.json() : []).catch(() => []);
+      result.forEach(r => {
+        if (!data.find(d => d.collection === r.collection && d.hadith_number === r.hadith_number)) data.push(r);
+      });
+    }
+  }
+
+  // Fallback 2: search by sura:aya link in hadith_corpus
+  if (data.length < 3 && ALL_VERSES.length > 0) {
+    const v = ALL_VERSES[0];
+    const byVerse = await fetch(
+      `${SB_URL}/rest/v1/hadith_corpus?select=collection,hadith_number,grade,text_english,source_url,narrator&sura_id=eq.${v.sura_id}&aya_number=eq.${v.aya_number}&limit=15`,
+      { headers: HDR }
+    ).then(r => r.ok ? r.json() : []).catch(() => []);
+    byVerse.forEach(r => {
+      if (!data.find(d => d.collection === r.collection && d.hadith_number === r.hadith_number)) data.push(r);
+    });
+  }
   // Map collection names to sunnah.com slugs
   const SUNNAH_SLUGS = {
     'sahih al-bukhari': 'bukhari', 'bukhari': 'bukhari',
