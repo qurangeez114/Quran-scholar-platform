@@ -376,113 +376,57 @@ async function loadVerses() {
 async function loadHadith() {
   document.getElementById('hadith-container').innerHTML = '<div style="text-align:center;padding:20px;"><span class="spinner"></span> Loading hadith...</div>';
 
-  // Theme-to-keyword mapping for better search
-  const THEME_KEYWORDS = {
-    'women': ['women', 'wife', 'husband', 'female'],
-    'adam': ['adam', 'iblis', 'paradise', 'garden'],
-    'moses': ['moses', 'musa', 'pharaoh', 'israelites'],
-    'jesus': ['jesus', 'isa', 'messiah', 'mary'],
-    'abraham': ['abraham', 'ibrahim', 'ishmael'],
-    'noah': ['noah', 'nuh', 'flood', 'ark'],
-    'prayer': ['prayer', 'salah', 'salat', 'mosque'],
-    'jihad': ['jihad', 'fighting', 'battle', 'war'],
-    'marriage': ['marriage', 'wife', 'husband', 'nikah'],
-    'divorce': ['divorce', 'talaq', 'separation'],
-    'inheritance': ['inheritance', 'estate', 'heir'],
-    'paradise': ['paradise', 'jannah', 'heaven', 'garden'],
-    'hell': ['hell', 'hellfire', 'punishment', 'fire'],
-    'fasting': ['fasting', 'ramadan', 'sawm'],
-    'pilgrimage': ['pilgrimage', 'hajj', 'kaaba', 'mecca'],
-    'charity': ['charity', 'zakat', 'sadaqa', 'giving'],
-    'hypocrites': ['hypocrites', 'munafiq', 'hypocrisy'],
-    'judgment': ['judgment', 'resurrection', 'day of'],
-    'creation': ['creation', 'created', 'creator'],
-    'authority': ['authority', 'obedience', 'guardian', 'qiwama'],
-    'hierarchy': ['authority', 'obedience', 'degree', 'guardian'],
-    'degree': ['degree', 'daraja', 'rank', 'authority'],
-  };
+  // PRIMARY: fetch from pre-linked theme_hadith_links table (instant, no keyword search)
+  let data = await fetch(
+    `${SB_URL}/rest/v1/theme_hadith_links?theme=eq.${encodeURIComponent(THEME)}&select=collection,hadith_number,hadith_grade,hadith_text,source_url,sura_id,aya_number,similarity_note,difference_note&order=hadith_grade&limit=30`,
+    { headers: HDR }
+  ).then(r => r.ok ? r.json() : []).catch(() => []);
 
-  // Clean theme name — remove colons, get key words
-  const cleanTheme = THEME.replace(/:/g, ' ').toLowerCase();
-  const stopWords = new Set(['and','the','of','in','a','an','to','for','with','from','by','on','at','as','or','is','their','its','his','her']);
-  const themeWords = cleanTheme.split(/\s+/).filter(w => w.length > 3 && !stopWords.has(w));
+  // Map to display format
+  data = data.map(h => ({
+    collection: h.collection,
+    hadith_number: h.hadith_number,
+    grade: h.hadith_grade,
+    text_english: h.hadith_text,
+    source_url: h.source_url,
+    narrator: null,
+    similarity_note: h.similarity_note,
+    difference_note: h.difference_note,
+    verse_ref: h.sura_id ? h.sura_id + ':' + h.aya_number : null
+  }));
 
-  // Build search keywords — use theme map first
-  let searchKeywords = [];
-  for (const word of themeWords) {
-    for (const [key, kws] of Object.entries(THEME_KEYWORDS)) {
-      if (word.includes(key) || key.includes(word)) {
-        searchKeywords = searchKeywords.concat(kws);
-      }
-    }
-  }
-  // Also add the cleaned theme words themselves
-  themeWords.forEach(w => { if (!searchKeywords.includes(w)) searchKeywords.push(w); });
-  // Deduplicate and limit
-  searchKeywords = [...new Set(searchKeywords)].slice(0, 6);
-
-  let data = [];
-  for (const kw of searchKeywords) {
-    if (data.length >= 25) break;
-    const result = await fetch(
-      `${SB_URL}/rest/v1/hadith_corpus?select=collection,hadith_number,grade,text_english,source_url,narrator&text_english=ilike.*${encodeURIComponent(kw)}*&order=grade&limit=15`,
+  // FALLBACK: if no pre-linked data, search hadith_connections by verse
+  if (data.length === 0 && ALL_VERSES.length > 0) {
+    const ayaIds = ALL_VERSES.slice(0,10).map(v => `(sura_id.eq.${v.sura_id},aya_number.eq.${v.aya_number})`);
+    // Query hadith_connections for these verses
+    const fallback = await fetch(
+      `${SB_URL}/rest/v1/hadith_connections?select=collection,reference,hadith_grade,hadith_text,source_url,sura_id,aya_number,similarity_note,difference_note&sura_id=in.(${ALL_VERSES.slice(0,10).map(v=>v.sura_id).join(',')})&limit=20`,
       { headers: HDR }
     ).then(r => r.ok ? r.json() : []).catch(() => []);
-    result.forEach(r => {
-      if (!data.find(d => d.collection === r.collection && d.hadith_number === r.hadith_number)) {
-        data.push(r);
-      }
-    });
+    
+    data = fallback
+      .filter(h => ALL_VERSES.some(v => v.sura_id===h.sura_id && v.aya_number===h.aya_number))
+      .map(h => ({
+        collection: h.collection,
+        hadith_number: h.reference,
+        grade: h.hadith_grade,
+        text_english: h.hadith_text,
+        source_url: h.source_url,
+        narrator: null,
+        similarity_note: h.similarity_note,
+        difference_note: h.difference_note,
+        verse_ref: h.sura_id + ':' + h.aya_number
+      }));
   }
 
-  // Fallback 1: extract keywords from actual verse text
-  if (data.length < 3 && ALL_VERSES.length > 0) {
-    const stopWords2 = new Set(['and','the','of','in','a','an','to','for','with','from','by','on','at','as','or','is','that','this','his','her','they','them','their','have','been','were','will','who','what','when','said','upon','allah','indeed','those','which','your']);
-    const verseWords = ALL_VERSES.slice(0,3)
-      .flatMap(v => (v.english||'').toLowerCase().split(/\W+/))
-      .filter(w => w.length > 5 && !stopWords2.has(w))
-      .map(w => w.replace(/[^a-z]/g,''))
-      .filter(w => w.length > 5);
-    const uniqueVerseWords = [...new Set(verseWords)].slice(0,4);
-    for (const kw of uniqueVerseWords) {
-      if (data.length >= 15) break;
-      const result = await fetch(
-        `${SB_URL}/rest/v1/hadith_corpus?select=collection,hadith_number,grade,text_english,source_url,narrator&text_english=ilike.*${encodeURIComponent(kw)}*&order=grade&limit=10`,
-        { headers: HDR }
-      ).then(r => r.ok ? r.json() : []).catch(() => []);
-      result.forEach(r => {
-        if (!data.find(d => d.collection === r.collection && d.hadith_number === r.hadith_number)) data.push(r);
-      });
-    }
+  ALL_HADITH = data;
+
+  if (!data.length) {
+    document.getElementById('hadith-container').innerHTML = '<div style="padding:20px;color:#888;text-align:center;">No hadith found for this theme in database.</div>';
+    return;
   }
 
-  // Fallback 2: search by sura:aya link in hadith_corpus
-  if (data.length < 3 && ALL_VERSES.length > 0) {
-    const v = ALL_VERSES[0];
-    const byVerse = await fetch(
-      `${SB_URL}/rest/v1/hadith_corpus?select=collection,hadith_number,grade,text_english,source_url,narrator&sura_id=eq.${v.sura_id}&aya_number=eq.${v.aya_number}&limit=15`,
-      { headers: HDR }
-    ).then(r => r.ok ? r.json() : []).catch(() => []);
-    byVerse.forEach(r => {
-      if (!data.find(d => d.collection === r.collection && d.hadith_number === r.hadith_number)) data.push(r);
-    });
-  }
-  // Map collection names to sunnah.com slugs
-  const SUNNAH_SLUGS = {
-    'sahih al-bukhari': 'bukhari', 'bukhari': 'bukhari',
-    'sahih muslim': 'muslim', 'muslim': 'muslim',
-    'sunan abu dawud': 'abudawud', 'abu dawud': 'abudawud',
-    'jami at-tirmidhi': 'tirmidhi', 'tirmidhi': 'tirmidhi',
-    'sunan an-nasai': 'nasai', "sunan al-nasa'i": 'nasai',
-    'sunan ibn majah': 'ibnmajah', 'ibn majah': 'ibnmajah',
-    'muwatta malik': 'malik', 'al-muwatta': 'malik',
-    'riyad al-salihin': 'riyadussalihin',
-    'al-adab al-mufrad': 'adab',
-    'forty hadith nawawi': 'nawawi40',
-    'bulugh al-maram': 'bulugh',
-    'mishkat al-masabih': 'mishkat',
-  };
-
+  const SUNNAH_SLUGS = {'sahih al-bukhari':'bukhari','bukhari':'bukhari','sahih muslim':'muslim','muslim':'muslim','sunan abu dawud':'abudawud','abu dawud':'abudawud','jami at-tirmidhi':'tirmidhi','tirmidhi':'tirmidhi','sunan an-nasai':'nasai',"sunan al-nasa'i":'nasai','sunan ibn majah':'ibnmajah','ibn majah':'ibnmajah','muwatta malik':'malik','al-muwatta':'malik','riyad al-salihin':'riyadussalihin','al-adab al-mufrad':'adab','forty hadith nawawi':'nawawi40','bulugh al-maram':'bulugh'};
   function getSunnahUrl(collection, number) {
     const key = (collection||'').toLowerCase();
     for (const [k, slug] of Object.entries(SUNNAH_SLUGS)) {
@@ -491,42 +435,31 @@ async function loadHadith() {
     return null;
   }
 
-  ALL_HADITH = data;
-  if (!data.length) {
-    document.getElementById('hadith-container').innerHTML = '<div style="padding:20px;color:#888;text-align:center;">No hadith found for this theme in database.</div>';
-    return;
-  }
-
-  let html = `<div style="padding:10px 14px;font-size:11px;color:#888;">${data.length} hadith found — showing additions/changes vs Quranic account</div>`;
+  let html = `<div style="padding:10px 14px;font-size:11px;color:#888;">${data.length} hadith found — pre-linked to this theme</div>`;
   data.forEach(h => {
-    const gradeClass = h.grade === 'sahih' ? 'grade-sahih' : h.grade === 'hasan' ? 'grade-hasan' : h.grade === 'weak' || h.grade?.includes('daif') || h.grade?.includes('da\'if') ? 'grade-weak' : h.grade === 'fabricated' ? 'grade-fabricated' : 'grade-ungraded';
+    const gradeRaw = (h.grade||'').toLowerCase();
+    const gradeClass = gradeRaw.includes('sahih') ? 'grade-sahih' : gradeRaw.includes('hasan') ? 'grade-hasan' : gradeRaw.includes('daif') || gradeRaw.includes("da'if") || gradeRaw.includes('weak') ? 'grade-weak' : gradeRaw.includes('fabricated') || gradeRaw.includes('mawdu') ? 'grade-fabricated' : 'grade-ungraded';
     const sunnahUrl = getSunnahUrl(h.collection, h.hadith_number);
     const verifyUrl = sunnahUrl || h.source_url || null;
     const fullText = h.text_english || '';
-    const shortText = fullText.slice(0, 500);
+    const shortText = fullText.slice(0,500);
     const hasMore = fullText.length > 500;
-    const hadithId = 'h-' + (h.collection||'').replace(/\s+/g,'-') + '-' + h.hadith_number;
+    const hadithId = 'h-' + Math.random().toString(36).slice(2,8);
 
     html += `<div class="hadith-card">
       <div class="hadith-meta">
-        <span>${h.collection} #${h.hadith_number}</span>
-        <span class="hadith-grade ${gradeClass}">${h.grade || 'ungraded'}</span>
+        <span>${h.collection||'Unknown'} ${h.hadith_number ? '#'+h.hadith_number : ''}</span>
+        <span class="hadith-grade ${gradeClass}">${h.grade||'ungraded'}</span>
       </div>
-      ${h.narrator ? `<div style="font-size:10px;color:#888;margin-bottom:6px;">Narrator: ${h.narrator}</div>` : ''}
-      <div class="hadith-text" id="${hadithId}-text">${shortText}${hasMore ? '...' : ''}</div>
-      ${hasMore ? `<button onclick="
-        const el=document.getElementById('${hadithId}-text');
-        const btn=this;
-        if(btn.textContent.includes('Read more')){el.textContent='${fullText.replace(/'/g,"\\'")}';btn.textContent='▲ Show less';}
-        else{el.textContent='${shortText.replace(/'/g,"\\'")}...';btn.textContent='▼ Read more';}
-      " style="margin-top:6px;font-size:10px;color:#B8902A;font-weight:700;background:none;border:none;cursor:pointer;padding:0;">▼ Read more</button>` : ''}
-      <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-        ${verifyUrl ? `<a href="${verifyUrl}" target="_blank" style="font-size:10px;color:#1A6FA8;font-weight:700;text-decoration:none;padding:3px 8px;border:1px solid #AED6F1;border-radius:8px;background:#EAF2FF;">🔗 Verify on ${sunnahUrl ? 'sunnah.com' : 'Source'}</a>` : ''}
-      </div>
+      ${h.verse_ref ? `<div style="font-size:10px;color:#B8902A;font-weight:700;margin-bottom:5px;">📖 Verse: ${h.verse_ref}</div>` : ''}
+      <div class="hadith-text" id="${hadithId}">${shortText}${hasMore?'...':''}</div>
+      ${hasMore ? `<button onclick="const el=document.getElementById('${hadithId}');const more=el.dataset.full;if(!more){el.dataset.full='1';el.textContent='${fullText.replace(/'/g,"\\'").replace(/\n/g,' ')}';this.textContent='▲ Less';}else{delete el.dataset.full;el.textContent='${shortText.replace(/'/g,"\\'").replace(/\n/g,' ')}...';this.textContent='▼ More';}" style="font-size:10px;color:#B8902A;font-weight:700;background:none;border:none;cursor:pointer;padding:2px 0;">▼ More</button>` : ''}
+      ${h.similarity_note ? `<div style="margin-top:6px;padding:5px 8px;background:#F0FFF4;border-left:3px solid #27AE60;font-size:11px;color:#1E8449;">✅ ${h.similarity_note}</div>` : ''}
+      ${h.difference_note ? `<div style="margin-top:4px;padding:5px 8px;background:#FFF0F0;border-left:3px solid #C0392B;font-size:11px;color:#C0392B;">⚡ ${h.difference_note}</div>` : ''}
+      ${verifyUrl ? `<div style="margin-top:8px;"><a href="${verifyUrl}" target="_blank" style="font-size:10px;color:#1A6FA8;font-weight:700;text-decoration:none;padding:3px 8px;border:1px solid #AED6F1;border-radius:8px;background:#EAF2FF;">🔗 Verify on ${sunnahUrl?'sunnah.com':'source'}</a></div>` : ''}
     </div>`;
   });
   document.getElementById('hadith-container').innerHTML = html;
-}
 
 async function runHadithComparison() {
   document.getElementById('compare-result').innerHTML = '<div style="text-align:center;padding:20px;"><span class="spinner"></span> Checking database...</div>';
