@@ -385,8 +385,31 @@ async function loadHadith() {
     order: 'grade',
     limit: 30
   });
-  ALL_HADITH = data;
+  // Map collection names to sunnah.com slugs
+  const SUNNAH_SLUGS = {
+    'sahih al-bukhari': 'bukhari', 'bukhari': 'bukhari',
+    'sahih muslim': 'muslim', 'muslim': 'muslim',
+    'sunan abu dawud': 'abudawud', 'abu dawud': 'abudawud',
+    'jami at-tirmidhi': 'tirmidhi', 'tirmidhi': 'tirmidhi',
+    'sunan an-nasai': 'nasai', "sunan al-nasa'i": 'nasai',
+    'sunan ibn majah': 'ibnmajah', 'ibn majah': 'ibnmajah',
+    'muwatta malik': 'malik', 'al-muwatta': 'malik',
+    'riyad al-salihin': 'riyadussalihin',
+    'al-adab al-mufrad': 'adab',
+    'forty hadith nawawi': 'nawawi40',
+    'bulugh al-maram': 'bulugh',
+    'mishkat al-masabih': 'mishkat',
+  };
 
+  function getSunnahUrl(collection, number) {
+    const key = (collection||'').toLowerCase();
+    for (const [k, slug] of Object.entries(SUNNAH_SLUGS)) {
+      if (key.includes(k)) return `https://sunnah.com/${slug}:${number}`;
+    }
+    return null;
+  }
+
+  ALL_HADITH = data;
   if (!data.length) {
     document.getElementById('hadith-container').innerHTML = '<div style="padding:20px;color:#888;text-align:center;">No hadith found for this theme in database.</div>';
     return;
@@ -394,15 +417,30 @@ async function loadHadith() {
 
   let html = `<div style="padding:10px 14px;font-size:11px;color:#888;">${data.length} hadith found — showing additions/changes vs Quranic account</div>`;
   data.forEach(h => {
-    const gradeClass = h.grade === 'sahih' ? 'grade-sahih' : h.grade === 'hasan' ? 'grade-hasan' : h.grade === 'weak' || h.grade === 'da\'if' ? 'grade-weak' : h.grade === 'fabricated' || h.grade === 'mawdu' ? 'grade-fabricated' : 'grade-ungraded';
+    const gradeClass = h.grade === 'sahih' ? 'grade-sahih' : h.grade === 'hasan' ? 'grade-hasan' : h.grade === 'weak' || h.grade?.includes('daif') || h.grade?.includes('da\'if') ? 'grade-weak' : h.grade === 'fabricated' ? 'grade-fabricated' : 'grade-ungraded';
+    const sunnahUrl = getSunnahUrl(h.collection, h.hadith_number);
+    const verifyUrl = sunnahUrl || h.source_url || null;
+    const fullText = h.text_english || '';
+    const shortText = fullText.slice(0, 500);
+    const hasMore = fullText.length > 500;
+    const hadithId = 'h-' + (h.collection||'').replace(/\s+/g,'-') + '-' + h.hadith_number;
+
     html += `<div class="hadith-card">
       <div class="hadith-meta">
         <span>${h.collection} #${h.hadith_number}</span>
         <span class="hadith-grade ${gradeClass}">${h.grade || 'ungraded'}</span>
       </div>
       ${h.narrator ? `<div style="font-size:10px;color:#888;margin-bottom:6px;">Narrator: ${h.narrator}</div>` : ''}
-      <div class="hadith-text">${(h.text_english||'').slice(0,400)}${h.text_english&&h.text_english.length>400?'...':''}</div>
-      ${h.source_url ? `<a href="${h.source_url}" target="_blank" style="display:inline-block;margin-top:8px;font-size:10px;color:#B8902A;font-weight:700;">🔗 Verify source</a>` : ''}
+      <div class="hadith-text" id="${hadithId}-text">${shortText}${hasMore ? '...' : ''}</div>
+      ${hasMore ? `<button onclick="
+        const el=document.getElementById('${hadithId}-text');
+        const btn=this;
+        if(btn.textContent.includes('Read more')){el.textContent='${fullText.replace(/'/g,"\\'")}';btn.textContent='▲ Show less';}
+        else{el.textContent='${shortText.replace(/'/g,"\\'")}...';btn.textContent='▼ Read more';}
+      " style="margin-top:6px;font-size:10px;color:#B8902A;font-weight:700;background:none;border:none;cursor:pointer;padding:0;">▼ Read more</button>` : ''}
+      <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        ${verifyUrl ? `<a href="${verifyUrl}" target="_blank" style="font-size:10px;color:#1A6FA8;font-weight:700;text-decoration:none;padding:3px 8px;border:1px solid #AED6F1;border-radius:8px;background:#EAF2FF;">🔗 Verify on ${sunnahUrl ? 'sunnah.com' : 'Source'}</a>` : ''}
+      </div>
     </div>`;
   });
   document.getElementById('hadith-container').innerHTML = html;
