@@ -484,6 +484,12 @@ async function runHadithComparison() {
     return;
   }
 
+  // Load hadith if not yet loaded
+  if (ALL_HADITH.length === 0) {
+    document.getElementById('compare-result').innerHTML = '<div style="text-align:center;padding:20px;"><span class="spinner"></span> Loading hadith data first...</div>';
+    await loadHadith();
+  }
+
   document.getElementById('compare-result').innerHTML = '<div style="text-align:center;padding:20px;"><span class="spinner"></span> Comparing Quran vs Hadith narratives...</div>';
   const verseList = ALL_VERSES.slice(0,15).map(v => v.sura_id+':'+v.aya_number+' — '+(v.english||'').slice(0,120)).join('\n');
   const hadithSample = ALL_HADITH.slice(0,5).map(h => h.collection+' #'+h.hadith_number+': '+(h.text_english||'').slice(0,200)).join('\n\n');
@@ -513,16 +519,27 @@ Return ONLY valid JSON (no markdown):
 
   try {
     const res = await fetch(PROXY, { method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ model:'claude-sonnet-4-5-20250929', max_tokens:1600, messages:[{role:'user',content:prompt}] }) });
+      body: JSON.stringify({ model:'claude-sonnet-4-5-20250929', max_tokens:1200, messages:[{role:'user',content:prompt}] }) });
     const data = await res.json();
-    if (data?.error) { document.getElementById('compare-result').innerHTML='<span style="color:#C0392B;">⚠️ '+data.error.message+'</span>'; return; }
+    if (data?.error) {
+      const errMsg = typeof data.error === 'string' ? data.error : (data.error?.message || JSON.stringify(data.error));
+      document.getElementById('compare-result').innerHTML='<div style="color:#C0392B;padding:10px;">⚠️ ' + errMsg + '<br><small style="color:#888;">This analysis requires AI. Try again or check your connection.</small></div>';
+      return;
+    }
     let raw = (data?.content?.[0]?.text||'').replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
-    const d = JSON.parse(raw);
+    if (!raw) { document.getElementById('compare-result').innerHTML='<div style="color:#C0392B;padding:10px;">⚠️ Empty response from AI. Please try again.</div>'; return; }
+    let d;
+    try { d = JSON.parse(raw); }
+    catch(pe) {
+      // AI returned text not JSON — display as plain text
+      document.getElementById('compare-result').innerHTML='<div style="padding:14px;font-size:13px;line-height:1.8;white-space:pre-wrap;">'+raw+'</div>';
+      return;
+    }
     renderComparison(d);
-    // Save to DB
     saveToDB('hadith_comparison', d);
   } catch(e) {
-    document.getElementById('compare-result').innerHTML='<span style="color:#C0392B;">⚠️ '+e.message+'</span>';
+    const errMsg = e?.message || String(e) || 'Network error';
+    document.getElementById('compare-result').innerHTML='<div style="color:#C0392B;padding:10px;">⚠️ ' + errMsg + '<br><small style="color:#888;">Check your connection and try again.</small></div>';
   }
 }
 
@@ -607,11 +624,12 @@ Be rigorous and specific to THIS theme. 5-6 paragraphs.`;
     const res = await fetch(PROXY, { method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ model:'claude-sonnet-4-5-20250929', max_tokens:1600, messages:[{role:'user',content:prompt}] }) });
     const data = await res.json();
-    if (data?.error) { box.innerHTML='<span style="color:#C0392B;">⚠️ '+data.error.message+'</span>'; return; }
+    if (data?.error) { box.innerHTML='<div style="color:#C0392B;padding:10px;">⚠️ '+(typeof data.error==='string'?data.error:(data.error?.message||JSON.stringify(data.error)))+'</div>'; return; }
     const text = data?.content?.[0]?.text||'';
+    if (!text) { box.innerHTML='<div style="color:#C0392B;padding:10px;">⚠️ Empty response. Please try again.</div>'; return; }
     box.innerHTML = `<div style="padding:14px;font-size:13px;line-height:1.8;color:#1A1A1A;white-space:pre-wrap;">${text}</div>`;
   } catch(e) {
-    box.innerHTML = '<span style="color:#C0392B;">⚠️ '+e.message+'</span>';
+    box.innerHTML = '<div style="color:#C0392B;padding:10px;">⚠️ '+(e?.message||String(e)||'Network error')+'<br><small style="color:#888;">Check your connection and try again.</small></div>';
   }
 }
 
