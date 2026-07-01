@@ -1020,7 +1020,7 @@ Rules:
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'claude-sonnet-4-5-20250929',
-        max_tokens: 400,
+        max_tokens: 900,
         messages: [{ role: 'user', content: prompt }]
       })
     });
@@ -1028,14 +1028,28 @@ Rules:
     if (data?.error) { body.innerHTML = '<span style="color:#C0392B;">⚠️ ' + (data.error.message||JSON.stringify(data.error)) + '</span>'; return; }
 
     let raw = data?.content?.[0]?.text || '';
-    // Strip markdown fences if present
     raw = raw.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
 
     let parsed;
     try { parsed = JSON.parse(raw); }
     catch(e) {
-      body.innerHTML = '<div style="color:#C0392B;">⚠️ Could not parse structured response. Raw output:<br><pre style="font-size:10px;white-space:pre-wrap;">' + raw.slice(0,500) + '</pre></div>';
-      return;
+      // Try to fix truncated JSON by closing open brackets
+      let fixed = raw;
+      try {
+        // Count open vs close braces/brackets and close them
+        const opens = (fixed.match(/[\[{]/g)||[]).length;
+        const closes = (fixed.match(/[\]}]/g)||[]).length;
+        const diff = opens - closes;
+        // Remove trailing incomplete string/key
+        fixed = fixed.replace(/,?\s*"[^"]*$/, '').replace(/,?\s*$/, '');
+        for (let i = 0; i < diff; i++) {
+          fixed += (fixed.trimEnd().endsWith('{') || fixed.trimEnd().endsWith(',')) ? '}' : ']';
+        }
+        parsed = JSON.parse(fixed);
+      } catch(e2) {
+        body.innerHTML = '<div style="color:#C0392B;padding:10px;">⚠️ Response was truncated. Try again — the analysis needs slightly more tokens.<br><button onclick="runThemeAI('internal_compare')" style="margin-top:8px;padding:6px 14px;background:#B8902A;color:#fff;border:none;border-radius:8px;font-size:12px;cursor:pointer;">🔄 Retry</button></div>';
+        return;
+      }
     }
 
     body.innerHTML = renderCompareTable(parsed);
