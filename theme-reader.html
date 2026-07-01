@@ -261,8 +261,32 @@ function toggleLang(lang, btn) {
   LANG_STATE[lang] = !LANG_STATE[lang];
   btn.classList.toggle('active', LANG_STATE[lang]);
   document.querySelectorAll('.v-' + lang).forEach(el => {
-    el.style.display = LANG_STATE[lang] ? '' : 'none';
+    if (LANG_STATE[lang]) {
+      el.style.display = '';
+      // Show empty state if no content
+      const textEl = el.querySelector('.verse-text-content') || el;
+      if (!textEl.textContent.trim() || textEl.textContent.trim().length < 3) {
+        el.style.display = 'none';
+      }
+    } else {
+      el.style.display = 'none';
+    }
   });
+  // Show/hide "no data" notice
+  const noDataId = 'no-data-' + lang;
+  let noData = document.getElementById(noDataId);
+  if (LANG_STATE[lang]) {
+    const hasAny = [...document.querySelectorAll('.v-' + lang)].some(el => el.style.display !== 'none');
+    if (!hasAny && !noData) {
+      noData = document.createElement('div');
+      noData.id = noDataId;
+      noData.style = 'text-align:center;padding:8px;font-size:11px;color:#888;font-style:italic;';
+      noData.textContent = '⚠️ ' + lang.charAt(0).toUpperCase() + lang.slice(1) + ' translation not yet available for these verses';
+      document.getElementById('verses-container').prepend(noData);
+    }
+  } else if (noData) {
+    noData.remove();
+  }
 }
 
 function switchMainTab(id, btn) {
@@ -312,7 +336,7 @@ async function loadVerses() {
   for (const sura of Object.keys(bySura).sort((a,b)=>a-b)) {
     const ayas = bySura[sura];
     const verseData = await sbFetch('ayas', {
-      select: 'sura_id,aya_number,arabic,english,tigrinya,amharic,arabic_transliteration',
+      select: 'sura_id,aya_number,arabic,english,tigrinya,amharic,arabic_transliteration,aya_text',
       sura_id: 'eq.' + sura,
       aya_number: 'in.(' + ayas.join(',') + ')',
       order: 'aya_number'
@@ -341,7 +365,7 @@ async function loadVerses() {
         <div class="v-arabic verse-arabic" style="${LANG_STATE.arabic?'':'display:none'}">${v.arabic||''}</div>
         <div class="v-translit verse-transliteration" style="${LANG_STATE.translit?'':'display:none'}">${v.arabic_transliteration||''}</div>
         <div class="v-english verse-english" style="${LANG_STATE.english?'':'display:none'}">${v.english||''}</div>
-        ${v.tigrinya ? `<div class="v-tigrinya verse-tigrinya" style="${LANG_STATE.tigrinya?'':'display:none'}"><div style="font-size:9px;font-weight:800;color:#B8902A;margin-bottom:3px;">TIGRINYA · ትግርኛ · ${v.sura_id}:${v.aya_number}</div>${v.tigrinya}</div>` : ''}
+        ${(v.tigrinya||v.aya_text) ? `<div class="v-tigrinya verse-tigrinya" style="${LANG_STATE.tigrinya?'':'display:none'}"><div style="font-size:9px;font-weight:800;color:#B8902A;margin-bottom:3px;">TIGRINYA · ትግርኛ · ${v.sura_id}:${v.aya_number}</div>${v.tigrinya||v.aya_text}</div>` : ''}
         ${v.amharic ? `<div class="v-amharic verse-amharic" style="${LANG_STATE.amharic?'':'display:none'}"><div style="font-size:9px;font-weight:800;color:#5C7A3A;margin-bottom:3px;">AMHARIC · አማርኛ · ${v.sura_id}:${v.aya_number}</div>${v.amharic}</div>` : ''}
         ${tbHtml}
       </div>`;
