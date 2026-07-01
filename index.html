@@ -2816,6 +2816,9 @@ async function toggleVerse(num, suraId, el) {
       });
       const aya = rows[0] || {};
       let html = '';
+      // TEXT BREAKS indicator — show first if this verse has a known tension
+      const tensionBadge = buildTensionBadge(suraId, num);
+      if (tensionBadge) html += tensionBadge;
       if (aya.english) html += `<div class="info-box"><div class="info-label">Meaning</div>${escapeHtml(aya.english)}</div>`;
       if (aya.tigrinya) html += `<div class="info-box"><div class="info-label">ትግርኛ</div>${escapeHtml(aya.tigrinya)}</div>`;
       if (aya.amharic) html += `<div class="info-box"><div class="info-label">አማርኛ</div>${escapeHtml(aya.amharic)}</div>`;
@@ -3907,6 +3910,78 @@ async function applyRiwayatClassifications(suraId, ayaNum) {
 
 // Chat history per verse: { num: [{role, content}] }
 const verseChats = {};
+
+// ── TEXT BREAKS: Known internal Quranic tensions by sura:aya ──────────────
+const TEXT_BREAKS = {
+  // ADAM — Material of creation
+  '3:59':  { beat: 'Material of creation', grade: '🔴', theme: 'Adam and the Garden of Eden', note: 'Says Adam created from DUST (تُرَاب) — other verses say clay, altered mud, or sounding clay' },
+  '7:12':  { beat: 'Material of creation', grade: '🔴', theme: 'Adam and the Garden of Eden', note: 'Iblis says Adam created from CLAY (طِين) — conflicts with dust (3:59) and sounding clay (15:26)' },
+  '15:26': { beat: 'Material of creation', grade: '🔴', theme: 'Adam and the Garden of Eden', note: 'Says ALTERED BLACK MUD (صَلْصَٰل مِّنْ حَمَإٍ مَّسْنُون) — different from dust and clay' },
+  '17:61': { beat: 'Material of creation', grade: '🔴', theme: 'Adam and the Garden of Eden', note: 'Says CLAY (طِين) — but 3:59 says dust, 15:26 says altered mud, 55:14 says pottery clay' },
+  '23:12': { beat: 'Material of creation', grade: '🔴', theme: 'Adam and the Garden of Eden', note: 'Says EXTRACT OF CLAY (سُلَٰلَة مِّن طِين) — a fifth distinct term for Adam\'s material' },
+  '38:71': { beat: 'Material of creation', grade: '🔴', theme: 'Adam and the Garden of Eden', note: 'Says CLAY (طِين) — see also 3:59 (dust), 15:26 (altered mud), 55:14 (pottery clay)' },
+  '55:14': { beat: 'Material of creation', grade: '🔴', theme: 'Adam and the Garden of Eden', note: 'Says CLAY LIKE POTTERY (صَلْصَٰل كَٱلْفَخَّار) — a sixth distinct term across Quranic passages' },
+  // ADAM — Iblis: angel or jinn?
+  '2:34':  { beat: 'Iblis: angel or jinn?', grade: '🔴', theme: 'Adam and the Garden of Eden', note: 'Iblis listed AMONG THE ANGELS commanded to bow — but 18:50 says he was a JINN' },
+  '7:11':  { beat: 'Iblis: angel or jinn?', grade: '🔴', theme: 'Adam and the Garden of Eden', note: 'Iblis listed AMONG THE ANGELS — contradicts 18:50 which says he was of the jinn' },
+  '15:31': { beat: 'Iblis: angel or jinn?', grade: '🔴', theme: 'Adam and the Garden of Eden', note: 'Iblis refused to be with those who prostrated — placed structurally among angels' },
+  '17:61': { beat: 'Iblis: angel or jinn?', grade: '🔴', theme: 'Adam and the Garden of Eden', note: 'Iblis listed AMONG THE ANGELS — contradicts 18:50 (jinn)' },
+  '18:50': { beat: 'Iblis: angel or jinn?', grade: '🔴', theme: 'Adam and the Garden of Eden', note: '⚠️ Says Iblis WAS OF THE JINN (كَانَ مِنَ ٱلْجِنِّ) — but 6 other passages place him among angels' },
+  '20:116':{ beat: 'Iblis: angel or jinn?', grade: '🔴', theme: 'Adam and the Garden of Eden', note: 'Iblis listed AMONG THE ANGELS — contradicts 18:50' },
+  '38:74': { beat: 'Iblis: angel or jinn?', grade: '🔴', theme: 'Adam and the Garden of Eden', note: 'Iblis listed AMONG THE ANGELS — contradicts 18:50' },
+  // ADAM — Satan's vow
+  '7:16':  { beat: "Satan's vow", grade: '🟠', theme: 'Adam and the Garden of Eden', note: 'Iblis says "because YOU PUT ME IN ERROR (أَغْوَيْتَنِى)" — blames Allah. Allah never refutes this claim' },
+  '15:39': { beat: "Satan's vow", grade: '🟠', theme: 'Adam and the Garden of Eden', note: 'Again Iblis blames Allah for his error — Allah does not correct or refute this in the text' },
+  '38:82': { beat: "Satan's vow", grade: '🟠', theme: 'Adam and the Garden of Eden', note: 'Here Iblis swears "by Your might" — no blame assigned. Differs from 7:16 and 15:39' },
+  // ADAM — Who was tempted?
+  '2:36':  { beat: 'Who was tempted?', grade: '🟠', theme: 'Adam and the Garden of Eden', note: '"Satan caused THEM BOTH to slip" — equal blame. But 20:120-121 singles out Adam alone' },
+  '7:20':  { beat: 'Who was tempted?', grade: '🟠', theme: 'Adam and the Garden of Eden', note: 'Satan whispered TO BOTH — but 20:120 says Satan whispered to Adam specifically by name' },
+  '20:120':{ beat: 'Who was tempted?', grade: '🟠', theme: 'Adam and the Garden of Eden', note: '"Satan whispered TO HIM [Adam alone]; O ADAM" — singles out Adam. But 2:36 and 7:20 say both equally' },
+  '20:121':{ beat: 'Was Adam blameworthy?', grade: '🔴', theme: 'Adam and the Garden of Eden', note: '⚠️ "ADAM DISOBEYED his Lord and ERRED" — strong condemnation. But 20:115 (same sura!) says he merely forgot' },
+  // ADAM — Blameworthy?
+  '20:115':{ beat: 'Was Adam blameworthy?', grade: '🔴', theme: 'Adam and the Garden of Eden', note: '"Adam FORGOT (فَنَسِىَ)" — reduces culpability. But 20:121 (6 verses later) says he DISOBEYED' },
+  // ADAM — Expulsion
+  '2:38':  { beat: 'Expulsion command', grade: '🟠', theme: 'Adam and the Garden of Eden', note: 'Second "go down" command in 2 verses (after 2:36) — possible editorial seam' },
+  '20:123':{ beat: 'Expulsion command', grade: '🟠', theme: 'Adam and the Garden of Eden', note: 'DUAL form (ٱهْبِطَا) — just two people. But 2:36, 2:38, 7:24 use PLURAL (three or more)' },
+  // NOAH
+  '11:42': { beat: "Noah's son", grade: '🟠', theme: "Noah's Ark and the Flood", note: "11:42-46: Noah asks Allah about his son as if he thought he was righteous — but 66:10 implies Noah's wife (and implicitly his son) were known betrayers" },
+  '66:10': { beat: "Noah's household", grade: '🟠', theme: "Noah's Ark and the Flood", note: "Wives of Noah and Lot given as examples of betrayal — raises question about 11:45 where Noah pleads for his son as 'family'" },
+  // MOSES
+  '2:55':  { beat: 'How many times did Israelites see Allah?', grade: '🟠', theme: 'Moses and the Exodus', note: 'Israelites demanded to see Allah openly — compare 7:143 where Moses himself requested and was refused' },
+  '7:143': { beat: 'Moses seeing Allah', grade: '🟠', theme: 'Moses and the Exodus', note: 'Moses requests to see Allah, is refused, mountain crushed — but 2:55 implies Israelites made same demand and were punished' },
+  '20:12': { beat: 'Location of first revelation to Moses', grade: '🟡', theme: 'Moses and the Exodus', note: 'Calls the valley "sacred" (مُقَدَّس) — 28:30 calls it "the right side of the valley" with no mention of sacredness' },
+  // IBRAHIM
+  '2:258': { beat: "Ibrahim's debate", grade: '🟡', theme: 'Abraham and Monotheism', note: "Ibrahim debates a king — the king is unnamed here but elsewhere Allah addresses Ibrahim differently on the same theme" },
+  '6:74':  { beat: "Ibrahim's father's name", grade: '🟠', theme: 'Abraham and Monotheism', note: "Calls Ibrahim's father AZAR — but Genesis 11:26 and all other sources say Terah. No other Islamic source uses Azar" },
+  // JESUS
+  '3:55':  { beat: "Jesus's death", grade: '🟠', theme: 'Jesus in the Quran', note: '"Allah said: I will cause you to die (مُتَوَفِّيكَ)" — classical scholars debate whether this means death or taking up. 4:157 says he was not killed' },
+  '4:157': { beat: "Jesus's crucifixion", grade: '🟠', theme: 'Jesus in the Quran', note: '"They did not kill him nor crucify him but it appeared so" — ambiguous. 3:55 uses death language. Creates tension' },
+  '4:171': { beat: "Jesus's nature", grade: '🟡', theme: 'Jesus in the Quran', note: 'Calls Jesus "a word from Him" and "a spirit from Him" — these titles appear nowhere else for any other prophet' },
+  // GENERAL CREATION
+  '41:9':  { beat: 'Days of creation', grade: '🔴', theme: 'Creation of the Universe', note: '41:9 says earth created in 2 days. 41:10 adds 4 more. 41:12 adds 2 more = 8 total. But 7:54, 10:3, 11:7, 25:59 all say 6 days' },
+  '41:10': { beat: 'Days of creation', grade: '🔴', theme: 'Creation of the Universe', note: 'Mountains and provisions in 4 days (cumulative with 41:9 = 6). But 41:12 adds 2 more for heavens = 8 total vs 6 in other verses' },
+  '41:12': { beat: 'Days of creation', grade: '🔴', theme: 'Creation of the Universe', note: 'Heavens completed in 2 days. Total with 41:9-10 = 8 days — but 7:54, 10:3, 11:7, 25:59 all say Allah created in 6 days' },
+  '7:54':  { beat: 'Days of creation', grade: '🔴', theme: 'Creation of the Universe', note: 'Says creation in 6 days — but adding 41:9 + 41:10 + 41:12 = 8 days total' },
+  // INHERITANCE
+  '4:11':  { beat: 'Inheritance contradictions', grade: '🔴', theme: 'Family Law and Inheritance', note: 'Fixed shares can add up to more than 100% in certain family configurations — a mathematical tension noted by classical jurists (kalalah problem)' },
+};
+
+function getTensionForVerse(suraId, ayaNum) {
+  return TEXT_BREAKS[`${suraId}:${ayaNum}`] || null;
+}
+
+function buildTensionBadge(suraId, ayaNum) {
+  const t = getTensionForVerse(suraId, ayaNum);
+  if (!t) return '';
+  const gradeColor = t.grade === '🔴' ? '#C0392B' : t.grade === '🟠' ? '#E67E22' : '#F1C40F';
+  const gradeBg = t.grade === '🔴' ? '#FFF0F0' : t.grade === '🟠' ? '#FFF8F0' : '#FFFDE0';
+  const themeEncoded = encodeURIComponent(t.theme);
+  return `<div style="margin:8px 0;padding:8px 10px;background:${gradeBg};border:1px solid ${gradeColor};border-left:4px solid ${gradeColor};border-radius:6px;font-size:11px;cursor:pointer;" onclick="window.location.href='theme-analysis.html?theme=${themeEncoded}&tab=internal'">
+    <div style="font-weight:800;color:${gradeColor};margin-bottom:3px;">${t.grade} TEXT BREAKS HERE — ${t.beat}</div>
+    <div style="color:#333;line-height:1.5;">${t.note}</div>
+    <div style="margin-top:5px;font-weight:700;color:#B8902A;">→ See full internal analysis in theme: ${t.theme}</div>
+  </div>`;
+}
 
 function buildAIPanel(num, arabic, english, tigrinya) {
   if (!verseChats[num]) verseChats[num] = [];
