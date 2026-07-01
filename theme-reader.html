@@ -385,6 +385,16 @@ async function loadHadith() {
 }
 
 async function runHadithComparison() {
+  document.getElementById('compare-result').innerHTML = '<div style="text-align:center;padding:20px;"><span class="spinner"></span> Checking database...</div>';
+
+  // Check DB first
+  const cached = await loadFromDB('hadith_comparison');
+  if (cached) {
+    renderComparison(cached);
+    document.getElementById('compare-result').insertAdjacentHTML('afterbegin', '<div style="font-size:10px;color:#27AE60;font-weight:700;padding:4px 0 8px;">✅ Loaded from database</div>');
+    return;
+  }
+
   document.getElementById('compare-result').innerHTML = '<div style="text-align:center;padding:20px;"><span class="spinner"></span> Comparing Quran vs Hadith narratives...</div>';
   const verseList = ALL_VERSES.slice(0,15).map(v => v.sura_id+':'+v.aya_number+' — '+(v.english||'').slice(0,120)).join('\n');
   const hadithSample = ALL_HADITH.slice(0,5).map(h => h.collection+' #'+h.hadith_number+': '+(h.text_english||'').slice(0,200)).join('\n\n');
@@ -420,6 +430,8 @@ Return ONLY valid JSON (no markdown):
     let raw = (data?.content?.[0]?.text||'').replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
     const d = JSON.parse(raw);
     renderComparison(d);
+    // Save to DB
+    saveToDB('hadith_comparison', d);
   } catch(e) {
     document.getElementById('compare-result').innerHTML='<span style="color:#C0392B;">⚠️ '+e.message+'</span>';
   }
@@ -555,6 +567,32 @@ function copyVerse(key) {
 function copyAll() {
   const text = ALL_VERSES.map(v => '['+v.sura_id+':'+v.aya_number+']\n'+(v.arabic||'')+'\n'+(v.english||'')).join('\n\n');
   navigator.clipboard.writeText(text).then(() => showToast('📋 All verses copied'));
+}
+
+async function saveToDB(field, data) {
+  try {
+    const check = await fetch(`${SB_URL}/rest/v1/theme_analysis?theme=eq.${encodeURIComponent(THEME)}&select=id`, { headers: HDR });
+    const rows = check.ok ? await check.json() : [];
+    const payload = { theme: THEME, [field]: data, updated_at: new Date().toISOString() };
+    if (rows.length) {
+      await fetch(`${SB_URL}/rest/v1/theme_analysis?theme=eq.${encodeURIComponent(THEME)}`, {
+        method:'PATCH', headers:{...HDR,'Content-Type':'application/json',Prefer:'return=minimal'}, body:JSON.stringify(payload)
+      });
+    } else {
+      await fetch(`${SB_URL}/rest/v1/theme_analysis`, {
+        method:'POST', headers:{...HDR,'Content-Type':'application/json',Prefer:'return=minimal'}, body:JSON.stringify(payload)
+      });
+    }
+    console.log('✅ Saved to DB:', field);
+  } catch(e) { console.warn('DB save failed:', e); }
+}
+
+async function loadFromDB(field) {
+  try {
+    const r = await fetch(`${SB_URL}/rest/v1/theme_analysis?theme=eq.${encodeURIComponent(THEME)}&select=${field}`, { headers: HDR });
+    const rows = r.ok ? await r.json() : [];
+    return rows[0]?.[field] || null;
+  } catch(e) { return null; }
 }
 
 // Load on start
