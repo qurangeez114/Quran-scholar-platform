@@ -378,13 +378,40 @@ async function loadVerses() {
 }
 
 async function loadHadith() {
-  const kw = THEME.split(' ').slice(0,3).join(' ');
-  const data = await sbFetch('hadith_corpus', {
-    select: 'collection,hadith_number,grade,text_english,source_url,narrator',
-    text_english: 'ilike.*' + THEME.split(' ')[0] + '*',
-    order: 'grade',
-    limit: 30
-  });
+  document.getElementById('hadith-container').innerHTML = '<div style="text-align:center;padding:20px;"><span class="spinner"></span> Loading hadith...</div>';
+
+  // Extract meaningful keywords from theme name
+  const stopWords = new Set(['and','the','of','in','a','an','to','for','with','from','by','on','at','as','or','is']);
+  const keywords = THEME.split(/\s+/).filter(w => w.length > 3 && !stopWords.has(w.toLowerCase()));
+  const primary = keywords[0] || THEME.split(' ')[0];
+
+  // Try primary keyword first, then fallback to secondary
+  let data = [];
+  for (const kw of keywords.slice(0, 3)) {
+    const result = await fetch(
+      `${SB_URL}/rest/v1/hadith_corpus?select=collection,hadith_number,grade,text_english,source_url,narrator&text_english=ilike.*${encodeURIComponent(kw)}*&order=grade&limit=30`,
+      { headers: HDR }
+    ).then(r => r.ok ? r.json() : []).catch(() => []);
+    result.forEach(r => {
+      if (!data.find(d => d.collection === r.collection && d.hadith_number === r.hadith_number)) {
+        data.push(r);
+      }
+    });
+    if (data.length >= 15) break;
+  }
+
+  // Also search by theme name directly in book_chapter if available
+  if (data.length < 5) {
+    const byChapter = await fetch(
+      `${SB_URL}/rest/v1/hadith_corpus?select=collection,hadith_number,grade,text_english,source_url,narrator&book_chapter=ilike.*${encodeURIComponent(primary)}*&limit=15`,
+      { headers: HDR }
+    ).then(r => r.ok ? r.json() : []).catch(() => []);
+    byChapter.forEach(r => {
+      if (!data.find(d => d.collection === r.collection && d.hadith_number === r.hadith_number)) {
+        data.push(r);
+      }
+    });
+  }
   // Map collection names to sunnah.com slugs
   const SUNNAH_SLUGS = {
     'sahih al-bukhari': 'bukhari', 'bukhari': 'bukhari',
