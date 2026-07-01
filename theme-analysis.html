@@ -915,7 +915,171 @@ function renderContradictions() {
 }
 
 // ── AI ANALYSIS ──────────────────────────────────────────────────────
-async function runThemeAI(mode) {
+async function runInternalCompare() {
+  const box   = document.getElementById('ai-internal-result');
+  const label = document.getElementById('ai-internal-label');
+  const body  = document.getElementById('ai-internal-text');
+  box.style.display = 'block';
+  label.textContent = '📊 SCENE-BY-SCENE COMPARISON ACROSS SURAS';
+  body.innerHTML = '<div style="text-align:center;padding:20px;color:#888;"><span class="spinner"></span> Analyzing ' + VERSES.length + ' verses across suras...</div>';
+
+  const verseList = VERSES.slice(0,25).map(v => v.sura_id+':'+v.aya_number + ' — ' + (v.english||'').slice(0,180)).join('\n');
+
+  const prompt = `You are a critical Quranic scholar. The story/theme "${THEME}" appears across multiple suras.
+
+Verses:
+${verseList}
+
+Return ONLY a valid JSON object (no markdown, no explanation, just the JSON):
+{
+  "suras": ["list of distinct suras involved e.g. Sura 2, Sura 7, Sura 20"],
+  "score": <number 0-100 internal consistency score>,
+  "score_reason": "<2 sentence justification of score>",
+  "beats": [
+    {
+      "beat": "<narrative beat name e.g. 'Material of creation' or 'Iblis refuses to bow'>",
+      "entries": [
+        {
+          "verse": "<sura:aya>",
+          "sura_label": "<e.g. Sura 2>",
+          "text": "<key phrase from verse, max 80 chars>",
+          "grade": "SAME|SIMILAR|TENSION|UNIQUE|ABSENT",
+          "note": "<max 100 char critical observation>"
+        }
+      ],
+      "verdict": "SAME|COMPATIBLE|TENSION|CONTRADICTION",
+      "verdict_note": "<max 150 chars — honest critical assessment>"
+    }
+  ],
+  "tensions": [
+    { "title": "<tension name>", "grade": "GENUINE|APPARENT|MINOR", "detail": "<max 200 chars>" }
+  ]
+}
+
+Rules:
+- grades: SAME (identical), SIMILAR (same event different words), TENSION (same event conflicting details), UNIQUE (only in one sura), ABSENT (missing from this sura)
+- Be honest — do not harmonize tensions that require importing concepts not in the text
+- Cover ALL major narrative beats
+- 4-8 beats minimum`;
+
+  try {
+    const res = await fetch(PROXY, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-5-20250929',
+        max_tokens: 1800,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+    const data = await res.json();
+    if (data?.error) { body.innerHTML = '<span style="color:#C0392B;">⚠️ ' + (data.error.message||JSON.stringify(data.error)) + '</span>'; return; }
+
+    let raw = data?.content?.[0]?.text || '';
+    // Strip markdown fences if present
+    raw = raw.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
+
+    let parsed;
+    try { parsed = JSON.parse(raw); }
+    catch(e) {
+      body.innerHTML = '<div style="color:#C0392B;">⚠️ Could not parse structured response. Raw output:<br><pre style="font-size:10px;white-space:pre-wrap;">' + raw.slice(0,500) + '</pre></div>';
+      return;
+    }
+
+    body.innerHTML = renderCompareTable(parsed);
+  } catch(e) {
+    body.innerHTML = '<span style="color:#C0392B;">⚠️ Error: ' + e.message + '</span>';
+  }
+}
+
+function renderCompareTable(d) {
+  const gradeColor = { SAME:'#27AE60', SIMILAR:'#F39C12', TENSION:'#E67E22', UNIQUE:'#8E44AD', ABSENT:'#95A5A6' };
+  const gradeEmoji = { SAME:'✅', SIMILAR:'🟡', TENSION:'🟠', UNIQUE:'⭐', ABSENT:'➖' };
+  const verdictColor = { SAME:'#27AE60', COMPATIBLE:'#F39C12', TENSION:'#E67E22', CONTRADICTION:'#C0392B' };
+  const verdictEmoji = { SAME:'✅', COMPATIBLE:'🟡', TENSION:'🟠', CONTRADICTION:'🔴' };
+  const workLabel = { SAME:'None', COMPATIBLE:'Low', TENSION:'Moderate', CONTRADICTION:'Very High' };
+
+  // Score card
+  const scoreColor = d.score >= 80 ? '#27AE60' : d.score >= 60 ? '#F39C12' : d.score >= 40 ? '#E67E22' : '#C0392B';
+  let html = `
+    <div style="background:#1A1A1A;border-radius:10px;padding:14px;margin-bottom:16px;text-align:center;">
+      <div style="font-size:32px;font-weight:900;color:${scoreColor};">${d.score}<span style="font-size:16px;color:#AAA;">/100</span></div>
+      <div style="font-size:11px;color:#CCC;margin-top:2px;letter-spacing:1px;">INTERNAL CONSISTENCY SCORE</div>
+      <div style="font-size:11px;color:#999;margin-top:6px;line-height:1.5;max-width:300px;margin-left:auto;margin-right:auto;">${d.score_reason||''}</div>
+    </div>`;
+
+  // Suras involved
+  if (d.suras && d.suras.length) {
+    html += `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;">
+      ${d.suras.map(s=>`<span style="background:#F5EED8;border:1px solid #D4C9A8;border-radius:12px;padding:3px 10px;font-size:11px;font-weight:700;color:#5A3A10;">${s}</span>`).join('')}
+    </div>`;
+  }
+
+  // Beat-by-beat table
+  html += `<div style="margin-bottom:16px;">`;
+  (d.beats||[]).forEach((beat, i) => {
+    const vc = verdictColor[beat.verdict] || '#888';
+    const ve = verdictEmoji[beat.verdict] || '❓';
+    const wl = workLabel[beat.verdict] || '?';
+    html += `
+      <div style="margin-bottom:12px;border:1px solid #E0D8C8;border-radius:8px;overflow:hidden;">
+        <div style="background:#F5EED8;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
+          <div style="font-weight:800;font-size:12px;color:#1A1A1A;">${i+1}. ${beat.beat}</div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span style="font-size:15px;">${ve}</span>
+            <span style="font-size:10px;font-weight:700;color:${vc};">${beat.verdict||''}</span>
+            <span style="font-size:10px;color:#888;">▾</span>
+          </div>
+        </div>
+        <div style="display:none;padding:10px 12px;">
+          <table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:8px;">
+            <tr style="background:#FAFAFA;">
+              <th style="padding:5px 8px;text-align:left;border:1px solid #EEE;width:70px;">Verse</th>
+              <th style="padding:5px 8px;text-align:left;border:1px solid #EEE;">Text</th>
+              <th style="padding:5px 8px;text-align:center;border:1px solid #EEE;width:30px;">Grade</th>
+              <th style="padding:5px 8px;text-align:left;border:1px solid #EEE;">Critical Note</th>
+            </tr>
+            ${(beat.entries||[]).map((e,j)=>`
+            <tr style="background:${j%2?'#FAFAFA':'#FFF'};">
+              <td style="padding:5px 8px;border:1px solid #EEE;font-weight:700;white-space:nowrap;">${e.verse}</td>
+              <td style="padding:5px 8px;border:1px solid #EEE;font-style:italic;color:#333;">"${e.text||''}"</td>
+              <td style="padding:5px 8px;border:1px solid #EEE;text-align:center;font-size:14px;" title="${e.grade||''}">${gradeEmoji[e.grade]||'❓'}</td>
+              <td style="padding:5px 8px;border:1px solid #EEE;color:${gradeColor[e.grade]||'#555'};font-size:10px;">${e.note||''}</td>
+            </tr>`).join('')}
+          </table>
+          <div style="background:#FFF8E8;border-left:3px solid ${vc};padding:8px 10px;font-size:11px;color:#333;line-height:1.6;">
+            ${ve} <strong>${beat.verdict}</strong> — ${beat.verdict_note||''}
+            ${beat.verdict!=='SAME'?`<span style="float:right;font-weight:700;color:${vc};">Work required: ${wl}</span>`:''}
+          </div>
+        </div>
+      </div>`;
+  });
+  html += '</div>';
+
+  // Tensions summary
+  if (d.tensions && d.tensions.length) {
+    html += `<div style="background:#FFF0F0;border:1px solid #FFAAAA;border-radius:8px;padding:12px;margin-bottom:12px;">
+      <div style="font-weight:800;font-size:12px;color:#C0392B;margin-bottom:8px;">⚡ KEY TENSIONS (${d.tensions.length})</div>`;
+    d.tensions.forEach(t => {
+      const tc = t.grade==='GENUINE'?'#C0392B':t.grade==='APPARENT'?'#E67E22':'#F39C12';
+      const te = t.grade==='GENUINE'?'🔴':t.grade==='APPARENT'?'🟠':'🟡';
+      html += `<div style="margin-bottom:8px;padding:8px;background:#FFF;border-radius:6px;border-left:3px solid ${tc};">
+        <div style="font-weight:700;font-size:11px;color:${tc};">${te} ${t.grade} — ${t.title}</div>
+        <div style="font-size:11px;color:#555;margin-top:3px;line-height:1.5;">${t.detail}</div>
+      </div>`;
+    });
+    html += '</div>';
+  }
+
+  // Grade legend
+  html += `<div style="display:flex;gap:6px;flex-wrap:wrap;font-size:10px;color:#555;margin-top:8px;">
+    <span>✅ Same</span><span>🟡 Similar</span><span>🟠 Tension</span><span>🔴 Contradiction</span><span>⭐ Unique to one sura</span><span>➖ Absent</span>
+  </div>`;
+
+  return html;
+}
+
+
   // Determine which container to use
   const isInternal = ['internal_compare','internal_emphasis','internal_sequence','internal_tensions','internal_chronology','internal_reconcile'].includes(mode);
   const isBiblical = ['biblical_compare','jewish_sources','christian_sources','pre_islamic','source_critical','unique_quran'].includes(mode);
