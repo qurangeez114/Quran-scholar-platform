@@ -376,33 +376,59 @@ async function loadVerses() {
 async function loadHadith() {
   document.getElementById('hadith-container').innerHTML = '<div style="text-align:center;padding:20px;"><span class="spinner"></span> Loading hadith...</div>';
 
-  // Extract meaningful keywords from theme name
-  const stopWords = new Set(['and','the','of','in','a','an','to','for','with','from','by','on','at','as','or','is']);
-  const keywords = THEME.split(/\s+/).filter(w => w.length > 3 && !stopWords.has(w.toLowerCase()));
-  const primary = keywords[0] || THEME.split(' ')[0];
+  // Theme-to-keyword mapping for better search
+  const THEME_KEYWORDS = {
+    'women': ['women', 'wife', 'husband', 'female'],
+    'adam': ['adam', 'iblis', 'paradise', 'garden'],
+    'moses': ['moses', 'musa', 'pharaoh', 'israelites'],
+    'jesus': ['jesus', 'isa', 'messiah', 'mary'],
+    'abraham': ['abraham', 'ibrahim', 'ishmael'],
+    'noah': ['noah', 'nuh', 'flood', 'ark'],
+    'prayer': ['prayer', 'salah', 'salat', 'mosque'],
+    'jihad': ['jihad', 'fighting', 'battle', 'war'],
+    'marriage': ['marriage', 'wife', 'husband', 'nikah'],
+    'divorce': ['divorce', 'talaq', 'separation'],
+    'inheritance': ['inheritance', 'estate', 'heir'],
+    'paradise': ['paradise', 'jannah', 'heaven', 'garden'],
+    'hell': ['hell', 'hellfire', 'punishment', 'fire'],
+    'fasting': ['fasting', 'ramadan', 'sawm'],
+    'pilgrimage': ['pilgrimage', 'hajj', 'kaaba', 'mecca'],
+    'charity': ['charity', 'zakat', 'sadaqa', 'giving'],
+    'hypocrites': ['hypocrites', 'munafiq', 'hypocrisy'],
+    'judgment': ['judgment', 'resurrection', 'day of'],
+    'creation': ['creation', 'created', 'creator'],
+    'authority': ['authority', 'obedience', 'guardian', 'qiwama'],
+    'hierarchy': ['authority', 'obedience', 'degree', 'guardian'],
+    'degree': ['degree', 'daraja', 'rank', 'authority'],
+  };
 
-  // Try primary keyword first, then fallback to secondary
+  // Clean theme name — remove colons, get key words
+  const cleanTheme = THEME.replace(/:/g, ' ').toLowerCase();
+  const stopWords = new Set(['and','the','of','in','a','an','to','for','with','from','by','on','at','as','or','is','their','its','his','her']);
+  const themeWords = cleanTheme.split(/\s+/).filter(w => w.length > 3 && !stopWords.has(w));
+
+  // Build search keywords — use theme map first
+  let searchKeywords = [];
+  for (const word of themeWords) {
+    for (const [key, kws] of Object.entries(THEME_KEYWORDS)) {
+      if (word.includes(key) || key.includes(word)) {
+        searchKeywords = searchKeywords.concat(kws);
+      }
+    }
+  }
+  // Also add the cleaned theme words themselves
+  themeWords.forEach(w => { if (!searchKeywords.includes(w)) searchKeywords.push(w); });
+  // Deduplicate and limit
+  searchKeywords = [...new Set(searchKeywords)].slice(0, 6);
+
   let data = [];
-  for (const kw of keywords.slice(0, 3)) {
+  for (const kw of searchKeywords) {
+    if (data.length >= 25) break;
     const result = await fetch(
-      `${SB_URL}/rest/v1/hadith_corpus?select=collection,hadith_number,grade,text_english,source_url,narrator&text_english=ilike.*${encodeURIComponent(kw)}*&order=grade&limit=30`,
+      `${SB_URL}/rest/v1/hadith_corpus?select=collection,hadith_number,grade,text_english,source_url,narrator&text_english=ilike.*${encodeURIComponent(kw)}*&order=grade&limit=15`,
       { headers: HDR }
     ).then(r => r.ok ? r.json() : []).catch(() => []);
     result.forEach(r => {
-      if (!data.find(d => d.collection === r.collection && d.hadith_number === r.hadith_number)) {
-        data.push(r);
-      }
-    });
-    if (data.length >= 15) break;
-  }
-
-  // Also search by theme name directly in book_chapter if available
-  if (data.length < 5) {
-    const byChapter = await fetch(
-      `${SB_URL}/rest/v1/hadith_corpus?select=collection,hadith_number,grade,text_english,source_url,narrator&book_chapter=ilike.*${encodeURIComponent(primary)}*&limit=15`,
-      { headers: HDR }
-    ).then(r => r.ok ? r.json() : []).catch(() => []);
-    byChapter.forEach(r => {
       if (!data.find(d => d.collection === r.collection && d.hadith_number === r.hadith_number)) {
         data.push(r);
       }
