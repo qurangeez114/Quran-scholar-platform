@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Theme Reader — Quran Hikma</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Georgia', serif; background: #FDFAF4; color: #1A1A1A; }
+
+/* TOP BAR */
+.topbar { position: sticky; top: 0; z-index: 200; background: #FDF8EE; border-bottom: 2px solid #E8C97B; padding: 10px 14px; display: flex; align-items: center; gap: 10px; }
+.topbar-title { flex: 1; font-size: 14px; font-weight: 700; color: #5A3A10; }
+.topbar a { font-size: 12px; color: #B8902A; text-decoration: none; font-weight: 700; white-space: nowrap; }
+.btn-gold { padding: 6px 12px; background: #B8902A; color: #fff; border: none; border-radius: 16px; font-size: 11px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.btn-outline { padding: 6px 12px; background: #FDF8EE; color: #B8902A; border: 1.5px solid #B8902A; border-radius: 16px; font-size: 11px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+
+/* CONTROLS */
+.controls { padding: 10px 14px; background: #FFF8E8; border-bottom: 1px solid #E8D8A0; }
+.controls-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
+.lang-btn { padding: 5px 10px; border-radius: 12px; border: 1.5px solid #D4C9A8; background: #FFF; font-size: 11px; cursor: pointer; font-weight: 600; color: #5A3A10; transition: all 0.15s; }
+.lang-btn.active { background: #B8902A; color: #fff; border-color: #B8902A; }
+.section-label { font-size: 10px; font-weight: 800; color: #B8902A; letter-spacing: 0.8px; text-transform: uppercase; }
+
+/* VERSE CARDS */
+.sura-section { margin: 12px 10px; }
+.sura-header { font-size: 13px; font-weight: 800; color: #B8902A; padding: 8px 12px; background: #FDF0D0; border-radius: 8px 8px 0 0; border: 1px solid #E8D0A0; border-bottom: none; display: flex; justify-content: space-between; align-items: center; }
+.verse-card { padding: 14px; border: 1px solid #E8E0D0; border-top: none; background: #FFF; }
+.verse-card:last-child { border-radius: 0 0 8px 8px; }
+.verse-card + .verse-card { border-top: 1px solid #F0EDE6; }
+.verse-num { font-size: 10px; font-weight: 800; color: #B8902A; letter-spacing: 0.5px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
+.verse-arabic { font-family: 'Times New Roman', serif; font-size: 20px; line-height: 1.8; direction: rtl; text-align: right; color: #1A1A1A; margin-bottom: 10px; }
+.verse-english { font-size: 14px; line-height: 1.75; color: #2C2C2C; }
+.verse-tigrinya { font-family: 'Noto Sans Ethiopic', sans-serif; font-size: 14px; line-height: 1.8; color: #1A1A1A; font-weight: 600; margin-top: 8px; }
+.verse-amharic { font-family: 'Noto Sans Ethiopic', sans-serif; font-size: 14px; line-height: 1.8; color: #1A1A1A; margin-top: 8px; }
+.verse-transliteration { font-size: 12px; color: #7A6A50; font-style: italic; margin-top: 6px; line-height: 1.6; }
+.tension-flag { margin-top: 8px; padding: 6px 10px; border-radius: 5px; font-size: 11px; cursor: pointer; border-left: 3px solid; }
+.tension-flag.red { background: #FFF0F0; border-color: #C0392B; color: #C0392B; }
+.tension-flag.orange { background: #FFF8F0; border-color: #E67E22; color: #E67E22; }
+.tension-flag.yellow { background: #FFFDE0; border-color: #F1C40F; color: #8B7010; }
+.verse-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; padding-top: 8px; border-top: 1px solid #F0EDE6; }
+.v-btn { padding: 4px 9px; border-radius: 10px; border: 1px solid #D4C9A8; background: #FDF8EE; font-size: 10px; font-weight: 700; cursor: pointer; color: #5A3A10; }
+.v-btn:active { background: #E8D8A0; }
+
+/* HADITH COMPARISON TAB */
+.tab-row { display: flex; overflow-x: auto; gap: 2px; padding: 0 10px; background: #F5EED8; border-bottom: 2px solid #D4C9A8; }
+.main-tab { padding: 10px 14px; font-size: 12px; font-weight: 700; border: none; background: none; cursor: pointer; color: #8B7355; border-bottom: 3px solid transparent; white-space: nowrap; }
+.main-tab.active { color: #B8902A; border-bottom-color: #B8902A; }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* HADITH */
+.hadith-card { margin: 10px; padding: 14px; background: #FFF; border: 1px solid #E8E0D0; border-radius: 8px; }
+.hadith-meta { font-size: 10px; font-weight: 800; color: #B8902A; letter-spacing: 0.5px; margin-bottom: 6px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px; }
+.hadith-grade { padding: 2px 8px; border-radius: 8px; font-size: 10px; font-weight: 700; }
+.grade-sahih { background: #D5F5E3; color: #1E8449; }
+.grade-hasan { background: #FEF9E7; color: #B7950B; }
+.grade-weak { background: #FDEDEC; color: #C0392B; }
+.grade-fabricated { background: #F2F3F4; color: #717D7E; }
+.grade-ungraded { background: #EAF2FF; color: #2471A3; }
+.hadith-text { font-size: 13px; line-height: 1.75; color: #2C2C2C; }
+.hadith-compare-badge { margin-top: 8px; padding: 6px 10px; background: #F0F8FF; border: 1px solid #AED6F1; border-radius: 6px; font-size: 11px; color: #1A5276; }
+
+/* AUTHENTICITY */
+.auth-section { margin: 10px; }
+.auth-card { padding: 14px; border-radius: 8px; margin-bottom: 10px; border: 1px solid; }
+.auth-card.quran { background: #F0FFF4; border-color: #ABEBC6; }
+.auth-card.hadith { background: #FFF8E8; border-color: #F9E79F; }
+.auth-card.critical { background: #FFF0F0; border-color: #FADBD8; }
+.auth-title { font-size: 13px; font-weight: 800; margin-bottom: 8px; }
+.auth-point { font-size: 12px; line-height: 1.7; color: #333; padding: 4px 0; border-bottom: 1px solid rgba(0,0,0,0.06); }
+.auth-point:last-child { border-bottom: none; }
+
+/* SPINNER */
+.spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid #E8D8A0; border-top-color: #B8902A; border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: middle; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* TOAST */
+.toast { position: fixed; bottom: 70px; left: 50%; transform: translateX(-50%); background: #1A1A1A; color: #fff; padding: 8px 18px; border-radius: 20px; font-size: 12px; font-weight: 700; z-index: 9999; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+.toast.show { opacity: 1; }
+</style>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Ethiopic:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <a href="javascript:history.back()">← Back</a>
+  <div class="topbar-title" id="pageTitle">Loading...</div>
+  <button class="btn-outline" onclick="saveToResearch()">📚 Research</button>
+  <button class="btn-gold" onclick="addAllToPresentation()">🎬 Deck</button>
+  <button onclick="openDonateModal()" style="flex-shrink:0;padding:6px 10px;border:2px solid #B8902A;border-radius:20px;background:#B8902A;color:#fff;font-size:11px;font-weight:700;cursor:pointer;">❤️ Donate</button>
+</div>
+
+<!-- LANGUAGE CONTROLS -->
+<div class="controls">
+  <div class="section-label" style="margin-bottom:6px;">Show Languages</div>
+  <div class="controls-row">
+    <button class="lang-btn active" onclick="toggleLang('arabic',this)">🕌 Arabic</button>
+    <button class="lang-btn" onclick="toggleLang('translit',this)">🔤 Translit</button>
+    <button class="lang-btn active" onclick="toggleLang('english',this)">🇬🇧 English</button>
+    <button class="lang-btn" onclick="toggleLang('tigrinya',this)">🇪🇷 Tigrinya</button>
+    <button class="lang-btn" onclick="toggleLang('amharic',this)">🇪🇹 Amharic</button>
+  </div>
+  <div class="controls-row">
+    <div id="verse-count" style="font-size:11px;color:#888;"></div>
+    <button class="v-btn" onclick="addAllToPresentation()" style="margin-left:auto;">🎬 Add All to Deck</button>
+    <button class="v-btn" onclick="copyAll()">📋 Copy All</button>
+  </div>
+</div>
+
+<!-- MAIN TABS -->
+<div class="tab-row">
+  <button class="main-tab active" onclick="switchMainTab('verses',this)">📖 All Verses</button>
+  <button class="main-tab" onclick="switchMainTab('hadith',this)">📿 Hadith</button>
+  <button class="main-tab" onclick="switchMainTab('compare',this)">🔄 Compare</button>
+  <button class="main-tab" onclick="switchMainTab('authentic',this)">⚖️ Authenticity</button>
+</div>
+
+<!-- TAB: ALL VERSES -->
+<div id="tab-verses" class="tab-panel active">
+  <div id="verses-container" style="padding-bottom:80px;">
+    <div style="text-align:center;padding:40px;color:#888;"><span class="spinner"></span> Loading verses...</div>
+  </div>
+</div>
+
+<!-- TAB: HADITH -->
+<div id="tab-hadith" class="tab-panel">
+  <div style="padding:10px 14px;font-size:12px;color:#7A8FA6;background:#F8F4EE;">
+    Hadith narrations that expand, add to, or diverge from the Quranic account of this theme.
+  </div>
+  <div id="hadith-container" style="padding-bottom:80px;">
+    <div style="text-align:center;padding:40px;color:#888;"><span class="spinner"></span> Loading...</div>
+  </div>
+</div>
+
+<!-- TAB: COMPARE (Quran vs Hadith) -->
+<div id="tab-compare" class="tab-panel">
+  <div style="padding:10px 14px;font-size:12px;color:#7A8FA6;background:#F8F4EE;">
+    How does the Hadith narrative differ from what the Quran actually says? What is added, removed, or changed?
+  </div>
+  <div id="compare-container" style="padding:10px;padding-bottom:80px;">
+    <button class="btn-gold" style="width:100%;padding:12px;margin-bottom:10px;" onclick="runHadithComparison()">
+      🔄 Generate Quran vs Hadith Comparison
+    </button>
+    <div id="compare-result"></div>
+  </div>
+</div>
+
+<!-- TAB: AUTHENTICITY -->
+<div id="tab-authentic" class="tab-panel">
+  <div style="padding:10px 14px;font-size:12px;color:#7A8FA6;background:#F8F4EE;">
+    Which narrative is more reliable? Scholarly criteria for evaluating Quranic vs Hadith accounts.
+  </div>
+  <div id="authentic-container" style="padding:10px;padding-bottom:80px;">
+    <button class="btn-gold" style="width:100%;padding:12px;margin-bottom:10px;" onclick="runAuthenticityAnalysis()">
+      ⚖️ Generate Authenticity Analysis
+    </button>
+    <div id="authentic-result">
+
+      <!-- Pre-loaded static framework -->
+      <div class="auth-section">
+        <div class="auth-card quran">
+          <div class="auth-title" style="color:#1E8449;">📖 Arguments for Quranic Priority</div>
+          <div class="auth-point">✅ <strong>Preserved in writing</strong> — compiled within decades of revelation, mass-transmitted (tawatur)</div>
+          <div class="auth-point">✅ <strong>Internal consistency test</strong> — the Quran itself challenges anyone to find contradictions (4:82)</div>
+          <div class="auth-point">✅ <strong>No chain of transmitters</strong> — no isnad to evaluate or fabricate</div>
+          <div class="auth-point">✅ <strong>Earlier text</strong> — chronologically closer to the Prophet than most hadith collections</div>
+          <div class="auth-point">✅ <strong>Quranists argue</strong> — 6:114 says "Shall I seek other than Allah as a judge?" implying Quran is self-sufficient</div>
+        </div>
+        <div class="auth-card hadith">
+          <div class="auth-title" style="color:#7D6608;">📿 Arguments for Hadith Authority</div>
+          <div class="auth-point">📿 <strong>Sunnah as explanation</strong> — 16:44 says "We revealed to you the Reminder so you may explain to people what was sent down" — requiring hadith</div>
+          <div class="auth-point">📿 <strong>Science of hadith criticism (rijal)</strong> — sophisticated system of isnad analysis developed to filter weak from authentic</div>
+          <div class="auth-point">📿 <strong>Sahih collections</strong> — Bukhari and Muslim applied rigorous standards; Sahih hadiths considered reliable by mainstream scholars</div>
+          <div class="auth-point">📿 <strong>Practical necessity</strong> — prayer timing, pilgrimage details, inheritance rules all require hadith since Quran doesn't specify</div>
+        </div>
+        <div class="auth-card critical">
+          <div class="auth-title" style="color:#C0392B;">⚡ Critical Scholarly Concerns</div>
+          <div class="auth-point">🔴 <strong>Hadith written 200+ years later</strong> — even Bukhari compiled 200+ years after the Prophet died; oral transmission over generations</div>
+          <div class="auth-point">🔴 <strong>Oral transmission distorts</strong> — telephone effect over 6-8 transmission generations; each narrator's memory, interpretation, and bias affects the text</div>
+          <div class="auth-point">🔴 <strong>Political fabrication</strong> — hadith scholars themselves acknowledged mass fabrication; Ibn al-Jawzi listed thousands of fabricated hadith</div>
+          <div class="auth-point">🔴 <strong>Isrāʾīliyyāt infiltration</strong> — Jewish and Christian stories entered hadith literature through converts; many Adam details come from Genesis via Ka'b al-Ahbar, Wahb ibn Munabbih</div>
+          <div class="auth-point">🔴 <strong>When Quran and hadith conflict</strong> — classical principle: Quran takes precedence. But in practice hadith often used to "explain" Quranic verses in ways that alter their plain meaning</div>
+          <div class="auth-point">🔴 <strong>The authenticity paradox</strong> — we verify hadith using hadith (rijal chains are themselves reported in hadith). No external verification possible</div>
+        </div>
+        <div style="margin:10px 0;padding:12px;background:#1A1A1A;border-radius:8px;color:#EEE;font-size:12px;line-height:1.7;">
+          <div style="font-weight:800;color:#FFD700;margin-bottom:6px;">⚖️ The Core Question</div>
+          When the Quran says Adam "forgot" (20:115) but the hadith describes Adam as 60 cubits tall, placed in Paradise for a specific duration, and names his sons Habil and Qabil — <strong>which is revelation and which is elaboration?</strong>
+          <br><br>
+          Classical Islamic answer: both — Quran provides the essentials, hadith provides the details.
+          <br><br>
+          Critical answer: the Quran is demonstrably the earlier, mass-transmitted text. Hadith details absent from the Quran should be held to a higher evidentiary standard before being treated as equally authoritative revelation.
+          <br><br>
+          <button class="btn-gold" style="margin-top:6px;" onclick="runAuthenticityAnalysis()">🤖 Get AI Analysis for This Specific Theme</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<!-- DONATE MODAL (minimal) -->
+<div id="donateModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;align-items:center;justify-content:center;">
+  <div style="background:#FDF8EE;border-radius:16px;padding:24px;max-width:320px;width:90%;text-align:center;">
+    <div style="font-size:32px;margin-bottom:8px;">❤️</div>
+    <div style="font-size:18px;font-weight:800;color:#B8902A;margin-bottom:8px;">Support Quran Hikma</div>
+    <a href="https://paypal.me/quranhikma" target="_blank" class="btn-gold" style="display:block;padding:12px;text-decoration:none;margin-bottom:10px;">Donate via PayPal</a>
+    <button onclick="document.getElementById('donateModal').style.display='none'" class="btn-outline" style="width:100%;">Close</button>
+  </div>
+</div>
+
+<script>
+const SB_URL = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
+const HDR = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY };
+const PROXY = '/.netlify/functions/claude-proxy';
+
+const params = new URLSearchParams(location.search);
+const THEME = decodeURIComponent(params.get('theme') || '');
+document.getElementById('pageTitle').textContent = THEME || 'Theme Reader';
+document.title = THEME + ' — Quran Hikma';
+
+// Record history
+if (window.qhistRecord) qhistRecord('Reading: "' + THEME + '"', location.href, '📖', 'Theme Reader');
+
+let LANG_STATE = { arabic: true, translit: false, english: true, tigrinya: false, amharic: false };
+let ALL_VERSES = [];
+let ALL_HADITH = [];
+
+// TEXT BREAKS lookup (from main app)
+const TEXT_BREAKS = {
+  '2:34': { grade:'🔴', note:'Iblis listed AMONG ANGELS — but 18:50 says he was a JINN' },
+  '7:11': { grade:'🔴', note:'Iblis among angels — contradicts 18:50 (jinn)' },
+  '15:31':{ grade:'🔴', note:'Iblis refused — placed structurally among angels vs 18:50' },
+  '17:61':{ grade:'🔴', note:'Iblis among angels — contradicts 18:50' },
+  '18:50':{ grade:'🔴', note:'⚠️ Says Iblis WAS OF THE JINN — but 6 passages place him among angels' },
+  '20:116':{ grade:'🔴', note:'Iblis among angels — contradicts 18:50' },
+  '38:74':{ grade:'🔴', note:'Iblis among angels — contradicts 18:50' },
+  '3:59': { grade:'🔴', note:'Adam from DUST — other verses say clay, altered mud, or pottery clay' },
+  '7:12': { grade:'🔴', note:'Iblis says Adam from CLAY — conflicts with dust (3:59) and altered mud (15:26)' },
+  '15:26':{ grade:'🔴', note:'ALTERED BLACK MUD — different from dust, clay, and pottery clay' },
+  '20:115':{ grade:'🔴', note:'Adam FORGOT — reduces culpability. But 20:121 says he DISOBEYED' },
+  '20:121':{ grade:'🔴', note:'⚠️ Adam DISOBEYED — strong condemnation. But 20:115 (same sura) says he forgot' },
+  '7:16': { grade:'🟠', note:'Iblis blames Allah "because YOU misled me" — Allah never refutes this' },
+  '15:39':{ grade:'🟠', note:'Again Iblis blames Allah — not refuted' },
+  '38:82':{ grade:'🟠', note:'Different oath — no blame assigned vs 7:16, 15:39' },
+  '2:36': { grade:'🟠', note:'Satan caused BOTH to slip equally — but 20:120 singles out Adam' },
+  '20:120':{ grade:'🟠', note:'Satan whispered to ADAM alone — but 2:36 and 7:20 say both equally' },
+  '2:38': { grade:'🟠', note:'Second "go down" command 2 verses after 2:36 — possible editorial seam' },
+  '20:123':{ grade:'🟠', note:'DUAL form (2 people) — but 2:36, 2:38, 7:24 use PLURAL (3+)' },
+  '41:9': { grade:'🔴', note:'Earth in 2 days — adding 41:10 + 41:12 = 8 total vs 6 days in 7:54' },
+  '41:12':{ grade:'🔴', note:'Heavens in 2 days — total with 41:9-10 = 8 days vs 6 days in other verses' },
+};
+
+function openDonateModal() { document.getElementById('donateModal').style.display='flex'; }
+
+function toggleLang(lang, btn) {
+  LANG_STATE[lang] = !LANG_STATE[lang];
+  btn.classList.toggle('active', LANG_STATE[lang]);
+  document.querySelectorAll('.v-' + lang).forEach(el => {
+    el.style.display = LANG_STATE[lang] ? '' : 'none';
+  });
+}
+
+function switchMainTab(id, btn) {
+  document.querySelectorAll('.main-tab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.style.display='');
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('tab-' + id).classList.add('active');
+  if (id === 'hadith' && ALL_HADITH.length === 0) loadHadith();
+}
+
+function showToast(msg, dur=2000) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), dur);
+}
+
+async function sbFetch(table, qparams) {
+  let url = SB_URL + '/rest/v1/' + table + '?';
+  url += Object.entries(qparams).map(([k,v]) => k + '=' + encodeURIComponent(v)).join('&');
+  const r = await fetch(url, { headers: HDR });
+  return r.ok ? await r.json() : [];
+}
+
+// Load all verses for this theme
+async function loadVerses() {
+  if (!THEME) { document.getElementById('verses-container').innerHTML = '<div style="padding:20px;color:#C00;">No theme specified.</div>'; return; }
+
+  // Get verse refs from thematic_cross_references
+  const refs = await sbFetch('thematic_cross_references', { select: 'sura,aya', theme: 'eq.' + THEME, order: 'sura,aya', limit: 300 });
+  // Deduplicate
+  const seen = {}; const pairs = [];
+  refs.forEach(r => { const k = r.sura+':'+r.aya; if (!seen[k]) { seen[k]=1; pairs.push(r); } });
+  pairs.sort((a,b) => a.sura-b.sura || a.aya-b.aya);
+
+  if (!pairs.length) { document.getElementById('verses-container').innerHTML = '<div style="padding:20px;color:#888;text-align:center;">No verses found for this theme.</div>'; return; }
+
+  // Fetch actual verse text in batches by sura
+  const bySura = {};
+  pairs.forEach(p => { if (!bySura[p.sura]) bySura[p.sura]=[]; bySura[p.sura].push(p.aya); });
+
+  const SURA_NAMES = {1:'Al-Fatiha',2:'Al-Baqara',3:'Al-Imran',4:'An-Nisa',5:'Al-Maida',6:'Al-Anam',7:'Al-Araf',8:'Al-Anfal',9:'At-Tawba',10:'Yunus',11:'Hud',12:'Yusuf',13:'Ar-Rad',14:'Ibrahim',15:'Al-Hijr',17:'Al-Isra',18:'Al-Kahf',19:'Maryam',20:'Ta-Ha',21:'Al-Anbiya',22:'Al-Hajj',23:'Al-Muminun',24:'An-Nur',25:'Al-Furqan',26:'Ash-Shuara',27:'An-Naml',28:'Al-Qasas',29:'Al-Ankabut',30:'Ar-Rum',31:'Luqman',32:'As-Sajda',33:'Al-Ahzab',34:'Saba',35:'Al-Fatir',36:'Ya-Sin',37:'As-Saffat',38:'Sad',39:'Az-Zumar',40:'Ghafir',41:'Fussilat',55:'Ar-Rahman',66:'At-Tahrim',71:'Nuh',76:'Al-Insan'};
+
+  let html = '';
+  let totalVerses = 0;
+
+  for (const sura of Object.keys(bySura).sort((a,b)=>a-b)) {
+    const ayas = bySura[sura];
+    const verseData = await sbFetch('ayas', {
+      select: 'sura_id,aya_number,arabic,english,tigrinya,amharic,arabic_transliteration',
+      sura_id: 'eq.' + sura,
+      aya_number: 'in.(' + ayas.join(',') + ')',
+      order: 'aya_number'
+    });
+    ALL_VERSES = ALL_VERSES.concat(verseData);
+    totalVerses += verseData.length;
+    const suraName = SURA_NAMES[sura] || 'Sura ' + sura;
+    html += `<div class="sura-section">
+      <div class="sura-header">
+        <span>Sura ${sura} — ${suraName}</span>
+        <span style="font-size:10px;color:#8B7355;">${verseData.length} verses</span>
+      </div>`;
+    verseData.forEach(v => {
+      const key = v.sura_id + ':' + v.aya_number;
+      const tb = TEXT_BREAKS[key];
+      const tbHtml = tb ? `<div class="tension-flag ${tb.grade==='🔴'?'red':'orange'}" onclick="window.location.href='theme-analysis.html?theme=${encodeURIComponent(THEME)}&tab=internal'">${tb.grade} Text breaks here — ${tb.note}</div>` : '';
+      html += `<div class="verse-card" id="vc-${key}">
+        <div class="verse-num">
+          <span>${v.sura_id}:${v.aya_number}</span>
+          <div style="display:flex;gap:4px;">
+            <button class="v-btn" onclick="addToPresentation('${key}')">🎬</button>
+            <button class="v-btn" onclick="addToResearch('${key}')">📚</button>
+            <button class="v-btn" onclick="copyVerse('${key}')">📋</button>
+          </div>
+        </div>
+        <div class="v-arabic verse-arabic" style="${LANG_STATE.arabic?'':'display:none'}">${v.arabic||''}</div>
+        <div class="v-translit verse-transliteration" style="${LANG_STATE.translit?'':'display:none'}">${v.arabic_transliteration||''}</div>
+        <div class="v-english verse-english" style="${LANG_STATE.english?'':'display:none'}">${v.english||''}</div>
+        ${v.tigrinya ? `<div class="v-tigrinya verse-tigrinya" style="${LANG_STATE.tigrinya?'':'display:none'}"><div style="font-size:9px;font-weight:800;color:#B8902A;margin-bottom:3px;">TIGRINYA · ትግርኛ · ${v.sura_id}:${v.aya_number}</div>${v.tigrinya}</div>` : ''}
+        ${v.amharic ? `<div class="v-amharic verse-amharic" style="${LANG_STATE.amharic?'':'display:none'}"><div style="font-size:9px;font-weight:800;color:#5C7A3A;margin-bottom:3px;">AMHARIC · አማርኛ · ${v.sura_id}:${v.aya_number}</div>${v.amharic}</div>` : ''}
+        ${tbHtml}
+      </div>`;
+    });
+    html += '</div>';
+  }
+
+  document.getElementById('verses-container').innerHTML = html;
+  document.getElementById('verse-count').textContent = totalVerses + ' verses across ' + Object.keys(bySura).length + ' suras';
+}
+
+async function loadHadith() {
+  const kw = THEME.split(' ').slice(0,3).join(' ');
+  const data = await sbFetch('hadith_corpus', {
+    select: 'collection,hadith_number,grade,text_english,source_url,narrator',
+    text_english: 'ilike.*' + THEME.split(' ')[0] + '*',
+    order: 'grade',
+    limit: 30
+  });
+  ALL_HADITH = data;
+
+  if (!data.length) {
+    document.getElementById('hadith-container').innerHTML = '<div style="padding:20px;color:#888;text-align:center;">No hadith found for this theme in database.</div>';
+    return;
+  }
+
+  let html = `<div style="padding:10px 14px;font-size:11px;color:#888;">${data.length} hadith found — showing additions/changes vs Quranic account</div>`;
+  data.forEach(h => {
+    const gradeClass = h.grade === 'sahih' ? 'grade-sahih' : h.grade === 'hasan' ? 'grade-hasan' : h.grade === 'weak' || h.grade === 'da\'if' ? 'grade-weak' : h.grade === 'fabricated' || h.grade === 'mawdu' ? 'grade-fabricated' : 'grade-ungraded';
+    html += `<div class="hadith-card">
+      <div class="hadith-meta">
+        <span>${h.collection} #${h.hadith_number}</span>
+        <span class="hadith-grade ${gradeClass}">${h.grade || 'ungraded'}</span>
+      </div>
+      ${h.narrator ? `<div style="font-size:10px;color:#888;margin-bottom:6px;">Narrator: ${h.narrator}</div>` : ''}
+      <div class="hadith-text">${(h.text_english||'').slice(0,400)}${h.text_english&&h.text_english.length>400?'...':''}</div>
+      ${h.source_url ? `<a href="${h.source_url}" target="_blank" style="display:inline-block;margin-top:8px;font-size:10px;color:#B8902A;font-weight:700;">🔗 Verify source</a>` : ''}
+    </div>`;
+  });
+  document.getElementById('hadith-container').innerHTML = html;
+}
+
+async function runHadithComparison() {
+  document.getElementById('compare-result').innerHTML = '<div style="text-align:center;padding:20px;"><span class="spinner"></span> Comparing Quran vs Hadith narratives...</div>';
+  const verseList = ALL_VERSES.slice(0,15).map(v => v.sura_id+':'+v.aya_number+' — '+(v.english||'').slice(0,120)).join('\n');
+  const hadithSample = ALL_HADITH.slice(0,5).map(h => h.collection+' #'+h.hadith_number+': '+(h.text_english||'').slice(0,200)).join('\n\n');
+
+  const prompt = `You are a critical scholar comparing Quranic and Hadith narratives on the theme: "${THEME}"
+
+QURANIC VERSES:
+${verseList}
+
+HADITH SAMPLE:
+${hadithSample}
+
+Return ONLY valid JSON (no markdown):
+{
+  "additions": [
+    { "detail": "<what hadith adds that Quran does not say>", "quran_says": "<what Quran actually says or 'Silent'>", "hadith_says": "<what hadith claims>", "significance": "MAJOR|MODERATE|MINOR" }
+  ],
+  "contradictions": [
+    { "detail": "<what conflicts>", "quran_verse": "<sura:aya>", "quran_text": "<key phrase>", "hadith_text": "<key phrase>", "severity": "HIGH|MODERATE|LOW" }
+  ],
+  "omissions": [
+    { "detail": "<what Quran says that hadith ignores or downplays>" }
+  ],
+  "oral_transmission_issues": "<paragraph on how oral transmission may have altered the story>",
+  "verdict": "<2-3 sentence honest scholarly assessment of relative reliability>"
+}`;
+
+  try {
+    const res = await fetch(PROXY, { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ model:'claude-sonnet-4-5-20250929', max_tokens:1600, messages:[{role:'user',content:prompt}] }) });
+    const data = await res.json();
+    if (data?.error) { document.getElementById('compare-result').innerHTML='<span style="color:#C0392B;">⚠️ '+data.error.message+'</span>'; return; }
+    let raw = (data?.content?.[0]?.text||'').replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
+    const d = JSON.parse(raw);
+    renderComparison(d);
+  } catch(e) {
+    document.getElementById('compare-result').innerHTML='<span style="color:#C0392B;">⚠️ '+e.message+'</span>';
+  }
+}
+
+function renderComparison(d) {
+  const sevColor = { HIGH:'#C0392B', MAJOR:'#C0392B', MODERATE:'#E67E22', MINOR:'#F1C40F', LOW:'#27AE60' };
+  let html = '';
+
+  if (d.additions && d.additions.length) {
+    html += `<div style="margin-bottom:12px;"><div style="font-size:12px;font-weight:800;color:#1A5276;padding:8px 12px;background:#EAF2FF;border-radius:8px 8px 0 0;">➕ What Hadith ADDS (not in Quran) — ${d.additions.length} items</div>`;
+    d.additions.forEach(a => {
+      html += `<div style="padding:10px 12px;border:1px solid #AED6F1;border-top:none;background:#FFF;">
+        <div style="font-weight:700;font-size:12px;color:#1A5276;margin-bottom:4px;">${a.detail}</div>
+        <div style="font-size:11px;color:#555;">📖 Quran: <em>${a.quran_says}</em></div>
+        <div style="font-size:11px;color:#555;">📿 Hadith: <em>${a.hadith_says}</em></div>
+        <span style="font-size:10px;font-weight:700;color:${sevColor[a.significance]||'#888'};">${a.significance}</span>
+      </div>`;
+    });
+    html += '</div>';
+  }
+
+  if (d.contradictions && d.contradictions.length) {
+    html += `<div style="margin-bottom:12px;"><div style="font-size:12px;font-weight:800;color:#C0392B;padding:8px 12px;background:#FDEDEC;border-radius:8px 8px 0 0;">⚡ CONTRADICTIONS between Quran and Hadith — ${d.contradictions.length}</div>`;
+    d.contradictions.forEach(c => {
+      html += `<div style="padding:10px 12px;border:1px solid #FADBD8;border-top:none;background:#FFF;">
+        <div style="font-weight:700;font-size:12px;color:#C0392B;margin-bottom:4px;">${c.detail}</div>
+        <div style="font-size:11px;color:#555;">📖 Quran ${c.quran_verse}: <em>"${c.quran_text}"</em></div>
+        <div style="font-size:11px;color:#555;">📿 Hadith says: <em>"${c.hadith_text}"</em></div>
+        <span style="font-size:10px;font-weight:700;color:${sevColor[c.severity]||'#888'};">Severity: ${c.severity}</span>
+      </div>`;
+    });
+    html += '</div>';
+  }
+
+  if (d.omissions && d.omissions.length) {
+    html += `<div style="margin-bottom:12px;"><div style="font-size:12px;font-weight:800;color:#7D6608;padding:8px 12px;background:#FEF9E7;border-radius:8px 8px 0 0;">➖ What Hadith OMITS from Quran — ${d.omissions.length}</div>`;
+    d.omissions.forEach(o => {
+      html += `<div style="padding:10px 12px;border:1px solid #F9E79F;border-top:none;font-size:12px;color:#555;background:#FFF;">${o.detail}</div>`;
+    });
+    html += '</div>';
+  }
+
+  if (d.oral_transmission_issues) {
+    html += `<div style="padding:12px;background:#F4ECF7;border:1px solid #D2B4DE;border-radius:8px;margin-bottom:12px;">
+      <div style="font-size:11px;font-weight:800;color:#6C3483;margin-bottom:6px;">📡 Oral Transmission Analysis</div>
+      <div style="font-size:12px;color:#333;line-height:1.7;">${d.oral_transmission_issues}</div>
+    </div>`;
+  }
+
+  if (d.verdict) {
+    html += `<div style="padding:12px;background:#1A1A1A;border-radius:8px;margin-bottom:12px;">
+      <div style="font-size:11px;font-weight:800;color:#FFD700;margin-bottom:6px;">⚖️ Scholarly Verdict</div>
+      <div style="font-size:12px;color:#EEE;line-height:1.7;">${d.verdict}</div>
+    </div>`;
+  }
+
+  document.getElementById('compare-result').innerHTML = html;
+}
+
+async function runAuthenticityAnalysis() {
+  const box = document.getElementById('authentic-result');
+  box.innerHTML = '<div style="text-align:center;padding:20px;"><span class="spinner"></span> Analyzing authenticity...</div>';
+  const verseList = ALL_VERSES.slice(0,10).map(v => v.sura_id+':'+v.aya_number+' — '+(v.english||'').slice(0,100)).join('\n');
+
+  const prompt = `You are a critical scholar of Islamic studies. Analyze the relative authenticity of the Quranic vs Hadith accounts of "${THEME}".
+
+Quranic verses on this theme:
+${verseList}
+
+Answer this question honestly: Given the evidence of oral transmission, Israiliyyat infiltration, political fabrication documented by hadith scholars themselves, and the earlier composition of the Quran — how should a critical reader weight the Quranic account vs the Hadith account of this story?
+
+Cover:
+1. Specific details in hadith about this theme that have NO Quranic support
+2. Which hadith details are likely Israiliyyat (from Jewish/Christian sources)  
+3. The chain of transmission for key hadith on this theme and its weaknesses
+4. The classical Islamic answer to this authenticity question
+5. The critical/academic answer
+6. A final honest verdict
+
+Be rigorous and specific to THIS theme. 5-6 paragraphs.`;
+
+  try {
+    const res = await fetch(PROXY, { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ model:'claude-sonnet-4-5-20250929', max_tokens:1600, messages:[{role:'user',content:prompt}] }) });
+    const data = await res.json();
+    if (data?.error) { box.innerHTML='<span style="color:#C0392B;">⚠️ '+data.error.message+'</span>'; return; }
+    const text = data?.content?.[0]?.text||'';
+    box.innerHTML = `<div style="padding:14px;font-size:13px;line-height:1.8;color:#1A1A1A;white-space:pre-wrap;">${text}</div>`;
+  } catch(e) {
+    box.innerHTML = '<span style="color:#C0392B;">⚠️ '+e.message+'</span>';
+  }
+}
+
+function addToPresentation(key) {
+  const [s,a] = key.split(':');
+  const el = document.getElementById('vc-'+key);
+  const english = el?.querySelector('.verse-english')?.textContent||'';
+  const arabic = el?.querySelector('.verse-arabic')?.textContent||'';
+  const slides = JSON.parse(localStorage.getItem('presentation_slides')||'[]');
+  slides.push({ type:'verse', sura:s, aya:a, english, arabic, theme:THEME, added:Date.now() });
+  localStorage.setItem('presentation_slides', JSON.stringify(slides));
+  showToast('✅ Added to presentation');
+}
+
+function addAllToPresentation() {
+  let count = 0;
+  ALL_VERSES.forEach(v => { addToPresentation(v.sura_id+':'+v.aya_number); count++; });
+  showToast('✅ ' + count + ' verses added to presentation');
+}
+
+function addToResearch(key) {
+  const el = document.getElementById('vc-'+key);
+  const english = el?.querySelector('.verse-english')?.textContent||'';
+  const saved = JSON.parse(localStorage.getItem('research_saves')||'[]');
+  saved.push({ key, english, theme:THEME, date:new Date().toISOString() });
+  localStorage.setItem('research_saves', JSON.stringify(saved));
+  showToast('📚 Saved to research');
+}
+
+function saveToResearch() {
+  ALL_VERSES.forEach(v => addToResearch(v.sura_id+':'+v.aya_number));
+  showToast('📚 All verses saved to research');
+}
+
+function copyVerse(key) {
+  const el = document.getElementById('vc-'+key);
+  const english = el?.querySelector('.verse-english')?.textContent||'';
+  const arabic = el?.querySelector('.verse-arabic')?.textContent||'';
+  navigator.clipboard.writeText('[' + key + ']\n' + arabic + '\n' + english).then(() => showToast('📋 Copied'));
+}
+
+function copyAll() {
+  const text = ALL_VERSES.map(v => '['+v.sura_id+':'+v.aya_number+']\n'+(v.arabic||'')+'\n'+(v.english||'')).join('\n\n');
+  navigator.clipboard.writeText(text).then(() => showToast('📋 All verses copied'));
+}
+
+// Load on start
+loadVerses();
+</script>
+</body>
+</html>
