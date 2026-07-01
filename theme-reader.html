@@ -513,35 +513,25 @@ async function runHadithComparison() {
   }
 
   document.getElementById('compare-result').innerHTML = '<div style="text-align:center;padding:20px;"><span class="spinner"></span> Comparing Quran vs Hadith narratives...</div>';
-  const verseList = ALL_VERSES.slice(0,15).map(v => v.sura_id+':'+v.aya_number+' — '+(v.english||'').slice(0,120)).join('\n');
-  const hadithSample = ALL_HADITH.slice(0,5).map(h => h.collection+' #'+h.hadith_number+': '+(h.text_english||'').slice(0,200)).join('\n\n');
+  const verseList = ALL_VERSES.slice(0,8).map(v => v.sura_id+':'+v.aya_number+' — '+(v.english||'').slice(0,80)).join('\n');
+  const hadithSample = ALL_HADITH.slice(0,3).map(h => h.collection+' #'+h.hadith_number+': '+(h.text_english||'').slice(0,120)).join('\n');
 
-  const prompt = `You are a critical scholar comparing Quranic and Hadith narratives on the theme: "${THEME}"
+  const prompt = `Compare Quranic vs Hadith narrative on "${THEME}". Be BRIEF.
 
-QURANIC VERSES:
+Quran:
 ${verseList}
 
-HADITH SAMPLE:
+Hadith sample:
 ${hadithSample}
 
-Return ONLY valid JSON (no markdown):
-{
-  "additions": [
-    { "detail": "<what hadith adds that Quran does not say>", "quran_says": "<what Quran actually says or 'Silent'>", "hadith_says": "<what hadith claims>", "significance": "MAJOR|MODERATE|MINOR" }
-  ],
-  "contradictions": [
-    { "detail": "<what conflicts>", "quran_verse": "<sura:aya>", "quran_text": "<key phrase>", "hadith_text": "<key phrase>", "severity": "HIGH|MODERATE|LOW" }
-  ],
-  "omissions": [
-    { "detail": "<what Quran says that hadith ignores or downplays>" }
-  ],
-  "oral_transmission_issues": "<paragraph on how oral transmission may have altered the story>",
-  "verdict": "<2-3 sentence honest scholarly assessment of relative reliability>"
-}`;
+Return ONLY this JSON (no markdown, keep all text under 80 chars each):
+{"additions":[{"detail":"","quran_says":"","hadith_says":"","significance":"MAJOR|MODERATE|MINOR"}],"contradictions":[{"detail":"","quran_verse":"","quran_text":"","hadith_text":"","severity":"HIGH|MODERATE|LOW"}],"omissions":[{"detail":""}],"oral_transmission_issues":"one sentence","verdict":"one sentence"}
+
+Max 3 items per array. Be concise.`;
 
   try {
     const res = await fetch(PROXY, { method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ model:'claude-sonnet-4-5-20250929', max_tokens:1200, messages:[{role:'user',content:prompt}] }) });
+      body: JSON.stringify({ model:'claude-sonnet-4-5-20250929', max_tokens:600, messages:[{role:'user',content:prompt}] }) });
     const data = await res.json();
     if (data?.error) {
       const errMsg = typeof data.error === 'string' ? data.error : (data.error?.message || JSON.stringify(data.error));
@@ -625,26 +615,23 @@ async function runAuthenticityAnalysis() {
   box.innerHTML = '<div style="text-align:center;padding:20px;"><span class="spinner"></span> Analyzing authenticity...</div>';
   const verseList = ALL_VERSES.slice(0,10).map(v => v.sura_id+':'+v.aya_number+' — '+(v.english||'').slice(0,100)).join('\n');
 
-  const prompt = `You are a critical scholar of Islamic studies. Analyze the relative authenticity of the Quranic vs Hadith accounts of "${THEME}".
+  const verseList2 = ALL_VERSES.slice(0,6).map(v => v.sura_id+':'+v.aya_number+' — '+(v.english||'').slice(0,80)).join('\n');
+  const prompt2 = `Briefly analyze authenticity: Quranic vs Hadith accounts of "${THEME}".
 
-Quranic verses on this theme:
-${verseList}
+Quran verses:
+${verseList2}
 
-Answer this question honestly: Given the evidence of oral transmission, Israiliyyat infiltration, political fabrication documented by hadith scholars themselves, and the earlier composition of the Quran — how should a critical reader weight the Quranic account vs the Hadith account of this story?
+In 4 short paragraphs cover:
+1. What hadith adds that Quran doesn't say (with examples)
+2. Which hadith details are likely Israiliyyat (Jewish/Christian sources)
+3. Classical Islamic answer on using hadith alongside Quran
+4. Critical verdict: which narrative is more reliable and why
 
-Cover:
-1. Specific details in hadith about this theme that have NO Quranic support
-2. Which hadith details are likely Israiliyyat (from Jewish/Christian sources)  
-3. The chain of transmission for key hadith on this theme and its weaknesses
-4. The classical Islamic answer to this authenticity question
-5. The critical/academic answer
-6. A final honest verdict
-
-Be rigorous and specific to THIS theme. 5-6 paragraphs.`;
+Be direct and honest. Max 300 words total.`;
 
   try {
     const res = await fetch(PROXY, { method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ model:'claude-sonnet-4-5-20250929', max_tokens:1600, messages:[{role:'user',content:prompt}] }) });
+      body: JSON.stringify({ model:'claude-sonnet-4-5-20250929', max_tokens:500, messages:[{role:'user',content:prompt2}] }) });
     const data = await res.json();
     if (data?.error) { box.innerHTML='<div style="color:#C0392B;padding:10px;">⚠️ '+(typeof data.error==='string'?data.error:(data.error?.message||JSON.stringify(data.error)))+'</div>'; return; }
     const text = data?.content?.[0]?.text||'';
