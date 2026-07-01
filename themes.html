@@ -125,7 +125,8 @@ body { padding-bottom: 60px !important; }
 </div>
 
 <div class="controls">
-  <input class="search-input" id="searchInput" placeholder="🔍 Search themes..." oninput="filter()">
+  <input class="search-input" id="searchInput" placeholder="🔍 Search themes... (try: taqiyya, shirk, sabr, jihad)" oninput="filter()">
+  <div id="search-suggest" style="display:none;font-size:11px;color:#B8902A;padding:4px 10px;font-style:italic;"></div>
   <div id="cat-filter-wrap" style="position:relative;">
     <button id="cat-filter-btn" onclick="toggleCatDrop()" style="width:100%;padding:8px 12px;border:1.5px solid #D4C9A8;border-radius:10px;font-size:13px;background:#fff;color:#5A3A10;font-weight:600;text-align:left;cursor:pointer;display:flex;justify-content:space-between;align-items:center;">
       <span id="cat-filter-label">📚 All Categories</span><span>▾</span>
@@ -340,16 +341,89 @@ function sortByControversy(arr) {
 }
 // ── END CONTROVERSY RANKING ──
 
-function filter() {
-  if (!ALL_THEMES || !ALL_THEMES.length) {
-    // Data still loading — wait and retry once more
-    setTimeout(filter, 600);
-    return;
+// Islamic/Arabic term aliases → English theme keywords
+const TERM_ALIASES = {
+  'taqiyya': 'conceal|dissimul|protection|faith',
+  'shirk': 'polytheism|idolatry|associating|partners',
+  'nifaq': 'hypocri', 'munafiq': 'hypocri',
+  'zakat': 'charity|alms|zakah|poor due',
+  'sadaqa': 'charity|spending|alms',
+  'jihad': 'jihad|warfare|fighting|struggle',
+  'tawbah': 'repentance|forgiveness', 'tawba': 'repentance|forgiveness',
+  'iman': 'faith|belief|believers',
+  'kufr': 'disbelief|unbelief|disbeliever', 'kafir': 'disbeliever|unbeliever',
+  'tawhid': 'monotheism|oneness|divine unity',
+  'dua': 'supplication|prayer|invocation', 'salah': 'prayer|ritual prayer', 'salat': 'prayer|ritual prayer',
+  'sawm': 'fasting|ramadan', 'hajj': 'pilgrimage|sacred rites|kaaba',
+  'riba': 'usury|interest|riba',
+  'halal': 'lawful|permitted|halal', 'haram': 'forbidden|prohibition|unlawful',
+  'jannah': 'paradise|garden|heaven', 'jahannam': 'hell|hellfire|punishment',
+  'qiyama': 'resurrection|day of judgment|last day',
+  'barzakh': 'barzakh|afterlife|intermediate',
+  'iblis': 'iblis|satan|devil', 'shaytan': 'satan|iblis|devil',
+  'adam': 'adam|garden of eden', 'musa': 'moses|exodus|pharaoh',
+  'isa': 'jesus|messiah|mary', 'ibrahim': 'abraham|ibrahim',
+  'yusuf': 'joseph|yusuf', 'nuh': 'noah|flood',
+  'dawud': 'david|goliath', 'sulayman': 'solomon|sulayman',
+  'maryam': 'mary|maryam',
+  'ruh': 'soul|spirit', 'nafs': 'soul|self|ego',
+  'qadar': 'predestination|decree|divine will',
+  'sabr': 'patience|perseverance', 'tawakkul': 'trust in allah|reliance',
+  'riddah': 'apostasy|leaving faith',
+  'talaq': 'divorce|talaq', 'nikah': 'marriage|wedding', 'mahr': 'dowry|bride',
+  'mirath': 'inheritance|heir', 'hudud': 'punishment|legal penalty|criminal',
+  'qisas': 'retribution|retaliation|equal',
+  'khalifa': 'vicegerent|caliph|successor', 'ummah': 'community|nation|believers',
+  'dawah': 'call|invitation|preaching', 'ilm': 'knowledge|learning',
+  'hikmah': 'wisdom', 'rahmah': 'mercy|compassion', 'adl': 'justice|equity|fairness',
+  'ghayb': 'unseen|hidden', 'ijaz': 'miracle|inimitability',
+  'nasikh': 'abrogation|naskh', 'asmaul husna': 'names of allah|divine attributes',
+};
+
+function translateAlias(q) {
+  if (!q) return null;
+  const lower = q.toLowerCase().trim();
+  for (const [alias, expansion] of Object.entries(TERM_ALIASES)) {
+    if (lower === alias || lower.includes(alias) || alias.includes(lower)) return expansion;
   }
-  const q   = (document.getElementById('searchInput')?.value || '').toLowerCase().trim();
+  return null;
+}
+
+function filter() {
+  if (!ALL_THEMES || !ALL_THEMES.length) { setTimeout(filter, 600); return; }
+  const q = (document.getElementById('searchInput')?.value || '').toLowerCase().trim();
   const cat = window._catFilterVal || '';
+  const suggest = document.getElementById('search-suggest');
+
   let filtered = ALL_THEMES;
-  if (q) filtered = filtered.filter(t => t.theme.toLowerCase().includes(q));
+
+  if (q) {
+    // Try direct match first
+    let direct = ALL_THEMES.filter(t => t.theme.toLowerCase().includes(q));
+
+    // Try alias translation
+    const translated = translateAlias(q);
+    const aliasTerms = translated ? translated.split('|').map(s => s.trim()) : [];
+    let aliasMatches = translated ? ALL_THEMES.filter(t => aliasTerms.some(term => t.theme.toLowerCase().includes(term))) : [];
+
+    // Combine both
+    const combined = [...direct];
+    aliasMatches.forEach(t => { if (!combined.find(c => c.theme === t.theme)) combined.push(t); });
+    filtered = combined;
+
+    if (suggest) {
+      if (!filtered.length) {
+        suggest.textContent = `No themes found for "${q}". Try related terms or browse categories.`;
+        suggest.style.display = 'block';
+      } else if (aliasMatches.length && !direct.length) {
+        suggest.textContent = `"${q}" → showing themes for: ${aliasTerms.slice(0,3).join(', ')}`;
+        suggest.style.display = 'block';
+      } else {
+        suggest.style.display = 'none';
+      }
+    }
+  } else if (suggest) { suggest.style.display = 'none'; }
+
   if (cat) {
     const parts = cat.split('|');
     filtered = filtered.filter(t => parts.some(p => t.theme.toLowerCase().includes(p.toLowerCase().trim())));
