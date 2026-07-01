@@ -96,11 +96,11 @@ body { font-family: 'Georgia', serif; background: #FDFAF4; color: #1A1A1A; }
 <div class="controls">
   <div class="section-label" style="margin-bottom:6px;">Show Languages</div>
   <div class="controls-row">
-    <button class="lang-btn active" onclick="toggleLang('arabic',this)">🕌 Arabic</button>
-    <button class="lang-btn" onclick="toggleLang('translit',this)">🔤 Translit</button>
-    <button class="lang-btn active" onclick="toggleLang('english',this)">🇬🇧 English</button>
-    <button class="lang-btn" onclick="toggleLang('tigrinya',this)">🇪🇷 Tigrinya</button>
-    <button class="lang-btn" onclick="toggleLang('amharic',this)">🇪🇹 Amharic</button>
+    <button class="lang-btn active" onclick="toggleLang('arabic',this)" id="btn-arabic">🕌 Arabic</button>
+    <button class="lang-btn" onclick="toggleLang('translit',this)" id="btn-translit">🔤 Translit</button>
+    <button class="lang-btn active" onclick="toggleLang('english',this)" id="btn-english">🇬🇧 English</button>
+    <button class="lang-btn" onclick="toggleLang('tigrinya',this)" id="btn-tigrinya">🇪🇷 Tigrinya</button>
+    <button class="lang-btn" onclick="toggleLang('amharic',this)" id="btn-amharic">🇪🇹 Amharic</button>
   </div>
   <div class="controls-row">
     <div id="verse-count" style="font-size:11px;color:#888;"></div>
@@ -261,31 +261,27 @@ function toggleLang(lang, btn) {
   LANG_STATE[lang] = !LANG_STATE[lang];
   btn.classList.toggle('active', LANG_STATE[lang]);
   document.querySelectorAll('.v-' + lang).forEach(el => {
-    if (LANG_STATE[lang]) {
-      el.style.display = '';
-      // Show empty state if no content
-      const textEl = el.querySelector('.verse-text-content') || el;
-      if (!textEl.textContent.trim() || textEl.textContent.trim().length < 3) {
-        el.style.display = 'none';
+    el.style.display = LANG_STATE[lang] ? '' : 'none';
+  });
+  // Show notice if toggled on but nothing visible
+  if (LANG_STATE[lang]) {
+    const visible = [...document.querySelectorAll('.v-' + lang)].filter(el => el.textContent.trim().length > 2);
+    const noticeId = 'no-data-' + lang;
+    if (!visible.length) {
+      if (!document.getElementById(noticeId)) {
+        const notice = document.createElement('div');
+        notice.id = noticeId;
+        notice.style.cssText = 'text-align:center;padding:8px 14px;font-size:11px;color:#888;font-style:italic;background:#FFF8E8;';
+        notice.textContent = '⚠️ ' + lang.charAt(0).toUpperCase() + lang.slice(1) + ' translation not available for these verses';
+        document.getElementById('verses-container').prepend(notice);
       }
     } else {
-      el.style.display = 'none';
+      const n = document.getElementById('no-data-' + lang);
+      if (n) n.remove();
     }
-  });
-  // Show/hide "no data" notice
-  const noDataId = 'no-data-' + lang;
-  let noData = document.getElementById(noDataId);
-  if (LANG_STATE[lang]) {
-    const hasAny = [...document.querySelectorAll('.v-' + lang)].some(el => el.style.display !== 'none');
-    if (!hasAny && !noData) {
-      noData = document.createElement('div');
-      noData.id = noDataId;
-      noData.style = 'text-align:center;padding:8px;font-size:11px;color:#888;font-style:italic;';
-      noData.textContent = '⚠️ ' + lang.charAt(0).toUpperCase() + lang.slice(1) + ' translation not yet available for these verses';
-      document.getElementById('verses-container').prepend(noData);
-    }
-  } else if (noData) {
-    noData.remove();
+  } else {
+    const n = document.getElementById('no-data-' + lang);
+    if (n) n.remove();
   }
 }
 
@@ -363,10 +359,10 @@ async function loadVerses() {
           </div>
         </div>
         <div class="v-arabic verse-arabic" style="${LANG_STATE.arabic?'':'display:none'}">${v.arabic||''}</div>
-        <div class="v-translit verse-transliteration" style="${LANG_STATE.translit?'':'display:none'}">${v.arabic_transliteration||''}</div>
-        <div class="v-english verse-english" style="${LANG_STATE.english?'':'display:none'}">${v.english||''}</div>
-        ${(v.tigrinya||v.aya_text) ? `<div class="v-tigrinya verse-tigrinya" style="${LANG_STATE.tigrinya?'':'display:none'}"><div style="font-size:9px;font-weight:800;color:#B8902A;margin-bottom:3px;">TIGRINYA · ትግርኛ · ${v.sura_id}:${v.aya_number}</div>${v.tigrinya||v.aya_text}</div>` : ''}
-        ${v.amharic ? `<div class="v-amharic verse-amharic" style="${LANG_STATE.amharic?'':'display:none'}"><div style="font-size:9px;font-weight:800;color:#5C7A3A;margin-bottom:3px;">AMHARIC · አማርኛ · ${v.sura_id}:${v.aya_number}</div>${v.amharic}</div>` : ''}
+        <div class="v-translit verse-transliteration" style="${LANG_STATE.translit&&v.arabic_transliteration?'':'display:none'}">${v.arabic_transliteration||''}</div>
+        <div class="v-english verse-english" style="${LANG_STATE.english&&v.english?'':'display:none'}">${v.english||''}</div>
+        <div class="v-tigrinya verse-tigrinya" style="${LANG_STATE.tigrinya&&(v.tigrinya||v.aya_text)?'':'display:none'}"><div style="font-size:9px;font-weight:800;color:#B8902A;margin-bottom:3px;">TIGRINYA · ትግርኛ · ${v.sura_id}:${v.aya_number}</div>${v.tigrinya||v.aya_text||''}</div>
+        <div class="v-amharic verse-amharic" style="${LANG_STATE.amharic&&v.amharic?'':'display:none'}"><div style="font-size:9px;font-weight:800;color:#5C7A3A;margin-bottom:3px;">AMHARIC · አማርኛ · ${v.sura_id}:${v.aya_number}</div>${v.amharic||''}</div>
         ${tbHtml}
       </div>`;
     });
