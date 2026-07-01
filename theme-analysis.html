@@ -915,12 +915,54 @@ function renderContradictions() {
 }
 
 // ── AI ANALYSIS ──────────────────────────────────────────────────────
+async function saveAnalysisToDB(field, data) {
+  try {
+    // Check if row exists
+    const check = await fetch(`${SB_URL}/rest/v1/theme_analysis?theme=eq.${encodeURIComponent(THEME)}&select=id`, { headers: HDR });
+    const rows = check.ok ? await check.json() : [];
+    const payload = { theme: THEME, [field]: typeof data === 'string' ? data : data, updated_at: new Date().toISOString() };
+    if (field === 'internal_comparison' && data?.score) payload.internal_consistency_score = data.score;
+
+    if (rows.length) {
+      // Update
+      await fetch(`${SB_URL}/rest/v1/theme_analysis?theme=eq.${encodeURIComponent(THEME)}`, {
+        method: 'PATCH', headers: { ...HDR, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+        body: JSON.stringify(payload)
+      });
+    } else {
+      // Insert
+      await fetch(`${SB_URL}/rest/v1/theme_analysis`, {
+        method: 'POST', headers: { ...HDR, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+        body: JSON.stringify(payload)
+      });
+    }
+    console.log('✅ Saved to DB:', field);
+  } catch(e) { console.warn('DB save failed:', e); }
+}
+
+async function loadAnalysisFromDB(field) {
+  try {
+    const r = await fetch(`${SB_URL}/rest/v1/theme_analysis?theme=eq.${encodeURIComponent(THEME)}&select=${field}`, { headers: HDR });
+    const rows = r.ok ? await r.json() : [];
+    return rows[0]?.[field] || null;
+  } catch(e) { return null; }
+}
+
 async function runInternalCompare() {
   const box   = document.getElementById('ai-internal-result');
   const label = document.getElementById('ai-internal-label');
   const body  = document.getElementById('ai-internal-text');
   box.style.display = 'block';
   label.textContent = '📊 SCENE-BY-SCENE COMPARISON ACROSS SURAS';
+  body.innerHTML = '<div style="text-align:center;padding:20px;color:#888;"><span class="spinner"></span> Checking database...</div>';
+
+  // CHECK DB FIRST
+  const cached = await loadAnalysisFromDB('internal_comparison');
+  if (cached) {
+    body.innerHTML = '<div style="font-size:10px;color:#27AE60;font-weight:700;padding:4px 0 8px;">✅ Loaded from database</div>' + renderCompareTable(cached);
+    return;
+  }
+
   body.innerHTML = '<div style="text-align:center;padding:20px;color:#888;"><span class="spinner"></span> Analyzing ' + VERSES.length + ' verses across suras...</div>';
 
   const verseList = VERSES.slice(0,25).map(v => v.sura_id+':'+v.aya_number + ' — ' + (v.english||'').slice(0,180)).join('\n');
@@ -987,6 +1029,8 @@ Rules:
     }
 
     body.innerHTML = renderCompareTable(parsed);
+    // SAVE TO DB for future users
+    saveAnalysisToDB('internal_comparison', parsed);
   } catch(e) {
     body.innerHTML = '<span style="color:#C0392B;">⚠️ Error: ' + e.message + '</span>';
   }
@@ -1158,6 +1202,32 @@ function renderCompareTable(d) {
   box.style.display = 'block';
   label.textContent = LABELS[mode] || mode;
   body.textContent = '';
+
+  // Map mode to DB field name
+  const DB_FIELD_MAP = {
+    summary: 'summary', contradiction: 'contradiction_themes', reconcile: 'traditional_interpretation',
+    academic: 'academic_interpretation', historical: 'historical_context',
+    internal_emphasis: 'internal_quranic_parallels', internal_sequence: 'internal_quranic_parallels',
+    internal_tensions: 'internal_tensions', internal_chronology: 'historical_context',
+    internal_reconcile: 'traditional_interpretation',
+    biblical_compare: 'biblical_parallels', jewish_sources: 'biblical_parallels',
+    christian_sources: 'biblical_parallels', pre_islamic: 'historical_context',
+    source_critical: 'academic_interpretation', unique_quran: 'summary',
+    grammar: 'linguistic_notes', word_roots: 'linguistic_notes',
+    rhetoric: 'linguistic_notes', variant_readings: 'linguistic_notes', depiction: 'linguistic_notes'
+  };
+  const dbField = DB_FIELD_MAP[mode];
+
+  // CHECK DB FIRST — show cached result instantly if available
+  if (dbField) {
+    body.innerHTML = '<span class="spinner"></span> Checking database...';
+    const cached = await loadAnalysisFromDB(dbField);
+    if (cached && typeof cached === 'string' && cached.length > 100) {
+      body.innerHTML = '<div style="font-size:10px;color:#27AE60;font-weight:700;padding:4px 0 8px;">✅ Loaded from database</div><div style="white-space:pre-wrap;">' + cached + '</div>';
+      return;
+    }
+  }
+
   body.innerHTML = '<span class="spinner"></span> Generating analysis...';
 
   try {
@@ -1176,7 +1246,9 @@ function renderCompareTable(d) {
       return;
     }
     const text = data?.content?.[0]?.text || 'No response received. Raw: ' + JSON.stringify(data).slice(0,200);
-    body.textContent = text;
+    body.innerHTML = '<div style="white-space:pre-wrap;">' + text + '</div>';
+    // SAVE TO DB so next user gets it instantly
+    if (dbField) saveAnalysisToDB(dbField, text);
   } catch(e) {
     body.innerHTML = '<span style="color:#C0392B;">⚠️ Network Error: ' + e.message + '</span>';
   }
