@@ -557,41 +557,29 @@ function esc(s) {
 // ── LOAD THEME VERSES ────────────────────────────────────────────────
 async function loadThemeVerses() {
   try {
-    // Get all verses in this theme — check both tables
-    let refs = await sbGet('thematic_cross_references', {
-      select: 'sura,aya', theme: 'eq.' + THEME, order: 'sura.asc,aya.asc'
+    // Single indexed query — theme_verses is pre-populated with all text columns.
+    // No join to ayas or thematic_cross_references needed.
+    const rows = await sbGet('theme_verses', {
+      select: 'sura,aya,arabic,english,tigrinya,amharic',
+      theme: 'eq.' + THEME,
+      order: 'sura.asc,aya.asc'
     });
 
-    // If not found in old table, try v2
-    if (!refs.length) {
-      const v2refs = await sbGet('thematic_cross_references_v2', {
-        select: 'sura,aya', theme: 'eq.' + THEME, order: 'sura.asc,aya.asc', limit: 200
-      });
-      // Deduplicate
-      const seen = {};
-      v2refs.forEach(r => { const k=r.sura+':'+r.aya; if(!seen[k]){seen[k]=1;refs.push(r);} });
-    }
-
-    if (!refs.length) {
+    if (!rows.length) {
       document.getElementById('verses-container').innerHTML = '<div class="loading-msg">No verses found for this theme.</div>';
       return;
     }
 
-    // Fetch verse texts in batches by sura
-    const bySura = {};
-    refs.forEach(r => { if(!bySura[r.sura]) bySura[r.sura]=[]; bySura[r.sura].push(r.aya); });
+    // Normalise shape so rest of page (which uses sura_id / aya_number) keeps working
+    VERSES = rows.map(r => ({
+      sura_id:    r.sura,
+      aya_number: r.aya,
+      arabic:     r.arabic,
+      english:    r.english,
+      tigrinya:   r.tigrinya,
+      amharic:    r.amharic
+    }));
 
-    const verseMap = {};
-    for (const [sid, ayas] of Object.entries(bySura)) {
-      const rows = await sbGet('ayas', {
-        select: 'sura_id,aya_number,arabic,english,aya_text,amharic,oromo,somali',
-        sura_id: 'eq.' + sid,
-        aya_number: 'in.(' + ayas.join(',') + ')'
-      });
-      rows.forEach(v => { verseMap[v.sura_id+':'+v.aya_number] = v; });
-    }
-
-    VERSES = refs.map(r => verseMap[r.sura+':'+r.aya]).filter(Boolean);
     document.getElementById('verses-container').innerHTML = '';
     renderVerses();
   } catch(e) {
@@ -626,7 +614,7 @@ function renderVerseCard(v, idx) {
     + '<div class="verse-body">'
       + (L.ar && v.arabic ? '<div class="arabic-text">'+esc(v.arabic)+'</div>' : '')
       + (L.en && v.english ? '<div class="english-text">'+esc(v.english)+'</div>' : '')
-      + (L.ti && v.aya_text ? '<div class="tigrinya-text">'+esc(v.aya_text)+'</div>' : '')
+      + (L.ti && v.tigrinya ? '<div class="tigrinya-text">'+esc(v.tigrinya)+'</div>' : '')
       + (L.am && v.amharic ? '<div class="amharic-text">'+esc(v.amharic)+'</div>' : '')
       + (L.or && v.oromo ? '<div class="oromo-text">'+esc(v.oromo)+'</div>' : '')
       + (L.so && v.somali ? '<div class="somali-text">'+esc(v.somali)+'</div>' : '')
@@ -664,14 +652,14 @@ function rerenderVerses() {
 // ── LOAD HADITH ──────────────────────────────────────────────────────
 async function loadThemeHadith() {
   try {
-    // Get hadith for verses in this theme
-    const refs = await sbGet('thematic_cross_references', {
-      select: 'sura,aya', theme: 'eq.' + THEME, order: 'sura.asc,aya.asc'
-    });
-    if (!refs.length) return;
+    // Use VERSES (already loaded) instead of re-querying thematic_cross_references
+    if (!VERSES.length) return;
 
     const bySura = {};
-    refs.forEach(r => { if(!bySura[r.sura]) bySura[r.sura]=[]; bySura[r.sura].push(r.aya); });
+    VERSES.forEach(v => {
+      if (!bySura[v.sura_id]) bySura[v.sura_id] = [];
+      bySura[v.sura_id].push(v.aya_number);
+    });
 
     for (const [sid, ayas] of Object.entries(bySura)) {
       const rows = await sbGet('hadith_connections', {
@@ -860,7 +848,7 @@ function renderContradictionSide(v, label, isA) {
     + '<div style="padding:8px;">'
       + (L.ar && v.arabic   ? '<div style="font-family:Amiri,serif;font-size:16px;direction:rtl;text-align:right;line-height:1.8;margin-bottom:6px;">'+esc(v.arabic)+'</div>' : '')
       + (L.en && v.english  ? '<div style="font-size:12px;color:#444;line-height:1.6;font-style:italic;margin-bottom:4px;">'+esc(v.english)+'</div>' : '')
-      + (L.ti && v.aya_text ? '<div style="font-size:14px;font-weight:700;color:#000;line-height:1.8;text-shadow:-1px -1px 0 #fff,1px -1px 0 #fff,-1px 1px 0 #fff,1px 1px 0 #fff;margin-bottom:4px;">'+esc(v.aya_text)+'</div>' : '')
+      + (L.ti && v.tigrinya ? '<div style="font-size:14px;font-weight:700;color:#000;line-height:1.8;text-shadow:-1px -1px 0 #fff,1px -1px 0 #fff,-1px 1px 0 #fff,1px 1px 0 #fff;margin-bottom:4px;">'+esc(v.tigrinya)+'</div>' : '')
       + (L.am && v.amharic  ? '<div style="font-size:13px;color:#333;line-height:1.8;margin-bottom:4px;">'+esc(v.amharic)+'</div>' : '')
       + (L.or && v.oromo    ? '<div style="font-size:12px;color:#555;line-height:1.7;margin-bottom:4px;">'+esc(v.oromo)+'</div>' : '')
       + (L.so && v.somali   ? '<div style="font-size:12px;color:#555;line-height:1.7;">'+esc(v.somali)+'</div>' : '')
@@ -886,7 +874,7 @@ function renderContradictions() {
           + (function(){ const L=getLang(); return ''
             + (L.ar && v && v.arabic   ? '<div style="font-family:Amiri,serif;font-size:18px;direction:rtl;text-align:right;line-height:1.8;margin-bottom:6px;">'+esc(v.arabic)+'</div>' : '')
             + (L.en && v && v.english  ? '<div style="font-size:12px;color:#444;font-style:italic;margin-bottom:6px;">'+esc(v.english)+'</div>' : '')
-            + (L.ti && v && v.aya_text ? '<div style="font-size:14px;font-weight:700;color:#000;line-height:1.8;text-shadow:-1px -1px 0 #fff,1px -1px 0 #fff,-1px 1px 0 #fff,1px 1px 0 #fff;margin-bottom:4px;">'+esc(v.aya_text)+'</div>' : '')
+            + (L.ti && v && v.tigrinya ? '<div style="font-size:14px;font-weight:700;color:#000;line-height:1.8;text-shadow:-1px -1px 0 #fff,1px -1px 0 #fff,-1px 1px 0 #fff,1px 1px 0 #fff;margin-bottom:4px;">'+esc(v.tigrinya)+'</div>' : '')
             + (L.am && v && v.amharic  ? '<div style="font-size:13px;color:#333;line-height:1.8;margin-bottom:4px;">'+esc(v.amharic)+'</div>' : '')
             + (L.or && v && v.oromo    ? '<div style="font-size:12px;color:#555;line-height:1.7;margin-bottom:4px;">'+esc(v.oromo)+'</div>' : '')
             + (L.so && v && v.somali   ? '<div style="font-size:12px;color:#555;line-height:1.7;">'+esc(v.somali)+'</div>' : '');
@@ -1323,7 +1311,7 @@ function openInMain(sura, aya) {
 function taRead(idx) {
   const v = VERSES[idx];
   if (!v) return;
-  const text = v.english || v.aya_text || (v.sura_id + ':' + v.aya_number);
+  const text = v.english || v.tigrinya || (v.sura_id + ':' + v.aya_number);
   window.speechSynthesis && window.speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(text);
   u.rate = 0.9;
@@ -1337,7 +1325,7 @@ function taCopy(idx) {
   const parts = ['Quran ' + v.sura_id + ':' + v.aya_number];
   if (L.ar && v.arabic) parts.push(v.arabic);
   if (L.en && v.english) parts.push(v.english);
-  if (L.ti && v.aya_text) parts.push(v.aya_text);
+  if (L.ti && v.tigrinya) parts.push(v.tigrinya);
   navigator.clipboard.writeText(parts.join('\n')).catch(()=>{});
   showToast('📋 Copied!');
 }
