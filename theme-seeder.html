@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Theme Analysis Seeder</title>
+<style>
+  body{font-family:system-ui,sans-serif;background:#12100C;color:#EDE3C8;margin:0;padding:16px;}
+  h1{font-size:18px;color:#D9B24A;}
+  .card{background:#1E1A12;border:1px solid #3A3222;border-radius:12px;padding:16px;margin-bottom:14px;}
+  button{background:#B8902A;color:#fff;border:none;border-radius:10px;padding:12px 18px;font-size:15px;font-weight:700;cursor:pointer;}
+  button:disabled{opacity:.5;}
+  .bar{height:14px;background:#2A2418;border-radius:8px;overflow:hidden;margin:10px 0;}
+  .fill{height:100%;background:#D9B24A;width:0%;transition:width .3s;}
+  #log{font-family:monospace;font-size:12px;white-space:pre-wrap;max-height:50vh;overflow:auto;background:#0C0A07;border-radius:8px;padding:10px;margin-top:10px;}
+  .stat{display:inline-block;margin-right:16px;font-size:13px;}
+  .stat b{color:#D9B24A;font-size:18px;}
+</style>
+</head>
+<body>
+<h1>🌱 Theme Analysis Seeder</h1>
+<div class="card">
+  <div class="stat">Done: <b id="s-done">0</b></div>
+  <div class="stat">Skipped: <b id="s-skip">0</b></div>
+  <div class="stat">Failed: <b id="s-fail">0</b></div>
+  <div class="stat">Total: <b id="s-total">0</b></div>
+  <div class="bar"><div class="fill" id="fill"></div></div>
+  <button id="start" onclick="run()">🚀 Seed ALL Theme Analyses</button>
+  <button id="stop" onclick="STOP=true" style="background:#7A2A2A;">■ Stop</button>
+  <p style="font-size:12px;color:#9A8E70;">Resumable: themes already having a scene-by-scene comparison are skipped. Safe to close and re-run — it picks up where it left off. Leave the tab open while running.</p>
+</div>
+<div id="log"></div>
+
+<script>
+const SB_URL = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
+const HDR = { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY, 'Content-Type': 'application/json' };
+const PROXY = '/.netlify/functions/claude-proxy';
+let STOP = false;
+
+const log = (m) => { const el=document.getElementById('log'); el.textContent += m + '\n'; el.scrollTop = el.scrollHeight; };
+const setStat = (id,v) => document.getElementById(id).textContent = v;
+
+async function getThemes(){
+  // Distinct themes that have verses, ordered by verse count (biggest first)
+  const r = await fetch(SB_URL + '/rest/v1/theme_verses?select=theme', { headers: HDR });
+  const rows = await r.json();
+  const counts = {};
+  rows.forEach(x => counts[x.theme] = (counts[x.theme]||0)+1);
+  return Object.keys(counts).sort((a,b)=>counts[b]-counts[a]);
+}
+
+async function alreadyDone(theme){
+  const r = await fetch(SB_URL + '/rest/v1/theme_analysis?theme=eq.' + encodeURIComponent(theme) + '&select=internal_comparison', { headers: HDR });
+  const rows = r.ok ? await r.json() : [];
+  return rows[0] && rows[0].internal_comparison;
+}
+
+async function getVerses(theme){
+  const r = await fetch(SB_URL + '/rest/v1/theme_verses?theme=eq.' + encodeURIComponent(theme) + '&select=sura,aya,english&order=sura,aya&limit=12', { headers: HDR });
+  return r.ok ? await r.json() : [];
+}
+
+function buildPrompt(theme, verses){
+  const verseList = verses.map(v => v.sura+':'+v.aya+' — '+(v.english||'').slice(0,80)).join('\n');
+  return `You are a critical Quranic scholar. The story/theme "${theme}" appears across multiple suras.
+
+Verses:
+${verseList}
+
+Return ONLY a valid JSON object (no markdown, just JSON):
+{
+  "suras": ["list of distinct suras e.g. Sura 2, Sura 7"],
+  "score": <0-100 internal consistency score>,
+  "score_reason": "<2 sentence justification>",
+  "beats": [
+    { "beat": "<narrative beat>", "entries": [ { "verse": "<sura:aya>", "sura_label": "<Sura X>", "text": "<key phrase max 80 chars>", "grade": "SAME|SIMILAR|TENSION|UNIQUE|ABSENT", "note": "<max 100 char observation>" } ], "verdict": "SAME|COMPATIBLE|TENSION|CONTRADICTION", "verdict_note": "<max 150 chars>" }
+  ],
+  "tensions": [ { "title": "<name>", "grade": "GENUINE|APPARENT|MINOR", "detail": "<max 200 chars>" } ]
+}
+Rules: SAME=identical, SIMILAR=same event different words, TENSION=conflicting details, UNIQUE=only one sura, ABSENT=missing. Be honest, cover 4-8 major beats.`;
+}
+
+async function analyze(theme){
+  const verses = await getVerses(theme);
+  if (!verses.length) return { skip: true };
+  const res = await fetch(PROXY, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: 'claude-sonnet-4-5-20250929', max_tokens: 1500, messages: [{ role:'user', content: buildPrompt(theme, verses) }] })
+  });
+  const data = await res.json();
+  if (data && data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+  let raw = (data && data.content && data.content[0] && data.content[0].text) || '';
+  raw = raw.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
+  const parsed = JSON.parse(raw);
+  return { parsed };
+}
+
+async function save(theme, parsed){
+  const check = await fetch(SB_URL + '/rest/v1/theme_analysis?theme=eq.' + encodeURIComponent(theme) + '&select=id', { headers: HDR });
+  const rows = check.ok ? await check.json() : [];
+  const payload = JSON.stringify({ internal_comparison: parsed, internal_consistency_score: parsed.score, updated_at: new Date().toISOString() });
+  if (rows.length) {
+    await fetch(SB_URL + '/rest/v1/theme_analysis?theme=eq.' + encodeURIComponent(theme), { method:'PATCH', headers: HDR, body: payload });
+  } else {
+    await fetch(SB_URL + '/rest/v1/theme_analysis', { method:'POST', headers: HDR, body: JSON.stringify({ theme: theme, internal_comparison: parsed, internal_consistency_score: parsed.score }) });
+  }
+}
+
+async function run(){
+  STOP = false;
+  document.getElementById('start').disabled = true;
+  let done=0, skip=0, fail=0;
+  log('Loading theme list...');
+  const themes = await getThemes();
+  setStat('s-total', themes.length);
+  log('Found ' + themes.length + ' themes. Starting (biggest first)...\n');
+  for (let i=0;i<themes.length;i++){
+    if (STOP){ log('\n■ Stopped by user at ' + i + '/' + themes.length); break; }
+    const theme = themes[i];
+    try {
+      if (await alreadyDone(theme)) { skip++; setStat('s-skip',skip); log('⏭  ['+(i+1)+'] '+theme+' — already done'); }
+      else {
+        const r = await analyze(theme);
+        if (r.skip) { skip++; setStat('s-skip',skip); log('⏭  ['+(i+1)+'] '+theme+' — no verses'); }
+        else { await save(theme, r.parsed); done++; setStat('s-done',done); log('✅ ['+(i+1)+'] '+theme+' — score '+r.parsed.score); }
+      }
+    } catch(e){ fail++; setStat('s-fail',fail); log('❌ ['+(i+1)+'] '+theme+' — '+e.message); }
+    document.getElementById('fill').style.width = (((i+1)/themes.length)*100).toFixed(1)+'%';
+    await new Promise(r=>setTimeout(r,400)); // gentle pacing
+  }
+  log('\n🎉 Finished. Done '+done+', Skipped '+skip+', Failed '+fail);
+  document.getElementById('start').disabled = false;
+}
+</script>
+</body>
+</html>
