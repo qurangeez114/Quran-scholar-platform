@@ -56,10 +56,12 @@ async function sbGet(path) {
 }
 
 async function getThemes() {
-  const rows = await sbGet('theme_verses?select=theme&limit=15000');
-  const counts = {};
-  rows.forEach(r => counts[r.theme] = (counts[r.theme]||0)+1);
-  return Object.keys(counts).sort((a,b) => counts[b]-counts[a]);
+  // Uses a DB function to get all 444 distinct themes, bypassing Supabase's 1000-row limit
+  const r = await fetch(SB_URL + '/rest/v1/rpc/get_all_themes', {
+    method: 'POST', headers: HDR, body: JSON.stringify({})
+  });
+  const rows = r.ok ? await r.json() : [];
+  return rows.map(r => r.theme);
 }
 
 async function alreadyDone(theme) {
