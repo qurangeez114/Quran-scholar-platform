@@ -43,7 +43,7 @@ const setStat = (id,v) => document.getElementById(id).textContent = v;
 
 async function getThemes(){
   // Distinct themes that have verses, ordered by verse count (biggest first)
-  const r = await fetch(SB_URL + '/rest/v1/theme_verses?select=theme', { headers: HDR });
+  const r = await fetch(SB_URL + '/rest/v1/theme_verses?select=theme&limit=15000', { headers: HDR });
   const rows = await r.json();
   const counts = {};
   rows.forEach(x => counts[x.theme] = (counts[x.theme]||0)+1);
@@ -86,7 +86,7 @@ async function analyze(theme){
   if (!verses.length) return { skip: true };
   const res = await fetch(PROXY, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1500, messages: [{ role:'user', content: buildPrompt(theme, verses) }] })
+    body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 3000, messages: [{ role:'user', content: buildPrompt(theme, verses) }] })
   });
   const data = await res.json();
   if (data && data.error) throw new Error(data.error.message || JSON.stringify(data.error));
