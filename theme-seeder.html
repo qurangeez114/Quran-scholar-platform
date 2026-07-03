@@ -86,7 +86,7 @@ async function analyze(theme){
   if (!verses.length) return { skip: true };
   const res = await fetch(PROXY, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: 'claude-sonnet-4-5-20250929', max_tokens: 1500, messages: [{ role:'user', content: buildPrompt(theme, verses) }] })
+    body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1500, messages: [{ role:'user', content: buildPrompt(theme, verses) }] })
   });
   const data = await res.json();
   if (data && data.error) throw new Error(data.error.message || JSON.stringify(data.error));
@@ -101,9 +101,9 @@ async function save(theme, parsed){
   const rows = check.ok ? await check.json() : [];
   const payload = JSON.stringify({ internal_comparison: parsed, internal_consistency_score: parsed.score, updated_at: new Date().toISOString() });
   if (rows.length) {
-    await fetch(SB_URL + '/rest/v1/theme_analysis?theme=eq.' + encodeURIComponent(theme), { method:'PATCH', headers: HDR, body: payload });
+    await fetch(SB_URL + '/rest/v1/theme_analysis?theme=eq.' + encodeURIComponent(theme), { method:'PATCH', headers: {...HDR, 'Prefer':'return=minimal'}, body: payload });
   } else {
-    await fetch(SB_URL + '/rest/v1/theme_analysis', { method:'POST', headers: HDR, body: JSON.stringify({ theme: theme, internal_comparison: parsed, internal_consistency_score: parsed.score }) });
+    await fetch(SB_URL + '/rest/v1/theme_analysis', { method:'POST', headers: {...HDR, 'Prefer':'return=minimal'}, body: JSON.stringify({ theme: theme, internal_comparison: parsed, internal_consistency_score: parsed.score }) });
   }
 }
 
