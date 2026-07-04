@@ -1,5 +1,5 @@
-// v4 — immediately unregisters old caches and takes control
-const CACHE_NAME = 'quran-hikma-v4';
+// v5 — immediately unregisters old caches and takes control
+const CACHE_NAME = 'quran-hikma-v5';
 
 self.addEventListener('install', e => {
   self.skipWaiting();
