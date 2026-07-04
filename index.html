@@ -2630,6 +2630,15 @@ async function loadSura(id) {
     ayas.forEach(a => {
       a.arabic_transliteration = translitMap[a.aya_number] || '';
       a.verified_arabic = arabicMap[a.aya_number] || '';
+      // The external Arabic/translit API prepends the Basmala to verse 1 of
+      // every sura except 1 (Al-Fatiha, where it IS verse 1) and 9 (At-Tawbah,
+      // which has none). The Basmala is shown separately as a banner, so remove
+      // it here to stop it being glued onto the first verse.
+      if (a.aya_number === 1 && id !== 1 && id !== 9) {
+        a.verified_arabic = stripLeadingBasmala(a.verified_arabic);
+        a.arabic = stripLeadingBasmala(a.arabic);
+        a.arabic_transliteration = stripLeadingBasmalaTranslit(a.arabic_transliteration);
+      }
       // Only set tigrinya from aya_text if no dedicated tigrinya translation exists
       if (!a.tigrinya) a.tigrinya = '';
     });
@@ -2644,6 +2653,21 @@ async function loadSura(id) {
 
 function containsArabicText(value) {
   return /[؀-ۿ]/.test(String(value || ''));
+}
+
+function stripLeadingBasmala(text){
+  if(!text) return text;
+  var t = String(text).replace(/^\uFEFF/, '');
+  var D = '[\\u0610-\\u061A\\u064B-\\u0652\\u0653-\\u065F\\u0670\\u0640\\u06D6-\\u06ED\\u200C-\\u200F\\s]*';
+  var A = '[\\u0627\\u0671\\u0622\\u0623\\u0625]';
+  var re = new RegExp('^'+D+'\\u0628'+D+'\\u0633'+D+'\\u0645'+D+A+D+'\\u0644'+D+'\\u0644'+D+'\\u0647'+D+A+D+'\\u0644'+D+'\\u0631'+D+'\\u062D'+D+'\\u0645'+D+'\\u0646'+D+A+D+'\\u0644'+D+'\\u0631'+D+'\\u062D'+D+'\\u064A'+D+'\\u0645'+D, 'u');
+  return t.replace(re, '').replace(/^[\s\u200C-\u200F]+/, '');
+}
+function stripLeadingBasmalaTranslit(text){
+  if(!text) return text;
+  var t = String(text).replace(/^\s+/, '');
+  var re = /^\s*bism(?:i)?\s*(?:llahi?|allahi?)\s+a[lr]l?[-\s]?r+ah+mani?\s+a[lr]l?[-\s]?r+ah+[ie]+mi?[\s.,]+/iu;
+  return t.replace(re, '').replace(/^\s+/, '');
 }
 
 function getSafeArabicText(aya) {
