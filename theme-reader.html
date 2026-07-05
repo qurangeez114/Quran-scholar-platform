@@ -344,47 +344,66 @@ let VERSE_OFFSET = 0;
 const VERSES_PER_LOAD = 50;
 
 // Rewritten loadVerses - fetches all pairs once, then renders in batches
-async function loadVerses() {
+function loadVerses() {
   if (!THEME) { 
     document.getElementById('verses-container').innerHTML = '<div style="padding:20px;color:#C00;">No theme specified.</div>'; 
     return; 
   }
 
   const container = document.getElementById('verses-container');
-  container.innerHTML = '<div style="padding:20px;text-align:center;color:#888;">Loading verses...</div>';
+  container.innerHTML = '<div style="padding:20px;text-align:center;color:#888;">⏳ Fetching verses from database...</div>';
   VERSE_OFFSET = 0;
 
-  try {
-    // Get verse refs from theme_verses (optimized table) - fetch all at once
-    const refs = await sbFetch('theme_verses', { 
-      select: 'sura,aya', 
-      theme: 'eq.' + THEME, 
-      limit: 10000
+  console.log('loadVerses called for theme:', THEME);
+  
+  // Use simple fetch with timeout
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => {
+    controller.abort();
+    container.innerHTML = '<div style="padding:20px;color:#C00;"><strong>⚠️ Request timed out</strong><br>The server took too long to respond. Try again in a moment.</div>';
+  }, 15000);
+  
+  const url = SB_URL + '/rest/v1/theme_verses?select=sura,aya&theme=eq.' + encodeURIComponent(THEME) + '&limit=10000';
+  console.log('Fetching from:', url);
+  
+  fetch(url, { headers: HDR, signal: controller.signal })
+    .then(r => {
+      clearTimeout(timeoutId);
+      console.log('Response status:', r.status);
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    })
+    .then(refs => {
+      console.log('Got', refs.length, 'refs');
+      if (!refs || refs.length === 0) {
+        container.innerHTML = '<div style="padding:20px;color:#888;text-align:center;">No verses found for this theme.</div>';
+        return;
+      }
+      
+      // Deduplicate
+      const seen = {}; 
+      ALL_THEME_PAIRS = [];
+      refs.forEach(r => { 
+        const k = r.sura+':'+r.aya; 
+        if (!seen[k]) { 
+          seen[k]=1; 
+          ALL_THEME_PAIRS.push(r); 
+        } 
+      });
+      ALL_THEME_PAIRS.sort((a,b) => a.sura-b.sura || a.aya-b.aya);
+      
+      console.log('Deduplicated to', ALL_THEME_PAIRS.length, 'verses');
+      
+      // Render the first batch
+      renderVersesBatch();
+    })
+    .catch(e => {
+      clearTimeout(timeoutId);
+      console.error('Error:', e);
+      let msg = e.message;
+      if (e.name === 'AbortError') msg = 'Request timeout (server took too long)';
+      container.innerHTML = '<div style="padding:20px;color:#C00;"><strong>Error loading verses:</strong><br>' + esc(msg) + '</div>';
     });
-
-    // Deduplicate
-    const seen = {}; 
-    ALL_THEME_PAIRS = [];
-    refs.forEach(r => { 
-      const k = r.sura+':'+r.aya; 
-      if (!seen[k]) { 
-        seen[k]=1; 
-        ALL_THEME_PAIRS.push(r); 
-      } 
-    });
-    ALL_THEME_PAIRS.sort((a,b) => a.sura-b.sura || a.aya-b.aya);
-
-    if (!ALL_THEME_PAIRS.length) { 
-      container.innerHTML = '<div style="padding:20px;color:#888;text-align:center;">No verses found for this theme.</div>'; 
-      return; 
-    }
-
-    // Render the first batch
-    await renderVersesBatch();
-  } catch(e) {
-    console.error('Error loading verses:', e);
-    container.innerHTML = '<div style="padding:20px;color:#C00;"><strong>Error:</strong><br>' + esc(e.message) + '</div>';
-  }
 }
 
 // Render a batch of verses starting at VERSE_OFFSET
