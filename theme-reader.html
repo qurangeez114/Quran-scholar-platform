@@ -352,63 +352,25 @@ function loadVerses() {
   }
 
   const container = document.getElementById('verses-container');
-  container.innerHTML = '<div style="padding:20px;text-align:center;color:#888;">⏳ Fetching verses from database...</div>';
+  container.innerHTML = '<div style="padding:20px;text-align:center;color:#888;">⏳ TEST: Fetching verses for ' + THEME + '...</div>';
   VERSE_OFFSET = 0;
 
-  console.log('loadVerses called for theme:', THEME);
-  
-  // Use simple fetch with timeout
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => {
-    controller.abort();
-    container.innerHTML = '<div style="padding:20px;color:#C00;"><strong>⚠️ Request timed out</strong><br>The server took too long to respond. Try again in a moment.</div>';
-  }, 15000);
-  
   const url = SB_URL + '/rest/v1/theme_verses?select=sura,aya&theme=eq.' + encodeURIComponent(THEME) + '&limit=10000';
-  console.log('Fetching from:', url);
   
-  fetch(url, { headers: HDR, signal: controller.signal })
+  fetch(url, { headers: HDR })
     .then(r => {
-      clearTimeout(timeoutId);
-      console.log('Response status:', r.status);
       if (!r.ok) throw new Error('HTTP ' + r.status);
       return r.json();
     })
     .then(refs => {
-      console.log('Got', refs.length, 'refs');
       if (!refs || refs.length === 0) {
-        container.innerHTML = '<div style="padding:20px;color:#888;text-align:center;">No verses found for this theme.</div>';
+        container.innerHTML = '<div style="padding:20px;color:#888;">No verses found.</div>';
         return;
       }
-      
-      // Deduplicate and sort
-      const seen = {}; 
-      ALL_THEME_PAIRS = [];
-      refs.forEach(r => { 
-        const k = r.sura+':'+r.aya; 
-        if (!seen[k]) { 
-          seen[k]=1; 
-          ALL_THEME_PAIRS.push(r); 
-        } 
-      });
-      ALL_THEME_PAIRS.sort((a,b) => a.sura-b.sura || a.aya-b.aya);
-      
-      console.log('Deduplicated to', ALL_THEME_PAIRS.length, 'verses, starting render');
-      
-      // Update status
-      container.innerHTML = '<div style="padding:20px;text-align:center;color:#888;">⏳ Rendering ' + ALL_THEME_PAIRS.length + ' verses...</div>';
-      
-      // Give browser time to show message, then render
-      setTimeout(() => {
-        renderVersesBatch();
-      }, 100);
+      container.innerHTML = '<div style="padding:20px;"><strong>✅ Success! Found ' + refs.length + ' verses</strong><br><br>First 3:<br><pre>' + JSON.stringify(refs.slice(0,3), null, 2) + '</pre></div>';
     })
     .catch(e => {
-      clearTimeout(timeoutId);
-      console.error('Error:', e);
-      let msg = e.message;
-      if (e.name === 'AbortError') msg = 'Request timeout (server took too long)';
-      container.innerHTML = '<div style="padding:20px;color:#C00;"><strong>Error loading verses:</strong><br>' + esc(msg) + '</div>';
+      container.innerHTML = '<div style="padding:20px;color:#C00;"><strong>❌ Error:</strong><br>' + e.message + '</div>';
     });
 }
 
