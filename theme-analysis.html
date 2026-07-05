@@ -594,15 +594,7 @@ const VERSES_PER_RENDER = 50;
 
 async function loadThemeVerses() {
   try {
-    document.getElementById('verses-container').innerHTML = '<div class="loading-msg"><span class="spinner"></span> Loading verses... (this may take a moment for large themes)</div>';
-    
-    // Set a timeout warning for slow connections
-    const timeoutId = setTimeout(() => {
-      const container = document.getElementById('verses-container');
-      if (container.innerHTML.includes('Loading verses')) {
-        container.innerHTML = '<div class="loading-msg" style="color:#F39C12;">⏳ Still loading... large themes with 100+ verses may take 10-15 seconds on slower connections.</div>';
-      }
-    }, 5000);
+    document.getElementById('verses-container').innerHTML = '<div class="loading-msg"><span class="spinner"></span> Fetching verses from database...</div>';
     
     // Fetch all verses from database
     const rows = await sbGet('theme_verses', {
@@ -611,14 +603,12 @@ async function loadThemeVerses() {
       order: 'sura.asc,aya.asc'
     });
 
-    clearTimeout(timeoutId);
-
-    if (!rows.length) {
+    if (!rows || !rows.length) {
       document.getElementById('verses-container').innerHTML = '<div class="loading-msg">No verses found for this theme.</div>';
       return;
     }
 
-    // Store all verses and start rendering in batches
+    // Store all verses in normalized format
     ALL_VERSE_DATA = rows.map(r => ({
       sura_id:    r.sura,
       aya_number: r.aya,
@@ -629,44 +619,56 @@ async function loadThemeVerses() {
       amharic:    r.amharic
     }));
 
+    // Set global VERSES for compatibility
+    VERSES = ALL_VERSE_DATA;
+    
+    // Start rendering in batches
     VERSE_RENDER_OFFSET = 0;
     renderVersesBatch();
   } catch(e) {
+    console.error('Error loading verses:', e);
     document.getElementById('verses-container').innerHTML = '<div class="loading-msg" style="color:#C0392B;">Error loading verses: ' + esc(e.message) + '</div>';
   }
 }
 
-// Render a batch of 50 verses
+// Render a batch of verses using original renderVerses logic
 function renderVersesBatch() {
   const container = document.getElementById('verses-container');
   const batch = ALL_VERSE_DATA.slice(VERSE_RENDER_OFFSET, VERSE_RENDER_OFFSET + VERSES_PER_RENDER);
   const hasMore = (VERSE_RENDER_OFFSET + VERSES_PER_RENDER) < ALL_VERSE_DATA.length;
   
-  // Set VERSES for compatibility with rest of page
-  if (VERSE_RENDER_OFFSET === 0) {
-    VERSES = ALL_VERSE_DATA;
-    container.innerHTML = '';
-  }
+  if (batch.length === 0) return;
   
-  // Render verses in batch
+  // Render verses using original format
   let html = '';
+  const L = getLang();
+  
   batch.forEach(v => {
-    html += renderSingleVerse(v);
+    const key = v.sura_id + ':' + v.aya_number;
+    html += `<div style="padding:14px;border-bottom:1px solid #E8E0D0;">
+      <div style="font-size:11px;font-weight:800;color:#B8902A;margin-bottom:8px;letter-spacing:0.5px;">${v.sura_id}:${v.aya_number}</div>
+      ${L.ar && v.arabic ? `<div style="font-family:Amiri,serif;font-size:18px;line-height:1.8;direction:rtl;text-align:right;margin-bottom:10px;color:#1A1A1A;">${esc(v.arabic)}</div>` : ''}
+      ${L.tr && v.translit ? `<div style="font-size:11px;color:#666;font-style:italic;margin-bottom:6px;line-height:1.6;">${esc(v.translit)}</div>` : ''}
+      ${L.en && v.english ? `<div style="font-size:12px;color:#444;line-height:1.6;margin-bottom:6px;">${esc(v.english)}</div>` : ''}
+      ${L.ti && v.tigrinya ? `<div style="font-size:13px;color:#000;margin-bottom:4px;font-weight:600;line-height:1.6;">${esc(v.tigrinya)}</div>` : ''}
+      ${L.am && v.amharic ? `<div style="font-size:12px;color:#333;line-height:1.6;">${esc(v.amharic)}</div>` : ''}
+    </div>`;
   });
   
   // Add "Load More" button if needed
   if (hasMore) {
     html += `<div style="padding:20px;text-align:center;">
       <button onclick="loadMoreVersesBatch()" class="btn-gold" style="padding:10px 20px;font-size:12px;">
-        Load More (${VERSE_RENDER_OFFSET + VERSES_PER_RENDER}/${ALL_VERSE_DATA.length} verses)
+        Load More (${Math.min(VERSE_RENDER_OFFSET + VERSES_PER_RENDER, ALL_VERSE_DATA.length)}/${ALL_VERSE_DATA.length} verses)
       </button>
     </div>`;
   }
   
+  // Append to container (clear only on first render)
   if (VERSE_RENDER_OFFSET === 0) {
     container.innerHTML = html;
   } else {
-    // Remove old Load More button
+    // Remove old Load More button before appending
     const oldBtn = container.querySelector('button[onclick="loadMoreVersesBatch()"]');
     if (oldBtn) oldBtn.parentElement.remove();
     container.innerHTML += html;
@@ -677,37 +679,13 @@ function renderVersesBatch() {
 function loadMoreVersesBatch() {
   VERSE_RENDER_OFFSET += VERSES_PER_RENDER;
   renderVersesBatch();
-  // Scroll down a bit
+  // Scroll to new content
   setTimeout(() => {
     const container = document.getElementById('verses-container');
-    const lastVerse = container.lastElementChild;
-    if (lastVerse) lastVerse.scrollIntoView({ behavior: 'smooth' });
+    const lastDiv = container.lastElementChild;
+    if (lastDiv) lastDiv.scrollIntoView({ behavior: 'smooth' });
   }, 100);
 }
-
-// Render a single verse
-function renderSingleVerse(v) {
-  const L = getLang();
-  return `
-    <div style="padding:12px;border-bottom:1px solid #E0D8C8;font-size:13px;">
-      <div style="font-weight:800;color:#B8902A;margin-bottom:6px;">${v.sura_id}:${v.aya_number}</div>
-      ${L.ar && v.arabic ? `<div style="font-family:Amiri,serif;font-size:18px;direction:rtl;text-align:right;line-height:1.8;margin-bottom:8px;color:#1A1A1A;">${esc(v.arabic)}</div>` : ''}
-      ${L.tr && v.translit ? `<div style="font-size:11px;color:#666;font-style:italic;margin-bottom:6px;">${esc(v.translit)}</div>` : ''}
-      ${L.en && v.english ? `<div style="font-size:12px;color:#444;line-height:1.6;margin-bottom:6px;">${esc(v.english)}</div>` : ''}
-      ${L.ti && v.tigrinya ? `<div style="font-size:13px;color:#000;margin-bottom:4px;font-weight:600;">${esc(v.tigrinya)}</div>` : ''}
-      ${L.am && v.amharic ? `<div style="font-size:12px;color:#333;margin-bottom:4px;">${esc(v.amharic)}</div>` : ''}
-    </div>
-  `;
-}
-
-function getLang() {
-  return {
-    ar: document.getElementById('lg-ar')?.checked,
-    en: document.getElementById('lg-en')?.checked,
-    ti: document.getElementById('lg-ti')?.checked,
-    am: document.getElementById('lg-am')?.checked,
-    or: document.getElementById('lg-or')?.checked,
-    tr: document.getElementById('lg-tr')?.checked,
     so: document.getElementById('lg-so')?.checked
   };
 }
