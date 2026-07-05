@@ -225,22 +225,27 @@ const THEME = decodeURIComponent(params.get('theme') || '');
 document.getElementById('pageTitle').textContent = THEME || 'Theme Reader';
 document.title = THEME + ' — Quran Hikma';
 
+// Show visible indicator that JS is running
+document.getElementById('verses-container').innerHTML = '<div style="padding:20px;background:#FFE8B6;border:2px solid #FF9800;color:#000;"><strong>✅ JS Running</strong><br>THEME: ' + (THEME || 'EMPTY') + '</div>';
+
 function loadVerses() {
   if (!THEME) return;
   
-  console.log('loadVerses called, THEME =', THEME);
+  document.getElementById('verses-container').innerHTML = '<div style="padding:20px;text-align:center;color:#888;">⏳ Fetching from API...</div>';
   
   const url = SB_URL + '/rest/v1/theme_verses?select=sura,aya,arabic,english&theme=eq.' + encodeURIComponent(THEME) + '&limit=10000';
-  console.log('Fetching from:', url);
   
-  fetch(url, { headers: HDR })
+  // Add timeout
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
+  
+  fetch(url, { headers: HDR, signal: controller.signal })
     .then(r => {
-      console.log('Response status:', r.status, r.statusText);
+      clearTimeout(timeoutId);
       if (!r.ok) throw new Error('HTTP ' + r.status);
       return r.json();
     })
     .then(verses => {
-      console.log('Got verses:', verses ? verses.length : 'null');
       if (!verses || verses.length === 0) {
         document.getElementById('verses-container').innerHTML = '<div style="padding:20px;color:#888;">No verses found.</div>';
         return;
@@ -252,17 +257,17 @@ function loadVerses() {
       });
       html += '</div>';
       
-      console.log('Rendering verses HTML');
       document.getElementById('verses-container').innerHTML = html;
     })
     .catch(e => {
-      console.error('Fetch error:', e);
-      document.getElementById('verses-container').innerHTML = '<div style="padding:20px;color:red;"><strong>Error:</strong><br>' + e.message + '</div>';
+      clearTimeout(timeoutId);
+      let msg = e.message;
+      if (e.name === 'AbortError') msg = 'Request timeout (10 seconds)';
+      document.getElementById('verses-container').innerHTML = '<div style="padding:20px;color:red;"><strong>Error:</strong><br>' + msg + '</div>';
     });
 }
 
 // Call on page load
-console.log('About to call loadVerses, THEME =', THEME);
 loadVerses();
 
 // Record history
