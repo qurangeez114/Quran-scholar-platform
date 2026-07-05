@@ -296,6 +296,13 @@ function loadVerses() {
     controller.abort();
   }, 10000);
   
+  // Log exact request headers being sent
+  console.log('Request headers:', {
+    apikey: HDR.apikey ? 'present (' + HDR.apikey.substring(0, 20) + '...)' : 'MISSING',
+    authorization: HDR.Authorization ? 'present (' + HDR.Authorization.substring(0, 20) + '...)' : 'MISSING',
+    'content-type': 'application/json'
+  });
+  
   console.log('Starting fetch...');
   
   fetch(url, { headers: HDR, signal: controller.signal })
@@ -310,11 +317,26 @@ function loadVerses() {
           'x-request-id': r.headers.get('x-request-id')
         });
         return r.text().then(text => {
-          console.error('Response body:', text);
+          console.error('Raw response text:', text.substring(0, 500));
           throw new Error('HTTP ' + r.status + ' ' + r.statusText + ': ' + (text || 'no body'));
         });
       }
-      return r.json();
+      
+      // For success responses, also log raw text to catch proxy/HTML errors
+      return r.text().then(text => {
+        console.log('Raw response text:', text.substring(0, 200) + (text.length > 200 ? '...' : ''));
+        
+        // Try to parse JSON
+        try {
+          const data = JSON.parse(text);
+          console.log('JSON parsed successfully');
+          return data;
+        } catch(e) {
+          console.error('JSON parse failed:', e.message);
+          console.error('Full response:', text);
+          throw new Error('Failed to parse JSON: ' + e.message);
+        }
+      });
     })
     .then(verses => {
       console.log('Parsed JSON, verses count:', verses ? verses.length : 'null');
