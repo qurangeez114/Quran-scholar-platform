@@ -307,27 +307,66 @@ async function sbFetch(table, qparams) {
   return r.ok ? await r.json() : [];
 }
 
-// Load all verses for this theme
+// Pagination state
+let ALL_THEME_PAIRS = [];
+let VERSE_OFFSET = 0;
+const VERSES_PER_LOAD = 50;
+
+// Rewritten loadVerses - fetches all pairs once, then renders in batches
 async function loadVerses() {
-  if (!THEME) { document.getElementById('verses-container').innerHTML = '<div style="padding:20px;color:#C00;">No theme specified.</div>'; return; }
+  if (!THEME) { 
+    document.getElementById('verses-container').innerHTML = '<div style="padding:20px;color:#C00;">No theme specified.</div>'; 
+    return; 
+  }
 
-  // Get verse refs from thematic_cross_references
-  const refs = await sbFetch('thematic_cross_references', { select: 'sura,aya', theme: 'eq.' + THEME, order: 'sura,aya', limit: 300 });
+  document.getElementById('verses-container').innerHTML = '<div style="padding:20px;text-align:center;color:#888;">Loading verses...</div>';
+  VERSE_OFFSET = 0;
+
+  // Get verse refs from thematic_cross_references - fetch all at once
+  const refs = await sbFetch('thematic_cross_references', { 
+    select: 'sura,aya', 
+    theme: 'eq.' + THEME, 
+    order: 'sura,aya', 
+    limit: 10000  // Up from 300 to get all
+  });
+
   // Deduplicate
-  const seen = {}; const pairs = [];
-  refs.forEach(r => { const k = r.sura+':'+r.aya; if (!seen[k]) { seen[k]=1; pairs.push(r); } });
-  pairs.sort((a,b) => a.sura-b.sura || a.aya-b.aya);
+  const seen = {}; 
+  ALL_THEME_PAIRS = [];
+  refs.forEach(r => { 
+    const k = r.sura+':'+r.aya; 
+    if (!seen[k]) { 
+      seen[k]=1; 
+      ALL_THEME_PAIRS.push(r); 
+    } 
+  });
+  ALL_THEME_PAIRS.sort((a,b) => a.sura-b.sura || a.aya-b.aya);
 
-  if (!pairs.length) { document.getElementById('verses-container').innerHTML = '<div style="padding:20px;color:#888;text-align:center;">No verses found for this theme.</div>'; return; }
+  if (!ALL_THEME_PAIRS.length) { 
+    document.getElementById('verses-container').innerHTML = '<div style="padding:20px;color:#888;text-align:center;">No verses found for this theme.</div>'; 
+    return; 
+  }
 
-  // Fetch actual verse text in batches by sura
+  // Render the first batch
+  await renderVersesBatch();
+}
+
+// Render a batch of verses starting at VERSE_OFFSET
+async function renderVersesBatch() {
+  const pairs = ALL_THEME_PAIRS.slice(VERSE_OFFSET, VERSE_OFFSET + VERSES_PER_LOAD);
+  const hasMore = (VERSE_OFFSET + VERSES_PER_LOAD) < ALL_THEME_PAIRS.length;
+
+  // Group pairs by sura
   const bySura = {};
-  pairs.forEach(p => { if (!bySura[p.sura]) bySura[p.sura]=[]; bySura[p.sura].push(p.aya); });
+  pairs.forEach(p => { 
+    if (!bySura[p.sura]) bySura[p.sura]=[]; 
+    bySura[p.sura].push(p.aya); 
+  });
 
   const SURA_NAMES = {1:'Al-Fatiha',2:'Al-Baqara',3:'Al-Imran',4:'An-Nisa',5:'Al-Maida',6:'Al-Anam',7:'Al-Araf',8:'Al-Anfal',9:'At-Tawba',10:'Yunus',11:'Hud',12:'Yusuf',13:'Ar-Rad',14:'Ibrahim',15:'Al-Hijr',17:'Al-Isra',18:'Al-Kahf',19:'Maryam',20:'Ta-Ha',21:'Al-Anbiya',22:'Al-Hajj',23:'Al-Muminun',24:'An-Nur',25:'Al-Furqan',26:'Ash-Shuara',27:'An-Naml',28:'Al-Qasas',29:'Al-Ankabut',30:'Ar-Rum',31:'Luqman',32:'As-Sajda',33:'Al-Ahzab',34:'Saba',35:'Al-Fatir',36:'Ya-Sin',37:'As-Saffat',38:'Sad',39:'Az-Zumar',40:'Ghafir',41:'Fussilat',55:'Ar-Rahman',66:'At-Tahrim',71:'Nuh',76:'Al-Insan'};
 
   let html = '';
-  let totalVerses = 0;
+  let batchVerseCount = 0;
 
   for (const sura of Object.keys(bySura).sort((a,b)=>a-b)) {
     const ayas = bySura[sura];
@@ -337,14 +376,16 @@ async function loadVerses() {
       aya_number: 'in.(' + ayas.join(',') + ')',
       order: 'aya_number'
     });
+    
+    batchVerseCount += verseData.length;
     ALL_VERSES = ALL_VERSES.concat(verseData);
-    totalVerses += verseData.length;
     const suraName = SURA_NAMES[sura] || 'Sura ' + sura;
     html += `<div class="sura-section">
       <div class="sura-header">
         <span>Sura ${sura} — ${suraName}</span>
         <span style="font-size:10px;color:#8B7355;">${verseData.length} verses</span>
       </div>`;
+
     verseData.forEach(v => {
       const key = v.sura_id + ':' + v.aya_number;
       const tb = TEXT_BREAKS[key];
@@ -369,8 +410,31 @@ async function loadVerses() {
     html += '</div>';
   }
 
-  document.getElementById('verses-container').innerHTML = html;
-  document.getElementById('verse-count').textContent = totalVerses + ' verses across ' + Object.keys(bySura).length + ' suras';
+  // Add Load More button if there are more verses
+  if (hasMore) {
+    html += `<div style="padding:20px;text-align:center;">
+      <button onclick="loadMoreVerses()" class="btn-gold" style="padding:10px 20px;font-size:12px;">
+        Load More (${VERSE_OFFSET + VERSES_PER_LOAD}/${ALL_THEME_PAIRS.length})
+      </button>
+    </div>`;
+  }
+
+  // If appending, add to existing HTML; if starting fresh, replace
+  if (VERSE_OFFSET === 0) {
+    document.getElementById('verses-container').innerHTML = html;
+  } else {
+    document.getElementById('verses-container').innerHTML += html;
+  }
+
+  document.getElementById('verse-count').textContent = ALL_THEME_PAIRS.length + ' verses across ' + Object.keys(bySura).length + ' suras (showing ' + (VERSE_OFFSET + batchVerseCount) + ')';
+}
+
+// Load next batch
+async function loadMoreVerses() {
+  VERSE_OFFSET += VERSES_PER_LOAD;
+  await renderVersesBatch();
+  // Scroll to the new content
+  setTimeout(() => document.querySelector('[class*="sura-section"]:last-of-type')?.scrollIntoView({ behavior: 'smooth' }), 100);
 }
 
 async function loadHadith() {
