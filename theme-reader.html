@@ -258,23 +258,23 @@ function loadVerses() {
         html += '<div class="verse-num" style="font-size:10px;font-weight:800;color:#B8902A;margin-bottom:6px;">' + v.sura + ':' + v.aya + '</div>';
         
         if (v.arabic) {
-          html += '<div class="verse-arabic v-arabic" style="font-size:20px;line-height:1.8;direction:rtl;text-align:right;margin-bottom:10px;display:block;">' + v.arabic + '</div>';
+          html += '<div class="v-arabic" style="font-size:20px;line-height:1.8;direction:rtl;text-align:right;margin-bottom:10px;display:' + (LANG_STATE.arabic ? 'block' : 'none') + ';">' + v.arabic + '</div>';
         }
         
         if (v.arabic_transliteration) {
-          html += '<div class="verse-transliteration v-translit" style="font-size:12px;color:#7A6A50;font-style:italic;margin-top:6px;display:none;">' + v.arabic_transliteration + '</div>';
+          html += '<div class="v-translit" style="font-size:12px;color:#7A6A50;font-style:italic;margin-top:6px;display:' + (LANG_STATE.translit ? 'block' : 'none') + ';">' + v.arabic_transliteration + '</div>';
         }
         
         if (v.english) {
-          html += '<div class="verse-english v-english" style="font-size:14px;line-height:1.75;color:#2C2C2C;display:block;">' + v.english + '</div>';
+          html += '<div class="v-english" style="font-size:14px;line-height:1.75;color:#2C2C2C;display:' + (LANG_STATE.english ? 'block' : 'none') + ';">' + v.english + '</div>';
         }
         
         if (v.tigrinya) {
-          html += '<div class="verse-tigrinya v-tigrinya" style="font-size:14px;line-height:1.8;color:#1A1A1A;margin-top:8px;display:none;">' + v.tigrinya + '</div>';
+          html += '<div class="v-tigrinya" style="font-size:14px;line-height:1.8;color:#1A1A1A;margin-top:8px;display:' + (LANG_STATE.tigrinya ? 'block' : 'none') + ';">' + v.tigrinya + '</div>';
         }
         
         if (v.amharic) {
-          html += '<div class="verse-amharic v-amharic" style="font-size:14px;line-height:1.8;color:#1A1A1A;margin-top:8px;display:none;">' + v.amharic + '</div>';
+          html += '<div class="v-amharic" style="font-size:14px;line-height:1.8;color:#1A1A1A;margin-top:8px;display:' + (LANG_STATE.amharic ? 'block' : 'none') + ';">' + v.amharic + '</div>';
         }
         
         html += '</div>';
@@ -299,42 +299,36 @@ try {
   console.error('Error accessing pageTitle:', e);
 }
 
-// Show visible indicator that JS is running
-try {
-  document.getElementById('verses-container').innerHTML = '<div style="padding:20px;background:#FFE8B6;border:2px solid #FF9800;color:#000;"><strong>✅ JS Running</strong><br>THEME: ' + (THEME || 'EMPTY') + '</div>';
-  console.log('Orange indicator displayed');
-} catch(e) {
-  console.error('Error showing indicator:', e);
-}
+
 
 function loadVerses() {
-  addLog('STATUS', 'loadVerses called');
+  console.log('loadVerses called');
   
   if (!THEME) {
-    addLog('ERROR', 'THEME is empty');
+    console.error('THEME is empty');
     return;
   }
   
   const url = SB_URL + '/rest/v1/theme_verses?select=sura,aya,arabic,english&theme=eq.' + encodeURIComponent(THEME) + '&limit=10000';
-  addLog('URL', url.substring(0, 80) + '...');
+  console.log('URL', url.substring(0, 80) + '...');
   
   const controller = new AbortController();
   const timeoutId = setTimeout(() => {
-    addLog('ERROR', 'TIMEOUT 10 seconds');
+    console.error('ERROR', 'TIMEOUT 10 seconds');
     controller.abort();
   }, 10000);
   
-  addLog('STATUS', 'Fetching...');
+  console.log('STATUS', 'Fetching...');
   
   fetch(url, { headers: HDR, signal: controller.signal })
     .then(r => {
-      addLog('HTTP', r.status + ' ' + r.statusText);
+      console.log('HTTP', r.status + ' ' + r.statusText);
       clearTimeout(timeoutId);
       
       if (!r.ok) {
         return r.text().then(text => {
-          addLog('ERROR', 'HTTP ' + r.status);
-          addLog('RESPONSE', text.substring(0, 100));
+          console.error('ERROR', 'HTTP ' + r.status);
+          console.log('RESPONSE', text.substring(0, 100));
           throw new Error('HTTP ' + r.status);
         });
       }
@@ -342,22 +336,22 @@ function loadVerses() {
       return r.text().then(text => {
         try {
           const data = JSON.parse(text);
-          addLog('PARSED', 'JSON OK');
+          console.log('PARSED', 'JSON OK');
           return data;
         } catch(e) {
-          addLog('ERROR', 'JSON parse failed');
-          addLog('RESPONSE', text.substring(0, 50));
+          console.error('ERROR', 'JSON parse failed');
+          console.log('RESPONSE', text.substring(0, 50));
           throw e;
         }
       });
     })
     .then(verses => {
       if (!verses || verses.length === 0) {
-        addLog('ERROR', 'No verses returned');
+        console.error('ERROR', 'No verses returned');
         return;
       }
       
-      addLog('SUCCESS', verses.length + ' verses');
+      console.log('SUCCESS', verses.length + ' verses');
       
       let html = '<div style="padding:14px;">';
       verses.forEach(v => {
@@ -366,11 +360,11 @@ function loadVerses() {
       html += '</div>';
       
       document.getElementById('verses-container').innerHTML = html;
-      addLog('RENDER', 'Complete');
+      console.log('RENDER', 'Complete');
     })
     .catch(e => {
       clearTimeout(timeoutId);
-      addLog('CATCH', e.message);
+      console.error('CATCH', e.message);
       document.getElementById('verses-container').innerHTML = '<div style="padding:20px;color:red;"><strong>Error:</strong><br>' + e.message + '</div>';
     });
 }
