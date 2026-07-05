@@ -404,35 +404,6 @@ let VERSE_OFFSET = 0;
 const VERSES_PER_LOAD = 50;
 
 // Rewritten loadVerses - fetches all pairs once, then renders in batches
-function loadVerses() {
-  if (!THEME) { 
-    document.getElementById('verses-container').innerHTML = '<div style="padding:20px;color:#C00;">No theme specified.</div>'; 
-    return; 
-  }
-
-  const container = document.getElementById('verses-container');
-  container.innerHTML = '<div style="padding:20px;text-align:center;color:#888;">⏳ TEST: Fetching verses for ' + THEME + '...</div>';
-  VERSE_OFFSET = 0;
-
-  const url = SB_URL + '/rest/v1/theme_verses?select=sura,aya&theme=eq.' + encodeURIComponent(THEME) + '&limit=10000';
-  
-  fetch(url, { headers: HDR })
-    .then(r => {
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      return r.json();
-    })
-    .then(refs => {
-      if (!refs || refs.length === 0) {
-        container.innerHTML = '<div style="padding:20px;color:#888;">No verses found.</div>';
-        return;
-      }
-      container.innerHTML = '<div style="padding:20px;"><strong>✅ Success! Found ' + refs.length + ' verses</strong><br><br>First 3:<br><pre>' + JSON.stringify(refs.slice(0,3), null, 2) + '</pre></div>';
-    })
-    .catch(e => {
-      container.innerHTML = '<div style="padding:20px;color:#C00;"><strong>❌ Error:</strong><br>' + e.message + '</div>';
-    });
-}
-
 // Render a batch of verses starting at VERSE_OFFSET
 async function renderVersesBatch() {
   const pairs = ALL_THEME_PAIRS.slice(VERSE_OFFSET, VERSE_OFFSET + VERSES_PER_LOAD);
