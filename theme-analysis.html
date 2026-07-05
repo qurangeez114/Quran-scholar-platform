@@ -589,6 +589,16 @@ function transliterateArabic(text) {
 // ── LOAD THEME VERSES ────────────────────────────────────────────────
 async function loadThemeVerses() {
   try {
+    document.getElementById('verses-container').innerHTML = '<div class="loading-msg"><span class="spinner"></span> Loading verses... (this may take a moment for large themes)</div>';
+    
+    // Set a timeout warning for slow connections
+    const timeoutId = setTimeout(() => {
+      const container = document.getElementById('verses-container');
+      if (container.innerHTML.includes('Loading verses')) {
+        container.innerHTML = '<div class="loading-msg" style="color:#F39C12;">⏳ Still loading... large themes with 100+ verses may take 10-15 seconds on slower connections.</div>';
+      }
+    }, 5000);
+    
     // Single indexed query — theme_verses is pre-populated with all text columns.
     // No join to ayas or thematic_cross_references needed.
     const rows = await sbGet('theme_verses', {
@@ -596,6 +606,8 @@ async function loadThemeVerses() {
       theme: 'eq.' + THEME,
       order: 'sura.asc,aya.asc'
     });
+
+    clearTimeout(timeoutId);
 
     if (!rows.length) {
       document.getElementById('verses-container').innerHTML = '<div class="loading-msg">No verses found for this theme.</div>';
