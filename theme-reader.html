@@ -213,6 +213,7 @@ body { font-family: 'Georgia', serif; background: #FDFAF4; color: #1A1A1A; }
 </div>
 
 <script>
+// VERSION: 2026-07-05 LOADVERSES-FIX
 const SB_URL = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
 const HDR = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY };
@@ -380,7 +381,7 @@ function loadVerses() {
         return;
       }
       
-      // Deduplicate
+      // Deduplicate and sort
       const seen = {}; 
       ALL_THEME_PAIRS = [];
       refs.forEach(r => { 
@@ -392,10 +393,15 @@ function loadVerses() {
       });
       ALL_THEME_PAIRS.sort((a,b) => a.sura-b.sura || a.aya-b.aya);
       
-      console.log('Deduplicated to', ALL_THEME_PAIRS.length, 'verses');
+      console.log('Deduplicated to', ALL_THEME_PAIRS.length, 'verses, starting render');
       
-      // Render the first batch
-      renderVersesBatch();
+      // Update status
+      container.innerHTML = '<div style="padding:20px;text-align:center;color:#888;">⏳ Rendering ' + ALL_THEME_PAIRS.length + ' verses...</div>';
+      
+      // Give browser time to show message, then render
+      setTimeout(() => {
+        renderVersesBatch();
+      }, 100);
     })
     .catch(e => {
       clearTimeout(timeoutId);
