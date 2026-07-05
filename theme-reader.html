@@ -228,11 +228,19 @@ document.title = THEME + ' — Quran Hikma';
 function loadVerses() {
   if (!THEME) return;
   
+  console.log('loadVerses called, THEME =', THEME);
+  
   const url = SB_URL + '/rest/v1/theme_verses?select=sura,aya,arabic,english&theme=eq.' + encodeURIComponent(THEME) + '&limit=10000';
+  console.log('Fetching from:', url);
   
   fetch(url, { headers: HDR })
-    .then(r => r.json())
+    .then(r => {
+      console.log('Response status:', r.status, r.statusText);
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    })
     .then(verses => {
+      console.log('Got verses:', verses ? verses.length : 'null');
       if (!verses || verses.length === 0) {
         document.getElementById('verses-container').innerHTML = '<div style="padding:20px;color:#888;">No verses found.</div>';
         return;
@@ -244,14 +252,17 @@ function loadVerses() {
       });
       html += '</div>';
       
+      console.log('Rendering verses HTML');
       document.getElementById('verses-container').innerHTML = html;
     })
     .catch(e => {
-      document.getElementById('verses-container').innerHTML = '<div style="padding:20px;color:red;">Error: ' + e.message + '</div>';
+      console.error('Fetch error:', e);
+      document.getElementById('verses-container').innerHTML = '<div style="padding:20px;color:red;"><strong>Error:</strong><br>' + e.message + '</div>';
     });
 }
 
 // Call on page load
+console.log('About to call loadVerses, THEME =', THEME);
 loadVerses();
 
 // Record history
