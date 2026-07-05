@@ -117,14 +117,12 @@ body { font-family: 'Georgia', serif; background: #FDFAF4; color: #1A1A1A; }
   <button class="main-tab" onclick="switchMainTab('authentic',this)">⚖️ Authenticity</button>
 </div>
 
-<!-- VERSES TAB REMOVED FOR TESTING -->
-<!--
+<!-- TAB: ALL VERSES -->
 <div id="tab-verses" class="tab-panel active">
   <div id="verses-container" style="padding-bottom:80px;">
-    <div style="text-align:center;padding:40px;color:#000;background:#FFD700;font-size:18px;font-weight:bold;">🔴 DEPLOYED AT 2026-07-05 15:00 — If you see this message, new code is live!</div>
+    <div style="text-align:center;padding:40px;color:#888;"><span class="spinner"></span> Loading verses...</div>
   </div>
 </div>
--->
 
 <!-- TAB: HADITH -->
 <div id="tab-hadith" class="tab-panel">
@@ -221,11 +219,40 @@ const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 const HDR = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY };
 const PROXY = '/.netlify/functions/claude-proxy';
 
+// Initialize THEME from URL
 const params = new URLSearchParams(location.search);
 const THEME = decodeURIComponent(params.get('theme') || '');
+document.getElementById('pageTitle').textContent = THEME || 'Theme Reader';
+document.title = THEME + ' — Quran Hikma';
 
-// SIMPLEST POSSIBLE TEST - this MUST show if JS runs
-document.body.innerHTML = '<div style="padding:40px;font-size:20px;color:green;background:yellow;"><strong>✅ JS WORKS!</strong></div>' + document.body.innerHTML;
+function loadVerses() {
+  if (!THEME) return;
+  
+  const url = SB_URL + '/rest/v1/theme_verses?select=sura,aya,arabic,english&theme=eq.' + encodeURIComponent(THEME) + '&limit=10000';
+  
+  fetch(url, { headers: HDR })
+    .then(r => r.json())
+    .then(verses => {
+      if (!verses || verses.length === 0) {
+        document.getElementById('verses-container').innerHTML = '<div style="padding:20px;color:#888;">No verses found.</div>';
+        return;
+      }
+      
+      let html = '<div style="padding:14px;">';
+      verses.forEach(v => {
+        html += '<div style="padding:10px;border-bottom:1px solid #ddd;"><strong>' + v.sura + ':' + v.aya + '</strong><br>' + (v.english || '') + '</div>';
+      });
+      html += '</div>';
+      
+      document.getElementById('verses-container').innerHTML = html;
+    })
+    .catch(e => {
+      document.getElementById('verses-container').innerHTML = '<div style="padding:20px;color:red;">Error: ' + e.message + '</div>';
+    });
+}
+
+// Call on page load
+loadVerses();
 
 // Record history
 if (window.qhistRecord) qhistRecord('Reading: "' + THEME + '"', location.href, '📖', 'Theme Reader');
