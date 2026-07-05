@@ -587,11 +587,6 @@ function transliterateArabic(text) {
 }
 
 // ── LOAD THEME VERSES ────────────────────────────────────────────────
-// Pagination for theme verses
-let ALL_VERSE_DATA = [];
-let VERSE_RENDER_OFFSET = 0;
-const VERSES_PER_RENDER = 50;
-
 async function loadThemeVerses() {
   try {
     document.getElementById('verses-container').innerHTML = '<div class="loading-msg"><span class="spinner"></span> Fetching verses from database...</div>';
@@ -608,8 +603,8 @@ async function loadThemeVerses() {
       return;
     }
 
-    // Store all verses in normalized format
-    ALL_VERSE_DATA = rows.map(r => ({
+    // Convert to format expected by renderVerses()
+    VERSES = rows.map(r => ({
       sura_id:    r.sura,
       aya_number: r.aya,
       arabic:     r.arabic,
@@ -619,72 +614,13 @@ async function loadThemeVerses() {
       amharic:    r.amharic
     }));
 
-    // Set global VERSES for compatibility
-    VERSES = ALL_VERSE_DATA;
+    // Use the original renderVerses function
+    renderVerses();
     
-    // Start rendering in batches
-    VERSE_RENDER_OFFSET = 0;
-    renderVersesBatch();
   } catch(e) {
     console.error('Error loading verses:', e);
-    document.getElementById('verses-container').innerHTML = '<div class="loading-msg" style="color:#C0392B;">Error loading verses: ' + esc(e.message) + '</div>';
+    document.getElementById('verses-container').innerHTML = '<div class="loading-msg" style="color:#C0392B;">Error: ' + esc(e.message) + '</div>';
   }
-}
-
-// Render a batch of verses using original renderVerses logic
-function renderVersesBatch() {
-  const container = document.getElementById('verses-container');
-  const batch = ALL_VERSE_DATA.slice(VERSE_RENDER_OFFSET, VERSE_RENDER_OFFSET + VERSES_PER_RENDER);
-  const hasMore = (VERSE_RENDER_OFFSET + VERSES_PER_RENDER) < ALL_VERSE_DATA.length;
-  
-  if (batch.length === 0) return;
-  
-  // Render verses using original format
-  let html = '';
-  const L = getLang();
-  
-  batch.forEach(v => {
-    const key = v.sura_id + ':' + v.aya_number;
-    html += `<div style="padding:14px;border-bottom:1px solid #E8E0D0;">
-      <div style="font-size:11px;font-weight:800;color:#B8902A;margin-bottom:8px;letter-spacing:0.5px;">${v.sura_id}:${v.aya_number}</div>
-      ${L.ar && v.arabic ? `<div style="font-family:Amiri,serif;font-size:18px;line-height:1.8;direction:rtl;text-align:right;margin-bottom:10px;color:#1A1A1A;">${esc(v.arabic)}</div>` : ''}
-      ${L.tr && v.translit ? `<div style="font-size:11px;color:#666;font-style:italic;margin-bottom:6px;line-height:1.6;">${esc(v.translit)}</div>` : ''}
-      ${L.en && v.english ? `<div style="font-size:12px;color:#444;line-height:1.6;margin-bottom:6px;">${esc(v.english)}</div>` : ''}
-      ${L.ti && v.tigrinya ? `<div style="font-size:13px;color:#000;margin-bottom:4px;font-weight:600;line-height:1.6;">${esc(v.tigrinya)}</div>` : ''}
-      ${L.am && v.amharic ? `<div style="font-size:12px;color:#333;line-height:1.6;">${esc(v.amharic)}</div>` : ''}
-    </div>`;
-  });
-  
-  // Add "Load More" button if needed
-  if (hasMore) {
-    html += `<div style="padding:20px;text-align:center;">
-      <button onclick="loadMoreVersesBatch()" class="btn-gold" style="padding:10px 20px;font-size:12px;">
-        Load More (${Math.min(VERSE_RENDER_OFFSET + VERSES_PER_RENDER, ALL_VERSE_DATA.length)}/${ALL_VERSE_DATA.length} verses)
-      </button>
-    </div>`;
-  }
-  
-  // Append to container (clear only on first render)
-  if (VERSE_RENDER_OFFSET === 0) {
-    container.innerHTML = html;
-  } else {
-    // Remove old Load More button before appending
-    const oldBtn = container.querySelector('button[onclick="loadMoreVersesBatch()"]');
-    if (oldBtn) oldBtn.parentElement.remove();
-    container.innerHTML += html;
-  }
-}
-
-// Load next batch of verses
-function loadMoreVersesBatch() {
-  VERSE_RENDER_OFFSET += VERSES_PER_RENDER;
-  renderVersesBatch();
-  // Scroll to new content
-  setTimeout(() => {
-    const container = document.getElementById('verses-container');
-    const lastDiv = container.lastElementChild;
-    if (lastDiv) lastDiv.scrollIntoView({ behavior: 'smooth' });
-  }, 100);
 }
 
 function getLang() {
