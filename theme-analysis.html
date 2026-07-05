@@ -587,6 +587,11 @@ function transliterateArabic(text) {
 }
 
 // ── LOAD THEME VERSES ────────────────────────────────────────────────
+// Pagination for theme verses
+let ALL_VERSE_DATA = [];
+let VERSE_RENDER_OFFSET = 0;
+const VERSES_PER_RENDER = 50;
+
 async function loadThemeVerses() {
   try {
     document.getElementById('verses-container').innerHTML = '<div class="loading-msg"><span class="spinner"></span> Loading verses... (this may take a moment for large themes)</div>';
@@ -599,8 +604,7 @@ async function loadThemeVerses() {
       }
     }, 5000);
     
-    // Single indexed query — theme_verses is pre-populated with all text columns.
-    // No join to ayas or thematic_cross_references needed.
+    // Fetch all verses from database
     const rows = await sbGet('theme_verses', {
       select: 'sura,aya,arabic,arabic_transliteration,english,tigrinya,amharic',
       theme: 'eq.' + THEME,
@@ -614,8 +618,8 @@ async function loadThemeVerses() {
       return;
     }
 
-    // Normalise shape so rest of page (which uses sura_id / aya_number) keeps working
-    VERSES = rows.map(r => ({
+    // Store all verses and start rendering in batches
+    ALL_VERSE_DATA = rows.map(r => ({
       sura_id:    r.sura,
       aya_number: r.aya,
       arabic:     r.arabic,
@@ -625,11 +629,75 @@ async function loadThemeVerses() {
       amharic:    r.amharic
     }));
 
-    document.getElementById('verses-container').innerHTML = '';
-    renderVerses();
+    VERSE_RENDER_OFFSET = 0;
+    renderVersesBatch();
   } catch(e) {
     document.getElementById('verses-container').innerHTML = '<div class="loading-msg" style="color:#C0392B;">Error loading verses: ' + esc(e.message) + '</div>';
   }
+}
+
+// Render a batch of 50 verses
+function renderVersesBatch() {
+  const container = document.getElementById('verses-container');
+  const batch = ALL_VERSE_DATA.slice(VERSE_RENDER_OFFSET, VERSE_RENDER_OFFSET + VERSES_PER_RENDER);
+  const hasMore = (VERSE_RENDER_OFFSET + VERSES_PER_RENDER) < ALL_VERSE_DATA.length;
+  
+  // Set VERSES for compatibility with rest of page
+  if (VERSE_RENDER_OFFSET === 0) {
+    VERSES = ALL_VERSE_DATA;
+    container.innerHTML = '';
+  }
+  
+  // Render verses in batch
+  let html = '';
+  batch.forEach(v => {
+    html += renderSingleVerse(v);
+  });
+  
+  // Add "Load More" button if needed
+  if (hasMore) {
+    html += `<div style="padding:20px;text-align:center;">
+      <button onclick="loadMoreVersesBatch()" class="btn-gold" style="padding:10px 20px;font-size:12px;">
+        Load More (${VERSE_RENDER_OFFSET + VERSES_PER_RENDER}/${ALL_VERSE_DATA.length} verses)
+      </button>
+    </div>`;
+  }
+  
+  if (VERSE_RENDER_OFFSET === 0) {
+    container.innerHTML = html;
+  } else {
+    // Remove old Load More button
+    const oldBtn = container.querySelector('button[onclick="loadMoreVersesBatch()"]');
+    if (oldBtn) oldBtn.parentElement.remove();
+    container.innerHTML += html;
+  }
+}
+
+// Load next batch of verses
+function loadMoreVersesBatch() {
+  VERSE_RENDER_OFFSET += VERSES_PER_RENDER;
+  renderVersesBatch();
+  // Scroll down a bit
+  setTimeout(() => {
+    const container = document.getElementById('verses-container');
+    const lastVerse = container.lastElementChild;
+    if (lastVerse) lastVerse.scrollIntoView({ behavior: 'smooth' });
+  }, 100);
+}
+
+// Render a single verse
+function renderSingleVerse(v) {
+  const L = getLang();
+  return `
+    <div style="padding:12px;border-bottom:1px solid #E0D8C8;font-size:13px;">
+      <div style="font-weight:800;color:#B8902A;margin-bottom:6px;">${v.sura_id}:${v.aya_number}</div>
+      ${L.ar && v.arabic ? `<div style="font-family:Amiri,serif;font-size:18px;direction:rtl;text-align:right;line-height:1.8;margin-bottom:8px;color:#1A1A1A;">${esc(v.arabic)}</div>` : ''}
+      ${L.tr && v.translit ? `<div style="font-size:11px;color:#666;font-style:italic;margin-bottom:6px;">${esc(v.translit)}</div>` : ''}
+      ${L.en && v.english ? `<div style="font-size:12px;color:#444;line-height:1.6;margin-bottom:6px;">${esc(v.english)}</div>` : ''}
+      ${L.ti && v.tigrinya ? `<div style="font-size:13px;color:#000;margin-bottom:4px;font-weight:600;">${esc(v.tigrinya)}</div>` : ''}
+      ${L.am && v.amharic ? `<div style="font-size:12px;color:#333;margin-bottom:4px;">${esc(v.amharic)}</div>` : ''}
+    </div>
+  `;
 }
 
 function getLang() {
