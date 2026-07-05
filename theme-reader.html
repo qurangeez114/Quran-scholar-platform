@@ -303,8 +303,39 @@ function showToast(msg, dur=2000) {
 async function sbFetch(table, qparams) {
   let url = SB_URL + '/rest/v1/' + table + '?';
   url += Object.entries(qparams).map(([k,v]) => k + '=' + encodeURIComponent(v)).join('&');
-  const r = await fetch(url, { headers: HDR });
-  return r.ok ? await r.json() : [];
+  
+  console.log('sbFetch:', table, 'URL:', url.substring(0, 80) + '...');
+  
+  // Add 15 second timeout
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
+  
+  try {
+    const r = await fetch(url, { 
+      headers: HDR,
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+    
+    console.log('sbFetch response:', r.status);
+    if (!r.ok) {
+      const error = await r.text();
+      console.error('sbFetch error:', error);
+      throw new Error('API Error ' + r.status);
+    }
+    const data = await r.json();
+    console.log('sbFetch got', data.length, 'rows');
+    return data;
+  } catch(e) {
+    clearTimeout(timeoutId);
+    console.error('sbFetch error:', e.message);
+    throw e; // Throw instead of silently returning []
+  }
+}
+
+// Helper to escape HTML
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
 // Pagination state
@@ -319,36 +350,41 @@ async function loadVerses() {
     return; 
   }
 
-  document.getElementById('verses-container').innerHTML = '<div style="padding:20px;text-align:center;color:#888;">Loading verses...</div>';
+  const container = document.getElementById('verses-container');
+  container.innerHTML = '<div style="padding:20px;text-align:center;color:#888;">Loading verses...</div>';
   VERSE_OFFSET = 0;
 
-  // Get verse refs from theme_verses (optimized table) - fetch all at once
-  const refs = await sbFetch('theme_verses', { 
-    select: 'sura,aya', 
-    theme: 'eq.' + THEME, 
-    order: 'sura,aya', 
-    limit: 10000
-  });
+  try {
+    // Get verse refs from theme_verses (optimized table) - fetch all at once
+    const refs = await sbFetch('theme_verses', { 
+      select: 'sura,aya', 
+      theme: 'eq.' + THEME, 
+      limit: 10000
+    });
 
-  // Deduplicate
-  const seen = {}; 
-  ALL_THEME_PAIRS = [];
-  refs.forEach(r => { 
-    const k = r.sura+':'+r.aya; 
-    if (!seen[k]) { 
-      seen[k]=1; 
-      ALL_THEME_PAIRS.push(r); 
-    } 
-  });
-  ALL_THEME_PAIRS.sort((a,b) => a.sura-b.sura || a.aya-b.aya);
+    // Deduplicate
+    const seen = {}; 
+    ALL_THEME_PAIRS = [];
+    refs.forEach(r => { 
+      const k = r.sura+':'+r.aya; 
+      if (!seen[k]) { 
+        seen[k]=1; 
+        ALL_THEME_PAIRS.push(r); 
+      } 
+    });
+    ALL_THEME_PAIRS.sort((a,b) => a.sura-b.sura || a.aya-b.aya);
 
-  if (!ALL_THEME_PAIRS.length) { 
-    document.getElementById('verses-container').innerHTML = '<div style="padding:20px;color:#888;text-align:center;">No verses found for this theme.</div>'; 
-    return; 
+    if (!ALL_THEME_PAIRS.length) { 
+      container.innerHTML = '<div style="padding:20px;color:#888;text-align:center;">No verses found for this theme.</div>'; 
+      return; 
+    }
+
+    // Render the first batch
+    await renderVersesBatch();
+  } catch(e) {
+    console.error('Error loading verses:', e);
+    container.innerHTML = '<div style="padding:20px;color:#C00;"><strong>Error:</strong><br>' + esc(e.message) + '</div>';
   }
-
-  // Render the first batch
-  await renderVersesBatch();
 }
 
 // Render a batch of verses starting at VERSE_OFFSET
