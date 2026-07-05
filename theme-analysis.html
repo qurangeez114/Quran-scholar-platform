@@ -548,9 +548,18 @@ window.addEventListener('DOMContentLoaded', async function() {
 // ── FETCH HELPERS ────────────────────────────────────────────────────
 async function sbGet(table, params) {
   const url = SB_URL + '/rest/v1/' + table + '?' + Object.entries(params).map(([k,v]) => k + '=' + encodeURIComponent(v)).join('&');
-  console.log('sbGet URL:', url);
+  console.log('sbGet URL:', url.substring(0, 100) + '...');
   try {
-    const r = await fetch(url, { headers: HDR });
+    // Add 10 second timeout to prevent hanging
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    
+    const r = await fetch(url, { 
+      headers: HDR,
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+    
     console.log('sbGet response status:', r.status, r.statusText);
     if (!r.ok) {
       const error = await r.text();
@@ -561,7 +570,7 @@ async function sbGet(table, params) {
     console.log('sbGet parsed data length:', data.length);
     return data;
   } catch(e) {
-    console.error('sbGet fetch error:', e);
+    console.error('sbGet fetch error:', e.message);
     return [];
   }
 }
@@ -613,11 +622,11 @@ async function loadThemeVerses() {
     
     console.log('Fetching theme_verses for:', THEME);
     
-    // Fetch all verses from database
+    // Fetch all verses from database (without ORDER BY - will sort client-side)
     const rows = await sbGet('theme_verses', {
       select: 'sura,aya,arabic,arabic_transliteration,english,tigrinya,amharic',
-      theme: 'eq.' + THEME,
-      order: 'sura.asc,aya.asc'
+      theme: 'eq.' + THEME
+      // Removed order to speed up query
     });
 
     console.log('Got rows:', rows);
@@ -629,7 +638,7 @@ async function loadThemeVerses() {
 
     console.log('Converting to VERSES format, count:', rows.length);
     
-    // Convert to format expected by renderVerses()
+    // Convert to format expected by renderVerses() and sort client-side
     VERSES = rows.map(r => ({
       sura_id:    r.sura,
       aya_number: r.aya,
@@ -638,7 +647,7 @@ async function loadThemeVerses() {
       english:    r.english,
       tigrinya:   r.tigrinya,
       amharic:    r.amharic
-    }));
+    })).sort((a, b) => a.sura_id - b.sura_id || a.aya_number - b.aya_number);
 
     console.log('Calling renderVerses with', VERSES.length, 'verses');
     
