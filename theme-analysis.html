@@ -549,11 +549,12 @@ window.addEventListener('DOMContentLoaded', async function() {
 async function sbGet(table, params) {
   const url = SB_URL + '/rest/v1/' + table + '?' + Object.entries(params).map(([k,v]) => k + '=' + encodeURIComponent(v)).join('&');
   console.log('sbGet URL:', url.substring(0, 100) + '...');
+  
+  // Add 15 second timeout to prevent hanging
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
+  
   try {
-    // Add 10 second timeout to prevent hanging
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
-    
     const r = await fetch(url, { 
       headers: HDR,
       signal: controller.signal
@@ -564,14 +565,15 @@ async function sbGet(table, params) {
     if (!r.ok) {
       const error = await r.text();
       console.error('sbGet error response:', error);
-      return [];
+      throw new Error('API Error ' + r.status + ': ' + error.substring(0, 100));
     }
     const data = await r.json();
     console.log('sbGet parsed data length:', data.length);
     return data;
   } catch(e) {
-    console.error('sbGet fetch error:', e.message);
-    return [];
+    clearTimeout(timeoutId);
+    console.error('sbGet error:', e.message);
+    throw e; // Throw the error instead of returning []
   }
 }
 
