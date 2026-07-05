@@ -546,9 +546,22 @@ window.addEventListener('DOMContentLoaded', async function() {
 // ── FETCH HELPERS ────────────────────────────────────────────────────
 async function sbGet(table, params) {
   const url = SB_URL + '/rest/v1/' + table + '?' + Object.entries(params).map(([k,v]) => k + '=' + encodeURIComponent(v)).join('&');
-  const r = await fetch(url, { headers: HDR });
-  if (!r.ok) return [];
-  return await r.json();
+  console.log('sbGet URL:', url);
+  try {
+    const r = await fetch(url, { headers: HDR });
+    console.log('sbGet response status:', r.status, r.statusText);
+    if (!r.ok) {
+      const error = await r.text();
+      console.error('sbGet error response:', error);
+      return [];
+    }
+    const data = await r.json();
+    console.log('sbGet parsed data length:', data.length);
+    return data;
+  } catch(e) {
+    console.error('sbGet fetch error:', e);
+    return [];
+  }
 }
 
 function esc(s) {
@@ -589,7 +602,14 @@ function transliterateArabic(text) {
 // ── LOAD THEME VERSES ────────────────────────────────────────────────
 async function loadThemeVerses() {
   try {
-    document.getElementById('verses-container').innerHTML = '<div class="loading-msg"><span class="spinner"></span> Fetching verses from database...</div>';
+    if (!THEME) {
+      document.getElementById('verses-container').innerHTML = '<div class="loading-msg" style="color:#C00;">Error: No theme specified</div>';
+      return;
+    }
+    
+    document.getElementById('verses-container').innerHTML = '<div class="loading-msg"><span class="spinner"></span> Fetching verses for: ' + esc(THEME) + '</div>';
+    
+    console.log('Fetching theme_verses for:', THEME);
     
     // Fetch all verses from database
     const rows = await sbGet('theme_verses', {
@@ -598,11 +618,15 @@ async function loadThemeVerses() {
       order: 'sura.asc,aya.asc'
     });
 
-    if (!rows || !rows.length) {
-      document.getElementById('verses-container').innerHTML = '<div class="loading-msg">No verses found for this theme.</div>';
+    console.log('Got rows:', rows);
+
+    if (!rows || rows.length === 0) {
+      document.getElementById('verses-container').innerHTML = '<div class="loading-msg">No verses found for theme: ' + esc(THEME) + '</div>';
       return;
     }
 
+    console.log('Converting to VERSES format, count:', rows.length);
+    
     // Convert to format expected by renderVerses()
     VERSES = rows.map(r => ({
       sura_id:    r.sura,
@@ -614,6 +638,8 @@ async function loadThemeVerses() {
       amharic:    r.amharic
     }));
 
+    console.log('Calling renderVerses with', VERSES.length, 'verses');
+    
     // Use the original renderVerses function
     renderVerses();
     
