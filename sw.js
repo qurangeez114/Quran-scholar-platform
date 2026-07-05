@@ -1,5 +1,5 @@
-// v5 — immediately unregisters old caches and takes control
-const CACHE_NAME = 'quran-hikma-v5';
+// v6 — force cache refresh for verse loading fixes
+const CACHE_NAME = 'quran-hikma-v6';
 
 self.addEventListener('install', e => {
   self.skipWaiting();
