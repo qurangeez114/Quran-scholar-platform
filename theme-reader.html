@@ -122,6 +122,9 @@ body { font-family: 'Georgia', serif; background: #FDFAF4; color: #1A1A1A; }
 
 <!-- TAB: ALL VERSES -->
 <div id="tab-verses" class="tab-panel active">
+  <!-- DIAGNOSTIC BOX - Shows logs on page for debugging -->
+  <div id="diagnostic-box" style="background:#1a1a1a;color:#00FF00;padding:10px;font-size:9px;font-family:monospace;max-height:150px;overflow-y:auto;border:2px solid #00FF00;margin:10px;white-space:pre-wrap;word-break:break-all;line-height:1.2;">Loading...</div>
+  
   <div id="verses-container" style="padding-bottom:80px;">
     <div style="text-align:center;padding:40px;color:#888;"><span class="spinner"></span> Loading verses...</div>
   </div>
@@ -216,30 +219,38 @@ body { font-family: 'Georgia', serif; background: #FDFAF4; color: #1A1A1A; }
 </div>
 
 <script>
-// SIMPLE TEST - Change background color to prove JS runs
-document.body.style.background = '#FF0000'; // Bright RED if JS works
-</script>
+// DIAGNOSTIC BOX - Show logs on page
+let diagnosticLogs = [];
 
-<script>
-// Now load the actual code
-// VERSION: 2026-07-05-AGGRESSIVE-TEST
+function addLog(label, value) {
+  diagnosticLogs.push(label + ': ' + JSON.stringify(value));
+  updateDiagnosticBox();
+}
+
+function updateDiagnosticBox() {
+  const diagBox = document.getElementById('diagnostic-box');
+  if (diagBox) {
+    diagBox.innerHTML = '<div style="padding:10px;font-size:11px;line-height:1.4;color:#000;white-space:pre-wrap;word-break:break-all;font-family:monospace;">' + diagnosticLogs.join('\n') + '</div>';
+  }
+}
+
+// SIMPLE TEST - Change background to BRIGHT RED to prove JS runs
+document.body.style.background = '#FF0000'; // Bright RED if JS works
+addLog('JS', 'RUNNING');
+
+// VERSION: 2026-07-05-SHOW-LOGS-ON-PAGE
 const SB_URL = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
+addLog('SB_URL', SB_URL);
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
 const HDR = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY };
 
 // Log headers exist
-console.log('Headers defined:', {
-  hasApikey: !!HDR.apikey,
-  hasAuth: !!HDR.Authorization,
-  authLength: HDR.Authorization ? HDR.Authorization.length : 0
-});
-const PROXY = '/.netlify/functions/claude-proxy';
+addLog('Headers', HDR.apikey ? 'present' : 'MISSING');
 
 // Initialize THEME from URL
 const params = new URLSearchParams(location.search);
 const THEME = decodeURIComponent(params.get('theme') || '');
-
-console.log('theme-reader.html loaded, THEME =', THEME);
+addLog('THEME', THEME);
 
 try {
   document.getElementById('pageTitle').textContent = THEME || 'Theme Reader';
@@ -257,111 +268,70 @@ try {
 }
 
 function loadVerses() {
-  console.log('=== loadVerses() called ===');
-  console.log('THEME:', THEME);
+  addLog('STATUS', 'loadVerses called');
   
   if (!THEME) {
-    console.error('ERROR: THEME is empty!');
+    addLog('ERROR', 'THEME is empty');
     return;
   }
-  
-  console.log('Showing "Fetching..." message');
-  const container = document.getElementById('verses-container');
-  if (!container) {
-    console.error('ERROR: verses-container not found!');
-    return;
-  }
-  
-  container.innerHTML = '<div style="padding:20px;text-align:center;color:#888;">⏳ Fetching from API...</div>';
   
   const url = SB_URL + '/rest/v1/theme_verses?select=sura,aya,arabic,english&theme=eq.' + encodeURIComponent(THEME) + '&limit=10000';
+  addLog('URL', url.substring(0, 80) + '...');
   
-  // Log encoding for debugging
-  const encodedTheme = encodeURIComponent(THEME);
-  console.log('Encoded theme:', encodedTheme);
-  console.log('Full query: theme=eq.' + encodedTheme);
-  console.log('Complete Fetch URL:', url);
-  
-  // Add timeout
   const controller = new AbortController();
   const timeoutId = setTimeout(() => {
-    console.error('TIMEOUT after 10 seconds!');
+    addLog('ERROR', 'TIMEOUT 10 seconds');
     controller.abort();
   }, 10000);
   
-  // Log exact request headers being sent
-  console.log('Request headers:', {
-    apikey: HDR.apikey ? 'present (' + HDR.apikey.substring(0, 20) + '...)' : 'MISSING',
-    authorization: HDR.Authorization ? 'present (' + HDR.Authorization.substring(0, 20) + '...)' : 'MISSING',
-    'content-type': 'application/json'
-  });
-  
-  console.log('Starting fetch...');
+  addLog('STATUS', 'Fetching...');
   
   fetch(url, { headers: HDR, signal: controller.signal })
     .then(r => {
-      console.log('Response received:', r.status, r.statusText);
+      addLog('HTTP', r.status + ' ' + r.statusText);
       clearTimeout(timeoutId);
       
-      // For error responses, capture the body
       if (!r.ok) {
-        console.error('Response headers:', {
-          'content-type': r.headers.get('content-type'),
-          'x-request-id': r.headers.get('x-request-id')
-        });
         return r.text().then(text => {
-          console.error('Raw response text:', text.substring(0, 500));
-          throw new Error('HTTP ' + r.status + ' ' + r.statusText + ': ' + (text || 'no body'));
+          addLog('ERROR', 'HTTP ' + r.status);
+          addLog('RESPONSE', text.substring(0, 100));
+          throw new Error('HTTP ' + r.status);
         });
       }
       
-      // For success responses, also log raw text to catch proxy/HTML errors
       return r.text().then(text => {
-        console.log('Raw response text:', text.substring(0, 200) + (text.length > 200 ? '...' : ''));
-        
-        // Try to parse JSON
         try {
           const data = JSON.parse(text);
-          console.log('JSON parsed successfully');
+          addLog('PARSED', 'JSON OK');
           return data;
         } catch(e) {
-          console.error('JSON parse failed:', e.message);
-          console.error('Full response:', text);
-          throw new Error('Failed to parse JSON: ' + e.message);
+          addLog('ERROR', 'JSON parse failed');
+          addLog('RESPONSE', text.substring(0, 50));
+          throw e;
         }
       });
     })
     .then(verses => {
-      console.log('Parsed JSON, verses count:', verses ? verses.length : 'null');
-      
-      // Log first verse to verify structure
-      if (verses && verses.length > 0) {
-        console.log('First verse sample:', verses[0]);
-      }
-      
       if (!verses || verses.length === 0) {
-        container.innerHTML = '<div style="padding:20px;color:#888;">No verses found.</div>';
-        console.log('Empty response');
+        addLog('ERROR', 'No verses returned');
         return;
       }
       
-      console.log('Building HTML for', verses.length, 'verses');
+      addLog('SUCCESS', verses.length + ' verses');
+      
       let html = '<div style="padding:14px;">';
       verses.forEach(v => {
         html += '<div style="padding:10px;border-bottom:1px solid #ddd;"><strong>' + v.sura + ':' + v.aya + '</strong><br>' + (v.english || '') + '</div>';
       });
       html += '</div>';
       
-      console.log('Rendering HTML');
-      container.innerHTML = html;
-      console.log('SUCCESS! Verses displayed');
+      document.getElementById('verses-container').innerHTML = html;
+      addLog('RENDER', 'Complete');
     })
     .catch(e => {
       clearTimeout(timeoutId);
-      console.error('FETCH ERROR:', e.name, e.message);
-      let msg = e.message;
-      if (e.name === 'AbortError') msg = 'Request timeout (10 seconds)';
-      container.innerHTML = '<div style="padding:20px;color:red;"><strong>Error:</strong><br>' + msg + '</div>';
+      addLog('CATCH', e.message);
+      document.getElementById('verses-container').innerHTML = '<div style="padding:20px;color:red;"><strong>Error:</strong><br>' + e.message + '</div>';
     });
 }
 
