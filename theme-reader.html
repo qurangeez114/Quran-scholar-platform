@@ -368,46 +368,56 @@ async function renderVersesBatch() {
   let html = '';
   let batchVerseCount = 0;
 
-  for (const sura of Object.keys(bySura).sort((a,b)=>a-b)) {
-    const ayas = bySura[sura];
-    const verseData = await sbFetch('ayas', {
-      select: 'sura_id,aya_number,arabic,english,tigrinya,amharic,arabic_transliteration,aya_text',
-      sura_id: 'eq.' + sura,
-      aya_number: 'in.(' + ayas.join(',') + ')',
-      order: 'aya_number'
-    });
-    
-    batchVerseCount += verseData.length;
-    ALL_VERSES = ALL_VERSES.concat(verseData);
-    const suraName = SURA_NAMES[sura] || 'Sura ' + sura;
-    html += `<div class="sura-section">
-      <div class="sura-header">
-        <span>Sura ${sura} — ${suraName}</span>
-        <span style="font-size:10px;color:#8B7355;">${verseData.length} verses</span>
-      </div>`;
+  try {
+    for (const sura of Object.keys(bySura).sort((a,b)=>a-b)) {
+      const ayas = bySura[sura];
+      console.log(`Fetching Sura ${sura} verses: ${ayas.join(',')}`);
+      
+      const verseData = await sbFetch('ayas', {
+        select: 'sura_id,aya_number,arabic,english,tigrinya,amharic,arabic_transliteration,aya_text',
+        sura_id: 'eq.' + sura,
+        aya_number: 'in.(' + ayas.join(',') + ')',
+        order: 'aya_number'
+      });
+      
+      console.log(`Got ${verseData.length} verses for Sura ${sura}`);
+      
+      batchVerseCount += verseData.length;
+      ALL_VERSES = ALL_VERSES.concat(verseData);
+      const suraName = SURA_NAMES[sura] || 'Sura ' + sura;
+      html += `<div class="sura-section">
+        <div class="sura-header">
+          <span>Sura ${sura} — ${suraName}</span>
+          <span style="font-size:10px;color:#8B7355;">${verseData.length} verses</span>
+        </div>`;
 
-    verseData.forEach(v => {
-      const key = v.sura_id + ':' + v.aya_number;
-      const tb = TEXT_BREAKS[key];
-      const tbHtml = tb ? `<div class="tension-flag ${tb.grade==='🔴'?'red':'orange'}" onclick="window.location.href='theme-analysis.html?theme=${encodeURIComponent(THEME)}&tab=internal'">${tb.grade} Text breaks here — ${tb.note}</div>` : '';
-      html += `<div class="verse-card" id="vc-${key}">
-        <div class="verse-num">
-          <span>${v.sura_id}:${v.aya_number}</span>
-          <div style="display:flex;gap:4px;">
-            <button class="v-btn" onclick="addToPresentation('${key}')">🎬</button>
-            <button class="v-btn" onclick="addToResearch('${key}')">📚</button>
-            <button class="v-btn" onclick="copyVerse('${key}')">📋</button>
+      verseData.forEach(v => {
+        const key = v.sura_id + ':' + v.aya_number;
+        const tb = TEXT_BREAKS[key];
+        const tbHtml = tb ? `<div class="tension-flag ${tb.grade==='🔴'?'red':'orange'}" onclick="window.location.href='theme-analysis.html?theme=${encodeURIComponent(THEME)}&tab=internal'">${tb.grade} Text breaks here — ${tb.note}</div>` : '';
+        html += `<div class="verse-card" id="vc-${key}">
+          <div class="verse-num">
+            <span>${v.sura_id}:${v.aya_number}</span>
+            <div style="display:flex;gap:4px;">
+              <button class="v-btn" onclick="addToPresentation('${key}')">🎬</button>
+              <button class="v-btn" onclick="addToResearch('${key}')">📚</button>
+              <button class="v-btn" onclick="copyVerse('${key}')">📋</button>
+            </div>
           </div>
-        </div>
-        <div class="v-arabic verse-arabic" style="${LANG_STATE.arabic?'':'display:none'}">${v.arabic||''}</div>
-        <div class="v-translit verse-transliteration" style="${LANG_STATE.translit&&v.arabic_transliteration?'':'display:none'}">${v.arabic_transliteration||''}</div>
-        <div class="v-english verse-english" style="${LANG_STATE.english&&v.english?'':'display:none'}">${v.english||''}</div>
-        <div class="v-tigrinya verse-tigrinya" style="${LANG_STATE.tigrinya&&(v.tigrinya||v.aya_text)?'':'display:none'}"><div style="font-size:9px;font-weight:800;color:#B8902A;margin-bottom:3px;">TIGRINYA · ትግርኛ · ${v.sura_id}:${v.aya_number}</div>${v.tigrinya||v.aya_text||''}</div>
-        <div class="v-amharic verse-amharic" style="${LANG_STATE.amharic&&v.amharic?'':'display:none'}"><div style="font-size:9px;font-weight:800;color:#5C7A3A;margin-bottom:3px;">AMHARIC · አማርኛ · ${v.sura_id}:${v.aya_number}</div>${v.amharic||''}</div>
-        ${tbHtml}
-      </div>`;
-    });
-    html += '</div>';
+          <div class="v-arabic verse-arabic" style="${LANG_STATE.arabic?'':'display:none'}">${v.arabic||''}</div>
+          <div class="v-translit verse-transliteration" style="${LANG_STATE.translit&&v.arabic_transliteration?'':'display:none'}">${v.arabic_transliteration||''}</div>
+          <div class="v-english verse-english" style="${LANG_STATE.english&&v.english?'':'display:none'}">${v.english||''}</div>
+          <div class="v-tigrinya verse-tigrinya" style="${LANG_STATE.tigrinya&&(v.tigrinya||v.aya_text)?'':'display:none'}"><div style="font-size:9px;font-weight:800;color:#B8902A;margin-bottom:3px;">TIGRINYA · ትግርኛ · ${v.sura_id}:${v.aya_number}</div>${v.tigrinya||v.aya_text||''}</div>
+          <div class="v-amharic verse-amharic" style="${LANG_STATE.amharic&&v.amharic?'':'display:none'}"><div style="font-size:9px;font-weight:800;color:#5C7A3A;margin-bottom:3px;">AMHARIC · አማርኛ · ${v.sura_id}:${v.aya_number}</div>${v.amharic||''}</div>
+          ${tbHtml}
+        </div>`;
+      });
+      html += '</div>';
+    }
+  } catch(e) {
+    console.error('Error rendering verses:', e);
+    document.getElementById('verses-container').innerHTML = '<div style="padding:20px;color:#C00;"><strong>Error loading verses:</strong><br>' + e.message + '</div>';
+    return;
   }
 
   // Add Load More button if there are more verses
