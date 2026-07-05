@@ -226,10 +226,20 @@ if ('caches' in window) {
 // VERSION: 2026-07-05-T08-30
 const SB_URL = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
 
+// Log critical constants immediately
+console.log('SB_URL:', SB_URL);
+
 // SIMPLEST TEST: If JS runs, body background changes
 document.body.style.background = '#FFF8DC'; // Cornsilk = JS is running
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
 const HDR = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY };
+
+// Log headers exist
+console.log('Headers defined:', {
+  hasApikey: !!HDR.apikey,
+  hasAuth: !!HDR.Authorization,
+  authLength: HDR.Authorization ? HDR.Authorization.length : 0
+});
 const PROXY = '/.netlify/functions/claude-proxy';
 
 // Initialize THEME from URL
@@ -272,7 +282,12 @@ function loadVerses() {
   container.innerHTML = '<div style="padding:20px;text-align:center;color:#888;">⏳ Fetching from API...</div>';
   
   const url = SB_URL + '/rest/v1/theme_verses?select=sura,aya,arabic,english&theme=eq.' + encodeURIComponent(THEME) + '&limit=10000';
-  console.log('Fetch URL:', url);
+  
+  // Log encoding for debugging
+  const encodedTheme = encodeURIComponent(THEME);
+  console.log('Encoded theme:', encodedTheme);
+  console.log('Full query: theme=eq.' + encodedTheme);
+  console.log('Complete Fetch URL:', url);
   
   // Add timeout
   const controller = new AbortController();
@@ -287,11 +302,28 @@ function loadVerses() {
     .then(r => {
       console.log('Response received:', r.status, r.statusText);
       clearTimeout(timeoutId);
-      if (!r.ok) throw new Error('HTTP ' + r.status + ' ' + r.statusText);
+      
+      // For error responses, capture the body
+      if (!r.ok) {
+        console.error('Response headers:', {
+          'content-type': r.headers.get('content-type'),
+          'x-request-id': r.headers.get('x-request-id')
+        });
+        return r.text().then(text => {
+          console.error('Response body:', text);
+          throw new Error('HTTP ' + r.status + ' ' + r.statusText + ': ' + (text || 'no body'));
+        });
+      }
       return r.json();
     })
     .then(verses => {
       console.log('Parsed JSON, verses count:', verses ? verses.length : 'null');
+      
+      // Log first verse to verify structure
+      if (verses && verses.length > 0) {
+        console.log('First verse sample:', verses[0]);
+      }
+      
       if (!verses || verses.length === 0) {
         container.innerHTML = '<div style="padding:20px;color:#888;">No verses found.</div>';
         console.log('Empty response');
