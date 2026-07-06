@@ -222,6 +222,7 @@ body { font-family: 'Georgia', serif; background: #FDFAF4; color: #1A1A1A; }
 const SB_URL = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
 const HDR = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY };
+const PROXY = 'https://api.anthropic.com/v1/messages';
 
 const params = new URLSearchParams(location.search);
 const THEME = decodeURIComponent(params.get('theme') || '');
@@ -314,8 +315,13 @@ function loadVerses() {
             html += '<div class="v-arabic" style="font-size:20px;line-height:1.8;direction:rtl;text-align:right;margin-bottom:10px;display:' + (LANG_STATE.arabic ? 'block' : 'none') + ';font-weight:bold;">' + v.arabic + '</div>';
           }
           
-          if (v.arabic_transliteration) {
-            html += '<div class="v-translit" style="font-size:12px;color:#7A6A50;margin-top:6px;display:' + (LANG_STATE.translit ? 'block' : 'none') + ';font-weight:bold;">' + v.arabic_transliteration + '</div>';
+          if (v.arabic_transliteration || v.arabic) {
+            // Check if stored transliteration is Ge'ez/Amharic script (wrong data)
+            const isGeez = v.arabic_transliteration && /[\u1200-\u137F]/.test(v.arabic_transliteration);
+            const translit = (isGeez || !v.arabic_transliteration) ? transliterateArabic(v.arabic || '') : v.arabic_transliteration;
+            if (translit) {
+              html += '<div class="v-translit" style="font-size:12px;color:#7A6A50;margin-top:6px;display:' + (LANG_STATE.translit ? 'block' : 'none') + ';font-weight:bold;">' + translit + '</div>';
+            }
           }
           
           if (v.english) {
@@ -494,8 +500,32 @@ async function sbFetch(table, qparams) {
 }
 
 // Helper to escape HTML
-function esc(s) {
-  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+function transliterateArabic(arabic) {
+  if (!arabic) return '';
+  
+  // Comprehensive Arabic to Latin transliteration mapping
+  const map = {
+    'ا': 'a', 'أ': 'a', 'إ': 'i', 'آ': 'ā', 'ى': 'ā',
+    'ب': 'b', 'ت': 't', 'ث': 'th', 'ج': 'j', 'ح': 'h', 'خ': 'kh',
+    'د': 'd', 'ذ': 'dh', 'ر': 'r', 'ز': 'z', 'س': 's', 'ش': 'sh',
+    'ص': 'ṣ', 'ض': 'ḍ', 'ط': 'ṭ', 'ظ': 'ẓ', 'ع': ''', 'غ': 'gh',
+    'ف': 'f', 'ق': 'q', 'ك': 'k', 'ل': 'l', 'م': 'm', 'ن': 'n',
+    'ه': 'h', 'و': 'w', 'ي': 'y', 'ة': 'a', 'َ': 'a', 'ِ': 'i', 'ُ': 'u',
+    'ّ': '', 'ْ': '', 'ً': 'an', 'ٌ': 'un', 'ٍ': 'in', 'ـ': '',
+    ' ': ' ', '-': '-', '.': '.', '،': ',', '؛': ';', '؟': '?'
+  };
+  
+  let result = '';
+  for (let char of arabic) {
+    result += map[char] || char;
+  }
+  
+  // Clean up multiple spaces and fix common patterns
+  result = result.replace(/\s+/g, ' ').trim();
+  result = result.replace(/a'/g, 'a'').replace(/'i/g, ''i').replace(/'u/g, ''u');
+  result = result.replace(/([a-z])an\s/g, '$1an ').replace(/\s+/g, ' ');
+  
+  return result;
 }
 
 // Pagination state
