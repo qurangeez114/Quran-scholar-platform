@@ -226,98 +226,134 @@ const HDR = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY };
 const params = new URLSearchParams(location.search);
 const THEME = decodeURIComponent(params.get('theme') || '');
 
-console.log('THEME:', THEME);
+console.log('🚀 SCRIPT LOADED');
+console.log('📍 URL:', location.href);
+console.log('🎯 THEME:', THEME);
+console.log('⏰ Time:', new Date().toISOString());
 
 // Define language state before using it
 let LANG_STATE = { arabic: true, translit: false, english: true, tigrinya: false, amharic: false };
 
 function loadVerses() {
+  console.log('📥 loadVerses() called');
+  console.log('✓ THEME:', THEME);
+  
   if (!THEME) {
-    console.log('No THEME');
+    const msg = '❌ NO THEME - Theme parameter missing from URL';
+    console.error(msg);
+    document.getElementById('verses-container').innerHTML = '<div style="padding:20px;color:red;"><strong>Error:</strong> ' + msg + '</div>';
     return;
   }
   
   const url = SB_URL + '/rest/v1/theme_verses?select=sura,aya,arabic,arabic_transliteration,english,tigrinya,amharic&theme=eq.' + encodeURIComponent(THEME) + '&limit=10000';
   
-  console.log('Fetch URL:', url);
+  console.log('🌐 Fetching URL:', url.substring(0, 100) + '...');
+  console.log('📊 Headers:', HDR);
   
-  fetch(url, { headers: HDR })
-    .then(r => {
-      console.log('HTTP', r.status);
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      return r.json();
-    })
-    .then(verses => {
-      console.log('Got', verses.length, 'verses');
-      
-      if (!verses || verses.length === 0) {
-        document.getElementById('verses-container').innerHTML = '<div style="padding:20px;color:#888;">No verses found.</div>';
-        return;
-      }
-      
-      // Check which languages actually have data
-      let hasTranslit = false, hasTigrinya = false, hasAmharic = false;
-      verses.forEach(v => {
-        if (v.arabic_transliteration && v.arabic_transliteration.trim()) hasTranslit = true;
-        if (v.tigrinya && v.tigrinya.trim()) hasTigrinya = true;
-        if (v.amharic && v.amharic.trim()) hasAmharic = true;
-      });
-      
-      // KEEP ALL BUTTONS VISIBLE - Don't hide them
-      // Just disable toggle if no data
-      if (!hasTranslit) LANG_STATE.translit = false;
-      if (!hasTigrinya) LANG_STATE.tigrinya = false;
-      if (!hasAmharic) LANG_STATE.amharic = false;
-      
-      let html = '<div style="padding:14px;">';
-      
-      // Show "No translation" notice if language is toggled on but has no data
-      if (LANG_STATE.translit && !hasTranslit) {
-        html += '<div style="padding:10px;background:#FFF8E8;border:1px solid #FFD700;color:#B8860B;margin-bottom:10px;border-radius:4px;font-size:12px;">⚠️ Transliteration translation not available for these verses</div>';
-      }
-      if (LANG_STATE.tigrinya && !hasTigrinya) {
-        html += '<div style="padding:10px;background:#FFF8E8;border:1px solid #FFD700;color:#B8860B;margin-bottom:10px;border-radius:4px;font-size:12px;">⚠️ Tigrinya translation not available for these verses</div>';
-      }
-      if (LANG_STATE.amharic && !hasAmharic) {
-        html += '<div style="padding:10px;background:#FFF8E8;border:1px solid #FFD700;color:#B8860B;margin-bottom:10px;border-radius:4px;font-size:12px;">⚠️ Amharic translation not available for these verses</div>';
-      }
-      
-      verses.forEach(v => {
-        html += '<div class="verse-card" id="vc-' + v.sura + ':' + v.aya + '" style="padding:14px;border:1px solid #E8E0D0;margin-bottom:10px;background:#FFF;">';
-        html += '<div class="verse-num" style="font-size:10px;font-weight:800;color:#B8902A;margin-bottom:6px;">' + v.sura + ':' + v.aya + '</div>';
+  // Timeout after 15 seconds
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => {
+    console.error('⏱️ TIMEOUT - Fetch took too long');
+    controller.abort();
+  }, 15000);
+  
+  try {
+    fetch(url, { headers: HDR, signal: controller.signal })
+      .then(r => {
+        clearTimeout(timeoutId);
+        console.log('📨 HTTP Response:', r.status, r.statusText);
         
-        if (v.arabic) {
-          html += '<div class="v-arabic" style="font-size:20px;line-height:1.8;direction:rtl;text-align:right;margin-bottom:10px;display:' + (LANG_STATE.arabic ? 'block' : 'none') + ';font-weight:bold;">' + v.arabic + '</div>';
+        if (!r.ok) {
+          const msg = 'HTTP ' + r.status + ' ' + r.statusText;
+          console.error('❌ HTTP Error:', msg);
+          throw new Error(msg);
+        }
+        return r.json();
+      })
+      .then(verses => {
+        console.log('✅ SUCCESS - Got', verses.length, 'verses');
+        
+        if (!verses || verses.length === 0) {
+          const msg = 'No verses found for theme: ' + THEME;
+          console.warn('⚠️', msg);
+          document.getElementById('verses-container').innerHTML = '<div style="padding:20px;color:#888;">' + msg + '</div>';
+          return;
         }
         
-        if (v.arabic_transliteration) {
-          html += '<div class="v-translit" style="font-size:12px;color:#7A6A50;margin-top:6px;display:' + (LANG_STATE.translit ? 'block' : 'none') + ';font-weight:bold;">' + v.arabic_transliteration + '</div>';
+        // Check which languages actually have data
+        let hasTranslit = false, hasTigrinya = false, hasAmharic = false;
+        verses.forEach(v => {
+          if (v.arabic_transliteration && v.arabic_transliteration.trim()) hasTranslit = true;
+          if (v.tigrinya && v.tigrinya.trim()) hasTigrinya = true;
+          if (v.amharic && v.amharic.trim()) hasAmharic = true;
+        });
+        
+        console.log('🗣️ Languages available - Translit:', hasTranslit, 'Tigrinya:', hasTigrinya, 'Amharic:', hasAmharic);
+        
+        if (!hasTranslit) LANG_STATE.translit = false;
+        if (!hasTigrinya) LANG_STATE.tigrinya = false;
+        if (!hasAmharic) LANG_STATE.amharic = false;
+        
+        let html = '<div style="padding:14px;">';
+        
+        if (LANG_STATE.translit && !hasTranslit) {
+          html += '<div style="padding:10px;background:#FFF8E8;border:1px solid #FFD700;color:#B8860B;margin-bottom:10px;border-radius:4px;font-size:12px;">⚠️ Transliteration translation not available for these verses</div>';
+        }
+        if (LANG_STATE.tigrinya && !hasTigrinya) {
+          html += '<div style="padding:10px;background:#FFF8E8;border:1px solid #FFD700;color:#B8860B;margin-bottom:10px;border-radius:4px;font-size:12px;">⚠️ Tigrinya translation not available for these verses</div>';
+        }
+        if (LANG_STATE.amharic && !hasAmharic) {
+          html += '<div style="padding:10px;background:#FFF8E8;border:1px solid #FFD700;color:#B8860B;margin-bottom:10px;border-radius:4px;font-size:12px;">⚠️ Amharic translation not available for these verses</div>';
         }
         
-        if (v.english) {
-          html += '<div class="v-english" style="font-size:14px;line-height:1.75;color:#2C2C2C;display:' + (LANG_STATE.english ? 'block' : 'none') + ';font-weight:bold;">' + v.english + '</div>';
-        }
-        
-        if (v.tigrinya) {
-          html += '<div class="v-tigrinya" style="font-size:14px;line-height:1.8;color:#1A1A1A;margin-top:8px;display:' + (LANG_STATE.tigrinya ? 'block' : 'none') + ';font-weight:bold;">' + v.tigrinya + '</div>';
-        }
-        
-        if (v.amharic) {
-          html += '<div class="v-amharic" style="font-size:14px;line-height:1.8;color:#1A1A1A;margin-top:8px;display:' + (LANG_STATE.amharic ? 'block' : 'none') + ';font-weight:bold;">' + v.amharic + '</div>';
-        }
-        
+        verses.forEach(v => {
+          html += '<div class="verse-card" id="vc-' + v.sura + ':' + v.aya + '" style="padding:14px;border:1px solid #E8E0D0;margin-bottom:10px;background:#FFF;">';
+          html += '<div class="verse-num" style="font-size:10px;font-weight:800;color:#B8902A;margin-bottom:6px;">' + v.sura + ':' + v.aya + '</div>';
+          
+          if (v.arabic) {
+            html += '<div class="v-arabic" style="font-size:20px;line-height:1.8;direction:rtl;text-align:right;margin-bottom:10px;display:' + (LANG_STATE.arabic ? 'block' : 'none') + ';font-weight:bold;">' + v.arabic + '</div>';
+          }
+          
+          if (v.arabic_transliteration) {
+            html += '<div class="v-translit" style="font-size:12px;color:#7A6A50;margin-top:6px;display:' + (LANG_STATE.translit ? 'block' : 'none') + ';font-weight:bold;">' + v.arabic_transliteration + '</div>';
+          }
+          
+          if (v.english) {
+            html += '<div class="v-english" style="font-size:14px;line-height:1.75;color:#2C2C2C;display:' + (LANG_STATE.english ? 'block' : 'none') + ';font-weight:bold;">' + v.english + '</div>';
+          }
+          
+          if (v.tigrinya) {
+            html += '<div class="v-tigrinya" style="font-size:14px;line-height:1.8;color:#1A1A1A;margin-top:8px;display:' + (LANG_STATE.tigrinya ? 'block' : 'none') + ';font-weight:bold;">' + v.tigrinya + '</div>';
+          }
+          
+          if (v.amharic) {
+            html += '<div class="v-amharic" style="font-size:14px;line-height:1.8;color:#1A1A1A;margin-top:8px;display:' + (LANG_STATE.amharic ? 'block' : 'none') + ';font-weight:bold;">' + v.amharic + '</div>';
+          }
+          
+          html += '</div>';
+        });
         html += '</div>';
+        
+        console.log('🎨 Rendering HTML...');
+        document.getElementById('verses-container').innerHTML = html;
+        console.log('✅ Render complete!');
+      })
+      .catch(e => {
+        clearTimeout(timeoutId);
+        const msg = e.name === 'AbortError' ? 'Fetch timeout (15 seconds)' : e.message;
+        console.error('❌ FETCH ERROR:', msg);
+        console.error('📋 Stack:', e.stack);
+        document.getElementById('verses-container').innerHTML = '<div style="padding:20px;color:red;"><strong>Error loading verses:</strong><br>' + msg + '<br><br><small>Check browser console (F12) for details</small></div>';
       });
-      html += '</div>';
-      
-      document.getElementById('verses-container').innerHTML = html;
-    })
-    .catch(e => {
-      console.error('ERROR:', e.message);
-      document.getElementById('verses-container').innerHTML = '<div style="padding:20px;color:red;"><strong>Error:</strong> ' + e.message + '</div>';
-    });
+  } catch(e) {
+    const msg = e.message;
+    console.error('❌ EXCEPTION:', msg);
+    document.getElementById('verses-container').innerHTML = '<div style="padding:20px;color:red;"><strong>Exception:</strong><br>' + msg + '</div>';
+  }
 }
 
+console.log('📝 loadVerses function defined');
+console.log('⏳ Calling loadVerses() now...');
 loadVerses();
 
 // Set page title
