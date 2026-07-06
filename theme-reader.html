@@ -444,28 +444,17 @@ const TEXT_BREAKS = {
 function openDonateModal() { document.getElementById('donateModal').style.display='flex'; }
 
 // Attach event listeners for language buttons - only ONCE on page load
-// Using named functions so they're not duplicated if loadVerses() runs multiple times
-function handleArabicClick() { toggleLang('arabic', event.target); }
-function handleTranslitClick() { toggleLang('translit', event.target); }
-function handleEnglishClick() { toggleLang('english', event.target); }
-function handleTigrinyaClick() { toggleLang('tigrinya', event.target); }
-function handleAmharicClick() { toggleLang('amharic', event.target); }
-
 // Attach listeners once when DOM is ready (only once per page load, not per loadVerses() call)
 setTimeout(() => {
   const btns = ['arabic', 'translit', 'english', 'tigrinya', 'amharic'];
-  const handlers = {
-    arabic: handleArabicClick,
-    translit: handleTranslitClick,
-    english: handleEnglishClick,
-    tigrinya: handleTigrinyaClick,
-    amharic: handleAmharicClick
-  };
   
   btns.forEach(lang => {
     const btn = document.getElementById('btn-' + lang);
     if (btn && !btn.dataset.listenerAttached) {
-      btn.addEventListener('click', handlers[lang]);
+      // Use arrow function to properly capture 'this' as the button element
+      btn.addEventListener('click', function(e) {
+        toggleLang(lang, this);
+      });
       btn.dataset.listenerAttached = 'true'; // Mark so we never add again
     }
   });
