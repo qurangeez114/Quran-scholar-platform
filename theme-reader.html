@@ -319,8 +319,8 @@ function loadVerses() {
 }
 
 loadVerses();
-</script>
 
+// Set page title
 try {
   document.getElementById('pageTitle').textContent = THEME || 'Theme Reader';
   document.title = THEME + ' — Quran Hikma';
@@ -329,85 +329,8 @@ try {
 }
 
 
+// Event listeners and pagination are handled below with renderVersesBatch()
 
-function loadVerses() {
-  console.log('loadVerses called');
-  
-  if (!THEME) {
-    console.error('THEME is empty');
-    return;
-  }
-  
-  const url = SB_URL + '/rest/v1/theme_verses?select=sura,aya,arabic,english&theme=eq.' + encodeURIComponent(THEME) + '&limit=10000';
-  console.log('URL', url.substring(0, 80) + '...');
-  
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => {
-    console.error('ERROR', 'TIMEOUT 10 seconds');
-    controller.abort();
-  }, 10000);
-  
-  console.log('STATUS', 'Fetching...');
-  
-  fetch(url, { headers: HDR, signal: controller.signal })
-    .then(r => {
-      console.log('HTTP', r.status + ' ' + r.statusText);
-      clearTimeout(timeoutId);
-      
-      if (!r.ok) {
-        return r.text().then(text => {
-          console.error('ERROR', 'HTTP ' + r.status);
-          console.log('RESPONSE', text.substring(0, 100));
-          throw new Error('HTTP ' + r.status);
-        });
-      }
-      
-      return r.text().then(text => {
-        try {
-          const data = JSON.parse(text);
-          console.log('PARSED', 'JSON OK');
-          return data;
-        } catch(e) {
-          console.error('ERROR', 'JSON parse failed');
-          console.log('RESPONSE', text.substring(0, 50));
-          throw e;
-        }
-      });
-    })
-    .then(verses => {
-      if (!verses || verses.length === 0) {
-        console.error('ERROR', 'No verses returned');
-        return;
-      }
-      
-      console.log('SUCCESS', verses.length + ' verses');
-      
-      let html = '<div style="padding:14px;">';
-      verses.forEach(v => {
-        html += '<div style="padding:10px;border-bottom:1px solid #ddd;"><strong>' + v.sura + ':' + v.aya + '</strong><br>' + (v.english || '') + '</div>';
-      });
-      html += '</div>';
-      
-      document.getElementById('verses-container').innerHTML = html;
-      console.log('RENDER', 'Complete');
-      // Note: Event listeners are attached ONCE during page load (above)
-      // NOT here, to avoid duplicate listeners on subsequent loadVerses() calls
-    })
-    .catch(e => {
-      clearTimeout(timeoutId);
-      console.error('CATCH', e.message);
-      document.getElementById('verses-container').innerHTML = '<div style="padding:20px;color:red;"><strong>Error:</strong><br>' + e.message + '</div>';
-    });
-}
-
-// Call on page load
-try {
-  console.log('Calling loadVerses...');
-  loadVerses();
-  console.log('loadVerses call completed');
-} catch(e) {
-  console.error('ERROR calling loadVerses:', e.name, e.message);
-  document.getElementById('verses-container').innerHTML = '<div style="padding:20px;color:red;"><strong>ERROR:</strong><br>' + e.message + '</div>';
 }
 
 // Record history
