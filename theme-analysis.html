@@ -647,8 +647,14 @@ async function loadThemeVerses() {
     // Sort client-side
     rows.sort((a, b) => a.sura - b.sura || a.aya - b.aya);
     
-    // IMPORTANT: Assign to VERSES so rerenderVerses() works when user toggles languages
-    VERSES = rows;
+    // IMPORTANT: Transform field names and assign to VERSES so rerenderVerses() works
+    // The API returns: sura, aya
+    // But the rest of the code expects: sura_id, aya_number
+    VERSES = rows.map(v => ({
+      ...v,
+      sura_id: v.sura,
+      aya_number: v.aya
+    }));
     
     console.log('Rendering', rows.length, 'verses');
     container.innerHTML = '<div class="loading-msg"><span class="spinner"></span> Rendering verses...</div>';
@@ -705,15 +711,15 @@ function getLang() {
 
 function renderVerseCard(v, idx) {
   const L = getLang();
-  const sn = SURAS[v.sura] || 'Surah ' + v.sura;
-  return '<div class="verse-card" id="vc-ta-'+v.sura+'-'+v.aya+'">'
+  const sn = SURAS[v.sura_id] || 'Surah ' + v.sura_id;
+  return '<div class="verse-card" id="vc-ta-'+v.sura_id+'-'+v.aya_number+'">'
     + '<div class="verse-card-header">'
-      + '<div><span class="verse-ref">' + v.sura + ':' + v.aya + '</span><span class="verse-sura">' + esc(sn) + '</span></div>'
+      + '<div><span class="verse-ref">' + v.sura_id + ':' + v.aya_number + '</span><span class="verse-sura">' + esc(sn) + '</span></div>'
       + '<div class="verse-actions">'
         + '<button class="action-btn" onclick="taRead('+idx+')">🔊</button>'
         + '<button class="action-btn" onclick="taCopy('+idx+')">📋</button>'
         + '<button class="action-btn" onclick="taShare('+idx+')">📤</button>'
-        + '<button class="action-btn primary" onclick="openInMain('+v.sura+','+v.aya+')">Open</button>'
+        + '<button class="action-btn primary" onclick="openInMain('+v.sura_id+','+v.aya_number+')">Open</button>'
       + '</div>'
     + '</div>'
     + '<div class="verse-body">'
