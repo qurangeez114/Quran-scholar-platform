@@ -19,25 +19,26 @@
   select, .toggle { padding:5px 10px; border-radius:12px; border:1.5px solid #D4C9A8; background:#FFF;
                     font-size:12px; color:#5A3A10; font-weight:600; cursor:pointer; font-family:inherit; }
   .toggle.active { background:#B8902A; color:#fff; border-color:#B8902A; }
+  .qira { display:flex; gap:6px; flex-wrap:wrap; align-items:center; padding:8px 14px; background:#FBF3DE; border-bottom:1px solid #EFE3C4; }
+  .qira .lbl { font-size:11px; font-weight:700; color:#7A5010; }
+  .qbtn { padding:4px 10px; border-radius:12px; border:1.5px solid #D4C9A8; background:#FFF; font-size:11px; cursor:pointer; color:#5A3A10; font-weight:600; }
+  .qbtn.active { background:#5A3A10; color:#fff; border-color:#5A3A10; }
   .legend { display:flex; gap:12px; flex-wrap:wrap; padding:8px 14px; font-size:10.5px; color:#5A3A10; background:#FBF6EA; border-bottom:1px solid #EFE3C4; }
   .legend span { display:flex; align-items:center; gap:5px; }
   .swatch { width:14px; height:4px; border-radius:2px; display:inline-block; }
-
-  /* alignment grid */
   .grid-wrap { overflow-x:auto; padding:10px 14px; }
   table.align { border-collapse:collapse; font-size:11px; min-width:100%; }
   table.align th, table.align td { border:1px solid #E8D8A0; padding:5px 7px; text-align:center; white-space:nowrap; }
-  table.align th { background:#FDF0D0; color:#7A5010; position:sticky; left:0; }
-  table.align td.ev { text-align:left; background:#FFFDF6; font-weight:600; color:#5A3A10; position:sticky; left:0; }
+  table.align th { background:#FDF0D0; color:#7A5010; }
+  table.align td.ev { text-align:left; background:#FFFDF6; font-weight:600; color:#5A3A10; }
   .yes { color:#1E8449; font-weight:800; } .no { color:#D8CBA8; }
-
-  /* columns */
   .cols { display:flex; gap:10px; overflow-x:auto; padding:12px 14px 40px; align-items:flex-start; }
   .col { flex:0 0 300px; max-width:300px; }
   .sura-header { font-size:13px; font-weight:800; color:#fff; background:#B8902A; padding:8px 12px;
                  border-radius:8px 8px 0 0; display:flex; justify-content:space-between; }
   .sura-header small { font-weight:600; opacity:.9; }
   .verse-card { padding:12px; border:1px solid #E8E0D0; border-top:none; background:#FFF; border-left-width:4px; }
+  .verse-card.hl { background:#FFF6CC; }
   .vk { font-size:10px; font-weight:700; color:#B8902A; }
   .diff-tag { font-size:9.5px; font-weight:700; padding:1px 6px; border-radius:8px; color:#fff; margin-left:6px; }
   .arabic { font-family:'Amiri',serif; font-size:19px; line-height:1.9; direction:rtl; text-align:right; margin:8px 0; }
@@ -48,8 +49,16 @@
           padding:7px 9px; margin-top:8px; border-radius:0 6px 6px 0; display:none; }
   .note.show { display:block; }
   .note-toggle { font-size:10px; color:#B8902A; cursor:pointer; font-weight:700; margin-top:6px; display:inline-block; }
+  .vtools { display:flex; gap:4px; margin-top:9px; border-top:1px dashed #EAE0C8; padding-top:8px; flex-wrap:wrap; }
+  .vtool { flex:1; min-width:34px; padding:5px 4px; border:1px solid #E2D6B8; background:#FDF8EE; border-radius:8px;
+           font-size:13px; cursor:pointer; text-align:center; text-decoration:none; color:#5A3A10; }
+  .vtool:active { background:#E8D8A0; }
+  .vtool.on { background:#B8902A; color:#fff; border-color:#B8902A; }
+  .toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:#5A3A10; color:#fff;
+           padding:9px 16px; border-radius:20px; font-size:12px; z-index:500; opacity:0; transition:opacity .2s; pointer-events:none; }
+  .toast.show { opacity:1; }
   .loading { padding:40px; text-align:center; color:#8B7355; }
-  @media print { .cols{flex-wrap:wrap} .col{flex:0 0 100%;max-width:100%} .topbar,.controls{position:static} }
+  @media print { .cols{flex-wrap:wrap} .col{flex:0 0 100%;max-width:100%} .topbar,.controls,.qira,.vtools{position:static} .vtools{display:none} }
 </style>
 </head>
 <body>
@@ -67,6 +76,14 @@
     <button class="toggle" id="tgl-mushaf" onclick="setOrder('mushaf')">Mushaf</button>
   </div>
 
+  <div class="qira">
+    <span class="lbl">Qiraʼa (Arabic reading)</span>
+    <button class="qbtn active" data-q="arabic" onclick="setQira('arabic',this)">Ḥafṣ</button>
+    <button class="qbtn" data-q="arabic_warsh" onclick="setQira('arabic_warsh',this)">Warsh</button>
+    <button class="qbtn" data-q="arabic_qalun" onclick="setQira('arabic_qalun',this)">Qālūn</button>
+    <button class="qbtn" data-q="arabic_duri" onclick="setQira('arabic_duri',this)">Dūrī</button>
+  </div>
+
   <div class="legend">
     <span><i class="swatch" style="background:#9E9E9E"></i>shared</span>
     <span><i class="swatch" style="background:#2E7D32"></i>near-identical</span>
@@ -77,85 +94,108 @@
 
   <div class="grid-wrap" id="grid"></div>
   <div class="cols" id="cols"><div class="loading">Loading…</div></div>
+  <div class="toast" id="toast"></div>
 
 <script>
 const SB_URL = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
 const params = new URLSearchParams(location.search);
 const STORY = params.get('story') || 'creation_adam';
-const LANG_NAMES = { en:'English', ur:'اردو', am:'አማርኛ', ti:'ትግርኛ', tr:'Türkçe', fr:'Français', id:'Indonesia', fa:'فارسی', so:'Somali', om:'Oromoo' };
+const LANG_NAMES = { en:'English', ur:'اردو', am:'አማርኛ', ti:'ትግርኛ', tr:'Türkçe', fr:'Français', id:'Indonesia', fa:'فارسی', so:'Somali', om:'Oromoo', de:'Deutsch' };
 const ETH = new Set(['am','ti']);
-let ROWS = [], order = 'nuzul', lang = 'en';
+let ROWS = [], order='nuzul', lang='en', qira='arabic';
+const saved = new Set(JSON.parse(localStorage.getItem('qh_saved')||'[]'));
+const hl    = new Set(JSON.parse(localStorage.getItem('qh_hl')||'[]'));
+const persist = () => { localStorage.setItem('qh_saved',JSON.stringify([...saved])); localStorage.setItem('qh_hl',JSON.stringify([...hl])); };
 
-async function load() {
+function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),1400); }
+
+async function load(){
   const url = `${SB_URL}/rest/v1/story_comparison?story_slug=eq.${STORY}` +
-              `&select=sura,aya,arabic,translations,speaker,event_key,event_label,sequence_position,diff_category,highlight_color,analysis_note,revelation_order,mushaf_order`;
-  const res = await fetch(url, { headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY } });
+    `&select=sura,aya,arabic,arabic_warsh,arabic_qalun,arabic_duri,translations,speaker,event_key,event_label,sequence_position,diff_category,highlight_color,analysis_note,revelation_order,mushaf_order`;
+  const res = await fetch(url,{ headers:{ apikey:SB_KEY, Authorization:'Bearer '+SB_KEY } });
   ROWS = await res.json();
-  if (!ROWS.length) { document.getElementById('cols').innerHTML = '<div class="loading">No data for this story.</div>'; return; }
-  document.getElementById('title').textContent = prettyName(STORY) + ' — ' + suraCount() + ' tellings';
+  if(!ROWS.length){ document.getElementById('cols').innerHTML='<div class="loading">No data for this story.</div>'; return; }
+  document.getElementById('title').textContent = prettyName(STORY)+' — '+suraCount()+' tellings';
   buildLangMenu(); render();
 }
-function prettyName(s){ return s.replace(/_/g,' ').replace(/\b\w/g, c=>c.toUpperCase()); }
+function prettyName(s){ return s.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase()); }
 function suraCount(){ return new Set(ROWS.map(r=>r.sura)).size; }
 
 function buildLangMenu(){
-  const langs = new Set();
-  ROWS.forEach(r => Object.keys(r.translations||{}).forEach(k=>langs.add(k)));
-  const sel = document.getElementById('lang'); sel.innerHTML='';
-  [...langs].forEach(l => { const o=document.createElement('option'); o.value=l; o.textContent=LANG_NAMES[l]||l; sel.appendChild(o); });
-  if (langs.has('en')) sel.value='en'; lang = sel.value;
-  sel.onchange = () => { lang = sel.value; render(); };
+  const langs=new Set(); ROWS.forEach(r=>Object.keys(r.translations||{}).forEach(k=>langs.add(k)));
+  const sel=document.getElementById('lang'); sel.innerHTML='';
+  [...langs].sort().forEach(l=>{ const o=document.createElement('option'); o.value=l; o.textContent=LANG_NAMES[l]||l; sel.appendChild(o); });
+  if(langs.has('en')) sel.value='en'; lang=sel.value;
+  sel.onchange=()=>{ lang=sel.value; renderCols(); };
 }
 function setOrder(o){ order=o;
-  document.getElementById('tgl-nuzul').classList.toggle('active', o==='nuzul');
-  document.getElementById('tgl-mushaf').classList.toggle('active', o==='mushaf');
-  render();
+  document.getElementById('tgl-nuzul').classList.toggle('active',o==='nuzul');
+  document.getElementById('tgl-mushaf').classList.toggle('active',o==='mushaf'); render();
 }
+function setQira(q,btn){ qira=q; document.querySelectorAll('.qbtn').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); renderCols(); }
 function surasOrdered(){
-  const map={}; ROWS.forEach(r=>{ map[r.sura]=map[r.sura]|| (order==='nuzul'? r.revelation_order : r.mushaf_order); });
-  return [...new Set(ROWS.map(r=>r.sura))].sort((a,b)=> map[a]-map[b]);
+  const map={}; ROWS.forEach(r=>{ map[r.sura]=map[r.sura]||(order==='nuzul'?r.revelation_order:r.mushaf_order); });
+  return [...new Set(ROWS.map(r=>r.sura))].sort((a,b)=>map[a]-map[b]);
 }
-
 function render(){ renderGrid(); renderCols(); }
 
 function renderGrid(){
-  const suras = surasOrdered();
-  const events = [...new Set(ROWS.filter(r=>r.event_key).map(r=>r.event_key))];
-  const label = {}; ROWS.forEach(r=>{ if(r.event_key && !label[r.event_key]) label[r.event_key]=r.event_label; });
-  const has = (ev,su)=> ROWS.some(r=>r.event_key===ev && r.sura===su);
-  let h = '<table class="align"><tr><th>Event \\ Sura</th>' + suras.map(s=>'<th>'+s+'</th>').join('') + '</tr>';
-  events.forEach(ev=>{
-    h += '<tr><td class="ev">'+(label[ev]||ev)+'</td>' +
-         suras.map(s=> '<td>'+(has(ev,s)?'<span class="yes">●</span>':'<span class="no">·</span>')+'</td>').join('') + '</tr>';
-  });
-  h += '</table>';
-  document.getElementById('grid').innerHTML = h;
+  const suras=surasOrdered();
+  const events=[...new Set(ROWS.filter(r=>r.event_key).map(r=>r.event_key))];
+  const label={}; ROWS.forEach(r=>{ if(r.event_key&&!label[r.event_key]) label[r.event_key]=r.event_label; });
+  const has=(ev,su)=>ROWS.some(r=>r.event_key===ev&&r.sura===su);
+  let h='<table class="align"><tr><th>Event \\ Sura</th>'+suras.map(s=>'<th>'+s+'</th>').join('')+'</tr>';
+  events.forEach(ev=>{ h+='<tr><td class="ev">'+(label[ev]||ev)+'</td>'+suras.map(s=>'<td>'+(has(ev,s)?'<span class="yes">●</span>':'<span class="no">·</span>')+'</td>').join('')+'</tr>'; });
+  document.getElementById('grid').innerHTML=h+'</table>';
 }
 
 function renderCols(){
-  const suras = surasOrdered();
-  const wrap = document.getElementById('cols'); wrap.innerHTML='';
+  const suras=surasOrdered(); const wrap=document.getElementById('cols'); wrap.innerHTML='';
   suras.forEach(su=>{
-    const verses = ROWS.filter(r=>r.sura===su).sort((a,b)=>a.aya-b.aya);
-    const place = verses[0].revelation_order;
-    const col = document.createElement('div'); col.className='col';
-    let h = '<div class="sura-header">Sura '+su+' <small>nuzul #'+place+'</small></div>';
+    const verses=ROWS.filter(r=>r.sura===su).sort((a,b)=>a.aya-b.aya);
+    const col=document.createElement('div'); col.className='col';
+    let h='<div class="sura-header">Sura '+su+' <small>nuzul #'+verses[0].revelation_order+'</small></div>';
     verses.forEach(v=>{
-      const color = v.highlight_color || '#9E9E9E';
-      const t = (v.translations||{})[lang] || '<em style="color:#B99">—</em>';
-      h += '<div class="verse-card" style="border-left-color:'+color+'">' +
-             '<span class="vk">'+su+':'+v.aya+'</span>' +
-             (v.diff_category?'<span class="diff-tag" style="background:'+color+'">'+v.diff_category.replace(/_/g,' ')+'</span>':'') +
-             '<div class="arabic">'+(v.arabic||'')+'</div>' +
-             '<div class="trans'+(ETH.has(lang)?' eth':'')+'">'+t+'</div>' +
-             (v.speaker?'<div class="speaker">— '+v.speaker+'</div>':'') +
-             (v.analysis_note?'<span class="note-toggle" onclick="this.nextElementSibling.classList.toggle(\'show\')">ⓘ why</span><div class="note">'+v.analysis_note+'</div>':'') +
-           '</div>';
+      const key=su+':'+v.aya;
+      const color=v.highlight_color||'#9E9E9E';
+      const ar=v[qira]||v.arabic||'';
+      const t=(v.translations||{})[lang]||'<em style="color:#B99">—</em>';
+      const isSaved=saved.has(key), isHl=hl.has(key);
+      h+='<div class="verse-card'+(isHl?' hl':'')+'" style="border-left-color:'+color+'">'+
+           '<span class="vk">'+key+'</span>'+
+           (v.diff_category?'<span class="diff-tag" style="background:'+color+'">'+v.diff_category.replace(/_/g,' ')+'</span>':'')+
+           '<div class="arabic">'+ar+'</div>'+
+           '<div class="trans'+(ETH.has(lang)?' eth':'')+'">'+t+'</div>'+
+           (v.speaker?'<div class="speaker">— '+v.speaker+'</div>':'')+
+           (v.analysis_note?'<span class="note-toggle" onclick="this.nextElementSibling.classList.toggle(\'show\')">ⓘ why</span><div class="note">'+v.analysis_note+'</div>':'')+
+           '<div class="vtools">'+
+             '<a class="vtool" title="Read in context" href="/index.html?sura='+su+'&aya='+v.aya+'" target="_blank" rel="noopener">🔗</a>'+
+             '<div class="vtool" title="Copy" onclick="copyVerse(\''+key+'\')">📋</div>'+
+             '<div class="vtool" title="Share" onclick="shareVerse(\''+key+'\')">↗</div>'+
+             '<div class="vtool'+(isSaved?' on':'')+'" title="Save" onclick="toggleSave(\''+key+'\',this)">'+(isSaved?'★':'☆')+'</div>'+
+             '<div class="vtool'+(isHl?' on':'')+'" title="Highlight" onclick="toggleHl(\''+key+'\',this)">🖍</div>'+
+           '</div>'+
+         '</div>';
     });
-    col.innerHTML = h; wrap.appendChild(col);
+    col.innerHTML=h; wrap.appendChild(col);
   });
 }
+
+function verseText(key){
+  const [s,a]=key.split(':').map(Number);
+  const v=ROWS.find(r=>r.sura===s&&r.aya===a); if(!v) return '';
+  const ar=v[qira]||v.arabic||''; const t=(v.translations||{})[lang]||'';
+  return key+'\n'+ar+'\n'+t+'\n— quranhikma.com';
+}
+function copyVerse(key){ navigator.clipboard.writeText(verseText(key)).then(()=>toast('Copied '+key)); }
+function shareVerse(key){
+  const [s,a]=key.split(':');
+  const data={ title:'Quran '+key, text:verseText(key), url:location.origin+'/index.html?sura='+s+'&aya='+a };
+  if(navigator.share) navigator.share(data).catch(()=>{}); else { navigator.clipboard.writeText(data.text+'\n'+data.url); toast('Copied to share'); }
+}
+function toggleSave(key,el){ if(saved.has(key)){saved.delete(key); el.classList.remove('on'); el.textContent='☆'; toast('Removed');} else {saved.add(key); el.classList.add('on'); el.textContent='★'; toast('Saved '+key);} persist(); }
+function toggleHl(key,el){ const card=el.closest('.verse-card'); if(hl.has(key)){hl.delete(key); el.classList.remove('on'); card.classList.remove('hl');} else {hl.add(key); el.classList.add('on'); card.classList.add('hl');} persist(); }
 load();
 </script>
 </body>
