@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Story Comparison — Quran Hikma</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=EB+Garamond:wght@400;500;600&family=Noto+Sans+Ethiopic&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:'EB Garamond','Georgia',serif; background:#FDFAF4; color:#1A1A1A; }
+  .topbar { position:sticky; top:0; z-index:200; background:#FDF8EE; border-bottom:2px solid #E8C97B;
+            padding:10px 14px; display:flex; align-items:center; gap:10px; }
+  .topbar h1 { font-size:15px; margin:0; color:#B8902A; font-weight:700; flex:1; }
+  .btn-outline { padding:6px 12px; background:#FDF8EE; color:#B8902A; border:1.5px solid #B8902A;
+                 border-radius:16px; font-size:11px; font-weight:700; cursor:pointer; white-space:nowrap; text-decoration:none; }
+  .controls { padding:10px 14px; background:#FFF8E8; border-bottom:1px solid #E8D8A0; display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .controls label { font-size:11px; font-weight:700; color:#7A5010; }
+  select, .toggle { padding:5px 10px; border-radius:12px; border:1.5px solid #D4C9A8; background:#FFF;
+                    font-size:12px; color:#5A3A10; font-weight:600; cursor:pointer; font-family:inherit; }
+  .toggle.active { background:#B8902A; color:#fff; border-color:#B8902A; }
+  .legend { display:flex; gap:12px; flex-wrap:wrap; padding:8px 14px; font-size:10.5px; color:#5A3A10; background:#FBF6EA; border-bottom:1px solid #EFE3C4; }
+  .legend span { display:flex; align-items:center; gap:5px; }
+  .swatch { width:14px; height:4px; border-radius:2px; display:inline-block; }
+
+  /* alignment grid */
+  .grid-wrap { overflow-x:auto; padding:10px 14px; }
+  table.align { border-collapse:collapse; font-size:11px; min-width:100%; }
+  table.align th, table.align td { border:1px solid #E8D8A0; padding:5px 7px; text-align:center; white-space:nowrap; }
+  table.align th { background:#FDF0D0; color:#7A5010; position:sticky; left:0; }
+  table.align td.ev { text-align:left; background:#FFFDF6; font-weight:600; color:#5A3A10; position:sticky; left:0; }
+  .yes { color:#1E8449; font-weight:800; } .no { color:#D8CBA8; }
+
+  /* columns */
+  .cols { display:flex; gap:10px; overflow-x:auto; padding:12px 14px 40px; align-items:flex-start; }
+  .col { flex:0 0 300px; max-width:300px; }
+  .sura-header { font-size:13px; font-weight:800; color:#fff; background:#B8902A; padding:8px 12px;
+                 border-radius:8px 8px 0 0; display:flex; justify-content:space-between; }
+  .sura-header small { font-weight:600; opacity:.9; }
+  .verse-card { padding:12px; border:1px solid #E8E0D0; border-top:none; background:#FFF; border-left-width:4px; }
+  .vk { font-size:10px; font-weight:700; color:#B8902A; }
+  .diff-tag { font-size:9.5px; font-weight:700; padding:1px 6px; border-radius:8px; color:#fff; margin-left:6px; }
+  .arabic { font-family:'Amiri',serif; font-size:19px; line-height:1.9; direction:rtl; text-align:right; margin:8px 0; }
+  .trans { font-size:13px; line-height:1.6; color:#333; }
+  .trans.eth { font-family:'Noto Sans Ethiopic',sans-serif; }
+  .speaker { font-size:10px; color:#7A8FA6; font-style:italic; margin-top:6px; }
+  .note { font-size:11px; color:#5A3A10; background:#FBF6EA; border-left:3px solid #B8902A;
+          padding:7px 9px; margin-top:8px; border-radius:0 6px 6px 0; display:none; }
+  .note.show { display:block; }
+  .note-toggle { font-size:10px; color:#B8902A; cursor:pointer; font-weight:700; margin-top:6px; display:inline-block; }
+  .loading { padding:40px; text-align:center; color:#8B7355; }
+  @media print { .cols{flex-wrap:wrap} .col{flex:0 0 100%;max-width:100%} .topbar,.controls{position:static} }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="btn-outline" href="/index.html">← Home</a>
+    <h1 id="title">Story Comparison</h1>
+    <button class="btn-outline" onclick="window.print()">⬇ Export</button>
+  </div>
+
+  <div class="controls">
+    <label>Language</label>
+    <select id="lang"></select>
+    <label>Order</label>
+    <button class="toggle active" id="tgl-nuzul" onclick="setOrder('nuzul')">Revelation</button>
+    <button class="toggle" id="tgl-mushaf" onclick="setOrder('mushaf')">Mushaf</button>
+  </div>
+
+  <div class="legend">
+    <span><i class="swatch" style="background:#9E9E9E"></i>shared</span>
+    <span><i class="swatch" style="background:#2E7D32"></i>near-identical</span>
+    <span><i class="swatch" style="background:#B8902A"></i>unique to this sura</span>
+    <span><i class="swatch" style="background:#7A4FA3"></i>reworded</span>
+    <span><i class="swatch" style="background:#1A6FA8"></i>compressed / expanded</span>
+  </div>
+
+  <div class="grid-wrap" id="grid"></div>
+  <div class="cols" id="cols"><div class="loading">Loading…</div></div>
+
+<script>
+const SB_URL = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
+const params = new URLSearchParams(location.search);
+const STORY = params.get('story') || 'creation_adam';
+const LANG_NAMES = { en:'English', ur:'اردو', am:'አማርኛ', ti:'ትግርኛ', tr:'Türkçe', fr:'Français', id:'Indonesia', fa:'فارسی', so:'Somali' };
+const ETH = new Set(['am','ti']);
+let ROWS = [], order = 'nuzul', lang = 'en';
+
+async function load() {
+  const url = `${SB_URL}/rest/v1/story_comparison?story_slug=eq.${STORY}` +
+              `&select=sura,aya,arabic,translations,speaker,event_key,event_label,sequence_position,diff_category,highlight_color,analysis_note,revelation_order,mushaf_order`;
+  const res = await fetch(url, { headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY } });
+  ROWS = await res.json();
+  if (!ROWS.length) { document.getElementById('cols').innerHTML = '<div class="loading">No data for this story.</div>'; return; }
+  document.getElementById('title').textContent = prettyName(STORY) + ' — ' + suraCount() + ' tellings';
+  buildLangMenu(); render();
+}
+function prettyName(s){ return s.replace(/_/g,' ').replace(/\b\w/g, c=>c.toUpperCase()); }
+function suraCount(){ return new Set(ROWS.map(r=>r.sura)).size; }
+
+function buildLangMenu(){
+  const langs = new Set();
+  ROWS.forEach(r => Object.keys(r.translations||{}).forEach(k=>langs.add(k)));
+  const sel = document.getElementById('lang'); sel.innerHTML='';
+  [...langs].forEach(l => { const o=document.createElement('option'); o.value=l; o.textContent=LANG_NAMES[l]||l; sel.appendChild(o); });
+  if (langs.has('en')) sel.value='en'; lang = sel.value;
+  sel.onchange = () => { lang = sel.value; render(); };
+}
+function setOrder(o){ order=o;
+  document.getElementById('tgl-nuzul').classList.toggle('active', o==='nuzul');
+  document.getElementById('tgl-mushaf').classList.toggle('active', o==='mushaf');
+  render();
+}
+function surasOrdered(){
+  const map={}; ROWS.forEach(r=>{ map[r.sura]=map[r.sura]|| (order==='nuzul'? r.revelation_order : r.mushaf_order); });
+  return [...new Set(ROWS.map(r=>r.sura))].sort((a,b)=> map[a]-map[b]);
+}
+
+function render(){ renderGrid(); renderCols(); }
+
+function renderGrid(){
+  const suras = surasOrdered();
+  const events = [...new Set(ROWS.filter(r=>r.event_key).map(r=>r.event_key))];
+  const label = {}; ROWS.forEach(r=>{ if(r.event_key && !label[r.event_key]) label[r.event_key]=r.event_label; });
+  const has = (ev,su)=> ROWS.some(r=>r.event_key===ev && r.sura===su);
+  let h = '<table class="align"><tr><th>Event \\ Sura</th>' + suras.map(s=>'<th>'+s+'</th>').join('') + '</tr>';
+  events.forEach(ev=>{
+    h += '<tr><td class="ev">'+(label[ev]||ev)+'</td>' +
+         suras.map(s=> '<td>'+(has(ev,s)?'<span class="yes">●</span>':'<span class="no">·</span>')+'</td>').join('') + '</tr>';
+  });
+  h += '</table>';
+  document.getElementById('grid').innerHTML = h;
+}
+
+function renderCols(){
+  const suras = surasOrdered();
+  const wrap = document.getElementById('cols'); wrap.innerHTML='';
+  suras.forEach(su=>{
+    const verses = ROWS.filter(r=>r.sura===su).sort((a,b)=>a.aya-b.aya);
+    const place = verses[0].revelation_order;
+    const col = document.createElement('div'); col.className='col';
+    let h = '<div class="sura-header">Sura '+su+' <small>nuzul #'+place+'</small></div>';
+    verses.forEach(v=>{
+      const color = v.highlight_color || '#9E9E9E';
+      const t = (v.translations||{})[lang] || '<em style="color:#B99">—</em>';
+      h += '<div class="verse-card" style="border-left-color:'+color+'">' +
+             '<span class="vk">'+su+':'+v.aya+'</span>' +
+             (v.diff_category?'<span class="diff-tag" style="background:'+color+'">'+v.diff_category.replace(/_/g,' ')+'</span>':'') +
+             '<div class="arabic">'+(v.arabic||'')+'</div>' +
+             '<div class="trans'+(ETH.has(lang)?' eth':'')+'">'+t+'</div>' +
+             (v.speaker?'<div class="speaker">— '+v.speaker+'</div>':'') +
+             (v.analysis_note?'<span class="note-toggle" onclick="this.nextElementSibling.classList.toggle(\'show\')">ⓘ why</span><div class="note">'+v.analysis_note+'</div>':'') +
+           '</div>';
+    });
+    col.innerHTML = h; wrap.appendChild(col);
+  });
+}
+load();
+</script>
+</body>
+</html>
