@@ -57,6 +57,17 @@
   .toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:#5A3A10; color:#fff;
            padding:9px 16px; border-radius:20px; font-size:12px; z-index:500; opacity:0; transition:opacity .2s; pointer-events:none; }
   .toast.show { opacity:1; }
+  .summary { margin:0 14px 14px; background:#FFFDF6; border:1px solid #E8D8A0; border-radius:12px; overflow:hidden; }
+  .summary-head { background:#5A3A10; color:#fff; padding:11px 14px; font-size:13px; font-weight:800; cursor:pointer; display:flex; justify-content:space-between; align-items:center; }
+  .summary-body { padding:14px; font-size:13px; line-height:1.7; color:#3A2A10; }
+  .summary-body.collapsed { display:none; }
+  .sum-headline { font-size:15px; font-weight:700; color:#7A5010; margin-bottom:10px; line-height:1.45; }
+  .sum-stats { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:4px; }
+  .sum-chip { font-size:10.5px; font-weight:700; padding:3px 9px; border-radius:12px; color:#fff; }
+  .sum-sec { margin:14px 0 5px; font-size:11px; font-weight:800; color:#B8902A; text-transform:uppercase; letter-spacing:.04em; }
+  .sum-uni { margin:4px 0; } .sum-uni b { color:#5A3A10; }
+  .sum-take p { margin:0 0 10px; }
+  .sum-note { font-size:11.5px; color:#8B6A30; font-style:italic; border-top:1px dashed #E2D6B8; padding-top:10px; margin-top:12px; }
   .loading { padding:40px; text-align:center; color:#8B7355; }
   @media print { .cols{flex-wrap:wrap} .col{flex:0 0 100%;max-width:100%} .topbar,.controls,.qira,.vtools{position:static} .vtools{display:none} }
 </style>
@@ -93,6 +104,7 @@
   </div>
 
   <div class="grid-wrap" id="grid"></div>
+  <div class="summary" id="summary"></div>
   <div class="cols" id="cols"><div class="loading">Loading…</div></div>
   <div class="toast" id="toast"></div>
 
@@ -103,7 +115,7 @@ const params = new URLSearchParams(location.search);
 const STORY = params.get('story') || 'creation_adam';
 const LANG_NAMES = { en:'English', ur:'اردو', am:'አማርኛ', ti:'ትግርኛ', tr:'Türkçe', fr:'Français', id:'Indonesia', fa:'فارسی', so:'Somali', om:'Oromoo', de:'Deutsch' };
 const ETH = new Set(['am','ti']);
-let ROWS = [], order='nuzul', lang='en', qira='arabic';
+let ROWS = [], SUMMARY=null, order='nuzul', lang='en', qira='arabic';
 const saved = new Set(JSON.parse(localStorage.getItem('qh_saved')||'[]'));
 const hl    = new Set(JSON.parse(localStorage.getItem('qh_hl')||'[]'));
 const persist = () => { localStorage.setItem('qh_saved',JSON.stringify([...saved])); localStorage.setItem('qh_hl',JSON.stringify([...hl])); };
@@ -116,6 +128,7 @@ async function load(){
   const res = await fetch(url,{ headers:{ apikey:SB_KEY, Authorization:'Bearer '+SB_KEY } });
   ROWS = await res.json();
   if(!ROWS.length){ document.getElementById('cols').innerHTML='<div class="loading">No data for this story.</div>'; return; }
+  try { const sr=await fetch(`${SB_URL}/rest/v1/story_summary?story_slug=eq.${STORY}&select=headline,takeaway`,{headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY}}); SUMMARY=(await sr.json())[0]||null; } catch(e){ SUMMARY=null; }
   document.getElementById('title').textContent = prettyName(STORY)+' — '+suraCount()+' tellings';
   buildLangMenu(); render();
 }
@@ -138,7 +151,33 @@ function surasOrdered(){
   const map={}; ROWS.forEach(r=>{ map[r.sura]=map[r.sura]||(order==='nuzul'?r.revelation_order:r.mushaf_order); });
   return [...new Set(ROWS.map(r=>r.sura))].sort((a,b)=>map[a]-map[b]);
 }
-function render(){ renderGrid(); renderCols(); }
+function render(){ renderGrid(); renderSummary(); renderCols(); }
+
+function renderSummary(){
+  const el=document.getElementById('summary'); if(!ROWS.length){ el.innerHTML=''; return; }
+  const suras=[...new Set(ROWS.map(r=>r.sura))]; const n=suras.length;
+  const cats={}; ROWS.forEach(r=>{ if(r.diff_category) cats[r.diff_category]=(cats[r.diff_category]||0)+1; });
+  const catColor={shared:'#9E9E9E',shared_verbatim:'#2E7D32',unique_here:'#B8902A',reworded:'#7A4FA3',compressed:'#1A6FA8',expanded:'#1A6FA8',sequence_shift:'#7A4FA3'};
+  const chips=Object.entries(cats).sort((a,b)=>b[1]-a[1]).map(([k,v])=>'<span class="sum-chip" style="background:'+(catColor[k]||'#999')+'">'+v+' '+k.replace(/_/g,' ')+'</span>').join('');
+  const evSuras={},evLabel={};
+  ROWS.forEach(r=>{ if(r.event_key){ (evSuras[r.event_key]=evSuras[r.event_key]||new Set()).add(r.sura); if(!evLabel[r.event_key])evLabel[r.event_key]=r.event_label; } });
+  const spine=Object.entries(evSuras).filter(([k,s])=>s.size>=Math.ceil(n/2)).sort((a,b)=>b[1].size-a[1].size).map(([k,s])=>evLabel[k]+' <b>('+s.size+'/'+n+')</b>');
+  const uniq={}; ROWS.forEach(r=>{ if(r.diff_category==='unique_here'){ (uniq[r.sura]=uniq[r.sura]||[]).push(r.event_label); } });
+  const uniqHtml=suras.slice().sort((a,b)=>a-b).filter(su=>uniq[su]).map(su=>'<div class="sum-uni"><b>Sura '+su+':</b> '+[...new Set(uniq[su])].join('; ')+'</div>').join('');
+  const verb=ROWS.filter(r=>r.diff_category==='shared_verbatim').map(r=>r.sura+':'+r.aya);
+  const take=SUMMARY&&SUMMARY.takeaway ? SUMMARY.takeaway.split('\n\n').map(p=>'<p>'+p+'</p>').join('') : '';
+  const headline=SUMMARY&&SUMMARY.headline ? SUMMARY.headline : '';
+  el.innerHTML='<div class="summary-head" onclick="document.getElementById(\'sumbody\').classList.toggle(\'collapsed\')">📋 Summary of Differences — the complete picture <span>▾</span></div>'+
+    '<div class="summary-body" id="sumbody">'+
+      (headline?'<div class="sum-headline">'+headline+'</div>':'')+
+      '<div class="sum-stats">'+chips+'</div>'+
+      '<div class="sum-sec">Shared across most tellings</div><div>'+spine.join(' &nbsp;·&nbsp; ')+'</div>'+
+      '<div class="sum-sec">Unique to each telling</div>'+uniqHtml+
+      (verb.length?'<div class="sum-sec">Preserved almost word-for-word</div><div>Iblis\u2019s reason for refusing — at '+verb.join(', ')+'</div>':'')+
+      (take?'<div class="sum-sec">The complete picture</div><div class="sum-take">'+take+'</div>':'')+
+      '<div class="sum-note">This synthesis describes what differs; the raw texts are laid out below so any conclusion remains the reader\u2019s own.</div>'+
+    '</div>';
+}
 
 function renderGrid(){
   const suras=surasOrdered();
