@@ -62,6 +62,17 @@
   .summary-head { background:#5A3A10; color:#fff; padding:11px 14px; font-size:13px; font-weight:800; cursor:pointer; display:flex; justify-content:space-between; align-items:center; }
   .summary-body { padding:14px; font-size:13px; line-height:1.7; color:#3A2A10; }
   .summary-body.collapsed { display:none; }
+  .eval { margin:0 14px 14px; border:1px solid #C9B98A; border-radius:12px; overflow:hidden; }
+  .eval-head { background:#3A2A10; color:#fff; padding:11px 14px; font-size:13px; font-weight:800; cursor:pointer; }
+  .eval-body { padding:12px 14px; }
+  .eval-card { border:1px solid #E8D8A0; border-radius:8px; margin-bottom:12px; overflow:hidden; }
+  .eval-card h4 { margin:0; background:#FBF3DE; padding:8px 10px; font-size:12px; color:#5A3A10; }
+  .eval-card table { width:100%; border-collapse:collapse; font-size:11.5px; }
+  .eval-card td { border-top:1px solid #EFE3C4; padding:5px 10px; }
+  .eval-card td:first-child { color:#5A3A10; width:62%; }
+  .eval-card td:last-child { font-weight:700; text-align:right; }
+  .eval-reason { font-size:11.5px; line-height:1.6; color:#3A2A10; padding:8px 10px; background:#FFFDF6; border-top:1px solid #EFE3C4; }
+  .eval-conf { font-size:10px; font-weight:800; padding:1px 7px; border-radius:8px; color:#fff; }
   .sum-headline { font-size:15px; font-weight:700; color:#7A5010; margin-bottom:10px; line-height:1.45; }
   .sum-stats { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:4px; }
   .sum-chip { font-size:10.5px; font-weight:700; padding:3px 9px; border-radius:12px; color:#fff; }
@@ -106,6 +117,7 @@
 
   <div class="grid-wrap" id="grid"></div>
   <div class="summary" id="summary"></div>
+  <div class="eval" id="eval" style="display:none"></div>
   <div class="cols" id="cols"><div class="loading">Loading…</div></div>
   <div class="toast" id="toast"></div>
 
@@ -116,7 +128,22 @@ const params = new URLSearchParams(location.search);
 const STORY = params.get('story') || 'creation_adam';
 const LANG_NAMES = { en:'English', ur:'اردو', am:'አማርኛ', ti:'ትግርኛ', tr:'Türkçe', fr:'Français', id:'Indonesia', fa:'فارسی', so:'Somali', om:'Oromoo', de:'Deutsch' };
 const ETH = new Set(['am','ti']);
-let ROWS = [], SUMMARY=null, order='nuzul', lang='en', qira='arabic';
+let ROWS = [], SUMMARY=null, EVALS=[], order='nuzul', lang='en', qira='arabic';
+function renderEval(){
+  const el=document.getElementById('eval'); if(!EVALS||!EVALS.length){ el.style.display='none'; return; }
+  el.style.display='';
+  const cc={High:'#2E7D32',Medium:'#B8902A',Low:'#9E9E9E'};
+  const row=(k,v)=> v?'<tr><td>'+k+'</td><td>'+v+'</td></tr>':'';
+  let h='<div class="eval-head" onclick="document.getElementById(\'evb\').style.display=document.getElementById(\'evb\').style.display==\'none\'?\'block\':\'none\'">\u2696\ufe0f Textual Evaluation \u2014 observable facts &amp; text-only conclusion</div><div class="eval-body" id="evb">';
+  EVALS.forEach(function(e){
+    h+='<div class="eval-card"><h4>'+(e.passage_a||'')+' vs '+(e.passage_b||'')+' &nbsp;<span class="eval-conf" style="background:'+(cc[e.confidence]||'#999')+'">'+(e.confidence||'')+'</span></h4><table>'
+      +row('Same event?',e.same_event)+row('All details identical?',e.all_identical)+row('Additional details in one?',e.additional_details)
+      +row('Any statement explicitly denied?',e.explicitly_denied)+row('Sequence differs?',e.sequence_differs)+row('Speaker changes?',e.speaker_changes)
+      +row('Narrator changes?',e.narrator_changes)+row('Both true if read literally?',e.both_true_literal)+row('Relationship',e.relationship)
+      +'</table>'+(e.reasoning?'<div class="eval-reason"><b>Conclusion:</b> '+e.reasoning+'</div>':'')+'</div>';
+  });
+  el.innerHTML=h+'</div>';
+}
 const saved = new Set(JSON.parse(localStorage.getItem('qh_saved')||'[]'));
 const hl    = new Set(JSON.parse(localStorage.getItem('qh_hl')||'[]'));
 const persist = () => { localStorage.setItem('qh_saved',JSON.stringify([...saved])); localStorage.setItem('qh_hl',JSON.stringify([...hl])); };
@@ -130,6 +157,8 @@ async function load(){
   ROWS = await res.json();
   if(!ROWS.length){ document.getElementById('cols').innerHTML='<div class="loading">No data for this story.</div>'; return; }
   try { const sr=await fetch(`${SB_URL}/rest/v1/story_summary?story_slug=eq.${STORY}&select=headline,takeaway`,{headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY}}); SUMMARY=(await sr.json())[0]||null; } catch(e){ SUMMARY=null; }
+  try { const er=await fetch(`${SB_URL}/rest/v1/story_evaluation?story_slug=eq.${STORY}&select=*&order=id`,{headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY}}); EVALS=await er.json(); } catch(e){ EVALS=[]; }
+  renderEval();
   document.getElementById('title').textContent = prettyName(STORY)+' — '+suraCount()+' tellings';
   buildLangMenu(); render();
 }
