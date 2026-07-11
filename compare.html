@@ -92,8 +92,8 @@
   </div>
 
   <div class="controls">
-    <label>Language</label>
-    <select id="lang"></select>
+    <label>Languages</label>
+    <span id="langchips"></span>
     <label>Order</label>
     <button class="toggle active" id="tgl-nuzul" onclick="setOrder('nuzul')">Revelation</button>
     <button class="toggle" id="tgl-mushaf" onclick="setOrder('mushaf')">Mushaf</button>
@@ -128,7 +128,7 @@ const params = new URLSearchParams(location.search);
 const STORY = params.get('story') || 'creation_adam';
 const LANG_NAMES = { en:'English', ur:'اردو', am:'አማርኛ', ti:'ትግርኛ', tr:'Türkçe', fr:'Français', id:'Indonesia', fa:'فارسی', so:'Somali', om:'Oromoo', de:'Deutsch' };
 const ETH = new Set(['am','ti']);
-let ROWS = [], SUMMARY=null, EVALS=[], order='nuzul', lang='en', qira='arabic';
+let ROWS = [], SUMMARY=null, EVALS=[], order='nuzul', langs=new Set(['en']), qira='arabic';
 function renderEval(){
   const el=document.getElementById('eval'); if(!EVALS||!EVALS.length){ el.style.display='none'; return; }
   el.style.display='';
@@ -166,11 +166,11 @@ function prettyName(s){ return s.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperC
 function suraCount(){ return new Set(ROWS.map(r=>r.sura)).size; }
 
 function buildLangMenu(){
-  const langs=new Set(); ROWS.forEach(r=>Object.keys(r.translations||{}).forEach(k=>langs.add(k)));
-  const sel=document.getElementById('lang'); sel.innerHTML='';
-  [...langs].sort().forEach(l=>{ const o=document.createElement('option'); o.value=l; o.textContent=LANG_NAMES[l]||l; sel.appendChild(o); });
-  if(langs.has('en')) sel.value='en'; lang=sel.value;
-  sel.onchange=()=>{ lang=sel.value; renderCols(); };
+  const set=new Set(); ROWS.forEach(r=>Object.keys(r.translations||{}).forEach(k=>set.add(k)));
+  const c=document.getElementById('langchips'); c.innerHTML='';
+  [...set].sort().forEach(l=>{ const b=document.createElement('button'); b.className='qbtn'+(langs.has(l)?' active':''); b.textContent=LANG_NAMES[l]||l;
+    b.onclick=()=>{ if(langs.has(l)){ if(langs.size>1) langs.delete(l); } else langs.add(l); b.classList.toggle('active',langs.has(l)); renderCols(); };
+    c.appendChild(b); });
 }
 function setOrder(o){ order=o;
   document.getElementById('tgl-nuzul').classList.toggle('active',o==='nuzul');
@@ -229,13 +229,13 @@ function renderCols(){
       const key=su+':'+v.aya;
       const color=v.highlight_color||'#9E9E9E';
       const ar=v[qira]||v.arabic||'';
-      const t=(v.translations||{})[lang]||'<em style="color:#B99">—</em>';
+      const tblock=[...langs].map(function(l){ var tt=(v.translations||{})[l]; return tt===undefined?'':'<div class="trans'+(ETH.has(l)?' eth':'')+(v.diff_category==='unique_here'?' unique':'')+'">'+(tt||'<em style="color:#B99">—</em>')+'</div>'; }).join('');
       const isSaved=saved.has(key), isHl=hl.has(key);
       h+='<div class="verse-card'+(isHl?' hl':'')+'" style="border-left-color:'+color+'">'+
            '<span class="vk">'+key+'</span>'+
            (v.diff_category?'<span class="diff-tag" style="background:'+color+'">'+v.diff_category.replace(/_/g,' ')+'</span>':'')+
            '<div class="arabic">'+ar+'</div>'+
-           '<div class="trans'+(ETH.has(lang)?' eth':'')+(v.diff_category==='unique_here'?' unique':'')+'">'+t+'</div>'+
+           tblock+
            (v.speaker?'<div class="speaker">— '+v.speaker+'</div>':'')+
            (v.analysis_note?'<span class="note-toggle" onclick="this.nextElementSibling.classList.toggle(\'show\')">ⓘ why</span><div class="note">'+v.analysis_note+'</div>':'')+
            '<div class="vtools">'+
@@ -254,7 +254,7 @@ function renderCols(){
 function verseText(key){
   const [s,a]=key.split(':').map(Number);
   const v=ROWS.find(r=>r.sura===s&&r.aya===a); if(!v) return '';
-  const ar=v[qira]||v.arabic||''; const t=(v.translations||{})[lang]||'';
+  const ar=v[qira]||v.arabic||''; const t=[...langs].map(l=>(v.translations||{})[l]||'').filter(Boolean).join(' / ');
   return key+'\n'+ar+'\n'+t+'\n— quranhikma.com';
 }
 function copyVerse(key){ navigator.clipboard.writeText(verseText(key)).then(()=>toast('Copied '+key)); }
