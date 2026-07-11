@@ -140,7 +140,12 @@ function renderEval(){
       +row('Same event?',e.same_event)+row('All details identical?',e.all_identical)+row('Additional details in one?',e.additional_details)
       +row('Any statement explicitly denied?',e.explicitly_denied)+row('Sequence differs?',e.sequence_differs)+row('Speaker changes?',e.speaker_changes)
       +row('Narrator changes?',e.narrator_changes)+row('Both true if read literally?',e.both_true_literal)+row('Relationship',e.relationship)
-      +'</table>'+(e.reasoning?'<div class="eval-reason"><b>Conclusion:</b> '+e.reasoning+'</div>':'')+'</div>';
+      +'</table>'
+      +'<div style="padding:8px 10px;display:flex;gap:5px;flex-wrap:wrap;border-top:1px solid #EFE3C4">'
+      +[['Narrative',e.narrative_consistency],['Chronological',e.chronological_consistency],['Logical',e.logical_consistency],['Linguistic',e.linguistic_consistency]].map(function(x){var v=x[1]||'—';var col=/conflict/i.test(v)?'#C0392B':/different|coverage/i.test(v)?'#B8902A':/indeterminate|not applicable/i.test(v)?'#9E9E9E':'#2E7D32';return '<span class="eval-conf" style="background:'+col+'">'+x[0]+': '+v+'</span>';}).join('')
+      +'</div>'
+      +(e.reasoning_trace?'<div class="eval-reason"><b>Reasoning trace:</b><br>'+e.reasoning_trace.replace(/\n/g,'<br>')+'</div>':'')
+      +(e.reasoning?'<div class="eval-reason"><b>Conclusion:</b> '+e.reasoning+'</div>':'')+'</div>';
   });
   el.innerHTML=h+'</div>';
 }
@@ -152,12 +157,12 @@ function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.
 
 async function load(){
   const url = `${SB_URL}/rest/v1/story_comparison?story_slug=eq.${STORY}` +
-    `&select=sura,aya,arabic,arabic_warsh,arabic_qalun,arabic_duri,translations,speaker,event_key,event_label,sequence_position,diff_category,highlight_color,analysis_note,revelation_order,mushaf_order`;
+    `&select=sura,aya,arabic,arabic_warsh,arabic_qalun,arabic_duri,translations,speaker,narrator,person,event_key,event_label,sequence_position,diff_category,highlight_color,analysis_note,revelation_order,mushaf_order`;
   const res = await fetch(url,{ headers:{ apikey:SB_KEY, Authorization:'Bearer '+SB_KEY } });
   ROWS = await res.json();
   if(!ROWS.length){ document.getElementById('cols').innerHTML='<div class="loading">No data for this story.</div>'; return; }
   try { const sr=await fetch(`${SB_URL}/rest/v1/story_summary?story_slug=eq.${STORY}&select=headline,takeaway`,{headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY}}); SUMMARY=(await sr.json())[0]||null; } catch(e){ SUMMARY=null; }
-  try { const er=await fetch(`${SB_URL}/rest/v1/story_evaluation?story_slug=eq.${STORY}&select=*&order=id`,{headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY}}); EVALS=await er.json(); } catch(e){ EVALS=[]; }
+  try { const er=await fetch(`${SB_URL}/rest/v1/story_evaluation?story_slug=eq.${STORY}&select=passage_a,passage_b,same_event,all_identical,additional_details,explicitly_denied,sequence_differs,speaker_changes,narrator_changes,both_true_literal,relationship,confidence,reasoning,narrative_consistency,chronological_consistency,logical_consistency,linguistic_consistency,reasoning_trace&order=id`,{headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY}}); EVALS=await er.json(); } catch(e){ EVALS=[]; }
   renderEval();
   document.getElementById('title').textContent = prettyName(STORY)+' — '+suraCount()+' tellings';
   buildLangMenu(); render();
@@ -236,7 +241,7 @@ function renderCols(){
            (v.diff_category?'<span class="diff-tag" style="background:'+color+'">'+v.diff_category.replace(/_/g,' ')+'</span>':'')+
            '<div class="arabic">'+ar+'</div>'+
            tblock+
-           (v.speaker?'<div class="speaker">— '+v.speaker+'</div>':'')+
+           (v.speaker?'<div class="speaker">— '+v.speaker+(v.person?' · '+v.person:'')+'</div>':'')+
            (v.analysis_note?'<span class="note-toggle" onclick="this.nextElementSibling.classList.toggle(\'show\')">ⓘ why</span><div class="note">'+v.analysis_note+'</div>':'')+
            '<div class="vtools">'+
              '<a class="vtool" title="Read in context" href="/index.html?sura='+su+'&aya='+v.aya+'" target="_blank" rel="noopener">🔗</a>'+
