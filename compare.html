@@ -190,7 +190,7 @@ function renderSummary(){
   const catColor={shared:'#9E9E9E',shared_verbatim:'#2E7D32',unique_here:'#C0392B',reworded:'#7A4FA3',compressed:'#1A6FA8',expanded:'#1A6FA8',sequence_shift:'#7A4FA3'};
   const chips=Object.entries(cats).sort((a,b)=>b[1]-a[1]).map(([k,v])=>'<span class="sum-chip" style="background:'+(catColor[k]||'#999')+'">'+v+' '+k.replace(/_/g,' ')+'</span>').join('');
   const evSuras={},evLabel={};
-  ROWS.forEach(r=>{ if(r.event_key){ (evSuras[r.event_key]=evSuras[r.event_key]||new Set()).add(r.sura); if(!evLabel[r.event_key])evLabel[r.event_key]=r.event_label; } });
+  ROWS.forEach(r=>{ if(r.event_key){ (evSuras[r.event_key]=evSuras[r.event_key]||new Set()).add(r.sura); if(!evLabel[r.event_key]||r.event_label.length<evLabel[r.event_key].length)evLabel[r.event_key]=r.event_label; } });
   const spine=Object.entries(evSuras).filter(([k,s])=>s.size>=Math.ceil(n/2)).sort((a,b)=>b[1].size-a[1].size).map(([k,s])=>evLabel[k]+' <b>('+s.size+'/'+n+')</b>');
   const uniq={}; ROWS.forEach(r=>{ if(r.diff_category==='unique_here'){ (uniq[r.sura]=uniq[r.sura]||[]).push(r.event_label); } });
   const uniqHtml=suras.slice().sort((a,b)=>a-b).filter(su=>uniq[su]).map(su=>'<div class="sum-uni"><b>Sura '+su+':</b> '+[...new Set(uniq[su])].join('; ')+'</div>').join('');
@@ -212,7 +212,7 @@ function renderSummary(){
 function renderGrid(){
   const suras=surasOrdered();
   const events=[...new Set(ROWS.filter(r=>r.event_key).map(r=>r.event_key))];
-  const label={}; ROWS.forEach(r=>{ if(r.event_key&&!label[r.event_key]) label[r.event_key]=r.event_label; });
+  const label={}; ROWS.forEach(r=>{ if(r.event_key&&(!label[r.event_key]||r.event_label.length<label[r.event_key].length)) label[r.event_key]=r.event_label; });
   const has=(ev,su)=>ROWS.some(r=>r.event_key===ev&&r.sura===su);
   let h='<table class="align"><tr><th>Event \\ Sura</th>'+suras.map(s=>'<th>'+s+'</th>').join('')+'</tr>';
   events.forEach(ev=>{ h+='<tr><td class="ev">'+(label[ev]||ev)+'</td>'+suras.map(s=>'<td>'+(has(ev,s)?'<span class="yes">●</span>':'<span class="no">·</span>')+'</td>').join('')+'</tr>'; });
