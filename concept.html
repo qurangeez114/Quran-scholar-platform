@@ -47,6 +47,7 @@
   <div class="topbar"><a class="btn-outline" href="/themes.html">← Themes</a><h1 id="title">Concept Comparison</h1><button class="btn-outline" onclick="window.print()">⬇</button></div>
   <div class="controls"><label>Languages</label><span id="langchips"></span></div>
   <div class="question" id="question"></div>
+  <div id="sections"></div>
   <div class="summary" id="summary" style="display:none"></div>
   <div class="eval" id="eval" style="display:none"></div>
   <div class="cols" id="cols"><div class="loading">Loading…</div></div>
@@ -58,16 +59,17 @@ const HDR={apikey:SB_KEY,Authorization:'Bearer '+SB_KEY};
 const CONCEPT=new URLSearchParams(location.search).get('concept')||'free_will_predestination';
 const LN={en:'English',ur:'اردو',am:'አማርኛ',ti:'ትግርኛ',tr:'Türkçe',fr:'Français',id:'Indonesia',fa:'فارسی',so:'Somali',om:'Oromoo',de:'Deutsch'};
 const ETH=new Set(['am','ti']);
-let F=[],C=null,EV=[],langs=new Set(['en']);
+let F=[],C=null,EV=[],SEC=[],langs=new Set(['en']);
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1400);}
 async function load(){
   F=await(await fetch(`${SB_URL}/rest/v1/concept_facets?concept_slug=eq.${CONCEPT}&select=*&order=facet,sura,aya`,{headers:HDR})).json();
   C=(await(await fetch(`${SB_URL}/rest/v1/concepts?slug=eq.${CONCEPT}&select=*`,{headers:HDR})).json())[0]||null;
   EV=await(await fetch(`${SB_URL}/rest/v1/concept_evaluation?concept_slug=eq.${CONCEPT}&select=*&order=id`,{headers:HDR})).json();
+  SEC=await(await fetch(`${SB_URL}/rest/v1/concept_sources?concept_slug=eq.${CONCEPT}&select=*&order=section,seq`,{headers:HDR})).json();
   if(!F.length){document.getElementById('cols').innerHTML='<div class="loading">No data.</div>';return;}
   document.getElementById('title').textContent=C?C.name:'Concept';
   if(C)document.getElementById('question').innerHTML='<b>Question:</b> '+C.question;
-  buildLangs();renderSummary();renderEval();render();
+  buildLangs();renderSummary();renderSections();renderEval();render();
 }
 function buildLangs(){const s=new Set();F.forEach(r=>Object.keys(r.translations||{}).forEach(k=>s.add(k)));const c=document.getElementById('langchips');c.innerHTML='';
   [...s].sort().forEach(l=>{const b=document.createElement('button');b.className='qbtn'+(langs.has(l)?' active':'');b.textContent=LN[l]||l;
@@ -86,6 +88,19 @@ function render(){
         '<div class="vtools"><a class="vtool" href="/index.html?sura='+v.sura+'&aya='+v.aya+'" target="_blank">🔗</a>'+
         '<div class="vtool" onclick="navigator.clipboard.writeText(\''+key+'\');toast(\'Copied\')">📋</div></div></div>';});
     col.innerHTML=h;wrap.appendChild(col);});
+}
+function renderSections(){
+  if(!SEC.length)return;const order=['Definition','Historical Context','Linguistics','Internal Comparison','External Comparison','Hadith','Tafsir','Madhhabs','Scholarly Views','Questions'];
+  const by={};SEC.forEach(r=>{(by[r.section]=by[r.section]||[]).push(r);});
+  const kc={evidence:'#2E7D32',external:'#1A6FA8',interpretation:'#B8902A',pending:'#9E9E9E'};
+  let h='';order.filter(s=>by[s]).forEach(s=>{const rows=by[s];const k=rows[0].kind||'evidence';
+    h+='<div style="margin:0 14px 8px;border:1px solid #E8D8A0;border-radius:10px;overflow:hidden">'+
+      '<div onclick="var b=this.nextElementSibling;b.style.display=b.style.display==\'none\'?\'block\':\'none\'" style="cursor:pointer;background:#FBF3DE;padding:9px 12px;font-size:12.5px;font-weight:800;color:#5A3A10;display:flex;justify-content:space-between">'+
+      s+' <span class="chip" style="background:'+(kc[k]||'#999')+'">'+k+'</span></div>'+
+      '<div style="display:none;padding:10px 12px;font-size:12.5px;line-height:1.6">'+
+      rows.map(r=>(r.label?'<b>'+r.label+':</b> ':'')+(r.content||'')+(r.citation?' <i style=color:#8B6A30>('+r.citation+')</i>':'')).join('<hr style="border:none;border-top:1px solid #EFE3C4;margin:8px 0">')+
+      '</div></div>';});
+  document.getElementById('sections').innerHTML=h;
 }
 function renderSummary(){if(!C||!C.summary)return;const e=document.getElementById('summary');e.style.display='';
   e.innerHTML='<div class="summary-head">📋 The complete picture</div><div class="summary-body">'+C.summary+'</div>';}
