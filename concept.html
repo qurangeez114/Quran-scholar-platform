@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Concept Comparison — Quran Hikma</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=EB+Garamond:wght@400;500;600&family=Noto+Sans+Ethiopic&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'EB Garamond','Georgia',serif;background:#FDFAF4;color:#1A1A1A}
+  .topbar{position:sticky;top:0;z-index:200;background:#FDF8EE;border-bottom:2px solid #E8C97B;padding:10px 14px;display:flex;align-items:center;gap:10px}
+  .topbar h1{font-size:15px;margin:0;color:#B8902A;font-weight:700;flex:1}
+  .btn-outline{padding:6px 12px;background:#FDF8EE;color:#B8902A;border:1.5px solid #B8902A;border-radius:16px;font-size:11px;font-weight:700;cursor:pointer;text-decoration:none}
+  .controls{padding:10px 14px;background:#FFF8E8;border-bottom:1px solid #E8D8A0;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .controls label{font-size:11px;font-weight:700;color:#7A5010}
+  .qbtn{padding:4px 10px;border-radius:12px;border:1.5px solid #D4C9A8;background:#FFF;font-size:11px;cursor:pointer;color:#5A3A10;font-weight:600}
+  .qbtn.active{background:#5A3A10;color:#fff;border-color:#5A3A10}
+  .question{padding:12px 14px;background:#FBF3DE;border-bottom:1px solid #EFE3C4;font-size:13px;color:#5A3A10}
+  .question b{color:#B8902A}
+  .cols{display:flex;gap:10px;overflow-x:auto;padding:12px 14px 40px;align-items:flex-start}
+  .col{flex:0 0 300px;max-width:300px}
+  .fac-header{font-size:13px;font-weight:800;color:#fff;padding:8px 12px;border-radius:8px 8px 0 0}
+  .verse-card{padding:12px;border:1px solid #E8E0D0;border-top:none;background:#FFF;border-left-width:4px}
+  .vk{font-size:10px;font-weight:700;color:#B8902A}
+  .role-tag{font-size:9.5px;font-weight:700;padding:1px 6px;border-radius:8px;color:#fff;margin-left:6px}
+  .arabic{font-family:'Amiri',serif;font-size:19px;line-height:1.9;direction:rtl;text-align:right;margin:8px 0}
+  .trans{font-size:13px;line-height:1.6;color:#333}
+  .trans.eth{font-family:'Noto Sans Ethiopic',sans-serif}
+  .note{font-size:11px;color:#5A3A10;background:#FBF6EA;border-left:3px solid #B8902A;padding:7px 9px;margin-top:8px;border-radius:0 6px 6px 0}
+  .vtools{display:flex;gap:4px;margin-top:9px;border-top:1px dashed #EAE0C8;padding-top:8px}
+  .vtool{flex:1;padding:5px 4px;border:1px solid #E2D6B8;background:#FDF8EE;border-radius:8px;font-size:13px;cursor:pointer;text-align:center;text-decoration:none;color:#5A3A10}
+  .summary{margin:0 14px 14px;background:#FFFDF6;border:1px solid #E8D8A0;border-radius:12px;overflow:hidden}
+  .summary-head{background:#5A3A10;color:#fff;padding:11px 14px;font-size:13px;font-weight:800}
+  .summary-body{padding:14px;font-size:13px;line-height:1.7;color:#3A2A10}
+  .eval{margin:0 14px 14px;border:1px solid #C9B98A;border-radius:12px;overflow:hidden}
+  .eval-head{background:#3A2A10;color:#fff;padding:11px 14px;font-size:13px;font-weight:800}
+  .eval-card{border:1px solid #E8D8A0;border-radius:8px;margin:12px 14px}
+  .eval-card h4{margin:0;background:#FBF3DE;padding:8px 10px;font-size:12px;color:#5A3A10}
+  .eval-card table{width:100%;border-collapse:collapse;font-size:11.5px}
+  .eval-card td{border-top:1px solid #EFE3C4;padding:5px 10px}
+  .eval-card td:first-child{color:#5A3A10;width:60%}.eval-card td:last-child{font-weight:700;text-align:right}
+  .eval-reason{font-size:11.5px;line-height:1.6;color:#3A2A10;padding:8px 10px;background:#FFFDF6;border-top:1px solid #EFE3C4}
+  .chip{font-size:10px;font-weight:800;padding:1px 7px;border-radius:8px;color:#fff}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#5A3A10;color:#fff;padding:9px 16px;border-radius:20px;font-size:12px;z-index:500;opacity:0;transition:opacity .2s}
+  .toast.show{opacity:1}
+  .loading{padding:40px;text-align:center;color:#8B7355}
+</style></head><body>
+  <div class="topbar"><a class="btn-outline" href="/themes.html">← Themes</a><h1 id="title">Concept Comparison</h1><button class="btn-outline" onclick="window.print()">⬇</button></div>
+  <div class="controls"><label>Languages</label><span id="langchips"></span></div>
+  <div class="question" id="question"></div>
+  <div class="summary" id="summary" style="display:none"></div>
+  <div class="eval" id="eval" style="display:none"></div>
+  <div class="cols" id="cols"><div class="loading">Loading…</div></div>
+  <div class="toast" id="toast"></div>
+<script>
+const SB_URL='https://ylosytbxpzxzwfzjpaej.supabase.co';
+const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
+const HDR={apikey:SB_KEY,Authorization:'Bearer '+SB_KEY};
+const CONCEPT=new URLSearchParams(location.search).get('concept')||'free_will_predestination';
+const LN={en:'English',ur:'اردو',am:'አማርኛ',ti:'ትግርኛ',tr:'Türkçe',fr:'Français',id:'Indonesia',fa:'فارسی',so:'Somali',om:'Oromoo',de:'Deutsch'};
+const ETH=new Set(['am','ti']);
+let F=[],C=null,EV=[],langs=new Set(['en']);
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1400);}
+async function load(){
+  F=await(await fetch(`${SB_URL}/rest/v1/concept_facets?concept_slug=eq.${CONCEPT}&select=*&order=facet,sura,aya`,{headers:HDR})).json();
+  C=(await(await fetch(`${SB_URL}/rest/v1/concepts?slug=eq.${CONCEPT}&select=*`,{headers:HDR})).json())[0]||null;
+  EV=await(await fetch(`${SB_URL}/rest/v1/concept_evaluation?concept_slug=eq.${CONCEPT}&select=*&order=id`,{headers:HDR})).json();
+  if(!F.length){document.getElementById('cols').innerHTML='<div class="loading">No data.</div>';return;}
+  document.getElementById('title').textContent=C?C.name:'Concept';
+  if(C)document.getElementById('question').innerHTML='<b>Question:</b> '+C.question;
+  buildLangs();renderSummary();renderEval();render();
+}
+function buildLangs(){const s=new Set();F.forEach(r=>Object.keys(r.translations||{}).forEach(k=>s.add(k)));const c=document.getElementById('langchips');c.innerHTML='';
+  [...s].sort().forEach(l=>{const b=document.createElement('button');b.className='qbtn'+(langs.has(l)?' active':'');b.textContent=LN[l]||l;
+    b.onclick=()=>{if(langs.has(l)){if(langs.size>1)langs.delete(l);}else langs.add(l);b.classList.toggle('active',langs.has(l));render();};c.appendChild(b);});}
+function render(){
+  const facets=[...new Set(F.map(r=>r.facet))];const wrap=document.getElementById('cols');wrap.innerHTML='';
+  facets.forEach(fa=>{const vs=F.filter(r=>r.facet===fa);const col=document.createElement('div');col.className='col';
+    const color=vs[0].highlight_color||'#9E9E9E';
+    let h='<div class="fac-header" style="background:'+color+'">'+(vs[0].facet_label||fa)+'</div>';
+    vs.forEach(v=>{const key=v.sura+':'+v.aya;
+      const tb=[...langs].map(l=>{var t=(v.translations||{})[l];return t===undefined?'':'<div class="trans'+(ETH.has(l)?' eth':'')+'">'+t+'</div>';}).join('');
+      h+='<div class="verse-card" style="border-left-color:'+color+'"><span class="vk">'+key+'</span>'+
+        (v.role?'<span class="role-tag" style="background:'+color+'">'+v.role+'</span>':'')+
+        '<div class="arabic">'+(v.arabic||'')+'</div>'+tb+
+        (v.note?'<div class="note">'+v.note+'</div>':'')+
+        '<div class="vtools"><a class="vtool" href="/index.html?sura='+v.sura+'&aya='+v.aya+'" target="_blank">🔗</a>'+
+        '<div class="vtool" onclick="navigator.clipboard.writeText(\''+key+'\');toast(\'Copied\')">📋</div></div></div>';});
+    col.innerHTML=h;wrap.appendChild(col);});
+}
+function renderSummary(){if(!C||!C.summary)return;const e=document.getElementById('summary');e.style.display='';
+  e.innerHTML='<div class="summary-head">📋 The complete picture</div><div class="summary-body">'+C.summary+'</div>';}
+function renderEval(){if(!EV.length)return;const e=document.getElementById('eval');e.style.display='';
+  const cc={High:'#2E7D32',Medium:'#B8902A',Low:'#9E9E9E'};
+  const row=(k,v)=>v?'<tr><td>'+k+'</td><td>'+v+'</td></tr>':'';
+  let h='<div class="eval-head">⚖️ Textual Evaluation</div>';
+  EV.forEach(x=>{h+='<div class="eval-card"><h4>'+x.facet_a+' vs '+x.facet_b+' <span class="chip" style="background:'+(cc[x.confidence]||'#999')+'">'+(x.confidence||'')+'</span></h4><table>'+
+    row('Same topic?',x.same_topic)+row('Both true if literal?',x.both_true_literal)+row('Tension type',x.tension_type)+row('Relationship',x.relationship)+'</table>'+
+    '<div style="padding:8px 10px;display:flex;gap:5px;flex-wrap:wrap;border-top:1px solid #EFE3C4">'+
+    [['Narrative',x.narrative_consistency],['Chronological',x.chronological_consistency],['Logical',x.logical_consistency],['Linguistic',x.linguistic_consistency]].map(y=>{var v=y[1]||'—';var c=/conflict/i.test(v)?'#C0392B':/different|tension/i.test(v)?'#B8902A':/indeterminate|not applicable/i.test(v)?'#9E9E9E':'#2E7D32';return '<span class="chip" style="background:'+c+'">'+y[0]+': '+v+'</span>';}).join('')+'</div>'+
+    (x.reasoning_trace?'<div class="eval-reason"><b>Reasoning trace:</b><br>'+x.reasoning_trace.replace(/\n/g,'<br>')+'</div>':'')+
+    (x.reasoning?'<div class="eval-reason"><b>Conclusion:</b> '+x.reasoning+'</div>':'')+'</div>';});
+  e.innerHTML=h;
+}
+load();
+</script></body></html>
