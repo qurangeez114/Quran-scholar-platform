@@ -107,6 +107,28 @@ function speakCard(idx){
   };
   speakNext();
 }
+function toggleHighlight(idx, el){
+  const key='hl_'+CONCEPT+'_'+idx;
+  const on = localStorage.getItem(key)==='1';
+  if(on){localStorage.removeItem(key); el.closest('.verse-card').style.background='#FFF'; el.classList.remove('active');}
+  else{localStorage.setItem(key,'1'); el.closest('.verse-card').style.background='#FFF8D6'; el.classList.add('active');}
+}
+function shareCard(idx){
+  const card=SPEAK_CARDS[idx];if(!card)return;
+  const firstLang=[...langs][0]||'en';
+  const text=(card.role?card.role+' -- ':'')+(card.arabic||'')+'\n'+((card.translations||{})[firstLang]||'')+(card.note?'\n'+card.note:'');
+  if(navigator.share){navigator.share({title:C?C.name:'Concept',text:text,url:location.href}).catch(()=>{});}
+  else{navigator.clipboard.writeText(text);toast('Copied to share');}
+}
+function saveToNotes(idx){
+  const card=SPEAK_CARDS[idx];if(!card)return;
+  const key='notes_'+CONCEPT;
+  let notes=[];try{notes=JSON.parse(localStorage.getItem(key)||'[]');}catch(e){}
+  const firstLang=[...langs][0]||'en';
+  notes.push({role:card.role,arabic:card.arabic,translation:(card.translations||{})[firstLang],note:card.note,sura:card.sura,aya:card.aya,saved_at:new Date().toISOString()});
+  localStorage.setItem(key, JSON.stringify(notes));
+  toast('Saved to notes ('+notes.length+')');
+}
 function render(){
   const facets=[...new Set(F.map(r=>r.facet))];const wrap=document.getElementById('cols');wrap.innerHTML='';
   SPEAK_CARDS=[];
@@ -115,14 +137,19 @@ function render(){
     let h='<div class="fac-header" style="background:'+color+'">'+(vs[0].facet_label||fa)+'</div>';
     vs.forEach(v=>{const key=v.sura+':'+v.aya;
       const tb=[...langs].map(l=>{var t=(v.translations||{})[l];return t===undefined?'':'<div class="trans'+(ETH.has(l)?' eth':'')+'">'+t+'</div>';}).join('');
-      const idx=SPEAK_CARDS.length;SPEAK_CARDS.push({arabic:v.arabic,translations:v.translations,note:v.note});
-      h+='<div class="verse-card" style="border-left-color:'+color+'"><span class="vk">'+key+'</span>'+
+      const idx=SPEAK_CARDS.length;SPEAK_CARDS.push({arabic:v.arabic,translations:v.translations,note:v.note,role:v.role,sura:v.sura,aya:v.aya});
+      const isHl=localStorage.getItem('hl_'+CONCEPT+'_'+idx)==='1';
+      h+='<div class="verse-card" style="border-left-color:'+color+';background:'+(isHl?'#FFF8D6':'#FFF')+'"><span class="vk">'+key+'</span>'+
         (v.role?'<span class="role-tag" style="background:'+color+'">'+v.role+'</span>':'')+
         '<div class="arabic">'+(v.arabic||'')+'</div>'+tb+
         (v.note?'<div class="note">'+v.note+'</div>':'')+
         '<div class="vtools"><a class="vtool" href="/index.html?sura='+v.sura+'&aya='+v.aya+'" target="_blank">🔗</a>'+
         '<div class="vtool" onclick="speakCard('+idx+')" title="Listen">🔊</div>'+
-        '<div class="vtool" onclick="navigator.clipboard.writeText(\''+key+'\');toast(\'Copied\')">📋</div></div></div>';});
+        '<div class="vtool" onclick="navigator.clipboard.writeText(\''+key+'\');toast(\'Copied\')" title="Copy reference">📋</div>'+
+        '<div class="vtool'+(isHl?' active':'')+'" onclick="toggleHighlight('+idx+',this)" title="Highlight" style="'+(isHl?'background:#F5D000':'')+'">🖍</div>'+
+        '<div class="vtool" onclick="shareCard('+idx+')" title="Share">📤</div>'+
+        '<div class="vtool" onclick="saveToNotes('+idx+')" title="Save to notes">📝</div>'+
+        '</div></div>';});
     col.innerHTML=h;wrap.appendChild(col);});
 }
 function renderSections(){
