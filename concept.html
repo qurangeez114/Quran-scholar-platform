@@ -73,20 +73,55 @@ async function load(){
   render();
 }
 function buildLangs(){const s=new Set();F.forEach(r=>Object.keys(r.translations||{}).forEach(k=>s.add(k)));const c=document.getElementById('langchips');c.innerHTML='';
+  const allBtn=document.createElement('button');
+  const syncAllBtn=()=>{allBtn.classList.toggle('active', s.size>0 && [...s].every(l=>langs.has(l)));};
+  allBtn.className='qbtn';allBtn.textContent='All';
+  allBtn.onclick=()=>{
+    const allSelected=[...s].every(l=>langs.has(l));
+    if(allSelected){langs=new Set(['en']);}else{langs=new Set(s);}
+    buildLangs();render();
+  };
+  c.appendChild(allBtn);
   [...s].sort().forEach(l=>{const b=document.createElement('button');b.className='qbtn'+(langs.has(l)?' active':'');b.textContent=LN[l]||l;
-    b.onclick=()=>{if(langs.has(l)){if(langs.size>1)langs.delete(l);}else langs.add(l);b.classList.toggle('active',langs.has(l));render();};c.appendChild(b);});}
+    b.onclick=()=>{if(langs.has(l)){if(langs.size>1)langs.delete(l);}else langs.add(l);b.classList.toggle('active',langs.has(l));syncAllBtn();render();};c.appendChild(b);});
+  syncAllBtn();
+}
+let SPEAK_CARDS=[];
+function speakCard(idx){
+  if(!('speechSynthesis' in window)){toast('Speech not supported on this browser');return;}
+  window.speechSynthesis.cancel();
+  const card=SPEAK_CARDS[idx];if(!card)return;
+  const parts=[];
+  if(card.arabic)parts.push({text:card.arabic,lang:'ar-SA'});
+  const firstLang=[...langs][0]||'en';
+  const t=(card.translations||{})[firstLang];
+  if(t)parts.push({text:t,lang:firstLang==='ar'?'ar-SA':(firstLang+'-'+firstLang.toUpperCase())});
+  if(!parts.length && card.note)parts.push({text:card.note,lang:'en-US'});
+  let i=0;
+  const speakNext=()=>{
+    if(i>=parts.length)return;
+    const u=new SpeechSynthesisUtterance(parts[i].text);
+    u.lang=parts[i].lang;u.rate=0.9;
+    u.onend=()=>{i++;speakNext();};
+    window.speechSynthesis.speak(u);
+  };
+  speakNext();
+}
 function render(){
   const facets=[...new Set(F.map(r=>r.facet))];const wrap=document.getElementById('cols');wrap.innerHTML='';
+  SPEAK_CARDS=[];
   facets.forEach(fa=>{const vs=F.filter(r=>r.facet===fa);const col=document.createElement('div');col.className='col';
     const color=vs[0].highlight_color||'#9E9E9E';
     let h='<div class="fac-header" style="background:'+color+'">'+(vs[0].facet_label||fa)+'</div>';
     vs.forEach(v=>{const key=v.sura+':'+v.aya;
       const tb=[...langs].map(l=>{var t=(v.translations||{})[l];return t===undefined?'':'<div class="trans'+(ETH.has(l)?' eth':'')+'">'+t+'</div>';}).join('');
+      const idx=SPEAK_CARDS.length;SPEAK_CARDS.push({arabic:v.arabic,translations:v.translations,note:v.note});
       h+='<div class="verse-card" style="border-left-color:'+color+'"><span class="vk">'+key+'</span>'+
         (v.role?'<span class="role-tag" style="background:'+color+'">'+v.role+'</span>':'')+
         '<div class="arabic">'+(v.arabic||'')+'</div>'+tb+
         (v.note?'<div class="note">'+v.note+'</div>':'')+
         '<div class="vtools"><a class="vtool" href="/index.html?sura='+v.sura+'&aya='+v.aya+'" target="_blank">🔗</a>'+
+        '<div class="vtool" onclick="speakCard('+idx+')" title="Listen">🔊</div>'+
         '<div class="vtool" onclick="navigator.clipboard.writeText(\''+key+'\');toast(\'Copied\')">📋</div></div></div>';});
     col.innerHTML=h;wrap.appendChild(col);});
 }
