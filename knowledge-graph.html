@@ -142,22 +142,30 @@ svg{width:100%;height:100%;}
 .qhist-ago { font-family: 'Inconsolata',monospace,sans-serif; font-size: 10px; color: #C4B490; flex-shrink: 0; margin-top: 3px; }
 .qhist-empty { padding: 28px 16px; text-align: center; font-style: italic; color: #A89060; font-size: 15px; font-family: 'EB Garamond',serif; }
 
-/* Generic "back to previous page" bar */
+/* Generic "back to previous page" / "forward" bar */
 #qnav-return-bar {
-  display: flex; align-items: center; gap: 10px; padding: 10px 16px;
+  display: flex; align-items: center; gap: 8px; padding: 10px 12px;
   background: #FFF8E8; border-bottom: 3px solid #D4A830;
-  position: sticky; top: 0; z-index: 99999; flex-shrink: 0;
+  position: sticky; top: 0; z-index: 99999; flex-shrink: 0; flex-wrap: nowrap;
 }
 #qnav-return-bar button {
-  display: inline-flex; align-items: center; gap: 6px; padding: 8px 18px;
+  display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px;
   background: #B8902A; color: #fff; border: none; border-radius: 24px;
-  font-size: 14px; cursor: pointer; font-weight: 700; white-space: nowrap; flex-shrink: 0;
+  font-size: 13px; cursor: pointer; font-weight: 700; white-space: nowrap; flex-shrink: 0;
   box-shadow: 0 2px 8px rgba(184,144,42,0.3);
 }
-#qnav-return-bar span.qnav-desc {
-  font-size: 13px; color: #5A3808; font-style: italic; overflow: hidden;
-  text-overflow: ellipsis; white-space: nowrap; flex: 1;
+#qnav-return-bar button.qnav-fwd {
+  background: #EDE8D8; color: #6B5A3E; box-shadow: none; border: 1px solid #D4C9A8;
+  margin-left: auto;
 }
+#qnav-return-bar span.qnav-desc {
+  font-size: 12px; color: #5A3808; font-style: italic; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0;
+}
+@media (max-width: 480px) {
+  #qnav-return-bar span.qnav-desc { display: none; }
+}
+
 </style>
 
 </head>
@@ -671,6 +679,34 @@ window.QNAV_PAGE_ICON = '🕸️';
   function saveHist(h){ try{ localStorage.setItem('qnav_hist',JSON.stringify(h)); }catch(e){} }
   function getStack(){ try{ return JSON.parse(sessionStorage.getItem('qnav_stack')||'[]'); }catch(e){ return []; } }
   function saveStack(s){ try{ sessionStorage.setItem('qnav_stack', JSON.stringify(s)); }catch(e){} }
+  function getForward(){ try{ return JSON.parse(sessionStorage.getItem('qnav_forward')||'[]'); }catch(e){ return []; } }
+  function saveForward(s){ try{ sessionStorage.setItem('qnav_forward', JSON.stringify(s)); }catch(e){} }
+  function clearForward(){ try{ sessionStorage.removeItem('qnav_forward'); }catch(e){} }
+
+  /* Push `entry` onto `stack`, deduping only against the immediately
+     preceding item (same rule used for qnav_stack pushes elsewhere). */
+  function pushDeduped(stack, entry, cap){
+    var last = stack[stack.length - 1];
+    if (last && stateKey(last) === stateKey(entry)) {
+      stack[stack.length - 1] = entry;
+    } else {
+      stack.push(entry);
+    }
+    if (cap && stack.length > cap) stack = stack.slice(stack.length - cap);
+    return stack;
+  }
+
+  function captureCurrent(){
+    return {
+      url: location.href,
+      label: (W.QNAV_PAGE_LABEL || document.title || 'QuranHikma'),
+      icon: (W.QNAV_PAGE_ICON || '📄'),
+      scrollX: window.scrollX,
+      scrollY: window.scrollY,
+      state: null,
+      savedAt: Date.now()
+    };
+  }
 
   /* Normalized identity for an entry: same destination + same label counts
      as "the same place", regardless of incidental query-param variance
@@ -740,46 +776,33 @@ window.QNAV_PAGE_ICON = '🕸️';
   };
 
   /* ── THE REAL BACK-STACK ──
-     Save exactly where the user is right now (URL + scroll position + how
-     this page currently identifies itself) before we ever navigate away.
-     Dedup only against the IMMEDIATELY PRECEDING entry — revisiting the
-     same page later in a journey (Concept -> Verse -> Concept -> Verse) is
-     a legitimate, distinct step and must not be collapsed away. This guards
-     against accidental double-fires (e.g. a rapid double-tap on mobile
-     queuing two clicks before the page actually unloads). */
+     Save exactly where the user is right now before we ever navigate away. */
   function saveCurrentPosition() {
-    var entry = {
-      url: location.href,
-      label: (W.QNAV_PAGE_LABEL || document.title || 'QuranHikma'),
-      icon: (W.QNAV_PAGE_ICON || '📄'),
-      scrollX: window.scrollX,
-      scrollY: window.scrollY,
-      savedAt: Date.now()
-    };
-    var stack = getStack();
-    var last = stack[stack.length - 1];
-    if (last && stateKey(last) === stateKey(entry)) {
-      stack[stack.length - 1] = entry;
-    } else {
-      stack.push(entry);
-    }
-    if (stack.length > 25) stack = stack.slice(stack.length - 25);
+    var entry = captureCurrent();
+    var stack = pushDeduped(getStack(), entry, 25);
     saveStack(stack);
   }
   W.qnavSaveCurrentPosition = saveCurrentPosition;
 
-  /* Navigate forward to url, saving exactly where we're leaving from. */
+  /* Navigate forward to a NEW destination. This is a fresh branch, so any
+     previously-recorded forward path is no longer valid (same rule a
+     browser follows: Back then choosing a different link drops "Forward"). */
   W.qnavGoTo = function(url) {
     saveCurrentPosition();
+    clearForward();
     window.location.assign(url);
   };
 
-  /* Pop the stack and go back to the exact previous page + scroll position */
+  /* Pop the back-stack and go to the exact previous page + scroll position.
+     The page we're leaving gets pushed onto the forward-stack so "Forward"
+     can return to it. */
   W.qnavBack = function() {
     var stack = getStack();
     var entry = stack.pop();
     saveStack(stack);
     if (entry) {
+      var fwd = pushDeduped(getForward(), captureCurrent(), 25);
+      saveForward(fwd);
       try {
         localStorage.setItem('qnav_restore_scroll', JSON.stringify({ x: entry.scrollX||0, y: entry.scrollY||0 }));
       } catch(e) {}
@@ -787,6 +810,21 @@ window.QNAV_PAGE_ICON = '🕸️';
       return;
     }
     if (window.history.length > 1) window.history.back();
+  };
+
+  /* Mirror of Back: pop the forward-stack, push current page back onto the
+     back-stack, go to the destination + scroll position. */
+  W.qnavForward = function() {
+    var fwd = getForward();
+    var entry = fwd.pop();
+    if (!entry) return;
+    saveForward(fwd);
+    var stack = pushDeduped(getStack(), captureCurrent(), 25);
+    saveStack(stack);
+    try {
+      localStorage.setItem('qnav_restore_scroll', JSON.stringify({ x: entry.scrollX||0, y: entry.scrollY||0 }));
+    } catch(e) {}
+    window.location.href = entry.url;
   };
 
   /* ── Delegated click handler: preserves new-tab, modifier-clicks,
@@ -842,23 +880,39 @@ window.QNAV_PAGE_ICON = '🕸️';
     updateBadge();
   }
 
-  /* Show the generic "← Back to X" bar if we arrived here via qnavGoTo from another page */
+  /* Show the generic "← Back to X" bar (and "Forward →" when available) */
   function injectReturnBar(){
-    if (document.getElementById('qnav-return-bar')) return;
+    var existing = document.getElementById('qnav-return-bar');
+    if (existing) existing.remove();
     var stack = getStack();
     var prev = stack.length ? stack[stack.length - 1] : null;
-    if (!prev) return;
+    var fwd = getForward();
+    var next = fwd.length ? fwd[fwd.length - 1] : null;
+    if (!prev && !next) return;
 
     var bar = document.createElement('div');
     bar.id = 'qnav-return-bar';
-    var btn = document.createElement('button');
-    btn.innerHTML = '← ' + esc(prev.icon || '📄') + ' ' + esc(prev.label || 'Back');
-    btn.onclick = W.qnavBack;
+
+    if (prev) {
+      var backBtn = document.createElement('button');
+      backBtn.innerHTML = '← ' + esc(prev.icon || '📄') + ' ' + esc(prev.label || 'Back');
+      backBtn.onclick = W.qnavBack;
+      bar.appendChild(backBtn);
+    }
+
     var desc = document.createElement('span');
     desc.className = 'qnav-desc';
     desc.textContent = 'Tap to return to the exact spot you left';
-    bar.appendChild(btn);
     bar.appendChild(desc);
+
+    if (next) {
+      var fwdBtn = document.createElement('button');
+      fwdBtn.className = 'qnav-fwd';
+      fwdBtn.innerHTML = esc(next.icon || '📄') + ' ' + esc(next.label || 'Forward') + ' →';
+      fwdBtn.onclick = W.qnavForward;
+      bar.appendChild(fwdBtn);
+    }
+
     document.body.insertBefore(bar, document.body.firstChild);
   }
 
