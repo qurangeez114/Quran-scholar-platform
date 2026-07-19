@@ -1207,11 +1207,18 @@ window.QNAV_PAGE_LABEL = 'Stories of the Prophets';
 window.QNAV_PAGE_ICON = '📚';
 </script>
 <script>
-/* ═══ UNIFIED SITE-WIDE HISTORY + PRECISE BACK NAVIGATION ═══
+/* ═══ UNIFIED SITE-WIDE HISTORY + PRECISE BACK NAVIGATION (v2) ═══
    One system, same on every page: Quran, Themes, Concept, Research,
    Madhhab, Sīra, Stories, Tensions, Graph, Qira'at.
    - qnav_hist   (localStorage) : persistent "recently visited" list -> drawer
    - qnav_stack  (sessionStorage): real back-stack -> precise "Back to X" bar + scroll restore
+
+   Links: mark any in-app forward link with data-qnav (no inline onclick, no
+   hand-written label/icon — the destination page records its own real title
+   after it loads). Mark any "back" link with data-qnav-back. A single
+   delegated click listener handles both while preserving normal browser
+   link behavior (new tab, Ctrl/Cmd/Shift/Alt-click, middle-click, downloads,
+   external links, long-press on mobile).
 */
 (function(W) {
   var MAX = 60;
@@ -1225,6 +1232,8 @@ window.QNAV_PAGE_ICON = '📚';
   }
   function getHist(){ try{ return JSON.parse(localStorage.getItem('qnav_hist')||'[]'); }catch(e){ return []; } }
   function saveHist(h){ try{ localStorage.setItem('qnav_hist',JSON.stringify(h)); }catch(e){} }
+  function getStack(){ try{ return JSON.parse(sessionStorage.getItem('qnav_stack')||'[]'); }catch(e){ return []; } }
+  function saveStack(s){ try{ sessionStorage.setItem('qnav_stack', JSON.stringify(s)); }catch(e){} }
 
   /* Record the CURRENT page into the persistent activity list */
   function record(label, url, icon, sub) {
@@ -1274,44 +1283,77 @@ window.QNAV_PAGE_ICON = '📚';
     saveHist([]); renderList(); updateBadge();
   };
 
-  /* Jump to any item straight from the Activity History drawer (no back-stack push needed) */
+  /* Jump to any item straight from the Activity History drawer */
   W.qhistGo = function(url){
     window.location.href = url;
   };
 
   /* ── THE REAL BACK-STACK ──
-     Call this instead of location.href='...' whenever a link leaves the current page
-     for another page in the app. It remembers exactly where you were (URL + scroll),
-     so "Back" always returns to the precise, exact point you left from. */
-  W.qnavGoTo = function(url, destLabel, destIcon) {
-    try {
-      var stack = JSON.parse(sessionStorage.getItem('qnav_stack') || '[]');
-      stack.push({
-        url: window.location.href,
-        label: (W.QNAV_PAGE_LABEL || document.title || 'Previous page'),
-        icon: (W.QNAV_PAGE_ICON || '📄'),
-        scrollY: window.scrollY
-      });
-      if (stack.length > 25) stack = stack.slice(stack.length - 25);
-      sessionStorage.setItem('qnav_stack', JSON.stringify(stack));
-    } catch(e) {}
-    window.location.href = url;
+     Save exactly where the user is right now (URL + scroll position + how
+     this page currently identifies itself) before we ever navigate away. */
+  function saveCurrentPosition() {
+    var entry = {
+      url: location.href,
+      label: (W.QNAV_PAGE_LABEL || document.title || 'QuranHikma'),
+      icon: (W.QNAV_PAGE_ICON || '📄'),
+      scrollX: window.scrollX,
+      scrollY: window.scrollY,
+      savedAt: Date.now()
+    };
+    var stack = getStack();
+    stack.push(entry);
+    if (stack.length > 25) stack = stack.slice(stack.length - 25);
+    saveStack(stack);
+  }
+  W.qnavSaveCurrentPosition = saveCurrentPosition;
+
+  /* Navigate forward to url, saving exactly where we're leaving from. */
+  W.qnavGoTo = function(url) {
+    saveCurrentPosition();
+    window.location.assign(url);
   };
 
   /* Pop the stack and go back to the exact previous page + scroll position */
   W.qnavBack = function() {
-    try {
-      var stack = JSON.parse(sessionStorage.getItem('qnav_stack') || '[]');
-      var entry = stack.pop();
-      sessionStorage.setItem('qnav_stack', JSON.stringify(stack));
-      if (entry) {
-        localStorage.setItem('qnav_restore_scroll', JSON.stringify(entry.scrollY || 0));
-        window.location.href = entry.url;
-        return;
-      }
-    } catch(e) {}
+    var stack = getStack();
+    var entry = stack.pop();
+    saveStack(stack);
+    if (entry) {
+      try {
+        localStorage.setItem('qnav_restore_scroll', JSON.stringify({ x: entry.scrollX||0, y: entry.scrollY||0 }));
+      } catch(e) {}
+      window.location.href = entry.url;
+      return;
+    }
     if (window.history.length > 1) window.history.back();
   };
+
+  /* ── Delegated click handler: preserves new-tab, modifier-clicks,
+     middle-click, downloads, external links, long-press on mobile. ── */
+  document.addEventListener('click', function(e){
+    var link = e.target.closest('a[data-qnav], a[data-qnav-back]');
+    if (!link) return;
+    if (
+      e.defaultPrevented ||
+      e.button !== 0 ||
+      e.ctrlKey || e.metaKey || e.shiftKey || e.altKey ||
+      link.target === '_blank' ||
+      link.hasAttribute('download')
+    ) return;
+
+    if (link.hasAttribute('data-qnav-back')) {
+      e.preventDefault();
+      W.qnavBack();
+      return;
+    }
+
+    var dest;
+    try { dest = new URL(link.href, location.href); } catch(err) { return; }
+    if (dest.origin !== location.origin) return;
+
+    e.preventDefault();
+    W.qnavGoTo(dest.href);
+  });
 
   /* Inject the floating button + drawer */
   function injectDrawer(){
@@ -1342,11 +1384,8 @@ window.QNAV_PAGE_ICON = '📚';
   /* Show the generic "← Back to X" bar if we arrived here via qnavGoTo from another page */
   function injectReturnBar(){
     if (document.getElementById('qnav-return-bar')) return;
-    var prev = null;
-    try {
-      var stack = JSON.parse(sessionStorage.getItem('qnav_stack') || '[]');
-      if (stack.length) prev = stack[stack.length - 1];
-    } catch(e) {}
+    var stack = getStack();
+    var prev = stack.length ? stack[stack.length - 1] : null;
     if (!prev) return;
 
     var bar = document.createElement('div');
@@ -1362,14 +1401,22 @@ window.QNAV_PAGE_ICON = '📚';
     document.body.insertBefore(bar, document.body.firstChild);
   }
 
-  /* Restore scroll position after a Back jump */
+  /* Restore scroll position (both axes) after a Back jump, once content has
+     had a moment to render. */
   function restoreScroll(){
     try {
-      var y = JSON.parse(localStorage.getItem('qnav_restore_scroll') || 'null');
-      if (y !== null) {
-        localStorage.removeItem('qnav_restore_scroll');
-        setTimeout(function(){ window.scrollTo(0, y); }, 250);
-      }
+      var raw = localStorage.getItem('qnav_restore_scroll');
+      if (raw === null) return;
+      localStorage.removeItem('qnav_restore_scroll');
+      var pos = JSON.parse(raw);
+      var x = (typeof pos === 'number') ? 0 : (pos.x||0);
+      var y = (typeof pos === 'number') ? pos : (pos.y||0);
+      var tries = 0;
+      var settle = setInterval(function(){
+        window.scrollTo(x, y);
+        tries++;
+        if (tries >= 6) clearInterval(settle);
+      }, 200);
     } catch(e) {}
   }
 
