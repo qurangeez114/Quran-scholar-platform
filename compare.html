@@ -83,10 +83,77 @@
   .loading { padding:40px; text-align:center; color:#8B7355; }
   @media print { .cols{flex-wrap:wrap} .col{flex:0 0 100%;max-width:100%} .topbar,.controls,.qira,.vtools{position:static} .vtools{display:none} }
 </style>
+<style id="qhist-unified-css">
+#qhist-btn {
+  position: fixed !important; bottom: 62px !important; right: 14px !important; left: auto !important;
+  z-index: 100000 !important; width: 48px !important; height: 48px !important;
+  border-radius: 50% !important; background: #B8902A !important; color: #fff !important;
+  border: 2px solid #8A6A18 !important; box-shadow: 0 3px 12px rgba(0,0,0,0.25) !important;
+  font-size: 20px !important; display: flex !important; align-items: center !important;
+  justify-content: center !important; cursor: pointer !important; padding: 0 !important;
+}
+#qhist-btn:hover { transform: scale(1.08); }
+#qhist-badge {
+  position: absolute; top: -4px; right: -4px;
+  background: #C03020; color: #fff; border-radius: 10px;
+  font-size: 10px; font-weight: 800;
+  min-width: 18px; height: 18px; padding: 0 4px;
+  display: none; align-items: center; justify-content: center;
+  font-family: 'Inconsolata', monospace;
+}
+#qhist-drawer {
+  position: fixed; bottom: 118px; right: 16px; z-index: 100001;
+  width: min(340px, calc(100vw - 32px));
+  max-height: 65vh;
+  background: #FFFEF8; border: 1px solid #E0D4B0;
+  border-radius: 14px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.20);
+  display: none; flex-direction: column; overflow: hidden;
+}
+#qhist-drawer.open { display: flex; }
+.qhist-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px 8px; border-bottom: 1px solid #EAE0C8; flex-shrink: 0;
+}
+.qhist-title { font-family: 'Inconsolata',monospace,sans-serif; font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: #B8902A; font-weight: 700; }
+.qhist-clearall { font-size: 11px; color: #C08050; background: none; border: none; cursor: pointer; font-family: 'Inconsolata',monospace,sans-serif; text-transform: uppercase; padding: 2px 8px; border-radius: 4px; }
+.qhist-scroll { overflow-y: auto; flex: 1; }
+.qhist-item {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 10px 16px; cursor: pointer;
+  border-bottom: 1px solid #F0E8D4;
+  text-decoration: none; color: inherit; transition: background .12s;
+}
+.qhist-item:hover { background: #FDF5E4; }
+.qhist-ico { font-size: 17px; flex-shrink: 0; margin-top: 1px; }
+.qhist-body { flex: 1; min-width: 0; }
+.qhist-lbl { font-family: 'EB Garamond',serif; font-size: 16px; font-weight: 700; color: #1A1610; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qhist-sub { font-family: 'Inconsolata',monospace,sans-serif; font-size: 10px; color: #9A8A70; margin-top: 2px; }
+.qhist-ago { font-family: 'Inconsolata',monospace,sans-serif; font-size: 10px; color: #C4B490; flex-shrink: 0; margin-top: 3px; }
+.qhist-empty { padding: 28px 16px; text-align: center; font-style: italic; color: #A89060; font-size: 15px; font-family: 'EB Garamond',serif; }
+
+/* Generic "back to previous page" bar */
+#qnav-return-bar {
+  display: flex; align-items: center; gap: 10px; padding: 10px 16px;
+  background: #FFF8E8; border-bottom: 3px solid #D4A830;
+  position: sticky; top: 0; z-index: 99999; flex-shrink: 0;
+}
+#qnav-return-bar button {
+  display: inline-flex; align-items: center; gap: 6px; padding: 8px 18px;
+  background: #B8902A; color: #fff; border: none; border-radius: 24px;
+  font-size: 14px; cursor: pointer; font-weight: 700; white-space: nowrap; flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(184,144,42,0.3);
+}
+#qnav-return-bar span.qnav-desc {
+  font-size: 13px; color: #5A3808; font-style: italic; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; flex: 1;
+}
+</style>
+
 </head>
 <body>
   <div class="topbar">
-    <a class="btn-outline" href="/index.html">← Home</a>
+    <a class="btn-outline" href="/themes.html" onclick="if(window.qnavBack&&sessionStorage.getItem('qnav_stack')&&JSON.parse(sessionStorage.getItem('qnav_stack')||'[]').length){event.preventDefault();qnavBack();}">← Back</a>
     <h1 id="title">Story Comparison</h1>
     <button class="btn-outline" onclick="window.print()">⬇ Export</button>
   </div>
@@ -165,6 +232,8 @@ async function load(){
   try { const er=await fetch(`${SB_URL}/rest/v1/story_evaluation?story_slug=eq.${STORY}&select=passage_a,passage_b,same_event,all_identical,additional_details,explicitly_denied,sequence_differs,speaker_changes,narrator_changes,both_true_literal,relationship,confidence,reasoning,narrative_consistency,chronological_consistency,logical_consistency,linguistic_consistency,reasoning_trace&order=id`,{headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY}}); EVALS=await er.json(); } catch(e){ EVALS=[]; }
   renderEval();
   document.getElementById('title').textContent = prettyName(STORY)+' — '+suraCount()+' tellings';
+  window.QNAV_PAGE_LABEL=prettyName(STORY);window.QNAV_PAGE_ICON='📚';
+  if(window.qhistRecord)qhistRecord(prettyName(STORY),location.href,'📚',suraCount()+' tellings compared');
   buildLangMenu(); render();
 }
 function prettyName(s){ return s.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase()); }
@@ -271,6 +340,194 @@ function shareVerse(key){
 function toggleSave(key,el){ if(saved.has(key)){saved.delete(key); el.classList.remove('on'); el.textContent='☆'; toast('Removed');} else {saved.add(key); el.classList.add('on'); el.textContent='★'; toast('Saved '+key);} persist(); }
 function toggleHl(key,el){ const card=el.closest('.verse-card'); if(hl.has(key)){hl.delete(key); el.classList.remove('on'); card.classList.remove('hl');} else {hl.add(key); el.classList.add('on'); card.classList.add('hl');} persist(); }
 load();
+</script>
+<script>
+window.QNAV_PAGE_LABEL = 'Story Comparison';
+window.QNAV_PAGE_ICON = '📚';
+</script>
+<script>
+/* ═══ UNIFIED SITE-WIDE HISTORY + PRECISE BACK NAVIGATION ═══
+   One system, same on every page: Quran, Themes, Concept, Research,
+   Madhhab, Sīra, Stories, Tensions, Graph, Qira'at.
+   - qnav_hist   (localStorage) : persistent "recently visited" list -> drawer
+   - qnav_stack  (sessionStorage): real back-stack -> precise "Back to X" bar + scroll restore
+*/
+(function(W) {
+  var MAX = 60;
+  function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function ago(ts){
+    var s=Math.floor((Date.now()-ts)/1000);
+    if(s<60) return 'just now';
+    if(s<3600) return Math.floor(s/60)+'m ago';
+    if(s<86400) return Math.floor(s/3600)+'h ago';
+    return Math.floor(s/86400)+'d ago';
+  }
+  function getHist(){ try{ return JSON.parse(localStorage.getItem('qnav_hist')||'[]'); }catch(e){ return []; } }
+  function saveHist(h){ try{ localStorage.setItem('qnav_hist',JSON.stringify(h)); }catch(e){} }
+
+  /* Record the CURRENT page into the persistent activity list */
+  function record(label, url, icon, sub) {
+    url = url || window.location.href;
+    var h = getHist().filter(function(x){ return x.url !== url; });
+    h.unshift({ label: label||document.title||'Page', url: url, icon: icon||'📄', sub: sub||'', time: Date.now() });
+    if(h.length > MAX) h = h.slice(0, MAX);
+    saveHist(h);
+    renderList();
+    updateBadge();
+  }
+  W.qhistRecord = record;
+
+  function renderList(){
+    var el = document.getElementById('qhist-scroll');
+    if(!el) return;
+    var h = getHist();
+    if(!h.length){ el.innerHTML='<div class="qhist-empty">No history yet — start exploring!</div>'; return; }
+    el.innerHTML = h.map(function(item){
+      var safeUrl = esc(item.url);
+      var goArg = JSON.stringify(item.url || '').replace(/'/g, '&#39;');
+      return '<a class="qhist-item" href="'+safeUrl+'" onclick="event.preventDefault();qhistGo('+goArg+')">'
+        +'<span class="qhist-ico">'+esc(item.icon||'📄')+'</span>'
+        +'<span class="qhist-body">'
+        +'<div class="qhist-lbl">'+esc(item.label)+'</div>'
+        +'<div class="qhist-sub">'+esc(item.sub)+'</div>'
+        +'</span>'
+        +'<span class="qhist-ago">'+ago(item.time)+'</span>'
+        +'</a>';
+    }).join('');
+  }
+
+  function updateBadge(){
+    var b = document.getElementById('qhist-badge');
+    if(!b) return;
+    var n = getHist().length;
+    b.textContent = n; b.style.display = n ? 'flex' : 'none';
+  }
+
+  W.qnavToggleHist = function(){
+    var d = document.getElementById('qhist-drawer');
+    if(!d) return;
+    d.classList.toggle('open');
+    if(d.classList.contains('open')) renderList();
+  };
+  W.qnavClearHist = function(){
+    saveHist([]); renderList(); updateBadge();
+  };
+
+  /* Jump to any item straight from the Activity History drawer (no back-stack push needed) */
+  W.qhistGo = function(url){
+    window.location.href = url;
+  };
+
+  /* ── THE REAL BACK-STACK ──
+     Call this instead of location.href='...' whenever a link leaves the current page
+     for another page in the app. It remembers exactly where you were (URL + scroll),
+     so "Back" always returns to the precise, exact point you left from. */
+  W.qnavGoTo = function(url, destLabel, destIcon) {
+    try {
+      var stack = JSON.parse(sessionStorage.getItem('qnav_stack') || '[]');
+      stack.push({
+        url: window.location.href,
+        label: (W.QNAV_PAGE_LABEL || document.title || 'Previous page'),
+        icon: (W.QNAV_PAGE_ICON || '📄'),
+        scrollY: window.scrollY
+      });
+      if (stack.length > 25) stack = stack.slice(stack.length - 25);
+      sessionStorage.setItem('qnav_stack', JSON.stringify(stack));
+    } catch(e) {}
+    window.location.href = url;
+  };
+
+  /* Pop the stack and go back to the exact previous page + scroll position */
+  W.qnavBack = function() {
+    try {
+      var stack = JSON.parse(sessionStorage.getItem('qnav_stack') || '[]');
+      var entry = stack.pop();
+      sessionStorage.setItem('qnav_stack', JSON.stringify(stack));
+      if (entry) {
+        localStorage.setItem('qnav_restore_scroll', JSON.stringify(entry.scrollY || 0));
+        window.location.href = entry.url;
+        return;
+      }
+    } catch(e) {}
+    if (window.history.length > 1) window.history.back();
+  };
+
+  /* Inject the floating button + drawer */
+  function injectDrawer(){
+    if(document.getElementById('qhist-btn')) return;
+
+    var btn = document.createElement('button');
+    btn.id = 'qhist-btn';
+    btn.title = 'Your browsing history';
+    btn.setAttribute('onclick','qnavToggleHist()');
+    btn.innerHTML = '🕐<span id="qhist-badge" class="qhist-badge"></span>';
+    document.body.appendChild(btn);
+
+    var drawer = document.createElement('div');
+    drawer.id = 'qhist-drawer';
+    drawer.innerHTML = '<div class="qhist-head"><span class="qhist-title">📖 Activity History</span><button class="qhist-clearall" onclick="qnavClearHist()">Clear all</button></div><div class="qhist-scroll" id="qhist-scroll"></div>';
+    document.body.appendChild(drawer);
+
+    document.addEventListener('click', function(e){
+      var d = document.getElementById('qhist-drawer');
+      var b = document.getElementById('qhist-btn');
+      if(d && d.classList.contains('open') && !d.contains(e.target) && b && !b.contains(e.target))
+        d.classList.remove('open');
+    });
+
+    updateBadge();
+  }
+
+  /* Show the generic "← Back to X" bar if we arrived here via qnavGoTo from another page */
+  function injectReturnBar(){
+    if (document.getElementById('qnav-return-bar')) return;
+    var prev = null;
+    try {
+      var stack = JSON.parse(sessionStorage.getItem('qnav_stack') || '[]');
+      if (stack.length) prev = stack[stack.length - 1];
+    } catch(e) {}
+    if (!prev) return;
+
+    var bar = document.createElement('div');
+    bar.id = 'qnav-return-bar';
+    var btn = document.createElement('button');
+    btn.innerHTML = '← ' + esc(prev.icon || '📄') + ' ' + esc(prev.label || 'Back');
+    btn.onclick = W.qnavBack;
+    var desc = document.createElement('span');
+    desc.className = 'qnav-desc';
+    desc.textContent = 'Tap to return to the exact spot you left';
+    bar.appendChild(btn);
+    bar.appendChild(desc);
+    document.body.insertBefore(bar, document.body.firstChild);
+  }
+
+  /* Restore scroll position after a Back jump */
+  function restoreScroll(){
+    try {
+      var y = JSON.parse(localStorage.getItem('qnav_restore_scroll') || 'null');
+      if (y !== null) {
+        localStorage.removeItem('qnav_restore_scroll');
+        setTimeout(function(){ window.scrollTo(0, y); }, 250);
+      }
+    } catch(e) {}
+  }
+
+  function init(){
+    injectDrawer();
+    injectReturnBar();
+    restoreScroll();
+  }
+
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})(window);
+</script>
+
+<script>
+
 </script>
 </body>
 </html>
