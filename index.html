@@ -2487,6 +2487,7 @@ async function init() {
         }
       }
 
+      if (urlAya) window._pendingHistAya = urlAya;
       await loadSura(urlSura);
       if (urlAya) {
         setTimeout(() => {
@@ -2582,13 +2583,22 @@ async function loadSura(id) {
   document.getElementById('topArabic').textContent = ARABIC_NAMES[id] || info?.sura_name || '';
   document.getElementById('topEnglish').textContent = info?.sura_name_english || info?.sura_name_translated || info?.sura_name || '';
   document.getElementById('topMeta').innerHTML = `<span>${info?.number_of_ayas || ''} verses</span>`;
-  // Record this sura visit in history
+  // Record this sura visit in history — include the SPECIFIC verse the user
+  // actually landed on (if any), so re-opening this entry returns to the
+  // exact spot rather than always restarting at verse 1. Without this, a
+  // label like "Surah 5 · 119 verses" (total count) looked like a verse
+  // reference ("5:119") but always reopened at 5:1.
   try {
     const suraEnglish = info?.sura_name_english || info?.sura_name_translated || info?.sura_name || ('Sura ' + id);
     const suraArabic = ARABIC_NAMES[id] || '';
     const label = suraArabic ? suraArabic + ' · ' + suraEnglish : suraEnglish;
-    const url = window.location.pathname + '?sura=' + id;
-    if (window.qhistRecord) qhistRecord(label, url, '📖', 'Surah ' + id + ' · ' + (info?.number_of_ayas || '') + ' verses');
+    const targetAya = window._pendingHistAya || null;
+    window._pendingHistAya = null;
+    const url = window.location.pathname + '?sura=' + id + (targetAya ? '&aya=' + targetAya : '');
+    const sub = targetAya
+      ? 'Verse ' + targetAya + ' · ' + (info?.number_of_ayas || '') + ' verses total'
+      : (info?.number_of_ayas || '') + ' verses total';
+    if (window.qhistRecord) qhistRecord(label, url, '📖', sub);
   } catch(e) {}
   document.getElementById('verseArea').innerHTML = `<div class="loading"><span class="spinner"></span>Loading verses...</div>`;
 
@@ -4590,6 +4600,7 @@ async function navToVerse(suraId, ayahNum) {
   navHistory.push({ sura: currentSura, scroll: document.getElementById('verseArea').scrollTop });
   document.getElementById('backBtn').style.display = 'block';
   document.getElementById('backBtn').textContent = '← Back to ' + (allSuras.find(s => (s.sura_id||s.id) === currentSura)?.sura_name || 'Previous');
+  window._pendingHistAya = ayahNum;
   await loadSura(suraId);
   setTimeout(() => {
     const card = document.getElementById('vc-' + ayahNum);
@@ -5063,6 +5074,7 @@ async function gotoVerse() {
     alert('Please enter a valid Chapter number (1-114) or name');
     return;
   }
+  if (aya && aya >= 1) window._pendingHistAya = aya;
   await loadSura(sura);
   setTimeout(() => {
     if (aya && aya >= 1) {
@@ -7050,6 +7062,7 @@ Length rule: every string value must be a single line — no literal newlines in
 
 async function jumpToRef(sura, aya) {
   switchSidebarTab('suras');
+  window._pendingHistAya = aya;
   await loadSura(sura);
   setTimeout(() => {
     const card = document.getElementById('vc-' + aya);
@@ -8594,14 +8607,7 @@ if (typeof renderVerses === 'function') {
 }
 </script>
 
-<script>
-document.addEventListener('DOMContentLoaded', function(){
-  var p = new URLSearchParams(window.location.search);
-  var sura = p.get('sura'), aya = p.get('aya');
-  var label = sura && aya ? 'Verse '+sura+':'+aya : sura ? 'Sura '+sura : 'Quran Platform';
-  qhistRecord(label, window.location.href, '📖', 'Quran Platform');
-});
-</script>
+
 
 <!-- PRESENTATION BUILDER START -->
 <script src="presentation-builder.js"></script>
@@ -8866,7 +8872,7 @@ async function loadRWItems() {
 window.openRWVerse = function(sura, aya) {
   closeResearchWorkspace();
   if (typeof gotoResult === 'function') { gotoResult(sura, aya, null); return; }
-  if (typeof loadSura  === 'function') { loadSura(sura).then(() => setTimeout(() => { const c=document.getElementById('vc-'+aya); if(c) c.scrollIntoView({behavior:'smooth',block:'center'}); },600)); return; }
+  if (typeof loadSura  === 'function') { window._pendingHistAya = aya; loadSura(sura).then(() => setTimeout(() => { const c=document.getElementById('vc-'+aya); if(c) c.scrollIntoView({behavior:'smooth',block:'center'}); },600)); return; }
   window.location.href = `index.html?sura=${sura}&aya=${aya}`;
 };
 
