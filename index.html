@@ -9865,6 +9865,9 @@ window.QNAV_PAGE_ICON = '📖';
 */
 (function(W) {
   var MAX = 60;
+  var HIST_VERSION = 2; // bump when the entry format/semantics change
+  var MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
   function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
   function ago(ts){
     var s=Math.floor((Date.now()-ts)/1000);
@@ -9873,7 +9876,27 @@ window.QNAV_PAGE_ICON = '📖';
     if(s<86400) return Math.floor(s/3600)+'h ago';
     return Math.floor(s/86400)+'d ago';
   }
-  function getHist(){ try{ return JSON.parse(localStorage.getItem('qnav_hist')||'[]'); }catch(e){ return []; } }
+  function getHist(){
+    try{
+      // One-time purge: entries recorded before HIST_VERSION carry the old
+      // "total verse count mislabeled as a reference" bug and stale links
+      // with no specific verse. Rather than guess which old entries are
+      // "safe", wipe once per version bump — it's just a recents list.
+      var storedVersion = parseInt(localStorage.getItem('qnav_hist_version') || '0');
+      if (storedVersion < HIST_VERSION) {
+        localStorage.removeItem('qnav_hist');
+        localStorage.setItem('qnav_hist_version', String(HIST_VERSION));
+        return [];
+      }
+      var h = JSON.parse(localStorage.getItem('qnav_hist')||'[]');
+      // Auto-expire anything older than MAX_AGE_MS so stale entries never
+      // silently accumulate again.
+      var now = Date.now();
+      var fresh = h.filter(function(x){ return (now - (x.time||0)) < MAX_AGE_MS; });
+      if (fresh.length !== h.length) saveHist(fresh);
+      return fresh;
+    }catch(e){ return []; }
+  }
   function saveHist(h){ try{ localStorage.setItem('qnav_hist',JSON.stringify(h)); }catch(e){} }
   function getStack(){ try{ return JSON.parse(sessionStorage.getItem('qnav_stack')||'[]'); }catch(e){ return []; } }
   function saveStack(s){ try{ sessionStorage.setItem('qnav_stack', JSON.stringify(s)); }catch(e){} }
