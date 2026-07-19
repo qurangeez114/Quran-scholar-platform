@@ -1189,15 +1189,13 @@ body { padding-bottom: 80px !important; }
       <div style="padding:0 12px 10px;">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
           <label style="font-size:11px;font-weight:700;color:#6B5A3E;width:52px;flex-shrink:0;">Chapter</label>
-          <select id="gotoSura" onchange="populateGotoAyaSelect()" style="flex:1;padding:6px 8px;border:1px solid #E8E4DC;border-radius:6px;font-size:12px;background:#FAFAF7;outline:none;min-width:0;">
-            <option value="">Loading...</option>
-          </select>
+          <input id="gotoSura" list="gotoSuraList" type="text" inputmode="numeric" placeholder="e.g. 47 or Muhammad" onchange="onGotoSuraChange()" onkeydown="if(event.key==='Enter'){event.preventDefault();onGotoSuraChange();document.getElementById('gotoAya').focus();}" style="flex:1;padding:6px 8px;border:1px solid #E8E4DC;border-radius:6px;font-size:12px;background:#FAFAF7;outline:none;min-width:0;">
+          <datalist id="gotoSuraList"></datalist>
         </div>
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
           <label style="font-size:11px;font-weight:700;color:#6B5A3E;width:52px;flex-shrink:0;">Verse</label>
-          <select id="gotoAya" style="flex:1;padding:6px 8px;border:1px solid #E8E4DC;border-radius:6px;font-size:12px;background:#FAFAF7;outline:none;min-width:0;">
-            <option value="">—</option>
-          </select>
+          <input id="gotoAya" type="number" min="1" inputmode="numeric" placeholder="#" onkeydown="if(event.key==='Enter'){event.preventDefault();gotoVerse();}" style="flex:1;padding:6px 8px;border:1px solid #E8E4DC;border-radius:6px;font-size:12px;background:#FAFAF7;outline:none;min-width:0;">
+          <span id="gotoAyaMax" style="font-size:10px;color:#B0A480;flex-shrink:0;white-space:nowrap;"></span>
         </div>
         <div style="display:flex;gap:6px;">
           <button onclick="gotoVerseStep(-1)" style="flex:1;padding:6px 4px;background:#EDE8D8;color:#6B5A3E;border:1px solid #D4C9A8;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;">« Prev</button>
@@ -2579,8 +2577,7 @@ async function loadSura(id) {
   if (activeEl) activeEl.classList.add('active');
 
   const info = allSuras.find(s => (s.sura_id || s.id) === id);
-  const gotoSuraSel = document.getElementById('gotoSura');
-  if (gotoSuraSel && gotoSuraSel.value != id) { gotoSuraSel.value = id; populateGotoAyaSelect(); }
+  if (document.getElementById('gotoSura')) syncGotoSuraDisplay(id);
   document.getElementById('topArabic').textContent = ARABIC_NAMES[id] || info?.sura_name || '';
   document.getElementById('topEnglish').textContent = info?.sura_name_english || info?.sura_name_translated || info?.sura_name || '';
   document.getElementById('topMeta').innerHTML = `<span>${info?.number_of_ayas || ''} verses</span>`;
@@ -5040,11 +5037,29 @@ Where:
   }
 }
 
+function resolveGotoSuraId() {
+  const raw = (document.getElementById('gotoSura').value || '').trim();
+  if (!raw) return null;
+  // Leading number wins (handles "47", "47 - Muhammad")
+  const m = raw.match(/^(\d{1,3})/);
+  if (m) {
+    const n = parseInt(m[1]);
+    if (n >= 1 && n <= 114) return n;
+  }
+  // Otherwise try matching by name
+  const needle = raw.toLowerCase();
+  const hit = allSuras.find(s => {
+    const english = (s.sura_name_english || s.sura_name_translated || s.sura_name || '').toLowerCase();
+    return english === needle || english.includes(needle);
+  });
+  return hit ? (hit.sura_id || hit.id) : null;
+}
+
 async function gotoVerse() {
-  const sura = parseInt(document.getElementById('gotoSura').value);
+  const sura = resolveGotoSuraId();
   const aya = parseInt(document.getElementById('gotoAya').value);
-  if (!sura || sura < 1 || sura > 114) {
-    alert('Please select a Chapter');
+  if (!sura) {
+    alert('Please enter a valid Chapter number (1-114) or name');
     return;
   }
   await loadSura(sura);
@@ -5062,39 +5077,52 @@ async function gotoVerse() {
 }
 
 function populateGotoSuraSelect() {
-  const sel = document.getElementById('gotoSura');
-  if (!sel || !allSuras.length) return;
-  const current = currentSura || (allSuras[0].sura_id || allSuras[0].id);
-  sel.innerHTML = allSuras.map(s => {
+  const input = document.getElementById('gotoSura');
+  const list = document.getElementById('gotoSuraList');
+  if (!input || !list || !allSuras.length) return;
+  list.innerHTML = allSuras.map(s => {
     const id = s.sura_id || s.id;
     const english = s.sura_name_english || s.sura_name_translated || s.sura_name || ('Sura ' + id);
-    return `<option value="${id}"${id===current?' selected':''}>${id} - ${escapeHtml(english)}</option>`;
+    return `<option value="${id} - ${escapeHtml(english)}"></option>`;
   }).join('');
-  populateGotoAyaSelect();
+  const current = currentSura || (allSuras[0].sura_id || allSuras[0].id);
+  syncGotoSuraDisplay(current);
 }
 
-function populateGotoAyaSelect(keepAya) {
-  const suraSel = document.getElementById('gotoAya');
-  const suraId = parseInt(document.getElementById('gotoSura').value);
+function syncGotoSuraDisplay(id) {
+  const input = document.getElementById('gotoSura');
+  if (!input) return;
+  const info = allSuras.find(s => (s.sura_id || s.id) === id);
+  const english = info ? (info.sura_name_english || info.sura_name_translated || info.sura_name || ('Sura ' + id)) : ('Sura ' + id);
+  input.value = `${id} - ${english}`;
+  updateGotoAyaMax(id);
+}
+
+function onGotoSuraChange() {
+  const id = resolveGotoSuraId();
+  if (id) { syncGotoSuraDisplay(id); }
+}
+
+function updateGotoAyaMax(suraId) {
   const info = allSuras.find(s => (s.sura_id || s.id) === suraId);
   const count = (info && info.number_of_ayas) || 0;
-  if (!count) { suraSel.innerHTML = '<option value="">—</option>'; return; }
-  let opts = '';
-  for (let i = 1; i <= count; i++) {
-    opts += `<option value="${i}"${keepAya===i?' selected':''}>${i}</option>`;
-  }
-  suraSel.innerHTML = opts;
+  const ayaInput = document.getElementById('gotoAya');
+  const maxLabel = document.getElementById('gotoAyaMax');
+  if (ayaInput) ayaInput.max = count || '';
+  if (maxLabel) maxLabel.textContent = count ? ('of ' + count) : '';
 }
 
 function gotoVerseStep(delta) {
-  const sel = document.getElementById('gotoAya');
-  const cur = parseInt(sel.value) || 1;
+  const input = document.getElementById('gotoAya');
+  const max = parseInt(input.max) || 999;
+  const cur = parseInt(input.value) || 1;
   const next = cur + delta;
-  if (next >= 1 && next <= sel.options.length) {
-    sel.value = next;
+  if (next >= 1 && next <= max) {
+    input.value = next;
   }
   gotoVerse();
 }
+
 
 function highlightVerse(card) {
   // Remove any existing highlights
