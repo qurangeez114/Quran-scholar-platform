@@ -9835,11 +9835,25 @@ window.QNAV_PAGE_ICON = '📖';
   function getStack(){ try{ return JSON.parse(sessionStorage.getItem('qnav_stack')||'[]'); }catch(e){ return []; } }
   function saveStack(s){ try{ sessionStorage.setItem('qnav_stack', JSON.stringify(s)); }catch(e){} }
 
-  /* Record the CURRENT page into the persistent activity list */
+  /* Normalized identity for an entry: same destination + same label counts
+     as "the same place", regardless of incidental query-param variance
+     (e.g. a trailing &from=stories) or exact scroll position. */
+  function stateKey(entry){
+    var u;
+    try { u = new URL(entry.url, location.href); } catch(e){ return entry.url || ''; }
+    return [u.pathname, u.search, entry.label || ''].join('|');
+  }
+
+  /* Record the CURRENT page into the persistent activity list.
+     Dedup across the WHOLE list — qnav_hist is a "recently visited" log,
+     not a journey, so any earlier visit to the same place should collapse
+     into this one, most-recent occurrence. */
   function record(label, url, icon, sub) {
     url = url || window.location.href;
-    var h = getHist().filter(function(x){ return x.url !== url; });
-    h.unshift({ label: label||document.title||'Page', url: url, icon: icon||'📄', sub: sub||'', time: Date.now() });
+    var entry = { label: label||document.title||'Page', url: url, icon: icon||'📄', sub: sub||'', time: Date.now() };
+    var key = stateKey(entry);
+    var h = getHist().filter(function(x){ return stateKey(x) !== key; });
+    h.unshift(entry);
     if(h.length > MAX) h = h.slice(0, MAX);
     saveHist(h);
     renderList();
@@ -9890,7 +9904,12 @@ window.QNAV_PAGE_ICON = '📖';
 
   /* ── THE REAL BACK-STACK ──
      Save exactly where the user is right now (URL + scroll position + how
-     this page currently identifies itself) before we ever navigate away. */
+     this page currently identifies itself) before we ever navigate away.
+     Dedup only against the IMMEDIATELY PRECEDING entry — revisiting the
+     same page later in a journey (Concept -> Verse -> Concept -> Verse) is
+     a legitimate, distinct step and must not be collapsed away. This guards
+     against accidental double-fires (e.g. a rapid double-tap on mobile
+     queuing two clicks before the page actually unloads). */
   function saveCurrentPosition() {
     var entry = {
       url: location.href,
@@ -9901,7 +9920,12 @@ window.QNAV_PAGE_ICON = '📖';
       savedAt: Date.now()
     };
     var stack = getStack();
-    stack.push(entry);
+    var last = stack[stack.length - 1];
+    if (last && stateKey(last) === stateKey(entry)) {
+      stack[stack.length - 1] = entry;
+    } else {
+      stack.push(entry);
+    }
     if (stack.length > 25) stack = stack.slice(stack.length - 25);
     saveStack(stack);
   }
