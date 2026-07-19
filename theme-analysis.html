@@ -160,12 +160,88 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
   font-size: 13px; font-weight: 700; z-index: 99999; pointer-events: none;
 }
 </style>
+<style id="qhist-unified-css">
+#qhist-btn {
+  position: fixed !important; bottom: 62px !important; right: 14px !important; left: auto !important;
+  z-index: 100000 !important; width: 48px !important; height: 48px !important;
+  border-radius: 50% !important; background: #B8902A !important; color: #fff !important;
+  border: 2px solid #8A6A18 !important; box-shadow: 0 3px 12px rgba(0,0,0,0.25) !important;
+  font-size: 20px !important; display: flex !important; align-items: center !important;
+  justify-content: center !important; cursor: pointer !important; padding: 0 !important;
+}
+#qhist-btn:hover { transform: scale(1.08); }
+#qhist-badge {
+  position: absolute; top: -4px; right: -4px;
+  background: #C03020; color: #fff; border-radius: 10px;
+  font-size: 10px; font-weight: 800;
+  min-width: 18px; height: 18px; padding: 0 4px;
+  display: none; align-items: center; justify-content: center;
+  font-family: 'Inconsolata', monospace;
+}
+#qhist-drawer {
+  position: fixed; bottom: 118px; right: 16px; z-index: 100001;
+  width: min(340px, calc(100vw - 32px));
+  max-height: 65vh;
+  background: #FFFEF8; border: 1px solid #E0D4B0;
+  border-radius: 14px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.20);
+  display: none; flex-direction: column; overflow: hidden;
+}
+#qhist-drawer.open { display: flex; }
+.qhist-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px 8px; border-bottom: 1px solid #EAE0C8; flex-shrink: 0;
+}
+.qhist-title { font-family: 'Inconsolata',monospace,sans-serif; font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: #B8902A; font-weight: 700; }
+.qhist-clearall { font-size: 11px; color: #C08050; background: none; border: none; cursor: pointer; font-family: 'Inconsolata',monospace,sans-serif; text-transform: uppercase; padding: 2px 8px; border-radius: 4px; }
+.qhist-scroll { overflow-y: auto; flex: 1; }
+.qhist-item {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 10px 16px; cursor: pointer;
+  border-bottom: 1px solid #F0E8D4;
+  text-decoration: none; color: inherit; transition: background .12s;
+}
+.qhist-item:hover { background: #FDF5E4; }
+.qhist-ico { font-size: 17px; flex-shrink: 0; margin-top: 1px; }
+.qhist-body { flex: 1; min-width: 0; }
+.qhist-lbl { font-family: 'EB Garamond',serif; font-size: 16px; font-weight: 700; color: #1A1610; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qhist-sub { font-family: 'Inconsolata',monospace,sans-serif; font-size: 10px; color: #9A8A70; margin-top: 2px; }
+.qhist-ago { font-family: 'Inconsolata',monospace,sans-serif; font-size: 10px; color: #C4B490; flex-shrink: 0; margin-top: 3px; }
+.qhist-empty { padding: 28px 16px; text-align: center; font-style: italic; color: #A89060; font-size: 15px; font-family: 'EB Garamond',serif; }
+
+/* Generic "back to previous page" / "forward" bar */
+#qnav-return-bar {
+  display: flex; align-items: center; gap: 8px; padding: 10px 12px;
+  background: #FFF8E8; border-bottom: 3px solid #D4A830;
+  position: sticky; top: 0; z-index: 99999; flex-shrink: 0; flex-wrap: nowrap;
+}
+#qnav-return-bar button {
+  display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px;
+  background: #B8902A; color: #fff; border: none; border-radius: 24px;
+  font-size: 13px; cursor: pointer; font-weight: 700; white-space: nowrap; flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(184,144,42,0.3);
+}
+#qnav-return-bar button.qnav-fwd {
+  background: #EDE8D8; color: #6B5A3E; box-shadow: none; border: 1px solid #D4C9A8;
+  margin-left: auto;
+}
+#qnav-return-bar span.qnav-desc {
+  font-size: 12px; color: #5A3808; font-style: italic; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0;
+}
+@media (max-width: 480px) {
+  #qnav-return-bar span.qnav-desc { display: none; }
+}
+
+</style>
+
+<style>#qhist-btn{display:none!important;}</style>
 </head>
 <body>
 
 <!-- TOP BAR -->
 <div class="top-bar">
-  <button class="back-btn" onclick="history.back()">← Back</button>
+  <button class="back-btn" onclick="if(window.qnavBack){qnavBack();}else{history.back();}">← Back</button>
   <div class="theme-title-bar" id="pageThemeTitle">Loading theme...</div>
   <button class="add-presentation-btn" onclick="addThemeToPresentation()">🎞 Add to Deck</button>
 </div>
@@ -519,6 +595,8 @@ window.addEventListener('DOMContentLoaded', async function() {
   }
   document.title = THEME + ' — Quran Scholar';
   document.getElementById('pageThemeTitle').textContent = THEME;
+  window.QNAV_PAGE_LABEL = THEME; window.QNAV_PAGE_ICON = '🗂️';
+  if (window.qhistRecord) qhistRecord(THEME, location.href, '🗂️', 'Theme analysis');
 
   // Auto-switch to requested tab (e.g. tab=internal from verse card)
   const requestedTab = params.get('tab');
@@ -712,14 +790,14 @@ function getLang() {
 function renderVerseCard(v, idx) {
   const L = getLang();
   const sn = SURAS[v.sura_id] || 'Surah ' + v.sura_id;
-  return '<div class="verse-card" id="vc-ta-'+v.sura_id+'-'+v.aya_number+'">'
+  return '<div class="verse-card" id="vc-ta-'+v.sura_id+'-'+v.aya_number+'" onclick="if(!event.target.closest(\'button\'))openInMain('+v.sura_id+','+v.aya_number+')" style="cursor:pointer;">'
     + '<div class="verse-card-header">'
       + '<div><span class="verse-ref">' + v.sura_id + ':' + v.aya_number + '</span><span class="verse-sura">' + esc(sn) + '</span></div>'
       + '<div class="verse-actions">'
-        + '<button class="action-btn" onclick="taRead('+idx+')">🔊</button>'
-        + '<button class="action-btn" onclick="taCopy('+idx+')">📋</button>'
-        + '<button class="action-btn" onclick="taShare('+idx+')">📤</button>'
-        + '<button class="action-btn primary" onclick="openInMain('+v.sura_id+','+v.aya_number+')">Open</button>'
+        + '<button class="action-btn" onclick="event.stopPropagation();taRead('+idx+')">🔊</button>'
+        + '<button class="action-btn" onclick="event.stopPropagation();taCopy('+idx+')">📋</button>'
+        + '<button class="action-btn" onclick="event.stopPropagation();taShare('+idx+')">📤</button>'
+        + '<button class="action-btn primary" onclick="event.stopPropagation();openInMain('+v.sura_id+','+v.aya_number+')">Read in Context →</button>'
       + '</div>'
     + '</div>'
     + '<div class="verse-body">'
@@ -1417,7 +1495,8 @@ function switchTab(id, btn) {
 
 // ── VERSE ACTIONS ─────────────────────────────────────────────────────
 function openInMain(sura, aya) {
-  window.location.href = 'index.html?sura=' + sura + '&aya=' + aya;
+  const url = 'index.html?sura=' + sura + '&aya=' + aya;
+  if (window.qnavGoTo) { qnavGoTo(url); } else { window.location.href = url; }
 }
 
 function taRead(idx) {
@@ -1519,6 +1598,305 @@ function showToast(msg) {
 <script>
 function toggleFabMenu(){var t=document.getElementById('fab-toggle'),i=document.getElementById('fab-items'),b=document.getElementById('fab-backdrop'),o=i.classList.contains('open');if(o){t.classList.remove('open');i.classList.remove('open');b.classList.remove('open');}else{t.classList.add('open');i.classList.add('open');b.classList.add('open');}}
 function closeFabMenu(){document.getElementById('fab-toggle').classList.remove('open');document.getElementById('fab-items').classList.remove('open');document.getElementById('fab-backdrop').classList.remove('open');}
+</script>
+
+
+<script>
+/* ═══ UNIFIED SITE-WIDE HISTORY + PRECISE BACK NAVIGATION (v2) ═══
+   One system, same on every page: Quran, Themes, Concept, Research,
+   Madhhab, Sīra, Stories, Tensions, Graph, Qira'at.
+   - qnav_hist   (localStorage) : persistent "recently visited" list -> drawer
+   - qnav_stack  (sessionStorage): real back-stack -> precise "Back to X" bar + scroll restore
+
+   Links: mark any in-app forward link with data-qnav (no inline onclick, no
+   hand-written label/icon — the destination page records its own real title
+   after it loads). Mark any "back" link with data-qnav-back. A single
+   delegated click listener handles both while preserving normal browser
+   link behavior (new tab, Ctrl/Cmd/Shift/Alt-click, middle-click, downloads,
+   external links, long-press on mobile).
+*/
+(function(W) {
+  var MAX = 60;
+  function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function ago(ts){
+    var s=Math.floor((Date.now()-ts)/1000);
+    if(s<60) return 'just now';
+    if(s<3600) return Math.floor(s/60)+'m ago';
+    if(s<86400) return Math.floor(s/3600)+'h ago';
+    return Math.floor(s/86400)+'d ago';
+  }
+  function getHist(){ try{ return JSON.parse(localStorage.getItem('qnav_hist')||'[]'); }catch(e){ return []; } }
+  function saveHist(h){ try{ localStorage.setItem('qnav_hist',JSON.stringify(h)); }catch(e){} }
+  function getStack(){ try{ return JSON.parse(sessionStorage.getItem('qnav_stack')||'[]'); }catch(e){ return []; } }
+  function saveStack(s){ try{ sessionStorage.setItem('qnav_stack', JSON.stringify(s)); }catch(e){} }
+  function getForward(){ try{ return JSON.parse(sessionStorage.getItem('qnav_forward')||'[]'); }catch(e){ return []; } }
+  function saveForward(s){ try{ sessionStorage.setItem('qnav_forward', JSON.stringify(s)); }catch(e){} }
+  function clearForward(){ try{ sessionStorage.removeItem('qnav_forward'); }catch(e){} }
+
+  /* Push `entry` onto `stack`, deduping only against the immediately
+     preceding item (same rule used for qnav_stack pushes elsewhere). */
+  function pushDeduped(stack, entry, cap){
+    var last = stack[stack.length - 1];
+    if (last && stateKey(last) === stateKey(entry)) {
+      stack[stack.length - 1] = entry;
+    } else {
+      stack.push(entry);
+    }
+    if (cap && stack.length > cap) stack = stack.slice(stack.length - cap);
+    return stack;
+  }
+
+  function captureCurrent(){
+    return {
+      url: location.href,
+      label: (W.QNAV_PAGE_LABEL || document.title || 'QuranHikma'),
+      icon: (W.QNAV_PAGE_ICON || '📄'),
+      scrollX: window.scrollX,
+      scrollY: window.scrollY,
+      state: null,
+      savedAt: Date.now()
+    };
+  }
+
+  /* Normalized identity for an entry: same destination + same label counts
+     as "the same place", regardless of incidental query-param variance
+     (e.g. a trailing &from=stories) or exact scroll position. */
+  function stateKey(entry){
+    var u;
+    try { u = new URL(entry.url, location.href); } catch(e){ return entry.url || ''; }
+    return [u.pathname, u.search, entry.label || ''].join('|');
+  }
+
+  /* Record the CURRENT page into the persistent activity list.
+     Dedup across the WHOLE list — qnav_hist is a "recently visited" log,
+     not a journey, so any earlier visit to the same place should collapse
+     into this one, most-recent occurrence. */
+  function record(label, url, icon, sub) {
+    url = url || window.location.href;
+    var entry = { label: label||document.title||'Page', url: url, icon: icon||'📄', sub: sub||'', time: Date.now() };
+    var key = stateKey(entry);
+    var h = getHist().filter(function(x){ return stateKey(x) !== key; });
+    h.unshift(entry);
+    if(h.length > MAX) h = h.slice(0, MAX);
+    saveHist(h);
+    renderList();
+    updateBadge();
+  }
+  W.qhistRecord = record;
+
+  function renderList(){
+    var el = document.getElementById('qhist-scroll');
+    if(!el) return;
+    var h = getHist();
+    if(!h.length){ el.innerHTML='<div class="qhist-empty">No history yet — start exploring!</div>'; return; }
+    el.innerHTML = h.map(function(item){
+      var safeUrl = esc(item.url);
+      var goArg = JSON.stringify(item.url || '').replace(/'/g, '&#39;');
+      return '<a class="qhist-item" href="'+safeUrl+'" onclick="event.preventDefault();qhistGo('+goArg+')">'
+        +'<span class="qhist-ico">'+esc(item.icon||'📄')+'</span>'
+        +'<span class="qhist-body">'
+        +'<div class="qhist-lbl">'+esc(item.label)+'</div>'
+        +'<div class="qhist-sub">'+esc(item.sub)+'</div>'
+        +'</span>'
+        +'<span class="qhist-ago">'+ago(item.time)+'</span>'
+        +'</a>';
+    }).join('');
+  }
+
+  function updateBadge(){
+    var b = document.getElementById('qhist-badge');
+    if(!b) return;
+    var n = getHist().length;
+    b.textContent = n; b.style.display = n ? 'flex' : 'none';
+  }
+
+  W.qnavToggleHist = function(){
+    var d = document.getElementById('qhist-drawer');
+    if(!d) return;
+    d.classList.toggle('open');
+    if(d.classList.contains('open')) renderList();
+  };
+  W.qnavClearHist = function(){
+    saveHist([]); renderList(); updateBadge();
+  };
+
+  /* Jump to any item straight from the Activity History drawer */
+  W.qhistGo = function(url){
+    window.location.href = url;
+  };
+
+  /* ── THE REAL BACK-STACK ──
+     Save exactly where the user is right now before we ever navigate away. */
+  function saveCurrentPosition() {
+    var entry = captureCurrent();
+    var stack = pushDeduped(getStack(), entry, 25);
+    saveStack(stack);
+  }
+  W.qnavSaveCurrentPosition = saveCurrentPosition;
+
+  /* Navigate forward to a NEW destination. This is a fresh branch, so any
+     previously-recorded forward path is no longer valid (same rule a
+     browser follows: Back then choosing a different link drops "Forward"). */
+  W.qnavGoTo = function(url) {
+    saveCurrentPosition();
+    clearForward();
+    window.location.assign(url);
+  };
+
+  /* Pop the back-stack and go to the exact previous page + scroll position.
+     The page we're leaving gets pushed onto the forward-stack so "Forward"
+     can return to it. */
+  W.qnavBack = function() {
+    var stack = getStack();
+    var entry = stack.pop();
+    saveStack(stack);
+    if (entry) {
+      var fwd = pushDeduped(getForward(), captureCurrent(), 25);
+      saveForward(fwd);
+      try {
+        localStorage.setItem('qnav_restore_scroll', JSON.stringify({ x: entry.scrollX||0, y: entry.scrollY||0 }));
+      } catch(e) {}
+      window.location.href = entry.url;
+      return;
+    }
+    if (window.history.length > 1) window.history.back();
+  };
+
+  /* Mirror of Back: pop the forward-stack, push current page back onto the
+     back-stack, go to the destination + scroll position. */
+  W.qnavForward = function() {
+    var fwd = getForward();
+    var entry = fwd.pop();
+    if (!entry) return;
+    saveForward(fwd);
+    var stack = pushDeduped(getStack(), captureCurrent(), 25);
+    saveStack(stack);
+    try {
+      localStorage.setItem('qnav_restore_scroll', JSON.stringify({ x: entry.scrollX||0, y: entry.scrollY||0 }));
+    } catch(e) {}
+    window.location.href = entry.url;
+  };
+
+  /* ── Delegated click handler: preserves new-tab, modifier-clicks,
+     middle-click, downloads, external links, long-press on mobile. ── */
+  document.addEventListener('click', function(e){
+    var link = e.target.closest('a[data-qnav], a[data-qnav-back]');
+    if (!link) return;
+    if (
+      e.defaultPrevented ||
+      e.button !== 0 ||
+      e.ctrlKey || e.metaKey || e.shiftKey || e.altKey ||
+      link.target === '_blank' ||
+      link.hasAttribute('download')
+    ) return;
+
+    if (link.hasAttribute('data-qnav-back')) {
+      e.preventDefault();
+      W.qnavBack();
+      return;
+    }
+
+    var dest;
+    try { dest = new URL(link.href, location.href); } catch(err) { return; }
+    if (dest.origin !== location.origin) return;
+
+    e.preventDefault();
+    W.qnavGoTo(dest.href);
+  });
+
+  /* Inject the floating button + drawer */
+  function injectDrawer(){
+    if(document.getElementById('qhist-btn')) return;
+
+    var btn = document.createElement('button');
+    btn.id = 'qhist-btn';
+    btn.title = 'Your browsing history';
+    btn.setAttribute('onclick','qnavToggleHist()');
+    btn.innerHTML = '🕐<span id="qhist-badge" class="qhist-badge"></span>';
+    document.body.appendChild(btn);
+
+    var drawer = document.createElement('div');
+    drawer.id = 'qhist-drawer';
+    drawer.innerHTML = '<div class="qhist-head"><span class="qhist-title">📖 Activity History</span><button class="qhist-clearall" onclick="qnavClearHist()">Clear all</button></div><div class="qhist-scroll" id="qhist-scroll"></div>';
+    document.body.appendChild(drawer);
+
+    document.addEventListener('click', function(e){
+      var d = document.getElementById('qhist-drawer');
+      var b = document.getElementById('qhist-btn');
+      if(d && d.classList.contains('open') && !d.contains(e.target) && b && !b.contains(e.target))
+        d.classList.remove('open');
+    });
+
+    updateBadge();
+  }
+
+  /* Show the generic "← Back to X" bar (and "Forward →" when available) */
+  function injectReturnBar(){
+    var existing = document.getElementById('qnav-return-bar');
+    if (existing) existing.remove();
+    var stack = getStack();
+    var prev = stack.length ? stack[stack.length - 1] : null;
+    var fwd = getForward();
+    var next = fwd.length ? fwd[fwd.length - 1] : null;
+    if (!prev && !next) return;
+
+    var bar = document.createElement('div');
+    bar.id = 'qnav-return-bar';
+
+    if (prev) {
+      var backBtn = document.createElement('button');
+      backBtn.innerHTML = '← ' + esc(prev.icon || '📄') + ' ' + esc(prev.label || 'Back');
+      backBtn.onclick = W.qnavBack;
+      bar.appendChild(backBtn);
+    }
+
+    var desc = document.createElement('span');
+    desc.className = 'qnav-desc';
+    desc.textContent = 'Tap to return to the exact spot you left';
+    bar.appendChild(desc);
+
+    if (next) {
+      var fwdBtn = document.createElement('button');
+      fwdBtn.className = 'qnav-fwd';
+      fwdBtn.innerHTML = esc(next.icon || '📄') + ' ' + esc(next.label || 'Forward') + ' →';
+      fwdBtn.onclick = W.qnavForward;
+      bar.appendChild(fwdBtn);
+    }
+
+    document.body.insertBefore(bar, document.body.firstChild);
+  }
+
+  /* Restore scroll position (both axes) after a Back jump, once content has
+     had a moment to render. */
+  function restoreScroll(){
+    try {
+      var raw = localStorage.getItem('qnav_restore_scroll');
+      if (raw === null) return;
+      localStorage.removeItem('qnav_restore_scroll');
+      var pos = JSON.parse(raw);
+      var x = (typeof pos === 'number') ? 0 : (pos.x||0);
+      var y = (typeof pos === 'number') ? pos : (pos.y||0);
+      var tries = 0;
+      var settle = setInterval(function(){
+        window.scrollTo(x, y);
+        tries++;
+        if (tries >= 6) clearInterval(settle);
+      }, 200);
+    } catch(e) {}
+  }
+
+  function init(){
+    injectDrawer();
+    injectReturnBar();
+    restoreScroll();
+  }
+
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})(window);
 </script>
 
 </body>
