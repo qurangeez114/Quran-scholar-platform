@@ -81,6 +81,19 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 }
 .action-btn.primary { background: #B8902A; color: #fff; border-color: #B8902A; }
 .verse-body { padding: 12px 14px; }
+
+/* ── HIGHLIGHT / COLOR TAG ── */
+.color-swatch-popover {
+  position: absolute; z-index: 50; background: #fff; border: 1px solid #D4C9A8;
+  border-radius: 10px; padding: 8px; box-shadow: 0 6px 20px rgba(0,0,0,.15);
+  display: flex; gap: 6px;
+}
+.color-swatch {
+  width: 22px; height: 22px; border-radius: 50%; cursor: pointer;
+  border: 2px solid rgba(0,0,0,.08);
+}
+.color-swatch.remove { background: #fff; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #999; }
+.verse-card.has-color { border-left-width: 5px; border-left-style: solid; }
 .arabic-text {
   font-family: 'Amiri', serif; font-size: 22px; direction: rtl;
   text-align: right; line-height: 2; color: #1a1a1a; margin-bottom: 10px;
@@ -593,6 +606,21 @@ let HADITH = [];
 let FIQH_DATA = [];
 let CONTRADICTIONS = [];
 
+// ── DEVICE ID (no login system on this site, so highlights are scoped
+//    per-browser via a stable random id kept in localStorage) ──────────
+function getDeviceId() {
+  let id = localStorage.getItem('qh_device_id');
+  if (!id) {
+    id = 'dev_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    localStorage.setItem('qh_device_id', id);
+  }
+  return id;
+}
+const DEVICE_ID = getDeviceId();
+let COLOR_TAGS = {}; // key "sura:aya" -> hex color
+
+const HIGHLIGHT_COLORS = ['#F5D97A','#A8D8B9','#A8C8E8','#E8A8C8','#D8A8E8','#E8B888'];
+
 // ── INIT ─────────────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', async function() {
   const params = new URLSearchParams(window.location.search);
@@ -744,39 +772,18 @@ async function loadThemeVerses() {
     
     console.log('Rendering', rows.length, 'verses');
     container.innerHTML = '<div class="loading-msg"><span class="spinner"></span> Rendering verses...</div>';
-    
-    // Render verses directly without using renderVerses()
-    let html = '';
-    const L = getLang();
-    
-    rows.forEach(v => {
-      const suraNum = v.sura;
-      const ayaNum = v.aya;
-      const SURA_NAMES = {1:'Al-Fatiha',2:'Al-Baqara',3:'Al-Imran',4:'An-Nisa',5:'Al-Maida',6:'Al-Anam',7:'Al-Araf',8:'Al-Anfal',9:'At-Tawba',10:'Yunus',11:'Hud',12:'Yusuf',13:'Ar-Rad',14:'Ibrahim',15:'Al-Hijr',16:'An-Nahl',17:'Al-Isra',18:'Al-Kahf',19:'Maryam',20:'Ta-Ha',21:'Al-Anbiya',22:'Al-Hajj',23:'Al-Muminun',24:'An-Nur',25:'Al-Furqan',26:'Ash-Shuara',27:'An-Naml',28:'Al-Qasas',29:'Al-Ankabut',30:'Ar-Rum',31:'Luqman',32:'As-Sajda',33:'Al-Ahzab',34:'Saba',35:'Al-Fatir',36:'Ya-Sin',37:'As-Saffat',38:'Sad',39:'Az-Zumar',40:'Ghafir',41:'Fussilat',42:'Ash-Shura',43:'Az-Zukhruf',44:'Ad-Dukhan',45:'Al-Jathiyah',46:'Al-Ahqaf',47:'Muhammad',48:'Al-Fath',49:'Al-Hujurat',50:'Qaf',51:'Adh-Dhariyat',52:'At-Tur',53:'An-Najm',54:'Al-Qamar',55:'Ar-Rahman',56:'Al-Waqi',57:'Al-Hadid',58:'Al-Mujadilah',59:'Al-Hashr',60:'Al-Mumtahanah',61:'As-Saff',62:'Al-Jumu',63:'Al-Munafiqun',64:'At-Taghabun',65:'At-Talaq',66:'At-Tahrim',67:'Al-Mulk',68:'Al-Qalam',69:'Al-Haqqah',70:'Al-Maarij',71:'Nuh',72:'Al-Jinn',73:'Al-Muzzammil',74:'Al-Muddaththir',75:'Al-Qiyamah',76:'Al-Insan',77:'Al-Mursalat',78:'An-Naba',79:'An-Naziat',80:'Abasa',81:'At-Takwir',82:'Al-Infitar',83:'Al-Mutaffifin',84:'Al-Inshiqaq',85:'Al-Buruj',86:'At-Tariq',87:'Al-Ala',88:'Al-Ghashiyah',89:'Al-Fajr',90:'Al-Balad',91:'Ash-Shams',92:'Al-Lail',93:'Ad-Duha',94:'Ash-Sharh',95:'At-Tin',96:'Al-Alaq',97:'Al-Qadr',98:'Al-Bayyinah',99:'Az-Zalzalah',100:'Al-Adiyat',101:'Al-Qaria',102:'At-Takathur',103:'Al-Asr',104:'Al-Humazah',105:'Al-Fil',106:'Quraysh',107:'Al-Maun',108:'Al-Kawthar',109:'Al-Kafiroon',110:'An-Nasr',111:'Al-Masad',112:'Al-Ikhlas',113:'Al-Falaq',114:'An-Nas'};
-      const sn = SURA_NAMES[suraNum] || 'Surah ' + suraNum;
-      
-      html += '<div style="padding:14px;border-bottom:1px solid #E8E0D0;">';
-      html += '<div style="font-size:11px;font-weight:800;color:#B8902A;margin-bottom:8px;">' + suraNum + ':' + ayaNum + ' — ' + sn + '</div>';
-      
-      if (L.ar && v.arabic) {
-        html += '<div style="font-family:Amiri,serif;font-size:18px;direction:rtl;text-align:right;line-height:1.8;margin-bottom:10px;color:#1A1A1A;font-weight:bold;">' + esc(v.arabic) + '</div>';
-      }
-      if (L.tr && v.arabic_transliteration) {
-        html += '<div style="font-size:11px;color:#666;line-height:1.6;margin-bottom:6px;font-weight:bold;">' + esc(v.arabic_transliteration) + '</div>';
-      }
-      if (L.en && v.english) {
-        html += '<div style="font-size:12px;color:#444;line-height:1.6;margin-bottom:6px;">' + esc(v.english) + '</div>';
-      }
-      if (L.ti && v.tigrinya) {
-        html += '<div style="font-size:13px;color:#000;line-height:1.6;margin-bottom:4px;">' + esc(v.tigrinya) + '</div>';
-      }
-      if (L.am && v.amharic) {
-        html += '<div style="font-size:12px;color:#333;line-height:1.6;">' + esc(v.amharic) + '</div>';
-      }
-      html += '</div>';
-    });
-    
-    container.innerHTML = html;
+
+    // Build SURAS lookup so renderVerseCard() shows sura names correctly
+    const SURA_NAMES = {1:'Al-Fatiha',2:'Al-Baqara',3:'Al-Imran',4:'An-Nisa',5:'Al-Maida',6:'Al-Anam',7:'Al-Araf',8:'Al-Anfal',9:'At-Tawba',10:'Yunus',11:'Hud',12:'Yusuf',13:'Ar-Rad',14:'Ibrahim',15:'Al-Hijr',16:'An-Nahl',17:'Al-Isra',18:'Al-Kahf',19:'Maryam',20:'Ta-Ha',21:'Al-Anbiya',22:'Al-Hajj',23:'Al-Muminun',24:'An-Nur',25:'Al-Furqan',26:'Ash-Shuara',27:'An-Naml',28:'Al-Qasas',29:'Al-Ankabut',30:'Ar-Rum',31:'Luqman',32:'As-Sajda',33:'Al-Ahzab',34:'Saba',35:'Al-Fatir',36:'Ya-Sin',37:'As-Saffat',38:'Sad',39:'Az-Zumar',40:'Ghafir',41:'Fussilat',42:'Ash-Shura',43:'Az-Zukhruf',44:'Ad-Dukhan',45:'Al-Jathiyah',46:'Al-Ahqaf',47:'Muhammad',48:'Al-Fath',49:'Al-Hujurat',50:'Qaf',51:'Adh-Dhariyat',52:'At-Tur',53:'An-Najm',54:'Al-Qamar',55:'Ar-Rahman',56:'Al-Waqi',57:'Al-Hadid',58:'Al-Mujadilah',59:'Al-Hashr',60:'Al-Mumtahanah',61:'As-Saff',62:'Al-Jumu',63:'Al-Munafiqun',64:'At-Taghabun',65:'At-Talaq',66:'At-Tahrim',67:'Al-Mulk',68:'Al-Qalam',69:'Al-Haqqah',70:'Al-Maarij',71:'Nuh',72:'Al-Jinn',73:'Al-Muzzammil',74:'Al-Muddaththir',75:'Al-Qiyamah',76:'Al-Insan',77:'Al-Mursalat',78:'An-Naba',79:'An-Naziat',80:'Abasa',81:'At-Takwir',82:'Al-Infitar',83:'Al-Mutaffifin',84:'Al-Inshiqaq',85:'Al-Buruj',86:'At-Tariq',87:'Al-Ala',88:'Al-Ghashiyah',89:'Al-Fajr',90:'Al-Balad',91:'Ash-Shams',92:'Al-Lail',93:'Ad-Duha',94:'Ash-Sharh',95:'At-Tin',96:'Al-Alaq',97:'Al-Qadr',98:'Al-Bayyinah',99:'Az-Zalzalah',100:'Al-Adiyat',101:'Al-Qaria',102:'At-Takathur',103:'Al-Asr',104:'Al-Humazah',105:'Al-Fil',106:'Quraysh',107:'Al-Maun',108:'Al-Kawthar',109:'Al-Kafiroon',110:'An-Nasr',111:'Al-Masad',112:'Al-Ikhlas',113:'Al-Falaq',114:'An-Nas'};
+    SURAS = Object.assign({}, SURAS, SURA_NAMES);
+
+    // Load any saved color-tags for these verses before first paint,
+    // so highlights show immediately instead of popping in after.
+    await loadColorTags();
+
+    // Use the real card renderer (gives us action buttons, deep-link,
+    // and color-tagging) instead of the old hand-built HTML strings.
+    renderVerses();
     console.log('Verses rendered successfully');
     
   } catch(e) {
@@ -798,13 +805,18 @@ function getLang() {
 function renderVerseCard(v, idx) {
   const L = getLang();
   const sn = SURAS[v.sura_id] || 'Surah ' + v.sura_id;
-  return '<div class="verse-card" id="vc-ta-'+v.sura_id+'-'+v.aya_number+'" onclick="if(!event.target.closest(\'button\'))openInMain('+v.sura_id+','+v.aya_number+')" style="cursor:pointer;">'
+  const key = v.sura_id + ':' + v.aya_number;
+  const color = COLOR_TAGS[key];
+  const cardStyle = color ? ' style="cursor:pointer;border-left-color:'+color+'"' : ' style="cursor:pointer;"';
+  const cardClass = 'verse-card' + (color ? ' has-color' : '');
+  return '<div class="'+cardClass+'" id="vc-ta-'+v.sura_id+'-'+v.aya_number+'" onclick="if(!event.target.closest(\'button\'))openInMain('+v.sura_id+','+v.aya_number+')"'+cardStyle+'>'
     + '<div class="verse-card-header">'
-      + '<div><span class="verse-ref">' + v.sura_id + ':' + v.aya_number + '</span><span class="verse-sura">' + esc(sn) + '</span></div>'
-      + '<div class="verse-actions">'
+      + '<div><span class="verse-ref" onclick="event.stopPropagation();openInMain('+v.sura_id+','+v.aya_number+')" style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;">' + v.sura_id + ':' + v.aya_number + '</span><span class="verse-sura">' + esc(sn) + '</span></div>'
+      + '<div class="verse-actions" style="position:relative;">'
         + '<button class="action-btn" onclick="event.stopPropagation();taRead('+idx+')">🔊</button>'
         + '<button class="action-btn" onclick="event.stopPropagation();taCopy('+idx+')">📋</button>'
         + '<button class="action-btn" onclick="event.stopPropagation();taShare('+idx+')">📤</button>'
+        + '<button class="action-btn" onclick="event.stopPropagation();toggleColorPicker('+idx+',this)" style="'+(color?'background:'+color+';border-color:'+color:'')+'">🎨</button>'
         + '<button class="action-btn primary" onclick="event.stopPropagation();openInMain('+v.sura_id+','+v.aya_number+')">Read in Context →</button>'
       + '</div>'
     + '</div>'
@@ -1535,6 +1547,71 @@ function taShare(idx) {
   const text = 'Quran ' + v.sura_id + ':' + v.aya_number + '\n' + (v.english||'');
   navigator.share ? navigator.share({ title: 'Quran ' + v.sura_id+':'+v.aya_number, text }).catch(()=>{})
     : navigator.clipboard.writeText(text).then(() => showToast('📋 Copied!')).catch(()=>{});
+}
+
+// ── COLOR TAG / HIGHLIGHT ─────────────────────────────────────────────
+async function loadColorTags() {
+  try {
+    const suraIds = [...new Set(VERSES.map(v => v.sura_id))];
+    if (!suraIds.length) return;
+    const filter = 'device_id=eq.' + encodeURIComponent(DEVICE_ID)
+      + '&action_type=eq.color_tag&surah=in.(' + suraIds.join(',') + ')';
+    const res = await fetch(SB_URL + '/rest/v1/verse_actions?' + filter, { headers: HDR });
+    if (!res.ok) return;
+    const rows = await res.json();
+    rows.forEach(r => { COLOR_TAGS[r.surah + ':' + r.ayah] = r.color; });
+  } catch (e) { /* non-fatal, highlights just won't show as persisted */ }
+}
+
+function toggleColorPicker(idx, btnEl) {
+  document.querySelectorAll('.color-swatch-popover').forEach(p => p.remove());
+  const v = VERSES[idx];
+  if (!v) return;
+  const pop = document.createElement('div');
+  pop.className = 'color-swatch-popover';
+  const rect = btnEl.getBoundingClientRect();
+  pop.style.top = (btnEl.offsetTop + btnEl.offsetHeight + 4) + 'px';
+  pop.style.right = '0px';
+  HIGHLIGHT_COLORS.forEach(c => {
+    const sw = document.createElement('div');
+    sw.className = 'color-swatch';
+    sw.style.background = c;
+    sw.onclick = (e) => { e.stopPropagation(); setColorTag(v.sura_id, v.aya_number, c); pop.remove(); };
+    pop.appendChild(sw);
+  });
+  const rm = document.createElement('div');
+  rm.className = 'color-swatch remove';
+  rm.textContent = '✕';
+  rm.onclick = (e) => { e.stopPropagation(); setColorTag(v.sura_id, v.aya_number, null); pop.remove(); };
+  pop.appendChild(rm);
+  btnEl.parentElement.appendChild(pop);
+  setTimeout(() => {
+    document.addEventListener('click', function h(ev) {
+      if (!pop.contains(ev.target)) { pop.remove(); document.removeEventListener('click', h); }
+    });
+  }, 0);
+}
+
+async function setColorTag(sura, aya, color) {
+  const key = sura + ':' + aya;
+  if (color) COLOR_TAGS[key] = color; else delete COLOR_TAGS[key];
+  renderVerses(); // re-render so the border/dot updates immediately
+  try {
+    if (color) {
+      await fetch(SB_URL + '/rest/v1/verse_actions?on_conflict=device_id,surah,ayah,action_type', {
+        method: 'POST',
+        headers: Object.assign({}, HDR, { Prefer: 'resolution=merge-duplicates' }),
+        body: JSON.stringify({ device_id: DEVICE_ID, surah: sura, ayah: aya, action_type: 'color_tag', color })
+      });
+      showToast('🎨 Color saved');
+    } else {
+      await fetch(SB_URL + '/rest/v1/verse_actions?device_id=eq.' + encodeURIComponent(DEVICE_ID)
+        + '&surah=eq.' + sura + '&ayah=eq.' + aya + '&action_type=eq.color_tag', {
+        method: 'DELETE', headers: HDR
+      });
+      showToast('Color removed');
+    }
+  } catch (e) { showToast('⚠️ Could not save — check connection'); }
 }
 
 function addThemeToPresentation() {
