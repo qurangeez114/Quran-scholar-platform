@@ -1336,10 +1336,10 @@ body { padding-bottom: 80px !important; }
         oninput="renderLangChips(this.value)"
         style="width:100%;box-sizing:border-box;padding:12px 16px;border:2px solid #E8C97B;border-radius:22px;font-size:15px;background:#FDF8EE;color:#1a1a1a;outline:none;margin-bottom:16px;flex-shrink:0;">
 
-      <div style="font-size:11px;font-weight:700;color:#B8902A;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;flex-shrink:0;" id="langChipsSectionLabel">Currently Selected</div>
+      <div style="font-size:11px;font-weight:700;color:#B8902A;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;flex-shrink:0;" id="langChipsSectionLabel">All Languages — tap to add</div>
       <div id="langChipsContainer" style="display:flex;flex-wrap:wrap;gap:10px;overflow-y:auto;flex:1;padding-bottom:8px;"></div>
 
-      <div style="font-size:12px;color:#999;text-align:center;margin-top:10px;flex-shrink:0;">Type above to find and add more languages</div>
+      <div style="font-size:12px;color:#999;text-align:center;margin-top:10px;flex-shrink:0;">Selected languages are highlighted and shown first</div>
     </div>
 
     <!-- Search Results Panel (overlays verse area) -->
@@ -7462,8 +7462,11 @@ function renderLangChips(query) {
   const q = (query || '').trim().toLowerCase();
   let keys;
   if (!q) {
-    keys = Object.keys(ALL_LANGS).filter(k => langState[k]);
-    if (sectionLabel) sectionLabel.textContent = 'Currently Selected';
+    // Show every language, selected ones first, so there's always something
+    // to browse and tap — never a blank panel.
+    keys = Object.keys(ALL_LANGS).sort((a, b) => (langState[b] ? 1 : 0) - (langState[a] ? 1 : 0));
+    const activeCount = keys.filter(k => langState[k]).length;
+    if (sectionLabel) sectionLabel.textContent = activeCount ? 'All Languages (selected first)' : 'All Languages — tap to add';
   } else {
     keys = Object.keys(ALL_LANGS).filter(k => {
       const meta = ALL_LANGS[k];
