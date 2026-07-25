@@ -4409,12 +4409,26 @@ let searchTimeout = null;
 
 function onSearchInput(val) {
   clearTimeout(searchTimeout);
-  if (val.trim().length < 2) {
+  const trimmed = val.trim();
+  if (trimmed.length < 2) {
     document.getElementById('searchResultsPanel').style.display = 'none';
     document.getElementById('verseArea').style.display = '';
     return;
   }
-  searchTimeout = setTimeout(() => runWordSearch(val.trim()), 500);
+  // Fast path: "5:20" style verse references jump straight to the verse
+  // instead of running a full-text search for the literal string "5:20".
+  const verseRefMatch = trimmed.match(/^(\d{1,3})\s*:\s*(\d{1,3})$/);
+  if (verseRefMatch) {
+    const sura = parseInt(verseRefMatch[1], 10);
+    const aya = parseInt(verseRefMatch[2], 10);
+    if (sura >= 1 && sura <= 114 && aya >= 1) {
+      document.getElementById('searchResultsPanel').style.display = 'none';
+      document.getElementById('verseArea').style.display = '';
+      navToVerse(sura, aya);
+      return;
+    }
+  }
+  searchTimeout = setTimeout(() => runWordSearch(trimmed), 500);
 }
 
 function highlightWord(text, word) {
