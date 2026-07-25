@@ -1332,31 +1332,14 @@ body { padding-bottom: 80px !important; }
         </div>
       </div>
 
-      <!-- Arabic Script -->
-      <div style="font-size:10px;font-weight:700;color:#B8902A;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">Arabic Script</div>
-      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
-        <div class="lang-chip" id="chip-arabic" onclick="toggleLangChip('arabic')">🔤 Arabic</div>
-        <div class="lang-chip" id="chip-translit" onclick="toggleLangChip('translit')">Aa Transliteration</div>
-        <div class="lang-chip" id="chip-urdu" onclick="toggleLangChip('urdu')">اردو Urdu</div>
-      </div>
+      <input id="langSearchInput" type="text" placeholder="Type a language or country (e.g. Kenya, Spanish, Bangladesh)..."
+        oninput="renderLangChips(this.value)"
+        style="width:100%;box-sizing:border-box;padding:10px 14px;border:2px solid #E8C97B;border-radius:20px;font-size:14px;background:#FDF8EE;color:#1a1a1a;outline:none;margin-bottom:12px;">
 
-      <!-- African Languages -->
-      <div style="font-size:10px;font-weight:700;color:#B8902A;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">African Languages</div>
-      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
-        <div class="lang-chip" id="chip-tigrinya" onclick="toggleLangChip('tigrinya')">ት Tigrinya</div>
-        <div class="lang-chip" id="chip-amharic" onclick="toggleLangChip('amharic')">አ Amharic</div>
-        <div class="lang-chip" id="chip-oromo" onclick="toggleLangChip('oromo')">O Oromo</div>
-        <div class="lang-chip" id="chip-somali" onclick="toggleLangChip('somali')">S Somali</div>
-      </div>
+      <div style="font-size:10px;font-weight:700;color:#B8902A;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;" id="langChipsSectionLabel">Currently Selected</div>
+      <div id="langChipsContainer" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;"></div>
 
-      <!-- European Languages -->
-      <div style="font-size:10px;font-weight:700;color:#B8902A;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">European Languages</div>
-      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
-        <div class="lang-chip" id="chip-english" onclick="toggleLangChip('english')">A English</div>
-        <div class="lang-chip" id="chip-german" onclick="toggleLangChip('german')">DE German</div>
-      </div>
-
-      <div style="font-size:11px;color:#999;text-align:center;margin-top:8px;">More languages coming soon</div>
+      <div style="font-size:11px;color:#999;text-align:center;margin-top:8px;">Start typing above to find and add more languages</div>
     </div>
 
     <!-- Search Results Panel (overlays verse area) -->
@@ -2625,6 +2608,31 @@ async function loadSura(id) {
         .then(d => d.data?.ayahs || [])
         .catch(() => [])
     ]);
+
+    // Languages that live in verse_translations (verse_key + lang) rather than
+    // their own column on `ayas`. Fetched separately and merged in below.
+    const VT_LANGS = { bn: 'bengali', ms: 'malay', es: 'spanish', zh: 'chinese', sw: 'swahili', ha: 'hausa' };
+    try {
+      const vtRows = await sbFetch('verse_translations', {
+        select: 'verse_key,lang,text',
+        verse_key: `like.${id}:*`,
+        lang: `in.(${Object.keys(VT_LANGS).join(',')})`
+      });
+      const vtMap = {}; // aya_number -> { bengali: '...', malay: '...', ... }
+      vtRows.forEach(r => {
+        const parts = r.verse_key.split(':');
+        if (parts[0] !== String(id)) return; // guard against loose "like" matches (e.g. sura 1 vs 10, 11...)
+        const ayaNum = parts[1];
+        (vtMap[ayaNum] = vtMap[ayaNum] || {})[VT_LANGS[r.lang]] = r.text;
+      });
+      ayas.forEach(a => {
+        const extra = vtMap[String(a.aya_number)] || {};
+        Object.values(VT_LANGS).forEach(field => { a[field] = extra[field] || ''; });
+      });
+    } catch (e) {
+      // Non-fatal: if this fetch fails, the sura still loads with its existing languages.
+      ayas.forEach(a => { Object.values(VT_LANGS).forEach(field => { a[field] = a[field] || ''; }); });
+    }
     // Merge transliteration and verified Arabic into ayas.
     // Important: never use English/Tigrinya translation as Arabic text.
     const translitMap = {};
@@ -2722,6 +2730,12 @@ function renderVerses(ayas, suraId) {
     const amharic = aya.amharic || '';
     const oromo = aya.oromo || '';
     const somali = aya.somali || '';
+    const bengali = aya.bengali || '';
+    const malay = aya.malay || '';
+    const spanish = aya.spanish || '';
+    const chinese = aya.chinese || '';
+    const swahili = aya.swahili || '';
+    const hausa = aya.hausa || '';
     const translit = aya.arabic_transliteration || transliterateArabic(arabic);
     return `
     <div class="verse-card" id="vc-${aya.aya_number}" data-sura="${suraId}" data-aya="${aya.aya_number}">
@@ -2783,6 +2797,12 @@ function renderVerses(ayas, suraId) {
           ${somali ? `<div class="lang-somali" style="margin-top:14px;padding-bottom:12px;border-bottom:1px solid #E8DDC0;${!langState.somali?'display:none':''}"><div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;"><div style="font-size:10px;font-weight:700;letter-spacing:1.2px;color:#2F5C7A;text-transform:uppercase;">Soomaali · ${suraId}:${aya.aya_number}</div></div><div style="font-size:15px;color:#1A4570;line-height:1.7;font-weight:600;">${escapeHtml(somali)}</div></div>` : ''}
           ${aya.german ? `<div class="lang-german" style="margin-top:14px;padding-bottom:12px;border-bottom:1px solid #E8DDC0;${!langState.german?'display:none':''}"><div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;"><div style="font-size:10px;font-weight:700;letter-spacing:1.2px;color:#333;text-transform:uppercase;">Deutsch · ${suraId}:${aya.aya_number}</div></div><div style="font-size:15px;color:#222;line-height:1.7;font-weight:600;">${escapeHtml(aya.german)}</div></div>` : ''}
           ${aya.urdu ? `<div class="lang-urdu" style="margin-top:14px;padding-bottom:0;${!langState.urdu?'display:none':''}"><div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;"><div style="font-size:10px;font-weight:700;letter-spacing:1.2px;color:#2D6A4F;text-transform:uppercase;">Urdu · اردو · ${suraId}:${aya.aya_number}</div></div><div style="font-size:16px;color:#1A3A2A;line-height:2;font-weight:600;direction:rtl;text-align:right;">${escapeHtml(aya.urdu)}</div></div>` : ''}
+          ${bengali ? `<div class="lang-bengali" style="margin-top:14px;padding-bottom:12px;border-bottom:1px solid #E8DDC0;${!langState.bengali?'display:none':''}"><div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;"><div style="font-size:10px;font-weight:700;letter-spacing:1.2px;color:#2B6E5C;text-transform:uppercase;">Bengali · বাংলা · ${suraId}:${aya.aya_number}</div></div><div style="font-size:15px;color:#1A4A3E;line-height:1.75;font-weight:600;">${escapeHtml(bengali)}</div></div>` : ''}
+          ${malay ? `<div class="lang-malay" style="margin-top:14px;padding-bottom:12px;border-bottom:1px solid #E8DDC0;${!langState.malay?'display:none':''}"><div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;"><div style="font-size:10px;font-weight:700;letter-spacing:1.2px;color:#7A3B69;text-transform:uppercase;">Malay · Bahasa Melayu · ${suraId}:${aya.aya_number}</div></div><div style="font-size:15px;color:#5A2B4E;line-height:1.7;font-weight:600;">${escapeHtml(malay)}</div></div>` : ''}
+          ${spanish ? `<div class="lang-spanish" style="margin-top:14px;padding-bottom:12px;border-bottom:1px solid #E8DDC0;${!langState.spanish?'display:none':''}"><div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;"><div style="font-size:10px;font-weight:700;letter-spacing:1.2px;color:#A83240;text-transform:uppercase;">Español · ${suraId}:${aya.aya_number}</div></div><div style="font-size:15px;color:#7A2028;line-height:1.7;font-weight:600;">${escapeHtml(spanish)}</div></div>` : ''}
+          ${chinese ? `<div class="lang-chinese" style="margin-top:14px;padding-bottom:12px;border-bottom:1px solid #E8DDC0;${!langState.chinese?'display:none':''}"><div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;"><div style="font-size:10px;font-weight:700;letter-spacing:1.2px;color:#B8860B;text-transform:uppercase;">中文 · ${suraId}:${aya.aya_number}</div></div><div style="font-size:16px;color:#5A4200;line-height:1.9;font-weight:600;">${escapeHtml(chinese)}</div></div>` : ''}
+          ${swahili ? `<div class="lang-swahili" style="margin-top:14px;padding-bottom:12px;border-bottom:1px solid #E8DDC0;${!langState.swahili?'display:none':''}"><div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;"><div style="font-size:10px;font-weight:700;letter-spacing:1.2px;color:#4A7A2B;text-transform:uppercase;">Kiswahili · ${suraId}:${aya.aya_number}</div></div><div style="font-size:15px;color:#345A1A;line-height:1.7;font-weight:600;">${escapeHtml(swahili)}</div></div>` : ''}
+          ${hausa ? `<div class="lang-hausa" style="margin-top:14px;padding-bottom:0;${!langState.hausa?'display:none':''}"><div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;"><div style="font-size:10px;font-weight:700;letter-spacing:1.2px;color:#2B5A7A;text-transform:uppercase;">Hausa · ${suraId}:${aya.aya_number}</div></div><div style="font-size:15px;color:#1A3E56;line-height:1.7;font-weight:600;">${escapeHtml(hausa)}</div></div>` : ''}
         </div>
         <button class="expand-btn">▼ Study</button>
       </div>
@@ -4779,7 +4799,11 @@ function toggleReadMode() {
   }
 }
 
-const langStateDefault = { arabic: true, translit: true, english: true, tigrinya: true, amharic: true, oromo: true, somali: true, german: true, urdu: true };
+const langStateDefault = {
+  arabic: true, english: true,
+  translit: false, tigrinya: false, amharic: false, oromo: false, somali: false, german: false, urdu: false,
+  bengali: false, malay: false, spanish: false, chinese: false, swahili: false, hausa: false
+};
 const langState = (() => {
   try {
     const saved = JSON.parse(localStorage.getItem('langState'));
@@ -7386,11 +7410,27 @@ function startVerseVoice(num) {
 }
 
 // ── LANGUAGE PICKER ─────────────────────────────────────────────
-const LANG_LABELS = {
-  arabic:'Arabic', translit:'Transliteration', english:'English',
-  tigrinya:'Tigrinya', amharic:'Amharic', oromo:'Oromo',
-  somali:'Somali', german:'German', urdu:'Urdu'
+// Full catalog: key -> {label, badge, aliases}. "aliases" lets a person type
+// a country name (e.g. "Kenya") and find the right language (Swahili).
+const ALL_LANGS = {
+  arabic:    { label:'Arabic',         badge:'🔤', aliases:['saudi arabia','quran','fusha'] },
+  translit:  { label:'Transliteration',badge:'Aa', aliases:['romanization','latin'] },
+  english:   { label:'English',        badge:'A',  aliases:['usa','uk','united states','united kingdom'] },
+  tigrinya:  { label:'Tigrinya',       badge:'ት',  aliases:['eritrea','tigray'] },
+  amharic:   { label:'Amharic',        badge:'አ',  aliases:['ethiopia'] },
+  oromo:     { label:'Oromo',          badge:'O',  aliases:['ethiopia','afaan oromoo'] },
+  somali:    { label:'Somali',         badge:'S',  aliases:['somalia','soomaali'] },
+  german:    { label:'German',         badge:'DE', aliases:['germany','deutsch','austria'] },
+  urdu:      { label:'Urdu',           badge:'اردو', aliases:['pakistan'] },
+  bengali:   { label:'Bengali',        badge:'ব',  aliases:['bangladesh','bangla','india'] },
+  malay:     { label:'Malay',          badge:'M',  aliases:['malaysia','brunei','singapore','bahasa melayu'] },
+  spanish:   { label:'Spanish',        badge:'E',  aliases:['spain','mexico','latin america','español'] },
+  chinese:   { label:'Chinese',        badge:'中', aliases:['china','mandarin','中文'] },
+  swahili:   { label:'Swahili',        badge:'K',  aliases:['kenya','tanzania','uganda','kiswahili'] },
+  hausa:     { label:'Hausa',          badge:'H',  aliases:['nigeria','niger','west africa'] },
 };
+// Kept for backward compatibility with any old code paths that read LANG_LABELS.
+const LANG_LABELS = Object.fromEntries(Object.entries(ALL_LANGS).map(([k,v]) => [k, v.label]));
 
 function toggleLangPicker() {
   const panel = document.getElementById('langPickerPanel');
@@ -7398,7 +7438,11 @@ function toggleLangPicker() {
   const isOpen = panel.style.display !== 'none';
   panel.style.display = isOpen ? 'none' : 'block';
   overlay.style.display = isOpen ? 'none' : 'block';
-  if (!isOpen) syncChips();
+  if (!isOpen) {
+    const input = document.getElementById('langSearchInput');
+    if (input) input.value = '';
+    renderLangChips('');
+  }
 }
 
 function closeLangPicker() {
@@ -7406,11 +7450,36 @@ function closeLangPicker() {
   document.getElementById('langPickerOverlay').style.display = 'none';
 }
 
+// Renders the chip list inside the picker. With no search text, shows only
+// the languages currently turned on (defaulting to English + Arabic for a
+// fresh user). Typing filters the FULL catalog by language name, native
+// name, or country alias, so a person can find e.g. Swahili by typing
+// "Kenya" and tap it straight on.
+function renderLangChips(query) {
+  const container = document.getElementById('langChipsContainer');
+  const sectionLabel = document.getElementById('langChipsSectionLabel');
+  if (!container) return;
+  const q = (query || '').trim().toLowerCase();
+  let keys;
+  if (!q) {
+    keys = Object.keys(ALL_LANGS).filter(k => langState[k]);
+    if (sectionLabel) sectionLabel.textContent = 'Currently Selected';
+  } else {
+    keys = Object.keys(ALL_LANGS).filter(k => {
+      const meta = ALL_LANGS[k];
+      if (meta.label.toLowerCase().includes(q)) return true;
+      return (meta.aliases || []).some(a => a.toLowerCase().includes(q));
+    });
+    if (sectionLabel) sectionLabel.textContent = keys.length ? 'Matching Languages' : 'No matches — try another spelling';
+  }
+  container.innerHTML = keys.map(k => `
+    <div class="lang-chip${langState[k] ? ' active' : ''}" id="chip-${k}" onclick="toggleLangChip('${k}')">${ALL_LANGS[k].badge} ${ALL_LANGS[k].label}</div>
+  `).join('');
+}
+
 function syncChips() {
-  Object.keys(LANG_LABELS).forEach(lang => {
-    const chip = document.getElementById('chip-' + lang);
-    if (chip) chip.classList.toggle('active', !!langState[lang]);
-  });
+  const input = document.getElementById('langSearchInput');
+  renderLangChips(input ? input.value : '');
 }
 
 function toggleLangChip(lang) {
@@ -7422,7 +7491,7 @@ function toggleLangChip(lang) {
 }
 
 function setAllLangs(on) {
-  Object.keys(langState).forEach(k => { langState[k] = on; });
+  Object.keys(ALL_LANGS).forEach(k => { langState[k] = on; });
   try { localStorage.setItem('langState', JSON.stringify(langState)); } catch {}
   syncChips();
   applyLangState();
