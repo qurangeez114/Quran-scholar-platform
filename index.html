@@ -4643,13 +4643,15 @@ async function navToVerse(suraId, ayahNum) {
   document.getElementById('backBtn').textContent = '← Back to ' + (allSuras.find(s => (s.sura_id||s.id) === currentSura)?.sura_name || 'Previous');
   window._pendingHistAya = ayahNum;
   await loadSura(suraId);
-  setTimeout(() => {
+  // Verse card is already rendered synchronously by the time loadSura()
+  // resolves — one frame is enough, no need for a fixed hundreds-of-ms wait.
+  requestAnimationFrame(() => {
     const card = document.getElementById('vc-' + ayahNum);
     if (card) {
       card.scrollIntoView({ behavior: 'smooth', block: 'center' });
       highlightVerse(card);
     }
-  }, 600);
+  });
 }
 
 // Wrapper used by clickable result cards. Skips navigation if:
@@ -5121,7 +5123,10 @@ async function gotoVerse() {
   }
   if (aya && aya >= 1) window._pendingHistAya = aya;
   await loadSura(sura);
-  setTimeout(() => {
+  // The verse card is already in the DOM by the time loadSura() resolves
+  // (renderVerses sets innerHTML synchronously) — no need to wait hundreds
+  // of milliseconds. One animation frame is enough for layout to settle.
+  requestAnimationFrame(() => {
     if (aya && aya >= 1) {
       const card = document.getElementById('vc-' + aya);
       if (card) {
@@ -5131,7 +5136,7 @@ async function gotoVerse() {
         alert('Verse ' + aya + ' not found in Sura ' + sura);
       }
     }
-  }, 700);
+  });
 }
 
 function populateGotoSuraSelect() {
