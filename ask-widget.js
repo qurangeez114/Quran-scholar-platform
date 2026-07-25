@@ -205,13 +205,6 @@
   }
 
   function init() {
-    // TEMP DIAGNOSTIC — remove once widget visibility is confirmed
-    var testMarker = document.createElement('div');
-    testMarker.id = 'askqh-test-marker';
-    testMarker.textContent = 'ASK WIDGET LOADED';
-    testMarker.style.cssText = 'position:fixed;bottom:80px;left:10px;z-index:999999;background:#ff0000;color:#fff;padding:6px 10px;font-family:monospace;font-size:12px;border-radius:4px;';
-    document.body.appendChild(testMarker);
-
     var wrap = document.createElement('div');
     wrap.id = 'askqh-root';
     wrap.innerHTML = widgetHTML();
