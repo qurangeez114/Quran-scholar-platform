@@ -211,7 +211,36 @@ const params = new URLSearchParams(location.search);
 const STORY = params.get('story') || 'creation_adam';
 const LANG_NAMES = { en:'English', ur:'اردو', am:'አማርኛ', ti:'ትግርኛ', tr:'Türkçe', fr:'Français', id:'Indonesia', fa:'فارسی', so:'Somali', om:'Oromoo', de:'Deutsch' };
 const ETH = new Set(['am','ti']);
-let ROWS = [], SUMMARY=null, EVALS=[], order='nuzul', langs=new Set(['en']), qira='arabic';
+let ROWS = [], SUMMARY=null, EVALS=[], order='nuzul', langs=new Set(['en']), qira='arabic', showTranslit=false;
+function transliterateArabic(text){
+  if(!text)return'';
+  const map={};
+  map[0x0628]='b';map[0x062A]='t';map[0x062B]='th';map[0x062C]='j';
+  map[0x062D]='h';map[0x062E]='kh';map[0x062F]='d';map[0x0630]='dh';
+  map[0x0631]='r';map[0x0632]='z';map[0x0633]='s';map[0x0634]='sh';
+  map[0x0635]='s';map[0x0636]='d';map[0x0637]='t';map[0x0638]='z';
+  map[0x0639]="'";map[0x063A]='gh';map[0x0641]='f';map[0x0642]='q';
+  map[0x0643]='k';map[0x0644]='l';map[0x0645]='m';map[0x0646]='n';
+  map[0x0647]='h';map[0x0648]='w';map[0x064A]='y';map[0x0649]='a';
+  map[0x0627]='a';map[0x0623]='a';map[0x0625]='i';map[0x0622]='aa';
+  map[0x0621]="'";map[0x0626]='y';map[0x0624]='w';
+  map[0x0629]='a';
+  map[0x064E]='a';map[0x064F]='u';map[0x0650]='i';
+  map[0x0651]='';map[0x0652]='';map[0x0670]='a';map[0x0653]='';
+  map[0x064B]='an';map[0x064C]='un';map[0x064D]='in';
+  map[0x0654]='';map[0x0655]='';map[0x0656]='';map[0x0657]='';
+  map[0x0658]='';map[0x065C]='u';map[0x065D]='u';map[0x065E]='a';
+  map[0x065F]='i';map[0x0610]='';map[0x0611]='';map[0x0612]='';
+  map[0x0613]='';map[0x0614]='';map[0x0615]='';map[0x0616]='';
+  map[0x0617]='a';map[0x0618]='a';map[0x0619]='u';map[0x061A]='i';
+  let result='';
+  for(let i=0;i<text.length;i++){
+    const code=text.charCodeAt(i);
+    if(map[code]!==undefined)result+=map[code];
+    else if(code===32)result+=' ';
+  }
+  return result.replace(/ +/g,' ').trim();
+}
 function renderEval(){
   const el=document.getElementById('eval'); if(!EVALS||!EVALS.length){ el.style.display='none'; return; }
   el.style.display='';
@@ -261,6 +290,9 @@ function buildLangMenu(){
   [...set].sort().forEach(l=>{ const b=document.createElement('button'); b.className='qbtn'+(langs.has(l)?' active':''); b.textContent=LANG_NAMES[l]||l;
     b.onclick=()=>{ if(langs.has(l)){ if(langs.size>1) langs.delete(l); } else langs.add(l); b.classList.toggle('active',langs.has(l)); renderCols(); };
     c.appendChild(b); });
+  const tBtn=document.createElement('button'); tBtn.className='qbtn'+(showTranslit?' active':''); tBtn.textContent='Aa Transliteration';
+  tBtn.onclick=()=>{ showTranslit=!showTranslit; tBtn.classList.toggle('active',showTranslit); renderCols(); };
+  c.appendChild(tBtn);
 }
 function setOrder(o){ order=o;
   document.getElementById('tgl-nuzul').classList.toggle('active',o==='nuzul');
@@ -325,6 +357,7 @@ function renderCols(){
            '<span class="vk">'+key+'</span>'+
            (v.diff_category?'<span class="diff-tag" style="background:'+color+'">'+v.diff_category.replace(/_/g,' ')+'</span>':'')+
            '<div class="arabic">'+ar+'</div>'+
+           (showTranslit&&ar?'<div class="trans" style="color:#7A5010;font-style:italic">'+transliterateArabic(ar)+'</div>':'')+
            tblock+
            (v.speaker?'<div class="speaker">— '+v.speaker+(v.person?' · '+v.person:'')+(v.narrator?' · narrator: '+v.narrator:'')+'</div>':'')+
            (v.analysis_note?'<span class="note-toggle" onclick="this.nextElementSibling.classList.toggle(\'show\')">ⓘ why</span><div class="note">'+v.analysis_note+'</div>':'')+
