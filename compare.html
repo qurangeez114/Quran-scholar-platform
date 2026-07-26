@@ -167,6 +167,13 @@
   background: rgba(0,0,0,0.08); color: #6B5A3E; border: none; border-radius: 50%;
   font-size: 14px; font-weight: 700; line-height: 1; cursor: pointer;
 }
+#qnav-return-bar button.qnav-drag {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 20px; height: 24px; padding: 0; margin-right: 2px; flex-shrink: 0;
+  background: transparent; color: #B8902A; border: none;
+  font-size: 15px; line-height: 1; cursor: grab; touch-action: none;
+}
+#qnav-return-bar button.qnav-drag:active { cursor: grabbing; }
 
 
 
@@ -666,6 +673,12 @@ window.QNAV_PAGE_ICON = '📚';
     var bar = document.createElement('div');
     bar.id = 'qnav-return-bar';
 
+    var dragHandle = document.createElement('button');
+    dragHandle.className = 'qnav-drag';
+    dragHandle.innerHTML = '⠿';
+    dragHandle.title = 'Drag to move';
+    bar.appendChild(dragHandle);
+
     if (prev) {
       var backBtn = document.createElement('button');
       backBtn.innerHTML = '← Back: ' + esc(prev.icon || '📄') + ' ' + esc(prev.label || 'Back');
@@ -694,6 +707,57 @@ window.QNAV_PAGE_ICON = '📚';
     bar.appendChild(closeBtn);
 
     document.body.insertBefore(bar, document.body.firstChild);
+    makeQnavDraggable(bar, dragHandle);
+  }
+
+  function makeQnavDraggable(el, handle){
+    var POS_KEY = 'qnav_bar_pos';
+    var saved = null;
+    try { saved = JSON.parse(localStorage.getItem(POS_KEY) || 'null'); } catch(e){}
+    function clamp(top, left){
+      var r = el.getBoundingClientRect();
+      var maxLeft = window.innerWidth - r.width - 4;
+      var maxTop = window.innerHeight - r.height - 4;
+      return { top: Math.max(4, Math.min(top, maxTop)), left: Math.max(4, Math.min(left, maxLeft)) };
+    }
+    if (saved && typeof saved.top === 'number' && typeof saved.left === 'number') {
+      var c = clamp(saved.top, saved.left);
+      el.style.top = c.top + 'px'; el.style.left = c.left + 'px';
+      el.style.bottom = 'auto'; el.style.right = 'auto';
+    }
+    var dragging = false, startX = 0, startY = 0, origTop = 0, origLeft = 0, moved = false;
+    handle.addEventListener('pointerdown', function(e){
+      dragging = true; moved = false;
+      try { handle.setPointerCapture(e.pointerId); } catch(ex){}
+      var r = el.getBoundingClientRect();
+      origTop = r.top; origLeft = r.left;
+      el.style.top = origTop + 'px'; el.style.left = origLeft + 'px';
+      el.style.bottom = 'auto'; el.style.right = 'auto';
+      startX = e.clientX; startY = e.clientY;
+      e.preventDefault();
+    });
+    handle.addEventListener('pointermove', function(e){
+      if (!dragging) return;
+      var dx = e.clientX - startX, dy = e.clientY - startY;
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) moved = true;
+      el.style.left = (origLeft + dx) + 'px';
+      el.style.top = (origTop + dy) + 'px';
+    });
+    function endDrag(){
+      if (!dragging) return;
+      dragging = false;
+      if (!moved) return;
+      var c = clamp(parseFloat(el.style.top), parseFloat(el.style.left));
+      el.style.top = c.top + 'px'; el.style.left = c.left + 'px';
+      try { localStorage.setItem(POS_KEY, JSON.stringify({ top: c.top, left: c.left })); } catch(e){}
+    }
+    handle.addEventListener('pointerup', endDrag);
+    handle.addEventListener('pointercancel', endDrag);
+    window.addEventListener('resize', function(){
+      if (el.style.left === '' || el.style.left === undefined) return;
+      var c = clamp(parseFloat(el.style.top)||0, parseFloat(el.style.left)||0);
+      el.style.top = c.top + 'px'; el.style.left = c.left + 'px';
+    });
   }
 
   /* Restore scroll position (both axes) after a Back jump, once content has
