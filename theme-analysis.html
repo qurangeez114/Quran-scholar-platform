@@ -822,7 +822,7 @@ function renderVerseCard(v, idx) {
     + '</div>'
     + '<div class="verse-body">'
       + (L.ar && v.arabic ? '<div class="arabic-text" style="font-weight:bold;">'+esc(v.arabic)+'</div>' : '')
-      + (L.tr && v.arabic_transliteration ? '<div class="translit-text" style="font-size:13px;color:#666;line-height:1.8;margin-bottom:4px;direction:ltr;text-align:left;font-weight:bold;">'+esc(v.arabic_transliteration)+'</div>' : '')
+      + (L.tr && v.arabic ? '<div class="translit-text" style="font-size:13px;color:#666;line-height:1.8;margin-bottom:4px;direction:ltr;text-align:left;font-weight:bold;">'+esc(transliterateArabic(v.arabic))+'</div>' : '')
       + (L.en && v.english ? '<div class="english-text" style="font-weight:bold;">'+esc(v.english)+'</div>' : '')
       + (L.ti && v.tigrinya ? '<div class="tigrinya-text" style="font-weight:bold;">'+esc(v.tigrinya)+'</div>' : '')
       + (L.am && v.amharic ? '<div class="amharic-text" style="font-weight:bold;">'+esc(v.amharic)+'</div>' : '')
@@ -1302,17 +1302,26 @@ function renderCompareTable(d) {
           <table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:8px;">
             <tr style="background:#FAFAFA;">
               <th style="padding:5px 8px;text-align:left;border:1px solid #EEE;width:70px;">Verse</th>
+              <th style="padding:5px 8px;text-align:right;border:1px solid #EEE;font-family:Amiri,serif;">Arabic</th>
+              <th style="padding:5px 8px;text-align:left;border:1px solid #EEE;">Transliteration</th>
               <th style="padding:5px 8px;text-align:left;border:1px solid #EEE;">Text</th>
               <th style="padding:5px 8px;text-align:center;border:1px solid #EEE;width:30px;">Grade</th>
               <th style="padding:5px 8px;text-align:left;border:1px solid #EEE;">Critical Note</th>
             </tr>
-            ${(beat.entries||[]).map((e,j)=>`
+            ${(beat.entries||[]).map((e,j)=>{
+              const m=(e.verse||'').match(/(\d+)\s*:\s*(\d+)/);
+              const vv=m?VERSES.find(x=>x.sura_id==+m[1]&&x.aya_number==+m[2]):null;
+              const arCell=vv&&vv.arabic?esc(vv.arabic):'—';
+              const trCell=vv&&vv.arabic?esc(transliterateArabic(vv.arabic)):'—';
+              return `
             <tr style="background:${j%2?'#FAFAFA':'#FFF'};">
               <td style="padding:5px 8px;border:1px solid #EEE;font-weight:700;white-space:nowrap;">${e.verse}</td>
+              <td style="padding:5px 8px;border:1px solid #EEE;font-family:Amiri,serif;direction:rtl;text-align:right;font-size:13px;">${arCell}</td>
+              <td style="padding:5px 8px;border:1px solid #EEE;color:#666;font-style:italic;">${trCell}</td>
               <td style="padding:5px 8px;border:1px solid #EEE;font-style:italic;color:#333;">"${e.text||''}"</td>
               <td style="padding:5px 8px;border:1px solid #EEE;text-align:center;font-size:14px;" title="${e.grade||''}">${gradeEmoji[e.grade]||'❓'}</td>
               <td style="padding:5px 8px;border:1px solid #EEE;color:${gradeColor[e.grade]||'#555'};font-size:10px;">${e.note||''}</td>
-            </tr>`).join('')}
+            </tr>`;}).join('')}
           </table>
           <div style="background:#FFF8E8;border-left:3px solid ${vc};padding:8px 10px;font-size:11px;color:#333;line-height:1.6;">
             ${ve} <strong>${beat.verdict}</strong> — ${beat.verdict_note||''}
