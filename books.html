@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Books Library — Quran Hikma</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=EB+Garamond:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'EB Garamond','Georgia',serif;background:#FDFAF4;color:#3A2E1A;padding-bottom:70px}
+  .topbar{background:#FFF8E8;border-bottom:1px solid #E8DDC0;padding:14px 16px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:50}
+  .topbar h1{font-size:19px;margin:0;flex:1;color:#5A3A10}
+  .qbtn{background:#fff;border:1.5px solid #D4A830;color:#7A5010;border-radius:20px;padding:7px 14px;font-family:'EB Garamond',serif;font-size:14px;font-weight:600;cursor:pointer}
+  .qbtn.active{background:#B8902A;color:#fff}
+  .qbtn.ghost{border-color:#ccc;color:#666}
+
+  /* ---- Library grid ---- */
+  #library{padding:16px}
+  .book-card{background:#fff;border:1px solid #E8DDC0;border-radius:14px;padding:18px;margin-bottom:14px;cursor:pointer;transition:box-shadow .15s}
+  .book-card:active{box-shadow:0 2px 10px rgba(0,0,0,.08)}
+  .book-title-ar{font-family:'Amiri',serif;font-size:26px;color:#3A2E1A;margin:0 0 4px;text-align:right;direction:rtl}
+  .book-title-en{font-size:15px;color:#7A5010;font-weight:600;margin:0 0 8px}
+  .book-meta{font-size:12.5px;color:#8a7a5a;line-height:1.6}
+  .book-desc{font-size:13.5px;color:#555;margin-top:8px;line-height:1.6}
+  .cat-pill{display:inline-block;background:#F3E9CE;color:#7A5010;font-size:11px;font-weight:700;padding:2px 10px;border-radius:10px;margin-bottom:8px}
+
+  /* ---- Reader ---- */
+  #reader{display:none;padding:14px}
+  .searchbar{display:flex;gap:8px;margin-bottom:12px}
+  .searchbar input{flex:1;padding:10px 14px;border-radius:20px;border:1.5px solid #E8DDC0;font-family:'EB Garamond',serif;font-size:15px}
+  .filter-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+  .filter-row select{padding:7px 10px;border-radius:10px;border:1.5px solid #E8DDC0;font-family:'EB Garamond',serif;font-size:13.5px;background:#fff;color:#5A3A10}
+  #entryCount{font-size:12.5px;color:#8a7a5a;text-align:center;margin-bottom:10px}
+
+  .entry-card{background:#fff;border:1px solid #E8DDC0;border-left:4px solid #B8902A;border-radius:10px;padding:16px;margin-bottom:14px}
+  .entry-badges{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+  .badge{font-size:11px;font-weight:700;padding:2px 9px;border-radius:9px}
+  .badge.narrator{background:#EFE6F5;color:#6A3E8A}
+  .badge.topic{background:#E4F0E9;color:#2E7D32}
+  .badge.grade-sahih{background:#E4F0E9;color:#2E7D32}
+  .badge.grade-hasan{background:#FFF3D6;color:#9A6A00}
+  .badge.grade-daif{background:#FBE4E4;color:#B23A3A}
+  .arabic-text{font-family:'Amiri',serif;font-size:20px;line-height:2.1;direction:rtl;text-align:right;color:#241a0a;user-select:text;margin-bottom:10px}
+  .english-text{font-size:14.5px;color:#444;line-height:1.7;margin-bottom:8px}
+  .grade-note{font-size:12px;color:#8a7a5a;font-style:italic;margin-bottom:10px}
+  .entry-actions{display:flex;gap:6px;flex-wrap:wrap;border-top:1px solid #F0E8D5;padding-top:10px}
+  .act-btn{background:#FBF6E9;border:1px solid #E8DDC0;color:#7A5010;border-radius:16px;padding:5px 12px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:'EB Garamond',serif}
+  .act-btn:active{background:#F3E9CE}
+  mark.hl{background:#FFE58A;padding:0 1px;border-radius:2px}
+  .note-box{margin-top:10px;background:#FFFBF0;border:1px dashed #D4A830;border-radius:8px;padding:10px;font-size:13px;color:#5A3A10}
+  .note-box textarea{width:100%;border:1px solid #E8DDC0;border-radius:6px;padding:8px;font-family:'EB Garamond',serif;font-size:13.5px;resize:vertical;min-height:60px}
+
+  /* selection popup */
+  #selPopup{display:none;position:fixed;z-index:9999;background:#3A2E1A;color:#fff;border-radius:8px;padding:6px 4px;box-shadow:0 4px 14px rgba(0,0,0,.3)}
+  #selPopup button{background:none;border:none;color:#fff;font-size:13px;padding:6px 10px;cursor:pointer;font-family:'EB Garamond',serif}
+
+  #emptyState{text-align:center;color:#8a7a5a;padding:40px 20px;font-size:14px}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <button class="qbtn ghost" id="backBtn" onclick="goBack()">← Back</button>
+  <h1 id="pageTitle">📚 Books Library</h1>
+</div>
+
+<div id="library">
+  <div id="bookCards"></div>
+</div>
+
+<div id="reader">
+  <div class="searchbar">
+    <input type="text" id="searchInput" placeholder="Search text, narrator, or topic..." oninput="debouncedSearch()">
+    <button class="qbtn" onclick="runSearch()">🔍</button>
+  </div>
+  <div class="filter-row">
+    <select id="narratorFilter" onchange="applyFilters()"><option value="">All narrators</option></select>
+    <select id="topicFilter" onchange="applyFilters()"><option value="">All topics</option></select>
+    <button class="qbtn ghost" onclick="clearFilters()">Clear filters</button>
+  </div>
+  <div id="entryCount"></div>
+  <div id="entries"></div>
+</div>
+
+<div id="selPopup"><button onclick="highlightSelection()">🖍 Highlight</button></div>
+
+<script>
+const SB_URL = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
+const HDR = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY };
+
+function getDeviceId(){
+  let id = localStorage.getItem('qh_device_id');
+  if(!id){ id = 'dev_' + Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem('qh_device_id', id); }
+  return id;
+}
+const DEVICE_ID = getDeviceId();
+
+let CURRENT_BOOK = null;
+let ALL_ENTRIES = [];
+let ANNOTATIONS = {}; // entry_id -> {highlights:[], notes:[]}
+
+function esc(s){ return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+async function loadBooks(){
+  const res = await fetch(SB_URL + '/rest/v1/books?select=*&order=id', { headers: HDR });
+  const books = await res.json();
+  const c = document.getElementById('bookCards');
+  if(!books.length){ c.innerHTML = '<div id="emptyState">No books added yet.</div>'; return; }
+  c.innerHTML = books.map(b => `
+    <div class="book-card" onclick="openBook(${b.id})">
+      <span class="cat-pill">${esc(b.category || 'book')}</span>
+      <div class="book-title-ar">${esc(b.title_ar)}</div>
+      <div class="book-title-en">${esc(b.title_en || '')}</div>
+      <div class="book-meta">
+        ${b.author_en ? esc(b.author_en) + ' · ' : ''}${esc(b.author_dates || '')}<br>
+        ${b.editor ? 'Edited by ' + esc(b.editor) + ' · ' : ''}${esc(b.publisher || '')}
+        ${b.total_volumes ? ' · ' + b.total_volumes + ' volumes' : ''}
+      </div>
+      <div class="book-desc">${esc(b.description || '')}</div>
+    </div>`).join('');
+}
+
+async function openBook(id){
+  const res = await fetch(SB_URL + '/rest/v1/books?id=eq.' + id + '&select=*', { headers: HDR });
+  const rows = await res.json();
+  CURRENT_BOOK = rows[0];
+  document.getElementById('pageTitle').textContent = '📖 ' + (CURRENT_BOOK.title_en || CURRENT_BOOK.title_ar);
+  document.getElementById('library').style.display = 'none';
+  document.getElementById('reader').style.display = 'block';
+  await loadEntries();
+}
+
+function goBack(){
+  if(document.getElementById('reader').style.display === 'block'){
+    document.getElementById('reader').style.display = 'none';
+    document.getElementById('library').style.display = 'block';
+    document.getElementById('pageTitle').textContent = '📚 Books Library';
+    CURRENT_BOOK = null;
+  } else {
+    window.location.href = 'themes.html';
+  }
+}
+
+async function loadEntries(){
+  const res = await fetch(SB_URL + '/rest/v1/book_entries?book_id=eq.' + CURRENT_BOOK.id + '&select=*&order=entry_number', { headers: HDR });
+  ALL_ENTRIES = await res.json();
+  await loadAnnotations();
+  populateFilterOptions();
+  renderEntries(ALL_ENTRIES);
+}
+
+async function loadAnnotations(){
+  if(!ALL_ENTRIES.length) return;
+  const ids = ALL_ENTRIES.map(e => e.id).join(',');
+  const res = await fetch(SB_URL + '/rest/v1/book_annotations?entry_id=in.(' + ids + ')&device_id=eq.' + encodeURIComponent(DEVICE_ID) + '&select=*', { headers: HDR });
+  const rows = await res.json();
+  ANNOTATIONS = {};
+  rows.forEach(r => {
+    if(!ANNOTATIONS[r.entry_id]) ANNOTATIONS[r.entry_id] = { highlights: [], notes: [] };
+    if(r.kind === 'highlight') ANNOTATIONS[r.entry_id].highlights.push(r);
+    else ANNOTATIONS[r.entry_id].notes.push(r);
+  });
+}
+
+function populateFilterOptions(){
+  const narrators = [...new Set(ALL_ENTRIES.map(e => e.narrator).filter(Boolean))].sort();
+  const topics = [...new Set(ALL_ENTRIES.map(e => e.topic).filter(Boolean))].sort();
+  const nf = document.getElementById('narratorFilter'), tf = document.getElementById('topicFilter');
+  nf.innerHTML = '<option value="">All narrators</option>' + narrators.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+  tf.innerHTML = '<option value="">All topics</option>' + topics.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
+}
+
+function applyHighlights(text, entryId){
+  const hls = (ANNOTATIONS[entryId] && ANNOTATIONS[entryId].highlights) || [];
+  let out = esc(text);
+  hls.forEach(h => {
+    if(!h.selected_text) return;
+    const escSel = esc(h.selected_text);
+    if(out.includes(escSel)) out = out.replace(escSel, '<mark class="hl">' + escSel + '</mark>');
+  });
+  return out;
+}
+
+function gradeClass(grade){
+  if(!grade) return '';
+  const g = grade.toLowerCase();
+  if(g.includes('sahih')) return 'grade-sahih';
+  if(g.includes('hasan')) return 'grade-hasan';
+  if(g.includes('daif') || g.includes("da'if")) return 'grade-daif';
+  return '';
+}
+
+function renderEntries(list){
+  document.getElementById('entryCount').textContent = list.length + ' entries' + (list.length !== ALL_ENTRIES.length ? ' (filtered from ' + ALL_ENTRIES.length + ')' : '');
+  const c = document.getElementById('entries');
+  if(!list.length){ c.innerHTML = '<div id="emptyState">No entries match your search.</div>'; return; }
+  c.innerHTML = list.map(e => {
+    const notes = (ANNOTATIONS[e.id] && ANNOTATIONS[e.id].notes) || [];
+    return `
+    <div class="entry-card" data-entry-id="${e.id}">
+      <div class="entry-badges">
+        ${e.narrator ? `<span class="badge narrator">👤 ${esc(e.narrator)}</span>` : ''}
+        ${e.topic ? `<span class="badge topic">🏷 ${esc(e.topic)}</span>` : ''}
+        ${e.grade ? `<span class="badge ${gradeClass(e.grade)}">${esc(e.grade)}</span>` : ''}
+      </div>
+      <div class="arabic-text" data-raw="${esc(e.arabic_text).replace(/"/g,'&quot;')}">${applyHighlights(e.arabic_text, e.id)}</div>
+      ${e.english_text ? `<div class="english-text">${esc(e.english_text)}</div>` : ''}
+      ${e.grader ? `<div class="grade-note">— ${esc(e.grader)}${e.page_ref ? ' · ' + esc(e.page_ref) : ''}</div>` : ''}
+      <div class="entry-actions">
+        <button class="act-btn" onclick="copyEntry(${e.id})">📋 Copy</button>
+        <button class="act-btn" onclick="toggleNoteBox(${e.id})">✏️ Note${notes.length ? ' (' + notes.length + ')' : ''}</button>
+        <button class="act-btn" onclick="shareEntry(${e.id})">↗ Share</button>
+      </div>
+      <div class="note-box" id="noteBox-${e.id}" style="display:none;">
+        ${notes.map(n => `<div style="margin-bottom:6px;">${esc(n.note_text)}</div>`).join('')}
+        <textarea id="noteInput-${e.id}" placeholder="Add a note..."></textarea>
+        <button class="qbtn" style="margin-top:6px;" onclick="saveNote(${e.id})">Save note</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function applyFilters(){
+  const q = document.getElementById('searchInput').value.trim().toLowerCase();
+  const nf = document.getElementById('narratorFilter').value;
+  const tf = document.getElementById('topicFilter').value;
+  let list = ALL_ENTRIES;
+  if(nf) list = list.filter(e => e.narrator === nf);
+  if(tf) list = list.filter(e => e.topic === tf);
+  if(q) list = list.filter(e =>
+    (e.arabic_text || '').toLowerCase().includes(q) ||
+    (e.english_text || '').toLowerCase().includes(q) ||
+    (e.narrator || '').toLowerCase().includes(q) ||
+    (e.topic || '').toLowerCase().includes(q));
+  renderEntries(list);
+}
+function clearFilters(){
+  document.getElementById('searchInput').value = '';
+  document.getElementById('narratorFilter').value = '';
+  document.getElementById('topicFilter').value = '';
+  renderEntries(ALL_ENTRIES);
+}
+let searchTimer;
+function debouncedSearch(){ clearTimeout(searchTimer); searchTimer = setTimeout(applyFilters, 250); }
+function runSearch(){ applyFilters(); }
+
+function copyEntry(id){
+  const e = ALL_ENTRIES.find(x => x.id === id);
+  if(!e) return;
+  const text = e.arabic_text + (e.english_text ? '\n\n' + e.english_text : '') + '\n\n— ' + (e.narrator || '') + (CURRENT_BOOK ? ', ' + CURRENT_BOOK.title_en : '');
+  navigator.clipboard.writeText(text).then(() => toast('Copied to clipboard'));
+}
+
+function shareEntry(id){
+  const e = ALL_ENTRIES.find(x => x.id === id);
+  if(!e) return;
+  const text = e.arabic_text + (e.english_text ? '\n\n' + e.english_text : '');
+  const url = window.location.origin + window.location.pathname + '?book=' + (CURRENT_BOOK.slug) + '&entry=' + id;
+  if(navigator.share){
+    navigator.share({ title: CURRENT_BOOK.title_en, text, url }).catch(()=>{});
+  } else {
+    navigator.clipboard.writeText(text + '\n' + url).then(() => toast('Copied share text + link'));
+  }
+}
+
+function toggleNoteBox(id){
+  const box = document.getElementById('noteBox-' + id);
+  box.style.display = box.style.display === 'none' ? 'block' : 'none';
+}
+
+async function saveNote(id){
+  const input = document.getElementById('noteInput-' + id);
+  const text = input.value.trim();
+  if(!text) return;
+  await fetch(SB_URL + '/rest/v1/book_annotations', {
+    method: 'POST',
+    headers: { ...HDR, 'Content-Type': 'application/json', Prefer: 'return=representation' },
+    body: JSON.stringify({ entry_id: id, device_id: DEVICE_ID, kind: 'note', note_text: text })
+  });
+  input.value = '';
+  await loadAnnotations();
+  applyFilters();
+  toast('Note saved');
+}
+
+// ---- Highlight-on-selection ----
+document.addEventListener('mouseup', showSelPopup);
+document.addEventListener('touchend', showSelPopup);
+function showSelPopup(e){
+  const sel = window.getSelection();
+  const popup = document.getElementById('selPopup');
+  if(!sel || sel.isCollapsed || !sel.toString().trim()){ popup.style.display = 'none'; return; }
+  const anchorNode = sel.anchorNode;
+  const container = anchorNode && anchorNode.parentElement ? anchorNode.parentElement.closest('.arabic-text') : null;
+  if(!container){ popup.style.display = 'none'; return; }
+  const rect = sel.getRangeAt(0).getBoundingClientRect();
+  popup.style.left = Math.max(4, rect.left) + 'px';
+  popup.style.top = Math.max(4, rect.top - 42) + 'px';
+  popup.style.display = 'block';
+  popup._selectedText = sel.toString().trim();
+  popup._entryId = container.closest('.entry-card').dataset.entryId;
+}
+async function highlightSelection(){
+  const popup = document.getElementById('selPopup');
+  const text = popup._selectedText;
+  const entryId = popup._entryId;
+  popup.style.display = 'none';
+  if(!text || !entryId) return;
+  await fetch(SB_URL + '/rest/v1/book_annotations', {
+    method: 'POST',
+    headers: { ...HDR, 'Content-Type': 'application/json', Prefer: 'return=representation' },
+    body: JSON.stringify({ entry_id: +entryId, device_id: DEVICE_ID, kind: 'highlight', selected_text: text })
+  });
+  await loadAnnotations();
+  applyFilters();
+  toast('Highlighted');
+}
+
+let toastTimer;
+function toast(msg){
+  let t = document.getElementById('qhToast');
+  if(!t){ t = document.createElement('div'); t.id = 'qhToast';
+    t.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#3A2E1A;color:#fff;padding:9px 18px;border-radius:20px;font-size:13px;z-index:99999;font-family:EB Garamond,serif;';
+    document.body.appendChild(t);
+  }
+  t.textContent = msg; t.style.display = 'block';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.style.display = 'none', 1800);
+}
+
+loadBooks();
+</script>
+</body>
+</html>
