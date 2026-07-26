@@ -121,6 +121,12 @@
 #qnav-return-bar span.qnav-desc {
   display: none;
 }
+#qnav-return-bar button.qnav-close {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; padding: 0; margin-left: 2px; flex-shrink: 0;
+  background: rgba(0,0,0,0.08); color: #6B5A3E; border: none; border-radius: 50%;
+  font-size: 14px; font-weight: 700; line-height: 1; cursor: pointer;
+}
 
 
 
@@ -558,6 +564,7 @@ window.QNAV_PAGE_ICON = '🔀';
   function injectReturnBar(){
     var existing = document.getElementById('qnav-return-bar');
     if (existing) existing.remove();
+    try { if (sessionStorage.getItem('qnav_bar_dismissed') === '1') return; } catch(e){}
     var stack = getStack();
     var prev = stack.length ? stack[stack.length - 1] : null;
     var fwd = getForward();
@@ -586,6 +593,13 @@ window.QNAV_PAGE_ICON = '🔀';
       fwdBtn.onclick = W.qnavForward;
       bar.appendChild(fwdBtn);
     }
+
+    var closeBtn = document.createElement('button');
+    closeBtn.className = 'qnav-close';
+    closeBtn.innerHTML = '×';
+    closeBtn.title = 'Hide';
+    closeBtn.onclick = function(){ try{ sessionStorage.setItem('qnav_bar_dismissed','1'); }catch(e){} bar.remove(); };
+    bar.appendChild(closeBtn);
 
     document.body.insertBefore(bar, document.body.firstChild);
   }
