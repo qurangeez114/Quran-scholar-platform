@@ -734,13 +734,71 @@ function entryBodyHTML(e){
 async function loadQuranLinks(id){
   const box = document.getElementById('quranLinks-' + id);
   box.innerHTML = '<em style="font-size:12.5px;color:#8a7a5a;">Loading…</em>';
-  const res = await fetch(SB_URL + '/rest/v1/theme_hadith_links?hadith_id=eq.' + id + '&select=sura_id,aya_number,similarity_note,relevance_score&order=relevance_score.desc', { headers: HDR });
+  const res = await fetch(SB_URL + '/rest/v1/theme_hadith_links?hadith_id=eq.' + id + '&select=sura_id,aya_number,similarity_note,relevance_score,link_source&order=relevance_score.desc', { headers: HDR });
   const links = res.ok ? await res.json() : [];
-  if(!links.length){ box.innerHTML = '<div style="font-size:12.5px;color:#8a7a5a;margin-bottom:8px;">No linked verses found for this hadith.</div>'; return; }
+  if(!links.length){
+    box.innerHTML = `<div style="font-size:12.5px;color:#8a7a5a;margin-bottom:8px;">No linked verses on file for this hadith.</div>
+      <button class="qbtn" onclick="suggestQuranLinks(${id})">🔍 Suggest Quran links (AI)</button>`;
+    return;
+  }
   box.innerHTML = '<div style="background:#F5F0FF;border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:13px;">' +
     '<div style="font-weight:700;color:#5A3A8B;margin-bottom:6px;">📖 Related Quran verses</div>' +
-    links.map(l => `<div style="margin-bottom:6px;"><a href="index.html?sura=${l.sura_id}&aya=${l.aya_number}" target="_blank" style="font-weight:700;color:#5A3A8B;">Quran ${l.sura_id}:${l.aya_number}</a> — ${esc(l.similarity_note || '')}</div>`).join('') +
+    links.map(l => `<div style="margin-bottom:6px;"><a href="index.html?sura=${l.sura_id}&aya=${l.aya_number}" target="_blank" style="font-weight:700;color:#5A3A8B;">Quran ${l.sura_id}:${l.aya_number}</a>${l.link_source === 'ai_suggested' ? ' <span style="font-size:10.5px;color:#B8902A;font-weight:700;">AI-SUGGESTED</span>' : ''} — ${esc(l.similarity_note || '')}</div>`).join('') +
     '</div>';
+}
+
+function findEntryById(id){
+  return ALL_ENTRIES.find(e => e.id === id) || Object.values(CLUSTERS || {}).flat().find(e => e.id === id) || CROSS_RESULTS.find(r => r.id === id);
+}
+
+async function suggestQuranLinks(id){
+  const box = document.getElementById('quranLinks-' + id);
+  const e = findEntryById(id);
+  if(!e){ box.innerHTML = '<div style="color:#B23A3A;font-size:12.5px;">Could not locate this hadith\'s text.</div>'; return; }
+  box.innerHTML = '<em style="font-size:12.5px;color:#8a7a5a;">Asking AI for candidate verses…</em>';
+  const text = e.english_text || e.text_english || e.arabic_text || e.text_arabic || '';
+  const prompt = `You are a careful Islamic studies assistant. Below is a hadith. Suggest up to 3 Quran verses that are genuinely thematically related (not a stretch), based on real content overlap.
+
+HADITH:
+${text}
+
+Respond ONLY with a JSON array, no other text, in this exact format:
+[{"sura": <int 1-114>, "aya": <int>, "note": "<one sentence justification, under 25 words>"}]
+If truly nothing is genuinely related, respond with [].`;
+  try{
+    const res = await fetch('/claude', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 400, messages: [{ role: 'user', content: prompt }] })
+    });
+    const data = await res.json();
+    const raw = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
+    const jsonMatch = raw.match(/\[[\s\S]*\]/);
+    const suggestions = jsonMatch ? JSON.parse(jsonMatch[0]) : [];
+    if(!suggestions.length){
+      box.innerHTML = '<div style="font-size:12.5px;color:#8a7a5a;">AI found no genuinely related verse for this hadith.</div>';
+      return;
+    }
+    box.innerHTML = '<div style="background:#FDF5DE;border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:13px;">' +
+      '<div style="font-weight:700;color:#B8902A;margin-bottom:6px;">📖 AI-suggested Quran verses (not scholar-verified)</div>' +
+      suggestions.map(s => `<div style="margin-bottom:6px;"><a href="index.html?sura=${s.sura}&aya=${s.aya}" target="_blank" style="font-weight:700;color:#B8902A;">Quran ${s.sura}:${s.aya}</a> — ${esc(s.note || '')}</div>`).join('') +
+      `<button class="qbtn" style="margin-top:8px;" onclick='saveAiSuggestedLinks(${id}, ${JSON.stringify(suggestions).replace(/'/g, "&#39;")})'>💾 Save these suggestions</button>` +
+      '</div>';
+  }catch(err){
+    box.innerHTML = '<span style="color:#B23A3A;font-size:12.5px;">Suggestion failed — try again.</span>';
+  }
+}
+
+async function saveAiSuggestedLinks(id, suggestions){
+  const rows = suggestions.map(s => ({
+    hadith_id: id, collection: CURRENT_BOOK.source_filter_val, sura_id: s.sura, aya_number: s.aya,
+    similarity_note: s.note, relevance_score: '0.5', link_source: 'ai_suggested'
+  }));
+  await fetch(SB_URL + '/rest/v1/theme_hadith_links', {
+    method: 'POST', headers: { ...HDR, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+    body: JSON.stringify(rows)
+  });
+  toast('Saved — reloading links');
+  loadQuranLinks(id);
 }
 
 function entryCardHTML(e){
