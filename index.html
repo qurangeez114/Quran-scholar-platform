@@ -2700,7 +2700,10 @@ function getSafeArabicText(aya) {
   return '';
 }
 
+let CURRENT_AYAS = [];
+
 function renderVerses(ayas, suraId) {
+  CURRENT_AYAS = ayas;
   const area = document.getElementById('verseArea');
   // Show Bismillah banner for all suras except:
   // Sura 1 (Al-Fatiha): aya 1 IS the Bismillah, shown as a verse
@@ -2754,7 +2757,7 @@ function renderVerses(ayas, suraId) {
               <option value="tigrinya">Tigrinya</option>
               <option value="oromo">Oromo</option>
             </select>
-            <button id="bm-${aya.aya_number}" onclick="event.stopPropagation();toggleBookmark(${aya.aya_number},${suraId},'${arabic.replace(/'/g,"\\'")}','${english.replace(/'/g,"\\'")}','${tigrinya.replace(/'/g,"\\'")}' )" title="Bookmark" style="background:#FDF8EE;border:1px solid #E8C97B;border-radius:6px;width:32px;height:30px;font-size:14px;cursor:pointer;padding:0;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;">${isBookmarked(aya.aya_number,suraId)?'🔖':'🏷️'}</button>
+            <button id="bm-${aya.aya_number}" onclick="event.stopPropagation();toggleBookmark(${aya.aya_number},${suraId})" title="Bookmark" style="background:#FDF8EE;border:1px solid #E8C97B;border-radius:6px;width:32px;height:30px;font-size:14px;cursor:pointer;padding:0;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;">${isBookmarked(aya.aya_number,suraId)?'🔖':'🏷️'}</button>
             <button onclick="event.stopPropagation();showVerseHlPicker(${aya.aya_number},${suraId},this)" title="Highlight text" style="background:#FDF8EE;border:1px solid #E8C97B;border-radius:6px;width:32px;height:30px;font-size:14px;cursor:pointer;padding:0;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;">🖊</button>
             <button onclick="event.stopPropagation();openNote(${aya.aya_number},${suraId})" title="Add note" style="background:#FDF8EE;border:1px solid #E8C97B;border-radius:6px;width:32px;height:30px;font-size:14px;cursor:pointer;padding:0;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;">📝</button>
             <button id="copy-${aya.aya_number}" onclick="event.stopPropagation();copyVerse(${aya.aya_number},${suraId})" title="Copy visible languages" style="background:#FDF8EE;border:1px solid #E8C97B;border-radius:6px;width:32px;height:30px;font-size:14px;cursor:pointer;padding:0;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;">📋</button>
@@ -5838,13 +5841,17 @@ function isBookmarked(ayaNum, suraId) {
   return !!localStorage.getItem(bmKey(suraId, ayaNum));
 }
 
-function toggleBookmark(ayaNum, suraId, arabic, english, tigrinya) {
+function toggleBookmark(ayaNum, suraId) {
   const key = bmKey(suraId, ayaNum);
   const btn = document.getElementById('bm-' + ayaNum);
   if (localStorage.getItem(key)) {
     localStorage.removeItem(key);
     if (btn) btn.textContent = '🏷️';
   } else {
+    const aya = CURRENT_AYAS.find(a => a.aya_number === ayaNum) || {};
+    const arabic = getSafeArabicText(aya) || aya.arabic || '';
+    const english = aya.english || '';
+    const tigrinya = aya.tigrinya || aya.aya_text || '';
     localStorage.setItem(key, JSON.stringify({ suraId, ayaNum, arabic, english, tigrinya, savedAt: new Date().toISOString() }));
     if (btn) btn.textContent = '🔖';
   }
