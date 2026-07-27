@@ -103,6 +103,19 @@
 
 <div id="selPopup"><button onclick="highlightSelection()">🖍 Highlight</button></div>
 
+<div id="researchModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:9998;align-items:flex-end;justify-content:center;">
+  <div style="background:#FDFAF4;border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:480px;max-height:70vh;overflow-y:auto;">
+    <div style="font-weight:700;color:#5A3A10;margin-bottom:12px;font-size:16px;">Save to Research Collection</div>
+    <div id="rpCollectionList"></div>
+    <div style="margin-top:12px;border-top:1px solid #E8DDC0;padding-top:12px;">
+      <div style="font-size:13px;color:#8a7a5a;margin-bottom:6px;">Or create a new collection:</div>
+      <input type="text" id="rpNewName" placeholder="Collection name" style="width:100%;padding:8px 10px;border-radius:8px;border:1.5px solid #E8DDC0;font-family:'EB Garamond',serif;font-size:14px;margin-bottom:8px;">
+      <button class="qbtn" onclick="createAndSaveCollection()">Create & Save</button>
+      <button class="qbtn ghost" onclick="closeResearchPicker()">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <nav id="bottom-nav">
   <button class="bnav-btn " onclick="location.href='index.html'"><span class="bni">📖</span><span>Quran</span></button>
   <button class="bnav-btn " onclick="location.href='research.html'"><span class="bni">🔬</span><span>Research</span></button>
@@ -241,6 +254,8 @@ function renderEntries(list){
         <button class="act-btn" onclick="copyEntry(${e.id})">📋 Copy</button>
         <button class="act-btn" onclick="toggleNoteBox(${e.id})">✏️ Note${notes.length ? ' (' + notes.length + ')' : ''}</button>
         <button class="act-btn" onclick="shareEntry(${e.id})">↗ Share</button>
+        <button class="act-btn" onclick="addEntryToPresentation(${e.id})">＋ Add to Presentation</button>
+        <button class="act-btn" onclick="openResearchPicker(${e.id})">📚 Save to Research</button>
       </div>
       <div class="note-box" id="noteBox-${e.id}" style="display:none;">
         ${notes.map(n => `<div style="margin-bottom:6px;">${esc(n.note_text)}</div>`).join('')}
@@ -345,6 +360,82 @@ async function highlightSelection(){
   await loadAnnotations();
   applyFilters();
   toast('Highlighted');
+}
+
+// ---- Add to Presentation (shares the same basket the rest of the site uses) ----
+function addEntryToPresentation(id){
+  const e = ALL_ENTRIES.find(x => x.id === id);
+  if(!e) return;
+  const key = 'presentationBasket';
+  let existing = [];
+  try { existing = JSON.parse(localStorage.getItem(key) || '[]'); } catch(err){}
+  const reference = (e.narrator ? e.narrator + ' — ' : '') + (CURRENT_BOOK.title_en || CURRENT_BOOK.title_ar);
+  const already = existing.find(s => s.type === 'hadith' && s.sourceUrl === ('books.html?book=' + CURRENT_BOOK.slug + '&entry=' + id));
+  if(already){ toast('Already in presentation'); return; }
+  existing.push({
+    type: 'hadith',
+    id: 'book_' + id + '_' + Date.now(),
+    title: e.topic || reference,
+    reference: reference,
+    text: e.english_text || '',
+    arabic: e.arabic_text || '',
+    speakerNotes: e.grade ? ('Grade: ' + e.grade + (e.grader ? ' — ' + e.grader : '')) : '',
+    sourceUrl: 'books.html?book=' + CURRENT_BOOK.slug + '&entry=' + id
+  });
+  try { localStorage.setItem(key, JSON.stringify(existing)); } catch(err){}
+  toast('✓ Added to presentation (' + existing.length + ' slides)');
+}
+
+// ---- Save to Research (own lightweight collection picker; research_collections/items are shared tables) ----
+let _rpEntryId = null;
+async function openResearchPicker(id){
+  _rpEntryId = id;
+  const modal = document.getElementById('researchModal');
+  modal.style.display = 'flex';
+  const list = document.getElementById('rpCollectionList');
+  list.innerHTML = 'Loading collections...';
+  const res = await fetch(SB_URL + '/rest/v1/research_collections?select=id,title&order=created_at.desc', { headers: HDR });
+  const cols = res.ok ? await res.json() : [];
+  if(!cols.length){
+    list.innerHTML = '<div style="color:#8a7a5a;font-size:13px;margin-bottom:8px;">No collections yet — create one below.</div>';
+  } else {
+    list.innerHTML = cols.map(c => `<button class="qbtn" style="display:block;width:100%;text-align:left;margin-bottom:6px;" onclick="saveEntryToCollection('${c.id}')">${esc(c.title)}</button>`).join('');
+  }
+}
+function closeResearchPicker(){
+  document.getElementById('researchModal').style.display = 'none';
+  document.getElementById('rpNewName').value = '';
+}
+async function createAndSaveCollection(){
+  const name = document.getElementById('rpNewName').value.trim();
+  if(!name){ toast('Enter a collection name'); return; }
+  const res = await fetch(SB_URL + '/rest/v1/research_collections', {
+    method: 'POST',
+    headers: { ...HDR, 'Content-Type': 'application/json', Prefer: 'return=representation' },
+    body: JSON.stringify({ title: name, visibility: 'private' })
+  });
+  const rows = await res.json();
+  if(!res.ok || !rows[0]){ toast('Could not create collection'); return; }
+  saveEntryToCollection(rows[0].id);
+}
+async function saveEntryToCollection(collectionId){
+  const e = ALL_ENTRIES.find(x => x.id === _rpEntryId);
+  if(!e) return;
+  const res = await fetch(SB_URL + '/rest/v1/research_items', {
+    method: 'POST',
+    headers: { ...HDR, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      collection_id: collectionId,
+      item_type: 'hadith',
+      title: (e.narrator || 'Hadith') + ' — ' + (CURRENT_BOOK.title_en || CURRENT_BOOK.title_ar),
+      content: (e.arabic_text + (e.english_text ? '\n' + e.english_text : '')).slice(0, 500),
+      source_table: 'book_entries',
+      source_id: String(e.id)
+    })
+  });
+  if(!res.ok){ toast('Could not save to research'); return; }
+  closeResearchPicker();
+  toast('✅ Saved to Research');
 }
 
 let toastTimer;
