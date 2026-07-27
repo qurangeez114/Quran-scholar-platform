@@ -272,19 +272,44 @@ let CLUSTERS = {};
 async function loadChapterClusters(){
   const chapter = document.getElementById('chapterSelect').value;
   if(!chapter){ toast('Pick a chapter first'); return; }
-  document.getElementById('entries').innerHTML = '<div id="emptyState">Finding duplicate narrations… this can take a few seconds.</div>';
+  document.getElementById('entries').innerHTML = '<div id="emptyState">Loading…</div>';
   document.getElementById('loadMoreRow').style.display = 'none';
-  const res = await fetch(SB_URL + '/rest/v1/rpc/get_hadith_duplicate_clusters', {
-    method: 'POST', headers: { ...HDR, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ p_collection: CURRENT_BOOK.source_filter_val, p_chapter: chapter })
-  });
-  if(!res.ok){ document.getElementById('entries').innerHTML = '<div id="emptyState">This chapter is too large to cluster live — try a smaller one.</div>'; return; }
-  const rows = await res.json();
+
+  const clusterRes = await fetch(SB_URL + '/rest/v1/hadith_dedup_clusters?collection=eq.' + encodeURIComponent(CURRENT_BOOK.source_filter_val) + '&book_chapter=eq.' + encodeURIComponent(chapter) + '&select=hadith_id,cluster_id', { headers: HDR });
+  let clusterRows = clusterRes.ok ? await clusterRes.json() : [];
+
+  if(!clusterRows.length){
+    // Not precomputed yet (e.g. brand-new data) — fall back to live computation
+    const res = await fetch(SB_URL + '/rest/v1/rpc/get_hadith_duplicate_clusters', {
+      method: 'POST', headers: { ...HDR, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_collection: CURRENT_BOOK.source_filter_val, p_chapter: chapter })
+    });
+    if(!res.ok){ document.getElementById('entries').innerHTML = '<div id="emptyState">This chapter is too large to cluster live — try a smaller one.</div>'; return; }
+    const rows = await res.json();
+    CLUSTER_MODE = true;
+    CLUSTERS = {};
+    rows.forEach(r => { if(!CLUSTERS[r.cluster_id]) CLUSTERS[r.cluster_id] = []; CLUSTERS[r.cluster_id].push(normalizeRawEntry(r)); });
+    ALL_ENTRIES = rows.map(normalizeRawEntry);
+    await loadAnnotations();
+    renderClusters();
+    return;
+  }
+
+  // Fast path: precomputed clusters exist — just fetch the actual hadith rows
+  const ids = clusterRows.map(r => r.hadith_id).join(',');
+  const hadithRes = await fetch(SB_URL + '/rest/v1/hadith_corpus?id=in.(' + ids + ')&select=id,narrator,book_chapter,text_arabic,text_english,grade,isnad,hadith_number,source_url', { headers: HDR });
+  const hadithRows = hadithRes.ok ? await hadithRes.json() : [];
+  const byId = {}; hadithRows.forEach(h => byId[h.id] = h);
+
   CLUSTER_MODE = true;
   CLUSTERS = {};
-  rows.forEach(r => { if(!CLUSTERS[r.cluster_id]) CLUSTERS[r.cluster_id] = []; CLUSTERS[r.cluster_id].push(normalizeRawEntry(r)); });
-  const allIds = rows.map(r => r.hadith_id);
-  ALL_ENTRIES = allIds.map(id => normalizeRawEntry(rows.find(r => r.hadith_id === id)));
+  clusterRows.forEach(r => {
+    const raw = byId[r.hadith_id];
+    if(!raw) return;
+    if(!CLUSTERS[r.cluster_id]) CLUSTERS[r.cluster_id] = [];
+    CLUSTERS[r.cluster_id].push(normalizeRawEntry(raw));
+  });
+  ALL_ENTRIES = Object.values(CLUSTERS).flat();
   await loadAnnotations();
   renderClusters();
 }
