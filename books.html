@@ -27,6 +27,17 @@
   #reader{display:none;padding:14px}
   .searchbar{display:flex;gap:8px;margin-bottom:12px}
   .searchbar input{flex:1;padding:10px 14px;border-radius:20px;border:1.5px solid #E8DDC0;font-family:'EB Garamond',serif;font-size:15px}
+  #searchSuggest{display:none;position:absolute;top:44px;left:0;right:46px;background:#fff;border:1.5px solid #E8DDC0;border-radius:12px;box-shadow:0 6px 20px rgba(0,0,0,.12);z-index:60;max-height:280px;overflow-y:auto;}
+  .sugg-item{padding:9px 14px;font-size:14px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid #F5EFDD;}
+  .sugg-item:last-child{border-bottom:none}
+  .sugg-item:hover, .sugg-item.active-sugg{background:#FDF5DE}
+  .sugg-tag{font-size:10px;font-weight:700;padding:2px 7px;border-radius:8px;flex-shrink:0;}
+  .sugg-tag.narrator{background:#EFE6F5;color:#6A3E8A}
+  .sugg-tag.topic{background:#E4F0E9;color:#2E7D32}
+  .sugg-tag.text{background:#FDF0D5;color:#9A6A00}
+  .sugg-label{color:#3A2E1A;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .sugg-label mark{background:#FFE58A;padding:0;}
+  .sugg-empty{padding:10px 14px;font-size:13px;color:#8a7a5a;font-style:italic;}
   .filter-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
   .filter-row select{padding:7px 10px;border-radius:10px;border:1.5px solid #E8DDC0;font-family:'EB Garamond',serif;font-size:13.5px;background:#fff;color:#5A3A10}
   #entryCount{font-size:12.5px;color:#8a7a5a;text-align:center;margin-bottom:10px}
@@ -90,9 +101,11 @@
 </div>
 
 <div id="reader">
-  <div class="searchbar">
-    <input type="text" id="searchInput" placeholder="Search text, narrator, or topic..." oninput="debouncedSearch()">
+  <div class="searchbar" style="position:relative;">
+    <input type="text" id="searchInput" placeholder="Search text, narrator, or topic..." autocomplete="off"
+      oninput="onSearchInput()" onfocus="onSearchInput()" onkeydown="onSearchKeydown(event)">
     <button class="qbtn" onclick="runSearch()">🔍</button>
+    <div id="searchSuggest"></div>
   </div>
   <div class="filter-row" style="margin-bottom:6px;">
     <span style="font-size:12.5px;color:#8a7a5a;align-self:center;">Group by:</span>
@@ -326,11 +339,112 @@ function clearFilters(){
   document.getElementById('searchInput').value = '';
   document.getElementById('narratorFilter').value = '';
   document.getElementById('topicFilter').value = '';
+  document.getElementById('searchSuggest').style.display = 'none';
   renderEntries(ALL_ENTRIES);
 }
 let searchTimer;
-function debouncedSearch(){ clearTimeout(searchTimer); searchTimer = setTimeout(applyFilters, 250); }
-function runSearch(){ applyFilters(); }
+let _suggItems = [];
+let _suggActiveIdx = -1;
+
+function onSearchInput(){
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => {
+    updateSuggestions();
+    applyFilters();
+  }, 200);
+}
+
+function updateSuggestions(){
+  const box = document.getElementById('searchSuggest');
+  const q = document.getElementById('searchInput').value.trim().toLowerCase();
+  _suggActiveIdx = -1;
+  if(!q){ box.style.display = 'none'; _suggItems = []; return; }
+
+  const items = [];
+  const seen = new Set();
+
+  // Narrator matches
+  [...new Set(ALL_ENTRIES.map(e => e.narrator).filter(Boolean))].forEach(n => {
+    if(n.toLowerCase().includes(q) && !seen.has('n:' + n)){
+      seen.add('n:' + n);
+      items.push({ type: 'narrator', label: n, value: n });
+    }
+  });
+  // Topic matches
+  [...new Set(ALL_ENTRIES.map(e => e.topic).filter(Boolean))].forEach(t => {
+    if(t.toLowerCase().includes(q) && !seen.has('t:' + t)){
+      seen.add('t:' + t);
+      items.push({ type: 'topic', label: t, value: t });
+    }
+  });
+  // Text snippet matches (Arabic or English content)
+  let textMatches = 0;
+  for(const e of ALL_ENTRIES){
+    if(textMatches >= 4) break;
+    const hay = ((e.arabic_text || '') + ' ' + (e.english_text || '')).toLowerCase();
+    if(hay.includes(q)){
+      const src = (e.english_text || e.arabic_text || '');
+      const idx = src.toLowerCase().indexOf(q);
+      const start = Math.max(0, idx - 20);
+      const snippet = (start > 0 ? '…' : '') + src.slice(start, idx + q.length + 30) + '…';
+      items.push({ type: 'text', label: snippet, value: q, entryId: e.id });
+      textMatches++;
+    }
+  }
+
+  _suggItems = items.slice(0, 8);
+  renderSuggestions(q);
+}
+
+function renderSuggestions(q){
+  const box = document.getElementById('searchSuggest');
+  if(!_suggItems.length){ box.innerHTML = '<div class="sugg-empty">No matches yet — keep typing or press search.</div>'; box.style.display = 'block'; return; }
+  const reQ = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const rx = new RegExp('(' + reQ + ')', 'ig');
+  box.innerHTML = _suggItems.map((it, i) => {
+    const tagLbl = it.type === 'narrator' ? '👤' : it.type === 'topic' ? '🏷' : 'text';
+    const highlighted = esc(it.label).replace(rx, '<mark>$1</mark>');
+    return `<div class="sugg-item${i === _suggActiveIdx ? ' active-sugg' : ''}" onclick="selectSuggestion(${i})">
+      <span class="sugg-tag ${it.type}">${tagLbl}</span>
+      <span class="sugg-label">${highlighted}</span>
+    </div>`;
+  }).join('');
+  box.style.display = 'block';
+}
+
+function selectSuggestion(i){
+  const it = _suggItems[i];
+  if(!it) return;
+  const box = document.getElementById('searchSuggest');
+  if(it.type === 'narrator'){
+    document.getElementById('narratorFilter').value = it.value;
+    document.getElementById('searchInput').value = '';
+  } else if(it.type === 'topic'){
+    document.getElementById('topicFilter').value = it.value;
+    document.getElementById('searchInput').value = '';
+  } else {
+    document.getElementById('searchInput').value = it.value;
+  }
+  box.style.display = 'none';
+  applyFilters();
+}
+
+function onSearchKeydown(e){
+  const box = document.getElementById('searchSuggest');
+  if(box.style.display !== 'block' || !_suggItems.length) return;
+  if(e.key === 'ArrowDown'){ e.preventDefault(); _suggActiveIdx = Math.min(_suggActiveIdx + 1, _suggItems.length - 1); renderSuggestions(document.getElementById('searchInput').value.trim().toLowerCase()); }
+  else if(e.key === 'ArrowUp'){ e.preventDefault(); _suggActiveIdx = Math.max(_suggActiveIdx - 1, 0); renderSuggestions(document.getElementById('searchInput').value.trim().toLowerCase()); }
+  else if(e.key === 'Enter'){ if(_suggActiveIdx >= 0){ e.preventDefault(); selectSuggestion(_suggActiveIdx); } else { box.style.display = 'none'; applyFilters(); } }
+  else if(e.key === 'Escape'){ box.style.display = 'none'; }
+}
+
+document.addEventListener('click', e => {
+  const box = document.getElementById('searchSuggest');
+  const bar = document.querySelector('.searchbar');
+  if(box && bar && !bar.contains(e.target)) box.style.display = 'none';
+});
+
+function runSearch(){ document.getElementById('searchSuggest').style.display = 'none'; applyFilters(); }
 
 function copyEntry(id){
   const e = ALL_ENTRIES.find(x => x.id === id);
