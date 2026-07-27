@@ -99,6 +99,15 @@
 </div>
 
 <div id="library">
+  <div style="background:#FBF6E9;border:1.5px solid #D4A830;border-radius:12px;padding:14px 16px;margin-bottom:18px;">
+    <div style="font-weight:700;color:#5A3A10;margin-bottom:8px;">🔬 Compare Across All Hadith Books</div>
+    <div style="font-size:12.5px;color:#8a7a5a;margin-bottom:10px;">Search a phrase or topic across every collection at once, then get one AI comparison of all versions found — contradictions, changes, omissions, and relation to the Quran.</div>
+    <div style="display:flex;gap:8px;">
+      <input type="text" id="crossSearchInput" placeholder="e.g. sun sets, intentions, jihad..." style="flex:1;padding:10px 14px;border-radius:20px;border:1.5px solid #E8DDC0;font-family:'EB Garamond',serif;font-size:15px;" onkeydown="if(event.key==='Enter') runCrossSearch()">
+      <button class="qbtn" onclick="runCrossSearch()">🔍 Search</button>
+    </div>
+    <div id="crossSearchResults"></div>
+  </div>
   <div id="bookCards"></div>
 </div>
 
@@ -179,6 +188,109 @@ const PAGE_SIZE = 25;
 let HAS_MORE = false;
 
 function esc(s){ return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+// ---- Cross-collection comparison (search across every hadith book at once) ----
+let CROSS_RESULTS = [];
+
+async function runCrossSearch(){
+  const q = document.getElementById('crossSearchInput').value.trim();
+  const box = document.getElementById('crossSearchResults');
+  if(!q){ toast('Type something to search'); return; }
+  box.innerHTML = '<div style="padding:14px 0;color:#8a7a5a;font-size:13px;"><em>Searching across all hadith books…</em></div>';
+  const enc = encodeURIComponent(q);
+  const res = await fetch(SB_URL + '/rest/v1/hadith_corpus?select=id,collection,narrator,book_chapter,text_arabic,text_english,grade,grade_details,hadith_number,source_url&text_english=ilike.*' + enc + '*&limit=60', { headers: HDR });
+  if(!res.ok){ box.innerHTML = '<div style="color:#B23A3A;padding:10px 0;">Search failed — try a shorter phrase.</div>'; return; }
+  const rows = await res.json();
+  CROSS_RESULTS = rows;
+  renderCrossSearchResults(q);
+}
+
+function renderCrossSearchResults(q){
+  const box = document.getElementById('crossSearchResults');
+  if(!CROSS_RESULTS.length){ box.innerHTML = '<div style="padding:14px 0;color:#8a7a5a;font-size:13px;">No matches found across any collection.</div>'; return; }
+
+  const byCollection = {};
+  CROSS_RESULTS.forEach(r => { if(!byCollection[r.collection]) byCollection[r.collection] = []; byCollection[r.collection].push(r); });
+  const collections = Object.keys(byCollection).sort();
+
+  box.innerHTML = `
+    <div style="margin:12px 0 8px;font-size:13px;color:#5A3A10;font-weight:700;">${CROSS_RESULTS.length} matches across ${collections.length} book${collections.length===1?'':'s'}</div>
+    <button class="qbtn" onclick="crossCollectionAnalyze('${esc(q).replace(/'/g,"\\'")}')" style="margin-bottom:14px;">🔬 Analyze All Together (contradictions, changes, omissions, Quran relation)</button>
+    <div id="crossAnalysisBox" style="margin-bottom:16px;"></div>
+  ` + collections.map(col => `
+    <div class="group-header">📚 ${esc(col)} <span style="font-weight:400;color:#8a7a5a;">(${byCollection[col].length})</span></div>
+    ${byCollection[col].map(r => `
+      <div class="entry-card">
+        <div class="entry-badges">
+          ${r.narrator ? `<span class="badge narrator">👤 ${esc(r.narrator)}</span>` : ''}
+          ${r.book_chapter ? `<span class="badge topic">🏷 Book ${esc(r.book_chapter)}, #${esc(r.hadith_number||'')}</span>` : ''}
+          <span class="badge ${gradeClass(r.grade)}">${esc(gradeLabel(r.grade))}</span>
+        </div>
+        ${r.text_arabic ? `<div class="arabic-text">${esc(r.text_arabic).slice(0,500)}${r.text_arabic.length>500?'…':''}</div>` : ''}
+        ${r.text_english ? `<div class="english-text">${esc(r.text_english).slice(0,500)}${r.text_english.length>500?'…':''}</div>` : ''}
+        ${r.source_url ? `<div class="grade-note"><a href="${esc(r.source_url)}" target="_blank" rel="noopener" style="color:#2E7D32;font-weight:700;text-decoration:none;">🔗 Verify source</a></div>` : ''}
+      </div>
+    `).join('')}
+  `).join('');
+}
+
+async function crossCollectionAnalyze(q){
+  const box = document.getElementById('crossAnalysisBox');
+  box.innerHTML = '<em>Gathering context…</em>';
+
+  // Cap how many versions we send to keep the prompt focused — one representative per collection
+  const byCollection = {};
+  CROSS_RESULTS.forEach(r => { if(!byCollection[r.collection]) byCollection[r.collection] = r; });
+  const picks = Object.values(byCollection);
+
+  const ids = picks.map(r => r.id).join(',');
+  const [linksRes] = await Promise.all([
+    fetch(SB_URL + '/rest/v1/theme_hadith_links?hadith_id=in.(' + ids + ')&select=hadith_id,sura_id,aya_number,similarity_note,difference_note&order=relevance_score.desc&limit=15', { headers: HDR })
+  ]);
+  const links = linksRes.ok ? await linksRes.json() : [];
+  const linksText = links.length
+    ? links.map(l => `Quran ${l.sura_id}:${l.aya_number} (linked to hadith id ${l.hadith_id}) — ${l.similarity_note || ''}${l.difference_note ? ' (tension: ' + l.difference_note + ')' : ''}`).join('\n')
+    : 'No pre-linked Quran verses on file for these hadith.';
+
+  const versionsText = picks.map(r => {
+    const crossRefs = extractCrossRefs(r.grade_details);
+    return `Source: ${r.collection} (hadith #${r.hadith_number || '?'}, id ${r.id}), narrator: ${r.narrator || 'unknown'}, grade: ${r.grade || 'unknown'}${crossRefs.length ? ', also recorded in: ' + crossRefs.join(', ') : ''}:\n${r.text_english || r.text_arabic}`;
+  }).join('\n\n');
+
+  box.innerHTML = '<em>Analyzing across ' + picks.length + ' books…</em>';
+  const prompt = `You are a hadith scholar comparing how the same topic ("${q}") is narrated across DIFFERENT hadith collections. Below is one representative narration from each collection that matched this search, each explicitly labeled with its source book, plus any pre-linked Quran verses on file (real data — do not invent more).
+
+NARRATIONS (one per source book):
+${versionsText}
+
+PRE-LINKED QURAN VERSES ON FILE:
+${linksText}
+
+Provide a structured critical analysis with exactly these four headed sections, under 450 words total. Always name the specific source book(s) you are referring to — never speak generically about "the hadith".
+### 1. What's Consistent
+What core content or wording is shared across the different books' versions.
+### 2. Contradictions and Changes
+Real differences in wording, emphasis, isnad, or claimed events between the named sources — note any that appear to contradict each other, not just stylistic variation.
+### 3. Omissions
+What one source includes that others leave out, and whether that omission seems significant.
+### 4. Relation to the Quran
+Using only the pre-linked verses above, explain how these narrations (naming their sources) relate to, support, or sit in tension with those verses. If no verses are linked, say so rather than inventing any.
+
+Be concise, factual, and avoid speculation beyond what the given text and context supports.`;
+  try{
+    const res = await fetch('/claude', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 900, messages: [{ role: 'user', content: prompt }] })
+    });
+    const data = await res.json();
+    const text = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n');
+    box.innerHTML = '<div style="background:#F5F0FF;border-radius:10px;padding:14px 16px;font-size:13.5px;line-height:1.6;">' +
+      esc(text).replace(/### (.+)/g, '<div style="font-weight:700;color:#5A3A8B;margin:10px 0 4px;">$1</div>').replace(/\n/g, '<br>') +
+      '</div>';
+  }catch(err){
+    box.innerHTML = '<span style="color:#B23A3A;">Analysis failed — try again.</span>';
+  }
+}
 
 async function loadBooks(){
   const res = await fetch(SB_URL + '/rest/v1/books?select=*&order=id', { headers: HDR });
