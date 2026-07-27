@@ -54,6 +54,8 @@
   #selPopup button{background:none;border:none;color:#fff;font-size:13px;padding:6px 10px;cursor:pointer;font-family:'EB Garamond',serif}
 
   #emptyState{text-align:center;color:#8a7a5a;padding:40px 20px;font-size:14px}
+  .group-header{font-family:'EB Garamond',serif;font-weight:700;font-size:15px;color:#5A3A10;background:#F3E9CE;padding:8px 14px;border-radius:8px;margin:18px 0 10px;position:sticky;top:0;z-index:5}
+  .group-header:first-child{margin-top:0}
 
   #bottom-nav {
     position: fixed !important; bottom: 0 !important; left: 0 !important; right: 0 !important; top: auto !important;
@@ -91,6 +93,12 @@
   <div class="searchbar">
     <input type="text" id="searchInput" placeholder="Search text, narrator, or topic..." oninput="debouncedSearch()">
     <button class="qbtn" onclick="runSearch()">🔍</button>
+  </div>
+  <div class="filter-row" style="margin-bottom:6px;">
+    <span style="font-size:12.5px;color:#8a7a5a;align-self:center;">Group by:</span>
+    <button class="qbtn" id="groupNoneBtn" onclick="setGroupMode('none')">None</button>
+    <button class="qbtn" id="groupNarratorBtn" onclick="setGroupMode('narrator')">👤 Narrator</button>
+    <button class="qbtn" id="groupTopicBtn" onclick="setGroupMode('topic')">🏷 Topic</button>
   </div>
   <div class="filter-row">
     <select id="narratorFilter" onchange="applyFilters()"><option value="">All narrators</option></select>
@@ -190,6 +198,10 @@ async function loadEntries(){
   ALL_ENTRIES = await res.json();
   await loadAnnotations();
   populateFilterOptions();
+  GROUP_MODE = 'none';
+  document.getElementById('groupNoneBtn').classList.add('active');
+  document.getElementById('groupNarratorBtn').classList.remove('active');
+  document.getElementById('groupTopicBtn').classList.remove('active');
   renderEntries(ALL_ENTRIES);
 }
 
@@ -234,13 +246,18 @@ function gradeClass(grade){
   return '';
 }
 
-function renderEntries(list){
-  document.getElementById('entryCount').textContent = list.length + ' entries' + (list.length !== ALL_ENTRIES.length ? ' (filtered from ' + ALL_ENTRIES.length + ')' : '');
-  const c = document.getElementById('entries');
-  if(!list.length){ c.innerHTML = '<div id="emptyState">No entries match your search.</div>'; return; }
-  c.innerHTML = list.map(e => {
-    const notes = (ANNOTATIONS[e.id] && ANNOTATIONS[e.id].notes) || [];
-    return `
+let GROUP_MODE = 'none'; // 'none' | 'narrator' | 'topic'
+
+function setGroupMode(mode){
+  GROUP_MODE = mode;
+  ['groupNoneBtn','groupNarratorBtn','groupTopicBtn'].forEach(id => document.getElementById(id).classList.remove('active'));
+  document.getElementById(mode === 'none' ? 'groupNoneBtn' : mode === 'narrator' ? 'groupNarratorBtn' : 'groupTopicBtn').classList.add('active');
+  applyFilters();
+}
+
+function entryCardHTML(e){
+  const notes = (ANNOTATIONS[e.id] && ANNOTATIONS[e.id].notes) || [];
+  return `
     <div class="entry-card" data-entry-id="${e.id}">
       <div class="entry-badges">
         ${e.narrator ? `<span class="badge narrator">👤 ${esc(e.narrator)}</span>` : ''}
@@ -263,7 +280,32 @@ function renderEntries(list){
         <button class="qbtn" style="margin-top:6px;" onclick="saveNote(${e.id})">Save note</button>
       </div>
     </div>`;
-  }).join('');
+}
+
+function renderEntries(list){
+  document.getElementById('entryCount').textContent = list.length + ' entries' + (list.length !== ALL_ENTRIES.length ? ' (filtered from ' + ALL_ENTRIES.length + ')' : '');
+  const c = document.getElementById('entries');
+  if(!list.length){ c.innerHTML = '<div id="emptyState">No entries match your search.</div>'; return; }
+
+  if(GROUP_MODE === 'none'){
+    c.innerHTML = list.map(entryCardHTML).join('');
+    return;
+  }
+
+  const key = GROUP_MODE === 'narrator' ? 'narrator' : 'topic';
+  const groups = {};
+  const order = [];
+  list.forEach(e => {
+    const g = e[key] || (GROUP_MODE === 'narrator' ? 'Unattributed' : 'Uncategorized');
+    if(!groups[g]){ groups[g] = []; order.push(g); }
+    groups[g].push(e);
+  });
+  order.sort((a, b) => a.localeCompare(b, 'ar'));
+  const icon = GROUP_MODE === 'narrator' ? '👤' : '🏷';
+  c.innerHTML = order.map(g => `
+    <div class="group-header">${icon} ${esc(g)} <span style="font-weight:400;color:#8a7a5a;">(${groups[g].length})</span></div>
+    ${groups[g].map(entryCardHTML).join('')}
+  `).join('');
 }
 
 function applyFilters(){
