@@ -226,7 +226,7 @@ function normalizeRawEntry(raw){
       id: raw.id, narrator: raw.narrator || '', topic: raw.book_chapter || '',
       arabic_text: raw.text_arabic || '', english_text: raw.text_english || '',
       grade: raw.grade || '', grader: raw.isnad ? ('Isnad: ' + raw.isnad) : '',
-      page_ref: raw.hadith_number ? ('#' + raw.hadith_number) : ''
+      page_ref: raw.hadith_number ? ('#' + raw.hadith_number) : '', source_url: raw.source_url || ''
     };
   }
   if(st === 'tafsir_entries'){
@@ -234,17 +234,17 @@ function normalizeRawEntry(raw){
       id: raw.id, narrator: '', topic: 'Sura ' + raw.sura,
       arabic_text: raw.language === 'ar' ? (raw.content || '') : '',
       english_text: raw.language === 'en' ? (raw.content || '') : '',
-      grade: '', grader: raw.tradition || '', page_ref: raw.sura + ':' + raw.aya
+      grade: '', grader: raw.tradition || '', page_ref: raw.sura + ':' + raw.aya, source_url: raw.source_url || ''
     };
   }
   if(st === 'asbab_al_nuzul'){
     return {
       id: raw.id, narrator: '', topic: 'Sura ' + raw.sura_id,
       arabic_text: '', english_text: raw.reason_text || '',
-      grade: '', grader: raw.scholar || '', page_ref: raw.sura_id + ':' + raw.aya_number
+      grade: '', grader: raw.scholar || '', page_ref: raw.sura_id + ':' + raw.aya_number, source_url: ''
     };
   }
-  return raw; // book_entries already matches the shape
+  return raw; // book_entries already matches the shape (now includes source_url)
 }
 
 async function loadEntries(){
@@ -270,14 +270,14 @@ function buildSourceQuery(offset, searchQ){
   const st = CURRENT_BOOK.source_table;
   const enc = searchQ ? encodeURIComponent(searchQ) : '';
   if(st === 'hadith_corpus'){
-    let url = SB_URL + '/rest/v1/hadith_corpus?select=id,narrator,book_chapter,text_arabic,text_english,grade,isnad,hadith_number'
+    let url = SB_URL + '/rest/v1/hadith_corpus?select=id,narrator,book_chapter,text_arabic,text_english,grade,isnad,hadith_number,source_url'
       + '&collection=eq.' + encodeURIComponent(CURRENT_BOOK.source_filter_val)
       + '&order=id&limit=' + PAGE_SIZE + '&offset=' + offset;
     if(searchQ) url += '&or=(text_english.ilike.*' + enc + '*,text_arabic.ilike.*' + enc + '*,narrator.ilike.*' + enc + '*)';
     return url;
   }
   if(st === 'tafsir_entries'){
-    let url = SB_URL + '/rest/v1/tafsir_entries?select=id,sura,aya,language,content,tradition'
+    let url = SB_URL + '/rest/v1/tafsir_entries?select=id,sura,aya,language,content,tradition,source_url'
       + '&scholar_key=eq.' + encodeURIComponent(CURRENT_BOOK.source_filter_val)
       + '&order=sura,aya&limit=' + PAGE_SIZE + '&offset=' + offset;
     if(searchQ) url += '&content=ilike.*' + enc + '*';
@@ -389,6 +389,7 @@ function entryCardHTML(e){
       ${e.arabic_text ? `<div class="arabic-text" data-raw="${esc(e.arabic_text).replace(/"/g,'&quot;')}">${e.arabic_text.length <= 700 ? applyHighlights(e.arabic_text, e.id) : truncatedHTML(e.arabic_text, e.id, 'arabic-text')}</div>` : ''}
       ${e.english_text ? truncatedHTML(e.english_text, e.id, 'english-text') : ''}
       ${e.grader ? `<div class="grade-note">— ${esc(e.grader)}${e.page_ref ? ' · ' + esc(e.page_ref) : ''}</div>` : ''}
+      ${e.source_url ? `<div class="grade-note"><a href="${esc(e.source_url)}" target="_blank" rel="noopener" style="color:#2E7D32;font-weight:700;text-decoration:none;">🔗 Verify source</a></div>` : ''}
       <div class="entry-actions">
         <button class="act-btn speak-btn" id="speakBtn-${e.id}" onclick="speakEntry(${e.id})">🔊 Listen</button>
         <button class="act-btn" onclick="copyEntry(${e.id})">📋 Copy</button>
