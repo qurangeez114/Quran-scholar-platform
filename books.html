@@ -50,6 +50,7 @@
   .badge.grade-sahih{background:#E4F0E9;color:#2E7D32}
   .badge.grade-hasan{background:#FFF3D6;color:#9A6A00}
   .badge.grade-daif{background:#FBE4E4;color:#B23A3A}
+  .badge.grade-ungraded{background:#EEEBE4;color:#8a7a5a;font-style:italic;font-weight:600;}
   .arabic-text{font-family:'Amiri',serif;font-size:20px;line-height:2.1;direction:rtl;text-align:right;color:#241a0a;user-select:text;margin-bottom:10px}
   .english-text{font-size:14.5px;color:#444;line-height:1.7;margin-bottom:8px}
   .grade-note{font-size:12px;color:#8a7a5a;font-style:italic;margin-bottom:10px}
@@ -329,7 +330,13 @@ function renderClusters(){
   c.innerHTML = groups.map(([cid, members]) => {
     const preview = esc((members[0].english_text || members[0].arabic_text || '').slice(0, 120)) + '…';
     if(members.length === 1){
-      return `<div class="entry-card" data-entry-id="${members[0].id}">${entryBodyHTML(members[0])}</div>`;
+      return `<div class="entry-card">
+        ${entryBodyHTML(members[0])}
+        <div style="padding:0 16px 16px;">
+          <button class="qbtn" onclick="analyzeCluster(${cid})">🔍 Critical Analysis</button>
+          <div id="clusterAnalysis-${cid}" style="margin-top:10px;font-size:13.5px;color:#3A2E1A;"></div>
+        </div>
+      </div>`;
     }
     return `
     <div class="entry-card" style="padding:0;overflow:hidden;">
@@ -341,7 +348,7 @@ function renderClusters(){
       <div id="clusterBody-${cid}" style="display:none;border-top:1px solid #F0E8D5;">
         ${members.map(e => `<div style="padding:16px;border-bottom:1px solid #F5EFDD;" data-entry-id="${e.id}">${entryBodyHTML(e)}</div>`).join('')}
         <div style="padding:12px 16px;">
-          <button class="qbtn" onclick="analyzeCluster(${cid})">🔍 Analyze (translation + fiqh/madhhab)</button>
+          <button class="qbtn" onclick="analyzeCluster(${cid})">🔍 Critical Analysis</button>
           <div id="clusterAnalysis-${cid}" style="margin-top:10px;font-size:13.5px;color:#3A2E1A;"></div>
         </div>
       </div>
@@ -356,24 +363,55 @@ function toggleCluster(cid){
 
 async function analyzeCluster(cid){
   const box = document.getElementById('clusterAnalysis-' + cid);
-  box.innerHTML = '<em>Analyzing…</em>';
+  box.innerHTML = '<em>Gathering context…</em>';
   const members = CLUSTERS[cid];
-  const versionsText = members.map((e,i) => `Version ${i+1} (narrator: ${e.narrator || 'unknown'}):\n${e.english_text || e.arabic_text}`).join('\n\n');
-  const prompt = `You are a hadith scholar. Below are ${members.length} narrations of what appears to be the same hadith from ${CURRENT_BOOK.title_en}. Provide, in under 250 words total:
-1. Key similarities/differences in wording between the versions.
-2. Any notable English translation nuance across versions.
-3. Relevance to fiqh rulings or madhhab positions, if any (state "none apparent" if not applicable).
-Be concise, factual, and avoid speculation beyond what the isnad/text supports.
+  const versionsText = members.map((e,i) => `Version ${i+1} (narrator: ${e.narrator || 'unknown'}, grade: ${e.grade || 'unknown'}):\n${e.english_text || e.arabic_text}`).join('\n\n');
 
-${versionsText}`;
+  // Ground the prompt with real linked Quran verses and any existing scholarly analysis already in the DB
+  const ids = members.map(m => m.id).join(',');
+  const [linksRes, analysisRes] = await Promise.all([
+    fetch(SB_URL + '/rest/v1/theme_hadith_links?hadith_id=in.(' + ids + ')&select=sura_id,aya_number,similarity_note,difference_note&order=relevance_score.desc&limit=8', { headers: HDR }),
+    fetch(SB_URL + '/rest/v1/hadith_analysis?hadith_id=in.(' + ids + ')&select=authenticity_grade,quran_tension_summary,sunni_interpretation,shia_interpretation&limit=5', { headers: HDR })
+  ]);
+  const links = linksRes.ok ? await linksRes.json() : [];
+  const analyses = analysisRes.ok ? await analysisRes.json() : [];
+
+  const linksText = links.length
+    ? links.map(l => `Quran ${l.sura_id}:${l.aya_number} — ${l.similarity_note || ''}${l.difference_note ? ' (tension: ' + l.difference_note + ')' : ''}`).join('\n')
+    : 'No pre-linked Quran verses on file for this hadith.';
+  const priorAnalysisText = analyses.length
+    ? analyses.map(a => `Prior note — grade: ${a.authenticity_grade || 'n/a'}; Quran tension: ${a.quran_tension_summary || 'none noted'}; Sunni view: ${a.sunni_interpretation || 'n/a'}; Shia view: ${a.shia_interpretation || 'n/a'}`).join('\n')
+    : 'No prior scholarly analysis on file for this hadith.';
+
+  box.innerHTML = '<em>Analyzing…</em>';
+  const prompt = `You are a hadith scholar. Below are ${members.length} narration(s) of a hadith from ${CURRENT_BOOK.title_en}, plus grounding data already on file (real linked Quran verses and any prior analysis — treat this as factual context, do not invent additional links beyond it).
+
+NARRATIONS:
+${versionsText}
+
+PRE-LINKED QURAN VERSES ON FILE:
+${linksText}
+
+PRIOR ANALYSIS ON FILE:
+${priorAnalysisText}
+
+Provide a structured critical analysis with exactly these three headed sections, under 350 words total:
+### 1. Comparison of Narrations
+If multiple versions exist, note real differences in wording, isnad, or emphasis, and flag any apparent internal contradiction. If only one version, say so briefly.
+### 2. Relation to the Quran
+Using the pre-linked verses above (do not fabricate new ones), explain how this hadith supports, elaborates on, or is in tension with those verses.
+### 3. Fiqh / Madhhab Ruling
+Explain what legal ruling(s), if any, classical scholars derive from this hadith, and whether madhhabs differ on it. State "no direct fiqh ruling derived" if that's accurate — do not invent a ruling that isn't well attested.
+
+Be concise, factual, and avoid speculation beyond what the given text and context supports.`;
   try{
     const res = await fetch('/claude', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 500, messages: [{ role: 'user', content: prompt }] })
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 700, messages: [{ role: 'user', content: prompt }] })
     });
     const data = await res.json();
     const text = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n');
-    box.innerHTML = esc(text).replace(/\n/g, '<br>');
+    box.innerHTML = esc(text).replace(/### (.+)/g, '<div style="font-weight:700;color:#5A3A10;margin:10px 0 4px;">$1</div>').replace(/\n/g, '<br>');
   }catch(err){
     box.innerHTML = '<span style="color:#B23A3A;">Analysis failed — try again.</span>';
   }
@@ -481,12 +519,18 @@ function applyHighlights(text, entryId){
 }
 
 function gradeClass(grade){
-  if(!grade) return '';
+  if(!grade) return 'grade-ungraded';
   const g = grade.toLowerCase();
+  if(g === 'ungraded') return 'grade-ungraded';
   if(g.includes('sahih')) return 'grade-sahih';
   if(g.includes('hasan')) return 'grade-hasan';
-  if(g.includes('daif') || g.includes("da'if")) return 'grade-daif';
+  if(g.includes('daif') || g.includes("da'if") || g.includes('weak')) return 'grade-daif';
+  if(g.includes('mawdu') || g.includes('fabricat')) return 'grade-daif';
   return '';
+}
+function gradeLabel(grade){
+  if(!grade || grade.toLowerCase() === 'ungraded') return 'No grade on file';
+  return grade;
 }
 
 let GROUP_MODE = 'none'; // 'none' | 'narrator' | 'topic'
@@ -516,7 +560,7 @@ function entryBodyHTML(e){
       <div class="entry-badges">
         ${e.narrator ? `<span class="badge narrator">👤 ${esc(e.narrator)}</span>` : ''}
         ${e.topic ? `<span class="badge topic">🏷 ${esc(e.topic)}</span>` : ''}
-        ${e.grade ? `<span class="badge ${gradeClass(e.grade)}">${esc(e.grade)}</span>` : ''}
+        <span class="badge ${gradeClass(e.grade)}">${esc(gradeLabel(e.grade))}</span>
       </div>
       ${e.arabic_text ? `<div class="arabic-text" data-raw="${esc(e.arabic_text).replace(/"/g,'&quot;')}">${e.arabic_text.length <= 700 ? applyHighlights(e.arabic_text, e.id) : truncatedHTML(e.arabic_text, e.id, 'arabic-text')}</div>` : ''}
       ${e.english_text ? truncatedHTML(e.english_text, e.id, 'english-text') : ''}
