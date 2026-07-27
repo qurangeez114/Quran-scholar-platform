@@ -119,6 +119,11 @@
     <select id="topicFilter" onchange="applyFilters()"><option value="">All topics</option></select>
     <button class="qbtn ghost" onclick="clearFilters()">Clear filters</button>
   </div>
+  <div class="filter-row" id="chapterModeRow" style="display:none;">
+    <select id="chapterSelect" style="flex:1;"><option value="">Select a chapter/book...</option></select>
+    <button class="qbtn" onclick="loadChapterClusters()">🔗 Group Duplicates</button>
+    <button class="qbtn ghost" onclick="exitChapterMode()">← Back to full list</button>
+  </div>
   <div id="entryCount"></div>
   <div id="entries"></div>
   <div id="loadMoreRow" style="display:none;text-align:center;margin:10px 0 20px;">
@@ -204,6 +209,9 @@ async function openBook(id){
   document.getElementById('groupFilterRow').style.display = IS_PAGINATED ? 'none' : 'flex';
   document.getElementById('dropdownFilterRow').style.display = IS_PAGINATED ? 'none' : 'flex';
   document.getElementById('loadMoreRow').style.display = 'none';
+  const isHadith = CURRENT_BOOK.source_table === 'hadith_corpus';
+  document.getElementById('chapterModeRow').style.display = isHadith ? 'flex' : 'none';
+  if(isHadith) await populateChapterOptions();
   await loadEntries();
 }
 
@@ -246,6 +254,106 @@ function normalizeRawEntry(raw){
   }
   return raw; // book_entries already matches the shape (now includes source_url)
 }
+
+async function populateChapterOptions(){
+  const res = await fetch(SB_URL + '/rest/v1/rpc/get_hadith_chapters', {
+    method: 'POST', headers: { ...HDR, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ p_collection: CURRENT_BOOK.source_filter_val })
+  });
+  const chapters = res.ok ? await res.json() : [];
+  const sel = document.getElementById('chapterSelect');
+  sel.innerHTML = '<option value="">Select a chapter/book...</option>' +
+    chapters.map(c => `<option value="${esc(c.book_chapter)}">${esc(c.book_chapter)} (${c.cnt})</option>`).join('');
+}
+
+let CLUSTER_MODE = false;
+let CLUSTERS = {};
+
+async function loadChapterClusters(){
+  const chapter = document.getElementById('chapterSelect').value;
+  if(!chapter){ toast('Pick a chapter first'); return; }
+  document.getElementById('entries').innerHTML = '<div id="emptyState">Finding duplicate narrations… this can take a few seconds.</div>';
+  document.getElementById('loadMoreRow').style.display = 'none';
+  const res = await fetch(SB_URL + '/rest/v1/rpc/get_hadith_duplicate_clusters', {
+    method: 'POST', headers: { ...HDR, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ p_collection: CURRENT_BOOK.source_filter_val, p_chapter: chapter })
+  });
+  if(!res.ok){ document.getElementById('entries').innerHTML = '<div id="emptyState">This chapter is too large to cluster live — try a smaller one.</div>'; return; }
+  const rows = await res.json();
+  CLUSTER_MODE = true;
+  CLUSTERS = {};
+  rows.forEach(r => { if(!CLUSTERS[r.cluster_id]) CLUSTERS[r.cluster_id] = []; CLUSTERS[r.cluster_id].push(normalizeRawEntry(r)); });
+  const allIds = rows.map(r => r.hadith_id);
+  ALL_ENTRIES = allIds.map(id => normalizeRawEntry(rows.find(r => r.hadith_id === id)));
+  await loadAnnotations();
+  renderClusters();
+}
+
+function exitChapterMode(){
+  CLUSTER_MODE = false;
+  document.getElementById('chapterSelect').value = '';
+  loadEntries();
+}
+
+function renderClusters(){
+  const groups = Object.entries(CLUSTERS).sort((a,b) => +a[0] - +b[0]);
+  const multi = groups.filter(([,members]) => members.length > 1);
+  const single = groups.filter(([,members]) => members.length === 1);
+  document.getElementById('entryCount').textContent = groups.length + ' distinct hadith (' + multi.length + ' with multiple narrations, ' + single.length + ' unique)';
+  const c = document.getElementById('entries');
+  c.innerHTML = groups.map(([cid, members]) => {
+    const preview = esc((members[0].english_text || members[0].arabic_text || '').slice(0, 120)) + '…';
+    if(members.length === 1){
+      return `<div class="entry-card" data-entry-id="${members[0].id}">${entryBodyHTML(members[0])}</div>`;
+    }
+    return `
+    <div class="entry-card" style="padding:0;overflow:hidden;">
+      <div style="padding:14px 16px;cursor:pointer;background:#FBF6E9;" onclick="toggleCluster(${cid})">
+        <span class="badge topic" style="margin-bottom:0;">${members.length} narrations</span>
+        <div style="margin-top:6px;font-size:13.5px;color:#5A3A10;">${preview}</div>
+        <div style="font-size:11.5px;color:#8a7a5a;margin-top:4px;">Tap to expand ▾</div>
+      </div>
+      <div id="clusterBody-${cid}" style="display:none;border-top:1px solid #F0E8D5;">
+        ${members.map(e => `<div style="padding:16px;border-bottom:1px solid #F5EFDD;" data-entry-id="${e.id}">${entryBodyHTML(e)}</div>`).join('')}
+        <div style="padding:12px 16px;">
+          <button class="qbtn" onclick="analyzeCluster(${cid})">🔍 Analyze (translation + fiqh/madhhab)</button>
+          <div id="clusterAnalysis-${cid}" style="margin-top:10px;font-size:13.5px;color:#3A2E1A;"></div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleCluster(cid){
+  const el = document.getElementById('clusterBody-' + cid);
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+async function analyzeCluster(cid){
+  const box = document.getElementById('clusterAnalysis-' + cid);
+  box.innerHTML = '<em>Analyzing…</em>';
+  const members = CLUSTERS[cid];
+  const versionsText = members.map((e,i) => `Version ${i+1} (narrator: ${e.narrator || 'unknown'}):\n${e.english_text || e.arabic_text}`).join('\n\n');
+  const prompt = `You are a hadith scholar. Below are ${members.length} narrations of what appears to be the same hadith from ${CURRENT_BOOK.title_en}. Provide, in under 250 words total:
+1. Key similarities/differences in wording between the versions.
+2. Any notable English translation nuance across versions.
+3. Relevance to fiqh rulings or madhhab positions, if any (state "none apparent" if not applicable).
+Be concise, factual, and avoid speculation beyond what the isnad/text supports.
+
+${versionsText}`;
+  try{
+    const res = await fetch('/claude', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 500, messages: [{ role: 'user', content: prompt }] })
+    });
+    const data = await res.json();
+    const text = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n');
+    box.innerHTML = esc(text).replace(/\n/g, '<br>');
+  }catch(err){
+    box.innerHTML = '<span style="color:#B23A3A;">Analysis failed — try again.</span>';
+  }
+}
+
 
 async function loadEntries(){
   if(!IS_PAGINATED){
@@ -377,10 +485,9 @@ function expandText(cls, id){
   document.getElementById('full-' + cls + '-' + id).style.display = 'block';
 }
 
-function entryCardHTML(e){
+function entryBodyHTML(e){
   const notes = (ANNOTATIONS[e.id] && ANNOTATIONS[e.id].notes) || [];
   return `
-    <div class="entry-card" data-entry-id="${e.id}">
       <div class="entry-badges">
         ${e.narrator ? `<span class="badge narrator">👤 ${esc(e.narrator)}</span>` : ''}
         ${e.topic ? `<span class="badge topic">🏷 ${esc(e.topic)}</span>` : ''}
@@ -390,6 +497,7 @@ function entryCardHTML(e){
       ${e.english_text ? truncatedHTML(e.english_text, e.id, 'english-text') : ''}
       ${e.grader ? `<div class="grade-note">— ${esc(e.grader)}${e.page_ref ? ' · ' + esc(e.page_ref) : ''}</div>` : ''}
       ${e.source_url ? `<div class="grade-note"><a href="${esc(e.source_url)}" target="_blank" rel="noopener" style="color:#2E7D32;font-weight:700;text-decoration:none;">🔗 Verify source</a></div>` : ''}
+      <div id="quranLinks-${e.id}"></div>
       <div class="entry-actions">
         <button class="act-btn speak-btn" id="speakBtn-${e.id}" onclick="speakEntry(${e.id})">🔊 Listen</button>
         <button class="act-btn" onclick="copyEntry(${e.id})">📋 Copy</button>
@@ -397,13 +505,29 @@ function entryCardHTML(e){
         <button class="act-btn" onclick="shareEntry(${e.id})">↗ Share</button>
         <button class="act-btn" onclick="addEntryToPresentation(${e.id})">＋ Add to Presentation</button>
         <button class="act-btn" onclick="openResearchPicker(${e.id})">📚 Save to Research</button>
+        ${CURRENT_BOOK.source_table === 'hadith_corpus' ? `<button class="act-btn" onclick="loadQuranLinks(${e.id})">📖 Related Quran verses</button>` : ''}
       </div>
       <div class="note-box" id="noteBox-${e.id}" style="display:none;">
         ${notes.map(n => `<div style="margin-bottom:6px;">${esc(n.note_text)}</div>`).join('')}
         <textarea id="noteInput-${e.id}" placeholder="Add a note..."></textarea>
         <button class="qbtn" style="margin-top:6px;" onclick="saveNote(${e.id})">Save note</button>
-      </div>
-    </div>`;
+      </div>`;
+}
+
+async function loadQuranLinks(id){
+  const box = document.getElementById('quranLinks-' + id);
+  box.innerHTML = '<em style="font-size:12.5px;color:#8a7a5a;">Loading…</em>';
+  const res = await fetch(SB_URL + '/rest/v1/theme_hadith_links?hadith_id=eq.' + id + '&collection=eq.' + encodeURIComponent(CURRENT_BOOK.source_filter_val) + '&select=sura_id,aya_number,similarity_note,relevance_score&order=relevance_score.desc', { headers: HDR });
+  const links = res.ok ? await res.json() : [];
+  if(!links.length){ box.innerHTML = '<div style="font-size:12.5px;color:#8a7a5a;margin-bottom:8px;">No linked verses found for this hadith.</div>'; return; }
+  box.innerHTML = '<div style="background:#F5F0FF;border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:13px;">' +
+    '<div style="font-weight:700;color:#5A3A8B;margin-bottom:6px;">📖 Related Quran verses</div>' +
+    links.map(l => `<div style="margin-bottom:6px;"><a href="index.html?sura=${l.sura_id}&aya=${l.aya_number}" target="_blank" style="font-weight:700;color:#5A3A8B;">Quran ${l.sura_id}:${l.aya_number}</a> — ${esc(l.similarity_note || '')}</div>`).join('') +
+    '</div>';
+}
+
+function entryCardHTML(e){
+  return `<div class="entry-card" data-entry-id="${e.id}">${entryBodyHTML(e)}</div>`;
 }
 
 function renderEntries(list){
