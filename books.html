@@ -699,9 +699,69 @@ function extractCrossRefs(gradeDetails){
   return [...refs];
 }
 
+const COLLECTION_KEYWORDS = [
+  [/al-?bukhari/i, 'Sahih al-Bukhari'],
+  [/muslim/i, 'Sahih Muslim'],
+  [/an-?nasa['’]?i|nasai/i, 'Sunan an-Nasai'],
+  [/ibn\s*majah/i, 'Sunan Ibn Majah'],
+  [/abu\s*da[wv]u?d/i, 'Sunan Abu Dawud'],
+  [/tirmidhi/i, 'Jami at-Tirmidhi'],
+  [/mu[wv]atta|imam\s*malik/i, 'Muwatta Malik'],
+  [/ahmad|ahmed/i, 'Ahmed'],
+  [/darimi/i, 'Sunan ad-Darimi']
+];
+
+function detectCitedCollections(text){
+  if(!text) return [];
+  const citeMatch = text.match(/related by|rawahu|narrated by|reported by|أخرجه|رواه/i);
+  const scope = citeMatch ? text.slice(citeMatch.index) : '';
+  if(!scope) return [];
+  const found = new Set();
+  COLLECTION_KEYWORDS.forEach(([rx, name]) => { if(rx.test(scope)) found.add(name); });
+  return [...found];
+}
+
+async function verifyParallelNarrations(id){
+  const box = document.getElementById('parallelBox-' + id);
+  const e = findEntryById(id);
+  if(!e){ box.innerHTML = '<div style="color:#B23A3A;font-size:12.5px;">Could not locate this hadith.</div>'; return; }
+  box.innerHTML = '<em style="font-size:12.5px;color:#8a7a5a;">Searching cited collections…</em>';
+
+  const fullText = e.english_text || '';
+  const citeMatch = fullText.match(/\n\n(it was |this )?related by|rawahu|narrated by|reported by/i);
+  const mainText = citeMatch ? fullText.slice(0, citeMatch.index).trim() : fullText;
+  const collections = detectCitedCollections(fullText);
+  if(!collections.length){ box.innerHTML = '<div style="font-size:12.5px;color:#8a7a5a;">No citation to other collections detected in this text.</div>'; return; }
+
+  // Use a distinctive early chunk of the actual hadith content as the search anchor
+  const anchor = mainText.replace(/^\W+/, '').split(/\s+/).slice(0, 8).join(' ');
+  const results = [];
+  for(const col of collections){
+    try{
+      const res = await fetch(SB_URL + '/rest/v1/hadith_corpus?select=id,collection,hadith_number,grade,source_url,text_english&collection=eq.' + encodeURIComponent(col) + '&text_english=ilike.*' + encodeURIComponent(anchor) + '*&limit=3', { headers: HDR });
+      if(res.ok){ const rows = await res.json(); results.push(...rows); }
+    }catch(err){}
+  }
+
+  if(!results.length){
+    box.innerHTML = `<div style="font-size:12.5px;color:#8a7a5a;">Citation mentions ${collections.map(esc).join(', ')}, but no exact textual match was found in those collections (translation wording may differ, or it may not be in what\'s currently indexed).</div>`;
+    return;
+  }
+  box.innerHTML = '<div style="background:#E9F5EC;border-radius:8px;padding:10px 12px;font-size:13px;">' +
+    '<div style="font-weight:700;color:#2E7D32;margin-bottom:6px;">✅ Verified parallel narrations found</div>' +
+    results.map(r => `<div style="margin-bottom:8px;">
+        <span style="font-weight:700;color:#2E7D32;">${esc(r.collection)} #${esc(r.hadith_number||'?')}</span>
+        <span class="badge ${gradeClass(r.grade)}" style="margin-left:6px;">${esc(gradeLabel(r.grade))}</span>
+        ${r.source_url ? ` <a href="${esc(r.source_url)}" target="_blank" style="color:#2E7D32;font-weight:700;">🔗</a>` : ''}
+        <div style="font-size:12px;color:#3A2E1A;margin-top:2px;">${esc((r.text_english||'').slice(0,150))}…</div>
+      </div>`).join('') +
+    '</div>';
+}
+
 function entryBodyHTML(e){
   const notes = (ANNOTATIONS[e.id] && ANNOTATIONS[e.id].notes) || [];
   const crossRefs = extractCrossRefs(e.grade_details);
+  const citedCollections = detectCitedCollections(e.english_text);
   return `
       <div class="entry-badges">
         ${CURRENT_BOOK.source_table ? `<span class="badge" style="background:#EDE7F6;color:#4A2E7A;">📚 ${esc(CURRENT_BOOK.title_en || CURRENT_BOOK.title_ar)}</span>` : ''}
@@ -715,6 +775,7 @@ function entryBodyHTML(e){
       ${e.grader ? `<div class="grade-note">— ${esc(e.grader)}${e.page_ref ? ' · ' + esc(e.page_ref) : ''}</div>` : ''}
       ${e.source_url ? `<div class="grade-note"><a href="${esc(e.source_url)}" target="_blank" rel="noopener" style="color:#2E7D32;font-weight:700;text-decoration:none;">🔗 Verify source</a></div>` : ''}
       <div id="quranLinks-${e.id}"></div>
+      <div id="parallelBox-${e.id}"></div>
       <div class="entry-actions">
         <button class="act-btn speak-btn" id="speakBtn-${e.id}" onclick="speakEntry(${e.id})">🔊 Listen</button>
         <button class="act-btn" onclick="copyEntry(${e.id})">📋 Copy</button>
@@ -723,6 +784,7 @@ function entryBodyHTML(e){
         <button class="act-btn" onclick="addEntryToPresentation(${e.id})">＋ Add to Presentation</button>
         <button class="act-btn" onclick="openResearchPicker(${e.id})">📚 Save to Research</button>
         ${CURRENT_BOOK.source_table === 'hadith_corpus' ? `<button class="act-btn" onclick="loadQuranLinks(${e.id})">📖 Related Quran verses</button>` : ''}
+        ${citedCollections.length ? `<button class="act-btn" onclick="verifyParallelNarrations(${e.id})">✅ Verify: ${esc(citedCollections.join(', '))}</button>` : ''}
       </div>
       <div class="note-box" id="noteBox-${e.id}" style="display:none;">
         ${notes.map(n => `<div style="margin-bottom:6px;">${esc(n.note_text)}</div>`).join('')}
