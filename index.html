@@ -5844,16 +5844,29 @@ function isBookmarked(ayaNum, suraId) {
 function toggleBookmark(ayaNum, suraId) {
   const key = bmKey(suraId, ayaNum);
   const btn = document.getElementById('bm-' + ayaNum);
+  const showToast = (msg, color) => {
+    const t = document.createElement('div');
+    t.style.cssText = `position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:${color};color:#fff;padding:8px 18px;border-radius:20px;font-size:13px;font-weight:700;z-index:999999;`;
+    t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), 1800);
+  };
   if (localStorage.getItem(key)) {
     localStorage.removeItem(key);
     if (btn) btn.textContent = '🏷️';
+    showToast('Bookmark removed', '#8a7a5a');
   } else {
     const aya = CURRENT_AYAS.find(a => a.aya_number === ayaNum) || {};
     const arabic = getSafeArabicText(aya) || aya.arabic || '';
     const english = aya.english || '';
     const tigrinya = aya.tigrinya || aya.aya_text || '';
-    localStorage.setItem(key, JSON.stringify({ suraId, ayaNum, arabic, english, tigrinya, savedAt: new Date().toISOString() }));
-    if (btn) btn.textContent = '🔖';
+    try {
+      localStorage.setItem(key, JSON.stringify({ suraId, ayaNum, arabic, english, tigrinya, savedAt: new Date().toISOString() }));
+      if (btn) btn.textContent = '🔖';
+      showToast('🔖 Bookmarked ' + suraId + ':' + ayaNum, '#B8902A');
+    } catch(err) {
+      showToast('Bookmark failed to save — storage may be full/blocked', '#B23A3A');
+    }
   }
   renderSavedList();
 }
