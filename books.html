@@ -507,6 +507,22 @@ function populateFilterOptions(){
   tf.innerHTML = '<option value="">All topics</option>' + topics.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
 }
 
+let CURRENT_SEARCH_QUERY = '';
+
+function highlightSearchTerms(escapedText){
+  if(!CURRENT_SEARCH_QUERY) return escapedText;
+  const words = CURRENT_SEARCH_QUERY.split(/\s+/).map(w => w.trim()).filter(Boolean);
+  if(!words.length) return escapedText;
+  let out = escapedText;
+  words.forEach(w => {
+    const escW = w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if(!escW) return;
+    const rx = new RegExp('(' + escW + ')', 'gi');
+    out = out.replace(rx, '<mark class="hl">$1</mark>');
+  });
+  return out;
+}
+
 function applyHighlights(text, entryId){
   const hls = (ANNOTATIONS[entryId] && ANNOTATIONS[entryId].highlights) || [];
   let out = esc(text);
@@ -515,7 +531,7 @@ function applyHighlights(text, entryId){
     const escSel = esc(h.selected_text);
     if(out.includes(escSel)) out = out.replace(escSel, '<mark class="hl">' + escSel + '</mark>');
   });
-  return out;
+  return highlightSearchTerms(out);
 }
 
 function gradeClass(grade){
@@ -543,9 +559,9 @@ function setGroupMode(mode){
 }
 
 function truncatedHTML(text, id, cls){
-  const safe = esc(text);
+  const safe = highlightSearchTerms(esc(text));
   if(text.length <= 700) return `<div class="${cls}">${safe}</div>`;
-  const short = esc(text.slice(0, 700)) + '…';
+  const short = highlightSearchTerms(esc(text.slice(0, 700))) + '…';
   return `<div class="${cls}" id="full-${cls}-${id}" style="display:none;">${safe}</div>
     <div class="${cls}" id="short-${cls}-${id}">${short} <a href="#" onclick="event.preventDefault();expandText('${cls}',${id})" style="color:#B8902A;font-weight:700;">Read more</a></div>`;
 }
@@ -626,8 +642,9 @@ function renderEntries(list){
 }
 
 function applyFilters(){
-  if(IS_PAGINATED){ fetchMorePaginated(true); return; }
   const q = document.getElementById('searchInput').value.trim().toLowerCase();
+  CURRENT_SEARCH_QUERY = q;
+  if(IS_PAGINATED){ fetchMorePaginated(true); return; }
   const nf = document.getElementById('narratorFilter').value;
   const tf = document.getElementById('topicFilter').value;
   let list = ALL_ENTRIES;
@@ -645,6 +662,7 @@ function clearFilters(){
   document.getElementById('narratorFilter').value = '';
   document.getElementById('topicFilter').value = '';
   document.getElementById('searchSuggest').style.display = 'none';
+  CURRENT_SEARCH_QUERY = '';
   if(IS_PAGINATED) fetchMorePaginated(true);
   else renderEntries(ALL_ENTRIES);
 }
