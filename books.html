@@ -108,19 +108,22 @@
     <button class="qbtn" onclick="runSearch()">🔍</button>
     <div id="searchSuggest"></div>
   </div>
-  <div class="filter-row" style="margin-bottom:6px;">
+  <div class="filter-row" id="groupFilterRow" style="margin-bottom:6px;">
     <span style="font-size:12.5px;color:#8a7a5a;align-self:center;">Group by:</span>
     <button class="qbtn" id="groupNoneBtn" onclick="setGroupMode('none')">None</button>
     <button class="qbtn" id="groupNarratorBtn" onclick="setGroupMode('narrator')">👤 Narrator</button>
     <button class="qbtn" id="groupTopicBtn" onclick="setGroupMode('topic')">🏷 Topic</button>
   </div>
-  <div class="filter-row">
+  <div class="filter-row" id="dropdownFilterRow">
     <select id="narratorFilter" onchange="applyFilters()"><option value="">All narrators</option></select>
     <select id="topicFilter" onchange="applyFilters()"><option value="">All topics</option></select>
     <button class="qbtn ghost" onclick="clearFilters()">Clear filters</button>
   </div>
   <div id="entryCount"></div>
   <div id="entries"></div>
+  <div id="loadMoreRow" style="display:none;text-align:center;margin:10px 0 20px;">
+    <button class="qbtn" onclick="loadMoreEntries()">⬇ Load more entries</button>
+  </div>
 </div>
 
 <div id="selPopup"><button onclick="highlightSelection()">🖍 Highlight</button></div>
@@ -164,6 +167,10 @@ const DEVICE_ID = getDeviceId();
 let CURRENT_BOOK = null;
 let ALL_ENTRIES = [];
 let ANNOTATIONS = {}; // entry_id -> {highlights:[], notes:[]}
+let IS_PAGINATED = false;
+let PAGE_OFFSET = 0;
+const PAGE_SIZE = 25;
+let HAS_MORE = false;
 
 function esc(s){ return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
@@ -190,9 +197,13 @@ async function openBook(id){
   const res = await fetch(SB_URL + '/rest/v1/books?id=eq.' + id + '&select=*', { headers: HDR });
   const rows = await res.json();
   CURRENT_BOOK = rows[0];
+  IS_PAGINATED = !!CURRENT_BOOK.source_table;
   document.getElementById('pageTitle').textContent = '📖 ' + (CURRENT_BOOK.title_en || CURRENT_BOOK.title_ar);
   document.getElementById('library').style.display = 'none';
   document.getElementById('reader').style.display = 'block';
+  document.getElementById('groupFilterRow').style.display = IS_PAGINATED ? 'none' : 'flex';
+  document.getElementById('dropdownFilterRow').style.display = IS_PAGINATED ? 'none' : 'flex';
+  document.getElementById('loadMoreRow').style.display = 'none';
   await loadEntries();
 }
 
@@ -207,22 +218,107 @@ function goBack(){
   }
 }
 
-async function loadEntries(){
-  const res = await fetch(SB_URL + '/rest/v1/book_entries?book_id=eq.' + CURRENT_BOOK.id + '&select=*&order=entry_number', { headers: HDR });
-  ALL_ENTRIES = await res.json();
-  await loadAnnotations();
-  populateFilterOptions();
-  GROUP_MODE = 'none';
-  document.getElementById('groupNoneBtn').classList.add('active');
-  document.getElementById('groupNarratorBtn').classList.remove('active');
-  document.getElementById('groupTopicBtn').classList.remove('active');
-  renderEntries(ALL_ENTRIES);
+// ---- Normalize a raw row from any source table into the common entry shape ----
+function normalizeRawEntry(raw){
+  const st = CURRENT_BOOK.source_table;
+  if(st === 'hadith_corpus'){
+    return {
+      id: raw.id, narrator: raw.narrator || '', topic: raw.book_chapter || '',
+      arabic_text: raw.text_arabic || '', english_text: raw.text_english || '',
+      grade: raw.grade || '', grader: raw.isnad ? ('Isnad: ' + raw.isnad) : '',
+      page_ref: raw.hadith_number ? ('#' + raw.hadith_number) : ''
+    };
+  }
+  if(st === 'tafsir_entries'){
+    return {
+      id: raw.id, narrator: '', topic: 'Sura ' + raw.sura,
+      arabic_text: raw.language === 'ar' ? (raw.content || '') : '',
+      english_text: raw.language === 'en' ? (raw.content || '') : '',
+      grade: '', grader: raw.tradition || '', page_ref: raw.sura + ':' + raw.aya
+    };
+  }
+  if(st === 'asbab_al_nuzul'){
+    return {
+      id: raw.id, narrator: '', topic: 'Sura ' + raw.sura_id,
+      arabic_text: '', english_text: raw.reason_text || '',
+      grade: '', grader: raw.scholar || '', page_ref: raw.sura_id + ':' + raw.aya_number
+    };
+  }
+  return raw; // book_entries already matches the shape
 }
+
+async function loadEntries(){
+  if(!IS_PAGINATED){
+    const res = await fetch(SB_URL + '/rest/v1/book_entries?book_id=eq.' + CURRENT_BOOK.id + '&select=*&order=entry_number', { headers: HDR });
+    ALL_ENTRIES = await res.json();
+    await loadAnnotations();
+    populateFilterOptions();
+    GROUP_MODE = 'none';
+    document.getElementById('groupNoneBtn').classList.add('active');
+    document.getElementById('groupNarratorBtn').classList.remove('active');
+    document.getElementById('groupTopicBtn').classList.remove('active');
+    renderEntries(ALL_ENTRIES);
+    return;
+  }
+  // Paginated (large source-table) book
+  PAGE_OFFSET = 0;
+  ALL_ENTRIES = [];
+  await fetchMorePaginated(true);
+}
+
+function buildSourceQuery(offset, searchQ){
+  const st = CURRENT_BOOK.source_table;
+  const enc = searchQ ? encodeURIComponent(searchQ) : '';
+  if(st === 'hadith_corpus'){
+    let url = SB_URL + '/rest/v1/hadith_corpus?select=id,narrator,book_chapter,text_arabic,text_english,grade,isnad,hadith_number'
+      + '&collection=eq.' + encodeURIComponent(CURRENT_BOOK.source_filter_val)
+      + '&order=id&limit=' + PAGE_SIZE + '&offset=' + offset;
+    if(searchQ) url += '&or=(text_english.ilike.*' + enc + '*,text_arabic.ilike.*' + enc + '*,narrator.ilike.*' + enc + '*)';
+    return url;
+  }
+  if(st === 'tafsir_entries'){
+    let url = SB_URL + '/rest/v1/tafsir_entries?select=id,sura,aya,language,content,tradition'
+      + '&scholar_key=eq.' + encodeURIComponent(CURRENT_BOOK.source_filter_val)
+      + '&order=sura,aya&limit=' + PAGE_SIZE + '&offset=' + offset;
+    if(searchQ) url += '&content=ilike.*' + enc + '*';
+    return url;
+  }
+  if(st === 'asbab_al_nuzul'){
+    let url = SB_URL + '/rest/v1/asbab_al_nuzul?select=id,sura_id,aya_number,scholar,reason_text'
+      + '&reason_text=not.like.Undefined Essential Tafsirs*'
+      + '&order=sura_id,aya_number&limit=' + PAGE_SIZE + '&offset=' + offset;
+    if(searchQ) url += '&reason_text=ilike.*' + enc + '*';
+    return url;
+  }
+  return null;
+}
+
+async function fetchMorePaginated(reset){
+  const searchQ = document.getElementById('searchInput').value.trim();
+  const offset = reset ? 0 : PAGE_OFFSET;
+  const url = buildSourceQuery(offset, searchQ);
+  if(!url) return;
+  const res = await fetch(url, { headers: { ...HDR, Prefer: 'count=exact' } });
+  const raw = await res.json();
+  const range = res.headers.get('content-range'); // e.g. "0-24/1298"
+  const total = range && range.includes('/') ? parseInt(range.split('/')[1], 10) : null;
+  const normalized = raw.map(normalizeRawEntry);
+  if(reset) ALL_ENTRIES = normalized;
+  else ALL_ENTRIES = ALL_ENTRIES.concat(normalized);
+  PAGE_OFFSET = offset + raw.length;
+  HAS_MORE = total !== null ? PAGE_OFFSET < total : raw.length === PAGE_SIZE;
+  await loadAnnotations();
+  renderEntries(ALL_ENTRIES);
+  document.getElementById('entryCount').textContent = ALL_ENTRIES.length + (total !== null ? ' of ' + total : '') + ' entries';
+  document.getElementById('loadMoreRow').style.display = HAS_MORE ? 'block' : 'none';
+}
+function loadMoreEntries(){ fetchMorePaginated(false); }
 
 async function loadAnnotations(){
   if(!ALL_ENTRIES.length) return;
+  const st = CURRENT_BOOK.source_table || 'book_entries';
   const ids = ALL_ENTRIES.map(e => e.id).join(',');
-  const res = await fetch(SB_URL + '/rest/v1/book_annotations?entry_id=in.(' + ids + ')&device_id=eq.' + encodeURIComponent(DEVICE_ID) + '&select=*', { headers: HDR });
+  const res = await fetch(SB_URL + '/rest/v1/book_annotations?entry_id=in.(' + ids + ')&source_table=eq.' + encodeURIComponent(st) + '&device_id=eq.' + encodeURIComponent(DEVICE_ID) + '&select=*', { headers: HDR });
   const rows = await res.json();
   ANNOTATIONS = {};
   rows.forEach(r => {
@@ -269,6 +365,18 @@ function setGroupMode(mode){
   applyFilters();
 }
 
+function truncatedHTML(text, id, cls){
+  const safe = esc(text);
+  if(text.length <= 700) return `<div class="${cls}">${safe}</div>`;
+  const short = esc(text.slice(0, 700)) + '…';
+  return `<div class="${cls}" id="full-${cls}-${id}" style="display:none;">${safe}</div>
+    <div class="${cls}" id="short-${cls}-${id}">${short} <a href="#" onclick="event.preventDefault();expandText('${cls}',${id})" style="color:#B8902A;font-weight:700;">Read more</a></div>`;
+}
+function expandText(cls, id){
+  document.getElementById('short-' + cls + '-' + id).style.display = 'none';
+  document.getElementById('full-' + cls + '-' + id).style.display = 'block';
+}
+
 function entryCardHTML(e){
   const notes = (ANNOTATIONS[e.id] && ANNOTATIONS[e.id].notes) || [];
   return `
@@ -278,8 +386,8 @@ function entryCardHTML(e){
         ${e.topic ? `<span class="badge topic">🏷 ${esc(e.topic)}</span>` : ''}
         ${e.grade ? `<span class="badge ${gradeClass(e.grade)}">${esc(e.grade)}</span>` : ''}
       </div>
-      <div class="arabic-text" data-raw="${esc(e.arabic_text).replace(/"/g,'&quot;')}">${applyHighlights(e.arabic_text, e.id)}</div>
-      ${e.english_text ? `<div class="english-text">${esc(e.english_text)}</div>` : ''}
+      ${e.arabic_text ? `<div class="arabic-text" data-raw="${esc(e.arabic_text).replace(/"/g,'&quot;')}">${e.arabic_text.length <= 700 ? applyHighlights(e.arabic_text, e.id) : truncatedHTML(e.arabic_text, e.id, 'arabic-text')}</div>` : ''}
+      ${e.english_text ? truncatedHTML(e.english_text, e.id, 'english-text') : ''}
       ${e.grader ? `<div class="grade-note">— ${esc(e.grader)}${e.page_ref ? ' · ' + esc(e.page_ref) : ''}</div>` : ''}
       <div class="entry-actions">
         <button class="act-btn speak-btn" id="speakBtn-${e.id}" onclick="speakEntry(${e.id})">🔊 Listen</button>
@@ -324,6 +432,7 @@ function renderEntries(list){
 }
 
 function applyFilters(){
+  if(IS_PAGINATED){ fetchMorePaginated(true); return; }
   const q = document.getElementById('searchInput').value.trim().toLowerCase();
   const nf = document.getElementById('narratorFilter').value;
   const tf = document.getElementById('topicFilter').value;
@@ -342,7 +451,8 @@ function clearFilters(){
   document.getElementById('narratorFilter').value = '';
   document.getElementById('topicFilter').value = '';
   document.getElementById('searchSuggest').style.display = 'none';
-  renderEntries(ALL_ENTRIES);
+  if(IS_PAGINATED) fetchMorePaginated(true);
+  else renderEntries(ALL_ENTRIES);
 }
 let searchTimer;
 let _suggItems = [];
@@ -358,6 +468,7 @@ function onSearchInput(){
 
 function updateSuggestions(){
   const box = document.getElementById('searchSuggest');
+  if(IS_PAGINATED){ box.style.display = 'none'; return; } // full dataset isn't loaded client-side; search box alone drives server search
   const q = document.getElementById('searchInput').value.trim().toLowerCase();
   _suggActiveIdx = -1;
   if(!q){ box.style.display = 'none'; _suggItems = []; return; }
@@ -479,11 +590,11 @@ async function saveNote(id){
   await fetch(SB_URL + '/rest/v1/book_annotations', {
     method: 'POST',
     headers: { ...HDR, 'Content-Type': 'application/json', Prefer: 'return=representation' },
-    body: JSON.stringify({ entry_id: id, device_id: DEVICE_ID, kind: 'note', note_text: text })
+    body: JSON.stringify({ entry_id: id, device_id: DEVICE_ID, kind: 'note', note_text: text, source_table: CURRENT_BOOK.source_table || 'book_entries' })
   });
   input.value = '';
   await loadAnnotations();
-  applyFilters();
+  if(IS_PAGINATED) renderEntries(ALL_ENTRIES); else applyFilters();
   toast('Note saved');
 }
 
@@ -513,10 +624,10 @@ async function highlightSelection(){
   await fetch(SB_URL + '/rest/v1/book_annotations', {
     method: 'POST',
     headers: { ...HDR, 'Content-Type': 'application/json', Prefer: 'return=representation' },
-    body: JSON.stringify({ entry_id: +entryId, device_id: DEVICE_ID, kind: 'highlight', selected_text: text })
+    body: JSON.stringify({ entry_id: +entryId, device_id: DEVICE_ID, kind: 'highlight', selected_text: text, source_table: CURRENT_BOOK.source_table || 'book_entries' })
   });
   await loadAnnotations();
-  applyFilters();
+  if(IS_PAGINATED) renderEntries(ALL_ENTRIES); else applyFilters();
   toast('Highlighted');
 }
 
@@ -627,7 +738,7 @@ async function saveEntryToCollection(collectionId){
       item_type: 'hadith',
       title: (e.narrator || 'Hadith') + ' — ' + (CURRENT_BOOK.title_en || CURRENT_BOOK.title_ar),
       content: (e.arabic_text + (e.english_text ? '\n' + e.english_text : '')).slice(0, 500),
-      source_table: 'book_entries',
+      source_table: CURRENT_BOOK.source_table || 'book_entries',
       source_id: String(e.id)
     })
   });
