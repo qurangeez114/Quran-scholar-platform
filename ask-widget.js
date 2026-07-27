@@ -20,6 +20,99 @@
     });
   }
 
+  function getDeviceId() {
+    var id = localStorage.getItem('qh_device_id');
+    if (!id) { id = 'dev_' + Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem('qh_device_id', id); }
+    return id;
+  }
+  var DEVICE_ID = getDeviceId();
+
+  var _msgTextStore = {}; // msgId -> raw answer text, for copy/share/save
+  var _msgIdCounter = 0;
+
+  function toast(msg) {
+    var t = document.createElement('div');
+    t.style.cssText = 'position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:#8a6d3b;color:#fff;padding:8px 18px;border-radius:20px;font-size:13px;font-weight:700;z-index:999999;';
+    t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(function () { t.remove(); }, 2000);
+  }
+
+  function actionRowHTML(msgId) {
+    return '<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">' +
+      '<button onclick="window._askqhCopy(\'' + msgId + '\')" style="font-size:11px;padding:4px 9px;background:#fff;border:1px solid #d5c9a8;border-radius:12px;cursor:pointer;color:#8a6d3b;">📋 Copy</button>' +
+      '<button onclick="window._askqhShare(\'' + msgId + '\')" style="font-size:11px;padding:4px 9px;background:#fff;border:1px solid #d5c9a8;border-radius:12px;cursor:pointer;color:#8a6d3b;">↗ Share</button>' +
+      '<button onclick="window._askqhSave(\'' + msgId + '\')" style="font-size:11px;padding:4px 9px;background:#fff;border:1px solid #d5c9a8;border-radius:12px;cursor:pointer;color:#8a6d3b;">📚 Save</button>' +
+      '</div><div id="askqh-savebox-' + msgId + '"></div>';
+  }
+
+  window._askqhCopy = function (msgId) {
+    var text = _msgTextStore[msgId] || '';
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { toast('📋 Copied'); }).catch(function () { toast('Could not copy'); });
+    } else {
+      var ta = document.createElement('textarea');
+      ta.value = text; document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); toast('📋 Copied'); } catch (e) { toast('Could not copy'); }
+      ta.remove();
+    }
+  };
+
+  window._askqhShare = function (msgId) {
+    var text = _msgTextStore[msgId] || '';
+    if (navigator.share) {
+      navigator.share({ text: text, title: 'Quran Hikma' }).catch(function () {});
+    } else {
+      window._askqhCopy(msgId);
+      toast('Sharing not supported here — copied instead');
+    }
+  };
+
+  window._askqhSave = async function (msgId) {
+    var box = document.getElementById('askqh-savebox-' + msgId);
+    if (!box) return;
+    box.innerHTML = '<div style="font-size:11px;color:#998;margin-top:6px;">Loading collections…</div>';
+    var res = await fetch(SB_URL + '/rest/v1/research_collections?select=id,title&order=created_at.desc', { headers: HDRS });
+    var cols = res.ok ? await res.json() : [];
+    box.innerHTML = '<div style="margin-top:6px;padding:8px;background:#fff;border:1px solid #d5c9a8;border-radius:6px;">' +
+      (cols.length
+        ? cols.map(function (c) { return '<button onclick="window._askqhSaveToCollection(\'' + msgId + '\',\'' + c.id + '\')" style="display:block;width:100%;text-align:left;font-size:12px;padding:5px 8px;margin-bottom:4px;background:#f0ebe0;border:none;border-radius:4px;cursor:pointer;">' + esc(c.title) + '</button>'; }).join('')
+        : '<div style="font-size:11px;color:#998;margin-bottom:6px;">No collections yet.</div>') +
+      '<input id="askqh-newcol-' + msgId + '" placeholder="New collection name" style="width:100%;padding:5px 8px;font-size:12px;border:1px solid #d5c9a8;border-radius:4px;margin-top:4px;">' +
+      '<button onclick="window._askqhCreateAndSave(\'' + msgId + '\')" style="width:100%;margin-top:4px;font-size:12px;padding:5px;background:#8a6d3b;color:#fff;border:none;border-radius:4px;cursor:pointer;">Create & Save</button>' +
+      '</div>';
+  };
+
+  window._askqhCreateAndSave = async function (msgId) {
+    var input = document.getElementById('askqh-newcol-' + msgId);
+    var name = (input && input.value || '').trim();
+    if (!name) { toast('Enter a collection name'); return; }
+    var res = await fetch(SB_URL + '/rest/v1/research_collections', {
+      method: 'POST', headers: Object.assign({}, HDRS, { 'Content-Type': 'application/json', Prefer: 'return=representation' }),
+      body: JSON.stringify({ title: name, visibility: 'private' })
+    });
+    var rows = await res.json();
+    if (!res.ok || !rows[0]) { toast('Could not create collection'); return; }
+    window._askqhSaveToCollection(msgId, rows[0].id);
+  };
+
+  window._askqhSaveToCollection = async function (msgId, collectionId) {
+    var text = _msgTextStore[msgId] || '';
+    var res = await fetch(SB_URL + '/rest/v1/research_items', {
+      method: 'POST', headers: Object.assign({}, HDRS, { 'Content-Type': 'application/json' }),
+      body: JSON.stringify({
+        collection_id: collectionId,
+        item_type: 'ai_answer',
+        title: 'Ask Quran Hikma — ' + new Date().toLocaleDateString(),
+        content: text.slice(0, 1000)
+      })
+    });
+    if (!res.ok) { toast('Could not save'); return; }
+    var box = document.getElementById('askqh-savebox-' + msgId);
+    if (box) box.innerHTML = '';
+    toast('✅ Saved to Research');
+  };
+
   async function sbSearch(table, columns, query, words, limit) {
     try {
       var orClauses = columns.map(function (col) {
@@ -195,7 +288,9 @@
       if (!resp.ok) throw new Error('API error: ' + resp.status);
       var data = await resp.json();
       var text = (data.content || []).filter(function (b) { return b.type === 'text'; }).map(function (b) { return b.text; }).join('\n');
-      loadingDiv.innerHTML = esc(text).replace(/\n/g, '<br>');
+      var msgId = 'm' + (_msgIdCounter++);
+      _msgTextStore[msgId] = text;
+      loadingDiv.innerHTML = esc(text).replace(/\n/g, '<br>') + actionRowHTML(msgId);
       conversationLog.push({ question: question, answer: text });
       var sumBtn = document.getElementById('askqh-summarize');
       if (sumBtn) sumBtn.style.display = 'block';
