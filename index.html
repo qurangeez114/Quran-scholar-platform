@@ -1145,7 +1145,7 @@ body { padding-bottom: 80px !important; }
    is the one zone every page already reserves for floating overlays. */
 #qnav-return-bar {
   display: flex; align-items: center; gap: 6px;
-  position: fixed; bottom: 62px; right: 14px; left: auto; top: auto;
+  position: fixed; bottom: 210px; right: 14px; left: auto; top: auto;
   width: auto; max-width: min(72vw, 380px);
   padding: 8px 10px; border-radius: 24px;
   background: #FFF8E8; border: 1px solid #D4A830;
@@ -1165,19 +1165,6 @@ body { padding-bottom: 80px !important; }
 #qnav-return-bar span.qnav-desc {
   display: none;
 }
-#qnav-return-bar button.qnav-close {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 22px; height: 22px; padding: 0; margin-left: 2px; flex-shrink: 0;
-  background: rgba(0,0,0,0.08); color: #6B5A3E; border: none; border-radius: 50%;
-  font-size: 14px; font-weight: 700; line-height: 1; cursor: pointer;
-}
-#qnav-return-bar button.qnav-drag {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 20px; height: 24px; padding: 0; margin-right: 2px; flex-shrink: 0;
-  background: transparent; color: #B8902A; border: none;
-  font-size: 15px; line-height: 1; cursor: grab; touch-action: none;
-}
-#qnav-return-bar button.qnav-drag:active { cursor: grabbing; }
 
 
 
@@ -4161,6 +4148,39 @@ function renderChatMessages(num) {
 }
 
 
+// ─── Streaming Claude API helper ───────────────────────────────────────────
+// Replaces the old buffered '/.netlify/functions/claude-proxy' and '/claude'
+// calls. Streams text back as it's generated via a Netlify Edge Function,
+// so long scholarly answers no longer die when they exceed a fixed function
+// timeout — the browser just keeps receiving chunks until done.
+// `onChunk(fullTextSoFar)` is called after every chunk so callers can update
+// the UI progressively; the final full text is also returned.
+async function streamClaudeAPI(payload, onChunk) {
+  const res = await fetch('/api/claude-stream', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok || !res.body) {
+    let errMsg = 'Request failed (status ' + res.status + ')';
+    try {
+      const errJson = await res.json();
+      errMsg = (errJson && (errJson.error?.message || errJson.error)) || errMsg;
+    } catch { /* response wasn't JSON either; keep default message */ }
+    throw new Error(errMsg);
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let fullText = '';
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    fullText += decoder.decode(value, { stream: true });
+    if (onChunk) onChunk(fullText);
+  }
+  return fullText;
+}
+
 async function loadAISection(num, sectionId) {
   const titleEl = document.getElementById('ai-section-title-' + num);
   const bodyEl  = document.getElementById('ai-section-body-' + num);
@@ -4249,18 +4269,12 @@ Be specific, scholarly, and cite actual sources where possible.`;
   } catch(e) { /* DB context optional */ }
 
   try {
-    const res = await fetch('/.netlify/functions/claude-proxy', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 1500,
-        messages: [{ role: 'user', content: prompt + dbContext }]
-      })
-    });
-    const data = await res.json();
-    const text = data?.content?.[0]?.text || 'No response received.';
-    bodyEl.textContent = text;
+    bodyEl.textContent = '';
+    await streamClaudeAPI({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 1500,
+      messages: [{ role: 'user', content: prompt + dbContext }]
+    }, (textSoFar) => { bodyEl.textContent = textSoFar; });
   } catch(e) {
     bodyEl.textContent = 'Error: ' + e.message;
   }
@@ -4318,20 +4332,19 @@ async function sendChatWithPrompt(num, fullPrompt) {
     container.scrollTop = container.scrollHeight;
   }
   try {
-    const res = await fetch('/.netlify/functions/claude-proxy', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 4000,
-        messages: [{ role: 'user', content: fullPrompt }]
-      })
-    });
-    const data = await res.json();
-    const reply = data?.content?.[0]?.text || 'No response.';
-    document.getElementById('chat-loading-' + num)?.remove();
     if (!verseChats[num]) verseChats[num] = [];
-    verseChats[num].push({ role: 'assistant', content: reply });
+    verseChats[num].push({ role: 'assistant', content: '' });
+    const msgIndex = verseChats[num].length - 1;
+    document.getElementById('chat-loading-' + num)?.remove();
+    await streamClaudeAPI({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 4000,
+      messages: [{ role: 'user', content: fullPrompt }]
+    }, (textSoFar) => {
+      verseChats[num][msgIndex].content = textSoFar;
+      renderChatMessages(num);
+    });
+    if (!verseChats[num][msgIndex].content) verseChats[num][msgIndex].content = 'No response.';
     renderChatMessages(num);
   } catch(e) {
     document.getElementById('chat-loading-' + num)?.remove();
@@ -4385,19 +4398,19 @@ Answer questions about this verse with scholarly depth. Be concise but thorough.
 
   try {
     const messages = verseChats[num].map(m => ({ role: m.role, content: m.content }));
-    const response = await fetch('/claude', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 1000,
-        system: systemPrompt,
-        messages: messages
-      })
+    verseChats[num].push({ role: 'assistant', content: '' });
+    const msgIndex = verseChats[num].length - 1;
+    document.getElementById('chat-loading-' + num)?.remove();
+    await streamClaudeAPI({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 1000,
+      system: systemPrompt,
+      messages: messages
+    }, (textSoFar) => {
+      verseChats[num][msgIndex].content = textSoFar;
+      renderChatMessages(num);
     });
-    const data = await response.json();
-    const answer = data.content?.[0]?.text || 'No response received.';
-    verseChats[num].push({ role: 'assistant', content: answer });
+    if (!verseChats[num][msgIndex].content) verseChats[num][msgIndex].content = 'No response received.';
   } catch(e) {
     verseChats[num].push({ role: 'assistant', content: 'Could not connect to AI. Check your internet connection and try again.' });
   }
@@ -5052,22 +5065,16 @@ Where:
 - "sources" — comma-separated short list of works ONLY for documenting which reading appears where (not for resolving meaning)`;
 
   try {
-    const response = await fetch('/claude', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 2000,
-        messages: [{ role: 'user', content: prompt }]
-      })
+    const text = await streamClaudeAPI({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 2000,
+      messages: [{ role: 'user', content: prompt }]
     });
-    const data = await response.json();
-    let text = (data.content && data.content[0] && data.content[0].text) || '';
-    if (!text) throw new Error('Empty AI response');
-    text = text.trim().replace(/^```json\s*/i, '').replace(/```$/, '').trim();
+    let cleaned = (text || '').trim().replace(/^```json\s*/i, '').replace(/```$/, '').trim();
+    if (!cleaned) throw new Error('Empty AI response');
     let parsed;
-    try { parsed = JSON.parse(text); }
-    catch(e) { throw new Error('AI response was not valid JSON: ' + text.slice(0, 100)); }
+    try { parsed = JSON.parse(cleaned); }
+    catch(e) { throw new Error('AI response was not valid JSON: ' + cleaned.slice(0, 100)); }
 
     const cls = parsed.classification || 'none';
     // Compose a single explanation string from the 4 structured fields,
@@ -6658,17 +6665,11 @@ async function generateLexiconField(wordId, field, btn) {
     ? `In one or two concise sentences, explain how the Arabic word "${word.word}" (${word.transliteration || ''}) is used in MODERN Standard Arabic today. Focus only on present-day usage and meaning. Do not discuss the Quranic meaning. Plain text, no markdown.`
     : `In two or three concise sentences, explain how the meaning of the Arabic word "${word.word}" (${word.transliteration || ''}) has shifted from its Quranic-era meaning ("${word.quranic_meaning || 'unspecified'}") to its modern usage. Focus on the semantic evolution: what it meant then, what it means now, and what changed. Plain text, no markdown.`;
   try {
-    const response = await fetch('/claude', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 400,
-        messages: [{ role: 'user', content: prompt }]
-      })
+    const text = await streamClaudeAPI({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 400,
+      messages: [{ role: 'user', content: prompt }]
     });
-    const data = await response.json();
-    const text = (data.content && data.content[0] && data.content[0].text) || '';
     if (!text) throw new Error('Empty AI response');
     // Save back to Supabase so we don't regenerate
     const updateUrl = `${SUPABASE_URL}/rest/v1/word_analysis?id=eq.${wordId}`;
@@ -6720,17 +6721,11 @@ Then on a separate line at the very end, prefix with "SOURCES:" and list the lex
 Plain text, no markdown headers or asterisks.`;
 
   try {
-    const response = await fetch('/claude', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 2000,
-        messages: [{ role: 'user', content: prompt }]
-      })
+    const text = await streamClaudeAPI({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 2000,
+      messages: [{ role: 'user', content: prompt }]
     });
-    const data = await response.json();
-    const text = (data.content && data.content[0] && data.content[0].text) || '';
     if (!text) throw new Error('Empty AI response');
 
     // Parse out the SOURCES: line at the bottom
@@ -6881,7 +6876,7 @@ async function loadTopicVerses(t) {
 
     resultsDiv.innerHTML = all.map(v => {
       const suraInfo = allSuras.find(s => (s.sura_id||s.id) === v.sura_id);
-      const translit = transliterateArabic(v.arabic || '');
+      const translit = v.arabic_transliteration || transliterateArabic(v.arabic || '');
       return `
       <div style="background:#fff;border:1px solid #E8E4DC;border-radius:10px;margin-bottom:10px;overflow:hidden;cursor:pointer;" onclick="gotoResult(${v.sura_id},${v.aya_number},event)">
         <div style="background:#FDF8EE;border-bottom:1px solid #E8C97B;padding:8px 14px;display:flex;align-items:center;gap:8px;">
@@ -9096,7 +9091,6 @@ function showToastMsg(msg) {
   <div style="padding:10px 18px;background:#F0EDE6;border-bottom:1px solid #E8E4DC;flex-shrink:0;overflow-x:auto;white-space:nowrap;">
     <span style="font-size:10px;font-weight:700;color:#999;text-transform:uppercase;letter-spacing:0.5px;margin-right:8px;">Show:</span>
     <label style="display:inline-flex;align-items:center;gap:4px;margin-right:10px;cursor:pointer;font-size:12px;font-weight:600;color:#5A3A10;"><input type="checkbox" id="vpLangArabic" checked onchange="renderVersePopupContent()" style="accent-color:#B8902A;"> Arabic</label>
-    <label style="display:inline-flex;align-items:center;gap:4px;margin-right:10px;cursor:pointer;font-size:12px;font-weight:600;color:#5A3A10;"><input type="checkbox" id="vpLangTranslit" onchange="renderVersePopupContent()" style="accent-color:#B8902A;"> Aa Transliteration</label>
     <label style="display:inline-flex;align-items:center;gap:4px;margin-right:10px;cursor:pointer;font-size:12px;font-weight:600;color:#5A3A10;"><input type="checkbox" id="vpLangEnglish" checked onchange="renderVersePopupContent()" style="accent-color:#B8902A;"> English</label>
     <label style="display:inline-flex;align-items:center;gap:4px;margin-right:10px;cursor:pointer;font-size:12px;font-weight:600;color:#5A3A10;"><input type="checkbox" id="vpLangTigrinya" onchange="renderVersePopupContent()" style="accent-color:#B8902A;"> Tigrinya</label>
     <label style="display:inline-flex;align-items:center;gap:4px;margin-right:10px;cursor:pointer;font-size:12px;font-weight:600;color:#5A3A10;"><input type="checkbox" id="vpLangAmharic" onchange="renderVersePopupContent()" style="accent-color:#B8902A;"> Amharic</label>
@@ -9189,7 +9183,6 @@ async function openVersePopup(sura, aya) {
 function renderVersePopupContent() {
   if (!_vpData) return;
   const showArabic   = document.getElementById('vpLangArabic').checked;
-  const showTranslit = document.getElementById('vpLangTranslit').checked;
   const showEnglish  = document.getElementById('vpLangEnglish').checked;
   const showTigrinya = document.getElementById('vpLangTigrinya').checked;
   const showAmharic  = document.getElementById('vpLangAmharic').checked;
@@ -9208,8 +9201,8 @@ function renderVersePopupContent() {
       html += '<div style="font-family:Amiri,serif;font-size:20px;direction:rtl;text-align:right;line-height:1.8;color:#1a1a1a;">' + escapeHtml(_vpData.arabic_warsh) + '</div>';
       html += '</div>';
     }
-    if (showTranslit) {
-      html += '<div style="font-size:12px;color:#7A8FA6;font-style:italic;margin-top:6px;">' + escapeHtml(transliterateArabic(_vpData.arabic || '')) + '</div>';
+    if (_vpData.arabic_transliteration) {
+      html += '<div style="font-size:12px;color:#7A8FA6;font-style:italic;margin-top:6px;">' + escapeHtml(_vpData.arabic_transliteration) + '</div>';
     }
     html += '</div>';
   }
@@ -9572,7 +9565,6 @@ document.addEventListener('keydown', function(e) {
   <button class="bnav-btn " onclick="location.href='madhhab.html'"><span class="bni">⚖️</span><span>Madhhab</span></button>
   <button class="bnav-btn " onclick="location.href='sira.html'"><span class="bni">🕌</span><span>Sīra</span></button>
   <button class="bnav-btn " onclick="location.href='stories.html'"><span class="bni">📚</span><span>Stories</span></button>
-  <button class="bnav-btn " onclick="location.href='books.html'"><span class="bni">📕</span><span>Books</span></button>
 
   <button class="bnav-btn" onclick="location.href='contradiction.html'"><span class="bni">⚔️</span><span>Tensions</span></button>
 
@@ -9852,24 +9844,17 @@ async function analyzeTafsirAccuracy(sura, aya) {
   const prompt = "You are an Islamic scholar. For verse " + sura + ":" + aya + ", compare this Ibn Kathir Arabic tafsir with its English translation. Arabic: " + arClean + " English: " + enClean + " Reply with ONLY a JSON object using these exact keys: score (number 1-10), accurate (string), omitted (string), mistranslated (string), concerns (string), verdict (string). Use double quotes only. No apostrophes in values. No markdown.";
 
   try {
-    // Use hardcoded key directly — ANTHROPIC_KEY may not be initialized yet
-    const _ak = window._ak;
-    const res = await fetch('/claude', {
-      method: 'POST',
-      headers: { 'Content-Type':'application/json' },
-      body: JSON.stringify({ model:'claude-sonnet-4-6', max_tokens:600, messages:[{role:'user',content:prompt}] })
-    });
-    if (!res.ok) {
-      const errBody = await res.text();
+    let raw;
+    try {
+      raw = await streamClaudeAPI({ model:'claude-sonnet-4-6', max_tokens:600, messages:[{role:'user',content:prompt}] });
+    } catch (streamErr) {
       const _inner = document.getElementById('tafsir-accuracy-inner') || loadingDiv;
-      _inner.innerHTML = '<div style="color:#c62828;padding:12px;font-size:13px;"><b>API Error ' + res.status + '</b><br><pre style="white-space:pre-wrap;font-size:11px;margin-top:8px;">' + errBody.substring(0,400) + '</pre></div>';
+      _inner.innerHTML = '<div style="color:#c62828;padding:12px;font-size:13px;"><b>API Error</b><br><pre style="white-space:pre-wrap;font-size:11px;margin-top:8px;">' + String(streamErr.message).substring(0,400) + '</pre></div>';
       return;
     }
-    const data = await res.json();
-    const raw = (data.content && data.content[0] && data.content[0].text) ? data.content[0].text : '';
     if (!raw) {
       const _inner2 = document.getElementById('tafsir-accuracy-inner') || loadingDiv;
-      _inner2.innerHTML = '<div style="color:#c62828;padding:12px;">Empty response from API.<br><pre style="font-size:10px;">' + JSON.stringify(data).substring(0,300) + '</pre></div>';
+      _inner2.innerHTML = '<div style="color:#c62828;padding:12px;">Empty response from API.</div>';
       return;
     }
     let result;
@@ -10251,7 +10236,6 @@ window.QNAV_PAGE_ICON = '📖';
   function injectReturnBar(){
     var existing = document.getElementById('qnav-return-bar');
     if (existing) existing.remove();
-    try { if (sessionStorage.getItem('qnav_bar_dismissed') === '1') return; } catch(e){}
     var stack = getStack();
     var prev = stack.length ? stack[stack.length - 1] : null;
     var fwd = getForward();
@@ -10260,12 +10244,6 @@ window.QNAV_PAGE_ICON = '📖';
 
     var bar = document.createElement('div');
     bar.id = 'qnav-return-bar';
-
-    var dragHandle = document.createElement('button');
-    dragHandle.className = 'qnav-drag';
-    dragHandle.innerHTML = '⠿';
-    dragHandle.title = 'Drag to move';
-    bar.appendChild(dragHandle);
 
     if (prev) {
       var backBtn = document.createElement('button');
@@ -10287,65 +10265,7 @@ window.QNAV_PAGE_ICON = '📖';
       bar.appendChild(fwdBtn);
     }
 
-    var closeBtn = document.createElement('button');
-    closeBtn.className = 'qnav-close';
-    closeBtn.innerHTML = '×';
-    closeBtn.title = 'Hide';
-    closeBtn.onclick = function(){ try{ sessionStorage.setItem('qnav_bar_dismissed','1'); }catch(e){} bar.remove(); };
-    bar.appendChild(closeBtn);
-
     document.body.insertBefore(bar, document.body.firstChild);
-    makeQnavDraggable(bar, dragHandle);
-  }
-
-  function makeQnavDraggable(el, handle){
-    var POS_KEY = 'qnav_bar_pos';
-    var saved = null;
-    try { saved = JSON.parse(localStorage.getItem(POS_KEY) || 'null'); } catch(e){}
-    function clamp(top, left){
-      var r = el.getBoundingClientRect();
-      var maxLeft = window.innerWidth - r.width - 4;
-      var maxTop = window.innerHeight - r.height - 4;
-      return { top: Math.max(4, Math.min(top, maxTop)), left: Math.max(4, Math.min(left, maxLeft)) };
-    }
-    if (saved && typeof saved.top === 'number' && typeof saved.left === 'number') {
-      var c = clamp(saved.top, saved.left);
-      el.style.top = c.top + 'px'; el.style.left = c.left + 'px';
-      el.style.bottom = 'auto'; el.style.right = 'auto';
-    }
-    var dragging = false, startX = 0, startY = 0, origTop = 0, origLeft = 0, moved = false;
-    handle.addEventListener('pointerdown', function(e){
-      dragging = true; moved = false;
-      try { handle.setPointerCapture(e.pointerId); } catch(ex){}
-      var r = el.getBoundingClientRect();
-      origTop = r.top; origLeft = r.left;
-      el.style.top = origTop + 'px'; el.style.left = origLeft + 'px';
-      el.style.bottom = 'auto'; el.style.right = 'auto';
-      startX = e.clientX; startY = e.clientY;
-      e.preventDefault();
-    });
-    handle.addEventListener('pointermove', function(e){
-      if (!dragging) return;
-      var dx = e.clientX - startX, dy = e.clientY - startY;
-      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) moved = true;
-      el.style.left = (origLeft + dx) + 'px';
-      el.style.top = (origTop + dy) + 'px';
-    });
-    function endDrag(){
-      if (!dragging) return;
-      dragging = false;
-      if (!moved) return;
-      var c = clamp(parseFloat(el.style.top), parseFloat(el.style.left));
-      el.style.top = c.top + 'px'; el.style.left = c.left + 'px';
-      try { localStorage.setItem(POS_KEY, JSON.stringify({ top: c.top, left: c.left })); } catch(e){}
-    }
-    handle.addEventListener('pointerup', endDrag);
-    handle.addEventListener('pointercancel', endDrag);
-    window.addEventListener('resize', function(){
-      if (el.style.left === '' || el.style.left === undefined) return;
-      var c = clamp(parseFloat(el.style.top)||0, parseFloat(el.style.left)||0);
-      el.style.top = c.top + 'px'; el.style.left = c.left + 'px';
-    });
   }
 
   /* Restore scroll position (both axes) after a Back jump, once content has
