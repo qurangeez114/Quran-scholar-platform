@@ -56,6 +56,7 @@
   .entry-actions{display:flex;gap:6px;flex-wrap:wrap;border-top:1px solid #F0E8D5;padding-top:10px}
   .act-btn{background:#FBF6E9;border:1px solid #E8DDC0;color:#7A5010;border-radius:16px;padding:5px 12px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:'EB Garamond',serif}
   .act-btn:active{background:#F3E9CE}
+  .act-btn.playing{background:#3A2E1A;color:#fff;border-color:#3A2E1A}
   mark.hl{background:#FFE58A;padding:0 1px;border-radius:2px}
   .note-box{margin-top:10px;background:#FFFBF0;border:1px dashed #D4A830;border-radius:8px;padding:10px;font-size:13px;color:#5A3A10}
   .note-box textarea{width:100%;border:1px solid #E8DDC0;border-radius:6px;padding:8px;font-family:'EB Garamond',serif;font-size:13.5px;resize:vertical;min-height:60px}
@@ -281,6 +282,7 @@ function entryCardHTML(e){
       ${e.english_text ? `<div class="english-text">${esc(e.english_text)}</div>` : ''}
       ${e.grader ? `<div class="grade-note">— ${esc(e.grader)}${e.page_ref ? ' · ' + esc(e.page_ref) : ''}</div>` : ''}
       <div class="entry-actions">
+        <button class="act-btn speak-btn" id="speakBtn-${e.id}" onclick="speakEntry(${e.id})">🔊 Listen</button>
         <button class="act-btn" onclick="copyEntry(${e.id})">📋 Copy</button>
         <button class="act-btn" onclick="toggleNoteBox(${e.id})">✏️ Note${notes.length ? ' (' + notes.length + ')' : ''}</button>
         <button class="act-btn" onclick="shareEntry(${e.id})">↗ Share</button>
@@ -517,6 +519,46 @@ async function highlightSelection(){
   applyFilters();
   toast('Highlighted');
 }
+
+// ---- Read aloud (Web Speech API) ----
+let _speakingId = null;
+function speakEntry(id){
+  if(!('speechSynthesis' in window)){ toast('Speech not supported on this browser'); return; }
+  const wasSpeaking = _speakingId;
+  window.speechSynthesis.cancel();
+  resetSpeakButtons();
+  if(wasSpeaking === id) { _speakingId = null; return; } // acted as a stop toggle
+
+  const e = ALL_ENTRIES.find(x => x.id === id);
+  if(!e) return;
+  const btn = document.getElementById('speakBtn-' + id);
+
+  const uttAr = new SpeechSynthesisUtterance(e.arabic_text || '');
+  uttAr.lang = 'ar-SA';
+  uttAr.rate = 0.85;
+
+  uttAr.onstart = () => { _speakingId = id; if(btn){ btn.classList.add('playing'); btn.textContent = '⏹ Stop'; } };
+  uttAr.onend = () => {
+    if(e.english_text){
+      const uttEn = new SpeechSynthesisUtterance(e.english_text);
+      uttEn.lang = 'en-US';
+      uttEn.rate = 0.95;
+      uttEn.onend = () => { _speakingId = null; if(btn){ btn.classList.remove('playing'); btn.textContent = '🔊 Listen'; } };
+      uttEn.onerror = uttEn.onend;
+      window.speechSynthesis.speak(uttEn);
+    } else {
+      _speakingId = null; if(btn){ btn.classList.remove('playing'); btn.textContent = '🔊 Listen'; }
+    }
+  };
+  uttAr.onerror = () => { _speakingId = null; if(btn){ btn.classList.remove('playing'); btn.textContent = '🔊 Listen'; } };
+
+  window.speechSynthesis.speak(uttAr);
+}
+function resetSpeakButtons(){
+  document.querySelectorAll('.speak-btn').forEach(b => { b.classList.remove('playing'); b.textContent = '🔊 Listen'; });
+}
+// Stop playback if the user navigates away from the entries
+window.addEventListener('beforeunload', () => { if('speechSynthesis' in window) window.speechSynthesis.cancel(); });
 
 // ---- Add to Presentation (shares the same basket the rest of the site uses) ----
 function addEntryToPresentation(id){
