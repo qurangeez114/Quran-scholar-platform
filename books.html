@@ -235,7 +235,8 @@ function normalizeRawEntry(raw){
       id: raw.id, narrator: raw.narrator || '', topic: raw.book_chapter || '',
       arabic_text: raw.text_arabic || '', english_text: raw.text_english || '',
       grade: raw.grade || '', grader: raw.isnad ? ('Isnad: ' + raw.isnad) : '',
-      page_ref: raw.hadith_number ? ('#' + raw.hadith_number) : '', source_url: raw.source_url || ''
+      page_ref: raw.hadith_number ? ('#' + raw.hadith_number) : '', source_url: raw.source_url || '',
+      grade_details: raw.grade_details || null
     };
   }
   if(st === 'tafsir_entries'){
@@ -298,7 +299,7 @@ async function loadChapterClusters(){
 
   // Fast path: precomputed clusters exist — just fetch the actual hadith rows
   const ids = clusterRows.map(r => r.hadith_id).join(',');
-  const hadithRes = await fetch(SB_URL + '/rest/v1/hadith_corpus?id=in.(' + ids + ')&select=id,narrator,book_chapter,text_arabic,text_english,grade,isnad,hadith_number,source_url', { headers: HDR });
+  const hadithRes = await fetch(SB_URL + '/rest/v1/hadith_corpus?id=in.(' + ids + ')&select=id,narrator,book_chapter,text_arabic,text_english,grade,grade_details,isnad,hadith_number,source_url', { headers: HDR });
   const hadithRows = hadithRes.ok ? await hadithRes.json() : [];
   const byId = {}; hadithRows.forEach(h => byId[h.id] = h);
 
@@ -365,7 +366,11 @@ async function analyzeCluster(cid){
   const box = document.getElementById('clusterAnalysis-' + cid);
   box.innerHTML = '<em>Gathering context…</em>';
   const members = CLUSTERS[cid];
-  const versionsText = members.map((e,i) => `Version ${i+1} (narrator: ${e.narrator || 'unknown'}, grade: ${e.grade || 'unknown'}):\n${e.english_text || e.arabic_text}`).join('\n\n');
+  const bookName = CURRENT_BOOK.title_en || CURRENT_BOOK.title_ar;
+  const versionsText = members.map((e,i) => {
+    const crossRefs = extractCrossRefs(e.grade_details);
+    return `Version ${i+1} — Source: ${bookName}, narrator: ${e.narrator || 'unknown'}, grade: ${e.grade || 'unknown'}${crossRefs.length ? ', also recorded in: ' + crossRefs.join(', ') : ''}:\n${e.english_text || e.arabic_text}`;
+  }).join('\n\n');
 
   // Ground the prompt with real linked Quran verses and any existing scholarly analysis already in the DB
   const ids = members.map(m => m.id).join(',');
@@ -384,7 +389,7 @@ async function analyzeCluster(cid){
     : 'No prior scholarly analysis on file for this hadith.';
 
   box.innerHTML = '<em>Analyzing…</em>';
-  const prompt = `You are a hadith scholar. Below are ${members.length} narration(s) of a hadith from ${CURRENT_BOOK.title_en}, plus grounding data already on file (real linked Quran verses and any prior analysis — treat this as factual context, do not invent additional links beyond it).
+  const prompt = `You are a hadith scholar. Below are ${members.length} narration(s) of a hadith, each explicitly labeled with its source book, plus grounding data already on file (real linked Quran verses and any prior analysis — treat this as factual context, do not invent additional links beyond it).
 
 NARRATIONS:
 ${versionsText}
@@ -395,13 +400,13 @@ ${linksText}
 PRIOR ANALYSIS ON FILE:
 ${priorAnalysisText}
 
-Provide a structured critical analysis with exactly these three headed sections, under 350 words total:
+Provide a structured critical analysis with exactly these three headed sections, under 350 words total. In every section, explicitly name the source book(s) you are referring to (e.g. "${bookName}", or any cross-referenced collection listed above) rather than speaking generically about "the hadith" — a reader must be able to tell which book each claim comes from.
 ### 1. Comparison of Narrations
-If multiple versions exist, note real differences in wording, isnad, or emphasis, and flag any apparent internal contradiction. If only one version, say so briefly.
+If multiple versions exist, note real differences in wording, isnad, or emphasis between the named sources, and flag any apparent internal contradiction. If only one version, say so briefly, naming its source.
 ### 2. Relation to the Quran
-Using the pre-linked verses above (do not fabricate new ones), explain how this hadith supports, elaborates on, or is in tension with those verses.
+Using the pre-linked verses above (do not fabricate new ones), explain how this hadith (naming its source book) supports, elaborates on, or is in tension with those verses.
 ### 3. Fiqh / Madhhab Ruling
-Explain what legal ruling(s), if any, classical scholars derive from this hadith, and whether madhhabs differ on it. State "no direct fiqh ruling derived" if that's accurate — do not invent a ruling that isn't well attested.
+Explain what legal ruling(s), if any, classical scholars derive from this hadith as recorded in the named source(s), and whether madhhabs differ on it. State "no direct fiqh ruling derived" if that's accurate — do not invent a ruling that isn't well attested.
 
 Be concise, factual, and avoid speculation beyond what the given text and context supports.`;
   try{
@@ -441,7 +446,7 @@ function buildSourceQuery(offset, searchQ){
   const st = CURRENT_BOOK.source_table;
   const enc = searchQ ? encodeURIComponent(searchQ) : '';
   if(st === 'hadith_corpus'){
-    let url = SB_URL + '/rest/v1/hadith_corpus?select=id,narrator,book_chapter,text_arabic,text_english,grade,isnad,hadith_number,source_url'
+    let url = SB_URL + '/rest/v1/hadith_corpus?select=id,narrator,book_chapter,text_arabic,text_english,grade,grade_details,isnad,hadith_number,source_url'
       + '&collection=eq.' + encodeURIComponent(CURRENT_BOOK.source_filter_val)
       + '&order=id&limit=' + PAGE_SIZE + '&offset=' + offset;
     if(searchQ) url += '&or=(text_english.ilike.*' + enc + '*,text_arabic.ilike.*' + enc + '*,narrator.ilike.*' + enc + '*)';
@@ -570,14 +575,29 @@ function expandText(cls, id){
   document.getElementById('full-' + cls + '-' + id).style.display = 'block';
 }
 
+function extractCrossRefs(gradeDetails){
+  if(!gradeDetails || !Array.isArray(gradeDetails)) return [];
+  const refs = new Set();
+  const rx = /(Sahih (?:al-)?Bukhari|Sahih Muslim)\s*\(([^)]+)\)/gi;
+  gradeDetails.forEach(g => {
+    let m;
+    const text = g.grade || '';
+    while((m = rx.exec(text)) !== null){ refs.add(m[1] + ' ' + m[2]); }
+  });
+  return [...refs];
+}
+
 function entryBodyHTML(e){
   const notes = (ANNOTATIONS[e.id] && ANNOTATIONS[e.id].notes) || [];
+  const crossRefs = extractCrossRefs(e.grade_details);
   return `
       <div class="entry-badges">
+        ${CURRENT_BOOK.source_table ? `<span class="badge" style="background:#EDE7F6;color:#4A2E7A;">📚 ${esc(CURRENT_BOOK.title_en || CURRENT_BOOK.title_ar)}</span>` : ''}
         ${e.narrator ? `<span class="badge narrator">👤 ${esc(e.narrator)}</span>` : ''}
         ${e.topic ? `<span class="badge topic">🏷 ${esc(e.topic)}</span>` : ''}
         <span class="badge ${gradeClass(e.grade)}">${esc(gradeLabel(e.grade))}</span>
       </div>
+      ${crossRefs.length ? `<div style="font-size:11.5px;color:#8a7a5a;margin:-4px 0 10px;">Also recorded in: ${crossRefs.map(esc).join(', ')}</div>` : ''}
       ${e.arabic_text ? `<div class="arabic-text" data-raw="${esc(e.arabic_text).replace(/"/g,'&quot;')}">${e.arabic_text.length <= 700 ? applyHighlights(e.arabic_text, e.id) : truncatedHTML(e.arabic_text, e.id, 'arabic-text')}</div>` : ''}
       ${e.english_text ? truncatedHTML(e.english_text, e.id, 'english-text') : ''}
       ${e.grader ? `<div class="grade-note">— ${esc(e.grader)}${e.page_ref ? ' · ' + esc(e.page_ref) : ''}</div>` : ''}
