@@ -181,7 +181,10 @@
           '<div id="askqh-msgs" style="flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px;font-size:14.5px;line-height:1.5;">' +
             '<div style="color:#7a6f5c;font-style:italic;">Ask about any verse, hadith, madhhab comparison, story, or theme on this site. I\'ll search our database first.</div>' +
           '</div>' +
-          '<button id="askqh-summarize" style="display:none;margin:0 10px 8px;padding:8px;background:#fff;border:1px solid #8a6d3b;color:#8a6d3b;border-radius:4px;cursor:pointer;font-family:\'Inconsolata\',monospace;font-size:11.5px;">📊 Build presentation from this chat</button>' +
+          '<div style="display:none;gap:6px;margin:0 10px 8px;" id="askqh-actionbar">' +
+            '<button id="askqh-summarize" style="flex:1;padding:8px;background:#fff;border:1px solid #8a6d3b;color:#8a6d3b;border-radius:4px;cursor:pointer;font-family:\'Inconsolata\',monospace;font-size:11.5px;">📊 Build presentation</button>' +
+            '<button id="askqh-export" style="flex:1;padding:8px;background:#fff;border:1px solid #8a6d3b;color:#8a6d3b;border-radius:4px;cursor:pointer;font-family:\'Inconsolata\',monospace;font-size:11.5px;">⬇ Export chat</button>' +
+          '</div>' +
           '<div style="display:flex;gap:6px;padding:10px;border-top:1px solid #e4d9c0;">' +
             '<input id="askqh-input" type="text" placeholder="Ask a question…" style="flex:1;padding:8px 10px;border:1px solid #d5c9a8;border-radius:4px;font-family:inherit;font-size:14px;">' +
             '<button id="askqh-send" style="padding:0 14px;background:#8a6d3b;color:#fff;border:none;border-radius:4px;cursor:pointer;">Go</button>' +
@@ -255,8 +258,31 @@
     } catch (e) {
       appendMsg('assistant', '<span style="color:#a33">Could not build summary (' + esc(e.message) + '). Please try again.</span>');
     } finally {
-      if (btn) { btn.disabled = false; btn.textContent = '📊 Build presentation from this chat'; }
+      if (btn) { btn.disabled = false; btn.textContent = '📊 Build presentation'; }
     }
+  }
+
+  function exportChat() {
+    if (!conversationLog.length) { toast('Nothing to export yet'); return; }
+    var lines = ['Ask Quran Hikma — Conversation Export', new Date().toLocaleString(), ''];
+    conversationLog.forEach(function (turn, i) {
+      lines.push('Q' + (i + 1) + ': ' + turn.question);
+      lines.push('');
+      lines.push(turn.answer);
+      lines.push('');
+      lines.push('---');
+      lines.push('');
+    });
+    var blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'quran-hikma-chat-' + new Date().toISOString().slice(0, 10) + '.txt';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    toast('⬇ Chat exported');
   }
 
   async function handleAsk() {
@@ -292,8 +318,8 @@
       _msgTextStore[msgId] = text;
       loadingDiv.innerHTML = esc(text).replace(/\n/g, '<br>') + actionRowHTML(msgId);
       conversationLog.push({ question: question, answer: text });
-      var sumBtn = document.getElementById('askqh-summarize');
-      if (sumBtn) sumBtn.style.display = 'block';
+      var sumBtn = document.getElementById('askqh-actionbar');
+      if (sumBtn) sumBtn.style.display = 'flex';
     } catch (e) {
       loadingDiv.innerHTML = '<span style="color:#a33">Sorry, something went wrong (' + esc(e.message) + '). Please try again.</span>';
     }
@@ -325,6 +351,7 @@
     head.addEventListener('click', function () { setExpanded(!expanded); });
     document.getElementById('askqh-send').addEventListener('click', handleAsk);
     document.getElementById('askqh-summarize').addEventListener('click', buildSessionSummary);
+    document.getElementById('askqh-export').addEventListener('click', exportChat);
     document.getElementById('askqh-input').addEventListener('keydown', function (e) {
       if (e.key === 'Enter') handleAsk();
       e.stopPropagation(); // don't let typing re-toggle the dock header
