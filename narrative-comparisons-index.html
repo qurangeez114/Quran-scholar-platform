@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Narrative Comparisons — Quran Hikma</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#FAFAF7;color:#1a1a1a;}
+.top-bar{background:linear-gradient(135deg,#1a1a2e,#2d2d44);padding:12px 16px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100;border-bottom:2px solid #E8C97B;}
+.back-btn{background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.25);color:#fff;border-radius:8px;padding:6px 14px;font-size:13px;cursor:pointer;font-weight:600;text-decoration:none;}
+.top-title{font-size:16px;font-weight:800;color:#E8C97B;flex:1;}
+.top-count{font-size:12px;color:#AAA;}
+.intro{padding:14px 16px 4px;}
+.intro-h{font-size:14px;font-weight:800;color:#5A3A10;}
+.intro-p{font-size:12px;color:#8B6A30;line-height:1.5;margin-top:3px;}
+.list{padding:10px 14px 24px;}
+.story-card{display:block;text-decoration:none;background:linear-gradient(135deg,#B8902A,#8A6A18);color:#fff;border-radius:12px;padding:13px 15px;margin-bottom:10px;box-shadow:0 2px 8px rgba(120,90,20,.18);}
+.story-title{font-size:15px;font-weight:800;}
+.story-headline{font-size:11.5px;opacity:.93;margin-top:4px;line-height:1.45;}
+.story-meta{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;}
+.pill{font-size:10px;font-weight:700;background:rgba(255,255,255,0.22);border-radius:10px;padding:2px 8px;}
+.empty{padding:24px;text-align:center;color:#9C8354;font-size:13px;}
+</style>
+</head>
+<body>
+<div class="top-bar">
+  <a href="index.html" class="back-btn">&larr; Back</a>
+  <div class="top-title">Narrative Comparisons</div>
+  <div class="top-count" id="count"></div>
+</div>
+<div class="intro">
+  <div class="intro-h">Same story, multiple sources</div>
+  <div class="intro-p">Each entry compares independent narrations (Quran, Hadith, Tafsir, Sira) of a single event or claim, side by side — showing what's shared, what's added, what's omitted, and where sources genuinely conflict, without merging them into one smoothed-over account.</div>
+</div>
+<div class="list" id="list"><div class="empty">Loading&hellip;</div></div>
+
+<script>
+const SB_URL = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
+const HDR = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY };
+
+// Hand-written headlines summarizing what's actually in each group's comparison data.
+// Not auto-generated from raw counts, since "what's added/omitted/conflicting" needs
+// an actual read of the comparison rows, not just a tally.
+const HEADLINES = {
+  'isra-wal-miraj': "Three tellings (Bukhari, Muslim, Sira): Bukhari and Muslim share the core structure and largely agree; Ibn Ishaq's Sira adds two elements neither hadith foregrounds \u2014 leading the prophets in prayer at Jerusalem, and an early dispute over whether the journey was physical or a vision.",
+  'sulayman-talking-ant': "One Quranic verse (27:18-19), two interpretive traditions: al-Tabari and Ibn Kathir read it as a literal miracle; al-Razi engages the philosophical difficulty (what \"speech\" from an ant means) directly rather than resolving it either way. Not a narration conflict \u2014 an interpretation split.",
+  'talha-arrow-wound-uhud': "Currently a single source (al-Tabarani's Mu'jam al-Kabir). No second independent telling of this specific incident has been located yet, so no comparison can be drawn \u2014 listed here as an open case, not a settled one.",
+};
+
+async function load() {
+  const res = await fetch(`${SB_URL}/rest/v1/narrative_groups?select=*&order=id.asc`, { headers: HDR });
+  const groups = await res.json();
+  document.getElementById('count').textContent = groups.length + ' entries';
+
+  if (!groups.length) {
+    document.getElementById('list').innerHTML = '<div class="empty">No narrative comparisons yet.</div>';
+    return;
+  }
+
+  // pull version/comparison counts + source types per group
+  const versions = await (await fetch(`${SB_URL}/rest/v1/narrative_versions?select=narrative_group_id,source_type`, { headers: HDR })).json();
+  const comparisons = await (await fetch(`${SB_URL}/rest/v1/narrative_comparisons?select=narrative_group_id`, { headers: HDR })).json();
+
+  const html = groups.map(g => {
+    const vs = versions.filter(v => v.narrative_group_id === g.id);
+    const cCount = comparisons.filter(c => c.narrative_group_id === g.id).length;
+    const sourceTypes = [...new Set(vs.map(v => v.source_type))];
+    const headline = HEADLINES[g.slug] || g.summary || '';
+    return `
+      <a class="story-card" href="narrative-comparison.html?story=${encodeURIComponent(g.slug)}">
+        <div class="story-title">${g.title} &rarr;</div>
+        <div class="story-headline">${headline}</div>
+        <div class="story-meta">
+          <span class="pill">${vs.length} version${vs.length === 1 ? '' : 's'}</span>
+          <span class="pill">${cCount} comparison${cCount === 1 ? '' : 's'}</span>
+          ${sourceTypes.map(s => `<span class="pill">${s}</span>`).join('')}
+        </div>
+      </a>`;
+  }).join('');
+
+  document.getElementById('list').innerHTML = html;
+}
+
+load().catch(err => {
+  document.getElementById('list').innerHTML = '<div class="empty">Failed to load: ' + err.message + '</div>';
+});
+</script>
+</body>
+</html>
