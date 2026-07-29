@@ -59,7 +59,7 @@
   <div class="filter-label">Show</div>
   <div class="filters" id="langToggles" style="padding-top:6px;">
     <label class="chip active" data-lang="arabic" style="cursor:pointer;"><input type="checkbox" checked style="margin-right:4px;">Arabic</label>
-    <label class="chip active" data-lang="arabic_transliteration" style="cursor:pointer;"><input type="checkbox" checked style="margin-right:4px;">Translit</label>
+    <label class="chip" data-lang="arabic_transliteration" style="cursor:pointer;"><input type="checkbox" style="margin-right:4px;">Translit</label>
     <label class="chip active" data-lang="english" style="cursor:pointer;"><input type="checkbox" checked style="margin-right:4px;">English</label>
     <label class="chip" data-lang="tigrinya" style="cursor:pointer;"><input type="checkbox" style="margin-right:4px;">Tigrinya</label>
     <label class="chip" data-lang="amharic" style="cursor:pointer;"><input type="checkbox" style="margin-right:4px;">Amharic</label>
@@ -96,7 +96,7 @@ const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 let allClaims = [];
 let currentFiltered = [];
 let active = { type: "All", domain: "All", claimType: "All", status: "All" };
-let activeLangs = new Set(['arabic', 'arabic_transliteration', 'english']);
+let activeLangs = new Set(['arabic', 'english']);
 const verseCache = {}; // "sura:aya" -> row, so repeated claims citing the same verse don't refetch
 
 // Parse a reference string like "17:44; 24:41; 57:1" into [[17,44],[24,41],[57,1]]
@@ -302,8 +302,7 @@ function render() {
         }${c.hadith_grade ? ' &middot; ' + c.hadith_grade : ''}
       </div>
       ${c.source_type === 'Quran' ? `
-        <div class="notes-toggle" data-verse-idx="${i}">Show verse(s) ↓</div>
-        <div class="notes-body" id="verses-wrap-${i}"><div id="verses-${i}"></div></div>
+        <div id="verses-${i}" style="margin-top:6px;"><div style="font-size:11px;color:#9C8354;">Loading verse(s)&hellip;</div></div>
       ` : ''}
       ${c.notes ? `
         <div class="notes-toggle" data-idx="${i}">Notes &darr;</div>
@@ -312,18 +311,9 @@ function render() {
     </div>
   `).join('');
 
-  document.querySelectorAll('.notes-toggle[data-verse-idx]').forEach(el => {
-    el.addEventListener('click', async () => {
-      const idx = el.dataset.verseIdx;
-      const wrap = document.getElementById('verses-wrap-' + idx);
-      const isOpening = !wrap.classList.contains('open');
-      wrap.classList.toggle('open');
-      el.textContent = isOpening ? 'Show verse(s) ↑' : 'Show verse(s) ↓';
-      if (isOpening) {
-        const claim = filtered[idx];
-        await renderVersesForClaim(idx, claim.reference);
-      }
-    });
+  // Auto-render verses for every Quran claim (no click required)
+  filtered.forEach((claim, i) => {
+    if (claim.source_type === 'Quran') renderVersesForClaim(i, claim.reference);
   });
 
   document.querySelectorAll('.notes-toggle').forEach(el => {
@@ -344,10 +334,8 @@ document.querySelectorAll('#langToggles .chip').forEach(label => {
       if (checkbox.checked) { activeLangs.add(lang); label.classList.add('active'); }
       else { activeLangs.delete(lang); label.classList.remove('active'); }
       // re-render any currently-open verse panels with the new language selection
-      document.querySelectorAll('.notes-body.open[id^="verses-wrap-"]').forEach(wrap => {
-        const idx = wrap.id.replace('verses-wrap-', '');
-        const claim = currentFiltered[idx];
-        if (claim) renderVersesForClaim(idx, claim.reference);
+      currentFiltered.forEach((claim, idx) => {
+        if (claim.source_type === 'Quran') renderVersesForClaim(idx, claim.reference);
       });
     }, 0);
   });
