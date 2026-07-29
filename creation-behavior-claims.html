@@ -56,13 +56,14 @@
 </div>
 
 <div class="filter-group">
-  <div class="filter-label">Show</div>
-  <div class="filters" id="langToggles" style="padding-top:6px;">
-    <label class="chip active" data-lang="arabic" style="cursor:pointer;"><input type="checkbox" checked style="margin-right:4px;">Arabic</label>
-    <label class="chip" data-lang="arabic_transliteration" style="cursor:pointer;"><input type="checkbox" style="margin-right:4px;">Translit</label>
-    <label class="chip active" data-lang="english" style="cursor:pointer;"><input type="checkbox" checked style="margin-right:4px;">English</label>
-    <label class="chip" data-lang="tigrinya" style="cursor:pointer;"><input type="checkbox" style="margin-right:4px;">Tigrinya</label>
-    <label class="chip" data-lang="amharic" style="cursor:pointer;"><input type="checkbox" style="margin-right:4px;">Amharic</label>
+  <div class="filter-label">Show languages</div>
+  <div style="padding:6px 14px 10px; position:relative;">
+    <div id="langTags" style="display:flex; flex-wrap:wrap; gap:5px; margin-bottom:6px;"></div>
+    <input id="langSearch" type="text" placeholder="Type a language (e.g. Amharic)..."
+           style="width:100%; padding:8px 12px; border:1px solid #D8C79A; border-radius:16px; font-family:inherit; font-size:13px;"
+           autocomplete="off">
+    <div id="langDropdown" style="display:none; position:absolute; left:14px; right:14px; top:100%; background:#fff;
+         border:1px solid #D8C79A; border-radius:10px; box-shadow:0 4px 14px rgba(0,0,0,.1); z-index:50; max-height:200px; overflow-y:auto;"></div>
   </div>
 </div>
 <div class="filter-group">
@@ -325,20 +326,70 @@ function render() {
   });
 }
 
-document.querySelectorAll('#langToggles .chip').forEach(label => {
-  label.addEventListener('click', (e) => {
-    const lang = label.dataset.lang;
-    const checkbox = label.querySelector('input');
-    // let the native checkbox toggle happen, then read its new state
-    setTimeout(() => {
-      if (checkbox.checked) { activeLangs.add(lang); label.classList.add('active'); }
-      else { activeLangs.delete(lang); label.classList.remove('active'); }
-      // re-render any currently-open verse panels with the new language selection
-      currentFiltered.forEach((claim, idx) => {
-        if (claim.source_type === 'Quran') renderVersesForClaim(idx, claim.reference);
-      });
-    }, 0);
+// Compact typeable multi-select for languages, replacing the checkbox row.
+// Sourced from the theme_verses columns actually available; new columns added
+// later just need adding to this list, not a new UI row.
+const LANGUAGE_OPTIONS = [
+  { key: 'arabic', label: 'Arabic' },
+  { key: 'arabic_transliteration', label: 'Transliteration' },
+  { key: 'english', label: 'English' },
+  { key: 'tigrinya', label: 'Tigrinya' },
+  { key: 'amharic', label: 'Amharic' },
+];
+
+function renderLangTags() {
+  const tagBox = document.getElementById('langTags');
+  tagBox.innerHTML = [...activeLangs].map(key => {
+    const opt = LANGUAGE_OPTIONS.find(o => o.key === key);
+    return `<span class="chip active" style="display:inline-flex;align-items:center;gap:5px;">
+      ${opt ? opt.label : key}
+      <span data-remove-lang="${key}" style="cursor:pointer;font-weight:700;">&times;</span>
+    </span>`;
+  }).join('') || '<span style="font-size:11px;color:#B0A480;">No languages selected</span>';
+
+  tagBox.querySelectorAll('[data-remove-lang]').forEach(x => {
+    x.addEventListener('click', () => {
+      activeLangs.delete(x.dataset.removeLang);
+      renderLangTags();
+      refreshAllVerses();
+    });
   });
+}
+
+function refreshAllVerses() {
+  currentFiltered.forEach((claim, idx) => {
+    if (claim.source_type === 'Quran') renderVersesForClaim(idx, claim.reference);
+  });
+}
+
+function showLangDropdown(query) {
+  const dropdown = document.getElementById('langDropdown');
+  const q = (query || '').toLowerCase();
+  const matches = LANGUAGE_OPTIONS.filter(o => !activeLangs.has(o.key) && o.label.toLowerCase().includes(q));
+  if (!matches.length) { dropdown.style.display = 'none'; return; }
+  dropdown.innerHTML = matches.map(o =>
+    `<div data-add-lang="${o.key}" style="padding:9px 12px; cursor:pointer; font-size:13px; border-bottom:1px solid #F0EAD8;">${o.label}</div>`
+  ).join('');
+  dropdown.style.display = 'block';
+  dropdown.querySelectorAll('[data-add-lang]').forEach(el => {
+    el.addEventListener('click', () => {
+      activeLangs.add(el.dataset.addLang);
+      document.getElementById('langSearch').value = '';
+      dropdown.style.display = 'none';
+      renderLangTags();
+      refreshAllVerses();
+    });
+  });
+}
+
+renderLangTags();
+const langSearchInput = document.getElementById('langSearch');
+langSearchInput.addEventListener('focus', () => showLangDropdown(langSearchInput.value));
+langSearchInput.addEventListener('input', () => showLangDropdown(langSearchInput.value));
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('#langSearch') && !e.target.closest('#langDropdown')) {
+    document.getElementById('langDropdown').style.display = 'none';
+  }
 });
 
 document.getElementById('searchInput').addEventListener('input', render);
