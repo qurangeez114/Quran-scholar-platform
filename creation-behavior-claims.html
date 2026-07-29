@@ -16,24 +16,32 @@
                  border-radius:16px; font-size:11px; font-weight:700; cursor:pointer; white-space:nowrap; text-decoration:none; }
   .searchbar { padding:10px 14px; background:#fff; border-bottom:1px solid #E8D8A0; }
   .searchbar input { width:100%; padding:9px 12px; border:1px solid #D8C79A; border-radius:20px; font-family:inherit; font-size:14px; }
-  .filters { display:flex; gap:6px; overflow-x:auto; padding:10px 14px; background:#fff; border-bottom:1px solid #E8D8A0; }
+  .filter-group { border-bottom:1px solid #E8D8A0; background:#fff; }
+  .filter-label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:#B0A480; padding:8px 14px 2px; }
+  .filters { display:flex; gap:6px; overflow-x:auto; padding:4px 14px 10px; }
   .filters::-webkit-scrollbar { display:none; }
   .chip { flex-shrink:0; padding:5px 12px; border-radius:14px; font-size:12px; font-weight:600; border:1.5px solid #D8C79A;
           background:#fff; color:#6B5B3A; cursor:pointer; white-space:nowrap; }
   .chip.active { background:#B8902A; border-color:#B8902A; color:#fff; }
-  .count { padding:8px 14px; font-size:12px; color:#9C8354; }
+  .count { padding:8px 14px; font-size:12px; color:#9C8354; display:flex; justify-content:space-between; align-items:center; }
+  .clear-btn { font-size:11px; color:#B8902A; font-weight:700; cursor:pointer; text-decoration:underline; }
   .list { padding:0 14px 20px; }
   .card { background:#fff; border:1px solid #E8D8A0; border-radius:10px; padding:12px; margin-bottom:10px; }
-  .card-top { display:flex; justify-content:space-between; align-items:flex-start; gap:8px; margin-bottom:6px; }
+  .card-top { display:flex; justify-content:space-between; align-items:flex-start; gap:6px; margin-bottom:6px; flex-wrap:wrap; }
   .badge { border-radius:999px; padding:2px 9px; font-size:10.5px; font-weight:700; white-space:nowrap; }
   .badge-source { background:#EFE7D0; color:#8C7A52; }
   .badge-verified { background:#DCEFE0; color:#2E7D46; }
+  .badge-unverified { background:#F0EAD8; color:#9C8354; }
   .badge-conflict { background:#FBE3D3; color:#C0682E; }
   .claim-title { font-size:15px; font-weight:600; margin:0 0 4px; }
   .claim-summary { font-size:13.5px; color:#3A3226; line-height:1.5; margin-bottom:8px; }
   .meta-row { display:flex; flex-wrap:wrap; gap:5px; font-size:11px; }
   .tag { border:1px solid #D8C79A; color:#8C7A52; border-radius:6px; padding:1px 8px; }
+  .tag-claimtype { border-color:#B8902A; color:#B8902A; font-weight:600; }
   .ref { font-size:11.5px; color:#9C8354; margin-top:6px; font-style:italic; }
+  .notes-toggle { font-size:11px; color:#B8902A; font-weight:700; cursor:pointer; margin-top:6px; display:inline-block; }
+  .notes-body { font-size:12px; color:#6B5B3A; line-height:1.5; margin-top:6px; padding-top:6px; border-top:1px dashed #E8D8A0; display:none; }
+  .notes-body.open { display:block; }
   .status { padding:30px 14px; text-align:center; color:#9C8354; font-size:13px; }
   .empty { border:1px dashed #D8C79A; border-radius:10px; padding:24px; text-align:center; color:#9C8354; font-size:13px; margin:14px; }
 </style>
@@ -46,9 +54,28 @@
 <div class="searchbar">
   <input id="searchInput" type="text" placeholder="Search claims, references, narrators...">
 </div>
-<div class="filters" id="typeFilters"></div>
-<div class="filters" id="domainFilters"></div>
-<div class="count" id="countLabel"></div>
+
+<div class="filter-group">
+  <div class="filter-label">Source</div>
+  <div class="filters" id="typeFilters"></div>
+</div>
+<div class="filter-group">
+  <div class="filter-label">Domain</div>
+  <div class="filters" id="domainFilters"></div>
+</div>
+<div class="filter-group">
+  <div class="filter-label">Claim type</div>
+  <div class="filters" id="claimTypeFilters"></div>
+</div>
+<div class="filter-group">
+  <div class="filter-label">Verification</div>
+  <div class="filters" id="statusFilters"></div>
+</div>
+
+<div class="count">
+  <span id="countLabel"></span>
+  <span class="clear-btn" id="clearBtn" style="display:none">Clear filters</span>
+</div>
 <div class="status" id="status">Loading&hellip;</div>
 <div class="list" id="list" style="display:none"></div>
 
@@ -57,8 +84,7 @@ const SUPABASE_URL = "https://ylosytbxpzxzwfzjpaej.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs";
 
 let allClaims = [];
-let activeType = "All";
-let activeDomain = "All";
+let active = { type: "All", domain: "All", claimType: "All", status: "All" };
 
 async function load() {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/creation_behavior_claims?select=*&order=id.asc`, {
@@ -71,34 +97,70 @@ async function load() {
   render();
 }
 
+// Broad claim-type buckets, since raw claim_type values are free-text and quite varied.
+// This groups them into a manageable filter set rather than showing 30+ raw strings.
+function claimTypeBucket(ct) {
+  if (!ct) return "Other";
+  const s = ct.toLowerCase();
+  if (s.includes('isra') || s.includes('athar') || s.includes('narrative expansion')) return "Athar / Isra'iliyyat";
+  if (s.includes('personified')) return "Personified scripture";
+  if (s.includes('prophecy')) return "Prophecy / End-times";
+  if (s.includes('miracle')) return "Miracle claim";
+  if (s.includes('counterfactual')) return "Counterfactual claim";
+  if (s.includes('testif') || s.includes('body-part')) return "Testimony claim";
+  if (s.includes('punishment') || s.includes('reward')) return "Punishment / Reward";
+  if (s.includes('object') || s.includes('animal') || s.includes('speak')) return "Speaking entity";
+  return "Other";
+}
+
 function buildFilters() {
   const types = ["All", ...new Set(allClaims.map(c => c.source_type))];
-  const domains = ["All", ...new Set(allClaims.map(c => c.subdomain).filter(Boolean))];
+  const domains = ["All", ...new Set(allClaims.map(c => c.domain).filter(Boolean))];
+  const claimTypes = ["All", ...new Set(allClaims.map(c => claimTypeBucket(c.claim_type)))];
+  const statuses = ["All", "verified", "unverified", "disputed_reference"];
+  const statusLabels = { All: "All", verified: "Verified", unverified: "Unverified", disputed_reference: "Conflicting" };
 
   document.getElementById('typeFilters').innerHTML = types.map(t =>
-    `<button class="chip ${t === activeType ? 'active' : ''}" data-kind="type" data-val="${t}">${t}</button>`
+    `<button class="chip ${t === active.type ? 'active' : ''}" data-kind="type" data-val="${t}">${t}</button>`
   ).join('');
   document.getElementById('domainFilters').innerHTML = domains.map(d =>
-    `<button class="chip ${d === activeDomain ? 'active' : ''}" data-kind="domain" data-val="${d}">${d}</button>`
+    `<button class="chip ${d === active.domain ? 'active' : ''}" data-kind="domain" data-val="${d}">${d}</button>`
+  ).join('');
+  document.getElementById('claimTypeFilters').innerHTML = claimTypes.map(c =>
+    `<button class="chip ${c === active.claimType ? 'active' : ''}" data-kind="claimType" data-val="${c}">${c}</button>`
+  ).join('');
+  document.getElementById('statusFilters').innerHTML = statuses.map(s =>
+    `<button class="chip ${s === active.status ? 'active' : ''}" data-kind="status" data-val="${s}">${statusLabels[s]}</button>`
   ).join('');
 
   document.querySelectorAll('.chip').forEach(btn => {
     btn.addEventListener('click', () => {
-      if (btn.dataset.kind === 'type') activeType = btn.dataset.val;
-      if (btn.dataset.kind === 'domain') activeDomain = btn.dataset.val;
+      active[btn.dataset.kind] = btn.dataset.val;
       buildFilters();
       render();
     });
   });
+
+  const anyActive = Object.values(active).some(v => v !== "All");
+  document.getElementById('clearBtn').style.display = anyActive ? 'inline' : 'none';
+}
+
+function clearFilters() {
+  active = { type: "All", domain: "All", claimType: "All", status: "All" };
+  document.getElementById('searchInput').value = '';
+  buildFilters();
+  render();
 }
 
 function render() {
   const q = document.getElementById('searchInput').value.toLowerCase();
   const filtered = allClaims.filter(c => {
-    if (activeType !== "All" && c.source_type !== activeType) return false;
-    if (activeDomain !== "All" && c.subdomain !== activeDomain) return false;
+    if (active.type !== "All" && c.source_type !== active.type) return false;
+    if (active.domain !== "All" && c.domain !== active.domain) return false;
+    if (active.claimType !== "All" && claimTypeBucket(c.claim_type) !== active.claimType) return false;
+    if (active.status !== "All" && c.verification_status !== active.status) return false;
     if (q) {
-      const hay = `${c.claim} ${c.reference} ${c.summary}`.toLowerCase();
+      const hay = `${c.claim} ${c.reference} ${c.summary} ${c.claim_type||''} ${c.source_collection||''}`.toLowerCase();
       if (!hay.includes(q)) return false;
     }
     return true;
@@ -112,27 +174,45 @@ function render() {
     return;
   }
 
-  list.innerHTML = filtered.map(c => `
+  const statusBadge = (s) => {
+    if (s === 'verified') return '<span class="badge badge-verified">Verified</span>';
+    if (s === 'disputed_reference') return '<span class="badge badge-conflict">Conflicting sources</span>';
+    return '<span class="badge badge-unverified">Unverified</span>';
+  };
+
+  list.innerHTML = filtered.map((c, i) => `
     <div class="card">
       <div class="card-top">
         <span class="badge badge-source">${c.source_type}</span>
-        <span class="badge ${c.verification_status === 'verified' ? 'badge-verified' : 'badge-conflict'}">
-          ${c.verification_status === 'verified' ? 'Verified' : 'Conflicting sources'}
-        </span>
+        ${statusBadge(c.verification_status)}
       </div>
       <div class="claim-title">${c.claim}</div>
       <div class="claim-summary">${c.summary}</div>
       <div class="meta-row">
         ${c.domain ? `<span class="tag">${c.domain}</span>` : ''}
         ${c.subdomain ? `<span class="tag">${c.subdomain}</span>` : ''}
+        ${c.claim_type ? `<span class="tag tag-claimtype">${c.claim_type}</span>` : ''}
         ${(c.behavior_tags || []).map(b => `<span class="tag">${b}</span>`).join('')}
       </div>
       <div class="ref">${c.source_collection ? c.source_collection + ' &middot; ' : ''}${c.reference}${c.hadith_grade ? ' &middot; ' + c.hadith_grade : ''}</div>
+      ${c.notes ? `
+        <div class="notes-toggle" data-idx="${i}">Notes &darr;</div>
+        <div class="notes-body" id="notes-${i}">${c.notes}</div>
+      ` : ''}
     </div>
   `).join('');
+
+  document.querySelectorAll('.notes-toggle').forEach(el => {
+    el.addEventListener('click', () => {
+      const body = document.getElementById('notes-' + el.dataset.idx);
+      body.classList.toggle('open');
+      el.textContent = body.classList.contains('open') ? 'Notes ↑' : 'Notes ↓';
+    });
+  });
 }
 
 document.getElementById('searchInput').addEventListener('input', render);
+document.getElementById('clearBtn').addEventListener('click', clearFilters);
 load().catch(err => {
   document.getElementById('status').textContent = 'Failed to load: ' + err.message;
 });
