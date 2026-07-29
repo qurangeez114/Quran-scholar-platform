@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Narrative Comparison — Quran Hikma</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=EB+Garamond:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:'EB Garamond','Georgia',serif; background:#FDFAF4; color:#1A1A1A; }
+  .topbar { position:sticky; top:0; z-index:200; background:#FDF8EE; border-bottom:2px solid #E8C97B;
+            padding:10px 14px; display:flex; align-items:center; gap:10px; }
+  .topbar h1 { font-size:15px; margin:0; color:#B8902A; font-weight:700; flex:1; }
+  .btn-outline { padding:6px 12px; background:#FDF8EE; color:#B8902A; border:1.5px solid #B8902A;
+                 border-radius:16px; font-size:11px; font-weight:700; cursor:pointer; white-space:nowrap; text-decoration:none; }
+  .core { padding:14px; border-bottom:1px solid #E8D8A0; background:#fff; font-size:13.5px; line-height:1.5; }
+  .core strong { display:block; font-size:11px; text-transform:uppercase; letter-spacing:1px; color:#9C8354; margin-bottom:4px; }
+  .tabs { display:flex; border-bottom:1px solid #E8D8A0; background:#fff; position:sticky; top:45px; z-index:100; }
+  .tab { flex:1; padding:11px 4px; font-size:12.5px; font-weight:700; border:none; background:transparent;
+         color:#9C8354; border-bottom:2px solid transparent; cursor:pointer; font-family:inherit; }
+  .tab.active { color:#B8902A; border-bottom-color:#B8902A; }
+  .body { padding:14px; }
+  .card { background:#fff; border:1px solid #E8D8A0; border-radius:10px; padding:12px; margin-bottom:10px; }
+  .badge { border-radius:999px; padding:2px 10px; font-size:11px; font-weight:700; color:#fff; white-space:nowrap; }
+  .tag { display:inline-block; border-radius:6px; padding:1px 8px; font-size:10.5px; font-weight:700; margin:0 6px 4px 0; }
+  .row { display:flex; gap:8px; margin-bottom:6px; font-size:13px; }
+  .row .label { width:130px; flex-shrink:0; color:#9C8354; font-size:11px; text-transform:uppercase; padding-top:2px; }
+  .empty { border:1px dashed #D8C79A; border-radius:10px; padding:22px; text-align:center; color:#9C8354; font-size:13px; }
+  .status { display:none; padding:20px; text-align:center; color:#9C8354; font-size:13px; }
+</style>
+</head>
+<body>
+<div class="topbar">
+  <a href="index.html" class="btn-outline">&larr; Back</a>
+  <h1 id="pageTitle">Narrative Comparison</h1>
+</div>
+<div class="core" id="coreBox" style="display:none">
+  <strong>Shared historical core</strong>
+  <div id="coreText"></div>
+</div>
+<div class="tabs" id="tabs" style="display:none">
+  <button class="tab active" data-tab="claims">Atomic claims</button>
+  <button class="tab" data-tab="source">Version detail</button>
+  <button class="tab" data-tab="compare">Comparison</button>
+</div>
+<div class="status" id="status">Loading&hellip;</div>
+<div class="body" id="body" style="display:none"></div>
+
+<script>
+const SUPABASE_URL = "https://ylosytbxpzxzwfzjpaej.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs";
+
+const SEVERITY_COLOR = ["#8C7A52","#7AA6D6","#3E8E4F","#C99A2E","#D9772E","#C0392B"];
+const SCORE_LABEL = ["Ordinary","Unusual","Weakly supported","Extraordinary","Highly extraordinary","Extreme"];
+const CATEGORY_COLOR = {
+  "Historical claim": "#8C7A52", "Legal claim": "#4472B0", "Ritual-effect claim": "#4472B0",
+  "Angelic intervention": "#7B4FA0", "Counterfactual miracle": "#7B4FA0",
+  "Logically problematic claim": "#C99A2E"
+};
+
+function scoreBadge(score) {
+  if (score === null || score === undefined) return '<span style="color:#B0A480;font-size:11px">n/a</span>';
+  return `<span class="badge" style="background:${SEVERITY_COLOR[score]}">${score} &middot; ${SCORE_LABEL[score]}</span>`;
+}
+function categoryTag(name) {
+  const c = CATEGORY_COLOR[name] || "#8C7A52";
+  return `<span class="tag" style="border:1px solid ${c};color:${c}">${name}</span>`;
+}
+
+async function sb(path) {
+  const res = await fetch(`${SUPABASE_URL}${path}`, {
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+  });
+  if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
+  return res.json();
+}
+
+let versions = [];
+
+async function load() {
+  const params = new URLSearchParams(location.search);
+  const slug = params.get('story') || 'talha-arrow-wound-uhud';
+  try {
+    const data = await sb(`/rest/v1/rpc/get_narrative_group_versions`);
+  } catch (e) { /* rpc requires POST, handled below */ }
+
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_narrative_group_versions`, {
+    method: 'POST',
+    headers: {
+      apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ group_slug: slug })
+  });
+  const json = await res.json();
+  document.getElementById('status').style.display = 'none';
+
+  if (!json || !json.group) {
+    document.getElementById('body').style.display = 'block';
+    document.getElementById('body').innerHTML = `<div class="empty">No narrative group found for "${slug}".</div>`;
+    return;
+  }
+
+  const g = json.group;
+  versions = json.versions || [];
+  document.getElementById('pageTitle').textContent = g.title;
+  document.getElementById('coreBox').style.display = 'block';
+  document.getElementById('coreText').textContent = g.historical_core || '(not yet documented)';
+  document.getElementById('tabs').style.display = 'flex';
+  document.getElementById('body').style.display = 'block';
+
+  renderTab('claims');
+
+  document.querySelectorAll('.tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      renderTab(btn.dataset.tab);
+    });
+  });
+}
+
+function renderTab(tab) {
+  const body = document.getElementById('body');
+  if (!versions.length) { body.innerHTML = '<div class="empty">No versions recorded yet.</div>'; return; }
+  const v = versions[0];
+
+  if (tab === 'claims') {
+    const claims = (v.claims || []).sort((a,b) => a.claim_order - b.claim_order);
+    body.innerHTML = claims.map(c => `
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div style="font-size:11px;color:#B0A480;font-weight:700">#${c.claim_order}</div>
+          ${scoreBadge(c.extraordinary_claim_score)}
+        </div>
+        <div style="font-size:14px;margin-top:4px">
+          <strong>${c.actor || c.speaker || '&mdash;'}</strong> &mdash; ${c.action || ''}
+          <div style="font-size:12.5px;color:#8C7A52;margin-top:2px">${c.condition ? 'Condition: ' + c.condition + '. ' : ''}${c.result || c.text_span || ''}</div>
+        </div>
+        <div style="margin-top:8px">${(c.claim_category || []).map(categoryTag).join('')}</div>
+      </div>
+    `).join('');
+  }
+
+  if (tab === 'source') {
+    body.innerHTML = `<div class="card">
+      ${row('Source type', v.source_type)}
+      ${row('Collection', v.source_collection)}
+      ${row('Reference', v.source_reference)}
+      ${row('Narrator', v.narrator)}
+      ${row('Transmission chain', v.transmission_chain)}
+      ${row('Approx. source date', v.approximate_source_date)}
+      ${row('Grade', v.hadith_grade)}
+      ${row('Reliability note', v.source_reliability)}
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid #E8D8A0">
+        <strong style="font-size:11px;text-transform:uppercase;color:#9C8354">Summary</strong>
+        <div style="margin-top:4px;font-size:13.5px">${v.version_summary || ''}</div>
+      </div>
+    </div>`;
+  }
+
+  if (tab === 'compare') {
+    if (versions.length < 2) {
+      body.innerHTML = `<div class="empty">Only one narration of this incident has been located so far.<br>A second version is required before a side-by-side comparison can be generated.</div>`;
+    } else {
+      body.innerHTML = `<div class="empty">Comparison rendering for ${versions.length} versions not yet built.</div>`;
+    }
+  }
+}
+
+function row(label, value) {
+  return `<div class="row"><div class="label">${label}</div><div>${value || '&mdash;'}</div></div>`;
+}
+
+document.getElementById('status').style.display = 'block';
+load().catch(err => {
+  document.getElementById('status').textContent = 'Failed to load: ' + err.message;
+});
+</script>
+</body>
+</html>
