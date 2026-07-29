@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nature &amp; Creation Claims — Quran Hikma</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:'EB Garamond','Georgia',serif; background:#FDFAF4; color:#1A1A1A; }
+  .topbar { position:sticky; top:0; z-index:200; background:#FDF8EE; border-bottom:2px solid #E8C97B;
+            padding:10px 14px; display:flex; align-items:center; gap:10px; }
+  .topbar h1 { font-size:15px; margin:0; color:#B8902A; font-weight:700; flex:1; }
+  .btn-outline { padding:6px 12px; background:#FDF8EE; color:#B8902A; border:1.5px solid #B8902A;
+                 border-radius:16px; font-size:11px; font-weight:700; cursor:pointer; white-space:nowrap; text-decoration:none; }
+  .searchbar { padding:10px 14px; background:#fff; border-bottom:1px solid #E8D8A0; }
+  .searchbar input { width:100%; padding:9px 12px; border:1px solid #D8C79A; border-radius:20px; font-family:inherit; font-size:14px; }
+  .filters { display:flex; gap:6px; overflow-x:auto; padding:10px 14px; background:#fff; border-bottom:1px solid #E8D8A0; }
+  .filters::-webkit-scrollbar { display:none; }
+  .chip { flex-shrink:0; padding:5px 12px; border-radius:14px; font-size:12px; font-weight:600; border:1.5px solid #D8C79A;
+          background:#fff; color:#6B5B3A; cursor:pointer; white-space:nowrap; }
+  .chip.active { background:#B8902A; border-color:#B8902A; color:#fff; }
+  .count { padding:8px 14px; font-size:12px; color:#9C8354; }
+  .list { padding:0 14px 20px; }
+  .card { background:#fff; border:1px solid #E8D8A0; border-radius:10px; padding:12px; margin-bottom:10px; }
+  .card-top { display:flex; justify-content:space-between; align-items:flex-start; gap:8px; margin-bottom:6px; }
+  .badge { border-radius:999px; padding:2px 9px; font-size:10.5px; font-weight:700; white-space:nowrap; }
+  .badge-source { background:#EFE7D0; color:#8C7A52; }
+  .badge-verified { background:#DCEFE0; color:#2E7D46; }
+  .badge-conflict { background:#FBE3D3; color:#C0682E; }
+  .claim-title { font-size:15px; font-weight:600; margin:0 0 4px; }
+  .claim-summary { font-size:13.5px; color:#3A3226; line-height:1.5; margin-bottom:8px; }
+  .meta-row { display:flex; flex-wrap:wrap; gap:5px; font-size:11px; }
+  .tag { border:1px solid #D8C79A; color:#8C7A52; border-radius:6px; padding:1px 8px; }
+  .ref { font-size:11.5px; color:#9C8354; margin-top:6px; font-style:italic; }
+  .status { padding:30px 14px; text-align:center; color:#9C8354; font-size:13px; }
+  .empty { border:1px dashed #D8C79A; border-radius:10px; padding:24px; text-align:center; color:#9C8354; font-size:13px; margin:14px; }
+</style>
+</head>
+<body>
+<div class="topbar">
+  <a href="index.html" class="btn-outline">&larr; Back</a>
+  <h1>Nature &amp; Creation Claims</h1>
+</div>
+<div class="searchbar">
+  <input id="searchInput" type="text" placeholder="Search claims, references, narrators...">
+</div>
+<div class="filters" id="typeFilters"></div>
+<div class="filters" id="domainFilters"></div>
+<div class="count" id="countLabel"></div>
+<div class="status" id="status">Loading&hellip;</div>
+<div class="list" id="list" style="display:none"></div>
+
+<script>
+const SUPABASE_URL = "https://ylosytbxpzxzwfzjpaej.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs";
+
+let allClaims = [];
+let activeType = "All";
+let activeDomain = "All";
+
+async function load() {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/creation_behavior_claims?select=*&order=id.asc`, {
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+  });
+  allClaims = await res.json();
+  document.getElementById('status').style.display = 'none';
+  document.getElementById('list').style.display = 'block';
+  buildFilters();
+  render();
+}
+
+function buildFilters() {
+  const types = ["All", ...new Set(allClaims.map(c => c.source_type))];
+  const domains = ["All", ...new Set(allClaims.map(c => c.subdomain).filter(Boolean))];
+
+  document.getElementById('typeFilters').innerHTML = types.map(t =>
+    `<button class="chip ${t === activeType ? 'active' : ''}" data-kind="type" data-val="${t}">${t}</button>`
+  ).join('');
+  document.getElementById('domainFilters').innerHTML = domains.map(d =>
+    `<button class="chip ${d === activeDomain ? 'active' : ''}" data-kind="domain" data-val="${d}">${d}</button>`
+  ).join('');
+
+  document.querySelectorAll('.chip').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (btn.dataset.kind === 'type') activeType = btn.dataset.val;
+      if (btn.dataset.kind === 'domain') activeDomain = btn.dataset.val;
+      buildFilters();
+      render();
+    });
+  });
+}
+
+function render() {
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  const filtered = allClaims.filter(c => {
+    if (activeType !== "All" && c.source_type !== activeType) return false;
+    if (activeDomain !== "All" && c.subdomain !== activeDomain) return false;
+    if (q) {
+      const hay = `${c.claim} ${c.reference} ${c.summary}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+
+  document.getElementById('countLabel').textContent = `${filtered.length} of ${allClaims.length} claims`;
+
+  const list = document.getElementById('list');
+  if (!filtered.length) {
+    list.innerHTML = '<div class="empty">No claims match these filters.</div>';
+    return;
+  }
+
+  list.innerHTML = filtered.map(c => `
+    <div class="card">
+      <div class="card-top">
+        <span class="badge badge-source">${c.source_type}</span>
+        <span class="badge ${c.verification_status === 'verified' ? 'badge-verified' : 'badge-conflict'}">
+          ${c.verification_status === 'verified' ? 'Verified' : 'Conflicting sources'}
+        </span>
+      </div>
+      <div class="claim-title">${c.claim}</div>
+      <div class="claim-summary">${c.summary}</div>
+      <div class="meta-row">
+        ${c.domain ? `<span class="tag">${c.domain}</span>` : ''}
+        ${c.subdomain ? `<span class="tag">${c.subdomain}</span>` : ''}
+        ${(c.behavior_tags || []).map(b => `<span class="tag">${b}</span>`).join('')}
+      </div>
+      <div class="ref">${c.source_collection ? c.source_collection + ' &middot; ' : ''}${c.reference}${c.hadith_grade ? ' &middot; ' + c.hadith_grade : ''}</div>
+    </div>
+  `).join('');
+}
+
+document.getElementById('searchInput').addEventListener('input', render);
+load().catch(err => {
+  document.getElementById('status').textContent = 'Failed to load: ' + err.message;
+});
+</script>
+</body>
+</html>
