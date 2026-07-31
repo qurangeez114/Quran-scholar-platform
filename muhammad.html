@@ -145,18 +145,23 @@ function setView(v){
 }
 
 async function load(){
-  const [catRes, verseRes, tagRes, hadithRes, tensionRes] = await Promise.all([
+  const [catRes, verseRes, tagRes, hadithRes, tensionRes, speakerRes] = await Promise.all([
     fetch(`${SB_URL}/rest/v1/muhammad_categories?select=*&order=display_order.asc`, {headers:HDR}),
     fetch(`${SB_URL}/rest/v1/muhammad_verses?select=*&review_status=eq.reviewed&order=sura.asc,aya.asc`, {headers:HDR}),
     fetch(`${SB_URL}/rest/v1/muhammad_verse_tags?select=*`, {headers:HDR}),
     fetch(`${SB_URL}/rest/v1/muhammad_hadith_links?select=*`, {headers:HDR}),
     fetch(`${SB_URL}/rest/v1/muhammad_tension_pairs?select=*&order=tension_id.asc`, {headers:HDR}),
+    fetch(`${SB_URL}/rest/v1/muhammad_speaker_types?select=*`, {headers:HDR}),
   ]);
   CATEGORIES = await catRes.json();
   VERSES = await verseRes.json();
   const tags = await tagRes.json();
   const hadith = await hadithRes.json();
   TENSIONS = await tensionRes.json();
+  const speakerRows = await speakerRes.json();
+  const speakerById = {};
+  speakerRows.forEach(s => { speakerById[s.id] = s.label; });
+  window._speakerById = speakerById;
 
   tags.forEach(t => { (TAGS_BY_VERSE[t.verse_id] = TAGS_BY_VERSE[t.verse_id] || []).push(t); });
   hadith.forEach(h => { const k = `${h.sura}:${h.aya}`; (HADITH_BY_KEY[k] = HADITH_BY_KEY[k] || []).push(h); });
@@ -239,6 +244,11 @@ function renderVerses(list){
     if (primary) badges += `<span class="badge">${esc(catName(primary.category_slug))}</span>`;
     secondary.forEach(t => { badges += `<span class="badge secondary">${esc(catName(t.category_slug))}</span>`; });
     if (v.tone) badges += `<span class="badge tone">${esc(v.tone)}</span>`;
+    if (v.discourse_type) badges += `<span class="badge secondary">🗣 ${esc(v.discourse_type)}</span>`;
+
+    const sb = window._speakerById || {};
+    let speakerLine = sb[v.narrative_speaker_id] ? `Narrative speaker: ${esc(sb[v.narrative_speaker_id])}` : '';
+    if (v.quoted_speaker_id) speakerLine += (speakerLine ? ' · ' : '') + `Quoting: ${esc(sb[v.quoted_speaker_id])}`;
 
     let hadithHtml = '';
     if (hadithList.length) {
@@ -255,7 +265,8 @@ function renderVerses(list){
       ${v.summary ? `<div class="verse-summary">${esc(v.summary)}</div>` : ''}
       ${v.research_question ? `<div class="verse-question">❓ ${esc(v.research_question)}</div>` : ''}
       <div class="verse-meta-row">
-        <span>Speaker→Addressee: ${esc(v.addressee||'—')}</span>
+        ${speakerLine ? `<span>${speakerLine}</span>` : ''}
+        ${v.addressee ? `<span>Addressee: ${esc(v.addressee)}</span>` : ''}
         ${v.applies_only_to_muhammad ? '<span>🔒 Unique to Muhammad</span>' : ''}
       </div>
       ${hadithHtml}
