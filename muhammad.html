@@ -78,6 +78,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <button id="btn-tensions" onclick="setView('tensions')">⚖️ Tension Pairs</button>
   </div>
   <input class="search-input" id="searchInput" placeholder="🔍 Search summaries, categories, references..." oninput="filter()">
+  <div class="view-toggle" id="relevance-toggle">
+    <button class="active" onclick="selectRelevance('', this)">All</button>
+    <button onclick="selectRelevance('Primary', this)">Primary only</button>
+    <button onclick="selectRelevance('Primary,Secondary', this)">Primary + Secondary</button>
+  </div>
   <div id="cat-filter-wrap">
     <button id="cat-filter-btn" onclick="toggleCatDrop()">
       <span id="cat-filter-label">📚 All Categories</span><span>▾</span>
@@ -113,6 +118,14 @@ let HADITH_BY_KEY = {};
 let TENSIONS = [];
 let CURRENT_VIEW = 'verses';
 window._catFilterVal = '';
+window._relevanceFilterVal = '';
+
+function selectRelevance(val, btn){
+  window._relevanceFilterVal = val;
+  document.querySelectorAll('#relevance-toggle button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  filter();
+}
 
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
@@ -212,6 +225,10 @@ function filter(){
   }
 
   let list = VERSES;
+  if (window._relevanceFilterVal) {
+    const allowed = window._relevanceFilterVal.split(',');
+    list = list.filter(v => allowed.includes(v.muhammad_relevance));
+  }
   if (window._catFilterVal) {
     list = list.filter(v => (TAGS_BY_VERSE[v.id]||[]).some(t => t.category_slug === window._catFilterVal));
   }
@@ -245,6 +262,7 @@ function renderVerses(list){
     secondary.forEach(t => { badges += `<span class="badge secondary">${esc(catName(t.category_slug))}</span>`; });
     if (v.tone) badges += `<span class="badge tone">${esc(v.tone)}</span>`;
     if (v.discourse_type) badges += `<span class="badge secondary">🗣 ${esc(v.discourse_type)}</span>`;
+    if (v.muhammad_relevance) badges += `<span class="badge secondary">🎯 ${esc(v.muhammad_relevance)}</span>`;
 
     const sb = window._speakerById || {};
     let speakerLine = sb[v.narrative_speaker_id] ? `Narrative speaker: ${esc(sb[v.narrative_speaker_id])}` : '';
