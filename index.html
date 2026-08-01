@@ -1418,6 +1418,27 @@ body { padding-bottom: 80px !important; }
   </div>
 </div>
 
+<div id="socialOverlayMain" onclick="if(event.target===this)closeSocialCardMain()" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:99999998;align-items:center;justify-content:center;padding:12px;overflow-y:auto;">
+  <div style="background:#fff;border-radius:14px;padding:16px;width:100%;max-width:480px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <div style="font-size:14px;font-weight:700;color:#C9A84C;">📱 Social Media Card</div>
+      <button onclick="closeSocialCardMain()" style="background:none;border:none;font-size:18px;color:#999;cursor:pointer;">✕</button>
+    </div>
+    <div style="display:flex;gap:6px;margin-bottom:12px;">
+      <button id="scm-fmt-square" class="active" onclick="setSocialFormatMain('square')" style="flex:1;padding:8px;border:1.5px solid #E8C97B;border-radius:8px;background:#C9A84C;color:#fff;font-size:12px;font-weight:700;cursor:pointer;">◻️ Square<br><span style="font-weight:400;font-size:10px;">Instagram/X post</span></button>
+      <button id="scm-fmt-story" onclick="setSocialFormatMain('story')" style="flex:1;padding:8px;border:1.5px solid #E8C97B;border-radius:8px;background:#fff;color:#1a1a1a;font-size:12px;font-weight:700;cursor:pointer;">📱 Story<br><span style="font-weight:400;font-size:10px;">Stories/TikTok/Reels</span></button>
+      <button id="scm-fmt-wide" onclick="setSocialFormatMain('wide')" style="flex:1;padding:8px;border:1.5px solid #E8C97B;border-radius:8px;background:#fff;color:#1a1a1a;font-size:12px;font-weight:700;cursor:pointer;">▭ Wide<br><span style="font-weight:400;font-size:10px;">X/Twitter card</span></button>
+    </div>
+    <div style="text-align:center;background:#F0EDE6;border-radius:8px;padding:10px;margin-bottom:12px;min-height:120px;">
+      <canvas id="socialCanvasMain" style="max-width:100%;height:auto;border-radius:6px;box-shadow:0 2px 10px rgba(0,0,0,0.15);"></canvas>
+      <div id="socialCanvasLoadingMain" style="color:#999;font-size:13px;padding:30px 0;">Loading verse...</div>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button onclick="downloadSocialCardMain()" style="flex:1;padding:10px;background:#C9A84C;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">⬇️ Download Image</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // deploy: 2
 const SUPABASE_URL = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
@@ -2777,6 +2798,7 @@ function renderVerses(ayas, suraId) {
             <button id="copy-${aya.aya_number}" onclick="event.stopPropagation();copyVerse(${aya.aya_number},${suraId})" title="Copy visible languages" style="background:#FDF8EE;border:1px solid #E8C97B;border-radius:6px;width:32px;height:30px;font-size:14px;cursor:pointer;padding:0;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;">📋</button>
             <button onclick="event.stopPropagation();shareVerse(${aya.aya_number},${suraId})" title="Share verse" style="background:#FDF8EE;border:1px solid #E8C97B;border-radius:6px;width:32px;height:30px;font-size:14px;cursor:pointer;padding:0;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;">📤</button>
             <button onclick="event.stopPropagation();addVerseToPresentation(${aya.aya_number},${suraId})" title="Add to Presentation" data-sura="${suraId}" data-aya="${aya.aya_number}" style="background:#FDF8EE;border:1px solid #C9A85C;border-radius:6px;height:30px;padding:0 8px;font-size:11px;font-weight:700;cursor:pointer;flex-shrink:0;display:inline-flex;align-items:center;color:#B8902A;font-family:Inconsolata,monospace;">＋</button>
+            <button onclick="event.stopPropagation();openSocialCardMain(${suraId},${aya.aya_number})" title="Create social media card" style="background:#FDF8EE;border:1px solid #E8C97B;border-radius:6px;width:32px;height:30px;font-size:14px;cursor:pointer;padding:0;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;">📱</button>
             
             <button id="wbw-btn-${suraId}-${aya.aya_number}" onclick="event.stopPropagation();toggleWordByWord(${suraId},${aya.aya_number},this)" title="Switch Arabic to word-by-word study mode" class="wbw-toggle-btn">🔤 Words</button>
           </div>
@@ -5922,6 +5944,114 @@ function deleteNote() {
   if (currentNoteKey) localStorage.removeItem(currentNoteKey);
   document.getElementById('noteModal').classList.remove('open');
   renderSavedList();
+}
+
+// ─── Social Media Card generator ──────────────────────────────────
+const SOCIAL_FORMATS_MAIN = {
+  square: { w: 1080, h: 1080 },
+  story:  { w: 1080, h: 1920 },
+  wide:   { w: 1200, h: 675 },
+};
+let _socialMainSura = null, _socialMainAya = null, _socialMainFormat = 'square';
+let _socialMainVerse = null;
+
+function wrapCanvasTextMain(ctx, text, maxWidth){
+  const words = (text || '').split(' ');
+  const lines = [];
+  let line = '';
+  for (const word of words) {
+    const test = line ? line + ' ' + word : word;
+    if (ctx.measureText(test).width > maxWidth && line) { lines.push(line); line = word; }
+    else line = test;
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+async function openSocialCardMain(sura, aya){
+  _socialMainSura = sura; _socialMainAya = aya; _socialMainFormat = 'square';
+  document.getElementById('socialOverlayMain').style.display = 'flex';
+  document.getElementById('socialCanvasLoadingMain').style.display = 'block';
+  document.getElementById('socialCanvasMain').style.display = 'none';
+  setSocialFormatMainUI('square');
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/ayas?select=arabic,english&sura_id=eq.${sura}&aya_number=eq.${aya}`,
+      { headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY } });
+    const rows = await res.json();
+    _socialMainVerse = rows[0] || { arabic: '', english: '' };
+    document.getElementById('socialCanvasLoadingMain').style.display = 'none';
+    document.getElementById('socialCanvasMain').style.display = 'inline-block';
+    drawSocialCardMain();
+  } catch(e) {
+    document.getElementById('socialCanvasLoadingMain').textContent = 'Could not load verse text.';
+  }
+}
+function closeSocialCardMain(){ document.getElementById('socialOverlayMain').style.display = 'none'; }
+
+function setSocialFormatMainUI(fmt){
+  ['square','story','wide'].forEach(f => {
+    const btn = document.getElementById('scm-fmt-' + f);
+    btn.style.background = f === fmt ? '#C9A84C' : '#fff';
+    btn.style.color = f === fmt ? '#fff' : '#1a1a1a';
+  });
+}
+function setSocialFormatMain(fmt){
+  _socialMainFormat = fmt;
+  setSocialFormatMainUI(fmt);
+  try { drawSocialCardMain(); } catch(e) { console.error('drawSocialCardMain failed:', e); }
+}
+
+function drawSocialCardMain(){
+  if (!_socialMainVerse) return;
+  const fmt = SOCIAL_FORMATS_MAIN[_socialMainFormat];
+  const canvas = document.getElementById('socialCanvasMain');
+  canvas.width = fmt.w; canvas.height = fmt.h;
+  const ctx = canvas.getContext('2d');
+  const W = fmt.w, H = fmt.h;
+  const pad = W * 0.09;
+  const contentWidth = W - pad * 2;
+
+  const grad = ctx.createLinearGradient(0, 0, W, H);
+  grad.addColorStop(0, '#FDF8EE'); grad.addColorStop(1, '#F5EBD0');
+  ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = '#C9A84C'; ctx.lineWidth = W * 0.006;
+  ctx.strokeRect(pad*0.35, pad*0.35, W-pad*0.7, H-pad*0.7);
+
+  let y = pad * 1.3;
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#C9A84C';
+  ctx.font = `700 ${Math.round(W*0.032)}px Georgia, serif`;
+  ctx.fillText(`Qur'an ${_socialMainSura}:${_socialMainAya}`, W/2, y);
+  y += H * 0.06;
+
+  if (_socialMainVerse.arabic) {
+    ctx.direction = 'rtl';
+    ctx.font = `${Math.round(W*0.052)}px "Times New Roman", serif`;
+    ctx.fillStyle = '#1a1a1a';
+    wrapCanvasTextMain(ctx, _socialMainVerse.arabic, contentWidth).forEach(line => { ctx.fillText(line, W/2, y); y += W * 0.075; });
+    ctx.direction = 'ltr';
+    y += H * 0.03;
+  }
+  if (_socialMainVerse.english) {
+    ctx.font = `italic ${Math.round(W*0.032)}px Georgia, serif`;
+    ctx.fillStyle = '#333';
+    const enLines = wrapCanvasTextMain(ctx, _socialMainVerse.english, contentWidth);
+    const maxLines = Math.floor((H - y - H*0.15) / (W*0.045));
+    const shown = enLines.slice(0, Math.max(3, maxLines));
+    if (shown.length < enLines.length) shown[shown.length-1] = shown[shown.length-1].replace(/\W*$/,'') + '…';
+    shown.forEach(line => { ctx.fillText(line, W/2, y); y += W * 0.045; });
+  }
+  ctx.font = `700 ${Math.round(W*0.024)}px Georgia, serif`;
+  ctx.fillStyle = '#C9A84C';
+  ctx.fillText('quranhikma.com', W/2, H - pad*0.6);
+}
+
+function downloadSocialCardMain(){
+  const canvas = document.getElementById('socialCanvasMain');
+  const link = document.createElement('a');
+  link.download = `quran-${_socialMainSura}-${_socialMainAya}-${_socialMainFormat}.png`;
+  link.href = canvas.toDataURL('image/png');
+  link.click();
 }
 
 // ─── Note rich-text helpers ──────────────────────────────────────
