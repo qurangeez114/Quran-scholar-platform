@@ -418,6 +418,127 @@ function deleteNote(){
   rerenderCurrentView();
 }
 
+// ─── Streaming Claude API helper (same edge function as the main Quran page) ───
+async function streamClaudeAPI(payload, onChunk) {
+  const res = await fetch('/api/claude-stream', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok || !res.body) {
+    let errMsg = 'Request failed (status ' + res.status + ')';
+    try {
+      const errJson = await res.json();
+      errMsg = (errJson && (errJson.error?.message || errJson.error)) || errMsg;
+    } catch {}
+    throw new Error(errMsg);
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let fullText = '';
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    fullText += decoder.decode(value, { stream: true });
+    if (onChunk) onChunk(fullText);
+  }
+  return fullText;
+}
+
+// ── Per-verse "Discuss" chat ─────────────────────────────────────────────
+const DISCUSS_CHATS = {}; // "sura:aya" -> [{role, content}]
+
+function discussKey(sura, aya){ return `${sura}:${aya}`; }
+
+function toggleDiscuss(sura, aya){
+  const key = discussKey(sura, aya);
+  const panel = document.getElementById('discuss-' + key);
+  if (!panel) return;
+  const isOpen = panel.style.display !== 'none';
+  panel.style.display = isOpen ? 'none' : 'block';
+  if (!isOpen) renderDiscussMessages(sura, aya);
+}
+
+function renderDiscussMessages(sura, aya){
+  const key = discussKey(sura, aya);
+  const container = document.getElementById('discuss-messages-' + key);
+  if (!container) return;
+  const msgs = DISCUSS_CHATS[key] || [];
+  if (!msgs.length) { container.innerHTML = ''; return; }
+  container.innerHTML = msgs.map(m => {
+    const isUser = m.role === 'user';
+    return `<div style="display:flex;justify-content:${isUser?'flex-end':'flex-start'};margin-bottom:6px;">
+      <div style="max-width:88%;padding:9px 12px;border-radius:${isUser?'14px 14px 3px 14px':'14px 14px 14px 3px'};background:${isUser?'#B8902A':'#F5F3EC'};color:${isUser?'#fff':'#1a1a1a'};font-size:13px;line-height:1.55;border:${isUser?'none':'1.5px solid #D4C9A8'};">
+        ${esc(m.content)}
+      </div>
+    </div>`;
+  }).join('');
+  container.scrollTop = container.scrollHeight;
+}
+
+async function sendDiscuss(sura, aya, v){
+  const key = discussKey(sura, aya);
+  const input = document.getElementById('discuss-input-' + key);
+  const btn = document.getElementById('discuss-btn-' + key);
+  const question = input.value.trim();
+  if (!question) return;
+  input.value = '';
+  if (btn) btn.disabled = true;
+
+  if (!DISCUSS_CHATS[key]) DISCUSS_CHATS[key] = [];
+
+  // Build a rich system prompt from everything already tagged on this card,
+  // not just the bare verse text.
+  const tags = (TAGS_BY_VERSE[v.id] || []).map(t => catName(t.category_slug)).join(', ');
+  const hadithList = HADITH_BY_KEY[`${sura}:${aya}`] || [];
+  const hadithSummary = hadithList.map(h => `${h.collection} ${h.hadith_number||''}: ${h.summary||''}`).join(' | ');
+  const systemPrompt = `You are a Quranic studies research assistant. The user is discussing ${sura}:${aya} within a project cataloguing every verse about Muhammad.
+Arabic: ${v.arabic || ''}
+English: ${v.english || ''}
+${v.summary ? 'Summary: ' + v.summary : ''}
+Categories: ${tags || 'none tagged'}
+Tone: ${v.tone || 'unspecified'} | Discourse type: ${v.discourse_type || 'unspecified'} | Relevance to Muhammad: ${v.muhammad_relevance || 'unspecified'}
+${v.research_question ? 'Open research question: ' + v.research_question : ''}
+${hadithSummary ? 'Linked hadith: ' + hadithSummary : ''}
+Answer with scholarly care: present the range of classical and academic views where relevant, note genuine interpretive disputes rather than picking a side, and keep answers focused and concise unless asked to go deeper.`;
+
+  DISCUSS_CHATS[key].push({ role: 'user', content: question });
+  renderDiscussMessages(sura, aya);
+
+  const container = document.getElementById('discuss-messages-' + key);
+  const loadingId = 'discuss-loading-' + key;
+  if (container) {
+    const loading = document.createElement('div');
+    loading.id = loadingId;
+    loading.style.cssText = 'display:flex;justify-content:flex-start;margin-bottom:6px;';
+    loading.innerHTML = '<div style="padding:9px 12px;background:#F5F3EC;border-radius:14px 14px 14px 3px;border:1.5px solid #D4C9A8;"><span class="spinner" style="width:12px;height:12px;border-width:2px;"></span></div>';
+    container.appendChild(loading);
+    container.scrollTop = container.scrollHeight;
+  }
+
+  try {
+    const messages = DISCUSS_CHATS[key].map(m => ({ role: m.role, content: m.content }));
+    DISCUSS_CHATS[key].push({ role: 'assistant', content: '' });
+    const msgIndex = DISCUSS_CHATS[key].length - 1;
+    document.getElementById(loadingId)?.remove();
+    await streamClaudeAPI({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 1000,
+      system: systemPrompt,
+      messages: messages
+    }, (textSoFar) => {
+      DISCUSS_CHATS[key][msgIndex].content = textSoFar;
+      renderDiscussMessages(sura, aya);
+    });
+    if (!DISCUSS_CHATS[key][msgIndex].content) DISCUSS_CHATS[key][msgIndex].content = 'No response received.';
+  } catch(e) {
+    DISCUSS_CHATS[key].push({ role: 'assistant', content: 'Could not connect to AI: ' + e.message });
+  }
+  document.getElementById(loadingId)?.remove();
+  renderDiscussMessages(sura, aya);
+  if (btn) btn.disabled = false;
+}
+
 function recordHistory(sura, aya, summary){  let hist = loadJSON('muhammadHistory', []);
   hist = hist.filter(h => !(h.sura === sura && h.aya === aya));
   hist.unshift({ sura, aya, summary: summary || '', ts: Date.now() });
@@ -785,6 +906,14 @@ function renderVerses(list){
         ${v.applies_only_to_muhammad ? '<span>🔒 Unique to Muhammad</span>' : ''}
       </div>
       ${hadithHtml}
+      <button onclick="toggleDiscuss(${v.sura},${v.aya})" style="width:100%;margin-top:10px;padding:8px;background:#FDF8EE;border:1.5px dashed #D4C9A8;border-radius:8px;color:#B8902A;font-size:12.5px;font-weight:700;cursor:pointer;">💬 Discuss this verse</button>
+      <div id="discuss-${v.sura}:${v.aya}" style="display:none;margin-top:8px;padding:10px;background:#FAFAF7;border-radius:8px;border:1px solid #E8E4DC;">
+        <div id="discuss-messages-${v.sura}:${v.aya}" style="max-height:280px;overflow-y:auto;margin-bottom:8px;"></div>
+        <div style="display:flex;gap:6px;">
+          <input id="discuss-input-${v.sura}:${v.aya}" placeholder="Ask about this verse..." onkeydown="if(event.key==='Enter')sendDiscuss(${v.sura},${v.aya},${JSON.stringify(v).replace(/'/g,"&#39;")})" style="flex:1;padding:8px 10px;border:1px solid #D4C9A8;border-radius:8px;font-size:13px;outline:none;">
+          <button id="discuss-btn-${v.sura}:${v.aya}" onclick="sendDiscuss(${v.sura},${v.aya},${JSON.stringify(v).replace(/'/g,"&#39;")})" style="padding:8px 14px;background:#B8902A;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">Ask</button>
+        </div>
+      </div>
     </div>`;
   }).join('');
 }
