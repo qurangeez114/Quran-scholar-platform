@@ -722,28 +722,41 @@ async function load(){
   tags.forEach(t => { (TAGS_BY_VERSE[t.verse_id] = TAGS_BY_VERSE[t.verse_id] || []).push(t); });
   hadith.forEach(h => { const k = `${h.sura}:${h.aya}`; (HADITH_BY_KEY[k] = HADITH_BY_KEY[k] || []).push(h); });
 
-  // Pull Arabic/English text for exactly the suras referenced, from the
-  // Pull text for exactly the suras referenced, from the site's existing
+  // Pull text for exactly the 356 cited verses, from the site's existing
   // `ayas` table — text is never duplicated into these new tables, just
-  // joined by (sura, aya). Includes every language that lives as an ayas
-  // column, plus transliteration.
-  const suraIds = [...new Set(VERSES.map(v => v.sura))];
-  const ayasRes = await fetch(`${SB_URL}/rest/v1/ayas?select=sura_id,aya_number,arabic,arabic_transliteration,english,tigrinya,amharic,oromo,somali,german,urdu&sura_id=in.(${suraIds.join(',')})`, {headers:HDR});
-  const ayasRows = await ayasRes.json();
+  // joined by (sura, aya). Querying by sura_id alone pulls whole chapters
+  // (4,935 rows for this citation set vs. the 356 actually needed) and
+  // silently truncates at Supabase's 1000-row response cap — the exact
+  // bug already found and fixed in the tension-pair verse-text fetch.
+  // Chunked exact-verse OR filter avoids it here too.
+  const verseKeys = VERSES.map(v => `${v.sura}:${v.aya}`);
   const ayaMap = {};
-  ayasRows.forEach(a => { ayaMap[`${a.sura_id}:${a.aya_number}`] = a; });
+  const ayaChunkSize = 150;
+  for (let i = 0; i < verseKeys.length; i += ayaChunkSize) {
+    const chunk = verseKeys.slice(i, i + ayaChunkSize);
+    const orFilter = chunk.map(k => {
+      const [s, a] = k.split(':');
+      return `and(sura_id.eq.${s},aya_number.eq.${a})`;
+    }).join(',');
+    const ayasRes = await fetch(`${SB_URL}/rest/v1/ayas?select=sura_id,aya_number,arabic,arabic_transliteration,english,tigrinya,amharic,oromo,somali,german,urdu&or=(${orFilter})`, {headers:HDR});
+    const ayasRows = await ayasRes.json();
+    if (Array.isArray(ayasRows)) {
+      ayasRows.forEach(a => { ayaMap[`${a.sura_id}:${a.aya_number}`] = a; });
+    } else {
+      console.warn('ayas fetch chunk failed (non-fatal):', ayasRows);
+    }
+  }
 
   // The 6 newer languages live in verse_translations (verse_key + lang),
   // not as ayas columns. Fetch by exact verse_key list (chunked to keep
   // request URLs reasonable).
-  const verseKeys = VERSES.map(v => `${v.sura}:${v.aya}`);
   const vtMap = {};
   const chunkSize = 150;
   for (let i = 0; i < verseKeys.length; i += chunkSize) {
     const chunk = verseKeys.slice(i, i + chunkSize);
     const vtRes = await fetch(`${SB_URL}/rest/v1/verse_translations?select=verse_key,lang,text&verse_key=in.(${chunk.join(',')})&lang=in.(${Object.keys(VT_LANGS).join(',')})`, {headers:HDR});
     const vtRows = await vtRes.json();
-    vtRows.forEach(r => { (vtMap[r.verse_key] = vtMap[r.verse_key] || {})[VT_LANGS[r.lang]] = r.text; });
+    if (Array.isArray(vtRows)) vtRows.forEach(r => { (vtMap[r.verse_key] = vtMap[r.verse_key] || {})[VT_LANGS[r.lang]] = r.text; });
   }
 
   VERSES.forEach(v => {
