@@ -65,15 +65,41 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .verse-toolbar{display:flex;gap:4px;justify-content:flex-end;margin-bottom:8px;flex-wrap:wrap;}
 .vt-btn{background:#FDF8EE;border:1px solid #E8C97B;border-radius:6px;width:30px;height:28px;font-size:13px;cursor:pointer;padding:0;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;}
 .vt-btn.active-toggle{background:#B8902A;color:#fff;}
-.verse-card.highlighted{background:#FFF9E0;border-color:#E8C97B;}
+.verse-card{transition:background-color 0.15s;}
 #historyOverlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.4);z-index:9999998;}
 #historyPanel{display:none;position:fixed;bottom:0;left:0;width:100%;background:#fff;border-radius:20px 20px 0 0;z-index:9999999;padding:20px 18px calc(28px + env(safe-area-inset-bottom));box-shadow:0 -4px 24px rgba(0,0,0,0.15);max-height:70vh;overflow-y:auto;}
 .hist-item{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid #F0EAE0;font-size:13px;}
 .hist-item a{color:#1A5276;font-weight:700;text-decoration:none;}
 .hist-item .hist-time{font-size:11px;color:#999;}
+
+#hlPicker{display:none;position:fixed;z-index:99999999;background:#fff;border:1px solid #E8E4DC;border-radius:12px;padding:12px;box-shadow:0 4px 20px rgba(0,0,0,0.2);max-width:220px;}
+#hlPicker.open{display:block;}
+.hl-picker-title{font-size:11px;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;}
+.hl-colors{display:flex;flex-wrap:wrap;gap:8px;max-width:190px;}
+.hl-dot{width:26px;height:26px;border-radius:50%;cursor:pointer;border:1.5px solid rgba(0,0,0,0.1);}
+.hl-remove-btn{margin-top:10px;width:100%;padding:7px;border:1px solid #E8E4DC;border-radius:8px;background:#fff;color:#999;font-size:12px;cursor:pointer;}
 </style>
 </head>
 <body>
+
+<div id="hlPicker">
+  <div class="hl-picker-title">Highlight color</div>
+  <div class="hl-colors">
+    <div class="hl-dot" style="background:#FFE500" onclick="applyHlColor('#FFE500')" title="Yellow"></div>
+    <div class="hl-dot" style="background:#FF85A1" onclick="applyHlColor('#FF85A1')" title="Pink"></div>
+    <div class="hl-dot" style="background:#7BFF8A" onclick="applyHlColor('#7BFF8A')" title="Green"></div>
+    <div class="hl-dot" style="background:#70CFFF" onclick="applyHlColor('#70CFFF')" title="Blue"></div>
+    <div class="hl-dot" style="background:#FFB347" onclick="applyHlColor('#FFB347')" title="Orange"></div>
+    <div class="hl-dot" style="background:#C97FFF" onclick="applyHlColor('#C97FFF')" title="Purple"></div>
+    <div class="hl-dot" style="background:#2EFFD9" onclick="applyHlColor('#2EFFD9')" title="Teal"></div>
+    <div class="hl-dot" style="background:#FF6B6B" onclick="applyHlColor('#FF6B6B')" title="Red"></div>
+    <div class="hl-dot" style="background:#FF7F50" onclick="applyHlColor('#FF7F50')" title="Coral"></div>
+    <div class="hl-dot" style="background:#CCFF00" onclick="applyHlColor('#CCFF00')" title="Lime"></div>
+    <div class="hl-dot" style="background:#FFC200" onclick="applyHlColor('#FFC200')" title="Gold"></div>
+    <div class="hl-dot" style="background:#9B7FFF" onclick="applyHlColor('#9B7FFF')" title="Lavender"></div>
+  </div>
+  <button class="hl-remove-btn" onclick="applyHlColor(null)">✕ Remove highlight</button>
+</div>
 
 <div class="top-bar">
   <a href="index.html" class="back-btn">← Back</a>
@@ -275,15 +301,33 @@ function toggleBookmark(sura, aya, btn){
   if (btn) btn.textContent = isBookmarked(sura, aya) ? '🔖' : '🏷️';
 }
 
-function isHighlighted(sura, aya){
-  return loadJSON('muhammadHighlights', []).some(h => h.sura === sura && h.aya === aya);
+function getHighlightColor(sura, aya){
+  const hl = loadJSON('muhammadHighlights', []);
+  const found = hl.find(h => h.sura === sura && h.aya === aya);
+  return found ? found.color : null;
 }
-function toggleHighlight(sura, aya, card){
+let _hlSura = null, _hlAya = null;
+function showHlPicker(sura, aya, btn){
+  _hlSura = sura; _hlAya = aya;
+  const picker = document.getElementById('hlPicker');
+  const rect = btn.getBoundingClientRect();
+  picker.style.top = (rect.bottom + window.scrollY + 6) + 'px';
+  picker.style.left = Math.min(rect.left, window.innerWidth - 210) + 'px';
+  picker.classList.add('open');
+  setTimeout(() => document.addEventListener('click', _closeHlPicker, { once: true }), 10);
+}
+function _closeHlPicker(e){
+  const picker = document.getElementById('hlPicker');
+  if (picker && !picker.contains(e.target)) picker.classList.remove('open');
+}
+function applyHlColor(color){
+  document.getElementById('hlPicker').classList.remove('open');
   let hl = loadJSON('muhammadHighlights', []);
-  const idx = hl.findIndex(h => h.sura === sura && h.aya === aya);
-  if (idx >= 0) hl.splice(idx, 1); else hl.push({ sura, aya });
+  hl = hl.filter(h => !(h.sura === _hlSura && h.aya === _hlAya));
+  if (color) hl.push({ sura: _hlSura, aya: _hlAya, color });
   saveJSON('muhammadHighlights', hl);
-  if (card) card.classList.toggle('highlighted', isHighlighted(sura, aya));
+  const card = document.getElementById('mvc-' + _hlSura + '-' + _hlAya);
+  if (card) card.style.backgroundColor = color ? color + '33' : '';
 }
 
 function recordHistory(sura, aya, summary){
@@ -578,11 +622,11 @@ function renderVerses(list){
         </div>`;
       }).join('');
 
-    return `<div class="verse-card${isHighlighted(v.sura, v.aya) ? ' highlighted' : ''}" id="mvc-${v.sura}-${v.aya}">
+    return `<div class="verse-card" id="mvc-${v.sura}-${v.aya}" style="${getHighlightColor(v.sura,v.aya) ? 'background-color:'+getHighlightColor(v.sura,v.aya)+'33;' : ''}">
       <div class="verse-toolbar">
         <button class="vt-btn" title="Listen" onclick='speakVerseCard(${JSON.stringify(v).replace(/'/g,"&#39;")})'>🔊</button>
         <button class="vt-btn${isBookmarked(v.sura,v.aya)?' active-toggle':''}" title="Bookmark" onclick="toggleBookmark(${v.sura},${v.aya},this)">${isBookmarked(v.sura,v.aya)?'🔖':'🏷️'}</button>
-        <button class="vt-btn${isHighlighted(v.sura,v.aya)?' active-toggle':''}" title="Highlight" onclick="toggleHighlight(${v.sura},${v.aya},this.closest('.verse-card'));this.classList.toggle('active-toggle')">🖊</button>
+        <button class="vt-btn" title="Highlight color" onclick="showHlPicker(${v.sura},${v.aya},this)">🖊</button>
         <button class="vt-btn" title="Copy" onclick='copyVerseCard(${JSON.stringify(v).replace(/'/g,"&#39;")})'>📋</button>
         <button class="vt-btn" title="Share" onclick='shareVerseCard(${JSON.stringify(v).replace(/'/g,"&#39;")})'>📤</button>
         <a class="vt-btn" style="text-decoration:none;color:#B8902A;" title="Open in Qur'an" href="index.html?sura=${v.sura}&aya=${v.aya}&from=muhammad" onclick="recordHistory(${v.sura},${v.aya},'${esc((v.summary||'').slice(0,60)).replace(/'/g,"\\'")}')">🔗</a>
