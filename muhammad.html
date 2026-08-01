@@ -62,6 +62,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .bnav-btn:last-child{border-right:none !important;}
 .bnav-btn:active{background:#FDF5DE !important;}
 .bni{font-size:16px;}
+.verse-toolbar{display:flex;gap:4px;justify-content:flex-end;margin-bottom:8px;flex-wrap:wrap;}
+.vt-btn{background:#FDF8EE;border:1px solid #E8C97B;border-radius:6px;width:30px;height:28px;font-size:13px;cursor:pointer;padding:0;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;}
+.vt-btn.active-toggle{background:#B8902A;color:#fff;}
+.verse-card.highlighted{background:#FFF9E0;border-color:#E8C97B;}
+#historyOverlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.4);z-index:9999998;}
+#historyPanel{display:none;position:fixed;bottom:0;left:0;width:100%;background:#fff;border-radius:20px 20px 0 0;z-index:9999999;padding:20px 18px calc(28px + env(safe-area-inset-bottom));box-shadow:0 -4px 24px rgba(0,0,0,0.15);max-height:70vh;overflow-y:auto;}
+.hist-item{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid #F0EAE0;font-size:13px;}
+.hist-item a{color:#1A5276;font-weight:700;text-decoration:none;}
+.hist-item .hist-time{font-size:11px;color:#999;}
 </style>
 </head>
 <body>
@@ -69,7 +78,20 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 <div class="top-bar">
   <a href="index.html" class="back-btn">← Back</a>
   <div class="top-title">☪️ Muhammad in the Qur'an</div>
+  <button onclick="toggleHistory()" style="background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.25);color:#E8C97B;border-radius:8px;padding:6px 10px;font-size:13px;cursor:pointer;">🕐</button>
   <div class="top-count" id="count">Loading...</div>
+</div>
+
+<div id="historyOverlay" onclick="toggleHistory()"></div>
+<div id="historyPanel">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+    <div style="font-size:16px;font-weight:700;">🕐 Recently Viewed</div>
+    <div style="display:flex;gap:8px;">
+      <button onclick="clearHistory()" style="padding:6px 12px;border:1px solid #999;border-radius:16px;background:#fff;color:#666;font-size:12px;font-weight:700;cursor:pointer;">Clear</button>
+      <button onclick="toggleHistory()" style="padding:6px 14px;border:1px solid #E8E4DC;border-radius:16px;background:#fff;color:#999;font-size:13px;cursor:pointer;">✕ Done</button>
+    </div>
+  </div>
+  <div id="historyList"></div>
 </div>
 
 <div class="controls">
@@ -236,6 +258,98 @@ function setAllLangs(on){
 function updateLangCount(){
   const el = document.getElementById('langCount');
   if (el) el.textContent = Object.keys(ALL_LANGS).filter(k => langState[k]).length;
+}
+
+// ── Bookmarks, highlights, history ──────────────────────────────────────
+function loadJSON(key, fallback){ try { return JSON.parse(localStorage.getItem(key)) || fallback; } catch { return fallback; } }
+function saveJSON(key, val){ try { localStorage.setItem(key, JSON.stringify(val)); } catch {} }
+
+function isBookmarked(sura, aya){
+  return loadJSON('muhammadBookmarks', []).some(b => b.sura === sura && b.aya === aya);
+}
+function toggleBookmark(sura, aya, btn){
+  let bm = loadJSON('muhammadBookmarks', []);
+  const idx = bm.findIndex(b => b.sura === sura && b.aya === aya);
+  if (idx >= 0) bm.splice(idx, 1); else bm.push({ sura, aya, ts: Date.now() });
+  saveJSON('muhammadBookmarks', bm);
+  if (btn) btn.textContent = isBookmarked(sura, aya) ? '🔖' : '🏷️';
+}
+
+function isHighlighted(sura, aya){
+  return loadJSON('muhammadHighlights', []).some(h => h.sura === sura && h.aya === aya);
+}
+function toggleHighlight(sura, aya, card){
+  let hl = loadJSON('muhammadHighlights', []);
+  const idx = hl.findIndex(h => h.sura === sura && h.aya === aya);
+  if (idx >= 0) hl.splice(idx, 1); else hl.push({ sura, aya });
+  saveJSON('muhammadHighlights', hl);
+  if (card) card.classList.toggle('highlighted', isHighlighted(sura, aya));
+}
+
+function recordHistory(sura, aya, summary){
+  let hist = loadJSON('muhammadHistory', []);
+  hist = hist.filter(h => !(h.sura === sura && h.aya === aya));
+  hist.unshift({ sura, aya, summary: summary || '', ts: Date.now() });
+  hist = hist.slice(0, 50);
+  saveJSON('muhammadHistory', hist);
+}
+function clearHistory(){
+  saveJSON('muhammadHistory', []);
+  renderHistory();
+}
+function toggleHistory(){
+  const overlay = document.getElementById('historyOverlay');
+  const panel = document.getElementById('historyPanel');
+  const isOpen = panel.style.display === 'block';
+  panel.style.display = isOpen ? 'none' : 'block';
+  overlay.style.display = isOpen ? 'none' : 'block';
+  if (!isOpen) renderHistory();
+}
+function renderHistory(){
+  const hist = loadJSON('muhammadHistory', []);
+  const el = document.getElementById('historyList');
+  if (!hist.length) { el.innerHTML = '<div style="padding:20px;text-align:center;color:#999;">No verses viewed yet — tap "Open in Qur\'an" on any card to start building history.</div>'; return; }
+  el.innerHTML = hist.map(h => `
+    <div class="hist-item">
+      <a href="index.html?sura=${h.sura}&aya=${h.aya}&from=muhammad">${h.sura}:${h.aya}${h.summary ? ' — ' + esc(h.summary.slice(0,40)) : ''}</a>
+      <span class="hist-time">${new Date(h.ts).toLocaleDateString()}</span>
+    </div>
+  `).join('');
+}
+
+function copyVerseCard(v){
+  const sb = window._speakerById || {};
+  let text = `${v.reference}\n`;
+  Object.keys(ALL_LANGS).forEach(k => {
+    if (langState[k] && v[ALL_LANGS[k].field]) text += `\n[${ALL_LANGS[k].label}] ${v[ALL_LANGS[k].field]}`;
+  });
+  if (v.summary) text += `\n\nSummary: ${v.summary}`;
+  text += `\n\n— Muhammad in the Qur'an, quranhikma.com`;
+  navigator.clipboard?.writeText(text).then(() => {
+    alert('Copied ' + v.reference + ' to clipboard');
+  }).catch(() => alert('Could not copy — try selecting the text manually.'));
+}
+
+function shareVerseCard(v){
+  const url = `${location.origin}${location.pathname.replace('muhammad.html','index.html')}?sura=${v.sura}&aya=${v.aya}&from=muhammad`;
+  const text = `${v.reference} — ${v.english || v.summary || ''}`;
+  if (navigator.share) {
+    navigator.share({ title: v.reference, text, url }).catch(() => {});
+  } else {
+    navigator.clipboard?.writeText(`${text}\n${url}`).then(() => alert('Link copied to clipboard'));
+  }
+}
+
+function speakVerseCard(v){
+  if (!('speechSynthesis' in window)) { alert('Speech not supported in this browser.'); return; }
+  window.speechSynthesis.cancel();
+  const preferred = Object.keys(ALL_LANGS).find(k => langState[k] && k !== 'arabic' && v[ALL_LANGS[k].field]) || 'english';
+  const text = v[ALL_LANGS[preferred]?.field || 'english'] || v.english || v.arabic;
+  if (!text) return;
+  const u = new SpeechSynthesisUtterance(text);
+  const langMap = { english:'en-US', arabic:'ar-SA', urdu:'ur-PK', german:'de-DE', spanish:'es-ES', chinese:'zh-CN', bengali:'bn-BD', malay:'ms-MY', somali:'so-SO' };
+  u.lang = langMap[preferred] || 'en-US';
+  window.speechSynthesis.speak(u);
 }
 
 function selectRelevance(val, btn){
@@ -438,7 +552,16 @@ function renderVerses(list){
         </div>`;
       }).join('');
 
-    return `<div class="verse-card">
+    return `<div class="verse-card${isHighlighted(v.sura, v.aya) ? ' highlighted' : ''}" id="mvc-${v.sura}-${v.aya}">
+      <div class="verse-toolbar">
+        <button class="vt-btn" title="Listen" onclick='speakVerseCard(${JSON.stringify(v).replace(/'/g,"&#39;")})'>🔊</button>
+        <button class="vt-btn${isBookmarked(v.sura,v.aya)?' active-toggle':''}" title="Bookmark" onclick="toggleBookmark(${v.sura},${v.aya},this)">${isBookmarked(v.sura,v.aya)?'🔖':'🏷️'}</button>
+        <button class="vt-btn${isHighlighted(v.sura,v.aya)?' active-toggle':''}" title="Highlight" onclick="toggleHighlight(${v.sura},${v.aya},this.closest('.verse-card'));this.classList.toggle('active-toggle')">🖊</button>
+        <button class="vt-btn" title="Copy" onclick='copyVerseCard(${JSON.stringify(v).replace(/'/g,"&#39;")})'>📋</button>
+        <button class="vt-btn" title="Share" onclick='shareVerseCard(${JSON.stringify(v).replace(/'/g,"&#39;")})'>📤</button>
+        <a class="vt-btn" style="text-decoration:none;color:#B8902A;" title="Open in Qur'an" href="index.html?sura=${v.sura}&aya=${v.aya}&from=muhammad" onclick="recordHistory(${v.sura},${v.aya},'${esc((v.summary||'').slice(0,60)).replace(/'/g,"\\'")}')">🔗</a>
+        ${v.source_url ? `<a class="vt-btn" style="text-decoration:none;color:#B8902A;" title="External reference" href="${esc(v.source_url)}" target="_blank" rel="noopener">🌐</a>` : ''}
+      </div>
       <div class="verse-ref">${esc(v.reference)} · ${esc(v.explicitness||'')} · ${esc(v.meccan_medinan||'')}${v.chronology_disputed ? ' (disputed)' : ''}</div>
       <div class="verse-badges">${badges}</div>
       ${langBlocks}
