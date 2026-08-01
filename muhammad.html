@@ -333,8 +333,14 @@ function showHlPicker(sura, aya, btn){
   _hlSura = sura; _hlAya = aya;
   const picker = document.getElementById('hlPicker');
   const rect = btn.getBoundingClientRect();
-  picker.style.top = (rect.bottom + window.scrollY + 6) + 'px';
-  picker.style.left = Math.min(rect.left, window.innerWidth - 210) + 'px';
+  // picker is position:fixed, so it's viewport-relative — adding
+  // window.scrollY here (correct only for position:absolute) pushed it
+  // off-screen whenever the page was scrolled down. That's the bug.
+  const pickerHeight = 260; // approx, before it's actually measured
+  let top = rect.bottom + 6;
+  if (top + pickerHeight > window.innerHeight) top = Math.max(8, rect.top - pickerHeight - 6);
+  picker.style.top = top + 'px';
+  picker.style.left = Math.min(rect.left, window.innerWidth - 230) + 'px';
   picker.classList.add('open');
   setTimeout(() => document.addEventListener('click', _closeHlPicker, { once: true }), 10);
 }
