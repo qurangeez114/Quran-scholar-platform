@@ -604,14 +604,36 @@ async function load(){
       const [s, a] = p.split(':');
       return `and(sura_id.eq.${s},aya_number.eq.${a})`;
     }).join(',');
-    const tAyasRes = await fetch(`${SB_URL}/rest/v1/ayas?select=sura_id,aya_number,arabic,english&or=(${orFilter})`, {headers:HDR});
+    const tAyasRes = await fetch(`${SB_URL}/rest/v1/ayas?select=sura_id,aya_number,arabic,arabic_transliteration,english,tigrinya,amharic,oromo,somali,german,urdu&or=(${orFilter})`, {headers:HDR});
     const tAyasRows = await tAyasRes.json();
+
+    // Same 6 newer languages as the main Verses view, fetched from
+    // verse_translations by exact verse_key (chunked, same pattern as the
+    // main load()).
+    const tVtMap = {};
+    const chunkSize = 150;
+    for (let i = 0; i < pairList.length; i += chunkSize) {
+      const chunk = pairList.slice(i, i + chunkSize);
+      const vtRes = await fetch(`${SB_URL}/rest/v1/verse_translations?select=verse_key,lang,text&verse_key=in.(${chunk.join(',')})&lang=in.(${Object.keys(VT_LANGS).join(',')})`, {headers:HDR});
+      const vtRows = await vtRes.json();
+      if (Array.isArray(vtRows)) {
+        vtRows.forEach(r => { (tVtMap[r.verse_key] = tVtMap[r.verse_key] || {})[VT_LANGS[r.lang]] = r.text; });
+      }
+    }
+
     if (Array.isArray(tAyasRows)) {
       const tAyaMap = {};
       tAyasRows.forEach(a => { tAyaMap[`${a.sura_id}:${a.aya_number}`] = a; });
       pairList.forEach(pair => {
-        const a = tAyaMap[pair];
-        window.TENSION_VERSE_TEXT[pair] = { arabic: a ? a.arabic : '', english: a ? a.english : '' };
+        const a = tAyaMap[pair] || {};
+        const vt = tVtMap[pair] || {};
+        window.TENSION_VERSE_TEXT[pair] = {
+          arabic: a.arabic || '', translit: a.arabic_transliteration || '', english: a.english || '',
+          tigrinya: a.tigrinya || '', amharic: a.amharic || '', oromo: a.oromo || '', somali: a.somali || '',
+          german: a.german || '', urdu: a.urdu || '',
+          bengali: vt.bengali || '', malay: vt.malay || '', spanish: vt.spanish || '',
+          chinese: vt.chinese || '', swahili: vt.swahili || '', hausa: vt.hausa || '',
+        };
       });
     } else {
       console.warn('Tension verse text fetch failed (non-fatal):', tAyasRows);
@@ -735,13 +757,18 @@ function renderVerses(list){
 function renderSingleVerseBlock(ref){
   const t = (window.TENSION_VERSE_TEXT || {})[ref] || {};
   const hadithList = HADITH_BY_KEY[ref] || [];
-  const showArabic = langState.arabic && t.arabic;
-  const showEnglish = (langState.english || !showArabic) && t.english;
+  const hasAnyText = Object.keys(ALL_LANGS).some(k => t[ALL_LANGS[k].field]);
+  const langBlocks = Object.keys(ALL_LANGS)
+    .filter(k => langState[k] && t[ALL_LANGS[k].field])
+    .map(k => {
+      const meta = ALL_LANGS[k];
+      const rtl = (k === 'arabic' || k === 'urdu');
+      return `<div style="margin-top:3px;${rtl ? 'direction:rtl;text-align:right;font-size:16px;' : 'font-size:12.5px;color:#444;'}line-height:1.6;">${esc(t[meta.field])}</div>`;
+    }).join('');
   return `<div style="margin-top:8px;padding:6px 8px;background:rgba(255,255,255,0.5);border-radius:6px;">
     <a href="index.html?sura=${ref.split(':')[0]}&aya=${ref.split(':')[1]}&from=muhammad" style="font-size:11px;font-weight:800;color:#1A5276;text-decoration:none;">${esc(ref)} 🔗</a>
-    ${showArabic ? `<div style="font-size:16px;direction:rtl;text-align:right;line-height:1.7;margin-top:3px;">${esc(t.arabic)}</div>` : ''}
-    ${showEnglish ? `<div style="font-size:12.5px;color:#444;line-height:1.5;margin-top:3px;">${esc(t.english)}</div>` : ''}
-    ${!t.arabic && !t.english ? `<div style="font-size:11px;color:#999;font-style:italic;margin-top:3px;">Text not loaded — tap reference to view</div>` : ''}
+    ${langBlocks}
+    ${!hasAnyText ? `<div style="font-size:11px;color:#999;font-style:italic;margin-top:3px;">Text not loaded — tap reference to view</div>` : ''}
     ${hadithList.length ? `<div style="margin-top:4px;font-size:11px;color:#8B4513;">📿 ${hadithList.map(h => esc(h.collection + ' ' + (h.hadith_number||''))).join(', ')}</div>` : ''}
   </div>`;
 }
