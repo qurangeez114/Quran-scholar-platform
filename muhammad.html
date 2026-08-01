@@ -591,8 +591,17 @@ async function load(){
 
   const pairList = [...numericPairs];
   if (pairList.length) {
-    const tSuraIds = [...new Set(pairList.map(r => r.split(':')[0]))];
-    const tAyasRes = await fetch(`${SB_URL}/rest/v1/ayas?select=sura_id,aya_number,arabic,english&sura_id=in.(${tSuraIds.join(',')})`, {headers:HDR});
+    // Query the EXACT cited verses only (via PostgREST's or=(and(...),...)
+    // composite filter), not whole chapters. Filtering by sura_id alone
+    // pulled entire suras (2,800+ rows for this citation set) and got
+    // silently truncated by Supabase's default 1000-row response cap,
+    // which is why later-cited suras never showed up. This scales
+    // correctly regardless of how many verses exist in the cited chapters.
+    const orFilter = pairList.map(p => {
+      const [s, a] = p.split(':');
+      return `and(sura_id.eq.${s},aya_number.eq.${a})`;
+    }).join(',');
+    const tAyasRes = await fetch(`${SB_URL}/rest/v1/ayas?select=sura_id,aya_number,arabic,english&or=(${orFilter})`, {headers:HDR});
     const tAyasRows = await tAyasRes.json();
     if (Array.isArray(tAyasRows)) {
       const tAyaMap = {};
