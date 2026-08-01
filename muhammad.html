@@ -539,6 +539,61 @@ Answer with scholarly care: present the range of classical and academic views wh
   if (btn) btn.disabled = false;
 }
 
+// ── Add to Presentation (real, working integration — presentation.html
+// reads from this exact 'presentationBasket' key/shape already) ──────────
+function addVerseToPresentation(sura, aya, v){
+  const key = 'presentationBasket';
+  let existing = loadJSON(key, []);
+  const already = existing.find(s => s.type === 'quran' && s.reference === `Quran ${sura}:${aya}`);
+  if (already) { toast('Already in presentation'); return; }
+  existing.push({
+    type: 'quran',
+    id: `v_${sura}_${aya}_${Date.now()}`,
+    title: `Quran ${sura}:${aya}`,
+    reference: `Quran ${sura}:${aya}`,
+    text: v.english || '',
+    arabic: v.arabic || '',
+    sourceUrl: `index.html?sura=${sura}&aya=${aya}`,
+  });
+  saveJSON(key, existing);
+  toast(`✓ Added to presentation (${existing.length} slides)`);
+}
+
+// ── Save to Research — NOTE: the "Save to Research" button on the main
+// Quran page currently calls an undefined function (saveVerseToResearch)
+// and doesn't actually work anywhere on the site yet. This is a real,
+// working implementation with its own storage key. research.html doesn't
+// yet have a view for this list — flag to build that if wanted.
+function saveVerseToResearch(sura, aya, v){
+  const key = 'researchSavedVerses';
+  let existing = loadJSON(key, []);
+  const already = existing.find(s => s.sura === sura && s.aya === aya);
+  if (already) { toast('Already saved to research'); return; }
+  existing.push({
+    sura, aya, ts: Date.now(),
+    reference: `${sura}:${aya}`,
+    text: v.english || '',
+    arabic: v.arabic || '',
+    summary: v.summary || '',
+  });
+  saveJSON(key, existing);
+  toast(`📚 Saved to research (${existing.length} items)`);
+}
+
+function toast(msg){
+  let t = document.getElementById('mvp-toast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'mvp-toast';
+    t.style.cssText = 'position:fixed;bottom:70px;left:50%;transform:translateX(-50%);background:#1a1a2e;color:#E8C97B;padding:8px 18px;border-radius:20px;font-size:12px;z-index:999999999;opacity:0;transition:opacity .3s;pointer-events:none;border:1px solid #E8C97B;white-space:nowrap;';
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.style.opacity = '1';
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => { t.style.opacity = '0'; }, 2200);
+}
+
 function recordHistory(sura, aya, summary){  let hist = loadJSON('muhammadHistory', []);
   hist = hist.filter(h => !(h.sura === sura && h.aya === aya));
   hist.unshift({ sura, aya, summary: summary || '', ts: Date.now() });
@@ -888,6 +943,8 @@ function renderVerses(list){
     return `<div class="verse-card" id="mvc-${v.sura}-${v.aya}" style="${getHighlightColor(v.sura,v.aya) ? 'background-color:'+getHighlightColor(v.sura,v.aya)+'33;' : ''}">
       <div class="verse-toolbar">
         <button class="vt-btn" title="Listen" onclick='speakVerseCard(${JSON.stringify(v).replace(/'/g,"&#39;")})'>🔊</button>
+        <button class="vt-btn" title="Add to Presentation" onclick='addVerseToPresentation(${v.sura},${v.aya},${JSON.stringify(v).replace(/'/g,"&#39;")})'>📊</button>
+        <button class="vt-btn" title="Save to Research" onclick='saveVerseToResearch(${v.sura},${v.aya},${JSON.stringify(v).replace(/'/g,"&#39;")})'>📚</button>
         <button class="vt-btn${isBookmarked(v.sura,v.aya)?' active-toggle':''}" title="Bookmark" onclick="toggleBookmark(${v.sura},${v.aya},this)">${isBookmarked(v.sura,v.aya)?'🔖':'🏷️'}</button>
         <button class="vt-btn" title="Highlight color" onclick="showHlPicker(${v.sura},${v.aya},this)">🖊</button>
         <button class="vt-btn${hasNote(v.sura,v.aya)?' active-toggle':''}" title="Note" onclick="openNote(${v.sura},${v.aya})">📝</button>
