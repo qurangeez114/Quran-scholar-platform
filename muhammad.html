@@ -553,30 +553,55 @@ async function load(){
     `${VERSES.length} verses fully reviewed and tagged (categories, tone, speaker, chronology). ` +
     `A further set of mechanically-flagged candidate verses is queued for manual review and not yet shown here.`;
 
-  // Tension pairs cite verses (pole_a_verses / pole_b_verses, e.g. "6:50;
-  // 7:188; 18:110") that mostly fall OUTSIDE the main reviewed verse set —
-  // fetch their actual text too, plus any hadith already linked to them,
-  // so tension cards show real content instead of bare references.
+  // Tension pairs cite verses (pole_a_verses / pole_b_verses) in three
+  // different shapes: single refs ("6:50"), ranges ("33:50-53"), and
+  // occasionally plain text instead of a verse list at all (T09's
+  // "Qur'an-linked hadith corpus"). Feeding any of the last two straight
+  // into a numeric sura_id query breaks the whole page load — so parse
+  // defensively and only ever query with confirmed numeric sura:aya pairs.
   window.TENSION_VERSE_TEXT = {};
+  window.TENSION_RANGE_EXPANSION = {}; // "sura:start-end" -> ["sura:start", ..., "sura:end"]
+  const singleRefRe = /^(\d+):(\d+)$/;
+  const rangeRefRe = /^(\d+):(\d+)-(\d+)$/;
   const parseRefs = (str) => (str || '').split(';').map(s => s.trim()).filter(Boolean);
-  const allTensionRefs = new Set();
+  const numericPairs = new Set(); // "sura:aya" individual verses to actually fetch
+
   TENSIONS.forEach(t => {
-    parseRefs(t.pole_a_verses).forEach(r => allTensionRefs.add(r));
-    parseRefs(t.pole_b_verses).forEach(r => allTensionRefs.add(r));
+    [...parseRefs(t.pole_a_verses), ...parseRefs(t.pole_b_verses)].forEach(ref => {
+      const single = ref.match(singleRefRe);
+      const range = ref.match(rangeRefRe);
+      if (single) {
+        numericPairs.add(ref);
+      } else if (range) {
+        const [, sura, start, end] = range;
+        const expanded = [];
+        for (let a = parseInt(start); a <= parseInt(end); a++) {
+          const pair = `${sura}:${a}`;
+          expanded.push(pair);
+          numericPairs.add(pair);
+        }
+        window.TENSION_RANGE_EXPANSION[ref] = expanded;
+      }
+      // else: not a verse reference at all (e.g. "Qur'an-linked hadith
+      // corpus") — intentionally ignored, rendered as plain text instead.
+    });
   });
-  const refList = [...allTensionRefs];
-  if (refList.length) {
-    const tSuraIds = [...new Set(refList.map(r => r.split(':')[0]))];
+
+  const pairList = [...numericPairs];
+  if (pairList.length) {
+    const tSuraIds = [...new Set(pairList.map(r => r.split(':')[0]))];
     const tAyasRes = await fetch(`${SB_URL}/rest/v1/ayas?select=sura_id,aya_number,arabic,english&sura_id=in.(${tSuraIds.join(',')})`, {headers:HDR});
     const tAyasRows = await tAyasRes.json();
-    const tAyaMap = {};
-    tAyasRows.forEach(a => { tAyaMap[`${a.sura_id}:${a.aya_number}`] = a; });
-    refList.forEach(ref => {
-      const a = tAyaMap[ref];
-      window.TENSION_VERSE_TEXT[ref] = { arabic: a ? a.arabic : '', english: a ? a.english : '' };
-    });
-    // Any hadith already linked (via muhammad_hadith_links) to a verse cited
-    // in a tension pair — reuse the same HADITH_BY_KEY map already built.
+    if (Array.isArray(tAyasRows)) {
+      const tAyaMap = {};
+      tAyasRows.forEach(a => { tAyaMap[`${a.sura_id}:${a.aya_number}`] = a; });
+      pairList.forEach(pair => {
+        const a = tAyaMap[pair];
+        window.TENSION_VERSE_TEXT[pair] = { arabic: a ? a.arabic : '', english: a ? a.english : '' };
+      });
+    } else {
+      console.warn('Tension verse text fetch failed (non-fatal):', tAyasRows);
+    }
   }
 
   render();
@@ -694,21 +719,38 @@ function renderVerses(list){
   }).join('');
 }
 
+function renderSingleVerseBlock(ref){
+  const t = (window.TENSION_VERSE_TEXT || {})[ref] || {};
+  const hadithList = HADITH_BY_KEY[ref] || [];
+  const showArabic = langState.arabic && t.arabic;
+  const showEnglish = (langState.english || !showArabic) && t.english;
+  return `<div style="margin-top:8px;padding:6px 8px;background:rgba(255,255,255,0.5);border-radius:6px;">
+    <a href="index.html?sura=${ref.split(':')[0]}&aya=${ref.split(':')[1]}&from=muhammad" style="font-size:11px;font-weight:800;color:#1A5276;text-decoration:none;">${esc(ref)} 🔗</a>
+    ${showArabic ? `<div style="font-size:16px;direction:rtl;text-align:right;line-height:1.7;margin-top:3px;">${esc(t.arabic)}</div>` : ''}
+    ${showEnglish ? `<div style="font-size:12.5px;color:#444;line-height:1.5;margin-top:3px;">${esc(t.english)}</div>` : ''}
+    ${!t.arabic && !t.english ? `<div style="font-size:11px;color:#999;font-style:italic;margin-top:3px;">Text not loaded — tap reference to view</div>` : ''}
+    ${hadithList.length ? `<div style="margin-top:4px;font-size:11px;color:#8B4513;">📿 ${hadithList.map(h => esc(h.collection + ' ' + (h.hadith_number||''))).join(', ')}</div>` : ''}
+  </div>`;
+}
+
 function renderPoleVerses(refsStr){
+  const singleRefRe = /^(\d+):(\d+)$/;
+  const rangeRefRe = /^(\d+):(\d+)-(\d+)$/;
   const refs = (refsStr || '').split(';').map(s => s.trim()).filter(Boolean);
   if (!refs.length) return '';
   return refs.map(ref => {
-    const t = (window.TENSION_VERSE_TEXT || {})[ref] || {};
-    const hadithList = HADITH_BY_KEY[ref] || [];
-    const showArabic = langState.arabic && t.arabic;
-    const showEnglish = (langState.english || !showArabic) && t.english;
-    return `<div style="margin-top:8px;padding:6px 8px;background:rgba(255,255,255,0.5);border-radius:6px;">
-      <a href="index.html?sura=${ref.split(':')[0]}&aya=${ref.split(':')[1]}&from=muhammad" style="font-size:11px;font-weight:800;color:#1A5276;text-decoration:none;">${esc(ref)} 🔗</a>
-      ${showArabic ? `<div style="font-size:16px;direction:rtl;text-align:right;line-height:1.7;margin-top:3px;">${esc(t.arabic)}</div>` : ''}
-      ${showEnglish ? `<div style="font-size:12.5px;color:#444;line-height:1.5;margin-top:3px;">${esc(t.english)}</div>` : ''}
-      ${!t.arabic && !t.english ? `<div style="font-size:11px;color:#999;font-style:italic;margin-top:3px;">Text not loaded — tap reference to view</div>` : ''}
-      ${hadithList.length ? `<div style="margin-top:4px;font-size:11px;color:#8B4513;">📿 ${hadithList.map(h => esc(h.collection + ' ' + (h.hadith_number||''))).join(', ')}</div>` : ''}
-    </div>`;
+    if (singleRefRe.test(ref)) {
+      return renderSingleVerseBlock(ref);
+    }
+    if (rangeRefRe.test(ref)) {
+      const expanded = (window.TENSION_RANGE_EXPANSION || {})[ref] || [];
+      return `<div style="margin-top:8px;">
+        <div style="font-size:11px;font-weight:800;color:#1A5276;">${esc(ref)} (range)</div>
+        ${expanded.map(renderSingleVerseBlock).join('')}
+      </div>`;
+    }
+    // Not a verse reference at all — show as plain descriptive text
+    return `<div style="margin-top:6px;font-size:11.5px;color:#888;font-style:italic;">${esc(ref)}</div>`;
   }).join('');
 }
 
