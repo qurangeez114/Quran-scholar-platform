@@ -72,19 +72,25 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .hist-item a{color:#1A5276;font-weight:700;text-decoration:none;}
 .hist-item .hist-time{font-size:11px;color:#999;}
 
-#hlPicker{display:none;position:fixed;z-index:99999999;background:#fff;border:1px solid #E8E4DC;border-radius:12px;padding:12px;box-shadow:0 4px 20px rgba(0,0,0,0.2);max-width:220px;}
+#hlOverlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.4);z-index:99999998;}
+#hlPicker{display:none;position:fixed;bottom:0;left:0;width:100%;background:#fff;border-radius:20px 20px 0 0;z-index:99999999;padding:20px 18px calc(24px + env(safe-area-inset-bottom));box-shadow:0 -4px 24px rgba(0,0,0,0.15);}
 #hlPicker.open{display:block;}
+#hlOverlay.open{display:block;}
 .hl-picker-title{font-size:11px;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;}
 .hl-colors{display:flex;flex-wrap:wrap;gap:8px;max-width:190px;}
-.hl-dot{width:26px;height:26px;border-radius:50%;cursor:pointer;border:1.5px solid rgba(0,0,0,0.1);}
+.hl-dot{width:38px;height:38px;border-radius:50%;cursor:pointer;border:1.5px solid rgba(0,0,0,0.1);}
 .hl-remove-btn{margin-top:10px;width:100%;padding:7px;border:1px solid #E8E4DC;border-radius:8px;background:#fff;color:#999;font-size:12px;cursor:pointer;}
 </style>
 </head>
 <body>
 
+<div id="hlOverlay" onclick="closeHlPicker()"></div>
 <div id="hlPicker">
-  <div class="hl-picker-title">Highlight color</div>
-  <div class="hl-colors">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+    <div class="hl-picker-title" style="margin:0;">Highlight color</div>
+    <button onclick="closeHlPicker()" style="background:none;border:none;font-size:18px;color:#999;cursor:pointer;">✕</button>
+  </div>
+  <div class="hl-colors" style="max-width:none;justify-content:flex-start;">
     <div class="hl-dot" style="background:#FFE500" onclick="applyHlColor('#FFE500')" title="Yellow"></div>
     <div class="hl-dot" style="background:#FF85A1" onclick="applyHlColor('#FF85A1')" title="Pink"></div>
     <div class="hl-dot" style="background:#7BFF8A" onclick="applyHlColor('#7BFF8A')" title="Green"></div>
@@ -331,25 +337,15 @@ function getHighlightColor(sura, aya){
 let _hlSura = null, _hlAya = null;
 function showHlPicker(sura, aya, btn){
   _hlSura = sura; _hlAya = aya;
-  const picker = document.getElementById('hlPicker');
-  const rect = btn.getBoundingClientRect();
-  // picker is position:fixed, so it's viewport-relative — adding
-  // window.scrollY here (correct only for position:absolute) pushed it
-  // off-screen whenever the page was scrolled down. That's the bug.
-  const pickerHeight = 260; // approx, before it's actually measured
-  let top = rect.bottom + 6;
-  if (top + pickerHeight > window.innerHeight) top = Math.max(8, rect.top - pickerHeight - 6);
-  picker.style.top = top + 'px';
-  picker.style.left = Math.min(rect.left, window.innerWidth - 230) + 'px';
-  picker.classList.add('open');
-  setTimeout(() => document.addEventListener('click', _closeHlPicker, { once: true }), 10);
+  document.getElementById('hlPicker').classList.add('open');
+  document.getElementById('hlOverlay').classList.add('open');
 }
-function _closeHlPicker(e){
-  const picker = document.getElementById('hlPicker');
-  if (picker && !picker.contains(e.target)) picker.classList.remove('open');
+function closeHlPicker(){
+  document.getElementById('hlPicker').classList.remove('open');
+  document.getElementById('hlOverlay').classList.remove('open');
 }
 function applyHlColor(color){
-  document.getElementById('hlPicker').classList.remove('open');
+  closeHlPicker();
   let hl = loadJSON('muhammadHighlights', []);
   hl = hl.filter(h => !(h.sura === _hlSura && h.aya === _hlAya));
   if (color) hl.push({ sura: _hlSura, aya: _hlAya, color });
