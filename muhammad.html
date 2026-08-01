@@ -52,6 +52,24 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .tension-status{font-size:10px;font-weight:700;color:#B8902A;text-transform:uppercase;margin-top:6px;}
 
 .loading{padding:40px;text-align:center;color:#AAA;font-style:italic;}
+
+/* Tablet/desktop: use the extra width instead of a single narrow column.
+   Grid mode is opt-in via the toggle below; List stays the default so
+   phones are unaffected. */
+#list.grid-mode{display:grid;grid-template-columns:1fr;gap:0;}
+@media (min-width:700px){
+  #list.grid-mode{grid-template-columns:repeat(2,1fr);gap:4px 12px;padding:0 8px;}
+  #list.grid-mode .verse-card{margin:10px 0;}
+}
+@media (min-width:1100px){
+  #list.grid-mode{grid-template-columns:repeat(3,1fr);}
+}
+.display-toggle{display:none;gap:6px;}
+@media (min-width:700px){
+  .display-toggle{display:flex;}
+}
+.display-toggle button{padding:6px 12px;border:1.5px solid #D4C9A8;border-radius:8px;background:#fff;color:#5A3A10;font-weight:700;font-size:12px;cursor:pointer;}
+.display-toggle button.active{background:#B8902A;color:#fff;border-color:#B8902A;}
 .spinner{display:inline-block;width:20px;height:20px;border:2px solid #E8C97B;border-top-color:#B8902A;border-radius:50%;animation:spin 0.7s linear infinite;margin-right:8px;}
 @keyframes spin{to{transform:rotate(360deg);}}
 .note-banner{margin:10px 12px;padding:9px 12px;background:#FFF8E1;border:1px solid #E8C97B;border-radius:8px;font-size:11.5px;color:#6B5A3E;line-height:1.5;}
@@ -168,6 +186,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   <button id="langPickerBtn" onclick="toggleLangPicker()" style="display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 14px;border:2px solid #D4A830;border-radius:10px;background:#FDF5DE;color:#B8902A;font-size:13px;font-weight:700;cursor:pointer;">
     🌐 Languages <span id="langCount" style="background:#B8902A;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:2px;">2</span>
   </button>
+  <div class="display-toggle" id="display-toggle">
+    <span style="font-size:11px;color:#999;align-self:center;margin-right:2px;">Display:</span>
+    <button id="btn-display-list" class="active" onclick="setDisplayMode('list', this)">☰ List</button>
+    <button id="btn-display-grid" onclick="setDisplayMode('grid', this)">▦ Grid</button>
+  </div>
 </div>
 
 <!-- Language Picker Overlay -->
@@ -315,6 +338,18 @@ function setAllLangs(on){
 function updateLangCount(){
   const el = document.getElementById('langCount');
   if (el) el.textContent = Object.keys(ALL_LANGS).filter(k => langState[k]).length;
+}
+
+// ── Display mode (List / Grid) — mainly useful on tablet/desktop widths;
+// the toggle itself is hidden via CSS on narrow phone screens.
+let displayMode = localStorage.getItem('muhammadDisplayMode') || 'list';
+function setDisplayMode(mode, btn){
+  displayMode = mode;
+  try { localStorage.setItem('muhammadDisplayMode', mode); } catch {}
+  document.getElementById('list').classList.toggle('grid-mode', mode === 'grid');
+  document.querySelectorAll('#display-toggle button').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  else document.getElementById('btn-display-' + mode)?.classList.add('active');
 }
 
 // ── Bookmarks, highlights, history ──────────────────────────────────────
@@ -814,6 +849,7 @@ function renderTensions(list){
 function render(){ filter(); }
 
 load();
+setDisplayMode(displayMode);
 </script>
 </body>
 </html>
