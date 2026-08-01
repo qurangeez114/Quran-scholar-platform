@@ -188,6 +188,8 @@ function render(myTags, hadithRows, relatedTensions){
     <div class="section">
       <div class="toolbar">
         <button class="vt-btn" title="Listen" onclick="speakThis()">🔊</button>
+        <button class="vt-btn" title="Add to Presentation" onclick="addToPresentation()">📊</button>
+        <button class="vt-btn" title="Save to Research" onclick="saveToResearch()">📚</button>
         <button class="vt-btn${isBookmarked()?' active-toggle':''}" id="bmBtn" title="Bookmark" onclick="toggleBm()">${isBookmarked()?'🔖':'🏷️'}</button>
         <button class="vt-btn" title="Copy" onclick="copyThis()">📋</button>
         <button class="vt-btn" title="Share" onclick="shareThis()">📤</button>
@@ -239,6 +241,45 @@ function render(myTags, hadithRows, relatedTensions){
 
 // ── Toolbar actions (bookmark/copy/share/speak) ─────────────────────────
 function isBookmarked(){ return loadJSON('muhammadBookmarks', []).some(b => b.sura === SURA && b.aya === AYA); }
+function toast(msg){
+  let t = document.getElementById('vd-toast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'vd-toast';
+    t.style.cssText = 'position:fixed;bottom:70px;left:50%;transform:translateX(-50%);background:#1a1a2e;color:#E8C97B;padding:8px 18px;border-radius:20px;font-size:12px;z-index:999999999;opacity:0;transition:opacity .3s;pointer-events:none;border:1px solid #E8C97B;white-space:nowrap;';
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.style.opacity = '1';
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => { t.style.opacity = '0'; }, 2200);
+}
+function addToPresentation(){
+  const key = 'presentationBasket';
+  let existing = loadJSON(key, []);
+  const already = existing.find(s => s.type === 'quran' && s.reference === `Quran ${SURA}:${AYA}`);
+  if (already) { toast('Already in presentation'); return; }
+  existing.push({
+    type: 'quran', id: `v_${SURA}_${AYA}_${Date.now()}`,
+    title: `Quran ${SURA}:${AYA}`, reference: `Quran ${SURA}:${AYA}`,
+    text: VERSE_ROW.english || '', arabic: VERSE_ROW.arabic || '',
+    sourceUrl: `index.html?sura=${SURA}&aya=${AYA}`,
+  });
+  saveJSON(key, existing);
+  toast(`✓ Added to presentation (${existing.length} slides)`);
+}
+function saveToResearch(){
+  const key = 'researchSavedVerses';
+  let existing = loadJSON(key, []);
+  const already = existing.find(s => s.sura === SURA && s.aya === AYA);
+  if (already) { toast('Already saved to research'); return; }
+  existing.push({
+    sura: SURA, aya: AYA, ts: Date.now(), reference: `${SURA}:${AYA}`,
+    text: VERSE_ROW.english || '', arabic: VERSE_ROW.arabic || '', summary: VERSE_ROW.summary || '',
+  });
+  saveJSON(key, existing);
+  toast(`📚 Saved to research (${existing.length} items)`);
+}
 function toggleBm(){
   let bm = loadJSON('muhammadBookmarks', []);
   const idx = bm.findIndex(b => b.sura === SURA && b.aya === AYA);
