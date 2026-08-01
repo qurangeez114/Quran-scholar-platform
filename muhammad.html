@@ -910,8 +910,8 @@ function renderVerses(list){
       <div id="discuss-${v.sura}:${v.aya}" style="display:none;margin-top:8px;padding:10px;background:#FAFAF7;border-radius:8px;border:1px solid #E8E4DC;">
         <div id="discuss-messages-${v.sura}:${v.aya}" style="max-height:280px;overflow-y:auto;margin-bottom:8px;"></div>
         <div style="display:flex;gap:6px;">
-          <input id="discuss-input-${v.sura}:${v.aya}" placeholder="Ask about this verse..." onkeydown="if(event.key==='Enter')sendDiscuss(${v.sura},${v.aya},${JSON.stringify(v).replace(/'/g,"&#39;")})" style="flex:1;padding:8px 10px;border:1px solid #D4C9A8;border-radius:8px;font-size:13px;outline:none;">
-          <button id="discuss-btn-${v.sura}:${v.aya}" onclick="sendDiscuss(${v.sura},${v.aya},${JSON.stringify(v).replace(/'/g,"&#39;")})" style="padding:8px 14px;background:#B8902A;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">Ask</button>
+          <input id="discuss-input-${v.sura}:${v.aya}" placeholder="Ask about this verse..." onkeydown='if(event.key==="Enter")sendDiscuss(${v.sura},${v.aya},${JSON.stringify(v).replace(/'/g,"&#39;")})' style="flex:1;padding:8px 10px;border:1px solid #D4C9A8;border-radius:8px;font-size:13px;outline:none;">
+          <button id="discuss-btn-${v.sura}:${v.aya}" onclick='sendDiscuss(${v.sura},${v.aya},${JSON.stringify(v).replace(/'/g,"&#39;")})' style="padding:8px 14px;background:#B8902A;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">Ask</button>
         </div>
       </div>
     </div>`;
@@ -929,11 +929,29 @@ function renderSingleVerseBlock(ref){
       const rtl = (k === 'arabic' || k === 'urdu');
       return `<div style="margin-top:3px;${rtl ? 'direction:rtl;text-align:right;font-size:16px;' : 'font-size:12.5px;color:#444;'}line-height:1.6;">${esc(t[meta.field])}</div>`;
     }).join('');
+
+  const [sura, aya] = ref.split(':').map(Number);
+  // If this verse is also part of the fully-reviewed set, reuse its full
+  // tagged context (category/tone/discourse/etc.) for the discussion chat;
+  // otherwise fall back to just the Arabic/English text.
+  const fullVerse = VERSES.find(x => x.sura === sura && x.aya === aya);
+  const discussVerse = fullVerse || { sura, aya, arabic: t.arabic || '', english: t.english || '' };
+  const key = discussKey(sura, aya);
+
   return `<div style="margin-top:8px;padding:6px 8px;background:rgba(255,255,255,0.5);border-radius:6px;">
-    <a href="index.html?sura=${ref.split(':')[0]}&aya=${ref.split(':')[1]}&from=muhammad" style="font-size:11px;font-weight:800;color:#1A5276;text-decoration:none;">${esc(ref)} 🔗</a>
+    <a href="index.html?sura=${sura}&aya=${aya}&from=muhammad" style="font-size:11px;font-weight:800;color:#1A5276;text-decoration:none;">${esc(ref)} 🔗</a>
     ${langBlocks}
     ${!hasAnyText ? `<div style="font-size:11px;color:#999;font-style:italic;margin-top:3px;">Text not loaded — tap reference to view</div>` : ''}
     ${hadithList.length ? `<div style="margin-top:4px;font-size:11px;color:#8B4513;">📿 ${hadithList.map(h => esc(h.collection + ' ' + (h.hadith_number||''))).join(', ')}</div>` : ''}
+    ${hasAnyText ? `
+    <button onclick="toggleDiscuss(${sura},${aya})" style="width:100%;margin-top:8px;padding:6px;background:#FDF8EE;border:1.5px dashed #D4C9A8;border-radius:6px;color:#B8902A;font-size:11.5px;font-weight:700;cursor:pointer;">💬 Discuss this verse</button>
+    <div id="discuss-${key}" style="display:none;margin-top:6px;padding:8px;background:#FAFAF7;border-radius:6px;border:1px solid #E8E4DC;">
+      <div id="discuss-messages-${key}" style="max-height:220px;overflow-y:auto;margin-bottom:6px;"></div>
+      <div style="display:flex;gap:5px;">
+        <input id="discuss-input-${key}" placeholder="Ask about this verse..." onkeydown='if(event.key==="Enter")sendDiscuss(${sura},${aya},${JSON.stringify(discussVerse).replace(/'/g,"&#39;")})' style="flex:1;padding:7px 9px;border:1px solid #D4C9A8;border-radius:7px;font-size:12.5px;outline:none;">
+        <button id="discuss-btn-${key}" onclick='sendDiscuss(${sura},${aya},${JSON.stringify(discussVerse).replace(/'/g,"&#39;")})' style="padding:7px 12px;background:#B8902A;color:#fff;border:none;border-radius:7px;font-size:12.5px;font-weight:700;cursor:pointer;">Ask</button>
+      </div>
+    </div>` : ''}
   </div>`;
 }
 
