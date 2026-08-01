@@ -462,6 +462,32 @@ async function load(){
     `${VERSES.length} verses fully reviewed and tagged (categories, tone, speaker, chronology). ` +
     `A further set of mechanically-flagged candidate verses is queued for manual review and not yet shown here.`;
 
+  // Tension pairs cite verses (pole_a_verses / pole_b_verses, e.g. "6:50;
+  // 7:188; 18:110") that mostly fall OUTSIDE the main reviewed verse set —
+  // fetch their actual text too, plus any hadith already linked to them,
+  // so tension cards show real content instead of bare references.
+  window.TENSION_VERSE_TEXT = {};
+  const parseRefs = (str) => (str || '').split(';').map(s => s.trim()).filter(Boolean);
+  const allTensionRefs = new Set();
+  TENSIONS.forEach(t => {
+    parseRefs(t.pole_a_verses).forEach(r => allTensionRefs.add(r));
+    parseRefs(t.pole_b_verses).forEach(r => allTensionRefs.add(r));
+  });
+  const refList = [...allTensionRefs];
+  if (refList.length) {
+    const tSuraIds = [...new Set(refList.map(r => r.split(':')[0]))];
+    const tAyasRes = await fetch(`${SB_URL}/rest/v1/ayas?select=sura_id,aya_number,arabic,english&sura_id=in.(${tSuraIds.join(',')})`, {headers:HDR});
+    const tAyasRows = await tAyasRes.json();
+    const tAyaMap = {};
+    tAyasRows.forEach(a => { tAyaMap[`${a.sura_id}:${a.aya_number}`] = a; });
+    refList.forEach(ref => {
+      const a = tAyaMap[ref];
+      window.TENSION_VERSE_TEXT[ref] = { arabic: a ? a.arabic : '', english: a ? a.english : '' };
+    });
+    // Any hadith already linked (via muhammad_hadith_links) to a verse cited
+    // in a tension pair — reuse the same HADITH_BY_KEY map already built.
+  }
+
   render();
 }
 
@@ -576,6 +602,24 @@ function renderVerses(list){
   }).join('');
 }
 
+function renderPoleVerses(refsStr){
+  const refs = (refsStr || '').split(';').map(s => s.trim()).filter(Boolean);
+  if (!refs.length) return '';
+  return refs.map(ref => {
+    const t = (window.TENSION_VERSE_TEXT || {})[ref] || {};
+    const hadithList = HADITH_BY_KEY[ref] || [];
+    const showArabic = langState.arabic && t.arabic;
+    const showEnglish = (langState.english || !showArabic) && t.english;
+    return `<div style="margin-top:8px;padding:6px 8px;background:rgba(255,255,255,0.5);border-radius:6px;">
+      <a href="index.html?sura=${ref.split(':')[0]}&aya=${ref.split(':')[1]}&from=muhammad" style="font-size:11px;font-weight:800;color:#1A5276;text-decoration:none;">${esc(ref)} 🔗</a>
+      ${showArabic ? `<div style="font-size:16px;direction:rtl;text-align:right;line-height:1.7;margin-top:3px;">${esc(t.arabic)}</div>` : ''}
+      ${showEnglish ? `<div style="font-size:12.5px;color:#444;line-height:1.5;margin-top:3px;">${esc(t.english)}</div>` : ''}
+      ${!t.arabic && !t.english ? `<div style="font-size:11px;color:#999;font-style:italic;margin-top:3px;">Text not loaded — tap reference to view</div>` : ''}
+      ${hadithList.length ? `<div style="margin-top:4px;font-size:11px;color:#8B4513;">📿 ${hadithList.map(h => esc(h.collection + ' ' + (h.hadith_number||''))).join(', ')}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
 function renderTensions(list){
   document.getElementById('count').textContent = list.length + ' tension pairs';
   const el = document.getElementById('list');
@@ -584,8 +628,8 @@ function renderTensions(list){
   el.innerHTML = list.map(t => `
     <div class="tension-card">
       <div class="tension-title">${esc(t.tension_id)} — ${esc(t.title)}</div>
-      <div class="tension-pole a"><b>Pole A</b>${esc(t.pole_a)}<br><span style="font-size:11px;color:#888;">${esc(t.pole_a_verses)}</span></div>
-      <div class="tension-pole b"><b>Pole B</b>${esc(t.pole_b)}<br><span style="font-size:11px;color:#888;">${esc(t.pole_b_verses)}</span></div>
+      <div class="tension-pole a"><b>Pole A</b>${esc(t.pole_a)}${renderPoleVerses(t.pole_a_verses)}</div>
+      <div class="tension-pole b"><b>Pole B</b>${esc(t.pole_b)}${renderPoleVerses(t.pole_b_verses)}</div>
       <div class="tension-q">❓ ${esc(t.core_question)}</div>
       ${t.hadith_effect ? `<div class="tension-hadith">📿 <b>With hadith:</b> ${esc(t.hadith_effect)}</div>` : ''}
       <div class="tension-status">${esc(t.status)}</div>
