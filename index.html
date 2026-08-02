@@ -5968,6 +5968,13 @@ function wrapCanvasTextMain(ctx, text, maxWidth){
   return lines;
 }
 
+const SOCIAL_FIELD_MAP = {
+  arabic:'arabic', translit:'arabic_transliteration', english:'english', tigrinya:'tigrinya',
+  amharic:'amharic', oromo:'oromo', somali:'somali', german:'german', urdu:'urdu',
+  bengali:'bengali', malay:'malay', spanish:'spanish', chinese:'chinese', swahili:'swahili', hausa:'hausa',
+};
+const SOCIAL_VT_LANGS = { bn:'bengali', ms:'malay', es:'spanish', zh:'chinese', sw:'swahili', ha:'hausa' };
+
 async function openSocialCardMain(sura, aya){
   _socialMainSura = sura; _socialMainAya = aya; _socialMainFormat = 'square';
   document.getElementById('socialOverlayMain').style.display = 'flex';
@@ -5975,10 +5982,15 @@ async function openSocialCardMain(sura, aya){
   document.getElementById('socialCanvasMain').style.display = 'none';
   setSocialFormatMainUI('square');
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/ayas?select=arabic,english&sura_id=eq.${sura}&aya_number=eq.${aya}`,
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/ayas?select=arabic,arabic_transliteration,english,tigrinya,amharic,oromo,somali,german,urdu&sura_id=eq.${sura}&aya_number=eq.${aya}`,
       { headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY } });
     const rows = await res.json();
-    _socialMainVerse = rows[0] || { arabic: '', english: '' };
+    _socialMainVerse = rows[0] || {};
+    // The 6 newer languages live in verse_translations, not as ayas columns.
+    const vtRes = await fetch(`${SUPABASE_URL}/rest/v1/verse_translations?select=lang,text&verse_key=eq.${sura}:${aya}&lang=in.(${Object.keys(SOCIAL_VT_LANGS).join(',')})`,
+      { headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY } });
+    const vtRows = await vtRes.json();
+    if (Array.isArray(vtRows)) vtRows.forEach(r => { _socialMainVerse[SOCIAL_VT_LANGS[r.lang]] = r.text; });
     document.getElementById('socialCanvasLoadingMain').style.display = 'none';
     document.getElementById('socialCanvasMain').style.display = 'inline-block';
     drawSocialCardMain();
@@ -6024,23 +6036,51 @@ function drawSocialCardMain(){
   ctx.fillText(`Qur'an ${_socialMainSura}:${_socialMainAya}`, W/2, y);
   y += H * 0.06;
 
-  if (_socialMainVerse.arabic) {
+  // Only draw languages the person actually has toggled on (langState),
+  // and only the ones that have text loaded for this verse.
+  const activeLangs = Object.keys(ALL_LANGS).filter(k => langState[k] && _socialMainVerse[SOCIAL_FIELD_MAP[k]]);
+  const bottomLimit = H - pad*1.5;
+
+  // Arabic gets special large/RTL treatment and always goes first if active.
+  if (activeLangs.includes('arabic')) {
     ctx.direction = 'rtl';
     ctx.font = `${Math.round(W*0.052)}px "Times New Roman", serif`;
     ctx.fillStyle = '#1a1a1a';
-    wrapCanvasTextMain(ctx, _socialMainVerse.arabic, contentWidth).forEach(line => { ctx.fillText(line, W/2, y); y += W * 0.075; });
+    wrapCanvasTextMain(ctx, _socialMainVerse.arabic, contentWidth).forEach(line => {
+      if (y < bottomLimit) { ctx.fillText(line, W/2, y); y += W * 0.075; }
+    });
     ctx.direction = 'ltr';
-    y += H * 0.03;
+    y += H * 0.025;
   }
-  if (_socialMainVerse.english) {
-    ctx.font = `italic ${Math.round(W*0.032)}px Georgia, serif`;
+
+  const otherLangs = activeLangs.filter(k => k !== 'arabic');
+  // Budget line-height shrinks a bit as more languages are selected, so
+  // everything still fits instead of only ever showing the first couple.
+  const perLangBudget = otherLangs.length ? (bottomLimit - y) / otherLangs.length : 0;
+
+  otherLangs.forEach(k => {
+    if (y >= bottomLimit) return;
+    const text = _socialMainVerse[SOCIAL_FIELD_MAP[k]];
+    const isRtl = (k === 'urdu');
+    const fontSize = Math.max(W*0.020, Math.min(W*0.030, perLangBudget*0.16));
+    ctx.font = `700 ${Math.round(fontSize*0.72)}px Georgia, serif`;
+    ctx.fillStyle = '#C9A84C';
+    ctx.fillText(ALL_LANGS[k].label.toUpperCase(), W/2, y);
+    y += fontSize * 0.9;
+
+    ctx.direction = isRtl ? 'rtl' : 'ltr';
+    ctx.font = `${k === 'arabic' ? '' : (k === 'english' ? 'italic ' : '')}${Math.round(fontSize)}px Georgia, serif`;
     ctx.fillStyle = '#333';
-    const enLines = wrapCanvasTextMain(ctx, _socialMainVerse.english, contentWidth);
-    const maxLines = Math.floor((H - y - H*0.15) / (W*0.045));
-    const shown = enLines.slice(0, Math.max(3, maxLines));
-    if (shown.length < enLines.length) shown[shown.length-1] = shown[shown.length-1].replace(/\W*$/,'') + '…';
-    shown.forEach(line => { ctx.fillText(line, W/2, y); y += W * 0.045; });
-  }
+    const lines = wrapCanvasTextMain(ctx, text, contentWidth);
+    const sectionBottom = Math.min(bottomLimit, y + perLangBudget);
+    const maxLines = Math.max(1, Math.floor((sectionBottom - y) / (fontSize*1.35)));
+    const shown = lines.slice(0, maxLines);
+    if (shown.length < lines.length && shown.length) shown[shown.length-1] = shown[shown.length-1].replace(/\W*$/,'') + '…';
+    shown.forEach(line => { ctx.fillText(line, W/2, y); y += fontSize*1.35; });
+    ctx.direction = 'ltr';
+    y += fontSize * 0.5;
+  });
+
   ctx.font = `700 ${Math.round(W*0.024)}px Georgia, serif`;
   ctx.fillStyle = '#C9A84C';
   ctx.fillText('quranhikma.com', W/2, H - pad*0.6);
