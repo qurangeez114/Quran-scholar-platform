@@ -181,6 +181,26 @@
 
 </head>
 <body>
+<div id="socialOverlayCompare" onclick="if(event.target===this)closeSocialCardCompare()" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:99999998;align-items:center;justify-content:center;padding:12px;overflow-y:auto;">
+  <div style="background:#fff;border-radius:14px;padding:16px;width:100%;max-width:480px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <div style="font-size:14px;font-weight:700;color:#B8902A;">📱 Social Media Card</div>
+      <button onclick="closeSocialCardCompare()" style="background:none;border:none;font-size:18px;color:#999;cursor:pointer;">✕</button>
+    </div>
+    <div style="display:flex;gap:6px;margin-bottom:12px;">
+      <button id="scc-fmt-square" onclick="setSocialFormatCompare('square')" style="flex:1;padding:8px;border:1.5px solid #D4C9A8;border-radius:8px;background:#B8902A;color:#fff;font-size:12px;font-weight:700;cursor:pointer;">◻️ Square<br><span style="font-weight:400;font-size:10px;">Instagram/X post</span></button>
+      <button id="scc-fmt-story" onclick="setSocialFormatCompare('story')" style="flex:1;padding:8px;border:1.5px solid #D4C9A8;border-radius:8px;background:#fff;color:#5A3A10;font-size:12px;font-weight:700;cursor:pointer;">📱 Story<br><span style="font-weight:400;font-size:10px;">Stories/TikTok/Reels</span></button>
+      <button id="scc-fmt-wide" onclick="setSocialFormatCompare('wide')" style="flex:1;padding:8px;border:1.5px solid #D4C9A8;border-radius:8px;background:#fff;color:#5A3A10;font-size:12px;font-weight:700;cursor:pointer;">▭ Wide<br><span style="font-weight:400;font-size:10px;">X/Twitter card</span></button>
+    </div>
+    <div style="text-align:center;background:#F0EDE6;border-radius:8px;padding:10px;margin-bottom:12px;">
+      <canvas id="socialCanvasCompare" style="max-width:100%;height:auto;border-radius:6px;box-shadow:0 2px 10px rgba(0,0,0,0.15);"></canvas>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button onclick="downloadSocialCardCompare()" style="flex:1;padding:10px;background:#B8902A;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">⬇️ Download Image</button>
+    </div>
+  </div>
+</div>
+
   <div class="topbar">
     <a class="btn-outline" href="/themes.html" data-qnav-back>← Back</a>
     <h1 id="title">Story Comparison</h1>
@@ -279,6 +299,75 @@ const hl    = new Set(JSON.parse(localStorage.getItem('qh_hl')||'[]'));
 const persist = () => { localStorage.setItem('qh_saved',JSON.stringify([...saved])); localStorage.setItem('qh_hl',JSON.stringify([...hl])); };
 
 function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),1400); }
+
+// ─── Social Media Card generator ──────────────────────────────────
+const SOCIAL_FORMATS_C = { square:{w:1080,h:1080}, story:{w:1080,h:1920}, wide:{w:1200,h:675} };
+let _scKey = null, _scFormat = 'square';
+function wrapCanvasTextC(ctx, text, maxWidth){
+  const words=(text||'').split(' '); const lines=[]; let line='';
+  for (const w of words){ const test=line?line+' '+w:w; if(ctx.measureText(test).width>maxWidth&&line){lines.push(line);line=w;} else line=test; }
+  if(line) lines.push(line);
+  return lines;
+}
+function drawSocialCardCompare(){
+  const [s,a]=_scKey.split(':').map(Number);
+  const v=ROWS.find(r=>r.sura===s&&r.aya===a); if(!v) return;
+  const fmt=SOCIAL_FORMATS_C[_scFormat];
+  const canvas=document.getElementById('socialCanvasCompare');
+  canvas.width=fmt.w; canvas.height=fmt.h;
+  const ctx=canvas.getContext('2d');
+  const W=fmt.w,H=fmt.h,pad=W*0.09,contentWidth=W-pad*2;
+  const grad=ctx.createLinearGradient(0,0,W,H);
+  grad.addColorStop(0,'#FDF8EE'); grad.addColorStop(1,'#F5EBD0');
+  ctx.fillStyle=grad; ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle='#D4A830'; ctx.lineWidth=W*0.006;
+  ctx.strokeRect(pad*0.35,pad*0.35,W-pad*0.7,H-pad*0.7);
+  let y=pad*1.3;
+  ctx.textAlign='center'; ctx.fillStyle='#B8902A';
+  ctx.font=`700 ${Math.round(W*0.032)}px Georgia, serif`;
+  ctx.fillText(`Qur'an ${_scKey}`, W/2, y);
+  y+=H*0.06;
+  const ar=v[qira]||v.arabic||'';
+  if (ar){
+    ctx.direction='rtl'; ctx.font=`${Math.round(W*0.052)}px "Times New Roman", serif`; ctx.fillStyle='#1a1a1a';
+    wrapCanvasTextC(ctx,ar,contentWidth).forEach(line=>{ctx.fillText(line,W/2,y);y+=W*0.075;});
+    ctx.direction='ltr'; y+=H*0.03;
+  }
+  const en=(v.translations||{}).en||'';
+  if (en){
+    ctx.font=`italic ${Math.round(W*0.032)}px Georgia, serif`; ctx.fillStyle='#333';
+    const lines=wrapCanvasTextC(ctx,en,contentWidth);
+    const maxLines=Math.floor((H-y-H*0.15)/(W*0.045));
+    const shown=lines.slice(0,Math.max(3,maxLines));
+    if(shown.length<lines.length) shown[shown.length-1]=shown[shown.length-1].replace(/\W*$/,'')+'…';
+    shown.forEach(line=>{ctx.fillText(line,W/2,y);y+=W*0.045;});
+  }
+  ctx.font=`700 ${Math.round(W*0.024)}px Georgia, serif`; ctx.fillStyle='#B8902A';
+  ctx.fillText('quranhikma.com', W/2, H-pad*0.6);
+}
+function setSocialFormatCompare(fmt){
+  _scFormat=fmt;
+  ['square','story','wide'].forEach(f=>{
+    const btn=document.getElementById('scc-fmt-'+f);
+    btn.style.background=f===fmt?'#B8902A':'#fff';
+    btn.style.color=f===fmt?'#fff':'#5A3A10';
+  });
+  try{ drawSocialCardCompare(); }catch(e){ console.error('drawSocialCardCompare failed:',e); }
+}
+function openSocialCardCompare(key){
+  _scKey=key; _scFormat='square';
+  document.getElementById('socialOverlayCompare').style.display='flex';
+  setSocialFormatCompare('square');
+}
+function closeSocialCardCompare(){ document.getElementById('socialOverlayCompare').style.display='none'; }
+function downloadSocialCardCompare(){
+  const canvas=document.getElementById('socialCanvasCompare');
+  const link=document.createElement('a');
+  link.download=`quran-${_scKey.replace(':','-')}-${_scFormat}.png`;
+  link.href=canvas.toDataURL('image/png');
+  link.click();
+}
+
 
 async function load(){
   const url = `${SB_URL}/rest/v1/story_comparison?story_slug=eq.${STORY}` +
@@ -380,6 +469,7 @@ function renderCols(){
              '<div class="vtool" title="Share" onclick="shareVerse(\''+key+'\')">↗</div>'+
              '<div class="vtool'+(isSaved?' on':'')+'" title="Save" onclick="toggleSave(\''+key+'\',this)">'+(isSaved?'★':'☆')+'</div>'+
              '<div class="vtool'+(isHl?' on':'')+'" title="Highlight" onclick="toggleHl(\''+key+'\',this)">🖍</div>'+
+             '<div class="vtool" title="Create social media card" onclick="openSocialCardCompare(\''+key+'\')">📱</div>'+
            '</div>'+
          '</div>';
     });
