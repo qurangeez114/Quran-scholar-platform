@@ -198,5 +198,5 @@ function showSupportModal(){
   };
 }
 
-window.qsEngagement = { stats, getSessionId };
+window.qsEngagement = { stats, getSessionId, PAYPAL_DONATE_URL, showSupportModal };
 })();
