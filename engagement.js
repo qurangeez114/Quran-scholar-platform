@@ -12,6 +12,16 @@ const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 const THRESHOLD_DAYS = 3;          // ask after this many distinct days of use
 const THRESHOLD_SECONDS = 600;     // OR after this much total time (10 min)
+const PAYPAL_DONATE_URL = 'https://www.paypal.com/donate/?hosted_button_id=YRYY537HG4RX2';
+
+// Keep every PayPal donate link on the page pointed at the confirmed Quranhikma hosted button.
+function syncPayPalDonateLinks(){
+  document.querySelectorAll('a[href*="paypal.com/ncp/payment"],a[href*="paypal.me"],a[href*="paypal.com/donate/"]').forEach(a=>{
+    a.href = PAYPAL_DONATE_URL;
+  });
+}
+if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', syncPayPalDonateLinks);
+else syncPayPalDonateLinks();
 
 function getSessionId(){
   let id = localStorage.getItem('qs_session');
@@ -177,7 +187,7 @@ function showSupportModal(){
   document.getElementById('qs-donate-btn').onclick = async ()=>{
     await saveProfile('donate');
     localStorage.setItem('qs_supporter','true');
-    window.open('https://www.paypal.me/magical19', '_blank');
+    window.open(PAYPAL_DONATE_URL, '_blank');
     closeModal(false);
   };
   document.getElementById('qs-subscribe-btn').onclick = async ()=>{
