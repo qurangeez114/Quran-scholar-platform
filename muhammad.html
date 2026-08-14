@@ -1221,13 +1221,15 @@ const VOICE_SECTIONS = [
 ];
 
 function voiceCardHtml(v){
-  const showArabic = langState.arabic && v.arabic;
-  const showEnglish = langState.english && v.english;
+  const langBlocks = Object.keys(ALL_LANGS).filter(k => langState[k] && v[ALL_LANGS[k].field]).map(k => {
+    const meta = ALL_LANGS[k];
+    const rtl = (k === 'arabic' || k === 'urdu');
+    return `<div style="margin-top:3px;${rtl ? 'direction:rtl;text-align:right;font-size:15px;' : 'font-size:12px;color:#444;'}line-height:1.65;">${esc(v[meta.field])}</div>`;
+  }).join('');
   return `<div class="verse-card" style="padding:10px 12px;margin-bottom:6px;">
     <a href="verse-detail.html?sura=${v.sura}&aya=${v.aya}" style="font-size:11px;font-weight:800;color:#1A5276;text-decoration:none;">${esc(v.reference)} 🔍</a>
     ${v.summary ? `<div style="font-size:12.5px;color:#555;margin-top:3px;">${esc(v.summary)}</div>` : ''}
-    ${showArabic ? `<div style="font-size:15px;direction:rtl;text-align:right;margin-top:4px;line-height:1.7;">${esc(v.arabic)}</div>` : ''}
-    ${showEnglish ? `<div style="font-size:12px;color:#444;margin-top:3px;font-style:italic;">${esc(v.english)}</div>` : ''}
+    ${langBlocks}
   </div>`;
 }
 
