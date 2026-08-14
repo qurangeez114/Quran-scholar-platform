@@ -190,6 +190,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   <div class="view-toggle">
     <button id="btn-verses" class="active" onclick="setView('verses')">📋 Verses</button>
     <button id="btn-tensions" onclick="setView('tensions')">⚖️ Tension Pairs</button>
+    <button id="btn-voices" onclick="setView('voices')">🗣️ Four Voices</button>
   </div>
   <input class="search-input" id="searchInput" placeholder="🔍 Search summaries, categories, references..." oninput="filter()">
   <div class="view-toggle" id="relevance-toggle">
@@ -836,6 +837,7 @@ function setView(v){
   CURRENT_VIEW = v;
   document.getElementById('btn-verses').classList.toggle('active', v==='verses');
   document.getElementById('btn-tensions').classList.toggle('active', v==='tensions');
+  document.getElementById('btn-voices').classList.toggle('active', v==='voices');
   document.getElementById('cat-filter-wrap').style.display = v==='verses' ? 'block' : 'none';
   filter();
 }
@@ -856,8 +858,10 @@ async function load(){
   TENSIONS = await tensionRes.json();
   const speakerRows = await speakerRes.json();
   const speakerById = {};
-  speakerRows.forEach(s => { speakerById[s.id] = s.label; });
+  const speakerIdBySlug = {};
+  speakerRows.forEach(s => { speakerById[s.id] = s.label; speakerIdBySlug[s.slug] = s.id; });
   window._speakerById = speakerById;
+  window._speakerIdBySlug = speakerIdBySlug;
 
   tags.forEach(t => { (TAGS_BY_VERSE[t.verse_id] = TAGS_BY_VERSE[t.verse_id] || []).push(t); });
   hadith.forEach(h => { const k = `${h.sura}:${h.aya}`; (HADITH_BY_KEY[k] = HADITH_BY_KEY[k] || []).push(h); });
@@ -1034,6 +1038,11 @@ function filter(){
     return;
   }
 
+  if (CURRENT_VIEW === 'voices') {
+    renderVoices(q);
+    return;
+  }
+
   let list = VERSES;
   if (window._relevanceFilterVal) {
     const allowed = window._relevanceFilterVal.split(',');
@@ -1190,6 +1199,51 @@ function renderPoleVerses(refsStr){
     }
     // Not a verse reference at all — show as plain descriptive text
     return `<div style="margin-top:6px;font-size:11.5px;color:#888;font-style:italic;">${esc(ref)}</div>`;
+  }).join('');
+}
+
+// ── Four Voices: Allah / Muhammad / Opponents / Community, using the
+// real tagged data pools (not a separate speaker-quotation field, since
+// the Quran rarely quotes believers directly — see toggleVoiceInfo()).
+const VOICE_SECTIONS = [
+  { key: 'allah', title: '📖 How Allah Describes Him', color: '#1A5276',
+    desc: 'Allah speaking directly, not quoting anyone else.',
+    match: v => v.narrative_speaker_id === (window._speakerIdBySlug||{}).allah && !v.quoted_speaker_id },
+  { key: 'muhammad', title: '🗣️ How Muhammad Describes Himself', color: '#8B4513',
+    desc: 'His own first-person reflection — limitation, mission, worship, fear of disobedience.',
+    match: v => v.discourse_type === 'Personal Testimony' },
+  { key: 'opponents', title: '⚔️ How Opponents Characterized Him', color: '#A83240',
+    desc: 'Accusations and polemic — liar, poet, magician, possessed, fabricator.',
+    match: v => (TAGS_BY_VERSE[v.id]||[]).some(t => t.category_slug === 'opposition') },
+  { key: 'community', title: '🤝 How the Community\'s Relation to Him Is Defined', color: '#6B5A3E',
+    desc: 'Not believers speaking in their own words (the Quran doesn\'t record that) — Allah instructing how believers should relate to him.',
+    match: v => (TAGS_BY_VERSE[v.id]||[]).some(t => t.category_slug === 'community_relation') },
+];
+
+function voiceCardHtml(v){
+  const showArabic = langState.arabic && v.arabic;
+  const showEnglish = langState.english && v.english;
+  return `<div class="verse-card" style="padding:10px 12px;margin-bottom:6px;">
+    <a href="verse-detail.html?sura=${v.sura}&aya=${v.aya}" style="font-size:11px;font-weight:800;color:#1A5276;text-decoration:none;">${esc(v.reference)} 🔍</a>
+    ${v.summary ? `<div style="font-size:12.5px;color:#555;margin-top:3px;">${esc(v.summary)}</div>` : ''}
+    ${showArabic ? `<div style="font-size:15px;direction:rtl;text-align:right;margin-top:4px;line-height:1.7;">${esc(v.arabic)}</div>` : ''}
+    ${showEnglish ? `<div style="font-size:12px;color:#444;margin-top:3px;font-style:italic;">${esc(v.english)}</div>` : ''}
+  </div>`;
+}
+
+function renderVoices(q){
+  document.getElementById('count').textContent = 'Four Voices';
+  const el = document.getElementById('list');
+  el.innerHTML = VOICE_SECTIONS.map(section => {
+    let matches = VERSES.filter(section.match);
+    if (q) matches = matches.filter(v => [v.reference, v.summary].join(' ').toLowerCase().includes(q));
+    return `<div class="tension-card" style="border-color:${section.color}66;">
+      <div class="tension-title" style="color:${section.color};">${section.title} <span style="font-weight:400;font-size:12px;color:#999;">(${matches.length})</span></div>
+      <div style="font-size:12px;color:#777;margin-bottom:10px;">${section.desc}</div>
+      <div style="max-height:400px;overflow-y:auto;">
+        ${matches.length ? matches.map(voiceCardHtml).join('') : '<div class="empty-note">No matching verses.</div>'}
+      </div>
+    </div>`;
   }).join('');
 }
 
