@@ -1709,6 +1709,14 @@ async function doSearch() {
 
   try {
     const tradFilter = currentTrad !== 'all' ? { tradition: 'eq.' + currentTrad } : {};
+    // Tafsir-only tradition filter: matches the same Sunni/Shia bucketing rule used
+    // elsewhere (prefix-based, not exact-match), so values like 'sunni-classical',
+    // 'sunni-ashari-philosophical', or 'mutazila-rationalist' still count as Sunni,
+    // and only 'shia-imami' etc. count as Shia. Left separate from tradFilter above
+    // so hadith/asbab filtering (which uses exact-match tradition values) is unaffected.
+    const tafsirTradFilter = currentTrad === 'shia' ? { tradition: 'ilike.shia*' }
+                            : currentTrad === 'sunni' ? { tradition: 'not.ilike.shia*' }
+                            : {};
     const collection = document.getElementById('collectionFilter').value;
     const scholar    = document.getElementById('scholarFilter').value;
     const relatedTerms = getRelatedTerms(q);
@@ -1775,7 +1783,7 @@ async function fetchAllSources(q, tradFilter, collection, scholar) {
 
     if (currentSource === 'all' || currentSource === 'tafsir') {
       const tSel   = 'id,sura,aya,content,source_name,scholar_name,tradition,language';
-      const tExtra = {sura:'eq.'+suraNum, aya:'eq.'+ayaNum, language:'eq.en', ...tradFilter};
+      const tExtra = {sura:'eq.'+suraNum, aya:'eq.'+ayaNum, language:'eq.en', ...tafsirTradFilter};
       if (scholar) tExtra.source_name = 'eq.' + scholar;
       const tRows = await sbFetch('tafsir_entries', tSel, tExtra);
       const seen = new Set();
@@ -1815,7 +1823,7 @@ async function fetchAllSources(q, tradFilter, collection, scholar) {
 
   if (currentSource === 'all' || currentSource === 'tafsir') {
     const tSel   = 'id,sura,aya,content,source_name,scholar_name,tradition,language';
-    const tExtra = {language:'eq.en',...tradFilter};
+    const tExtra = {language:'eq.en',...tafsirTradFilter};
     if (scholar) tExtra.source_name = 'eq.' + scholar;
     const tRows = await sbSearch('tafsir_entries', tSel, 'content', q, tExtra);
     const seen = new Set();
