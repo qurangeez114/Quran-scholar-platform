@@ -5686,6 +5686,205 @@ function speakTafsirEntry(verseKey, idx) {
   speakNext();
 }
 
+// ============================================================
+// TAFSIR RESEARCH COMPARISON VIEW
+// Reads the proposition/voice-chain/evidence comparison-engine data
+// (built for Pilots A/B/C) and renders it as an additional research
+// mode alongside the normal scholar-by-scholar Tafsir list. Only
+// appears when comparison data actually exists for a verse -- most
+// verses have none yet, and the normal Tafsir list remains the
+// default view in every case. Does not alter any research data;
+// read-only against propositions/proposition_voice_chain/evidence_units/
+// evidence_transmission_routes/proposition_evidence/
+// voice_chain_attribution_conflicts/proposition_relationships/claim_types.
+// ============================================================
+
+// Curated research-question text per verse. This is presentation-layer
+// framing, not derived from the database -- kept here rather than as a
+// new table, per instruction to treat this as the presentation layer
+// only. Extend this object as more pilots are added.
+const TAFSIR_RESEARCH_QUESTIONS = {
+  '53:5': 'Who is the figure described as "shadid al-quwa" (intense in strength), and what evidence does each commentator give for that identification?',
+  '53:6': 'Who or what is the subject of "fa-istawa" (then he rose)? The Qur\'an\'s wording alone does not name him.',
+  '18:50': 'Does each commentator treat Iblis as a jinn by nature, an angel by nature, an angelic-order member from a clan called jinn, or another category -- and how do they explain his inclusion in a command addressed "to the angels"?',
+  '2:34': 'Continuation of the 18:50 question: do Tabari and Qurtubi\'s own cross-references (which they point to from 18:50) give a final classification here?',
+  '38:33': 'What does "ruddūhā ʿalayya" refer to (the horses, or -- per one preserved reading -- the sun)? Does "tafiqa mashan bi\'l-suqi wa\'l-a\'naq" mean stroking/wiping the horses, or striking/cutting their legs and necks?'
+};
+
+const TAFSIR_COMPARISON_SCHOLARS = ['tabari','ibn_kathir','qurtubi','jalalayn','saadi','ibn_abbas'];
+const TAFSIR_SCHOLAR_LABELS = { tabari:'Tabari', ibn_kathir:'Ibn Kathir', qurtubi:'Qurtubi', jalalayn:'Jalalayn', saadi:'Sa\'di', ibn_abbas:'Ibn Abbas (attrib.)' };
+const VOICE_TYPE_LABELS = {
+  exegete_own_view: '🗣️ Own view',
+  named_earlier_exegete: '📜 Reports',
+  companion_report: '📜 Companion report',
+  hadith_report: '📿 Hadith',
+  unattributed_group: '💬 "Some say" (unattributed)'
+};
+const VERIFICATION_LABELS = {
+  legacy_verification_unspecified: '⚪ Legacy (unspecified)',
+  unreviewed: '⏳ Unreviewed',
+  source_language_located: '🔍 Source-language located',
+  reviewer_approved_translation_only: '✓ Translation-approved',
+  source_language_proposition_verified: '✅ Source-verified',
+  independently_reconstructed: '✅ Independently reconstructed',
+  double_reviewed: '✅✅ Double-reviewed'
+};
+
+async function checkComparisonExists(sura, aya) {
+  try {
+    const url = `${SUPABASE_URL}/rest/v1/propositions?select=id,tafsir_entries!inner(sura,aya)&tafsir_entries.sura=eq.${sura}&tafsir_entries.aya=eq.${aya}&limit=1`;
+    const res = await fetch(url, { headers: HEADERS });
+    if (!res.ok) return false;
+    const rows = await res.json();
+    return Array.isArray(rows) && rows.length > 0;
+  } catch (e) { return false; }
+}
+
+async function loadComparisonView(sura, aya) {
+  const container = document.getElementById(`cmp-${aya}`);
+  if (!container) return;
+  container.innerHTML = `<div class="loading" style="padding:16px;"><span class="spinner"></span>Loading comparison...</div>`;
+
+  try {
+    const propUrl = `${SUPABASE_URL}/rest/v1/propositions?select=id,statement_en,verification_state,claim_types(code,label_en),tafsir_entries!inner(scholar_key,sura,aya)&tafsir_entries.sura=eq.${sura}&tafsir_entries.aya=eq.${aya}`;
+    const propRes = await fetch(propUrl, { headers: HEADERS });
+    const props = await propRes.json();
+
+    if (!Array.isArray(props) || !props.length) {
+      container.innerHTML = `<div class="info-box" style="color:#888;font-style:italic;">No comparison data for ${sura}:${aya}.</div>`;
+      return;
+    }
+    const ids = props.map(p => p.id).join(',');
+
+    const [voiceRows, evidenceRows, relRows, entryCheckRows] = await Promise.all([
+      fetch(`${SUPABASE_URL}/rest/v1/proposition_voice_chain?select=proposition_id,originating_voice_type,originating_voice_name,quoted_collection,sources(title,author)&proposition_id=in.(${ids})`, { headers: HEADERS }).then(r => r.json()).catch(() => []),
+      fetch(`${SUPABASE_URL}/rest/v1/proposition_evidence?select=proposition_id,semantic_link_note,evidence_units(id,unit_type,attributed_authority_name,content_summary,independence_state,evidence_transmission_routes(id))&proposition_id=in.(${ids})`, { headers: HEADERS }).then(r => r.json()).catch(() => []),
+      fetch(`${SUPABASE_URL}/rest/v1/proposition_relationships?select=from_proposition_id,to_proposition_id,notes,confidence,review_status,relationship_types(code,label_en)&or=(from_proposition_id.in.(${ids}),to_proposition_id.in.(${ids}))`, { headers: HEADERS }).then(r => r.json()).catch(() => []),
+      fetch(`${SUPABASE_URL}/rest/v1/tafsir_entries?select=scholar_key&sura=eq.${sura}&aya=eq.${aya}`, { headers: HEADERS }).then(r => r.json()).catch(() => [])
+    ]);
+
+    // Voice-chain ids, needed to find any disputed-attribution rows that
+    // reference them -- fetched via a second small query rather than
+    // assuming the earlier query returned ids (it didn't select id).
+    const voiceIdRows = await fetch(`${SUPABASE_URL}/rest/v1/proposition_voice_chain?select=id,proposition_id,originating_voice_name&proposition_id=in.(${ids})`, { headers: HEADERS }).then(r => r.json()).catch(() => []);
+    const voiceIds = voiceIdRows.map(v => v.id).join(',');
+    const conflictRows = voiceIds ? await fetch(`${SUPABASE_URL}/rest/v1/voice_chain_attribution_conflicts?select=shared_authority_name,conflict_note,status,voice_chain_id_a,voice_chain_id_b&or=(voice_chain_id_a.in.(${voiceIds}),voice_chain_id_b.in.(${voiceIds}))`, { headers: HEADERS }).then(r => r.json()).catch(() => []) : [];
+
+    // Group voice + evidence by proposition_id
+    const voiceByProp = {}, evidenceByProp = {};
+    voiceRows.forEach(v => { (voiceByProp[v.proposition_id] = voiceByProp[v.proposition_id] || []).push(v); });
+    evidenceRows.forEach(e => { (evidenceByProp[e.proposition_id] = evidenceByProp[e.proposition_id] || []).push(e); });
+
+    // Group propositions by claim type (the research-question axis),
+    // then list every scholar's proposition under it -- deliberately NOT
+    // computing an auto agreement/disagreement count or majority badge;
+    // that oversimplification was explicitly identified and corrected
+    // during Pilot B's review, and this view does not reintroduce it.
+    const byClaimType = {};
+    props.forEach(p => {
+      const ct = p.claim_types?.label_en || 'Uncategorized';
+      (byClaimType[ct] = byClaimType[ct] || []).push(p);
+    });
+
+    let html = `<div style="background:#FFFBF0;border:1px solid #E8C97B;border-radius:10px;padding:14px;margin-bottom:14px;">`;
+    const qKey = `${sura}:${aya}`;
+    if (TAFSIR_RESEARCH_QUESTIONS[qKey]) {
+      html += `<div style="font-size:12px;font-weight:700;color:#8B5E0A;margin-bottom:4px;">RESEARCH QUESTION</div>
+                <div style="font-size:13px;color:#3a2f1a;line-height:1.5;">${escapeHtml(TAFSIR_RESEARCH_QUESTIONS[qKey])}</div>`;
+    }
+    html += `</div>`;
+
+    // Coverage / source-data limitations -- checked live, not hardcoded,
+    // so it stays correct if entries are ever added later.
+    const presentScholars = new Set(entryCheckRows.map(r => r.scholar_key));
+    const missing = TAFSIR_COMPARISON_SCHOLARS.filter(s => !presentScholars.has(s));
+    if (missing.length) {
+      html += `<div style="background:#FFF3E0;border:1px solid #E0A040;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#8B5A00;">
+        ⚠️ <b>Source-data limitation:</b> no entry available for ${missing.map(m => TAFSIR_SCHOLAR_LABELS[m]).join(', ')} at ${sura}:${aya}. Not present in the underlying dataset -- not the same as that commentator having no view.
+      </div>`;
+    }
+
+    Object.entries(byClaimType).forEach(([ctLabel, plist]) => {
+      html += `<div style="margin-bottom:18px;">
+        <div style="font-size:11px;font-weight:700;letter-spacing:0.05em;color:#B8902A;text-transform:uppercase;margin-bottom:8px;">${escapeHtml(ctLabel)}</div>`;
+      plist.forEach(p => {
+        const scholarKey = p.tafsir_entries.scholar_key;
+        const scholarLabel = TAFSIR_SCHOLAR_LABELS[scholarKey] || scholarKey;
+        const vchain = voiceByProp[p.id] || [];
+        const evid = evidenceByProp[p.id] || [];
+        const verLabel = VERIFICATION_LABELS[p.verification_state] || p.verification_state;
+
+        html += `<div style="background:#fff;border:1px solid #E8E4DC;border-radius:8px;padding:12px 14px;margin-bottom:8px;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px;">
+            <span style="font-size:12px;font-weight:700;color:#5A4A2A;">${escapeHtml(scholarLabel)}</span>
+            <span style="font-size:10px;color:#888;white-space:nowrap;">${verLabel}</span>
+          </div>
+          <div style="font-size:13px;color:#222;line-height:1.5;margin-bottom:8px;">${escapeHtml(p.statement_en)}</div>`;
+
+        if (vchain.length) {
+          html += `<div style="font-size:11px;color:#666;margin-bottom:4px;">`;
+          vchain.forEach(v => {
+            const label = VOICE_TYPE_LABELS[v.originating_voice_type] || v.originating_voice_type;
+            const name = v.originating_voice_name ? `: <b>${escapeHtml(v.originating_voice_name)}</b>` : '';
+            const coll = v.quoted_collection ? ` <span style="color:#999;">(${escapeHtml(v.quoted_collection)})</span>` : '';
+            html += `<div>${label}${name}${coll}</div>`;
+          });
+          html += `</div>`;
+        }
+
+        if (evid.length) {
+          html += `<div style="font-size:11px;color:#7A6A3A;border-top:1px dashed #E8E4DC;padding-top:6px;margin-top:6px;">`;
+          evid.forEach(e => {
+            const eu = e.evidence_units;
+            if (!eu) return;
+            const routeCount = (eu.evidence_transmission_routes || []).length;
+            const routeNote = routeCount > 1 ? ` — ${routeCount} transmission routes, counted as one report` : (routeCount === 1 ? ` — 1 route` : '');
+            html += `<div>📎 Evidence: ${eu.attributed_authority_name ? escapeHtml(eu.attributed_authority_name) + ' — ' : ''}${escapeHtml(eu.content_summary || eu.unit_type)}${routeNote} <span style="color:#aaa;">[independence: ${eu.independence_state}]</span></div>`;
+          });
+          html += `</div>`;
+        }
+        html += `</div>`;
+      });
+      html += `</div>`;
+    });
+
+    if (conflictRows.length) {
+      html += `<div style="background:#FDECEA;border:1px solid #E0968C;border-radius:8px;padding:12px 14px;margin-top:6px;">
+        <div style="font-size:12px;font-weight:700;color:#B03A2E;margin-bottom:4px;">⚠️ DISPUTED ATTRIBUTION — UNRESOLVED</div>`;
+      conflictRows.forEach(c => {
+        html += `<div style="font-size:12px;color:#7a2a20;line-height:1.5;margin-bottom:4px;"><b>${escapeHtml(c.shared_authority_name)}:</b> ${escapeHtml(c.conflict_note)}</div>`;
+      });
+      html += `</div>`;
+    }
+
+    if (relRows.length) {
+      html += `<div style="background:#EEF3F8;border:1px solid #A9C2D9;border-radius:8px;padding:12px 14px;margin-top:10px;">
+        <div style="font-size:12px;font-weight:700;color:#2E5A8A;margin-bottom:4px;">🔗 CROSS-REFERENCE RELATIONSHIPS</div>`;
+      relRows.forEach(r => {
+        html += `<div style="font-size:12px;color:#2E4A6A;line-height:1.5;margin-bottom:4px;">
+          <b>${escapeHtml(r.relationship_types?.label_en || '')}</b> (confidence: ${r.confidence}, ${r.review_status.replace('_',' ')}): ${escapeHtml(r.notes || '')}
+        </div>`;
+      });
+      html += `</div>`;
+    }
+
+    container.innerHTML = html;
+  } catch (e) {
+    container.innerHTML = `<div class="error-box">⚠️ Failed to load comparison view: ${e.message}</div>`;
+  }
+}
+
+function toggleComparisonView(sura, aya) {
+  const container = document.getElementById(`cmp-${aya}`);
+  if (!container) return;
+  const showing = container.style.display !== 'none';
+  container.style.display = showing ? 'none' : 'block';
+  if (!showing && !container.dataset.loaded) {
+    container.dataset.loaded = '1';
+    loadComparisonView(sura, aya);
+  }
+}
+
 async function loadTafsirPanel(sura, aya) {
   const panel = document.getElementById(`tp-${aya}-tafsir`);
   if (!panel || !panel.querySelector('.loading')) return;
@@ -5701,6 +5900,14 @@ async function loadTafsirPanel(sura, aya) {
     });
   } catch {}
   if (tabBtn) tabBtn.textContent = allRows.length > 0 ? `Tafsir (${allRows.length})` : 'Tafsir';
+  // Non-blocking: check for comparison-engine data in parallel with the
+  // normal render below. Most verses have none; this never delays the
+  // ordinary Tafsir list from appearing.
+  checkComparisonExists(sura, aya).then(exists => {
+    if (!exists) return;
+    const btn = document.getElementById(`cmp-toggle-${aya}`);
+    if (btn) btn.style.display = 'inline-block';
+  });
 
   function buildTafsirContent(lang) {
     // Group by scholar_key — pair Arabic + English for same scholar
@@ -5725,7 +5932,11 @@ async function loadTafsirPanel(sura, aya) {
     if (hasAr) toggleBar += `<button onclick="setTafsirLang(${sura},${aya},'ar')" style="padding:5px 14px;border-radius:20px;border:2px solid ${lang==='ar'?'#B8902A':'#D4C9A8'};background:${lang==='ar'?'#B8902A':'#fff'};color:${lang==='ar'?'#fff':'#666'};font-size:12px;font-weight:700;cursor:pointer;">عربي</button>`;
     if (hasAr && hasEn) toggleBar += `<button onclick="setTafsirLang(${sura},${aya},'both')" style="padding:5px 14px;border-radius:20px;border:2px solid ${lang==='both'?'#B8902A':'#D4C9A8'};background:${lang==='both'?'#B8902A':'#fff'};color:${lang==='both'?'#fff':'#666'};font-size:12px;font-weight:700;cursor:pointer;">Both</button>`;
     if (hasAr && hasEn) toggleBar += `<button onclick="analyzeTafsirAccuracy(${sura},${aya})" style="padding:5px 14px;border-radius:20px;border:2px solid #2E7D32;background:#E8F5E9;color:#2E7D32;font-size:12px;font-weight:700;cursor:pointer;">🔍 Accuracy</button>`;
-    toggleBar += `</div>`;
+    // Research Comparison toggle -- hidden by default; a parallel, non-blocking
+    // check in loadTafsirPanel reveals it only when comparison data actually
+    // exists for this verse (currently: 53:5, 53:6, 18:50, 2:34, 38:33).
+    toggleBar += `<button id="cmp-toggle-${aya}" onclick="toggleComparisonView(${sura},${aya})" style="display:none;padding:5px 14px;border-radius:20px;border:2px solid #6A4FA0;background:#F1ECFA;color:#6A4FA0;font-size:12px;font-weight:700;cursor:pointer;">🔬 Research Comparison</button>`;
+    toggleBar += `</div><div id="cmp-${aya}" style="display:none;margin-bottom:14px;"></div>`;
 
     let html = toggleBar;
     const speakStore = [];
