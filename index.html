@@ -5699,17 +5699,21 @@ function speakTafsirEntry(verseKey, idx) {
 // voice_chain_attribution_conflicts/proposition_relationships/claim_types.
 // ============================================================
 
-// Curated research-question text per verse. This is presentation-layer
-// framing, not derived from the database -- kept here rather than as a
-// new table, per instruction to treat this as the presentation layer
-// only. Extend this object as more pilots are added.
-const TAFSIR_RESEARCH_QUESTIONS = {
-  '53:5': 'Who is the figure described as "shadid al-quwa" (intense in strength), and what evidence does each commentator give for that identification?',
-  '53:6': 'Who or what is the subject of "fa-istawa" (then he rose)? The Qur\'an\'s wording alone does not name him.',
-  '18:50': 'Does each commentator treat Iblis as a jinn by nature, an angel by nature, an angelic-order member from a clan called jinn, or another category -- and how do they explain his inclusion in a command addressed "to the angels"?',
-  '2:34': 'Continuation of the 18:50 question: do Tabari and Qurtubi\'s own cross-references (which they point to from 18:50) give a final classification here?',
-  '38:33': 'What does "ruddūhā ʿalayya" refer to (the horses, or -- per one preserved reading -- the sun)? Does "tafiqa mashan bi\'l-suqi wa\'l-a\'naq" mean stroking/wiping the horses, or striking/cutting their legs and necks?'
-};
+// Research-question text lives in tafsir_research_topics/tafsir_research_topic_verses
+// (fetched live below) rather than a hardcoded object -- a hardcoded lookup was
+// acceptable for 5 locations but becomes maintenance debt once dozens/hundreds of
+// verses are added. topic_key lets one question (e.g. Iblis's classification) span
+// multiple verses (18:50 and 2:34) without duplicating the question text, while
+// keeping genuinely distinct questions (53:5 vs 53:6) as separate rows.
+async function fetchResearchQuestion(sura, aya) {
+  try {
+    const url = `${SUPABASE_URL}/rest/v1/tafsir_research_topic_verses?select=tafsir_research_topics(question_text)&sura=eq.${sura}&aya=eq.${aya}&limit=1`;
+    const res = await fetch(url, { headers: HEADERS });
+    if (!res.ok) return null;
+    const rows = await res.json();
+    return rows[0]?.tafsir_research_topics?.question_text || null;
+  } catch (e) { return null; }
+}
 
 const TAFSIR_COMPARISON_SCHOLARS = ['tabari','ibn_kathir','qurtubi','jalalayn','saadi','ibn_abbas'];
 const TAFSIR_SCHOLAR_LABELS = { tabari:'Tabari', ibn_kathir:'Ibn Kathir', qurtubi:'Qurtubi', jalalayn:'Jalalayn', saadi:'Sa\'di', ibn_abbas:'Ibn Abbas (attrib.)' };
@@ -5787,10 +5791,10 @@ async function loadComparisonView(sura, aya) {
     });
 
     let html = `<div style="background:#FFFBF0;border:1px solid #E8C97B;border-radius:10px;padding:14px;margin-bottom:14px;">`;
-    const qKey = `${sura}:${aya}`;
-    if (TAFSIR_RESEARCH_QUESTIONS[qKey]) {
+    const researchQuestion = await fetchResearchQuestion(sura, aya);
+    if (researchQuestion) {
       html += `<div style="font-size:12px;font-weight:700;color:#8B5E0A;margin-bottom:4px;">RESEARCH QUESTION</div>
-                <div style="font-size:13px;color:#3a2f1a;line-height:1.5;">${escapeHtml(TAFSIR_RESEARCH_QUESTIONS[qKey])}</div>`;
+                <div style="font-size:13px;color:#3a2f1a;line-height:1.5;">${escapeHtml(researchQuestion)}</div>`;
     }
     html += `</div>`;
 
@@ -5815,7 +5819,7 @@ async function loadComparisonView(sura, aya) {
         const verLabel = VERIFICATION_LABELS[p.verification_state] || p.verification_state;
 
         html += `<div style="background:#fff;border:1px solid #E8E4DC;border-radius:8px;padding:12px 14px;margin-bottom:8px;">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px;flex-wrap:wrap;">
             <span style="font-size:12px;font-weight:700;color:#5A4A2A;">${escapeHtml(scholarLabel)}</span>
             <span style="font-size:10px;color:#888;white-space:nowrap;">${verLabel}</span>
           </div>
