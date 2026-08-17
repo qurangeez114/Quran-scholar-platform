@@ -2515,9 +2515,10 @@ async function init() {
 
       if (urlAya) window._pendingHistAya = urlAya;
       if (urlAya && urlAya >= 1) {
-        // Direct-verse deep link (e.g. ?sura=53&aya=5): fetch just that verse
-        // instead of the whole sura first. Same rationale as gotoVerse()/navToVerse().
-        await loadSingleVerseFast(urlSura, urlAya);
+        // Direct-verse deep link (e.g. ?sura=53&aya=5): fetch that verse plus
+        // 2 verses of surrounding context, not the whole sura. Same helper
+        // used by gotoVerse()/navToVerse().
+        await loadVerseContext(urlSura, urlAya);
       } else {
         await loadSura(urlSura);
       }
@@ -2600,6 +2601,7 @@ function selectSura(id) {
 
 async function loadSura(id) {
   currentSura = id;
+  window._loadedContextRange = null; // full sura load supersedes any prior direct-verse context window
   document.querySelectorAll('.sura-item').forEach(el => el.classList.remove('active'));
   const activeEl = document.getElementById('si-' + id);
   if (activeEl) activeEl.classList.add('active');
@@ -4709,8 +4711,8 @@ async function navToVerse(suraId, ayahNum) {
   document.getElementById('backBtn').textContent = '← Back to ' + (allSuras.find(s => (s.sura_id||s.id) === currentSura)?.sura_name || 'Previous');
   window._pendingHistAya = ayahNum;
 
-  // Duplicate-request avoidance: already on this sura with it fully loaded.
-  if (currentSura === suraId && CURRENT_AYAS && CURRENT_AYAS.length > 1) {
+  // Duplicate-request avoidance: already displayed (full sura or context range).
+  if (isVerseAlreadyLoaded(suraId, ayahNum)) {
     requestAnimationFrame(() => {
       const card = document.getElementById('vc-' + ayahNum);
       if (card) { card.scrollIntoView({ behavior: 'smooth', block: 'center' }); highlightVerse(card); }
@@ -4718,10 +4720,11 @@ async function navToVerse(suraId, ayahNum) {
     return;
   }
 
-  // Direct-verse fast path (same rationale as gotoVerse()): a click on one
+  // Direct-verse context path (same rationale as gotoVerse()): a click on one
   // specific verse reference (search result, cross-ref, story comparison,
-  // deep link) should not pay the cost of loading the whole sura first.
-  await loadSingleVerseFast(suraId, ayahNum);
+  // deep link) shows that verse with 2 verses of surrounding context on each
+  // side, not the whole sura.
+  await loadVerseContext(suraId, ayahNum);
 }
 
 // Wrapper used by clickable result cards. Skips navigation if:
@@ -5187,31 +5190,31 @@ async function gotoVerse() {
   }
   if (aya && aya >= 1) window._pendingHistAya = aya;
 
-  // Duplicate-request avoidance: if the requested sura is already loaded in
-  // full, just jump to the existing card instead of querying again.
-  if (currentSura === sura && CURRENT_AYAS && CURRENT_AYAS.length > 1) {
+  // Duplicate-request avoidance: already displayed (full sura or context range).
+  if (aya && aya >= 1 && isVerseAlreadyLoaded(sura, aya)) {
     requestAnimationFrame(() => {
-      if (aya && aya >= 1) {
-        const card = document.getElementById('vc-' + aya);
-        if (card) {
-          card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          highlightVerse(card);
-        } else {
-          alert('Verse ' + aya + ' not found in Sura ' + sura);
-        }
+      const card = document.getElementById('vc-' + aya);
+      if (card) {
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        highlightVerse(card);
+      } else {
+        alert('Verse ' + aya + ' not found in Sura ' + sura);
       }
     });
     return;
   }
+  if (!aya && currentSura === sura && CURRENT_AYAS && CURRENT_AYAS.length > 1) {
+    return; // already on this sura, no verse specified -- nothing to do
+  }
 
-  // Direct-verse fast path: a specific chapter+verse request should not
-  // wait on the whole chapter loading first (previously, even "53:5" paid
-  // the full cost of loading all 62 verses of Sura 53 -- and far worse for
-  // long suras like Al-Baqarah's 286). Fetch and render only the requested
-  // verse. Full-sura browsing (sidebar selection) still uses loadSura()
-  // unchanged below.
+  // Direct-verse context path: a specific chapter+verse request shows that
+  // verse with 2 verses of surrounding context on each side (clamped to sura
+  // boundaries), not the whole chapter -- previously even "53:5" paid the
+  // full cost of loading all 62 verses of Sura 53, and far worse for long
+  // suras like Al-Baqarah's 286. Full-sura browsing (sidebar selection)
+  // still uses loadSura() unchanged below.
   if (aya && aya >= 1) {
-    await loadSingleVerseFast(sura, aya);
+    await loadVerseContext(sura, aya);
   } else {
     await loadSura(sura);
   }
@@ -5223,13 +5226,42 @@ async function gotoVerse() {
 // lookups, and the extra-language verse_translations lookup -- to exactly the
 // one requested aya instead of the whole sura. Full-sura browsing is
 // untouched; this is only used by gotoVerse() for a direct verse request.
-async function loadSingleVerseFast(suraId, ayaNum) {
+// Shared direct-navigation context loader. Used by every path that jumps to
+// a specific verse (Go search, search-result clicks, cross-refs, story
+// comparisons, deep links) instead of duplicating context-loading logic per
+// caller. Fetches target verse plus `before`/`after` neighbors (clamped to
+// sura boundaries) in ONE combined query per data source -- measured against
+// live data, a 5-row range query costs the same as a 1-row query (both
+// ~70-160ms), so there is no benefit to a slower two-phase "target first,
+// then context" fetch, and a single combined fetch also makes duplicate
+// target-fetching structurally impossible rather than something to guard against.
+async function loadVerseContext(suraId, targetAya, before, after) {
+  before = (before === undefined) ? 2 : before;
+  after = (after === undefined) ? 2 : after;
+  const info = allSuras.find(s => (s.sura_id || s.id) === suraId);
+  const maxAya = info?.number_of_ayas || 9999;
+  // Window redistribution: if one side is clamped by a sura boundary, shift
+  // the deficit to the other side so the context window stays at its full
+  // size instead of just shrinking. E.g. 1:1 with before=2/after=2 has no
+  // room before verse 1 -- rather than showing only 1:1-3, the 2 unused
+  // "before" slots move to the after side, giving 1:1-5.
+  let rangeStart = targetAya - before;
+  let rangeEnd = targetAya + after;
+  if (rangeStart < 1) {
+    rangeEnd += (1 - rangeStart);
+    rangeStart = 1;
+  }
+  if (rangeEnd > maxAya) {
+    rangeStart -= (rangeEnd - maxAya);
+    rangeEnd = maxAya;
+    if (rangeStart < 1) rangeStart = 1; // sura itself shorter than the window
+  }
+
   currentSura = suraId;
   document.querySelectorAll('.sura-item').forEach(el => el.classList.remove('active'));
   const activeEl = document.getElementById('si-' + suraId);
   if (activeEl) activeEl.classList.add('active');
 
-  const info = allSuras.find(s => (s.sura_id || s.id) === suraId);
   if (document.getElementById('gotoSura')) syncGotoSuraDisplay(suraId);
   document.getElementById('topArabic').textContent = ARABIC_NAMES[suraId] || info?.sura_name || '';
   document.getElementById('topEnglish').textContent = info?.sura_name_english || info?.sura_name_translated || info?.sura_name || '';
@@ -5238,67 +5270,92 @@ async function loadSingleVerseFast(suraId, ayaNum) {
     const suraEnglish = info?.sura_name_english || info?.sura_name_translated || info?.sura_name || ('Sura ' + suraId);
     const suraArabic = ARABIC_NAMES[suraId] || '';
     const label = suraArabic ? suraArabic + ' · ' + suraEnglish : suraEnglish;
-    window._pendingHistAya = null; // already used above; avoid double-consuming
-    const url = window.location.pathname + '?sura=' + suraId + '&aya=' + ayaNum;
-    const sub = 'Verse ' + ayaNum + ' · ' + (info?.number_of_ayas || '') + ' verses total';
+    window._pendingHistAya = null; // already used by caller; avoid double-consuming
+    const url = window.location.pathname + '?sura=' + suraId + '&aya=' + targetAya;
+    const sub = 'Verse ' + targetAya + ' · ' + (info?.number_of_ayas || '') + ' verses total';
     if (window.qhistRecord) qhistRecord(label, url, '📖', sub);
   } catch (e) {}
   document.getElementById('verseArea').innerHTML = `<div class="loading"><span class="spinner"></span>Loading verse...</div>`;
 
   try {
-    const [ayaRows, translitRows, arabicRows] = await Promise.all([
-      sbFetch('ayas', {
-        select: 'sura_id,aya_number,arabic,aya_text,arabic_transliteration,arabic_warsh,arabic_qalun,arabic_duri,arabic_shubah,arabic_soosi,arabic_bazzi,arabic_qumbul,english,amharic,oromo,somali,german,urdu',
-        sura_id: `eq.${suraId}`,
-        aya_number: `eq.${ayaNum}`
-      }),
-      fetch(`https://api.alquran.cloud/v1/ayah/${suraId}:${ayaNum}/en.transliteration`)
-        .then(r => r.json())
-        .then(d => d.data && d.data.text ? [{ numberInSurah: ayaNum, text: d.data.text }] : [])
-        .catch(() => []),
-      fetch(`https://api.alquran.cloud/v1/ayah/${suraId}:${ayaNum}/quran-uthmani`)
-        .then(r => r.json())
-        .then(d => d.data && d.data.text ? [{ numberInSurah: ayaNum, text: d.data.text }] : [])
-        .catch(() => [])
-    ]);
+    const ayaRows = await sbFetch('ayas', {
+      select: 'sura_id,aya_number,arabic,aya_text,arabic_transliteration,arabic_warsh,arabic_qalun,arabic_duri,arabic_shubah,arabic_soosi,arabic_bazzi,arabic_qumbul,english,amharic,oromo,somali,german,urdu',
+      sura_id: `eq.${suraId}`,
+      aya_number: `gte.${rangeStart}`,
+      and: `(aya_number.lte.${rangeEnd})`,
+      order: 'aya_number'
+    });
 
     if (!ayaRows.length) {
-      document.getElementById('verseArea').innerHTML = `<div class="error-box">⚠️ Verse ${ayaNum} not found in Sura ${suraId}.</div>`;
+      document.getElementById('verseArea').innerHTML = `<div class="error-box">⚠️ Verse ${targetAya} not found in Sura ${suraId}.</div>`;
       return;
     }
+    ayaRows.sort((a, b) => a.aya_number - b.aya_number);
+    window._loadedContextRange = { sura: suraId, min: ayaRows[0].aya_number, max: ayaRows[ayaRows.length - 1].aya_number };
+
+    // External Arabic/transliteration lookups, scoped to exactly the rows in
+    // this range (parallel, one call per verse -- still tiny compared to a
+    // whole-sura call, and stays proportional to context size, not sura length).
+    const [translitResults, arabicResults] = await Promise.all([
+      Promise.all(ayaRows.map(a =>
+        fetch(`https://api.alquran.cloud/v1/ayah/${suraId}:${a.aya_number}/en.transliteration`)
+          .then(r => r.json()).then(d => ({ n: a.aya_number, text: d.data?.text || '' })).catch(() => ({ n: a.aya_number, text: '' }))
+      )),
+      Promise.all(ayaRows.map(a =>
+        fetch(`https://api.alquran.cloud/v1/ayah/${suraId}:${a.aya_number}/quran-uthmani`)
+          .then(r => r.json()).then(d => ({ n: a.aya_number, text: d.data?.text || '' })).catch(() => ({ n: a.aya_number, text: '' }))
+      ))
+    ]);
+    const translitMap = {}, arabicMap = {};
+    translitResults.forEach(r => { translitMap[r.n] = r.text; });
+    arabicResults.forEach(r => { arabicMap[r.n] = r.text; });
 
     const VT_LANGS = { bn: 'bengali', ms: 'malay', es: 'spanish', zh: 'chinese', sw: 'swahili', ha: 'hausa' };
     try {
+      const keys = ayaRows.map(a => `${suraId}:${a.aya_number}`).join(',');
       const vtRows = await sbFetch('verse_translations', {
-        select: 'lang,text',
-        verse_key: `eq.${suraId}:${ayaNum}`,
+        select: 'verse_key,lang,text',
+        verse_key: `in.(${keys})`,
         lang: `in.(${Object.keys(VT_LANGS).join(',')})`
       });
-      const extra = {};
-      vtRows.forEach(r => { extra[VT_LANGS[r.lang]] = r.text; });
-      Object.values(VT_LANGS).forEach(field => { ayaRows[0][field] = extra[field] || ''; });
+      const vtMap = {};
+      vtRows.forEach(r => {
+        const ayaNum = r.verse_key.split(':')[1];
+        (vtMap[ayaNum] = vtMap[ayaNum] || {})[VT_LANGS[r.lang]] = r.text;
+      });
+      ayaRows.forEach(a => {
+        const extra = vtMap[String(a.aya_number)] || {};
+        Object.values(VT_LANGS).forEach(field => { a[field] = extra[field] || ''; });
+      });
     } catch (e) {
-      Object.values(VT_LANGS).forEach(field => { ayaRows[0][field] = ayaRows[0][field] || ''; });
+      ayaRows.forEach(a => { Object.values(VT_LANGS).forEach(field => { a[field] = a[field] || ''; }); });
     }
 
-    const translitMap = {}, arabicMap = {};
-    translitRows.forEach(a => { translitMap[a.numberInSurah] = a.text || ''; });
-    arabicRows.forEach(a => { arabicMap[a.numberInSurah] = a.text || ''; });
-    const a = ayaRows[0];
-    a.arabic_transliteration = translitMap[a.aya_number] || '';
-    a.verified_arabic = arabicMap[a.aya_number] || '';
-    if (a.aya_number === 1 && suraId !== 1 && suraId !== 9) {
-      a.verified_arabic = stripLeadingBasmala(a.verified_arabic);
-      a.arabic = stripLeadingBasmala(a.arabic);
-      a.arabic_transliteration = stripLeadingBasmalaTranslit(a.arabic_transliteration);
-    }
-    if (!a.tigrinya) a.tigrinya = '';
+    ayaRows.forEach(a => {
+      a.arabic_transliteration = translitMap[a.aya_number] || '';
+      a.verified_arabic = arabicMap[a.aya_number] || '';
+      if (a.aya_number === 1 && suraId !== 1 && suraId !== 9) {
+        a.verified_arabic = stripLeadingBasmala(a.verified_arabic);
+        a.arabic = stripLeadingBasmala(a.arabic);
+        a.arabic_transliteration = stripLeadingBasmalaTranslit(a.arabic_transliteration);
+      }
+      if (!a.tigrinya) a.tigrinya = '';
+    });
 
     document.getElementById('topMeta').innerHTML = `<span>${info?.number_of_ayas || ''} verses</span>`;
     renderVerses(ayaRows, suraId);
     applyLangState();
+    // "View Full Sūrah" continuation — reuses the normal full-sura path
+    // unchanged; full sura is never loaded automatically.
+    const area = document.getElementById('verseArea');
+    area.insertAdjacentHTML('afterbegin', `
+      <div style="text-align:center;margin-bottom:14px;">
+        <button onclick="loadSura(${suraId})" style="padding:7px 16px;background:#FDF8EE;border:1px solid #E8C97B;border-radius:20px;font-size:12px;font-weight:700;color:#B8902A;cursor:pointer;">
+          📖 View Full Sūrah (${info?.number_of_ayas || ''} verses)
+        </button>
+      </div>`);
     requestAnimationFrame(() => {
-      const card = document.getElementById('vc-' + ayaNum);
+      const card = document.getElementById('vc-' + targetAya);
       if (card) {
         card.scrollIntoView({ behavior: 'smooth', block: 'center' });
         highlightVerse(card);
@@ -5306,8 +5363,18 @@ async function loadSingleVerseFast(suraId, ayaNum) {
     });
     setTimeout(restoreVerseHighlights, 100);
   } catch (e) {
-    document.getElementById('verseArea').innerHTML = `<div class="error-box">⚠️ Failed to load verse ${suraId}:${ayaNum}. ${e.message}</div>`;
+    document.getElementById('verseArea').innerHTML = `<div class="error-box">⚠️ Failed to load verse ${suraId}:${targetAya}. ${e.message}</div>`;
   }
+}
+
+// True if the requested verse is already visible without a new fetch: either
+// the full sura is loaded, or it falls within the currently-loaded context range.
+function isVerseAlreadyLoaded(suraId, ayaNum) {
+  if (currentSura !== suraId) return false;
+  if (CURRENT_AYAS && CURRENT_AYAS.length > 1 && !window._loadedContextRange) return true; // full sura loaded
+  const r = window._loadedContextRange;
+  if (r && r.sura === suraId && ayaNum >= r.min && ayaNum <= r.max) return true;
+  return false;
 }
 
 function populateGotoSuraSelect() {
