@@ -1,0 +1,53 @@
+name: Tafsir Fidelity Batch
+
+on:
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "Maximum new verse evaluations this run (0 = all missing)"
+        required: true
+        default: "20"
+        type: string
+      start:
+        description: "Optional starting verse, e.g. 2:255"
+        required: false
+        default: ""
+        type: string
+      model:
+        description: "Claude model used by the existing QuranHikma API"
+        required: true
+        default: "claude-sonnet-4-6"
+        type: string
+
+concurrency:
+  group: tafsir-fidelity-batch
+  cancel-in-progress: false
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate evaluator syntax
+        run: python -m py_compile batch_tafsir_accuracy.py
+
+      - name: Evaluate missing Ibn Kathir Arabic-English pairs
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=(--limit "${{ inputs.limit }}" --model "${{ inputs.model }}")
+          if [[ -n "${{ inputs.start }}" ]]; then
+            args+=(--start "${{ inputs.start }}")
+          fi
+          python batch_tafsir_accuracy.py "${args[@]}"
