@@ -4,6 +4,13 @@
   function addDonateButton(){
     if (document.getElementById('quranhikma-global-donate')) return;
 
+    // Most Quran Hikma pages already provide a Donate control in the page header.
+    // Do not add a second fixed Donate button when a PayPal donate link is present.
+    const existingDonate = Array.from(document.querySelectorAll('a[href]')).some(function(link){
+      return link.href && link.href.indexOf('paypal.com/donate') !== -1;
+    });
+    if (existingDonate) return;
+
     const a = document.createElement('a');
     a.id = 'quranhikma-global-donate';
     a.href = PAYPAL_DONATE_URL;
@@ -14,8 +21,8 @@
     a.style.cssText = [
       'position:fixed',
       'right:14px',
-      'bottom:66px',
-      'z-index:9998',
+      'bottom:116px',
+      'z-index:8999',
       'background:#B8902A',
       'color:#fff',
       'text-decoration:none',
