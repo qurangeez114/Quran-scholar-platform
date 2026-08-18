@@ -228,7 +228,17 @@
   }
 
   function injectButtons() {
-    document.querySelectorAll('.verse-card:not(.pb-injected)').forEach(card => appendButton(card, extractFromVerseCard));
+    // Verse cards already have their own dedicated "Add to Presentation"
+    // control (the bare "+" icon in .verse-actions, wired to
+    // addVerseToPresentation() in index.html, writing to the same
+    // presentationBasket localStorage key). Injecting a second, generic
+    // labeled button here was a genuine duplicate control, not just a
+    // positioning bug -- it also landed in .verse-top (a 3-item flex row)
+    // instead of .verse-detail (its CSS's actual target, border-top/
+    // margin-top styled for a full-width block row), because .verse-top
+    // matches first in document order regardless of querySelector's
+    // selector-list order. Fixing the duplication removes the crowding
+    // at its source rather than relocating a redundant button.
     document.querySelectorAll('.result-card:not(.pb-injected),.event-card:not(.pb-injected),.event-detail:not(.pb-injected),.school-card:not(.pb-injected),.topic-item:not(.pb-injected),.compare:not(.pb-injected),.s-hdr:not(.pb-injected),.src-card:not(.pb-injected),.sr-card:not(.pb-injected),.hadith-card:not(.pb-injected),.tafsir-card:not(.pb-injected),.cross-ref-card:not(.pb-injected),.analysis-card:not(.pb-injected),.word-card:not(.pb-injected)').forEach(card => appendButton(card, extractGeneric));
   }
 
