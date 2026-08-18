@@ -10297,6 +10297,35 @@ document.addEventListener('keydown', function(e) {
   background: transparent;
 }
 #fab-backdrop.open { display: block; }
+
+/* ── Coordinated bottom-stack offsets (phone only) ──
+   Root cause of the FAB/donate overlap: #fab-menu (bottom:70px) and
+   #quranhikma-global-donate (bottom:66px, set inline by the separate
+   donate-global.js file loaded via the donate-inject edge function) were
+   positioned independently, 4px apart, with no awareness of each other or
+   of #askqh-dock (ask-widget.js) sitting between them and #bottom-nav.
+   Single shared basis instead of separate magic numbers: nav height +
+   Ask dock's collapsed height + safe-area inset. */
+@media (max-width: 768px) {
+  :root {
+    --qh-navh: 54px;                                    /* matches #bottom-nav height */
+    --qh-safeb: env(safe-area-inset-bottom, 0px);
+    --qh-askh: 46px;                                     /* #askqh-dock collapsed (head-only) height */
+    --qh-gap: 10px;
+    --qh-stack0: calc(var(--qh-navh) + var(--qh-askh) + var(--qh-safeb));
+  }
+  /* Ask dock: was hardcoded bottom:54px with no safe-area awareness */
+  #askqh-dock { bottom: calc(var(--qh-navh) + var(--qh-safeb)) !important; }
+  /* FAB: was bottom:70px */
+  #fab-menu { bottom: calc(var(--qh-stack0) + var(--qh-gap)) !important; }
+  /* Donate button: placed left of the FAB on the same row (52px = fab-toggle
+     diameter) rather than stacked above it, so no height-mismatch math is
+     needed between a circular FAB and a pill-shaped label button. */
+  #quranhikma-global-donate {
+    right: calc(14px + 52px + var(--qh-gap)) !important;
+    bottom: calc(var(--qh-stack0) + var(--qh-gap)) !important;
+  }
+}
 </style>
 
 <div id="fab-backdrop" onclick="closeFabMenu()"></div>
