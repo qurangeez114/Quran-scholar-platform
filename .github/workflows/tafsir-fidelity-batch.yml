@@ -18,6 +18,9 @@ on:
         required: true
         default: "claude-sonnet-4-6"
         type: string
+  push:
+    paths:
+      - ".github/tafsir-fidelity-run-trigger.txt"
 
 concurrency:
   group: tafsir-fidelity-batch
@@ -44,10 +47,14 @@ jobs:
 
       - name: Evaluate missing Ibn Kathir Arabic-English pairs
         shell: bash
+        env:
+          BATCH_LIMIT: ${{ inputs.limit || '100' }}
+          BATCH_START: ${{ inputs.start || '' }}
+          BATCH_MODEL: ${{ inputs.model || 'claude-sonnet-4-6' }}
         run: |
           set -euo pipefail
-          args=(--limit "${{ inputs.limit }}" --model "${{ inputs.model }}")
-          if [[ -n "${{ inputs.start }}" ]]; then
-            args+=(--start "${{ inputs.start }}")
+          args=(--limit "$BATCH_LIMIT" --model "$BATCH_MODEL")
+          if [[ -n "$BATCH_START" ]]; then
+            args+=(--start "$BATCH_START")
           fi
           python batch_tafsir_accuracy.py "${args[@]}"
