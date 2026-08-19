@@ -1430,6 +1430,14 @@ body { padding-bottom: 80px !important; }
       <button id="scm-fmt-story" onclick="setSocialFormatMain('story')" style="flex:1;padding:8px;border:1.5px solid #E8C97B;border-radius:8px;background:#fff;color:#1a1a1a;font-size:12px;font-weight:700;cursor:pointer;">📱 Story<br><span style="font-weight:400;font-size:10px;">Stories/TikTok/Reels</span></button>
       <button id="scm-fmt-wide" onclick="setSocialFormatMain('wide')" style="flex:1;padding:8px;border:1.5px solid #E8C97B;border-radius:8px;background:#fff;color:#1a1a1a;font-size:12px;font-weight:700;cursor:pointer;">▭ Wide<br><span style="font-weight:400;font-size:10px;">X/Twitter card</span></button>
     </div>
+    <div id="scm-langs-wrap" style="margin-bottom:12px;display:none;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+        <div style="font-size:11px;font-weight:700;color:#B8902A;text-transform:uppercase;letter-spacing:0.5px;">Languages on card</div>
+        <button onclick="resetSocialLangsMain()" style="background:none;border:none;font-size:11px;color:#7A8FA6;cursor:pointer;text-decoration:underline;padding:0;">Reset</button>
+      </div>
+      <div id="scm-langs" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+      <div id="scm-langs-note" style="font-size:11px;color:#999;margin-top:6px;display:none;">Keep at least one language selected.</div>
+    </div>
     <div style="text-align:center;background:#F0EDE6;border-radius:8px;padding:10px;margin-bottom:12px;min-height:120px;">
       <canvas id="socialCanvasMain" style="max-width:100%;height:auto;border-radius:6px;box-shadow:0 2px 10px rgba(0,0,0,0.15);"></canvas>
       <div id="socialCanvasLoadingMain" style="color:#999;font-size:13px;padding:30px 0;">Loading verse...</div>
@@ -6358,6 +6366,11 @@ const SOCIAL_FORMATS_MAIN = {
 };
 let _socialMainSura = null, _socialMainAya = null, _socialMainFormat = 'square';
 let _socialMainVerse = null;
+// Which languages appear on the CARD. Seeded from the page's global
+// langState the first time a card is opened, but kept separate after
+// that: choosing what to publish is not the same choice as what to
+// read on the page, and changing one should not silently change the other.
+let _socialMainLangs = null;
 
 function wrapCanvasTextMain(ctx, text, maxWidth){
   const words = (text || '').split(' ');
@@ -6384,6 +6397,8 @@ async function openSocialCardMain(sura, aya){
   document.getElementById('socialOverlayMain').style.display = 'flex';
   document.getElementById('socialCanvasLoadingMain').style.display = 'block';
   document.getElementById('socialCanvasMain').style.display = 'none';
+  const _lw = document.getElementById('scm-langs-wrap');
+  if (_lw) _lw.style.display = 'none';
   setSocialFormatMainUI('square');
   try {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/ayas?select=arabic,arabic_transliteration,english,tigrinya,amharic,oromo,somali,german,urdu&sura_id=eq.${sura}&aya_number=eq.${aya}`,
@@ -6395,6 +6410,7 @@ async function openSocialCardMain(sura, aya){
       { headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY } });
     const vtRows = await vtRes.json();
     if (Array.isArray(vtRows)) vtRows.forEach(r => { _socialMainVerse[SOCIAL_VT_LANGS[r.lang]] = r.text; });
+    resetSocialLangsMain();
     document.getElementById('socialCanvasLoadingMain').style.display = 'none';
     document.getElementById('socialCanvasMain').style.display = 'inline-block';
     drawSocialCardMain();
@@ -6450,7 +6466,7 @@ function drawSocialCardMain(){
 
   ctx.textAlign = 'center';
 
-  const activeLangs = Object.keys(ALL_LANGS).filter(k => langState[k] && _socialMainVerse[SOCIAL_FIELD_MAP[k]]);
+  const activeLangs = Object.keys(ALL_LANGS).filter(k => _socialMainLangs && _socialMainLangs[k] && _socialMainVerse[SOCIAL_FIELD_MAP[k]]);
   const hasArabic = activeLangs.includes('arabic');
   const otherLangs = activeLangs.filter(k => k !== 'arabic');
 
@@ -6556,6 +6572,67 @@ function drawSocialCardMain(){
   ctx.letterSpacing = `${Math.round(W*0.005)}px`;
   ctx.fillText('quranhikma.com', W/2, H - pad * 0.72);
   ctx.letterSpacing = '0px';
+}
+
+function socialAvailableLangsMain(){
+  // Only languages that genuinely have text for THIS verse are offered --
+  // never show a toggle that would produce an empty section.
+  return Object.keys(ALL_LANGS).filter(k => {
+    const v = _socialMainVerse && _socialMainVerse[SOCIAL_FIELD_MAP[k]];
+    return typeof v === 'string' && v.trim();
+  });
+}
+
+function renderSocialLangChipsMain(){
+  const wrap = document.getElementById('scm-langs-wrap');
+  const box = document.getElementById('scm-langs');
+  if (!wrap || !box) return;
+  const avail = socialAvailableLangsMain();
+  if (!avail.length) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+  box.innerHTML = avail.map(k => {
+    const on = !!(_socialMainLangs && _socialMainLangs[k]);
+    return '<button onclick="toggleSocialLangMain(\'' + k + '\')"'
+      + ' aria-pressed="' + (on ? 'true' : 'false') + '"'
+      + ' style="padding:5px 11px;border-radius:20px;cursor:pointer;font-size:12px;font-weight:700;'
+      + 'border:1.5px solid ' + (on ? '#C9A84C' : '#D4C9A8') + ';'
+      + 'background:' + (on ? '#C9A84C' : '#fff') + ';'
+      + 'color:' + (on ? '#fff' : '#7A8FA6') + ';">'
+      + escapeHtml(ALL_LANGS[k].label) + '</button>';
+  }).join('');
+}
+
+function toggleSocialLangMain(k){
+  if (!_socialMainLangs) return;
+  const note = document.getElementById('scm-langs-note');
+  const selected = socialAvailableLangsMain().filter(x => _socialMainLangs[x]);
+  // Turning off the last remaining language would render a card with no
+  // verse text on it, so block that and say why instead of failing quietly.
+  if (_socialMainLangs[k] && selected.length <= 1) {
+    if (note) { note.style.display = 'block'; setTimeout(() => { note.style.display = 'none'; }, 2200); }
+    return;
+  }
+  if (note) note.style.display = 'none';
+  _socialMainLangs[k] = !_socialMainLangs[k];
+  renderSocialLangChipsMain();
+  try { drawSocialCardMain(); } catch(e) { console.error('drawSocialCardMain failed:', e); }
+}
+
+function resetSocialLangsMain(){
+  const avail = socialAvailableLangsMain();
+  if (!avail.length) return;
+  _socialMainLangs = {};
+  // Reset returns to the page's current language choices, falling back to
+  // Arabic + English if that would leave the card empty.
+  avail.forEach(k => { _socialMainLangs[k] = !!langState[k]; });
+  if (!avail.some(k => _socialMainLangs[k])) {
+    avail.forEach(k => { if (k === 'arabic' || k === 'english') _socialMainLangs[k] = true; });
+    if (!avail.some(k => _socialMainLangs[k])) _socialMainLangs[avail[0]] = true;
+  }
+  const note = document.getElementById('scm-langs-note');
+  if (note) note.style.display = 'none';
+  renderSocialLangChipsMain();
+  try { drawSocialCardMain(); } catch(e) { console.error('drawSocialCardMain failed:', e); }
 }
 
 function downloadSocialCardMain(){
