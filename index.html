@@ -6414,70 +6414,138 @@ function drawSocialCardMain(){
   canvas.width = fmt.w; canvas.height = fmt.h;
   const ctx = canvas.getContext('2d');
   const W = fmt.w, H = fmt.h;
-  const pad = W * 0.09;
+  const pad = W * 0.085;
   const contentWidth = W - pad * 2;
 
-  const grad = ctx.createLinearGradient(0, 0, W, H);
-  grad.addColorStop(0, '#FDF8EE'); grad.addColorStop(1, '#F5EBD0');
-  ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
-  ctx.strokeStyle = '#C9A84C'; ctx.lineWidth = W * 0.006;
-  ctx.strokeRect(pad*0.35, pad*0.35, W-pad*0.7, H-pad*0.7);
+  // ── Cinematic backdrop: deep warm black, gold glow behind the text,
+  //    vignette at the edges, double gold frame. ──
+  const bg = ctx.createLinearGradient(0, 0, W, H);
+  bg.addColorStop(0, '#141109'); bg.addColorStop(0.5, '#221C11'); bg.addColorStop(1, '#0A0906');
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
 
-  let y = pad * 1.3;
+  const glow = ctx.createRadialGradient(W/2, H*0.44, 0, W/2, H*0.44, Math.max(W, H) * 0.62);
+  glow.addColorStop(0, 'rgba(212,168,48,0.22)');
+  glow.addColorStop(0.45, 'rgba(212,168,48,0.06)');
+  glow.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = glow; ctx.fillRect(0, 0, W, H);
+
+  const vig = ctx.createRadialGradient(W/2, H/2, Math.min(W, H) * 0.28, W/2, H/2, Math.max(W, H) * 0.78);
+  vig.addColorStop(0, 'rgba(0,0,0,0)'); vig.addColorStop(1, 'rgba(0,0,0,0.60)');
+  ctx.fillStyle = vig; ctx.fillRect(0, 0, W, H);
+
+  ctx.strokeStyle = 'rgba(212,168,48,0.85)'; ctx.lineWidth = Math.max(2, W * 0.0045);
+  ctx.strokeRect(pad*0.42, pad*0.42, W - pad*0.84, H - pad*0.84);
+  ctx.strokeStyle = 'rgba(212,168,48,0.28)'; ctx.lineWidth = Math.max(1, W * 0.0016);
+  ctx.strokeRect(pad*0.64, pad*0.64, W - pad*1.28, H - pad*1.28);
+
   ctx.textAlign = 'center';
-  ctx.fillStyle = '#C9A84C';
-  ctx.font = `700 ${Math.round(W*0.032)}px Georgia, serif`;
-  ctx.fillText(`Qur'an ${_socialMainSura}:${_socialMainAya}`, W/2, y);
-  y += H * 0.06;
 
-  // Only draw languages the person actually has toggled on (langState),
-  // and only the ones that have text loaded for this verse.
   const activeLangs = Object.keys(ALL_LANGS).filter(k => langState[k] && _socialMainVerse[SOCIAL_FIELD_MAP[k]]);
-  const bottomLimit = H - pad*1.5;
+  const hasArabic = activeLangs.includes('arabic');
+  const otherLangs = activeLangs.filter(k => k !== 'arabic');
 
-  // Arabic gets special large/RTL treatment and always goes first if active.
-  if (activeLangs.includes('arabic')) {
-    ctx.direction = 'rtl';
-    ctx.font = `${Math.round(W*0.052)}px "Times New Roman", serif`;
-    ctx.fillStyle = '#1a1a1a';
-    wrapCanvasTextMain(ctx, _socialMainVerse.arabic, contentWidth).forEach(line => {
-      if (y < bottomLimit) { ctx.fillText(line, W/2, y); y += W * 0.075; }
+  const topLimit = pad * 1.15, bottomLimit = H - pad * 1.55;
+  const avail = bottomLimit - topLimit;
+
+  // Measure the whole composition at a given scale. Type starts LARGE and
+  // only shrinks if the content genuinely needs the room, so a short verse
+  // fills the card instead of floating in empty space.
+  function buildLayout(sc){
+    const blocks = [];
+    let total = 0;
+    const titleSize = Math.round(W * 0.030 * sc);
+    const titleGap = W * 0.050 * sc;
+    blocks.push({ type:'title', size:titleSize, gapAfter:titleGap });
+    total += titleSize + titleGap;
+
+    if (hasArabic) {
+      const aSize = Math.round(W * 0.092 * sc);
+      ctx.direction = 'rtl';
+      ctx.font = `${aSize}px "Times New Roman", serif`;
+      const lines = wrapCanvasTextMain(ctx, _socialMainVerse.arabic, contentWidth);
+      ctx.direction = 'ltr';
+      const lh = aSize * 1.52;
+      const gapAfter = otherLangs.length ? W * 0.055 * sc : 0;
+      blocks.push({ type:'arabic', size:aSize, lines, lh, gapAfter });
+      total += lines.length * lh + gapAfter;
+    }
+
+    otherLangs.forEach((k, i) => {
+      const fSize = Math.round(W * 0.044 * sc);
+      const labelSize = Math.round(W * 0.021 * sc);
+      ctx.direction = (k === 'urdu') ? 'rtl' : 'ltr';
+      ctx.font = `${k === 'english' ? 'italic ' : ''}${fSize}px Georgia, serif`;
+      const lines = wrapCanvasTextMain(ctx, _socialMainVerse[SOCIAL_FIELD_MAP[k]], contentWidth * 0.94);
+      ctx.direction = 'ltr';
+      const lh = fSize * 1.44;
+      const gapAfter = (i === otherLangs.length - 1) ? 0 : W * 0.042 * sc;
+      blocks.push({ type:'lang', key:k, size:fSize, labelSize, lines, lh, gapAfter });
+      total += labelSize * 2.3 + lines.length * lh + gapAfter;
     });
-    ctx.direction = 'ltr';
-    y += H * 0.025;
+
+    return { blocks, total };
   }
 
-  const otherLangs = activeLangs.filter(k => k !== 'arabic');
-  // Budget line-height shrinks a bit as more languages are selected, so
-  // everything still fits instead of only ever showing the first couple.
-  const perLangBudget = otherLangs.length ? (bottomLimit - y) / otherLangs.length : 0;
+  // Find the LARGEST scale that still fits, rather than only shrinking from
+  // 1.0 -- otherwise a short verse on a tall canvas (Story) leaves the type
+  // marooned in the middle. Descending search: first fit wins.
+  let scale = 1.75, layout = buildLayout(scale);
+  while (layout.total > avail * 0.94 && scale > 0.30) { scale -= 0.03; layout = buildLayout(scale); }
 
-  otherLangs.forEach(k => {
-    if (y >= bottomLimit) return;
-    const text = _socialMainVerse[SOCIAL_FIELD_MAP[k]];
-    const isRtl = (k === 'urdu');
-    const fontSize = Math.max(W*0.020, Math.min(W*0.030, perLangBudget*0.16));
-    ctx.font = `700 ${Math.round(fontSize*0.72)}px Georgia, serif`;
-    ctx.fillStyle = '#C9A84C';
-    ctx.fillText(ALL_LANGS[k].label.toUpperCase(), W/2, y);
-    y += fontSize * 0.9;
+  // Vertically centre the finished block: no more dead space at the bottom.
+  let cursor = topLimit + Math.max(0, (avail - layout.total) / 2);
 
-    ctx.direction = isRtl ? 'rtl' : 'ltr';
-    ctx.font = `${k === 'arabic' ? '' : (k === 'english' ? 'italic ' : '')}${Math.round(fontSize)}px Georgia, serif`;
-    ctx.fillStyle = '#333';
-    const lines = wrapCanvasTextMain(ctx, text, contentWidth);
-    const sectionBottom = Math.min(bottomLimit, y + perLangBudget);
-    const maxLines = Math.max(1, Math.floor((sectionBottom - y) / (fontSize*1.35)));
-    const shown = lines.slice(0, maxLines);
-    if (shown.length < lines.length && shown.length) shown[shown.length-1] = shown[shown.length-1].replace(/\W*$/,'') + '…';
-    shown.forEach(line => { ctx.fillText(line, W/2, y); y += fontSize*1.35; });
-    ctx.direction = 'ltr';
-    y += fontSize * 0.5;
+  layout.blocks.forEach(b => {
+    if (b.type === 'title') {
+      ctx.fillStyle = '#D4A830';
+      ctx.font = `700 ${b.size}px Georgia, serif`;
+      ctx.letterSpacing = `${Math.round(W*0.004)}px`;
+      ctx.fillText(`QUR'AN ${_socialMainSura}:${_socialMainAya}`, W/2, cursor + b.size);
+      ctx.letterSpacing = '0px';
+      // thin gold rule under the reference
+      const ruleY = cursor + b.size + b.gapAfter * 0.45;
+      const ruleW = Math.min(contentWidth * 0.34, W * 0.30);
+      const rg = ctx.createLinearGradient(W/2 - ruleW/2, 0, W/2 + ruleW/2, 0);
+      rg.addColorStop(0, 'rgba(212,168,48,0)');
+      rg.addColorStop(0.5, 'rgba(212,168,48,0.85)');
+      rg.addColorStop(1, 'rgba(212,168,48,0)');
+      ctx.fillStyle = rg;
+      ctx.fillRect(W/2 - ruleW/2, ruleY, ruleW, Math.max(1, W*0.0018));
+      cursor += b.size + b.gapAfter;
+
+    } else if (b.type === 'arabic') {
+      ctx.direction = 'rtl';
+      ctx.font = `${b.size}px "Times New Roman", serif`;
+      ctx.fillStyle = '#FBF3DF';
+      ctx.shadowColor = 'rgba(212,168,48,0.45)';
+      ctx.shadowBlur = W * 0.022;
+      b.lines.forEach(line => { ctx.fillText(line, W/2, cursor + b.size * 0.92); cursor += b.lh; });
+      ctx.shadowBlur = 0; ctx.shadowColor = 'transparent';
+      ctx.direction = 'ltr';
+      cursor += b.gapAfter;
+
+    } else {
+      ctx.fillStyle = 'rgba(212,168,48,0.92)';
+      ctx.font = `700 ${b.labelSize}px Georgia, serif`;
+      ctx.letterSpacing = `${Math.round(W*0.0045)}px`;
+      ctx.fillText(ALL_LANGS[b.key].label.toUpperCase(), W/2, cursor + b.labelSize);
+      ctx.letterSpacing = '0px';
+      cursor += b.labelSize * 2.3;
+
+      ctx.direction = (b.key === 'urdu') ? 'rtl' : 'ltr';
+      ctx.font = `${b.key === 'english' ? 'italic ' : ''}${b.size}px Georgia, serif`;
+      ctx.fillStyle = '#EFE7D4';
+      b.lines.forEach(line => { ctx.fillText(line, W/2, cursor + b.size * 0.9); cursor += b.lh; });
+      ctx.direction = 'ltr';
+      cursor += b.gapAfter;
+    }
   });
 
-  ctx.font = `700 ${Math.round(W*0.024)}px Georgia, serif`;
-  ctx.fillStyle = '#C9A84C';
-  ctx.fillText('quranhikma.com', W/2, H - pad*0.6);
+  ctx.font = `700 ${Math.round(W * 0.021)}px Georgia, serif`;
+  ctx.fillStyle = 'rgba(212,168,48,0.75)';
+  ctx.letterSpacing = `${Math.round(W*0.005)}px`;
+  ctx.fillText('quranhikma.com', W/2, H - pad * 0.72);
+  ctx.letterSpacing = '0px';
 }
 
 function downloadSocialCardMain(){
