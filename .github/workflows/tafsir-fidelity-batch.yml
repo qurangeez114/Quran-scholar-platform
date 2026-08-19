@@ -56,9 +56,20 @@ jobs:
           BATCH_START: ${{ inputs.start || '' }}
           BATCH_MODEL: ${{ inputs.model || 'claude-sonnet-4-6' }}
         run: |
-          set -euo pipefail
+          set -uo pipefail
           args=(--limit "$BATCH_LIMIT" --model "$BATCH_MODEL")
           if [[ -n "$BATCH_START" ]]; then
             args+=(--start "$BATCH_START")
           fi
-          python batch_tafsir_accuracy.py "${args[@]}"
+          set +e
+          python batch_tafsir_accuracy.py "${args[@]}" 2>&1 | tee /tmp/evaluator_output.txt
+          code=${PIPESTATUS[0]}
+          set -e
+          {
+            echo "### Tafsir evaluator output (exit code $code)"
+            echo ""
+            echo '```'
+            tail -c 8000 /tmp/evaluator_output.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $code
