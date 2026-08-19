@@ -39,7 +39,7 @@ import urllib.parse
 import urllib.request
 
 SUPABASE_URL = "https://ylosytbxpzxzwfzjpaej.supabase.co"
-SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ5bG9zeXRieHB6eHp3ZnpqcGFlaiIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzc2MTQ2NTI3LCJleHAiOjIwOTE3MjI1Mjd9.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs"
+SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs"
 CLAUDE_URL = "https://quranhikma.com/api/claude-stream"
 SCHOLAR_KEY = "ibn_kathir"
 EVALUATOR_VERSION = "tafsir-fidelity-v1-2026-08-18"
