@@ -30,6 +30,7 @@ ANTHROPIC_API_KEY remains server-side in Netlify and is never stored here.
 """
 
 import argparse
+import http.client
 import json
 import re
 import sys
@@ -173,8 +174,23 @@ def call_claude(prompt, model="claude-sonnet-4-6", max_tokens=900, timeout=180):
         method="POST",
         headers={"Content-Type": "application/json"},
     )
+    # /api/claude-stream returns a chunked text/plain stream. The Netlify edge
+    # function already unwraps Anthropic's SSE and emits concatenated text, so
+    # no event parsing is needed -- but the stream can end without a terminating
+    # zero-length chunk, which makes http.client raise IncompleteRead even
+    # though the full body has already arrived. Read incrementally and keep
+    # whatever was received, matching how the site's own frontend consumes it.
     with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return resp.read().decode("utf-8", errors="replace").strip()
+        buf = bytearray()
+        try:
+            while True:
+                piece = resp.read(8192)
+                if not piece:
+                    break
+                buf.extend(piece)
+        except http.client.IncompleteRead as e:
+            buf.extend(e.partial or b"")
+        return bytes(buf).decode("utf-8", errors="replace").strip()
 
 
 def parse_result(raw):
@@ -305,7 +321,7 @@ def main():
                 saved += 1
                 last_error = None
                 break
-            except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, ValueError, json.JSONDecodeError) as e:
+            except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, ValueError, json.JSONDecodeError, http.client.IncompleteRead, http.client.HTTPException, OSError) as e:
                 last_error = e
                 if attempt < args.retries:
                     wait = 2 ** attempt
