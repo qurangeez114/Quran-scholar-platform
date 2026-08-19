@@ -1,0 +1,28 @@
+name: Tafsir Stream Diagnostic
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/tafsir-fidelity-run-trigger.txt"
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Capture one raw Tafsir stream response
+        run: python debug_tafsir_stream.py
+      - name: Commit diagnostic output
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/diagnostics/stream-raw.txt
+          git diff --cached --quiet || git commit -m "Capture Tafsir stream diagnostic [skip ci]"
+          git push
