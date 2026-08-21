@@ -1,48 +1,32 @@
 name: Tafsir DB Bridge Diagnostic
-
 on:
   pull_request:
-    branches:
-      - main
-
+    branches: [main]
 permissions:
   contents: read
-
 jobs:
   inspect:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Resolve Pilot L adjudication endpoints
+      - name: Validate Pilot L fixture
         run: |
           python - <<'PY'
           import json, urllib.request, urllib.parse
           from batch_tafsir_accuracy import SUPABASE_URL, SUPABASE_ANON_KEY
           H={'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY}
-          def get(id):
-              q=urllib.parse.urlencode({'id':f'eq.{id}','select':'id,aya,scholar_key,language,content'})
-              req=urllib.request.Request(f'{SUPABASE_URL}/rest/v1/tafsir_entries?{q}',headers=H)
-              with urllib.request.urlopen(req,timeout=60) as r:return json.loads(r.read().decode())[0]
-          specs=[
-            (840,['قال أبو جعفر','والصواب','وأولى الأقوال','هارون']),
-            (13486,['والصحيح','والأصح','قلت','هارون']),
-            (847,['قال أبو جعفر','والصواب','قول الحق','بالرفع','بالنصب']),
-            (54235,['يا أخت هارون','المغيرة','موسى','هارون']),
-            (54237,['آتاني الكتاب','قضى','عبد الله','الكتاب']),
-            (54241,['قول الحق','يمترون','النصارى','اليهود'])
-          ]
-          out=[]
-          for id,terms in specs:
-              r=get(id); txt=' '.join((r.get('content') or '').split()); hits=[]
-              for term in terms:
-                  start=0
-                  while True:
-                      i=txt.find(term,start)
-                      if i<0:break
-                      hits.append(txt[max(0,i-300):min(len(txt),i+len(term)+900)])
-                      start=i+len(term)
-                      if len(hits)>=14:break
-                  if len(hits)>=14:break
-              out.append({'id':id,'aya':r['aya'],'scholar_key':r['scholar_key'],'hits':hits,'tail':txt[-1800:]})
-          print('PILOT_L_ENDPOINTS='+json.dumps(out,ensure_ascii=False))
+          def get(t,p):
+            q=urllib.parse.urlencode(p,safe='(),.*:'); r=urllib.request.Request(f'{SUPABASE_URL}/rest/v1/{t}?{q}',headers=H)
+            with urllib.request.urlopen(r,timeout=60) as x:return json.loads(x.read().decode())
+          fx=json.load(open('.github/tafsir-pilot-l-fixture.json',encoding='utf-8')); ps,eus,links=fx['propositions'],fx['evidence_units'],fx['evidence_links']
+          assert len(ps)==32 and len({p['key'] for p in ps})==32
+          assert len(eus)==3 and sum(len(e['routes']) for e in eus)==7 and len(links)==4
+          work={1:'tabari',2:'ibn_kathir',3:'qurtubi',54:'jalalayn',55:'saadi',56:'ibn_abbas'}
+          ids=','.join(str(p['tafsir_entry_id']) for p in ps); rows=get('tafsir_entries',{'id':f'in.({ids})','select':'id,sura,aya,scholar_key,language','limit':'100'}); by={r['id']:r for r in rows}
+          assert len(by)==len(set(p['tafsir_entry_id'] for p in ps))
+          for p in ps:
+            r=by[p['tafsir_entry_id']]; assert r['scholar_key']==work[p['voice']['reporting_work_id']] and r['sura']==19 and 27<=r['aya']<=34,(p['key'],r)
+          existing=get('propositions',{'extracted_by':'eq.claude-pilot-l','select':'id','limit':'100'}); assert not existing,existing
+          assert all(l['proposition_key'] in {p['key'] for p in ps} and l['evidence_key'] in {e['key'] for e in eus} for l in links)
+          print('PILOT_L_PREFLIGHT='+json.dumps({'propositions':len(ps),'sources':len(by),'evidence_units':len(eus),'routes':sum(len(e['routes']) for e in eus),'links':len(links),'existing':0,'languages':sorted({r['language'] for r in rows})}))
           PY
