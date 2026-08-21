@@ -11,17 +11,12 @@ permissions:
 jobs:
   inspect:
     runs-on: ubuntu-latest
-    env:
-      SR1: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      SR2: ${{ secrets.SUPABASE_SECRET_KEY }}
-      SR3: ${{ secrets.SUPABASE_KEY }}
     steps:
       - uses: actions/checkout@v4
-      - name: Inspect Pilot I schema and write capability
+      - name: Inspect benchmark vocabularies
         run: |
           python - <<'PY'
-          import json, os, urllib.request, urllib.parse, urllib.error
-          from collections import Counter
+          import json, urllib.request, urllib.parse
           from batch_tafsir_accuracy import SUPABASE_URL, SUPABASE_ANON_KEY
           H={'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY}
           def get(table, params):
@@ -29,21 +24,22 @@ jobs:
               req=urllib.request.Request(f'{SUPABASE_URL}/rest/v1/{table}?{q}',headers=H)
               with urllib.request.urlopen(req,timeout=60) as r:
                   return json.loads(r.read().decode())
-          pi=get('propositions',{'extracted_by':'eq.claude-pilot-i','select':'*','order':'id.asc','limit':'100'})
-          pids=','.join(str(x['id']) for x in pi)
-          vc=get('proposition_voice_chain',{'proposition_id':f'in.({pids})','select':'*','order':'proposition_id.asc,id.asc','limit':'200'}) if pids else []
-          teids=','.join(str(x['tafsir_entry_id']) for x in pi if x.get('tafsir_entry_id'))
-          tes=get('tafsir_entries',{'id':f'in.({teids})','select':'id,sura,aya,scholar_key,scholar_name,language','limit':'200'}) if teids else []
-          try:
-              cts=get('claim_types',{'select':'*','limit':'200'})
-          except Exception as e:
-              cts={'error':repr(e)}
-          methods={}
-          for table in ['propositions','proposition_voice_chain','proposition_evidence','evidence_units','evidence_transmission_routes']:
-              req=urllib.request.Request(f'{SUPABASE_URL}/rest/v1/{table}',headers=H,method='OPTIONS')
-              try:
-                  with urllib.request.urlopen(req,timeout=60) as r: methods[table]=r.headers.get('Allow')
-              except urllib.error.HTTPError as e: methods[table]=f'HTTP {e.code}'
-          out={'secret_presence':{'SUPABASE_SERVICE_ROLE_KEY':bool(os.environ.get('SR1')),'SUPABASE_SECRET_KEY':bool(os.environ.get('SR2')),'SUPABASE_KEY':bool(os.environ.get('SR3'))},'anon_allow':methods,'pilot_i_propositions':pi,'pilot_i_voice_chain':vc,'pilot_i_entries':tes,'claim_types':cts}
+          props=get('propositions',{'extracted_by':'ilike.*pilot*','select':'assertion_mode,extraction_validity,verification_state,attribution_fidelity,quranic_textual_support,mufassir_own_position,status','limit':'500'})
+          voices=get('proposition_voice_chain',{'select':'originating_voice_type,reporting_work_id,originating_voice_name','limit':'500'})
+          eus=get('evidence_units',{'select':'unit_type,independence_state','limit':'500'})
+          def vals(rows,k): return sorted({str(x.get(k)) for x in rows})
+          out={
+            'assertion_mode':vals(props,'assertion_mode'),
+            'extraction_validity':vals(props,'extraction_validity'),
+            'verification_state':vals(props,'verification_state'),
+            'attribution_fidelity':vals(props,'attribution_fidelity'),
+            'quranic_textual_support':vals(props,'quranic_textual_support'),
+            'mufassir_own_position':vals(props,'mufassir_own_position'),
+            'status':vals(props,'status'),
+            'voice_types':vals(voices,'originating_voice_type'),
+            'work_ids':sorted({int(x['reporting_work_id']) for x in voices if x.get('reporting_work_id') is not None}),
+            'evidence_unit_types':vals(eus,'unit_type'),
+            'independence_states':vals(eus,'independence_state')
+          }
           print('TAFSIR_DB_BRIDGE_RESULT='+json.dumps(out,ensure_ascii=False))
           PY
