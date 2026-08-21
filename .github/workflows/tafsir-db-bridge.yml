@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Inspect benchmark vocabularies
+      - name: Validate Pilot J fixture against live benchmark
         run: |
           python - <<'PY'
           import json, urllib.request, urllib.parse
@@ -24,22 +24,24 @@ jobs:
               req=urllib.request.Request(f'{SUPABASE_URL}/rest/v1/{table}?{q}',headers=H)
               with urllib.request.urlopen(req,timeout=60) as r:
                   return json.loads(r.read().decode())
-          props=get('propositions',{'extracted_by':'ilike.*pilot*','select':'assertion_mode,extraction_validity,verification_state,attribution_fidelity,quranic_textual_support,mufassir_own_position,status','limit':'500'})
-          voices=get('proposition_voice_chain',{'select':'originating_voice_type,reporting_work_id,originating_voice_name','limit':'500'})
-          eus=get('evidence_units',{'select':'unit_type,independence_state','limit':'500'})
-          def vals(rows,k): return sorted({str(x.get(k)) for x in rows})
-          out={
-            'assertion_mode':vals(props,'assertion_mode'),
-            'extraction_validity':vals(props,'extraction_validity'),
-            'verification_state':vals(props,'verification_state'),
-            'attribution_fidelity':vals(props,'attribution_fidelity'),
-            'quranic_textual_support':vals(props,'quranic_textual_support'),
-            'mufassir_own_position':vals(props,'mufassir_own_position'),
-            'status':vals(props,'status'),
-            'voice_types':vals(voices,'originating_voice_type'),
-            'work_ids':sorted({int(x['reporting_work_id']) for x in voices if x.get('reporting_work_id') is not None}),
-            'evidence_unit_types':vals(eus,'unit_type'),
-            'independence_states':vals(eus,'independence_state')
-          }
-          print('TAFSIR_DB_BRIDGE_RESULT='+json.dumps(out,ensure_ascii=False))
+          with open('.github/tafsir-pilot-j-fixture.json',encoding='utf-8') as f: fx=json.load(f)
+          ps=fx['propositions']; eus=fx['evidence_units']; links=fx['evidence_links']
+          assert len(ps)==29, len(ps)
+          assert len({p['key'] for p in ps})==29
+          assert len(eus)==4 and sum(len(e['routes']) for e in eus)==5
+          assert all(l['proposition_key'] in {p['key'] for p in ps} for l in links)
+          assert all(l['evidence_key'] in {e['key'] for e in eus} for l in links)
+          allowed_work={1:'tabari',2:'ibn_kathir',3:'qurtubi',54:'jalalayn',55:'saadi',56:'ibn_abbas'}
+          ids=','.join(str(p['tafsir_entry_id']) for p in ps)
+          rows=get('tafsir_entries',{'id':f'in.({ids})','select':'id,scholar_key,language','limit':'100'})
+          byid={r['id']:r for r in rows}
+          assert len(byid)==len(set(p['tafsir_entry_id'] for p in ps)), (len(byid),len(set(p['tafsir_entry_id'] for p in ps)))
+          mism=[]
+          for p in ps:
+              r=byid[p['tafsir_entry_id']]; want=allowed_work[p['voice']['reporting_work_id']]
+              if r['scholar_key']!=want: mism.append((p['key'],r['scholar_key'],want))
+          assert not mism,mism
+          existing=get('propositions',{'extracted_by':'eq.claude-pilot-j','select':'id,statement_en','limit':'100'})
+          assert existing==[], f'Pilot J already exists: {len(existing)} rows'
+          print('TAFSIR_PILOT_J_VALIDATION='+json.dumps({'propositions':len(ps),'unique_source_entries':len(byid),'evidence_units':len(eus),'routes':sum(len(e['routes']) for e in eus),'evidence_links':len(links),'existing_pilot_j':len(existing),'languages':{r['language'] for r in rows}},default=list))
           PY
