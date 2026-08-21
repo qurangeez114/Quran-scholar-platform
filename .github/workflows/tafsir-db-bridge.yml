@@ -13,17 +13,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Commit Pilot J through fixed Netlify bridge
+      - name: Independent read-only Pilot J postflight
         run: |
           python - <<'PY'
-          import json, urllib.request, urllib.error
-          url='https://deploy-preview-3--fascinating-sunburst-516df8.netlify.app/.netlify/functions/tafsir-pilot-j-commit'
-          req=urllib.request.Request(url,data=b'{}',headers={'Content-Type':'application/json','Cache-Control':'no-cache'},method='POST')
-          try:
-              with urllib.request.urlopen(req,timeout=120) as r:
-                  obj=json.loads(r.read().decode())
-          except urllib.error.HTTPError as e:
-              raise RuntimeError(f'Bridge HTTP {e.code}: '+e.read().decode('utf-8','replace'))
-          print('TAFSIR_PILOT_J_BRIDGE_RESULT='+json.dumps(obj,sort_keys=True))
-          assert obj.get('success') is True, obj
+          import json, urllib.request, urllib.parse
+          from batch_tafsir_accuracy import SUPABASE_URL, SUPABASE_ANON_KEY
+          H={'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY}
+          def get(table, params):
+              q=urllib.parse.urlencode(params,safe='(),.*:')
+              req=urllib.request.Request(f'{SUPABASE_URL}/rest/v1/{table}?{q}',headers=H)
+              with urllib.request.urlopen(req,timeout=60) as r:
+                  return json.loads(r.read().decode())
+          props=get('propositions',{'extracted_by':'eq.claude-pilot-j','select':'id,extraction_validity,verification_state','order':'id.asc','limit':'100'})
+          assert len(props)==29, len(props)
+          pids=','.join(str(r['id']) for r in props)
+          voices=get('proposition_voice_chain',{'proposition_id':f'in.({pids})','select':'id,proposition_id','limit':'100'})
+          pe=get('proposition_evidence',{'proposition_id':f'in.({pids})','select':'proposition_id,evidence_unit_id','limit':'100'})
+          eids=sorted({r['evidence_unit_id'] for r in pe})
+          eus=get('evidence_units',{'id':f'in.({','.join(map(str,eids))})','select':'id','limit':'100'})
+          routes=get('evidence_transmission_routes',{'evidence_unit_id':f'in.({','.join(map(str,eids))})','select':'id,evidence_unit_id','limit':'100'})
+          allpilots=get('propositions',{'extracted_by':'ilike.*pilot*','select':'id','limit':'1000'})
+          out={'pilot_j_propositions':len(props),'pilot_j_voice_rows':len(voices),'pilot_j_evidence_links':len(pe),'pilot_j_evidence_units':len(eus),'pilot_j_routes':len(routes),'all_pilot_propositions':len(allpilots),'id_min':min(r['id'] for r in props),'id_max':max(r['id'] for r in props),'all_verified':all(r['extraction_validity']=='verified' and r['verification_state']=='source_language_proposition_verified' for r in props)}
+          assert out=={'pilot_j_propositions':29,'pilot_j_voice_rows':29,'pilot_j_evidence_links':4,'pilot_j_evidence_units':4,'pilot_j_routes':5,'all_pilot_propositions':209,'id_min':1543,'id_max':1571,'all_verified':True},out
+          print('TAFSIR_PILOT_J_INDEPENDENT_POSTFLIGHT='+json.dumps(out,sort_keys=True))
           PY
