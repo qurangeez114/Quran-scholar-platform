@@ -13,16 +13,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Discover safe privileged RPC paths
+      - name: Read Netlify Supabase secret presence
         run: |
           python - <<'PY'
           import json, urllib.request
-          from batch_tafsir_accuracy import SUPABASE_URL, SUPABASE_ANON_KEY
-          H={'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY,'Accept':'application/openapi+json'}
-          req=urllib.request.Request(SUPABASE_URL+'/rest/v1/',headers=H)
+          url='https://deploy-preview-3--fascinating-sunburst-516df8.netlify.app/api/tafsir-db-probe'
+          req=urllib.request.Request(url,headers={'Cache-Control':'no-cache'})
           with urllib.request.urlopen(req,timeout=60) as r:
-              spec=json.loads(r.read().decode())
-          paths=sorted(p for p in spec.get('paths',{}) if p.startswith('/rpc/'))
-          interesting=[p for p in paths if any(k in p.lower() for k in ['sql','admin','prop','evidence','tafsir','migration','exec','query','policy'])]
-          print('TAFSIR_RPC_DISCOVERY='+json.dumps({'rpc_count':len(paths),'interesting':interesting,'all_rpc':paths},ensure_ascii=False))
+              obj=json.loads(r.read().decode())
+          assert set(obj)=={'present'}
+          print('TAFSIR_NETLIFY_SECRET_PRESENCE='+json.dumps(obj,sort_keys=True))
           PY
