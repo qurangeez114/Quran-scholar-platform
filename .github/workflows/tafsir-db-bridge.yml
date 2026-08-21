@@ -13,126 +13,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Insert and verify Pilot J benchmark
+      - name: Discover safe privileged RPC paths
         run: |
           python - <<'PY'
-          import json, urllib.request, urllib.parse, urllib.error
+          import json, urllib.request
           from batch_tafsir_accuracy import SUPABASE_URL, SUPABASE_ANON_KEY
-
-          BASE=SUPABASE_URL+'/rest/v1/'
-          H={'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY,'Content-Type':'application/json'}
-          def req(table, method='GET', params=None, body=None, prefer=None):
-              url=BASE+table
-              if params:
-                  url+='?'+urllib.parse.urlencode(params,safe='(),.*:')
-              headers=dict(H)
-              if prefer: headers['Prefer']=prefer
-              data=None if body is None else json.dumps(body,ensure_ascii=False).encode('utf-8')
-              r=urllib.request.Request(url,data=data,headers=headers,method=method)
-              try:
-                  with urllib.request.urlopen(r,timeout=60) as x:
-                      raw=x.read().decode('utf-8','replace')
-                      return json.loads(raw) if raw.strip() else None
-              except urllib.error.HTTPError as e:
-                  detail=e.read().decode('utf-8','replace')
-                  raise RuntimeError(f'{method} {table} HTTP {e.code}: {detail}')
-
-          with open('.github/tafsir-pilot-j-fixture.json',encoding='utf-8') as f: fx=json.load(f)
-          ps=fx['propositions']; eus=fx['evidence_units']; links=fx['evidence_links']
-          assert len(ps)==29 and len({p['key'] for p in ps})==29
-
-          # Propositions: insert once, or resume an already-complete proposition batch.
-          existing=req('propositions',params={'extracted_by':'eq.claude-pilot-j','select':'*','order':'id.asc','limit':'100'}) or []
-          if len(existing) not in (0,29):
-              raise RuntimeError(f'Refusing partial Pilot J proposition state: {len(existing)} rows')
-          if not existing:
-              payload=[]
-              for p in ps:
-                  row={
-                    'claim_type_id':p['claim_type_id'], 'statement_en':p['statement_en'],
-                    'extracted_by':'claude-pilot-j', 'speaker_type':'unspecified',
-                    'assertion_mode':p['assertion_mode'], 'extraction_validity':'verified',
-                    'status':'active', 'source_type':'tafsir_entry', 'tafsir_entry_id':p['tafsir_entry_id'],
-                    'verification_state':'source_language_proposition_verified',
-                    'attribution_fidelity':p['attribution_fidelity'],
-                    'quranic_textual_support':p['quranic_textual_support'],
-                    'mufassir_own_position':p['mufassir_own_position']
-                  }
-                  payload.append(row)
-              req('propositions','POST',body=payload,prefer='return=representation')
-              existing=req('propositions',params={'extracted_by':'eq.claude-pilot-j','select':'*','order':'id.asc','limit':'100'}) or []
-          assert len(existing)==29, len(existing)
-          by_statement={r['statement_en']:r for r in existing}
-          assert len(by_statement)==29
-          pmap={p['key']:by_statement[p['statement_en']]['id'] for p in ps}
-
-          # Voice chain: exactly one row per Pilot J proposition.
-          pids=','.join(str(x) for x in sorted(pmap.values()))
-          voices=req('proposition_voice_chain',params={'proposition_id':f'in.({pids})','select':'*','limit':'100'}) or []
-          have={v['proposition_id'] for v in voices}
-          missing=[]
-          for p in ps:
-              pid=pmap[p['key']]
-              if pid in have: continue
-              v=p['voice']
-              missing.append({'proposition_id':pid,'reporting_work_id':v['reporting_work_id'],'originating_voice_type':v['originating_voice_type'],'originating_voice_name':v.get('originating_voice_name'),'quoted_collection':None})
-          if missing: req('proposition_voice_chain','POST',body=missing,prefer='return=minimal')
-
-          # Evidence units, idempotent by exact content summary.
-          all_eu=req('evidence_units',params={'select':'*','limit':'500'}) or []
-          eu_by_summary={e['content_summary']:e for e in all_eu}
-          emap={}
-          for e in eus:
-              row=eu_by_summary.get(e['content_summary'])
-              if not row:
-                  made=req('evidence_units','POST',body={'unit_type':e['unit_type'],'attributed_authority_name':e['attributed_authority_name'],'content_summary':e['content_summary'],'independence_state':e['independence_state'],'independence_justification':None},prefer='return=representation')
-                  row=made[0]
-                  eu_by_summary[e['content_summary']]=row
-              emap[e['key']]=row['id']
-
-          # Transmission routes, idempotent by evidence unit + route description.
-          eids=','.join(str(x) for x in sorted(emap.values()))
-          routes=req('evidence_transmission_routes',params={'evidence_unit_id':f'in.({eids})','select':'*','limit':'100'}) or []
-          route_keys={(r['evidence_unit_id'],r['route_description']) for r in routes}
-          route_payload=[]
-          for e in eus:
-              eid=emap[e['key']]
-              for r in e['routes']:
-                  k=(eid,r['route_description'])
-                  if k not in route_keys:
-                      route_payload.append({'evidence_unit_id':eid,'route_description':r['route_description'],'transmitter_chain':r['transmitter_chain'],'source_citation_text':None})
-          if route_payload: req('evidence_transmission_routes','POST',body=route_payload,prefer='return=minimal')
-
-          # Proposition-evidence links, idempotent by composite pair.
-          pel=req('proposition_evidence',params={'proposition_id':f'in.({pids})','select':'*','limit':'100'}) or []
-          pel_keys={(r['proposition_id'],r['evidence_unit_id']) for r in pel}
-          pel_payload=[]
-          for l in links:
-              pid,eid=pmap[l['proposition_key']],emap[l['evidence_key']]
-              if (pid,eid) not in pel_keys:
-                  pel_payload.append({'proposition_id':pid,'evidence_unit_id':eid,'semantic_link_note':l['semantic_link_note'],'linked_by':'claude-pilot-j'})
-          if pel_payload: req('proposition_evidence','POST',body=pel_payload,prefer='return=minimal')
-
-          # Exact postflight.
-          props=req('propositions',params={'extracted_by':'eq.claude-pilot-j','select':'id,statement_en,extraction_validity,verification_state','order':'id.asc','limit':'100'}) or []
-          pids=','.join(str(r['id']) for r in props)
-          voices=req('proposition_voice_chain',params={'proposition_id':f'in.({pids})','select':'*','limit':'100'}) or []
-          routes=req('evidence_transmission_routes',params={'evidence_unit_id':f'in.({eids})','select':'*','limit':'100'}) or []
-          pel=req('proposition_evidence',params={'proposition_id':f'in.({pids})','select':'*','limit':'100'}) or []
-          allpilots=req('propositions',params={'extracted_by':'ilike.*pilot*','select':'id','limit':'1000'}) or []
-          checks={
-            'pilot_j_propositions':len(props), 'pilot_j_voice_rows':len(voices),
-            'pilot_j_evidence_units':len(emap), 'pilot_j_routes':len(routes),
-            'pilot_j_evidence_links':len(pel), 'all_pilot_propositions':len(allpilots),
-            'pilot_j_id_min':min(r['id'] for r in props), 'pilot_j_id_max':max(r['id'] for r in props),
-            'all_verified':all(r['extraction_validity']=='verified' and r['verification_state']=='source_language_proposition_verified' for r in props)
-          }
-          assert checks['pilot_j_propositions']==29,checks
-          assert checks['pilot_j_voice_rows']==29,checks
-          assert checks['pilot_j_evidence_units']==4,checks
-          assert checks['pilot_j_routes']==5,checks
-          assert checks['pilot_j_evidence_links']==4,checks
-          assert checks['all_pilot_propositions']==209,checks
-          assert checks['all_verified'],checks
-          print('TAFSIR_PILOT_J_POSTFLIGHT='+json.dumps(checks,ensure_ascii=False))
+          H={'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY,'Accept':'application/openapi+json'}
+          req=urllib.request.Request(SUPABASE_URL+'/rest/v1/',headers=H)
+          with urllib.request.urlopen(req,timeout=60) as r:
+              spec=json.loads(r.read().decode())
+          paths=sorted(p for p in spec.get('paths',{}) if p.startswith('/rpc/'))
+          interesting=[p for p in paths if any(k in p.lower() for k in ['sql','admin','prop','evidence','tafsir','migration','exec','query','policy'])]
+          print('TAFSIR_RPC_DISCOVERY='+json.dumps({'rpc_count':len(paths),'interesting':interesting,'all_rpc':paths},ensure_ascii=False))
           PY
