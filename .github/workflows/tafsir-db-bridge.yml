@@ -13,35 +13,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Validate Pilot J fixture against live benchmark
+      - name: Inspect evidence write schemas
         run: |
           python - <<'PY'
           import json, urllib.request, urllib.parse
           from batch_tafsir_accuracy import SUPABASE_URL, SUPABASE_ANON_KEY
           H={'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY}
-          def get(table, params):
-              q=urllib.parse.urlencode(params, safe='(),.*:')
-              req=urllib.request.Request(f'{SUPABASE_URL}/rest/v1/{table}?{q}',headers=H)
+          def get(table):
+              req=urllib.request.Request(f'{SUPABASE_URL}/rest/v1/{table}?select=*&limit=3',headers=H)
               with urllib.request.urlopen(req,timeout=60) as r:
                   return json.loads(r.read().decode())
-          with open('.github/tafsir-pilot-j-fixture.json',encoding='utf-8') as f: fx=json.load(f)
-          ps=fx['propositions']; eus=fx['evidence_units']; links=fx['evidence_links']
-          assert len(ps)==29, len(ps)
-          assert len({p['key'] for p in ps})==29
-          assert len(eus)==4 and sum(len(e['routes']) for e in eus)==5
-          assert all(l['proposition_key'] in {p['key'] for p in ps} for l in links)
-          assert all(l['evidence_key'] in {e['key'] for e in eus} for l in links)
-          allowed_work={1:'tabari',2:'ibn_kathir',3:'qurtubi',54:'jalalayn',55:'saadi',56:'ibn_abbas'}
-          ids=','.join(str(p['tafsir_entry_id']) for p in ps)
-          rows=get('tafsir_entries',{'id':f'in.({ids})','select':'id,scholar_key,language','limit':'100'})
-          byid={r['id']:r for r in rows}
-          assert len(byid)==len(set(p['tafsir_entry_id'] for p in ps)), (len(byid),len(set(p['tafsir_entry_id'] for p in ps)))
-          mism=[]
-          for p in ps:
-              r=byid[p['tafsir_entry_id']]; want=allowed_work[p['voice']['reporting_work_id']]
-              if r['scholar_key']!=want: mism.append((p['key'],r['scholar_key'],want))
-          assert not mism,mism
-          existing=get('propositions',{'extracted_by':'eq.claude-pilot-j','select':'id,statement_en','limit':'100'})
-          assert existing==[], f'Pilot J already exists: {len(existing)} rows'
-          print('TAFSIR_PILOT_J_VALIDATION='+json.dumps({'propositions':len(ps),'unique_source_entries':len(byid),'evidence_units':len(eus),'routes':sum(len(e['routes']) for e in eus),'evidence_links':len(links),'existing_pilot_j':len(existing),'languages':{r['language'] for r in rows}},default=list))
+          out={t:get(t) for t in ['evidence_units','evidence_transmission_routes','proposition_evidence']}
+          print('TAFSIR_EVIDENCE_SCHEMA='+json.dumps(out,ensure_ascii=False))
           PY
