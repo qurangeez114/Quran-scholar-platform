@@ -13,10 +13,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Read Pilot L source inventory 19:27-34
+      - name: Compact Pilot L source map and thematic excerpts
         run: |
           python - <<'PY'
-          import json, urllib.request, urllib.parse
+          import json, re, urllib.request, urllib.parse
           from batch_tafsir_accuracy import SUPABASE_URL, SUPABASE_ANON_KEY
           H={'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY}
           def get(table, params):
@@ -26,7 +26,28 @@ jobs:
           rows=get('tafsir_entries',{'sura':'eq.19','aya':'in.(27,28,29,30,31,32,33,34)','select':'id,sura,aya,scholar_key,scholar_name,language,content','order':'aya.asc,scholar_key.asc,language.asc','limit':'800'})
           wanted={'tabari','ibn_kathir','qurtubi','saadi','jalalayn','ibn_abbas'}
           rows=[r for r in rows if r.get('scholar_key') in wanted]
-          summary=[{'id':r['id'],'aya':r['aya'],'scholar_key':r['scholar_key'],'language':r['language'],'chars':len((r.get('content') or ''))} for r in rows]
-          print('PILOT_L_INVENTORY='+json.dumps(summary,ensure_ascii=False))
-          print('PILOT_L_SOURCES='+json.dumps(rows,ensure_ascii=False))
+          primary=[]
+          for r in rows:
+              if r['scholar_key'] in {'tabari','ibn_kathir','qurtubi','saadi'} and r['language']=='ar': primary.append(r)
+              elif r['scholar_key'] in {'jalalayn','ibn_abbas'} and r['language']=='en': primary.append(r)
+          terms=['هارون','Aaron','عبد الله','servant','الكتاب','Book','نبيا','prophet','مبارك','blessed','الصلاة','prayer','الزكاة','zak','السلام','peace','قول الحق','truth','يمترون','doubt','dispute','المهد','cradle','أشارت','pointed']
+          out=[]
+          for r in primary:
+              txt=' '.join((r.get('content') or '').split())
+              hits=[]
+              low=txt.lower()
+              for term in terms:
+                  start=0
+                  needle=term.lower()
+                  while True:
+                      i=low.find(needle,start)
+                      if i<0: break
+                      a=max(0,i-180); b=min(len(txt),i+len(term)+260)
+                      sn=txt[a:b]
+                      if sn not in hits: hits.append(sn)
+                      start=i+len(term)
+                      if len(hits)>=8: break
+                  if len(hits)>=8: break
+              out.append({'id':r['id'],'aya':r['aya'],'scholar_key':r['scholar_key'],'language':r['language'],'chars':len(txt),'hits':hits})
+          print('PILOT_L_COMPACT='+json.dumps(out,ensure_ascii=False))
           PY
