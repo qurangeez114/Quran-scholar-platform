@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Inspect benchmark and Pilot J source rows
+      - name: Read Pilot checkpoint and Pilot J source text
         run: |
           python - <<'PY'
           import json, urllib.request, urllib.parse
@@ -22,19 +22,13 @@ jobs:
           H={'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY}
           def get(table, params):
               q=urllib.parse.urlencode(params, safe='(),.*:')
-              r=urllib.request.Request(f'{SUPABASE_URL}/rest/v1/{table}?{q}',headers=H)
-              with urllib.request.urlopen(r,timeout=60) as x:
-                  return json.loads(x.read().decode())
-          props=get('propositions',{'select':'id,extracted_by,verification_state,extraction_validity,source_type,tafsir_entry_id','order':'id.asc','limit':'2000'})
-          c=Counter((p.get('extracted_by') or '(null)') for p in props)
-          pilot={k:v for k,v in sorted(c.items()) if 'pilot' in k.lower()}
-          pids=[p['id'] for p in props if 'pilot' in (p.get('extracted_by') or '').lower()]
-          rows=get('tafsir_entries',{'sura':'eq.19','aya':'in.(17,18,19,20,21)','select':'id,sura,aya,scholar_key,scholar_name,language,content','order':'aya.asc,scholar_key.asc,language.asc','limit':'500'})
-          meta=[]
-          for r in rows:
-              txt=(r.get('content') or '').strip().replace('\n',' ')
-              meta.append({'id':r['id'],'aya':r['aya'],'scholar_key':r.get('scholar_key'),'scholar_name':r.get('scholar_name'),'language':r.get('language'),'chars':len(txt),'preview':txt[:220]})
-          pe=get('proposition_evidence',{'select':'*','limit':'3'})
-          out={'pilot_extracted_by_counts':pilot,'pilot_prop_count':len(pids),'pilot_prop_id_min':min(pids) if pids else None,'pilot_prop_id_max':max(pids) if pids else None,'pilot_j_tafsir_rows':meta,'proposition_evidence_sample':pe}
+              req=urllib.request.Request(f'{SUPABASE_URL}/rest/v1/{table}?{q}',headers=H)
+              with urllib.request.urlopen(req,timeout=60) as r:
+                  return json.loads(r.read().decode())
+          pilots=get('propositions',{'extracted_by':'ilike.*pilot*','select':'id,extracted_by,statement_en,verification_state,extraction_validity,tafsir_entry_id,quranic_textual_support,mufassir_own_position','order':'id.asc','limit':'500'})
+          pc=Counter(p.get('extracted_by') or '(null)' for p in pilots)
+          ids='26046,26047,26048,26049,26050,54224,19920,19921,19922,19923,19924,13499,13500,13501,13494,13502,32403,32404,32405,32406,32407,822,830,831,832,833'
+          src=get('tafsir_entries',{'id':f'in.({ids})','select':'id,sura,aya,scholar_key,scholar_name,language,content','order':'scholar_key.asc,aya.asc','limit':'100'})
+          out={'pilot_counts_by_extracted_by':dict(sorted(pc.items())),'pilot_prop_count':len(pilots),'pilot_id_min':min([p['id'] for p in pilots],default=None),'pilot_id_max':max([p['id'] for p in pilots],default=None),'pilot_j_sources':src}
           print('TAFSIR_DB_BRIDGE_RESULT='+json.dumps(out,ensure_ascii=False))
           PY
