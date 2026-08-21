@@ -4,11 +4,6 @@ on:
   pull_request:
     branches:
       - main
-  push:
-    branches:
-      - debug/tafsir-db-bridge
-    paths:
-      - '.github/tafsir-db-bridge-trigger.txt'
 
 permissions:
   contents: read
@@ -18,34 +13,28 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Query benchmark tables read-only
-        env:
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      - name: Inspect benchmark and Pilot J source rows
         run: |
           python - <<'PY'
-          import json, os, urllib.request, urllib.error
+          import json, urllib.request, urllib.parse
+          from collections import Counter
           from batch_tafsir_accuracy import SUPABASE_URL, SUPABASE_ANON_KEY
-          key = os.environ.get('SUPABASE_SERVICE_ROLE_KEY') or SUPABASE_ANON_KEY
-          headers = {'apikey': key, 'Authorization': 'Bearer ' + key, 'Prefer': 'count=exact'}
-          tables = ['propositions','proposition_voice_chain','evidence_units','evidence_transmission_routes','sources','tafsir_entries','evidence_links','proposition_evidence_links','evidence_proposition_links','claim_evidence_links','evidence_levels']
-          out = {'auth_mode': 'service_role' if os.environ.get('SUPABASE_SERVICE_ROLE_KEY') else 'anon', 'tables': {}}
-          for table in tables:
-              url = f"{SUPABASE_URL}/rest/v1/{table}?select=*&limit=1"
-              req = urllib.request.Request(url, headers=headers)
-              try:
-                  with urllib.request.urlopen(req, timeout=60) as r:
-                      body = r.read().decode('utf-8','replace')
-                      cr = r.headers.get('Content-Range')
-                      total = None
-                      if cr and '/' in cr:
-                          tail = cr.rsplit('/',1)[1]
-                          if tail.isdigit(): total = int(tail)
-                      try: data = json.loads(body)
-                      except Exception: data = body
-                      out['tables'][table] = {'status': r.status, 'count': total, 'sample': data}
-              except urllib.error.HTTPError as e:
-                  out['tables'][table] = {'status': e.code, 'error': e.read().decode('utf-8','replace')[:1000]}
-              except Exception as e:
-                  out['tables'][table] = {'status': 'error', 'error': repr(e)}
-          print('TAFSIR_DB_BRIDGE_RESULT=' + json.dumps(out, ensure_ascii=False))
+          H={'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY}
+          def get(table, params):
+              q=urllib.parse.urlencode(params, safe='(),.*:')
+              r=urllib.request.Request(f'{SUPABASE_URL}/rest/v1/{table}?{q}',headers=H)
+              with urllib.request.urlopen(r,timeout=60) as x:
+                  return json.loads(x.read().decode())
+          props=get('propositions',{'select':'id,extracted_by,verification_state,extraction_validity,source_type,tafsir_entry_id','order':'id.asc','limit':'2000'})
+          c=Counter((p.get('extracted_by') or '(null)') for p in props)
+          pilot={k:v for k,v in sorted(c.items()) if 'pilot' in k.lower()}
+          pids=[p['id'] for p in props if 'pilot' in (p.get('extracted_by') or '').lower()]
+          rows=get('tafsir_entries',{'sura':'eq.19','aya':'in.(17,18,19,20,21)','select':'id,sura,aya,scholar_key,scholar_name,language,content','order':'aya.asc,scholar_key.asc,language.asc','limit':'500'})
+          meta=[]
+          for r in rows:
+              txt=(r.get('content') or '').strip().replace('\n',' ')
+              meta.append({'id':r['id'],'aya':r['aya'],'scholar_key':r.get('scholar_key'),'scholar_name':r.get('scholar_name'),'language':r.get('language'),'chars':len(txt),'preview':txt[:220]})
+          pe=get('proposition_evidence',{'select':'*','limit':'3'})
+          out={'pilot_extracted_by_counts':pilot,'pilot_prop_count':len(pids),'pilot_prop_id_min':min(pids) if pids else None,'pilot_prop_id_max':max(pids) if pids else None,'pilot_j_tafsir_rows':meta,'proposition_evidence_sample':pe}
+          print('TAFSIR_DB_BRIDGE_RESULT='+json.dumps(out,ensure_ascii=False))
           PY
