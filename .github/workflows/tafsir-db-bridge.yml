@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Read Pilot K source inventory 19:22-26
+      - name: Validate Pilot K fixture against live benchmark
         run: |
           python - <<'PY'
           import json, urllib.request, urllib.parse
@@ -24,10 +24,25 @@ jobs:
               req=urllib.request.Request(f'{SUPABASE_URL}/rest/v1/{table}?{q}',headers=H)
               with urllib.request.urlopen(req,timeout=60) as r:
                   return json.loads(r.read().decode())
-          rows=get('tafsir_entries',{'sura':'eq.19','aya':'in.(22,23,24,25,26)','select':'id,sura,aya,scholar_key,scholar_name,language,content','order':'aya.asc,scholar_key.asc,language.asc','limit':'500'})
-          wanted={'tabari','ibn_kathir','qurtubi','saadi','jalalayn','ibn_abbas'}
-          rows=[r for r in rows if r.get('scholar_key') in wanted]
-          summary=[{'id':r['id'],'aya':r['aya'],'scholar_key':r['scholar_key'],'language':r['language'],'chars':len((r.get('content') or ''))} for r in rows]
-          print('PILOT_K_INVENTORY='+json.dumps(summary,ensure_ascii=False))
-          print('PILOT_K_SOURCES='+json.dumps(rows,ensure_ascii=False))
+          with open('.github/tafsir-pilot-k-fixture.json',encoding='utf-8') as f: fx=json.load(f)
+          ps,eus,links=fx['propositions'],fx['evidence_units'],fx['evidence_links']
+          assert len(ps)==29 and len({p['key'] for p in ps})==29
+          assert len(eus)==4 and sum(len(e['routes']) for e in eus)==6
+          assert len(links)==5
+          pkeys={p['key'] for p in ps}; ekeys={e['key'] for e in eus}
+          assert all(l['proposition_key'] in pkeys and l['evidence_key'] in ekeys for l in links)
+          work={1:'tabari',2:'ibn_kathir',3:'qurtubi',54:'jalalayn',55:'saadi',56:'ibn_abbas'}
+          ids=','.join(str(p['tafsir_entry_id']) for p in ps)
+          rows=get('tafsir_entries',{'id':f'in.({ids})','select':'id,scholar_key,language,sura,aya','limit':'100'})
+          byid={r['id']:r for r in rows}
+          assert len(byid)==len(set(p['tafsir_entry_id'] for p in ps)),(len(byid),len(set(p['tafsir_entry_id'] for p in ps)))
+          mism=[]
+          for p in ps:
+              r=byid[p['tafsir_entry_id']]; want=work[p['voice']['reporting_work_id']]
+              if r['scholar_key']!=want or r['sura']!=19 or r['aya'] not in (22,23,24,25,26): mism.append((p['key'],r,want))
+          assert not mism,mism
+          existing=get('propositions',{'extracted_by':'eq.claude-pilot-k','select':'id','limit':'100'})
+          assert existing==[],f'Pilot K already exists: {len(existing)}'
+          out={'propositions':len(ps),'unique_source_entries':len(byid),'evidence_units':len(eus),'routes':sum(len(e['routes']) for e in eus),'evidence_links':len(links),'existing_pilot_k':0,'languages':sorted({r['language'] for r in rows})}
+          print('TAFSIR_PILOT_K_VALIDATION='+json.dumps(out,sort_keys=True))
           PY
