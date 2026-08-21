@@ -13,41 +13,36 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Compact Pilot L source map and thematic excerpts
+      - name: Resolve Pilot L adjudication endpoints
         run: |
           python - <<'PY'
-          import json, re, urllib.request, urllib.parse
+          import json, urllib.request, urllib.parse
           from batch_tafsir_accuracy import SUPABASE_URL, SUPABASE_ANON_KEY
           H={'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY}
-          def get(table, params):
-              q=urllib.parse.urlencode(params,safe='(),.*:')
-              req=urllib.request.Request(f'{SUPABASE_URL}/rest/v1/{table}?{q}',headers=H)
-              with urllib.request.urlopen(req,timeout=60) as r: return json.loads(r.read().decode())
-          rows=get('tafsir_entries',{'sura':'eq.19','aya':'in.(27,28,29,30,31,32,33,34)','select':'id,sura,aya,scholar_key,scholar_name,language,content','order':'aya.asc,scholar_key.asc,language.asc','limit':'800'})
-          wanted={'tabari','ibn_kathir','qurtubi','saadi','jalalayn','ibn_abbas'}
-          rows=[r for r in rows if r.get('scholar_key') in wanted]
-          primary=[]
-          for r in rows:
-              if r['scholar_key'] in {'tabari','ibn_kathir','qurtubi','saadi'} and r['language']=='ar': primary.append(r)
-              elif r['scholar_key'] in {'jalalayn','ibn_abbas'} and r['language']=='en': primary.append(r)
-          terms=['هارون','Aaron','عبد الله','servant','الكتاب','Book','نبيا','prophet','مبارك','blessed','الصلاة','prayer','الزكاة','zak','السلام','peace','قول الحق','truth','يمترون','doubt','dispute','المهد','cradle','أشارت','pointed']
+          def get(id):
+              q=urllib.parse.urlencode({'id':f'eq.{id}','select':'id,aya,scholar_key,language,content'})
+              req=urllib.request.Request(f'{SUPABASE_URL}/rest/v1/tafsir_entries?{q}',headers=H)
+              with urllib.request.urlopen(req,timeout=60) as r:return json.loads(r.read().decode())[0]
+          specs=[
+            (840,['قال أبو جعفر','والصواب','وأولى الأقوال','هارون']),
+            (13486,['والصحيح','والأصح','قلت','هارون']),
+            (847,['قال أبو جعفر','والصواب','قول الحق','بالرفع','بالنصب']),
+            (54235,['يا أخت هارون','المغيرة','موسى','هارون']),
+            (54237,['آتاني الكتاب','قضى','عبد الله','الكتاب']),
+            (54241,['قول الحق','يمترون','النصارى','اليهود'])
+          ]
           out=[]
-          for r in primary:
-              txt=' '.join((r.get('content') or '').split())
-              hits=[]
-              low=txt.lower()
+          for id,terms in specs:
+              r=get(id); txt=' '.join((r.get('content') or '').split()); hits=[]
               for term in terms:
                   start=0
-                  needle=term.lower()
                   while True:
-                      i=low.find(needle,start)
-                      if i<0: break
-                      a=max(0,i-180); b=min(len(txt),i+len(term)+260)
-                      sn=txt[a:b]
-                      if sn not in hits: hits.append(sn)
+                      i=txt.find(term,start)
+                      if i<0:break
+                      hits.append(txt[max(0,i-300):min(len(txt),i+len(term)+900)])
                       start=i+len(term)
-                      if len(hits)>=8: break
-                  if len(hits)>=8: break
-              out.append({'id':r['id'],'aya':r['aya'],'scholar_key':r['scholar_key'],'language':r['language'],'chars':len(txt),'hits':hits})
-          print('PILOT_L_COMPACT='+json.dumps(out,ensure_ascii=False))
+                      if len(hits)>=14:break
+                  if len(hits)>=14:break
+              out.append({'id':id,'aya':r['aya'],'scholar_key':r['scholar_key'],'hits':hits,'tail':txt[-1800:]})
+          print('PILOT_L_ENDPOINTS='+json.dumps(out,ensure_ascii=False))
           PY
