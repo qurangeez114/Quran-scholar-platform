@@ -25,22 +25,26 @@ jobs:
           python - <<'PY'
           import json, os, urllib.request, urllib.error
           from batch_tafsir_accuracy import SUPABASE_URL, SUPABASE_ANON_KEY
-
           key = os.environ.get('SUPABASE_SERVICE_ROLE_KEY') or SUPABASE_ANON_KEY
-          headers = {'apikey': key, 'Authorization': 'Bearer ' + key}
-          tables = ['propositions','proposition_voice_chain','evidence_units','transmission_routes','evidence_links','sources','tafsir_entries']
+          headers = {'apikey': key, 'Authorization': 'Bearer ' + key, 'Prefer': 'count=exact'}
+          tables = ['propositions','proposition_voice_chain','evidence_units','evidence_transmission_routes','sources','tafsir_entries','evidence_links','proposition_evidence_links','evidence_proposition_links','claim_evidence_links','evidence_levels']
           out = {'auth_mode': 'service_role' if os.environ.get('SUPABASE_SERVICE_ROLE_KEY') else 'anon', 'tables': {}}
           for table in tables:
-              url = f"{SUPABASE_URL}/rest/v1/{table}?select=*&limit=3"
+              url = f"{SUPABASE_URL}/rest/v1/{table}?select=*&limit=1"
               req = urllib.request.Request(url, headers=headers)
               try:
                   with urllib.request.urlopen(req, timeout=60) as r:
                       body = r.read().decode('utf-8','replace')
+                      cr = r.headers.get('Content-Range')
+                      total = None
+                      if cr and '/' in cr:
+                          tail = cr.rsplit('/',1)[1]
+                          if tail.isdigit(): total = int(tail)
                       try: data = json.loads(body)
                       except Exception: data = body
-                      out['tables'][table] = {'status': r.status, 'sample': data}
+                      out['tables'][table] = {'status': r.status, 'count': total, 'sample': data}
               except urllib.error.HTTPError as e:
-                  out['tables'][table] = {'status': e.code, 'error': e.read().decode('utf-8','replace')[:1200]}
+                  out['tables'][table] = {'status': e.code, 'error': e.read().decode('utf-8','replace')[:1000]}
               except Exception as e:
                   out['tables'][table] = {'status': 'error', 'error': repr(e)}
           print('TAFSIR_DB_BRIDGE_RESULT=' + json.dumps(out, ensure_ascii=False))
