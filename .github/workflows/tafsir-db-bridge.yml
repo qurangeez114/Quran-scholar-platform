@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Independent read-only Pilot K postflight
+      - name: Read Pilot L source inventory 19:27-34
         run: |
           python - <<'PY'
           import json, urllib.request, urllib.parse
@@ -23,16 +23,10 @@ jobs:
               q=urllib.parse.urlencode(params,safe='(),.*:')
               req=urllib.request.Request(f'{SUPABASE_URL}/rest/v1/{table}?{q}',headers=H)
               with urllib.request.urlopen(req,timeout=60) as r: return json.loads(r.read().decode())
-          props=get('propositions',{'extracted_by':'eq.claude-pilot-k','select':'id,extraction_validity,verification_state','order':'id.asc','limit':'100'})
-          assert len(props)==29,len(props)
-          pids=','.join(str(r['id']) for r in props)
-          voices=get('proposition_voice_chain',{'proposition_id':f'in.({pids})','select':'id,proposition_id','limit':'100'})
-          pe=get('proposition_evidence',{'proposition_id':f'in.({pids})','select':'proposition_id,evidence_unit_id','limit':'100'})
-          eids=sorted({r['evidence_unit_id'] for r in pe})
-          eus=get('evidence_units',{'id':f'in.({','.join(map(str,eids))})','select':'id','limit':'100'})
-          routes=get('evidence_transmission_routes',{'evidence_unit_id':f'in.({','.join(map(str,eids))})','select':'id,evidence_unit_id','limit':'100'})
-          allpilots=get('propositions',{'extracted_by':'ilike.*pilot*','select':'id','limit':'1000'})
-          out={'pilot_k_propositions':len(props),'pilot_k_voice_rows':len(voices),'pilot_k_evidence_links':len(pe),'pilot_k_evidence_units':len(eus),'pilot_k_routes':len(routes),'all_pilot_propositions':len(allpilots),'id_min':min(r['id'] for r in props),'id_max':max(r['id'] for r in props),'all_verified':all(r['extraction_validity']=='verified' and r['verification_state']=='source_language_proposition_verified' for r in props)}
-          assert out=={'pilot_k_propositions':29,'pilot_k_voice_rows':29,'pilot_k_evidence_links':5,'pilot_k_evidence_units':4,'pilot_k_routes':6,'all_pilot_propositions':238,'id_min':1572,'id_max':1600,'all_verified':True},out
-          print('TAFSIR_PILOT_K_INDEPENDENT_POSTFLIGHT='+json.dumps(out,sort_keys=True))
+          rows=get('tafsir_entries',{'sura':'eq.19','aya':'in.(27,28,29,30,31,32,33,34)','select':'id,sura,aya,scholar_key,scholar_name,language,content','order':'aya.asc,scholar_key.asc,language.asc','limit':'800'})
+          wanted={'tabari','ibn_kathir','qurtubi','saadi','jalalayn','ibn_abbas'}
+          rows=[r for r in rows if r.get('scholar_key') in wanted]
+          summary=[{'id':r['id'],'aya':r['aya'],'scholar_key':r['scholar_key'],'language':r['language'],'chars':len((r.get('content') or ''))} for r in rows]
+          print('PILOT_L_INVENTORY='+json.dumps(summary,ensure_ascii=False))
+          print('PILOT_L_SOURCES='+json.dumps(rows,ensure_ascii=False))
           PY
