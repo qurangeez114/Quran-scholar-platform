@@ -1167,7 +1167,7 @@ async function fetchDBContext(query) {
       ayaMatches,
     ] = await Promise.all([
       // 1. Raw hadith text matches (English) - small limit, single column
-      safe(`${SB_URL}/rest/v1/hadith_corpus?select=id,collection,narrator,hadith_number,text_english,grade&text_english=ilike.${q}&limit=8`),
+      safe(`${SB_URL}/rest/v1/hadith_corpus_canonical?select=id,collection,narrator,hadith_number,text_english,grade&text_english=ilike.${q}&limit=8`),
       // 2. Hadith analyses that touch this topic - search ONE column for speed
       safe(`${SB_URL}/rest/v1/hadith_analysis?select=hadith_id,authenticity_grade,common_sense_analysis,potential_concerns,human_rights_score,scientific_score&potential_concerns=ilike.${q}&limit=6`),
       // 3. Madhhab topics matching this term - search ONE column
@@ -1514,8 +1514,8 @@ async function sbSearch(table, select, column, q, extra) {
       filterParam = `title_en.ilike.*${enc}*,title_ar.ilike.*${enc}*,story_en.ilike.*${enc}*,story_ar.ilike.*${enc}*,location.ilike.*${enc}*,period.ilike.*${enc}*,hadith_ref.ilike.*${enc}*,tafsir_ref.ilike.*${enc}*`;
     } else if (table === 'hadith_connections') {
       filterParam = `hadith_text.ilike.*${enc}*,narrator.ilike.*${enc}*,collection.ilike.*${enc}*,reference.ilike.*${enc}*,similarity_note.ilike.*${enc}*`;
-    } else if (table === 'hadith_corpus') {
-      filterParam = `text_english.ilike.*${enc}*,narrator.ilike.*${enc}*,collection.ilike.*${enc}*,hadith_number.ilike.*${enc}*,collection_name.ilike.*${enc}*`;
+    } else if (table === 'hadith_corpus' || table === 'hadith_corpus_canonical') {
+      filterParam = `text_english.ilike.*${enc}*,narrator.ilike.*${enc}*,collection.ilike.*${enc}*,hadith_number.ilike.*${enc}*`;
     } else if (table === 'tafsir_entries') {
       filterParam = `content.ilike.*${enc}*,source_name.ilike.*${enc}*,scholar_name.ilike.*${enc}*`;
     } else if (table === 'asbab_al_nuzul') {
@@ -1771,7 +1771,7 @@ async function fetchAllSources(q, tradFilter, collection, scholar) {
       if (collection) corpExtra.collection = 'eq.' + collection;
       const [hRows, cRows] = await Promise.all([
         sbFetch('hadith_connections', hSelect, hExtra),
-        sbFetch('hadith_corpus', corpSel, corpExtra),
+        sbFetch('hadith_corpus_canonical', corpSel, corpExtra),
       ]);
       const tagged = [
         ...hRows.map(r=>({...r,_tbl:'hc'})),
@@ -1811,7 +1811,7 @@ async function fetchAllSources(q, tradFilter, collection, scholar) {
     // sbSearch now searches all hadith columns via OR in one request each
     const [hRows, cRows] = await Promise.all([
       sbSearch('hadith_connections', hSelect, 'hadith_text', q, hExtra),
-      sbSearch('hadith_corpus',      corpSel, 'text_english', q, corpExtra),
+      sbSearch('hadith_corpus_canonical', corpSel, 'text_english', q, corpExtra),
     ]);
     const tagged = [
       ...hRows.map(r=>({...r,_tbl:'hc'})),

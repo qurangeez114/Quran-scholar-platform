@@ -213,7 +213,7 @@ async function runCrossSearch(){
   if(!q){ toast('Type something to search'); return; }
   box.innerHTML = '<div style="padding:14px 0;color:#8a7a5a;font-size:13px;"><em>Searching across all hadith books…</em></div>';
   const enc = encodeURIComponent(q);
-  const res = await fetch(SB_URL + '/rest/v1/hadith_corpus?select=id,collection,narrator,book_chapter,text_arabic,text_english,grade,grade_details,hadith_number,source_url&text_english=ilike.*' + enc + '*&limit=60', { headers: HDR });
+  const res = await fetch(SB_URL + '/rest/v1/hadith_corpus_canonical?select=id,collection,narrator,book_chapter,text_arabic,text_english,grade,grade_details,hadith_number,source_url&text_english=ilike.*' + enc + '*&limit=60', { headers: HDR });
   if(!res.ok){ box.innerHTML = '<div style="color:#B23A3A;padding:10px 0;">Search failed — try a shorter phrase.</div>'; return; }
   const rows = await res.json();
   CROSS_RESULTS = rows;
@@ -613,7 +613,7 @@ function buildSourceQuery(offset, searchQ){
   const st = CURRENT_BOOK.source_table;
   const enc = searchQ ? encodeURIComponent(searchQ) : '';
   if(st === 'hadith_corpus'){
-    let url = SB_URL + '/rest/v1/hadith_corpus?select=id,narrator,book_chapter,text_arabic,text_english,grade,grade_details,isnad,hadith_number,source_url'
+    let url = SB_URL + '/rest/v1/hadith_corpus_canonical?select=id,narrator,book_chapter,text_arabic,text_english,grade,grade_details,isnad,hadith_number,source_url'
       + '&collection=eq.' + encodeURIComponent(CURRENT_BOOK.source_filter_val)
       + '&order=id&limit=' + PAGE_SIZE + '&offset=' + offset;
     if(searchQ) url += '&or=(text_english.ilike.*' + enc + '*,text_arabic.ilike.*' + enc + '*,narrator.ilike.*' + enc + '*)';
@@ -793,7 +793,7 @@ async function verifyParallelNarrations(id){
   const results = [];
   for(const col of collections){
     try{
-      const res = await fetch(SB_URL + '/rest/v1/hadith_corpus?select=id,collection,hadith_number,grade,source_url,text_english&collection=eq.' + encodeURIComponent(col) + '&text_english=ilike.*' + encodeURIComponent(anchor) + '*&limit=3', { headers: HDR });
+      const res = await fetch(SB_URL + '/rest/v1/hadith_corpus_canonical?select=id,collection,hadith_number,grade,source_url,text_english&collection=eq.' + encodeURIComponent(col) + '&text_english=ilike.*' + encodeURIComponent(anchor) + '*&limit=3', { headers: HDR });
       if(res.ok){ const rows = await res.json(); results.push(...rows); }
     }catch(err){}
   }

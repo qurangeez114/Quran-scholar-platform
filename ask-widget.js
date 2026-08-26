@@ -134,7 +134,7 @@
       sbSearch('madhhab_topics', ['topic', 'brief_description'], question, words, 4),
       sbSearch('ayas', ['translation_en'], question, words, 4),
       sbSearch('tafsir_entries', ['text_english'], question, words, 3),
-      sbSearch('hadith_corpus', ['text_english'], question, words, 3),
+      sbSearch('hadith_corpus_canonical', ['text_english'], question, words, 3),
       sbSearch('sira_events', ['title_en', 'description_en'], question, words, 3),
       sbSearch('quranic_stories', ['title_en', 'summary'], question, words, 3),
       sbSearch('themes', ['name', 'description'], question, words, 3),
