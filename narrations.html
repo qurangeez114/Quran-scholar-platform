@@ -114,19 +114,31 @@ function gradeClass(g){
 
 async function loadList(){
   let rows;
-  try { rows = await api('narrative_dossier_reader?select=*&order=sequence_order'); }
+  try { rows = await api('narrative_dossier_reader?select=*&order=dossier_slug.asc,sequence_order.asc'); }
   catch(e){ document.getElementById('list').innerHTML =
     '<div class="msg">Couldn\'t load the comparisons. ' + esc(e.message) + '</div>'; return; }
 
   if(!rows.length){ document.getElementById('list').innerHTML =
     '<div class="msg">No comparisons published yet.</div>'; return; }
 
-  const d = rows[0];
-  let h = '<div class="dossier-q">' + esc(d.question) + '</div>'
+  // Rows arrive flat, one per group. Group them by dossier so each subject
+  // keeps its own question, summary and method note.
+  const byDossier = [];
+  const seen = {};
+  rows.forEach(r => {
+    if(!seen[r.dossier_slug]){ seen[r.dossier_slug] = {meta:r, groups:[]}; byDossier.push(seen[r.dossier_slug]); }
+    seen[r.dossier_slug].groups.push(r);
+  });
+
+  let h = '';
+  byDossier.forEach((dos, i) => {
+  const d = dos.meta;
+  h += (i > 0 ? '<div style="height:34px"></div>' : '')
+        + '<div class="dossier-q">' + esc(d.question) + '</div>'
         + '<div class="dossier-sum">' + esc(d.summary) + '</div>'
         + '<div class="method"><b>How these comparisons were made.</b> ' + esc(d.method_note) + '</div>';
 
-  rows.forEach(r => {
+  dos.groups.forEach(r => {
     h += '<div class="grp" tabindex="0" role="button" onclick="openGroup(\'' + esc(r.group_slug) + '\')"'
        + ' onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();openGroup(\'' + esc(r.group_slug) + '\')}">'
        + '<div class="grp-role">' + esc(r.role_in_dossier) + '</div>'
@@ -144,6 +156,7 @@ async function loadList(){
          + 'Being in many books is not the same as being independently reported.</div>';
     }
     h += '</div>';
+  });
   });
   document.getElementById('list').innerHTML = h;
 }
