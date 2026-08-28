@@ -118,29 +118,6 @@ function gradeClass(g){
   if(s.includes('hasan')) return 'mid';
   return '';
 }
-// Numbering differs between this corpus and sunnah.com — Sahih Muslim here
-// runs 1-7459 (sequential) while sunnah.com uses the Abdul Baqi numbering,
-// so a /muslim:4297 style link resolves to nothing. Searching sunnah.com for
-// a distinctive Arabic phrase from the narration finds it regardless of which
-// numbering that site uses.
-function sunnahSearch(arabic){
-  if(!arabic) return null;
-  let w = String(arabic).replace(/[\u064B-\u0652\u0670\u0640]/g,'').trim().split(/\s+/);
-  if(w.length < 5) return null;
-  // The opening words are the isnad — the transmitters — which many hadiths
-  // share. Skip past it to the matn, where the distinctive wording is: start
-  // after the last reporting verb near the beginning, or a fixed offset.
-  let start = 0;
-  const verbs = /^(قال|قالت|قالوا|سمعت|أن|عن)$/;
-  for(let i = Math.min(w.length - 4, 22); i >= 3; i--){
-    if(verbs.test(w[i])){ start = i + 1; break; }
-  }
-  if(start === 0) start = Math.min(8, Math.max(0, w.length - 6));
-  const phrase = w.slice(start, start + 7).join(' ');
-  if(phrase.split(' ').length < 3) return null;
-  return 'https://sunnah.com/search?q=' + encodeURIComponent(phrase);
-}
-
 function sidePanel(ref,grade,text,lang,url,idx,cid){
   const isEnglish=lang&&lang.indexOf('English')===0;
   return '<div class="side" id="side-'+cid+'-'+idx+'"'+(idx===1?' hidden':'')+'>'
@@ -148,7 +125,7 @@ function sidePanel(ref,grade,text,lang,url,idx,cid){
        +'<div class="side-grade">'+esc(grade||'')+'</div>'
        +'<div class="'+(isEnglish?'ev-en':'ar')+'">'+esc(text)+'</div>'
        +(isEnglish?'<div class="ev-note">'+esc(lang)+'</div>':'')
-       +(function(){const u=isEnglish?null:sunnahSearch(text);return u?'<a class="verify" href="'+esc(u)+'" target="_blank" rel="noopener">Search sunnah.com for this wording</a>':'';})()
+       
        +'</div>';
 }
 
@@ -255,7 +232,7 @@ async function load(){
   });
 
   h+='<h3 class="sec">The narrations compared ('+vers.length+')</h3>'
-    +'<div class="refnote">Hadith numbering differs between printed editions and between websites. The numbers below follow this corpus; sunnah.com may number the same narration differently, so the links search for the Arabic wording rather than a number.</div>';
+    +'<div class="refnote">The numbers below follow this corpus. Hadith numbering differs between printed editions and between websites, so the same narration is often numbered differently elsewhere — Sahih al-Bukhari 6577 here is 6824 on sunnah.com, for example. External links are not shown because the mapping has not been verified for every collection; the Arabic above is the evidence, and it can be searched on any hadith site.</div>';
   vers.forEach(v=>{
     const isTafsir=v.source_type==='Tafsir';
     h+='<div class="ver"><div class="ver-head">'
@@ -269,7 +246,7 @@ async function load(){
           ?' <b>Attributed to a '+esc(v.grade_attribution.split('—')[0].trim())+', not the Prophet.</b>':'')+'</div>':'')
       +(v.citation_ambiguous?'<div class="ambig">This collection and number match more than one different hadith in this corpus, because the two source editions numbered differently. The text shown here is the one this comparison refers to (record '+esc(v.hadith_corpus_id)+').</div>':'')
       +'<div class="ver-sum">'+esc(v.version_summary)+'</div>'
-      +(function(){const u=sunnahSearch(v.text_arabic);return u?'<a class="verify" href="'+esc(u)+'" target="_blank" rel="noopener">Search sunnah.com for this narration</a>':'';})()
+      
       +(v.grade_disputed?'<div class="grade-alt">The same Arabic text is stored again as '+esc(v.source_collection)+' '+esc(v.alternate_reference)+' and graded <b>'+esc(v.alternate_grade)+'</b>. Both are shown because the corpus contains both.</div>':'')
       +'</div>';
   });
