@@ -1,0 +1,15 @@
+const SB='https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1';
+const H={apikey:process.argv[2],Authorization:'Bearer '+process.argv[2]};
+const rows=await (await fetch(SB+'/narrative_search_index?select=*&order=dossier_slug,group_title',{headers:H})).json();
+console.log('index rows:',rows.length);
+const q=(t)=>rows.filter(r=>(r.searchable||'').includes(t.toLowerCase()));
+const cases=[['stoning',5],['aisha',1],['khaybar',1],['الرجم',3],['ماعز',1],['jerusalem',1],['suckling',null],['nursing',null],['jewish',null],['tirmidhi',null]];
+for(const [t] of cases) console.log(`  "${t}" -> ${q(t).length}`);
+console.log('\nfilters:');
+console.log('  severity>=5:', rows.filter(r=>r.max_severity>=5).length);
+console.log('  severity>=4:', rows.filter(r=>r.max_severity>=4).length);
+console.log('  Bukhari:', rows.filter(r=>(r.collections||'').includes('Sahih al-Bukhari')).length);
+console.log('  Muslim:', rows.filter(r=>(r.collections||'').includes('Sahih Muslim')).length);
+console.log('  single companion:', rows.filter(r=>r.distinct_narrators===1&&r.distinct_collections>2).length);
+const noDossier=rows.filter(r=>!r.dossier_title);
+console.log('\nrows without a section heading:', noDossier.length||'none');

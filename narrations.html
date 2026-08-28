@@ -27,6 +27,17 @@
   .pill.contra{background:#EDE2EF;color:#6A3E8A}
   .pill.warn{background:#F5E3D0;color:#9A5A20}
   .thin{margin-top:7px;font-size:12px;color:#9A5A20;background:#FCF3E8;border:1px solid #EBD9C2;border-radius:7px;padding:6px 9px}
+  .searchbar{position:relative;margin:2px 0 10px}
+  #q{width:100%;padding:13px 40px 13px 14px;font-family:'EB Garamond',serif;font-size:17px;color:#3A2E1A;
+     background:#fff;border:1.5px solid #E8DDC0;border-radius:12px;outline:none}
+  #q:focus{border-color:#D4A830}
+  .clearq{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;
+     font-size:24px;color:#8a7a5a;cursor:pointer;padding:0 8px;line-height:1}
+  .chips{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:10px}
+  .chip{font-size:13.5px;padding:7px 13px;border-radius:18px;background:#fff;border:1.5px solid #E8DDC0;
+     color:#6b5c3f;cursor:pointer;font-family:'EB Garamond',serif;min-height:38px}
+  .chip.on{background:#FFF8E8;border-color:#D4A830;color:#5A3A10;font-weight:700}
+  .rescount{font-size:13.5px;color:#8a7a5a;margin-bottom:8px}
   .msg{padding:26px 16px;text-align:center;color:#8a7a5a;font-size:14.5px}
   #bottom-nav{position:fixed;bottom:0;left:0;right:0;background:#FFF8E8;border-top:1px solid #E8DDC0;display:flex;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;z-index:60}
   #bottom-nav::-webkit-scrollbar{display:none}
@@ -39,7 +50,17 @@
   <h1>Narrations Compared</h1>
   <button class="qbtn ghost" onclick="location.href='index.html'">Home</button>
 </div>
-<div class="wrap"><div id="list"><div class="msg">Loading…</div></div></div>
+<div class="wrap">
+  <div class="lede">Where the sources report the same event differently. Every comparison is drawn from the Arabic text of the narrations, not from any translation.</div>
+  <div class="searchbar">
+    <input id="q" type="search" placeholder="Search a topic, companion, collection, or Arabic word…"
+           autocomplete="off" oninput="applyFilters()">
+    <button id="clearq" class="clearq" onclick="clearSearch()" hidden>&times;</button>
+  </div>
+  <div class="chips" id="chips"></div>
+  <div id="count" class="rescount"></div>
+  <div id="list"><div class="msg">Loading…</div></div>
+</div>
 <script>
 const SB_URL='https://ylosytbxpzxzwfzjpaej.supabase.co';
 const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
@@ -47,27 +68,72 @@ const HDRS={apikey:SB_KEY,Authorization:'Bearer '+SB_KEY};
 const esc=s=>(s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const SEV={5:'Rule contradicts practice',4:'Contradictory outcome',3:'Accounts differ',2:'Detail varies',1:'Wording varies'};
 
+let ALL=[];               // every comparison, with its searchable blob
+let FILTER={sev:null,coll:null};
+
+const FILTERS=[
+  {key:'sev',  val:5, label:'Rule vs practice'},
+  {key:'sev',  val:4, label:'Contradictory outcome'},
+  {key:'coll', val:'Sahih al-Bukhari', label:'Bukhārī'},
+  {key:'coll', val:'Sahih Muslim', label:'Muslim'},
+  {key:'thin', val:true, label:'Single companion'}
+];
+
+function drawChips(){
+  document.getElementById('chips').innerHTML = FILTERS.map((f,i)=>
+    '<button class="chip'+(FILTER[f.key]===f.val?' on':'')+'" onclick="toggleFilter('+i+')">'+esc(f.label)+'</button>'
+  ).join('');
+}
+function toggleFilter(i){
+  const f=FILTERS[i];
+  FILTER[f.key] = (FILTER[f.key]===f.val) ? null : f.val;
+  drawChips(); applyFilters();
+}
+function clearSearch(){ document.getElementById('q').value=''; applyFilters(); }
+
+function applyFilters(){
+  const q=document.getElementById('q').value.trim().toLowerCase();
+  document.getElementById('clearq').hidden = !q;
+  let rows=ALL.filter(r=>{
+    if(q && !(r.searchable||'').includes(q)) return false;
+    if(FILTER.sev && (r.max_severity||0) < FILTER.sev) return false;
+    if(FILTER.coll && !(r.collections||'').includes(FILTER.coll)) return false;
+    if(FILTER.thin && !(r.distinct_narrators===1 && r.distinct_collections>2)) return false;
+    return true;
+  });
+  render(rows, q);
+}
+
 async function load(){
   let rows;
   try{
-    const r=await fetch(SB_URL+'/rest/v1/narrative_dossier_reader?select=*&order=dossier_slug.asc,sequence_order.asc',{headers:HDRS});
+    const r=await fetch(SB_URL+'/rest/v1/narrative_search_index?select=*&order=dossier_slug.asc,group_title.asc',{headers:HDRS});
     if(!r.ok) throw new Error('HTTP '+r.status);
     rows=await r.json();
   }catch(e){
     document.getElementById('list').innerHTML='<div class="msg">Couldn\'t load the comparisons. '+esc(e.message)+'</div>';return;
   }
   if(!rows.length){document.getElementById('list').innerHTML='<div class="msg">No comparisons published yet.</div>';return;}
+  ALL=rows; drawChips(); applyFilters();
+}
 
+function render(rows, q){
   const narrations=rows.reduce((a,r)=>a+(r.version_count||0),0);
   const contradictions=rows.reduce((a,r)=>a+(r.contradiction_count||0),0);
+  document.getElementById('count').textContent =
+    rows.length + (rows.length===1?' comparison':' comparisons')
+    + ' · ' + narrations + ' narrations · ' + contradictions + ' contradictions';
 
-  let h='<div class="lede">Where the sources report the same event differently. Every comparison below is drawn from the Arabic text of the narrations, not from any translation.</div>'
-      +'<div class="counts"><span><b>'+rows.length+'</b> comparisons</span><span><b>'+narrations+'</b> narrations</span><span><b>'+contradictions+'</b> contradictions</span></div>'
-      +'<details class="how"><summary>How these comparisons were made</summary><p>'+esc(rows[0].method_note)+'</p></details>';
+  if(!rows.length){
+    document.getElementById('list').innerHTML =
+      '<div class="msg">Nothing matches that search.<br>Try a companion, a collection, a topic, or an Arabic word.</div>';
+    return;
+  }
 
+  let h='';
   let cur=null;
   rows.forEach(r=>{
-    if(r.dossier_slug!==cur){cur=r.dossier_slug;h+='<div class="dhead">'+esc(r.dossier_title)+'</div>';}
+    if(r.dossier_title!==cur){cur=r.dossier_title;h+='<div class="dhead">'+esc(r.dossier_title||'Other comparisons')+'</div>';}
     h+='<a class="row" href="narration.html?group='+encodeURIComponent(r.group_slug)+'">'
       +'<div class="rtitle">'+esc(r.group_title)+'</div><div class="rmeta">'
       +'<span class="pill">'+r.version_count+' narrations</span>'
