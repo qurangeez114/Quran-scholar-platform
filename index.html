@@ -5745,7 +5745,7 @@ const VOICE_TYPE_LABELS = {
 const VERIFICATION_LABELS = {
   legacy_verification_unspecified: '⚪ Legacy (unspecified)',
   unreviewed: '⏳ Unreviewed',
-  source_language_located: '🔍 Source-language located',
+  source_language_located: '⚠️ Disputed against the Arabic',
   reviewer_approved_translation_only: '✓ Translation-approved',
   source_language_proposition_verified: '✅ Source-verified',
   independently_reconstructed: '✅ Independently reconstructed',
@@ -5792,6 +5792,13 @@ async function loadComparisonView(sura, aya) {
     const voiceIds = voiceIdRows.map(v => v.id).join(',');
     const conflictRows = voiceIds ? await fetch(`${SUPABASE_URL}/rest/v1/voice_chain_attribution_conflicts?select=shared_authority_name,conflict_note,status,voice_chain_id_a,voice_chain_id_b&or=(voice_chain_id_a.in.(${voiceIds}),voice_chain_id_b.in.(${voiceIds}))`, { headers: HEADERS }).then(r => r.json()).catch(() => []) : [];
 
+    // Recorded defects for propositions whose statement was checked against
+    // the Arabic and found not to match. Fetched here so a disputed statement
+    // can show WHY it is disputed rather than only a small status label.
+    const defectRows = await fetch(`${SUPABASE_URL}/rest/v1/proposition_defect_reader?select=proposition_id,defect_reason&proposition_id=in.(${ids})`, { headers: HEADERS }).then(r => r.json()).catch(() => []);
+    const defectByProp = {};
+    if (Array.isArray(defectRows)) defectRows.forEach(d => { defectByProp[d.proposition_id] = d.defect_reason; });
+
     // Group voice + evidence by proposition_id
     const voiceByProp = {}, evidenceByProp = {};
     voiceRows.forEach(v => { (voiceByProp[v.proposition_id] = voiceByProp[v.proposition_id] || []).push(v); });
@@ -5835,6 +5842,7 @@ async function loadComparisonView(sura, aya) {
         const vchain = voiceByProp[p.id] || [];
         const evid = evidenceByProp[p.id] || [];
         const verLabel = VERIFICATION_LABELS[p.verification_state] || p.verification_state;
+        const defect = defectByProp[p.id];
 
         html += `<div style="background:#fff;border:1px solid #E8E4DC;border-radius:8px;padding:12px 14px;margin-bottom:8px;">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px;flex-wrap:wrap;">
@@ -5842,6 +5850,11 @@ async function loadComparisonView(sura, aya) {
             <span style="font-size:10px;color:#888;white-space:nowrap;">${verLabel}</span>
           </div>
           <div style="font-size:13px;color:#222;line-height:1.5;margin-bottom:8px;">${escapeHtml(p.statement_en)}</div>`;
+
+        if (defect) {
+          html += `<div style="font-size:12px;color:#8a4a1a;background:#FDF3E7;border:1px solid #F0DCC4;border-radius:6px;padding:8px 10px;margin-bottom:8px;">
+            <b>Checked against the Arabic and disputed.</b> ${escapeHtml(defect)} This statement was extracted from the record and does not fully match its Arabic; it is shown so the record is complete, not as an established claim.</div>`;
+        }
 
         if (vchain.length) {
           html += `<div style="font-size:11px;color:#666;margin-bottom:4px;">`;
