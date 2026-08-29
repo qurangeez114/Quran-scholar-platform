@@ -168,8 +168,13 @@ function bcDraw(){
   const sv=d.point_severity||d.severity;
   const panel=(ref,grade,text,lang,english)=>{
     const en=lang&&lang.indexOf('English')===0;
+    // 'Sahih (by inclusion...)' is not a verdict anyone pronounced. Saying so
+    // matters most here, where the card is being shown to an audience.
+    const byInclusion = grade && grade.indexOf('by inclusion') > -1;
     return '<div class="bc-src">'+esc(ref)+'</div>'
-         + '<div class="bc-grade">'+esc(grade||'')+'</div>'
+         + '<div class="bc-grade">'+esc(grade||'')
+           + (byInclusion ? ' — a record of the collection it is in, not a grading anyone gave it' : '')
+           + '</div>'
          + '<div class="'+(en?'bc-en':'bc-ar')+'">'+esc(text)+'</div>'
          + (!en && english ? '<div class="bc-tr">'+esc(english)+'</div>' : '');
   };
@@ -180,7 +185,15 @@ function bcDraw(){
     + panel(d.source_a,d.grade_a,d.arabic_a,d.evidence_language_a,d.english_a)
     + panel(d.source_b,d.grade_b,d.arabic_b,d.evidence_language_b,d.english_b)
     + '<div class="bc-lbl">What differs</div><div class="bc-txt">'+esc(d.analysis)+'</div>'
-    + '<div class="bc-lbl">Why it matters</div><div class="bc-txt">'+esc(d.significance)+'</div>';
+    + '<div class="bc-lbl">Why it matters</div><div class="bc-txt">'+esc(d.significance)+'</div>'
+    // Showing a contradiction without the reconciliation offered for it would
+    // present only one side. It belongs on screen with the rest.
+    + (d.harmonization_option
+       ? '<div class="bc-lbl">How it is reconciled</div><div class="bc-txt">'+esc(d.harmonization_option)+'</div>'
+         + (d.preferred_explanation
+            ? '<div class="bc-lbl">Does that settle it?</div><div class="bc-txt">'+esc(d.preferred_explanation)+'</div>'
+            : '')
+       : '');
 }
 document.addEventListener('keydown',e=>{
   if(document.getElementById('bc').hidden) return;
