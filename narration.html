@@ -29,6 +29,7 @@
   .side-grade{font-size:12.5px;color:#8a7a5a;margin-bottom:8px}
   .ar{font-family:'Amiri',serif;font-size:24px;direction:rtl;text-align:right;line-height:1.85;color:#2A2012}
   .ev-en{font-size:17px;line-height:1.6;color:#3A2E1A;font-style:italic}
+  .ev-tr{font-size:16px;line-height:1.55;color:#3A2E1A;margin-top:10px;padding-top:10px;border-top:1px dashed #E8DDC0}
   .ev-note{font-size:11px;color:#9A5A20;margin-top:6px}
   .div-body{padding:16px;border-top:1px solid #EFE6D0;font-size:17px}
   .lbl{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:#8a7a5a;font-weight:700;margin:11px 0 3px}
@@ -77,6 +78,7 @@
   .bc-ar{font-family:'Amiri',serif;font-size:40px;direction:rtl;text-align:right;line-height:1.9;color:#1F1810;
          background:#fff;border:2px solid #E8DDC0;border-radius:14px;padding:18px 20px}
   .bc-en{font-size:26px;line-height:1.55;font-style:italic;background:#fff;border:2px solid #E8DDC0;border-radius:14px;padding:18px 20px}
+  .bc-tr{font-size:24px;line-height:1.5;color:#2A2012;margin-top:12px;background:#fff;border:2px solid #E8DDC0;border-radius:14px;padding:16px 18px}
   .bc-lbl{font-size:16px;text-transform:uppercase;letter-spacing:.05em;color:#8a7a5a;font-weight:700;margin:26px 0 6px}
   .bc-txt{font-size:25px;line-height:1.55;color:#2A2012}
   #bottom-nav{position:fixed;bottom:0;left:0;right:0;background:#FFF8E8;border-top:1px solid #E8DDC0;display:flex;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;z-index:60}
@@ -118,12 +120,15 @@ function gradeClass(g){
   if(s.includes('hasan')) return 'mid';
   return '';
 }
-function sidePanel(ref,grade,text,lang,url,idx,cid){
+function sidePanel(ref,grade,text,lang,url,idx,cid,english){
   const isEnglish=lang&&lang.indexOf('English')===0;
   return '<div class="side" id="side-'+cid+'-'+idx+'"'+(idx===1?' hidden':'')+'>'
        +'<div class="side-ref">'+esc(ref)+'</div>'
        +'<div class="side-grade">'+esc(grade||'')+'</div>'
        +'<div class="'+(isEnglish?'ev-en':'ar')+'">'+esc(text)+'</div>'
+       // Translation of the phrase above. The Arabic is the evidence; this is
+       // provided so the card can be read without Arabic.
+       +(!isEnglish && english ? '<div class="ev-tr">'+esc(english)+'</div>' : '')
        +(isEnglish?'<div class="ev-note">'+esc(lang)+'</div>':'')
        
        +'</div>';
@@ -161,18 +166,19 @@ function bcStep(n){
 function bcDraw(){
   const d=POINTS[BCI];
   const sv=d.point_severity||d.severity;
-  const panel=(ref,grade,text,lang)=>{
+  const panel=(ref,grade,text,lang,english)=>{
     const en=lang&&lang.indexOf('English')===0;
     return '<div class="bc-src">'+esc(ref)+'</div>'
          + '<div class="bc-grade">'+esc(grade||'')+'</div>'
-         + '<div class="'+(en?'bc-en':'bc-ar')+'">'+esc(text)+'</div>';
+         + '<div class="'+(en?'bc-en':'bc-ar')+'">'+esc(text)+'</div>'
+         + (!en && english ? '<div class="bc-tr">'+esc(english)+'</div>' : '');
   };
   document.getElementById('bc-pos').textContent=(BCI+1)+' / '+POINTS.length;
   document.getElementById('bc-body').innerHTML=
       '<span class="bc-sev">'+esc(SEV[sv]||'Differs')+'</span>'
     + '<div class="bc-cat">'+esc(d.category)+'</div>'
-    + panel(d.source_a,d.grade_a,d.arabic_a,d.evidence_language_a)
-    + panel(d.source_b,d.grade_b,d.arabic_b,d.evidence_language_b)
+    + panel(d.source_a,d.grade_a,d.arabic_a,d.evidence_language_a,d.english_a)
+    + panel(d.source_b,d.grade_b,d.arabic_b,d.evidence_language_b,d.english_b)
     + '<div class="bc-lbl">What differs</div><div class="bc-txt">'+esc(d.analysis)+'</div>'
     + '<div class="bc-lbl">Why it matters</div><div class="bc-txt">'+esc(d.significance)+'</div>';
 }
@@ -221,8 +227,8 @@ async function load(){
       +'<button id="pick-'+cid+'-1" onclick="pickOne('+cid+',1)">'+esc(d.source_b)+'<small>'+esc(d.grade_b||'')+'</small></button>'
       +'</div>'
       +'<div class="pair">'
-      +sidePanel(d.source_a,d.grade_a,d.arabic_a,d.evidence_language_a,d.url_a,0,cid)
-      +sidePanel(d.source_b,d.grade_b,d.arabic_b,d.evidence_language_b,d.url_b,1,cid)
+      +sidePanel(d.source_a,d.grade_a,d.arabic_a,d.evidence_language_a,d.url_a,0,cid,d.english_a)
+      +sidePanel(d.source_b,d.grade_b,d.arabic_b,d.evidence_language_b,d.url_b,1,cid,d.english_b)
       +'</div><div class="div-body">'
       +'<div class="lbl">What differs</div>'+esc(d.analysis)
       +'<div class="lbl">Why it matters</div>'+esc(d.significance)
