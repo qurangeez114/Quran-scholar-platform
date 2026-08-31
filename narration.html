@@ -33,6 +33,7 @@
   .ar{font-family:'Amiri',serif;font-size:24px;direction:rtl;text-align:right;line-height:1.85;color:#2A2012}
   .ev-en{font-size:17px;line-height:1.6;color:#3A2E1A;font-style:italic}
   .ev-tr{font-size:16px;line-height:1.55;color:#3A2E1A;margin-top:10px;padding-top:10px;border-top:1px dashed #E8DDC0}
+  .ev-cond{font-size:12px;color:#8a7a5a;font-style:italic;margin-top:6px}
   .ev-note{font-size:11px;color:#9A5A20;margin-top:6px}
   .div-body{padding:16px;border-top:1px solid #EFE6D0;font-size:17px}
   .lbl{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:#8a7a5a;font-weight:700;margin:11px 0 3px}
@@ -125,7 +126,7 @@ function gradeClass(g){
   if(s.includes('hasan')) return 'mid';
   return '';
 }
-function sidePanel(ref,grade,text,lang,url,idx,cid,english){
+function sidePanel(ref,grade,text,lang,url,idx,cid,english,form){
   const isEnglish=lang&&lang.indexOf('English')===0;
   return '<div class="side" id="side-'+cid+'-'+idx+'"'+(idx===1?' hidden':'')+'>'
        +'<div class="side-ref">'+esc(ref)+'</div>'
@@ -134,6 +135,9 @@ function sidePanel(ref,grade,text,lang,url,idx,cid,english){
        // Translation of the phrase above. The Arabic is the evidence; this is
        // provided so the card can be read without Arabic.
        +(!isEnglish && english ? '<div class="ev-tr">'+esc(english)+'</div>' : '')
+       // A condensed quote is faithful to the matn but not contiguous — an
+       // interruption (often an honorific) was elided. Say so.
+       +(!isEnglish && form==='condensed' ? '<div class="ev-cond">shortened from the full wording; the omitted words do not change the sense</div>' : '')
        +(isEnglish?'<div class="ev-note">'+esc(lang)+'</div>':'')
        
        +'</div>';
@@ -257,8 +261,8 @@ async function load(){
       +'<button id="pick-'+cid+'-1" onclick="pickOne('+cid+',1)">'+esc(d.source_b)+'<small>'+esc(d.grade_b||'')+'</small></button>'
       +'</div>'
       +'<div class="pair">'
-      +sidePanel(d.source_a,d.grade_a,d.arabic_a,d.evidence_language_a,d.url_a,0,cid,d.english_a)
-      +sidePanel(d.source_b,d.grade_b,d.arabic_b,d.evidence_language_b,d.url_b,1,cid,d.english_b)
+      +sidePanel(d.source_a,d.grade_a,d.arabic_a,d.evidence_language_a,d.url_a,0,cid,d.english_a,d.quote_a_form)
+      +sidePanel(d.source_b,d.grade_b,d.arabic_b,d.evidence_language_b,d.url_b,1,cid,d.english_b,d.quote_b_form)
       +'</div><div class="div-body">'
       +'<div class="lbl">What differs</div>'+esc(d.analysis)
       +'<div class="lbl">Why it matters</div>'+esc(d.significance)
