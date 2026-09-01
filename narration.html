@@ -83,9 +83,11 @@
   .bc-ar{font-family:'Amiri',serif;font-size:40px;direction:rtl;text-align:right;line-height:1.9;color:#1F1810;
          background:#fff;border:2px solid #E8DDC0;border-radius:14px;padding:18px 20px}
   .bc-en{font-size:26px;line-height:1.55;font-style:italic;background:#fff;border:2px solid #E8DDC0;border-radius:14px;padding:18px 20px}
+  .bc-cond{font-size:15px;color:#8a7a5a;font-style:italic;margin-top:8px}
   .bc-tr{font-size:24px;line-height:1.5;color:#2A2012;margin-top:12px;background:#fff;border:2px solid #E8DDC0;border-radius:14px;padding:16px 18px}
   .bc-lbl{font-size:16px;text-transform:uppercase;letter-spacing:.05em;color:#8a7a5a;font-weight:700;margin:26px 0 6px}
   .bc-txt{font-size:25px;line-height:1.55;color:#2A2012}
+  .bc-foot{margin-top:30px;padding-top:16px;border-top:1px solid #E8DDC0;font-size:15px;color:#8a7a5a;font-style:italic}
   #bottom-nav{position:fixed;bottom:0;left:0;right:0;background:#FFF8E8;border-top:1px solid #E8DDC0;display:flex;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;z-index:60}
   #bottom-nav::-webkit-scrollbar{display:none}
   .bnav-btn{flex:0 0 auto;min-width:72px;background:none;border:none;padding:7px 6px 8px;display:flex;flex-direction:column;align-items:center;gap:3px;font-family:'EB Garamond',serif;font-size:11px;color:#8a7a5a;cursor:pointer;white-space:nowrap;overflow:visible}
@@ -184,16 +186,15 @@ function bcStep(n){
 function bcDraw(){
   const d=POINTS[BCI];
   const sv=d.point_severity||d.severity;
-  const panel=(ref,grade,text,lang,english)=>{
+  const panel=(ref,grade,text,lang,english,form)=>{
     const en=lang&&lang.indexOf('English')===0;
-    // 'Sahih (by inclusion...)' is not a verdict anyone pronounced. Saying so
-    // matters most here, where the card is being shown to an audience.
     const byInclusion = grade && grade.indexOf('by inclusion') > -1;
     return '<div class="bc-src">'+esc(ref)+'</div>'
          + '<div class="bc-grade">'+esc(grade||'')
            + (byInclusion ? ' — a record of the collection it is in, not a grading anyone gave it' : '')
            + '</div>'
          + '<div class="'+(en?'bc-en':'bc-ar')+'">'+esc(text)+'</div>'
+         + (!en && form==='condensed' ? '<div class="bc-cond">shortened from the full wording</div>' : '')
          + (!en && english ? '<div class="bc-tr">'+esc(english)+'</div>' : '');
   };
   document.getElementById('bc-pos').textContent=(BCI+1)+' / '+POINTS.length;
@@ -201,18 +202,17 @@ function bcDraw(){
       '<div class="bc-topic">'+esc(BC_TITLE)+'</div>'
     + '<span class="bc-sev">'+esc(SEV[sv]||'Differs')+'</span>'
     + '<div class="bc-cat">'+esc(d.category)+'</div>'
-    + panel(d.source_a,d.grade_a,d.arabic_a,d.evidence_language_a,d.english_a)
-    + panel(d.source_b,d.grade_b,d.arabic_b,d.evidence_language_b,d.english_b)
+    + panel(d.source_a,d.grade_a,d.arabic_a,d.evidence_language_a,d.english_a,d.quote_a_form)
+    + panel(d.source_b,d.grade_b,d.arabic_b,d.evidence_language_b,d.english_b,d.quote_b_form)
     + '<div class="bc-lbl">What differs</div><div class="bc-txt">'+esc(d.analysis)+'</div>'
     + '<div class="bc-lbl">Why it matters</div><div class="bc-txt">'+esc(d.significance)+'</div>'
-    // Showing a contradiction without the reconciliation offered for it would
-    // present only one side. It belongs on screen with the rest.
     + (d.harmonization_option
        ? '<div class="bc-lbl">How it is reconciled</div><div class="bc-txt">'+esc(d.harmonization_option)+'</div>'
          + (d.preferred_explanation
             ? '<div class="bc-lbl">Does that settle it?</div><div class="bc-txt">'+esc(d.preferred_explanation)+'</div>'
             : '')
-       : '');
+       : '')
+    + '<div class="bc-foot">Comparison drawn from the Arabic wording of the narrations, not from any translation. quranhikma.com</div>';
 }
 document.addEventListener('keydown',e=>{
   if(document.getElementById('bc').hidden) return;
