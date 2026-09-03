@@ -60,6 +60,21 @@ dupIds.length ? bad(`${dupIds.length} version row(s) duplicated in the reader vi
 const noText = versions.filter(v => !v.text_arabic && !v.text_english);
 noText.length ? bad(`${noText.length} version(s) resolve no text`) : ok('every version resolves text');
 
+// The index count must match the true data. A group with versions but no
+// dossier link (or a dossier row summing wrong) makes the reader-facing
+// count lie, which is exactly the kind of silent drift that hides additions.
+const idxNarrations = groups.reduce((a,g)=>a+(g.version_count||0),0);
+const dossierRowsFull = await api('narrative_dossier_reader?select=group_slug,version_count');
+const idxGroups = new Set(dossierRowsFull.map(r=>r.group_slug));
+const missingFromIndex = groups.filter(g=>!idxGroups.has(g.slug));
+missingFromIndex.length
+  ? bad(`${missingFromIndex.length} group(s) built but absent from the index: ${missingFromIndex.map(g=>g.slug).join(', ')}`)
+  : ok(`index lists all ${groups.length} groups`);
+const idxSum = dossierRowsFull.reduce((a,r)=>a+(r.version_count||0),0);
+idxSum === idxNarrations
+  ? ok(`index narration count (${idxSum}) matches the data`)
+  : bad(`index shows ${idxSum} narrations but the groups hold ${idxNarrations}`);
+
 // 3. Every divergence card is complete.
 section('divergence cards');
 const divs = (await api('narrative_divergence_reader?select=*')).filter(d => d.point_id);
