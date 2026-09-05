@@ -10570,6 +10570,111 @@ function showNavArrows() {
 // ══════════════════════════════════════════════════
 // TAFSIR ACCURACY ANALYZER — Ibn Kathir AR vs EN
 // ══════════════════════════════════════════════════
+function renderTafsirAnalysis(container, analysis, sura, aya, isCached) {
+  if (!analysis) return;
+
+  // Calculate grade letter
+  function gradeFromScore(s) {
+    if (!s) return '—';
+    if (s >= 9) return 'A';
+    if (s >= 8) return 'B';
+    if (s >= 7) return 'C';
+    if (s >= 6) return 'D';
+    return 'F';
+  }
+
+  const grade = gradeFromScore(analysis.accuracy_score);
+  const pct = Math.round((analysis.accuracy_score || 0) * 10);
+
+  let html = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <div style="color:#2E7D32;font-weight:700;font-size:16px;">🔍 Translation Accuracy</div>
+      <button onclick="closeAccuracyModal()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#999;">✕</button>
+    </div>
+
+    <!-- Accuracy Score -->
+    <div style="background:linear-gradient(135deg, #E8F5E9 0%, #F1F8F6 100%);border:2px solid #4CAF50;border-radius:12px;padding:16px;margin-bottom:16px;">
+      <div style="font-size:12px;color:#2E7D32;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Fidelity Score</div>
+      <div style="display:flex;align-items:baseline;gap:8px;">
+        <div style="font-size:32px;font-weight:800;color:#2E7D32;">${grade}</div>
+        <div style="font-size:20px;color:#558B2F;font-weight:600;">${pct}%</div>
+        <div style="font-size:12px;color:#666;margin-left:auto;">${analysis.confidence_level || 'high'} confidence</div>
+      </div>
+    </div>
+
+    <!-- Side-by-side Arabic/English -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+      <div style="background:#faf8f5;border-left:4px solid #d0b59d;padding:12px;border-radius:6px;">
+        <div style="font-size:10px;font-weight:700;color:#8B5E0A;text-transform:uppercase;margin-bottom:6px;">Arabic Original</div>
+        <div style="font-size:13px;line-height:1.6;color:#333;direction:rtl;text-align:right;font-family:serif;">
+          ${escapeHtml(analysis.arabic_excerpt || '').substring(0, 300)}${(analysis.arabic_excerpt || '').length > 300 ? '…' : ''}
+        </div>
+      </div>
+
+      <div style="background:#f5f8ff;border-left:4px solid #6A1B9A;padding:12px;border-radius:6px;">
+        <div style="font-size:10px;font-weight:700;color:#4A148C;text-transform:uppercase;margin-bottom:6px;">English Translation</div>
+        <div style="font-size:13px;line-height:1.6;color:#333;direction:ltr;text-align:left;">
+          ${escapeHtml(analysis.english_excerpt || '').substring(0, 300)}${(analysis.english_excerpt || '').length > 300 ? '…' : ''}
+        </div>
+      </div>
+    </div>
+
+    <!-- Analysis Sections -->
+    ${analysis.accurate_portions ? `
+      <div style="background:#E8F5E9;border:1px solid #81C784;border-radius:8px;padding:12px;margin-bottom:12px;">
+        <div style="font-size:11px;font-weight:700;color:#2E7D32;text-transform:uppercase;margin-bottom:6px;">✓ Accurately Translated</div>
+        <div style="font-size:13px;color:#1B5E20;line-height:1.5;">
+          ${escapeHtml(analysis.accurate_portions)}
+        </div>
+      </div>
+    ` : ''}
+
+    ${analysis.omitted_content ? `
+      <div style="background:#FFF3E0;border:1px solid #FFB74D;border-radius:8px;padding:12px;margin-bottom:12px;">
+        <div style="font-size:11px;font-weight:700;color:#E65100;text-transform:uppercase;margin-bottom:6px;">⊘ Omitted Content</div>
+        <div style="font-size:13px;color:#BF360C;line-height:1.5;">
+          ${escapeHtml(analysis.omitted_content)}
+        </div>
+      </div>
+    ` : ''}
+
+    ${analysis.mistranslated_sections ? `
+      <div style="background:#FFEBEE;border:1px solid #EF5350;border-radius:8px;padding:12px;margin-bottom:12px;">
+        <div style="font-size:11px;font-weight:700;color:#C62828;text-transform:uppercase;margin-bottom:6px;">✗ Mistranslated</div>
+        <div style="font-size:13px;color:#B71C1C;line-height:1.5;">
+          ${escapeHtml(analysis.mistranslated_sections)}
+        </div>
+      </div>
+    ` : ''}
+
+    ${analysis.theological_concerns ? `
+      <div style="background:#F3E5F5;border:1px solid #BA68C8;border-radius:8px;padding:12px;margin-bottom:12px;">
+        <div style="font-size:11px;font-weight:700;color:#6A1B9A;text-transform:uppercase;margin-bottom:6px;">⚠ Theological Concerns</div>
+        <div style="font-size:13px;color:#4A148C;line-height:1.5;">
+          ${escapeHtml(analysis.theological_concerns)}
+        </div>
+      </div>
+    ` : ''}
+
+    <!-- Verdict -->
+    ${analysis.verdict ? `
+      <div style="background:#E3F2FD;border:2px solid #1976D2;border-radius:8px;padding:14px;margin-bottom:12px;">
+        <div style="font-size:11px;font-weight:700;color:#0D47A1;text-transform:uppercase;margin-bottom:6px;">Summary Verdict</div>
+        <div style="font-size:13px;color:#1565C0;line-height:1.6;font-weight:500;">
+          ${escapeHtml(analysis.verdict)}
+        </div>
+      </div>
+    ` : ''}
+
+    <div style="font-size:11px;color:#999;margin-top:12px;padding-top:12px;border-top:1px solid #e0e0e0;">
+      Reviewed: ${analysis.review_date ? new Date(analysis.review_date).toLocaleDateString() : 'N/A'}
+      ${analysis.reviewed_by ? ` • By: ${escapeHtml(analysis.reviewed_by)}` : ''}
+    </div>
+  `;
+
+  container.innerHTML = html;
+}
+
 async function analyzeTafsirAccuracy(sura, aya) {
   const panel = document.getElementById(`tp-${aya}-tafsir`);
   if (!panel) return;
