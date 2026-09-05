@@ -1,131 +1,33 @@
-// QuranHikma — database-backed Tafsir comparison renderer.
-// Safe integration module: uses the site's existing sbFetch helper and never
-// embeds credentials. It renders only stored tafsir_entries data and does not
-// infer semantic agreement/disagreement from raw prose.
+// QuranHikma — Tafsir comparison renderer
 (function(){
-  'use strict';
-
-  const BASELINE = [
-    ['tabari','al-Ṭabarī'],
-    ['ibn_kathir','Ibn Kathīr'],
-    ['qurtubi','al-Qurṭubī'],
-    ['jalalayn','al-Jalālayn'],
-    ['saadi','al-Saʿdī'],
-    ['ibn_abbas','Ibn ʿAbbās / Tanwīr al-Miqbās']
-  ];
-  const NAMES = Object.fromEntries(BASELINE);
-
-  function esc(value='') {
-    return String(value).replace(/[&<>\"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[c]));
+'use strict';
+const BASELINE=[['tabari','al-Ṭabarī'],['ibn_kathir','Ibn Kathīr'],['qurtubi','al-Qurṭubī'],['jalalayn','al-Jalālayn'],['saadi','al-Saʿdī'],['ibn_abbas','Tanwīr al-Miqbās (attributed to Ibn ʿAbbās)']];
+const NAMES=Object.fromEntries(BASELINE);
+const VERIFIED={
+ '19:28':{
+  question:'Who is “Aaron” in “O sister of Aaron”?',
+  note:'Counts mean sources preserving an interpretation, not votes for what each commentator personally believed.',
+  views:[
+   {title:'Righteousness / resemblance',count:5,scholars:['tabari','ibn_kathir','qurtubi','jalalayn','ibn_abbas'],text:'Mary is linked to a righteous Aaron through resemblance in worship, chastity, righteousness, or communal naming language.'},
+   {title:'Contemporary brother named Aaron',count:3,scholars:['qurtubi','saadi','ibn_abbas'],text:'These sources preserve a reading in which Aaron is a real person from Mary’s own generation. Al-Saʿdī presents this as the apparent reading and distinguishes him from Aaron, brother of Moses.'},
+   {title:'Lineage / descent from Aaron',count:3,scholars:['tabari','ibn_kathir','qurtubi'],text:'Mary is associated with Aaron, brother of Moses, through descent or broader ancestral/tribal kinship language.'},
+   {title:'Wicked-man comparison',count:2,scholars:['ibn_kathir','ibn_abbas'],text:'A minority transmitted report says Aaron was a wicked man and Mary was compared with him. Preservation of the report does not mean the commentator adopts it.'}
+  ],
+  special:'Ibn Kathīr also transmits a claim that Mary was literally the sister of Moses and Aaron, but explicitly rejects it as “خطأ محض” (a clear error). It is therefore classified as rejected, not as Ibn Kathīr’s belief.',
+  statuses:{
+   tabari:['Preserves righteous-Aaron/resemblance explanation','Preserves naming-practice evidence','Preserves lineage interpretation'],
+   ibn_kathir:['Principal gloss: resemblance in worship — “أي يا شبيهة هارون في العبادة”','Preserves lineage report','Preserves wicked-man report as an alternative','Explicitly rejects literal sister-of-Moses/Aaron report — “وهذا خطأ محض”'],
+   qurtubi:['Preserves resemblance interpretation','Preserves lineage interpretation','Preserves real contemporary brother interpretation'],
+   jalalayn:['States righteous-Aaron / chastity-resemblance interpretation'],
+   saadi:['Apparent/stated reading: real brother — “الظاهر أنه أخوها حقيقة”','Explicitly distinguishes him from Aaron, brother of Moses'],
+   ibn_abbas:['Attributed work preserves righteous-Aaron report','Preserves competing wicked-Aaron report','Preserves paternal-brother report','Attribution of Tanwīr al-Miqbās to Ibn ʿAbbās is disputed']
   }
-
-  function longestPerLanguage(rows) {
-    const out = {};
-    for (const row of rows || []) {
-      const lang = row.language || 'unknown';
-      if (!out[lang] || String(row.content || '').length > String(out[lang].content || '').length) {
-        out[lang] = row;
-      }
-    }
-    return out;
-  }
-
-  function groupRows(rows) {
-    const grouped = {};
-    for (const row of rows || []) {
-      const key = row.scholar_key || 'unknown';
-      (grouped[key] ||= []).push(row);
-    }
-    return grouped;
-  }
-
-  async function fetchRows(sura, aya) {
-    if (typeof window.sbFetch === 'function') {
-      return await window.sbFetch('tafsir_entries', {
-        sura: `eq.${sura}`,
-        aya: `eq.${aya}`,
-        select: 'scholar_key,language,content',
-        order: 'scholar_key.asc,language.asc'
-      });
-    }
-    if (typeof sbFetch === 'function') {
-      return await sbFetch('tafsir_entries', {
-        sura: `eq.${sura}`,
-        aya: `eq.${aya}`,
-        select: 'scholar_key,language,content',
-        order: 'scholar_key.asc,language.asc'
-      });
-    }
-    throw new Error('The existing sbFetch database helper is not available on this page.');
-  }
-
-  function styles() {
-    if (document.getElementById('qh-tafsir-compare-css')) return;
-    const s = document.createElement('style');
-    s.id = 'qh-tafsir-compare-css';
-    s.textContent = `
-      .qh-tc{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#1d1b18}
-      .qh-tc-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin:10px 0}
-      .qh-tc-metric{border:1px solid #e2d8c2;border-radius:10px;padding:8px;text-align:center;background:#fffdf8}
-      .qh-tc-metric b{display:block;font-size:18px}.qh-tc-metric span{font-size:10px;color:#746b5c}
-      .qh-tc-coverage{display:flex;gap:5px;flex-wrap:wrap;margin:8px 0 12px}
-      .qh-tc-pill{display:inline-block;background:#fff4d6;border:1px solid #e7cf8f;border-radius:999px;padding:4px 7px;font-size:10px;font-weight:800}
-      .qh-tc-pill.missing{background:#f7eeee;border-color:#e2bbbb;color:#8a3d3d}
-      .qh-tc-grid{display:grid;grid-template-columns:1fr;gap:10px}.qh-tc-card{border:1px solid #e1d8c6;border-radius:12px;overflow:hidden;background:#fff}
-      .qh-tc-card summary{padding:11px 12px;font-weight:800;cursor:pointer;background:#fbf7ed}.qh-tc-body{padding:12px;border-top:1px solid #e8e0d2}
-      .qh-tc-lang{font-size:10px;font-weight:800;color:#8b6d23;margin:9px 0 4px}.qh-tc-text{white-space:pre-wrap;line-height:1.6;font-size:13px}.qh-tc-text.ar{direction:rtl;text-align:right;font-size:17px}
-      .qh-tc-note{background:#f6f3ea;border-left:3px solid #b99232;padding:9px 10px;font-size:11px;line-height:1.45;margin:10px 0}
-      @media(min-width:760px){.qh-tc-grid{grid-template-columns:1fr 1fr}.qh-tc-summary{grid-template-columns:repeat(4,1fr)}}`;
-    document.head.appendChild(s);
-  }
-
-  async function render(container, sura, aya) {
-    const el = typeof container === 'string' ? document.querySelector(container) : container;
-    if (!el) throw new Error('Comparison container not found.');
-    styles();
-    el.classList.add('qh-tc');
-    el.innerHTML = '<div class="qh-tc-note">Loading stored tafsīr comparison…</div>';
-
-    try {
-      const rows = await fetchRows(Number(sura), Number(aya)) || [];
-      const grouped = groupRows(rows);
-      const keys = Object.keys(grouped);
-      const langs = [...new Set(rows.map(r => r.language).filter(Boolean))];
-      const found = BASELINE.filter(([k]) => grouped[k]).length;
-      const ordered = [
-        ...BASELINE.map(x => x[0]).filter(k => grouped[k]),
-        ...keys.filter(k => !NAMES[k])
-      ];
-
-      const summary = `<div class="qh-tc-summary">
-        <div class="qh-tc-metric"><b>${rows.length}</b><span>DB rows</span></div>
-        <div class="qh-tc-metric"><b>${keys.length}</b><span>scholars</span></div>
-        <div class="qh-tc-metric"><b>${found}/6</b><span>baseline</span></div>
-        <div class="qh-tc-metric"><b>${langs.length}</b><span>languages</span></div>
-      </div>`;
-
-      const coverage = `<div class="qh-tc-coverage">${BASELINE.map(([k,n]) =>
-        `<span class="qh-tc-pill ${grouped[k] ? '' : 'missing'}">${grouped[k] ? '✓' : '—'} ${esc(n)}</span>`
-      ).join('')}</div>`;
-
-      const note = '<div class="qh-tc-note">This view compares only text actually stored in <b>tafsir_entries</b>. Agreement, disagreement, preferred views, rejected reports and interpretation counts are intentionally not inferred from raw prose. Those will be attached from the verified proposition layer.</div>';
-
-      const cards = rows.length ? `<div class="qh-tc-grid">${ordered.map((k, i) => {
-        const langMap = longestPerLanguage(grouped[k]);
-        const langKeys = Object.keys(langMap).sort((a,b) => a === 'ar' ? -1 : b === 'ar' ? 1 : a === 'en' ? -1 : b === 'en' ? 1 : a.localeCompare(b));
-        return `<details class="qh-tc-card" ${i===0?'open':''}><summary>${esc(NAMES[k] || k)} <small>(${grouped[k].length} row${grouped[k].length===1?'':'s'})</small></summary><div class="qh-tc-body">${langKeys.map(lang => {
-          const row = langMap[lang];
-          return `<div class="qh-tc-lang">${esc(lang.toUpperCase())}</div><div class="qh-tc-text ${lang==='ar'?'ar':''}">${esc(row.content || '')}</div>`;
-        }).join('')}</div></details>`;
-      }).join('')}</div>` : '<div class="qh-tc-note">No stored tafsīr rows were returned for this verse.</div>';
-
-      el.innerHTML = summary + coverage + note + cards;
-      return {sura:Number(sura), aya:Number(aya), rows:rows.length, scholarKeys:keys.length, baselineFound:found, languages:langs};
-    } catch (err) {
-      el.innerHTML = `<div class="qh-tc-note">Tafsīr comparison could not load: ${esc(err.message || err)}</div>`;
-      throw err;
-    }
-  }
-
-  window.QuranHikmaTafsirComparison = { render, fetchRows };
+ }
+};
+function esc(v=''){return String(v).replace(/[&<>\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[c]));}
+function styles(){if(document.getElementById('qh-tc-css'))return;const s=document.createElement('style');s.id='qh-tc-css';s.textContent=`.qh-tc{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#1d1b18}.qh-sem{background:#fff9e9;border:1px solid #e4d3a7;border-radius:14px;padding:13px;margin:10px 0}.qh-sem h3{margin:0 0 5px}.qh-note{font-size:11px;color:#665f53;line-height:1.45}.qh-views{display:grid;gap:8px;margin:10px 0}.qh-view{border:1px solid #e5d8ba;border-radius:11px;background:#fff;padding:10px;cursor:pointer;text-align:left;width:100%}.qh-view b{display:block}.qh-bar{height:7px;background:#eee6d8;border-radius:8px;overflow:hidden;margin:7px 0 4px}.qh-fill{height:100%;background:#b8902a}.qh-detail{display:none;font-size:12px;line-height:1.5;padding-top:7px}.qh-view.open .qh-detail{display:block}.qh-warn{background:#fff1ed;border-left:3px solid #a95d48;padding:9px;font-size:11px;line-height:1.45;margin-top:8px}.qh-status{margin:8px 0 12px;padding:9px;background:#f7f3e8;border-radius:9px;font-size:11px;line-height:1.5}.qh-card{border:1px solid #e1d8c6;border-radius:12px;margin:9px 0;overflow:hidden}.qh-card summary{padding:11px;font-weight:800;cursor:pointer;background:#fbf7ed}.qh-body{padding:11px}.qh-lang{font-size:10px;font-weight:800;color:#8b6d23;margin:8px 0 3px}.qh-text{white-space:pre-wrap;line-height:1.6;font-size:13px}.qh-text.ar{direction:rtl;text-align:right;font-size:17px}.qh-pill{display:inline-block;border:1px solid #dfcfaa;border-radius:999px;padding:3px 6px;margin:2px;font-size:10px}@media(min-width:700px){.qh-views{grid-template-columns:1fr 1fr}}`;document.head.appendChild(s);}
+async function fetchRows(sura,aya){const fn=window.sbFetch||(typeof sbFetch==='function'?sbFetch:null);if(!fn)throw new Error('Database helper unavailable');return await fn('tafsir_entries',{sura:`eq.${sura}`,aya:`eq.${aya}`,select:'scholar_key,language,content',order:'scholar_key.asc,language.asc'});}
+function semanticBlock(sura,aya){const d=VERIFIED[`${sura}:${aya}`];if(!d)return'';return `<section class="qh-sem"><h3>${esc(d.question)}</h3><div class="qh-note">${esc(d.note)}</div><div class="qh-views">${d.views.map(v=>`<button class="qh-view" type="button" onclick="this.classList.toggle('open')"><b>${esc(v.title)}</b><div class="qh-bar"><div class="qh-fill" style="width:${Math.round(v.count/6*100)}%"></div></div><span>${v.count} of 6 sources</span><div class="qh-detail">${esc(v.text)}<br><br><b>Sources:</b> ${v.scholars.map(k=>esc(NAMES[k])).join(' · ')}</div></button>`).join('')}</div><div class="qh-warn"><b>Rejected-report safeguard:</b> ${esc(d.special)}</div></section>`;}
+async function render(container,sura,aya){const el=typeof container==='string'?document.querySelector(container):container;if(!el)throw new Error('Comparison container not found');styles();el.classList.add('qh-tc');el.innerHTML=semanticBlock(sura,aya)+'<div class="qh-note">Loading full stored tafsīr texts…</div>';try{const rows=await fetchRows(Number(sura),Number(aya))||[];const grouped={};rows.forEach(r=>(grouped[r.scholar_key]??=[]).push(r));const verified=VERIFIED[`${sura}:${aya}`];let html=semanticBlock(sura,aya);html+=`<div class="qh-note"><b>${Object.keys(grouped).length}</b> scholar records loaded from the tafsīr database. Open a scholar to inspect the stored source text.</div>`;for(const [key,name] of BASELINE){if(!grouped[key])continue;html+=`<details class="qh-card"><summary>${esc(name)}</summary><div class="qh-body">`;if(verified?.statuses[key])html+=`<div class="qh-status"><b>Comparison classification</b><br>${verified.statuses[key].map(x=>'• '+esc(x)).join('<br>')}</div>`;const by={};for(const r of grouped[key]){if(!by[r.language]||String(r.content||'').length>String(by[r.language].content||'').length)by[r.language]=r;}for(const lang of Object.keys(by).sort(a=>a==='ar'?-1:1)){html+=`<div class="qh-lang">${esc(lang.toUpperCase())}</div><div class="qh-text ${lang==='ar'?'ar':''}">${esc(by[lang].content||'')}</div>`;}html+='</div></details>';}if(!rows.length)html+='<div class="qh-note">No stored tafsīr text returned for this verse.</div>';el.innerHTML=html;return{rows:rows.length,scholars:Object.keys(grouped).length,verifiedComparison:!!verified};}catch(e){el.innerHTML=semanticBlock(sura,aya)+`<div class="qh-warn">Full tafsīr text could not load: ${esc(e.message||e)}</div>`;throw e;}}
+window.QuranHikmaTafsirComparison={render,fetchRows,verified:VERIFIED};
 })();
