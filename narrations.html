@@ -518,15 +518,17 @@
         // Fetch and display comparisons
         async function loadComparisons() {
             try {
-                console.log('🔍 loadComparisons: Starting...');
                 const container = document.getElementById('comparisonsList');
-                console.log('🔍 loadComparisons: Container found?', !!container);
                 
                 if (!container) {
-                    throw new Error('comparisonsList element not found in DOM');
+                    throw new Error('FATAL: comparisonsList element not found');
                 }
 
-                console.log('🔍 loadComparisons: Fetching narrative_groups...');
+                // Test that API key is defined
+                if (!SUPABASE_ANON_KEY || !SUPABASE_URL) {
+                    throw new Error('FATAL: API credentials not defined');
+                }
+
                 const response = await fetch(
                     `${SUPABASE_URL}/rest/v1/narrative_groups?select=*`,
                     {
@@ -537,19 +539,19 @@
                     }
                 );
 
-                console.log('🔍 loadComparisons: Response status:', response.status);
-
                 if (!response.ok) {
-                    throw new Error(`Supabase error: ${response.status} ${response.statusText}`);
+                    throw new Error(`API Error: HTTP ${response.status}`);
                 }
 
                 const groups = await response.json();
-                console.log('🔍 loadComparisons: Got groups:', groups.length);
+
+                if (!Array.isArray(groups)) {
+                    throw new Error('API returned invalid data (not an array)');
+                }
 
                 // For each group, fetch verification status
                 const comparisonsData = await Promise.all(
                     groups.map(async (group) => {
-                        // Get narrations in this group
                         const narrResponse = await fetch(
                             `${SUPABASE_URL}/rest/v1/narrative_versions?narrative_group_id=eq.${group.id}&select=id,source_collection`,
                             {
@@ -560,12 +562,10 @@
                             }
                         );
                         if (!narrResponse.ok) {
-                            console.error(`Error fetching narrations for group ${group.id}:`, narrResponse.status);
                             return { ...group, narrationCount: 0, collectionCount: 0, verifiedLinksCount: 0, totalLinksCount: 0 };
                         }
                         const narrations = await narrResponse.json();
 
-                        // Get link verification status
                         const narrationIds = narrations.map(n => n.id);
                         let verifiedCount = 0;
                         let totalLinks = 0;
@@ -587,8 +587,7 @@
                                     verifiedCount = links.filter(l => l.verification_status === 'verified').length;
                                 }
                             } catch (linkError) {
-                                console.warn('Warning: Could not fetch link verification status (RLS may be blocking)');
-                                // Continue without link counts - don't fail the whole query
+                                // Continue without link counts
                             }
                         }
 
@@ -602,17 +601,17 @@
                     })
                 );
 
-                console.log('🔍 loadComparisons: Calling displayComparisons with', comparisonsData.length, 'items');
                 displayComparisons(comparisonsData);
-                console.log('✅ loadComparisons: Complete!');
             } catch (error) {
-                console.error('❌ Error loading comparisons:', error);
-                console.error('Stack trace:', error.stack);
                 const container = document.getElementById('comparisonsList');
                 if (container) {
                     container.innerHTML = `
                         <div class="loading">
-                            <p style="color: #c62828;">Error loading comparisons: ${error.message}</p>
+                            <p style="color: #c62828; padding: 20px; border: 2px solid #c62828; border-radius: 8px;">
+                                <strong>🔴 Error:</strong><br>
+                                ${error.message}<br><br>
+                                <small style="color: #999;">Refresh the page to try again.</small>
+                            </p>
                         </div>
                     `;
                 }
