@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quran Hikma - Add Translations</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #f5f1e8 0%, #e8dcc8 100%);
+            padding: 20px;
+            color: #333;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            padding: 40px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #5a4a3a;
+            margin-bottom: 10px;
+            font-size: 2em;
+        }
+        .subtitle {
+            color: #999;
+            margin-bottom: 30px;
+            font-size: 0.95em;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 8px;
+            color: #5a4a3a;
+        }
+        input, textarea, select {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 1em;
+            font-family: inherit;
+        }
+        textarea {
+            min-height: 120px;
+            resize: vertical;
+        }
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 30px;
+        }
+        button {
+            padding: 12px 24px;
+            font-size: 1em;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .btn-add {
+            background: #8b7355;
+            color: white;
+            flex: 1;
+        }
+        .btn-add:hover {
+            background: #6b5345;
+        }
+        .btn-clear {
+            background: #ddd;
+            color: #333;
+            flex: 1;
+        }
+        .btn-clear:hover {
+            background: #ccc;
+        }
+        .translations-list {
+            margin-top: 40px;
+            border-top: 2px solid #ddd;
+            padding-top: 30px;
+        }
+        .translation-card {
+            background: #f9f8f5;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            border-left: 4px solid #8b7355;
+        }
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .card-title {
+            font-weight: bold;
+            color: #5a4a3a;
+        }
+        .card-status {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            background: #ffd700;
+            color: #333;
+        }
+        .card-status.done {
+            background: #4caf50;
+            color: white;
+        }
+        .card-body {
+            font-size: 0.9em;
+            line-height: 1.6;
+            color: #666;
+        }
+        .card-link {
+            margin-top: 10px;
+            font-size: 0.85em;
+        }
+        .card-link a {
+            color: #0066cc;
+            text-decoration: none;
+        }
+        .card-link a:hover {
+            text-decoration: underline;
+        }
+        .stats {
+            background: #f5f1e8;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            text-align: center;
+        }
+        .stat-item {
+            border-right: 1px solid #ddd;
+        }
+        .stat-item:last-child {
+            border-right: none;
+        }
+        .stat-number {
+            font-size: 2em;
+            font-weight: bold;
+            color: #8b7355;
+        }
+        .stat-label {
+            font-size: 0.85em;
+            color: #999;
+            margin-top: 5px;
+        }
+        .note {
+            background: #fffbf0;
+            border-left: 4px solid #ffd700;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            font-size: 0.9em;
+            color: #666;
+        }
+        .error {
+            color: #c62828;
+            margin-top: 5px;
+            font-size: 0.9em;
+        }
+        .success {
+            background: #d4edda;
+            border: 1px solid #4caf50;
+            color: #155724;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📚 Add Hadith Translations</h1>
+        <p class="subtitle">Add English translations with source verification links</p>
+
+        <div class="stats">
+            <div class="stat-item">
+                <div class="stat-number" id="totalNeeded">89</div>
+                <div class="stat-label">Translations Needed</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number" id="alreadyAdded">0</div>
+                <div class="stat-label">Already Added This Session</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number" id="remaining">89</div>
+                <div class="stat-label">Remaining to Complete</div>
+            </div>
+        </div>
+
+        <div class="note">
+            <strong>📌 How it works:</strong><br>
+            Fill in the form below with a hadith reference, collection, English translation, and the source link (URL) where readers can verify the translation. When you click "Add Translation", it will be stored in the database and displayed on the site with a link for verification.
+        </div>
+
+        <div id="successMessage"></div>
+
+        <form id="translationForm">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="collection">Collection *</label>
+                    <select id="collection" required>
+                        <option value="">Select Collection</option>
+                        <option value="Sahih al-Bukhari">Sahih al-Bukhari</option>
+                        <option value="Sahih Muslim">Sahih Muslim</option>
+                        <option value="Jami at-Tirmidhi">Jami at-Tirmidhi</option>
+                        <option value="Sunan Abu Dawud">Sunan Abu Dawud</option>
+                        <option value="Sunan ad-Darimi">Sunan ad-Darimi</option>
+                        <option value="Sunan Ibn Majah">Sunan Ibn Majah</option>
+                        <option value="Ahmed">Musnad Ahmad</option>
+                        <option value="Muwatta Malik">Muwatta Malik</option>
+                        <option value="Sunan an-Nasai">Sunan an-Nasai</option>
+                        <option value="Mishkat al-Masabih">Mishkat al-Masabih</option>
+                        <option value="Bulugh Almaram">Bulugh Almaram</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="reference">Hadith Reference # *</label>
+                    <input type="text" id="reference" placeholder="e.g. 4350 or Q 27:18-19" required>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="translation">English Translation *</label>
+                <textarea id="translation" placeholder="Paste the complete English translation here..." required></textarea>
+                <div class="error" id="translationError"></div>
+            </div>
+
+            <div class="form-group">
+                <label for="sourceLink">Source Link (URL) *</label>
+                <input type="url" id="sourceLink" placeholder="https://example.com/hadith/4350" required>
+                <small style="color: #999; margin-top: 5px; display: block;">
+                    This link will be displayed on the site so readers can verify the translation is accurate.
+                </small>
+            </div>
+
+            <div class="button-group">
+                <button type="submit" class="btn-add">✓ Add Translation</button>
+                <button type="reset" class="btn-clear">Clear Form</button>
+            </div>
+        </form>
+
+        <div class="translations-list">
+            <h2 style="margin-bottom: 20px; color: #5a4a3a;">📋 Added in This Session</h2>
+            <div id="addedList" style="color: #999; text-align: center; padding: 30px;">
+                No translations added yet. Add one to get started!
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
+
+        const form = document.getElementById('translationForm');
+        const addedList = document.getElementById('addedList');
+        const successMessage = document.getElementById('successMessage');
+        let sessionCount = 0;
+        const addedTranslations = [];
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const collection = document.getElementById('collection').value;
+            const reference = document.getElementById('reference').value;
+            const translation = document.getElementById('translation').value;
+            const sourceLink = document.getElementById('sourceLink').value;
+
+            if (!collection || !reference || !translation || !sourceLink) {
+                alert('Please fill in all fields');
+                return;
+            }
+
+            try {
+                // Find the narration by collection and reference
+                const { data: narration } = await fetch(
+                    `${SUPABASE_URL}/rest/v1/narrative_versions?source_collection=eq.${encodeURIComponent(collection)}&source_reference=eq.${encodeURIComponent(reference)}&select=id`,
+                    {
+                        headers: {
+                            'apikey': SUPABASE_ANON_KEY,
+                            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                        }
+                    }
+                ).then(r => r.json());
+
+                if (!narration || narration.length === 0) {
+                    alert(`Narration not found: ${collection} ${reference}`);
+                    return;
+                }
+
+                const id = narration[0].id;
+
+                // Update the narration with translation and source link
+                const { error } = await fetch(
+                    `${SUPABASE_URL}/rest/v1/narrative_versions?id=eq.${id}`,
+                    {
+                        method: 'PATCH',
+                        headers: {
+                            'apikey': SUPABASE_ANON_KEY,
+                            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            english_translation: translation,
+                            source_link: sourceLink
+                        })
+                    }
+                ).then(r => r.json());
+
+                if (error && error.message) {
+                    throw new Error(error.message);
+                }
+
+                // Add to session list
+                sessionCount++;
+                addedTranslations.unshift({
+                    collection,
+                    reference,
+                    translation: translation.substring(0, 150) + '...',
+                    sourceLink
+                });
+
+                // Update stats
+                document.getElementById('alreadyAdded').textContent = sessionCount;
+                document.getElementById('remaining').textContent = Math.max(0, 89 - sessionCount);
+
+                // Show success message
+                successMessage.innerHTML = `
+                    <div class="success">
+                        ✅ Translation added! "${collection} ${reference}" now has English translation with source verification.
+                    </div>
+                `;
+                successMessage.scrollIntoView({ behavior: 'smooth' });
+
+                // Update list
+                updateAddedList();
+
+                // Clear form
+                form.reset();
+
+                setTimeout(() => {
+                    successMessage.innerHTML = '';
+                }, 3000);
+
+            } catch (err) {
+                alert('Error adding translation: ' + err.message);
+            }
+        });
+
+        function updateAddedList() {
+            if (addedTranslations.length === 0) {
+                addedList.innerHTML = '<p style="color: #999; text-align: center; padding: 30px;">No translations added yet.</p>';
+                return;
+            }
+
+            addedList.innerHTML = addedTranslations.map((t, idx) => `
+                <div class="translation-card">
+                    <div class="card-header">
+                        <div class="card-title">${t.collection} ${t.reference}</div>
+                        <div class="card-status done">✓ Added</div>
+                    </div>
+                    <div class="card-body">
+                        ${t.translation}
+                    </div>
+                    <div class="card-link">
+                        🔗 Source: <a href="${t.sourceLink}" target="_blank">View source for verification</a>
+                    </div>
+                </div>
+            `).join('');
+        }
+    </script>
+</body>
+</html>
