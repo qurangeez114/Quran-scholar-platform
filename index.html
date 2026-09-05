@@ -10590,49 +10590,26 @@ async function analyzeTafsirAccuracy(sura, aya) {
   modal.style.display = 'flex';
   loadingDiv.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;"><div style="color:#2E7D32;font-weight:700;font-size:16px;">🔍 Translation Accuracy</div><button onclick="closeAccuracyModal()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#999;">✕</button></div><div style="color:#2E7D32;font-weight:600;margin-bottom:8px;">Checking saved analysis...</div>';
 
-  // Check DB cache first
+  // Check DB cache first — ONLY show cached results, never generate new ones
   try {
     const cached = await sbFetch('tafsir_accuracy_analysis', { sura: `eq.${sura}`, aya: `eq.${aya}`, scholar_key: 'eq.ibn_kathir' });
-    if (cached && cached.length > 0) { renderTafsirAnalysis(loadingDiv, cached[0], sura, aya, true); return; }
+    if (cached && cached.length > 0) { 
+      renderTafsirAnalysis(loadingDiv, cached[0], sura, aya, true); 
+      return; 
+    }
   } catch(e) {}
 
-  // Get rows — from panel cache or fetch fresh
-  let allRows = panel._allRows;
-  if (!allRows || allRows.length === 0) {
-    loadingDiv.innerHTML = '<div style="color:#2E7D32;font-weight:700;">🔍 Fetching tafsir data...</div>';
-    try {
-      allRows = await sbFetch('tafsir_entries', {
-        select: 'scholar_key,language,content',
-        sura: `eq.${sura}`, aya: `eq.${aya}`
-      });
-      panel._allRows = allRows;
-    } catch(e) {
-      loadingDiv.innerHTML = `<div style="color:#c62828;">Failed to load tafsir data: ${e.message}</div>`;
-      return;
-    }
-  }
-  const arRow = allRows.find(r => r.scholar_key === 'ibn_kathir' && r.language === 'ar');
-  const enRow = allRows.find(r => r.scholar_key === 'ibn_kathir' && r.language === 'en');
-  if (!arRow || !enRow) {
-    loadingDiv.innerHTML = `<div style="color:#c62828;">Missing ${!arRow?'Arabic':'English'} Ibn Kathir for ${sura}:${aya}.</div>`;
-    return;
-  }
-
-  loadingDiv.innerHTML = '<div style="color:#2E7D32;font-weight:700;margin-bottom:8px;">🔍 Analyzing Translation Accuracy...</div><div style="color:#666;font-size:13px;">AI comparing Arabic original with English...</div>';
-
-  const arClean = arRow.content.substring(0,1500).replace(/[`'"\\]/g," ").replace(/\n/g," ").trim();
-  const enClean = enRow.content.substring(0,1500).replace(/[`'"\\]/g," ").replace(/\n/g," ").trim();
-  const prompt = "You are an Islamic scholar. For verse " + sura + ":" + aya + ", compare this Ibn Kathir Arabic tafsir with its English translation. Arabic: " + arClean + " English: " + enClean + " Reply with ONLY a JSON object using these exact keys: score (number 1-10), accurate (string), omitted (string), mistranslated (string), concerns (string), verdict (string). Use double quotes only. No apostrophes in values. No markdown.";
-
-  try {
-    let raw;
-    try {
-      raw = await streamClaudeAPI({ model:'claude-sonnet-4-6', max_tokens:600, messages:[{role:'user',content:prompt}] });
-    } catch (streamErr) {
-      const _inner = document.getElementById('tafsir-accuracy-inner') || loadingDiv;
-      _inner.innerHTML = '<div style="color:#c62828;padding:12px;font-size:13px;"><b>API Error</b><br><pre style="white-space:pre-wrap;font-size:11px;margin-top:8px;">' + String(streamErr.message).substring(0,400) + '</pre></div>';
-      return;
-    }
+  // No cached analysis found — show "not evaluated" instead of calling Claude
+  loadingDiv.innerHTML = `
+    <div style="color:#c62828;padding:16px;font-size:13px;line-height:1.6;">
+      <div style="font-weight:700;margin-bottom:8px;">⏳ Not Yet Evaluated</div>
+      <div>This translation accuracy evaluation has not yet been performed for ${sura}:${aya}.</div>
+      <div style="margin-top:8px;font-size:12px;color:#999;">
+        Evaluations are stored in the database. Pre-analyzed verses show results here immediately.
+      </div>
+    </div>
+  `;
+  return;
     if (!raw) {
       const _inner2 = document.getElementById('tafsir-accuracy-inner') || loadingDiv;
       _inner2.innerHTML = '<div style="color:#c62828;padding:12px;">Empty response from API.</div>';
