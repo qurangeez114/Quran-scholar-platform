@@ -450,6 +450,9 @@
             <strong>About this data:</strong> All narration texts are sourced from Arabic hadith corpora. 
             Links to sunnah.com are generated for 108 narrations; verification pending. 
             <a href="/methodology.html">Learn about our methodology →</a>
+            <br/><small style="color: #666; margin-top: 8px; display: block;">
+            <em>Note: Link verification counts require database access. Enable RLS policy in Supabase admin panel to display full link status.</em>
+            </small>
         </div>
 
         <!-- Search -->
@@ -556,21 +559,24 @@
                         let totalLinks = 0;
 
                         if (narrationIds.length > 0) {
-                            const linkResponse = await fetch(
-                                `${SUPABASE_URL}/rest/v1/external_narration_link?narration_id=in.(${narrationIds.join(',')})&select=verification_status`,
-                                {
-                                    headers: {
-                                        'apikey': SUPABASE_ANON_KEY,
-                                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                            try {
+                                const linkResponse = await fetch(
+                                    `${SUPABASE_URL}/rest/v1/external_narration_link?narration_id=in.(${narrationIds.join(',')})&select=verification_status`,
+                                    {
+                                        headers: {
+                                            'apikey': SUPABASE_ANON_KEY,
+                                            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                                        }
                                     }
+                                );
+                                if (linkResponse.ok) {
+                                    const links = await linkResponse.json();
+                                    totalLinks = links.length;
+                                    verifiedCount = links.filter(l => l.verification_status === 'verified').length;
                                 }
-                            );
-                            if (!linkResponse.ok) {
-                                console.error(`Error fetching links for narrations:`, linkResponse.status);
-                            } else {
-                                const links = await linkResponse.json();
-                                totalLinks = links.length;
-                                verifiedCount = links.filter(l => l.verification_status === 'verified').length;
+                            } catch (linkError) {
+                                console.warn('Warning: Could not fetch link verification status (RLS may be blocking)');
+                                // Continue without link counts - don't fail the whole query
                             }
                         }
 
