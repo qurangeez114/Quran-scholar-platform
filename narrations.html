@@ -518,6 +518,15 @@
         // Fetch and display comparisons
         async function loadComparisons() {
             try {
+                console.log('🔍 loadComparisons: Starting...');
+                const container = document.getElementById('comparisonsList');
+                console.log('🔍 loadComparisons: Container found?', !!container);
+                
+                if (!container) {
+                    throw new Error('comparisonsList element not found in DOM');
+                }
+
+                console.log('🔍 loadComparisons: Fetching narrative_groups...');
                 const response = await fetch(
                     `${SUPABASE_URL}/rest/v1/narrative_groups?select=*`,
                     {
@@ -528,11 +537,14 @@
                     }
                 );
 
+                console.log('🔍 loadComparisons: Response status:', response.status);
+
                 if (!response.ok) {
                     throw new Error(`Supabase error: ${response.status} ${response.statusText}`);
                 }
 
                 const groups = await response.json();
+                console.log('🔍 loadComparisons: Got groups:', groups.length);
 
                 // For each group, fetch verification status
                 const comparisonsData = await Promise.all(
@@ -590,14 +602,20 @@
                     })
                 );
 
+                console.log('🔍 loadComparisons: Calling displayComparisons with', comparisonsData.length, 'items');
                 displayComparisons(comparisonsData);
+                console.log('✅ loadComparisons: Complete!');
             } catch (error) {
-                console.error('Error loading comparisons:', error);
-                document.getElementById('comparisonsList').innerHTML = `
-                    <div class="loading">
-                        <p style="color: #c62828;">Error loading comparisons. Please try again later.</p>
-                    </div>
-                `;
+                console.error('❌ Error loading comparisons:', error);
+                console.error('Stack trace:', error.stack);
+                const container = document.getElementById('comparisonsList');
+                if (container) {
+                    container.innerHTML = `
+                        <div class="loading">
+                            <p style="color: #c62828;">Error loading comparisons: ${error.message}</p>
+                        </div>
+                    `;
+                }
             }
         }
 
