@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Quran Hikma - API Test</title>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #f5f5f5; }
+        .test { background: white; padding: 15px; margin: 10px 0; border-left: 4px solid #ccc; }
+        .pass { border-left-color: #4caf50; }
+        .fail { border-left-color: #f44336; }
+        .pending { border-left-color: #ff9800; }
+        pre { overflow-x: auto; background: #eee; padding: 10px; }
+    </style>
+</head>
+<body>
+    <h1>🔧 Quran Hikma API Test</h1>
+    <div id="results"></div>
+
+    <script>
+        const SUPABASE_URL = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
+
+        const results = document.getElementById('results');
+
+        async function test(name, fn) {
+            const div = document.createElement('div');
+            div.className = 'test pending';
+            div.innerHTML = `<strong>${name}...</strong>`;
+            results.appendChild(div);
+
+            try {
+                const result = await fn();
+                div.className = 'test pass';
+                div.innerHTML = `<strong>✅ ${name}</strong><pre>${JSON.stringify(result, null, 2).substring(0, 500)}</pre>`;
+            } catch (e) {
+                div.className = 'test fail';
+                div.innerHTML = `<strong>❌ ${name}</strong><pre>${e.message}</pre>`;
+            }
+        }
+
+        async function runTests() {
+            await test('narrative_groups', async () => {
+                const r = await fetch(`${SUPABASE_URL}/rest/v1/narrative_groups?select=*&limit=1`, {
+                    headers: {
+                        'apikey': SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                    }
+                });
+                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                const data = await r.json();
+                return { count: data.length, sample: data[0]?.title };
+            });
+
+            await test('narrative_versions', async () => {
+                const r = await fetch(`${SUPABASE_URL}/rest/v1/narrative_versions?select=id&limit=1`, {
+                    headers: {
+                        'apikey': SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                    }
+                });
+                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                const data = await r.json();
+                return { count: data.length };
+            });
+
+            await test('hadith_content', async () => {
+                const r = await fetch(`${SUPABASE_URL}/rest/v1/hadith_content?select=id&limit=1`, {
+                    headers: {
+                        'apikey': SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                    }
+                });
+                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                const data = await r.json();
+                return { count: data.length };
+            });
+
+            await test('external_narration_link', async () => {
+                const r = await fetch(`${SUPABASE_URL}/rest/v1/external_narration_link?select=id&limit=1`, {
+                    headers: {
+                        'apikey': SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                    }
+                });
+                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                const data = await r.json();
+                return { count: data.length };
+            });
+
+            results.innerHTML += `<div style="margin-top: 20px; color: #666;">All tests complete</div>`;
+        }
+
+        runTests();
+    </script>
+</body>
+</html>
