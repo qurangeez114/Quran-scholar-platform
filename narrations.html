@@ -274,6 +274,58 @@
             margin-right: 6px;
         }
 
+        /* Severity + Religious-significance indicators */
+        .score-row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        .score-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 10px;
+            border-radius: 6px;
+            font-size: 0.82em;
+            font-weight: 700;
+            white-space: nowrap;
+            border: 1px solid rgba(0,0,0,0.06);
+        }
+        .score-badge .score-label {
+            font-weight: 600;
+            opacity: 0.85;
+        }
+        .score-badge .pips { letter-spacing: 1px; }
+        /* Severity colour scale: 5 severe (red) → 1 mild (grey) */
+        .sev-5 { background: #fdecea; color: #b71c1c; }
+        .sev-4 { background: #fff1e6; color: #d84315; }
+        .sev-3 { background: #fff8e1; color: #a1710a; }
+        .sev-2 { background: #f3f6ec; color: #5a7a2e; }
+        .sev-1 { background: #eef0f2; color: #5a6470; }
+        /* Significance colour scale: teal family, deepening with importance */
+        .sig-5 { background: #e0f2f1; color: #00695c; }
+        .sig-4 { background: #e3f2fd; color: #1565c0; }
+        .sig-3 { background: #ede7f6; color: #5e35b1; }
+        .sig-2 { background: #f2f0ec; color: #6d5d48; }
+        .sig-1 { background: #f2f0ec; color: #8a8072; }
+
+        .list-legend {
+            display: flex;
+            gap: 18px;
+            flex-wrap: wrap;
+            align-items: center;
+            font-size: 0.85em;
+            color: #666;
+            background: #faf7f2;
+            border: 1px solid #e0d7ce;
+            border-radius: 8px;
+            padding: 10px 14px;
+            margin-bottom: 20px;
+        }
+        .list-legend b { color: #5a4a3a; }
+
         .link-indicator {
             display: inline-flex;
             align-items: center;
@@ -474,6 +526,13 @@
             <div class="tag" data-filter="major-collections">Major Collections</div>
         </div>
 
+        <!-- Indicator legend -->
+        <div class="list-legend">
+            <span><b>Ordered worst-first</b> — most severe contradiction at the top.</span>
+            <span><b>⚖ Contradiction</b> (1–5): how sharply the sound narrations conflict.</span>
+            <span><b>☾ Religious significance</b> (1–5): how much the issue bears on belief or law — a topic is included because it <i>matters</i>, not merely because it diverges.</span>
+        </div>
+
         <!-- Comparisons List -->
         <div class="comparisons-list" id="comparisonsList">
             <div class="loading">
@@ -530,7 +589,7 @@
                 }
 
                 const response = await fetch(
-                    `${SUPABASE_URL}/rest/v1/narrative_groups?select=*`,
+                    `${SUPABASE_URL}/rest/v1/narrative_groups?select=*&order=severity_score.desc.nullslast,religious_significance.desc.nullslast,id.asc`,
                     {
                         headers: {
                             'apikey': SUPABASE_ANON_KEY,
@@ -626,6 +685,16 @@
                 return;
             }
 
+            // Safety net: order worst-first even if the API ignored the order param.
+            // Sort by severity (desc), then religious significance (desc); unscored last.
+            comparisons.sort((a, b) => {
+                const sa = a.severity_score || 0, sb = b.severity_score || 0;
+                if (sb !== sa) return sb - sa;
+                const ga = a.religious_significance || 0, gb = b.religious_significance || 0;
+                if (gb !== ga) return gb - ga;
+                return (a.id || 0) - (b.id || 0);
+            });
+
             container.innerHTML = comparisons.map(comp => `
                 <div class="comparison-card" onclick="window.location.href='narration.html?id=${comp.id}'">
                     <div class="comparison-header">
@@ -633,6 +702,11 @@
                         <div class="verification-badge ${getVerificationClass(comp.verifiedLinksCount, comp.totalLinksCount)}">
                             ${getVerificationStatus(comp.verifiedLinksCount, comp.totalLinksCount)}
                         </div>
+                    </div>
+
+                    <div class="score-row">
+                        ${severityBadge(comp.severity_score)}
+                        ${significanceBadge(comp.religious_significance)}
                     </div>
 
                     <div class="comparison-meta">
@@ -674,6 +748,33 @@
                 verifiedLinksElement.textContent = 
                     comparisons.reduce((sum, c) => sum + c.verifiedLinksCount, 0);
             }
+        }
+
+        function pips(score) {
+            const n = Math.max(0, Math.min(5, score || 0));
+            return '●'.repeat(n) + '○'.repeat(5 - n);
+        }
+
+        function severityLabel(s) {
+            return ({5:'Severe', 4:'Strong', 3:'Moderate', 2:'Mild', 1:'Minor'})[s] || 'Unrated';
+        }
+        function significanceLabel(s) {
+            return ({5:'Core', 4:'Major', 3:'Notable', 2:'Limited', 1:'Peripheral'})[s] || 'Unrated';
+        }
+
+        function severityBadge(s) {
+            if (!s) return '';
+            return `<span class="score-badge sev-${s}" title="Severity of contradiction: ${severityLabel(s)} (${s}/5)">
+                        <span class="score-label">⚖ Contradiction</span>
+                        <span class="pips">${pips(s)}</span> ${s}/5
+                    </span>`;
+        }
+        function significanceBadge(s) {
+            if (!s) return '';
+            return `<span class="score-badge sig-${s}" title="Religious significance: ${significanceLabel(s)} (${s}/5)">
+                        <span class="score-label">☾ Religious significance</span>
+                        <span class="pips">${pips(s)}</span> ${significanceLabel(s)}
+                    </span>`;
         }
 
         function getVerificationStatus(verified, total) {
