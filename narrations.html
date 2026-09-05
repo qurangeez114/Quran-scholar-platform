@@ -536,6 +536,10 @@
                     }
                 );
 
+                if (!response.ok) {
+                    throw new Error(`Supabase error: ${response.status} ${response.statusText}`);
+                }
+
                 const groups = await response.json();
 
                 // For each group, fetch verification status
@@ -551,6 +555,10 @@
                                 }
                             }
                         );
+                        if (!narrResponse.ok) {
+                            console.error(`Error fetching narrations for group ${group.id}:`, narrResponse.status);
+                            return { ...group, narrationCount: 0, collectionCount: 0, verifiedLinksCount: 0, totalLinksCount: 0 };
+                        }
                         const narrations = await narrResponse.json();
 
                         // Get link verification status
@@ -568,9 +576,13 @@
                                     }
                                 }
                             );
-                            const links = await linkResponse.json();
-                            totalLinks = links.length;
-                            verifiedCount = links.filter(l => l.verification_status === 'verified').length;
+                            if (!linkResponse.ok) {
+                                console.error(`Error fetching links for narrations:`, linkResponse.status);
+                            } else {
+                                const links = await linkResponse.json();
+                                totalLinks = links.length;
+                                verifiedCount = links.filter(l => l.verification_status === 'verified').length;
+                            }
                         }
 
                         return {
