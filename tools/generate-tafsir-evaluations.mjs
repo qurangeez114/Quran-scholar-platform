@@ -134,7 +134,7 @@ Provide a detailed evaluation in this exact JSON format (no markdown, no preambl
   let fullText = "";
   const stream = await client.messages.stream({
     model: "claude-sonnet-4-5",
-    max_tokens: 800,
+    max_tokens: 2000,
     messages: [{ role: "user", content: prompt }]
   });
 
