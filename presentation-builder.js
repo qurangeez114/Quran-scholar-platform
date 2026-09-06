@@ -160,13 +160,12 @@
   }
 
   function createFloatBtn() {
-    if (document.getElementById('pb-float-btn')) return;
-    const btn = document.createElement('button');
-    btn.id = 'pb-float-btn';
-    btn.innerHTML = `<span>📊 Presentation</span><span class="pb-count">0</span>`;
-    btn.onclick = () => { window.location.href = 'presentation.html'; };
-    document.body.appendChild(btn);
-    updateFloatCount();
+    // Standalone floating Presentation pill removed by request — the feature is
+    // still reachable via the FAB "+" menu (Presentation entry). Also clear any
+    // instance that a cached script may have already injected.
+    const existing = document.getElementById('pb-float-btn');
+    if (existing) existing.remove();
+    return;
   }
 
   function extractFromVerseCard(card) {

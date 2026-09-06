@@ -4322,12 +4322,13 @@ Be specific, scholarly, and cite actual sources where possible.`;
       }
     } else if (sectionId === 'hadith') {
       const hadiths = await sbFetch('hadith_connections', {
-        select: 'hadith_text,collection,reference,narrator',
+        select: 'hadith_text,collection,reference,narrator,hadith_grade,is_ai_generated',
         sura_id: 'eq.' + currentSura, aya_number: 'eq.' + num
       });
-      if (hadiths.length) {
+      const realHadiths = hadiths.filter(h => (h.hadith_grade||'').toLowerCase() !== 'ai_synthesis' && !h.is_ai_generated);
+      if (realHadiths.length) {
         dbContext = '\n\nConnected hadiths from database:\n' +
-          hadiths.slice(0,5).map(h => '[' + (h.collection||'') + '] ' + (h.hadith_text||'').slice(0,200)).join('\n');
+          realHadiths.slice(0,5).map(h => '[' + (h.collection||'') + '] ' + (h.hadith_text||'').slice(0,200)).join('\n');
       }
     }
   } catch(e) { /* DB context optional */ }
@@ -6131,24 +6132,29 @@ async function loadHadithPanel(sura, aya) {
   let directEntries = [];
   let suraHadith = [];
 
+  // Hide AI-synthesized hadith from display: they are AI-generated and their
+  // references (incl. those attributed to canonical collections) are unverified.
+  // Only show entries backed by a real, sourced narration.
+  const isRealHadith = r => (r.hadith_grade || '').toLowerCase() !== 'ai_synthesis' && !r.is_ai_generated;
+
   try {
     const rows = await sbFetch('hadith_connections', {
-      select: 'hadith_text,narrator,collection,reference,hadith_grade,tradition,similarity_note,difference_note,aya_number',
+      select: 'hadith_text,narrator,collection,reference,hadith_grade,tradition,similarity_note,difference_note,aya_number,is_ai_generated',
       sura_id: `eq.${sura}`,
       aya_number: `eq.${aya}`
     });
-    directEntries = rows.map(rowToHadithEntry);
+    directEntries = rows.filter(isRealHadith).map(rowToHadithEntry);
   } catch {}
 
   if (directEntries.length === 0) {
     try {
       const rows = await sbFetch('hadith_connections', {
-        select: 'hadith_text,narrator,collection,reference,hadith_grade,tradition,similarity_note,difference_note,aya_number',
+        select: 'hadith_text,narrator,collection,reference,hadith_grade,tradition,similarity_note,difference_note,aya_number,is_ai_generated',
         sura_id: `eq.${sura}`,
         order: 'aya_number',
         limit: 50
       });
-      suraHadith = rows.map(rowToHadithEntry);
+      suraHadith = rows.filter(isRealHadith).map(rowToHadithEntry);
     } catch {}
   }
 
