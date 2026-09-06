@@ -21,7 +21,6 @@
   function percentFromScore(score) {
     const s = Number(score);
     if (!Number.isFinite(s)) return null;
-    // Existing tafsir accuracy analyzer scores on a 0–10 scale.
     return Math.max(0, Math.min(100, Math.round(s * 10)));
   }
 
@@ -43,8 +42,6 @@
       return rows && rows.length ? rows[0] : null;
     }
 
-    // Most pages expose sbFetch as a global function declaration even if it is
-    // not assigned on window. Use it when available without hardcoding keys.
     try {
       if (typeof sbFetch === 'function') {
         const rows = await sbFetch('tafsir_accuracy_analysis', {
@@ -58,6 +55,17 @@
     } catch (_) {}
 
     return null;
+  }
+
+  function ensureBrowseLink(button) {
+    if (!button || button.parentElement?.querySelector('.tafsir-fidelity-browser-link')) return;
+    const link = document.createElement('a');
+    link.className = 'tafsir-fidelity-browser-link';
+    link.href = '/tafsir-fidelity.html';
+    link.textContent = '📚 All evaluations';
+    link.title = 'Browse all saved Ibn Kathir Arabic–English fidelity evaluations';
+    link.style.cssText = 'display:inline-flex;align-items:center;padding:5px 12px;border-radius:20px;border:2px solid #8a6a17;background:#fff;color:#6f5312;font-size:12px;font-weight:700;text-decoration:none;';
+    button.insertAdjacentElement('afterend', link);
   }
 
   function setPending(button) {
@@ -85,6 +93,7 @@
     const target = parseTarget(button);
     if (!target) return;
     seen.add(button);
+    ensureBrowseLink(button);
 
     button.textContent = '🔍 Fidelity · …';
     button.title = 'Loading saved Arabic–English Tafsir fidelity assessment';
