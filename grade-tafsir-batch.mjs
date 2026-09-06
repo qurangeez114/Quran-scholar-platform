@@ -171,7 +171,7 @@ ${ar.substring(0, 2000).trim()}
 ENGLISH TRANSLATION:
 ${en.substring(0, 2000).trim()}
 
-Provide a detailed evaluation in this exact JSON format (no markdown, no preamble):
+Provide a detailed evaluation in this exact JSON format (no markdown, no preamble). Use only straight double quotes for JSON; inside string values, write any Arabic transliteration or quoted phrase WITHOUT double quotes (use single quotes or none) so the JSON stays valid:
 {
   "accuracy_score": <number 1-10, where 10 is perfect translation>,
   "accurate_portions": "<key phrases/concepts translated accurately>",
@@ -180,15 +180,27 @@ Provide a detailed evaluation in this exact JSON format (no markdown, no preambl
   "theological_concerns": "<any theological or conceptual shifts>",
   "verdict": "<1-2 sentence overall assessment>"
 }`;
-  let full = "";
-  const stream = await client.messages.stream({
-    model: MODEL, max_tokens: 2000,
-    messages: [{ role: "user", content: prompt }],
-  });
-  for await (const c of stream) {
-    if (c.type === "content_block_delta" && c.delta.type === "text_delta") full += c.delta.text;
+  // Try up to 3 times: model output occasionally contains an unescaped inner quote
+  // that breaks JSON.parse. A fresh generation usually fixes it.
+  let lastErr;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    let full = "";
+    const stream = await client.messages.stream({
+      model: MODEL, max_tokens: 2000,
+      messages: [{ role: "user", content: prompt }],
+    });
+    for await (const c of stream) {
+      if (c.type === "content_block_delta" && c.delta.type === "text_delta") full += c.delta.text;
+    }
+    const cleaned = full.replace(/```json/gi, "").replace(/```/g, "").trim();
+    try {
+      return JSON.parse(cleaned);
+    } catch (e) {
+      lastErr = e;
+      if (attempt < 3) await sleep(600); // regenerate
+    }
   }
-  return JSON.parse(full.replace(/```json/gi, "").replace(/```/g, "").trim());
+  throw new Error(`JSON parse failed after 3 attempts: ${lastErr.message}`);
 }
 
 // ── main ──────────────────────────────────────────────────────
