@@ -4,6 +4,19 @@
 const BASELINE=[['tabari','al-Ṭabarī'],['ibn_kathir','Ibn Kathīr'],['qurtubi','al-Qurṭubī'],['jalalayn','al-Jalālayn'],['saadi','al-Saʿdī'],['ibn_abbas','Tanwīr al-Miqbās (attributed to Ibn ʿAbbās)']];
 const NAMES=Object.fromEntries(BASELINE);
 const VERIFIED={
+ '3:55':{
+  question:'What does “mutawaffīka” mean concerning Jesus?',
+  note:'The completed pilot preserves competing explanations rather than forcing them into one harmonized reading. Where a source transmits more than one report, the UI keeps those reports separate.',
+  views:[
+   {title:'Jesus was caused to die',count:1,scholars:['ibn_abbas'],text:'The attributed Ibn ʿAbbās material preserves a report reading the expression as death before the raising.'},
+   {title:'Jesus was taken without death at that point',count:1,scholars:['ibn_abbas'],text:'The same attributed source also preserves a competing no-death reading and marks that report as the correct report in the pilot data.'}
+  ],
+  alertLabel:'Competing transmitted reports',
+  special:'These two cards are not counted as two scholars. They are two distinct transmitted explanations preserved under the attributed Ibn ʿAbbās source. The comparison therefore shows report-level disagreement without falsely turning it into scholar-level voting.',
+  statuses:{
+   ibn_abbas:['Preserves a death reading for mutawaffīka','Also preserves a competing no-death reading','Pilot classification keeps both routes separate; the no-death report is marked as the correct report in that source record','Attribution of Tanwīr al-Miqbās to Ibn ʿAbbās is disputed']
+  }
+ },
  '18:65':{
   question:'Was al-Khiḍr a prophet?',
   note:'This is a verified explicit disagreement in the project research. The cards distinguish the commentators’ adopted conclusions rather than merely counting transmitted reports.',
