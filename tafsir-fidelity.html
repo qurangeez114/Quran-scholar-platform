@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tafsir Fidelity Evaluations — Quran Hikma</title>
+<style>
+body{margin:0;background:#f6f1e4;color:#1a1a1a;font-family:Georgia,'Times New Roman',serif}.wrap{max-width:1000px;margin:auto;padding:24px}.top{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}.back{color:#8a6a17;text-decoration:none;font-weight:700}.title{margin:8px 0 4px;font-size:32px}.sub{color:#665b48;line-height:1.5;margin-bottom:18px}.stats{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0}.stat{background:white;border:1px solid #d6c9a6;border-radius:10px;padding:10px 14px;font-weight:700}.controls{display:flex;gap:10px;flex-wrap:wrap;margin:18px 0}.controls input,.controls select{padding:11px 12px;border:1px solid #cbbd99;border-radius:8px;background:white;font-size:15px}.controls input{flex:1;min-width:220px}.card{background:white;border:1px solid #d6c9a6;border-radius:12px;padding:16px;margin:12px 0;box-shadow:0 2px 7px rgba(0,0,0,.04)}.head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.ref{font-size:20px;font-weight:700}.score{font-weight:800;border-radius:18px;padding:5px 10px}.good{background:#e8f5e9;color:#236b27}.mid{background:#fff3e0;color:#a04b00}.low{background:#ffebee;color:#a51d2a}.row{margin-top:11px;line-height:1.55}.label{font-weight:700;color:#8a6a17}.empty,.loading{padding:30px;text-align:center;color:#6c6252}.verdict{font-size:17px}.meta{font-size:12px;color:#777;margin-top:12px}button{cursor:pointer}.detail{margin-top:10px;border-top:1px solid #eee;padding-top:10px}details summary{cursor:pointer;font-weight:700;color:#4b3d22}@media(max-width:600px){.wrap{padding:15px}.title{font-size:26px}.head{align-items:center}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><a class="back" href="/">← Quran Hikma</a><strong>Public Research Record</strong></div>
+  <h1 class="title">Ibn Kathir Tafsir Translation Fidelity</h1>
+  <div class="sub">Saved Arabic ↔ English fidelity evaluations from the Quran Hikma research database. These records evaluate how faithfully the English Ibn Kathir text represents the stored Arabic source; they do not grade the theology or historical claims of the tafsir.</div>
+  <div class="stats"><div class="stat" id="count">Loading…</div><div class="stat" id="avg"></div></div>
+  <div class="controls">
+    <input id="search" placeholder="Search verse, verdict, omission, mistranslation…">
+    <select id="filter"><option value="all">All scores</option><option value="reliable">8–10 Reliable</option><option value="moderate">6–7.9 Moderate</option><option value="low">0–5.9 Low</option></select>
+  </div>
+  <div id="results" class="loading">Loading saved evaluations…</div>
+</div>
+<script>
+const SUPABASE_URL='https://ylosytbxpzxzwfzjpaej.supabase.co';
+const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
+let rows=[];
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function scoreClass(s){return s>=8?'good':s>=6?'mid':'low'}
+function show(){
+ const q=document.getElementById('search').value.trim().toLowerCase();
+ const f=document.getElementById('filter').value;
+ const filtered=rows.filter(r=>{
+   const s=Number(r.accuracy_score);
+   if(f==='reliable'&&s<8)return false;if(f==='moderate'&&(s<6||s>=8))return false;if(f==='low'&&s>=6)return false;
+   if(!q)return true;
+   return [r.sura+':'+r.aya,r.verdict,r.accurately_translated,r.omitted,r.mistranslated,r.theological_concerns].join(' ').toLowerCase().includes(q);
+ });
+ const box=document.getElementById('results');
+ if(!filtered.length){box.className='empty';box.textContent='No matching saved evaluations.';return}
+ box.className='';
+ box.innerHTML=filtered.map(r=>`<article class="card">
+   <div class="head"><div class="ref">Qur'an ${esc(r.sura)}:${esc(r.aya)} · Ibn Kathir</div><div class="score ${scoreClass(Number(r.accuracy_score))}">${esc(r.accuracy_score)}/10</div></div>
+   <div class="row verdict"><span class="label">Verdict:</span> ${esc(r.verdict||'—')}</div>
+   <details class="detail"><summary>View full fidelity analysis</summary>
+     <div class="row"><span class="label">Accurately translated:</span> ${esc(r.accurately_translated||'—')}</div>
+     <div class="row"><span class="label">Omitted from English:</span> ${esc(r.omitted||'—')}</div>
+     <div class="row"><span class="label">Mistranslated / changed meaning:</span> ${esc(r.mistranslated||'—')}</div>
+     <div class="row"><span class="label">Semantic / theological wording concerns:</span> ${esc(r.theological_concerns||'—')}</div>
+   </details>
+ </article>`).join('');
+}
+async function load(){
+ try{
+   const p=new URLSearchParams({scholar_key:'eq.ibn_kathir',select:'sura,aya,accuracy_score,accurately_translated,omitted,mistranslated,theological_concerns,verdict',order:'sura.asc,aya.asc',limit:'10000'});
+   const res=await fetch(`${SUPABASE_URL}/rest/v1/tafsir_accuracy_analysis?${p}`,{headers:{apikey:SUPABASE_ANON_KEY,Authorization:'Bearer '+SUPABASE_ANON_KEY}});
+   if(!res.ok)throw new Error('Database returned '+res.status);
+   rows=await res.json();
+   document.getElementById('count').textContent=rows.length+' saved evaluations';
+   const nums=rows.map(r=>Number(r.accuracy_score)).filter(Number.isFinite);
+   document.getElementById('avg').textContent=nums.length?'Average '+(nums.reduce((a,b)=>a+b,0)/nums.length).toFixed(2)+'/10':'';
+   show();
+ }catch(e){document.getElementById('results').className='empty';document.getElementById('results').textContent='Unable to load saved evaluations: '+e.message;document.getElementById('count').textContent='Unavailable';}
+}
+document.getElementById('search').addEventListener('input',show);document.getElementById('filter').addEventListener('change',show);load();
+</script>
+</body>
+</html>
