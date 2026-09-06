@@ -5970,7 +5970,12 @@ async function loadTafsirPanel(sura, aya) {
     if (hasEn) toggleBar += `<button onclick="setTafsirLang(${sura},${aya},'en')" style="padding:5px 14px;border-radius:20px;border:2px solid ${lang==='en'?'#B8902A':'#D4C9A8'};background:${lang==='en'?'#B8902A':'#fff'};color:${lang==='en'?'#fff':'#666'};font-size:12px;font-weight:700;cursor:pointer;">English</button>`;
     if (hasAr) toggleBar += `<button onclick="setTafsirLang(${sura},${aya},'ar')" style="padding:5px 14px;border-radius:20px;border:2px solid ${lang==='ar'?'#B8902A':'#D4C9A8'};background:${lang==='ar'?'#B8902A':'#fff'};color:${lang==='ar'?'#fff':'#666'};font-size:12px;font-weight:700;cursor:pointer;">عربي</button>`;
     if (hasAr && hasEn) toggleBar += `<button onclick="setTafsirLang(${sura},${aya},'both')" style="padding:5px 14px;border-radius:20px;border:2px solid ${lang==='both'?'#B8902A':'#D4C9A8'};background:${lang==='both'?'#B8902A':'#fff'};color:${lang==='both'?'#fff':'#666'};font-size:12px;font-weight:700;cursor:pointer;">Both</button>`;
-    if (hasAr && hasEn) toggleBar += `<button onclick="analyzeTafsirAccuracy(${sura},${aya})" style="padding:5px 14px;border-radius:20px;border:2px solid #2E7D32;background:#E8F5E9;color:#2E7D32;font-size:12px;font-weight:700;cursor:pointer;">🔍 Accuracy</button>`;
+    if (hasAr && hasEn) {
+      toggleBar += `<button onclick="analyzeTafsirAccuracy(${sura},${aya})" style="padding:5px 14px;border-radius:20px;border:2px solid #2E7D32;background:#E8F5E9;color:#2E7D32;font-size:12px;font-weight:700;cursor:pointer;">🔍 Accuracy</button>`;
+      // Option B: auto-loading compact fidelity badge (score shown without a click; full breakdown still opens via the button above)
+      toggleBar += `<span id="fidbadge-${sura}-${aya}" style="display:none;"></span>`;
+      setTimeout(function(){ loadTafsirBadge(sura, aya); }, 0);
+    }
     // Research Comparison toggle -- hidden by default; a parallel, non-blocking
     // check in loadTafsirPanel reveals it only when comparison data actually
     // exists for this verse (currently: 53:5, 53:6, 18:50, 2:34, 38:33).
@@ -10762,6 +10767,26 @@ async function analyzeTafsirAccuracy(sura, aya) {
 function closeAccuracyModal() {
   const m = document.getElementById('tafsir-accuracy-modal');
   if (m) m.style.display = 'none';
+}
+
+// Option B: auto-load a compact fidelity badge for a verse (no click needed).
+// Reads the cached evaluation from tafsir_accuracy_analysis; if none exists, the badge stays hidden.
+async function loadTafsirBadge(sura, aya) {
+  const el = document.getElementById(`fidbadge-${sura}-${aya}`);
+  if (!el) return;
+  try {
+    const rows = await sbFetch('tafsir_accuracy_analysis', { sura: `eq.${sura}`, aya: `eq.${aya}`, scholar_key: 'eq.ibn_kathir', limit: '1' });
+    if (!rows || !rows.length) return; // not yet evaluated -> no badge
+    const score = parseFloat(rows[0].accuracy_score || 0);
+    const col = score >= 8 ? '#2E7D32' : score >= 6 ? '#E65100' : '#c62828';
+    const lbl = score >= 8 ? 'Reliable' : score >= 6 ? 'Moderate' : 'Unreliable';
+    el.style.display = 'inline-flex';
+    el.style.cssText += 'align-items:center;gap:5px;padding:5px 12px;border-radius:20px;background:#fff;border:2px solid ' + col + ';cursor:pointer;';
+    el.title = 'Translation fidelity ' + score + '/10 — tap for the full breakdown';
+    el.onclick = function(){ analyzeTafsirAccuracy(sura, aya); };
+    el.innerHTML = '<span style="font-weight:800;color:' + col + ';font-size:12px;">' + score + '/10</span>'
+      + '<span style="font-size:11px;font-weight:700;color:' + col + ';">' + lbl + '</span>';
+  } catch (e) { /* badge is best-effort; leave hidden on error */ }
 }
 
 function renderTafsirAnalysis(div, r, sura, aya, fromCache) {
