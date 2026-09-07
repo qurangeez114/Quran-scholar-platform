@@ -1155,7 +1155,19 @@ Return ONLY valid JSON (no markdown, no backticks) with this exact structure:
       const clean = raw.replace(/```json|```/g, '').trim();
       ruling = JSON.parse(clean);
     } catch(e) {
-      throw new Error('Could not parse AI response: ' + e.message);
+      // Common failure: an unescaped newline or quote inside a string value
+      // produces an "unterminated string". Attempt a light repair before giving up.
+      try {
+        let repaired = raw.replace(/```json|```/g, '').trim();
+        // Trim anything after the last closing brace (stray trailing text)
+        const lastBrace = repaired.lastIndexOf('}');
+        if (lastBrace > -1) repaired = repaired.slice(0, lastBrace + 1);
+        // Escape literal newlines/tabs that sit inside the JSON (invalid in JSON strings)
+        repaired = repaired.replace(/[\n\r\t]+/g, ' ');
+        ruling = JSON.parse(repaired);
+      } catch(e2) {
+        throw new Error('Could not parse AI response: ' + e.message);
+      }
     }
 
     setStatus('Saving to database (step 3/3)…');
