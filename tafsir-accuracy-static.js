@@ -37,7 +37,7 @@
         sura: `eq.${sura}`,
         aya: `eq.${aya}`,
         scholar_key: 'eq.ibn_kathir',
-        select: 'accuracy_score,verdict,omitted,mistranslated,theological_concerns'
+        select: 'accuracy_score,verdict,omitted_content,mistranslated_sections,theological_concerns'
       });
       return rows && rows.length ? rows[0] : null;
     }
@@ -48,7 +48,7 @@
           sura: `eq.${sura}`,
           aya: `eq.${aya}`,
           scholar_key: 'eq.ibn_kathir',
-          select: 'accuracy_score,verdict,omitted,mistranslated,theological_concerns'
+          select: 'accuracy_score,verdict,omitted_content,mistranslated_sections,theological_concerns'
         });
         return rows && rows.length ? rows[0] : null;
       }
