@@ -2101,7 +2101,7 @@ async function loadCrossReferences(sura, aya) {
           + ' class="xref-chip-btn"'
           + ' style="padding:6px 12px;background:transparent;border:none;border-right:1px solid #E8E4DC;font-size:13px;font-weight:700;color:#2A3F4E;cursor:pointer;min-width:56px;text-align:center;"'
           + '>' + r.related_sura + ':' + r.related_aya + '</button>';
-        html += '<button onclick="event.stopPropagation();_currentCrossRefList = ' + JSON.stringify(verses.map(v => v.related_sura + ':' + v.related_aya)) + '; openSocialCardMain(' + r.related_sura + ',' + r.related_aya + ')"'
+        html += '<button data-cross-ref-list="' + JSON.stringify(verses.map(v => v.related_sura + ':' + v.related_aya)).replace(/"/g, '&quot;') + '" onclick="event.stopPropagation();setAndOpenSocialCard(' + r.related_sura + ',' + r.related_aya + ', this)"'
           + ' title="Create social media card for ' + r.related_sura + ':' + r.related_aya + '"'
           + ' aria-label="Create social media card for ' + r.related_sura + ':' + r.related_aya + '"'
           + ' style="padding:6px 9px;background:#FDF8EE;border:none;font-size:13px;line-height:1;cursor:pointer;color:#B8902A;"'
@@ -6430,6 +6430,20 @@ const SOCIAL_VT_LANGS = { bn:'bengali', ms:'malay', es:'spanish', zh:'chinese', 
 function openSocialCardWithCrossRefList(sura, aya, verseListJson) {
   try {
     _currentCrossRefList = JSON.parse(verseListJson);
+  } catch(e) {
+    _currentCrossRefList = null;
+  }
+  openSocialCardMain(sura, aya);
+}
+
+
+// Helper to set cross-ref list and open social card
+function setAndOpenSocialCard(sura, aya, buttonElement) {
+  try {
+    const listJson = buttonElement.getAttribute('data-cross-ref-list');
+    if (listJson) {
+      _currentCrossRefList = JSON.parse(listJson);
+    }
   } catch(e) {
     _currentCrossRefList = null;
   }
