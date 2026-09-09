@@ -6445,7 +6445,7 @@ function openSocialCardWithCrossRefList(sura, aya, verseListJson) {
 }
 
 
-async function openSocialCardMain(sura, aya){
+async function openSocialCardMain(sura, aya, crossRefTheme){
   _socialMainSura = sura; _socialMainAya = aya; _socialMainFormat = 'square';
   _socialMainVerseList = null; _socialMainVerseListIdx = 0;
   document.getElementById('socialOverlayMain').style.display = 'flex';
@@ -6471,6 +6471,19 @@ async function openSocialCardMain(sura, aya){
   } catch(e) {
     document.getElementById('socialCanvasLoadingMain').textContent = 'Could not load verse text.';
   }
+  
+  // Set cross-reference navigation context at the END (outside try-catch)
+  if (crossRefTheme && window._crossRefThemeLists && window._crossRefThemeLists[crossRefTheme]) {
+    const verseList = window._crossRefThemeLists[crossRefTheme];
+    _socialNavigationContext = {
+      type: 'cross-reference',
+      theme: crossRefTheme,
+      verses: verseList
+    };
+    console.log('[DEBUG] Context SET at END of openSocialCardMain:', _socialNavigationContext);
+  } else {
+    _socialNavigationContext = null;
+  }
 }
 
 // Open social card with cross-reference verse list for navigation
@@ -6485,23 +6498,13 @@ async function openSocialCardWithList(sura, aya, idx, verseListJson) {
 // Navigate within verse list
 // Open social card from cross-reference, setting navigation context
 function openCrossRefSocialCard(themeName, sura, aya) {
-  // Update debug panel
-  if (document.getElementById('debugContext')) {
-    const cache = window._crossRefThemeLists || {};
-    const keys = Object.keys(cache);
-    document.getElementById('debugKeys').textContent = keys.length > 0 ? keys.slice(0, 2).join(', ') + '...' : 'none';
-  }
+  // Debug logging
   console.log('[DEBUG] openCrossRefSocialCard called:', {themeName, sura, aya});
   console.log('[DEBUG] Cache available:', window._crossRefThemeLists);
   const list = window._crossRefThemeLists && window._crossRefThemeLists[themeName];
   console.log('[DEBUG] Theme list found:', list);
-  _socialNavigationContext = {
-    type: 'cross-reference',
-    theme: themeName,
-    verses: Array.isArray(list) ? [...list] : []
-  };
-  console.log('[DEBUG] Context set:', _socialNavigationContext);
-  openSocialCardMain(sura, aya);
+  // Pass theme to openSocialCardMain so it can set context at the END
+  openSocialCardMain(sura, aya, themeName);
 }
 
 function navigateSocialCardList(direction) {
@@ -6522,7 +6525,7 @@ function navigateSocialCardList(direction) {
       if (newIdx >= 0 && newIdx < ctx.verses.length) {
         const parts = ctx.verses[newIdx].split(':');
         console.log('[DEBUG] Moving to:', ctx.verses[newIdx]);
-        openSocialCardMain(Number(parts[0]), Number(parts[1]));
+        openSocialCardMain(Number(parts[0]), Number(parts[1]), ctx.theme);
         return;
       }
     }
