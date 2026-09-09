@@ -6441,10 +6441,14 @@ function openSocialCardWithCrossRefList(sura, aya, verseListJson) {
 function setAndOpenSocialCard(sura, aya, buttonElement) {
   try {
     const listJson = buttonElement.getAttribute('data-cross-ref-list');
+    console.log('setAndOpenSocialCard called for', sura, aya);
+    console.log('listJson from data attribute:', listJson);
     if (listJson) {
       _currentCrossRefList = JSON.parse(listJson);
+      console.log('Parsed _currentCrossRefList:', _currentCrossRefList);
     }
   } catch(e) {
+    console.error('Error in setAndOpenSocialCard:', e);
     _currentCrossRefList = null;
   }
   openSocialCardMain(sura, aya);
@@ -6490,16 +6494,25 @@ async function openSocialCardWithList(sura, aya, idx, verseListJson) {
 // Navigate within verse list
 function navigateSocialCardList(direction) {
   const verseList = _currentCrossRefList || null;
+  console.log('navigateSocialCardList called, direction:', direction);
+  console.log('_currentCrossRefList:', _currentCrossRefList);
+  console.log('Current verse:', _socialMainSura + ':' + _socialMainAya);
   
   if (verseList && verseList.length > 0) {
     // Navigate through cross-reference list
+    console.log('Using cross-ref list, verses:', verseList);
     let currentIdx = verseList.findIndex(v => v === (_socialMainSura + ':' + _socialMainAya));
+    console.log('Current index:', currentIdx);
     if (currentIdx === -1) currentIdx = 0;
     
     let newIdx = currentIdx + direction;
-    if (newIdx < 0 || newIdx >= verseList.length) return;
+    if (newIdx < 0 || newIdx >= verseList.length) {
+      console.log('New index out of bounds:', newIdx);
+      return;
+    }
     
     const verseRef = verseList[newIdx];
+    console.log('Moving to:', verseRef);
     const [sura, aya] = verseRef.split(':').map(Number);
     if (sura && aya) {
       _socialMainSura = sura;
@@ -6507,6 +6520,7 @@ function navigateSocialCardList(direction) {
       openSocialCardMain(sura, aya);
     }
   } else {
+    console.log('No cross-ref list, using chapter navigation fallback');
     // Fallback: navigate through chapter verses
     if (!_socialMainVerse) return;
     const newAya = _socialMainAya + direction;
