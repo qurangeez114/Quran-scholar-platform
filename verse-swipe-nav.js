@@ -143,9 +143,15 @@
     }, false);
   }
   
-  // Keyboard navigation
+  // Keyboard navigation - disable when input/textarea/form fields are focused
   function addKeyboardSupport() {
     document.addEventListener('keydown', (e) => {
+      // Don't intercept if user is typing in a form field
+      const activeEl = document.activeElement;
+      if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.contentEditable === 'true')) {
+        return;
+      }
+      
       if (e.key === 'ArrowLeft') {
         e.preventDefault();
         navigate(-1);

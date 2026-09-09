@@ -45,6 +45,8 @@
     .map(function (k) { return SC_LANGS[k].vt; });
 
   var scSura = null, scAya = null, scFormat = 'square', scVerse = null, scSel = null;
+  var scVerseList = null; // List of related verses (cross-references)
+  var scListIndex = 0;   // Current position in cross-reference list
 
   function scEsc(s) {
     return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
@@ -336,9 +338,12 @@
     else if (e.key === 'ArrowRight') { e.preventDefault(); window.scNavigate(1); }
   };
 
-  window.openSocialCard = async function (sura, aya) {
+  window.openSocialCard = async function (sura, aya, verseList, listIndex) {
     scEnsureModal();
     scSura = sura; scAya = aya; scFormat = 'square'; scVerse = null; scSel = null;
+    scVerseList = verseList || null;  // Store cross-reference list if provided
+    scListIndex = (typeof listIndex === 'number') ? listIndex : 0;
+    
     document.getElementById('scCardOverlay').style.display = 'flex';
     document.getElementById('scLoading').style.display = 'block';
     document.getElementById('scLoading').textContent = 'Loading verse…';
