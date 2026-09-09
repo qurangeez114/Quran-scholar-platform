@@ -2101,7 +2101,7 @@ async function loadCrossReferences(sura, aya) {
           + ' class="xref-chip-btn"'
           + ' style="padding:6px 12px;background:transparent;border:none;border-right:1px solid #E8E4DC;font-size:13px;font-weight:700;color:#2A3F4E;cursor:pointer;min-width:56px;text-align:center;"'
           + '>' + r.related_sura + ':' + r.related_aya + '</button>';
-        html += '<button data-cross-ref-list="' + JSON.stringify(verses.map(v => v.related_sura + ':' + v.related_aya)).replace(/"/g, '&quot;') + '" onclick="event.stopPropagation();setAndOpenSocialCard(' + r.related_sura + ',' + r.related_aya + ', this)"'
+        html += '<button data-cross-ref-list="' + JSON.stringify(verses.map(v => v.related_sura + ':' + v.related_aya)).replace(/"/g, '&quot;') + '" onclick="event.stopPropagation();_currentCrossRefList = window._crossRefThemeLists[' + "'" + theme + "'" + '] || null; openSocialCardMain(' + r.related_sura + ',' + r.related_aya + ')"'
           + ' title="Create social media card for ' + r.related_sura + ':' + r.related_aya + '"'
           + ' aria-label="Create social media card for ' + r.related_sura + ':' + r.related_aya + '"'
           + ' style="padding:6px 9px;background:#FDF8EE;border:none;font-size:13px;line-height:1;cursor:pointer;color:#B8902A;"'
@@ -2112,6 +2112,10 @@ async function loadCrossReferences(sura, aya) {
     });
 
     panel.innerHTML = html;
+
+// Global cache of cross-ref verse lists by theme
+window._crossRefThemeLists = {};
+
   } catch(e) {
     console.error('loadCrossReferences error for ' + sura + ':' + aya + ':', e);
     console.error('Error details:', e.message, e.stack);
@@ -6436,23 +6440,6 @@ function openSocialCardWithCrossRefList(sura, aya, verseListJson) {
   openSocialCardMain(sura, aya);
 }
 
-
-// Helper to set cross-ref list and open social card
-function setAndOpenSocialCard(sura, aya, buttonElement) {
-  try {
-    const listJson = buttonElement.getAttribute('data-cross-ref-list');
-    console.log('setAndOpenSocialCard called for', sura, aya);
-    console.log('listJson from data attribute:', listJson);
-    if (listJson) {
-      _currentCrossRefList = JSON.parse(listJson);
-      console.log('Parsed _currentCrossRefList:', _currentCrossRefList);
-    }
-  } catch(e) {
-    console.error('Error in setAndOpenSocialCard:', e);
-    _currentCrossRefList = null;
-  }
-  openSocialCardMain(sura, aya);
-}
 
 async function openSocialCardMain(sura, aya){
   _socialMainSura = sura; _socialMainAya = aya; _socialMainFormat = 'square';
