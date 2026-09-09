@@ -93,80 +93,8 @@
     }
   }
   
-  // Add navigation button bar to top of page
-  function addNavBar() {
-    if (document.getElementById('vsnNavBar')) return;
-    
-    const bar = document.createElement('div');
-    bar.id = 'vsnNavBar';
-    bar.setAttribute('style', `
-      display: flex;
-      gap: 12px;
-      align-items: center;
-      justify-content: center;
-      padding: 12px;
-      background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
-      border-bottom: 2px solid #C9A84C;
-      position: sticky;
-      top: 0;
-      z-index: 10000;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-    `);
-    
-    const leftBtn = document.createElement('button');
-    leftBtn.textContent = '◀ Prev';
-    leftBtn.setAttribute('style', `
-      padding: 8px 16px;
-      background: #C9A84C;
-      color: #fff;
-      border: none;
-      border-radius: 6px;
-      font-weight: 700;
-      cursor: pointer;
-      transition: all 0.2s;
-    `);
-    leftBtn.onclick = () => navigate(-1);
-    leftBtn.onmouseover = () => leftBtn.style.background = '#D4B860';
-    leftBtn.onmouseout = () => leftBtn.style.background = '#C9A84C';
-    
-    const verseLabel = document.createElement('span');
-    verseLabel.id = 'vsnVerseLabel';
-    verseLabel.setAttribute('style', `
-      color: #C9A84C;
-      font-weight: 700;
-      font-size: 14px;
-      min-width: 60px;
-      text-align: center;
-    `);
-    verseLabel.textContent = 'Loading...';
-    
-    const rightBtn = document.createElement('button');
-    rightBtn.textContent = 'Next ▶';
-    rightBtn.setAttribute('style', `
-      padding: 8px 16px;
-      background: #C9A84C;
-      color: #fff;
-      border: none;
-      border-radius: 6px;
-      font-weight: 700;
-      cursor: pointer;
-      transition: all 0.2s;
-    `);
-    rightBtn.onclick = () => navigate(1);
-    rightBtn.onmouseover = () => rightBtn.style.background = '#D4B860';
-    rightBtn.onmouseout = () => rightBtn.style.background = '#C9A84C';
-    
-    bar.appendChild(leftBtn);
-    bar.appendChild(verseLabel);
-    bar.appendChild(rightBtn);
-    
-    const topBar = document.querySelector('.topbar, .navbar, [class*="header"]');
-    if (topBar && topBar.parentNode) {
-      topBar.parentNode.insertBefore(bar, topBar.nextSibling);
-    } else {
-      document.body.insertBefore(bar, document.body.firstChild);
-    }
-  }
+  // Navigation bar already exists on most pages (Prev/Next buttons)
+  // This module adds swipe/keyboard support without creating redundant UI
   
   // Initialize current verse from URL or page
   function initializeCurrentVerse() {
@@ -184,13 +112,6 @@
       if (match) {
         VSN.currentSura = parseInt(match[1]);
         VSN.currentAya = parseInt(match[2]);
-      }
-    }
-    
-    if (VSN.currentSura) {
-      const label = document.getElementById('vsnVerseLabel');
-      if (label) {
-        label.textContent = `${VSN.currentSura}:${VSN.currentAya}`;
       }
     }
   }
@@ -256,7 +177,6 @@
   window.VerseSwipeNav = {
     init: function() {
       fixModalZIndex();
-      addNavBar();
       initializeCurrentVerse();
       addSwipeSupport();
       addKeyboardSupport();
