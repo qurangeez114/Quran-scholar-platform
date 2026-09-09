@@ -1426,7 +1426,9 @@ body { padding-bottom: 80px !important; }
 <div id="socialOverlayMain" onclick="if(event.target===this)closeSocialCardMain()" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:99999998;align-items:center;justify-content:center;padding:12px;overflow-y:auto;">
   <div style="background:#fff;border-radius:14px;padding:16px;width:100%;max-width:480px;">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-      <div style="font-size:14px;font-weight:700;color:#C9A84C;">📱 Social Media Card</div>
+      <button id="scm-nav-prev" onclick="navigateSocialCardList(-1)" style="background:none;border:none;font-size:20px;color:#C9A84C;cursor:pointer;padding:4px 8px;opacity:0.3;pointer-events:none;transition:opacity 0.2s;">◀</button>
+      <div style="font-size:14px;font-weight:700;color:#C9A84C;flex:1;text-align:center;">📱 Social Media Card</div>
+      <button id="scm-nav-next" onclick="navigateSocialCardList(1)" style="background:none;border:none;font-size:20px;color:#C9A84C;cursor:pointer;padding:4px 8px;opacity:0.3;pointer-events:none;transition:opacity 0.2s;">▶</button>
       <button onclick="closeSocialCardMain()" style="background:none;border:none;font-size:18px;color:#999;cursor:pointer;">✕</button>
     </div>
     <div style="display:flex;gap:6px;margin-bottom:12px;">
@@ -2099,7 +2101,7 @@ async function loadCrossReferences(sura, aya) {
           + ' class="xref-chip-btn"'
           + ' style="padding:6px 12px;background:transparent;border:none;border-right:1px solid #E8E4DC;font-size:13px;font-weight:700;color:#2A3F4E;cursor:pointer;min-width:56px;text-align:center;"'
           + '>' + r.related_sura + ':' + r.related_aya + '</button>';
-        html += '<button onclick="event.stopPropagation();openSocialCardMain(' + r.related_sura + ',' + r.related_aya + ')"'
+        html += '<button onclick="event.stopPropagation();openSocialCardWithList(' + r.related_sura + ',' + r.related_aya + ',' + idx + ',&#39;' + JSON.stringify(verses.map(v => v.related_sura + ':' + v.related_aya)).replace(/'/g, '&#39;').replace(/"/g, '&quot;') + '&#39;)"'
           + ' title="Create social media card for ' + r.related_sura + ':' + r.related_aya + '"'
           + ' aria-label="Create social media card for ' + r.related_sura + ':' + r.related_aya + '"'
           + ' style="padding:6px 9px;background:#FDF8EE;border:none;font-size:13px;line-height:1;cursor:pointer;color:#B8902A;"'
@@ -6393,6 +6395,7 @@ const SOCIAL_FORMATS_MAIN = {
   wide:   { w: 1200, h: 675 },
 };
 let _socialMainSura = null, _socialMainAya = null, _socialMainFormat = 'square';
+let _socialMainVerseList = null, _socialMainVerseListIdx = 0;
 let _socialMainVerse = null;
 // Which languages appear on the CARD. Seeded from the page's global
 // langState the first time a card is opened, but kept separate after
@@ -6422,6 +6425,7 @@ const SOCIAL_VT_LANGS = { bn:'bengali', ms:'malay', es:'spanish', zh:'chinese', 
 
 async function openSocialCardMain(sura, aya){
   _socialMainSura = sura; _socialMainAya = aya; _socialMainFormat = 'square';
+  _socialMainVerseList = null; _socialMainVerseListIdx = 0;
   document.getElementById('socialOverlayMain').style.display = 'flex';
   document.getElementById('socialCanvasLoadingMain').style.display = 'block';
   document.getElementById('socialCanvasMain').style.display = 'none';
@@ -6445,6 +6449,44 @@ async function openSocialCardMain(sura, aya){
   } catch(e) {
     document.getElementById('socialCanvasLoadingMain').textContent = 'Could not load verse text.';
   }
+}
+
+// Open social card with cross-reference verse list for navigation
+async function openSocialCardWithList(sura, aya, idx, verseListJson) {
+  _socialMainVerseList = JSON.parse(verseListJson);
+  _socialMainVerseListIdx = idx;
+  // Update nav button states
+  updateSocialCardNavButtons();
+  await openSocialCardMain(sura, aya);
+}
+
+// Navigate within verse list
+function navigateSocialCardList(direction) {
+  if (!_socialMainVerseList || _socialMainVerseList.length === 0) return;
+  const newIdx = _socialMainVerseListIdx + direction;
+  if (newIdx < 0 || newIdx >= _socialMainVerseList.length) return;
+  
+  _socialMainVerseListIdx = newIdx;
+  const verseRef = _socialMainVerseList[newIdx]; // Format: "2:154"
+  const [sura, aya] = verseRef.split(':').map(Number);
+  
+  if (sura && aya) {
+    _socialMainSura = sura;
+    _socialMainAya = aya;
+    openSocialCardMain(sura, aya);
+  }
+}
+
+// Update nav buttons visibility based on position in list
+function updateSocialCardNavButtons() {
+  const prevBtn = document.getElementById('scm-nav-prev');
+  const nextBtn = document.getElementById('scm-nav-next');
+  if (!prevBtn || !nextBtn || !_socialMainVerseList) return;
+  
+  prevBtn.style.opacity = _socialMainVerseListIdx > 0 ? '1' : '0.3';
+  prevBtn.style.pointerEvents = _socialMainVerseListIdx > 0 ? 'auto' : 'none';
+  nextBtn.style.opacity = _socialMainVerseListIdx < _socialMainVerseList.length - 1 ? '1' : '0.3';
+  nextBtn.style.pointerEvents = _socialMainVerseListIdx < _socialMainVerseList.length - 1 ? 'auto' : 'none';
 }
 function closeSocialCardMain(){ document.getElementById('socialOverlayMain').style.display = 'none'; }
 
