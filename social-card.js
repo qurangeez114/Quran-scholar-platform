@@ -70,7 +70,9 @@
     el.innerHTML =
       '<div style="background:#fff;border-radius:14px;padding:16px;width:100%;max-width:480px;">'
       + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">'
-      + '<div style="font-size:14px;font-weight:700;color:#C9A84C;">📱 Social Media Card</div>'
+      + '<button id="scNavPrev" onclick="scNavigate(-1)" style="background:none;border:none;font-size:20px;color:#C9A84C;cursor:pointer;padding:4px 8px;opacity:0.7;hover:{opacity:1};">◀</button>'
+      + '<div style="font-size:14px;font-weight:700;color:#C9A84C;flex:1;text-align:center;">📱 Social Media Card</div>'
+      + '<button id="scNavNext" onclick="scNavigate(1)" style="background:none;border:none;font-size:20px;color:#C9A84C;cursor:pointer;padding:4px 8px;opacity:0.7;hover:{opacity:1};">▶</button>'
       + '<button onclick="closeSocialCard()" style="background:none;border:none;font-size:18px;color:#999;cursor:pointer;">✕</button>'
       + '</div>'
       + '<div style="display:flex;gap:6px;margin-bottom:12px;">'
@@ -309,9 +311,29 @@
     link.click();
   };
 
+  window.scNavigate = function (dir) {
+    if (!scVerse) return;
+    var newAya = scAya + dir;
+    // Determine max aya for current sura from Qur'an structure
+    var surahLengths = {1:7,2:286,3:200,4:176,5:120,6:165,7:206,8:75,9:129,10:109,11:123,12:111,13:43,14:52,15:99,16:128,17:111,18:110,19:98,20:135,21:112,22:78,23:118,24:64,25:77,26:227,27:93,28:88,29:69,30:60,31:34,32:30,33:73,34:54,35:45,36:83,37:182,38:88,39:75,40:85,41:54,42:53,43:89,44:59,45:37,46:35,47:38,48:29,49:18,50:45,51:60,52:49,53:62,54:55,55:78,56:96,57:29,58:22,59:24,60:13,61:14,62:11,63:11,64:18,65:12,66:12,67:30,68:52,69:52,70:44,71:28,72:28,73:20,74:56,75:40,76:31,77:50,78:40,79:46,80:42,81:29,82:19,83:36,84:45,85:22,86:17,87:19,88:26,89:30,90:20,91:15,92:21,93:11,94:8,95:8,96:19,97:5,98:8,99:8,100:11,101:11,102:8,103:3,104:9,105:5,106:4,107:7,108:3,109:6,110:3,111:5,112:4,113:5,114:6};
+    var maxAya = surahLengths[scSura] || scAya;
+    if (newAya < 1) newAya = 1;
+    if (newAya > maxAya) newAya = maxAya;
+    if (newAya === scAya) return; // no change
+    openSocialCard(scSura, newAya);
+  };
+
   window.closeSocialCard = function () {
     var o = document.getElementById('scCardOverlay');
     if (o) o.style.display = 'none';
+  };
+
+  // Keyboard navigation for social card modal
+  var scKeyListener = function (e) {
+    var o = document.getElementById('scCardOverlay');
+    if (!o || o.style.display === 'none') return; // modal not visible
+    if (e.key === 'ArrowLeft') { e.preventDefault(); window.scNavigate(-1); }
+    else if (e.key === 'ArrowRight') { e.preventDefault(); window.scNavigate(1); }
   };
 
   window.openSocialCard = async function (sura, aya) {
@@ -323,6 +345,13 @@
     document.getElementById('scCanvas').style.display = 'none';
     document.getElementById('scLangsWrap').style.display = 'none';
     window.scSetFormat('square');
+    
+    // Attach keyboard listener when modal opens
+    if (!window.scKeyListenerAttached) {
+      document.addEventListener('keydown', scKeyListener);
+      window.scKeyListenerAttached = true;
+    }
+    
     try {
       var res = await fetch(SC_URL + '/rest/v1/ayas?select=' + SC_AYA_COLS
         + '&sura_id=eq.' + sura + '&aya_number=eq.' + aya, { headers: SC_HDR });
