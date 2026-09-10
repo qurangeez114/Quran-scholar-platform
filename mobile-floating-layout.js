@@ -78,6 +78,27 @@
     bottom: calc(var(--floating-base-bottom) + var(--floating-gap) + var(--nav-row) + 52px + var(--floating-gap)) !important;
     right: 14px !important;
   }
+
+  /* Everything above is position:fixed, so it was positioned into a tidy
+     stack but never reserved any space in the document -- at the end of a
+     scroll the whole stack sat on top of the verse text. Reserve the height
+     of the tallest column (up to #pb-float-btn) as trailing padding so
+     content can always scroll clear of it.
+
+     Applied without overriding pages that manage their own body padding
+     beyond the trailing gap. */
+  body {
+    padding-bottom: calc(
+      var(--floating-base-bottom) + var(--floating-gap) + var(--nav-row)
+      + 52px + var(--floating-gap) + 52px + var(--floating-gap)
+    ) !important;
+    box-sizing: border-box;
+  }
+
+  /* When the user minimises the floating UI, give the space straight back. */
+  html.floating-ui-hidden body {
+    padding-bottom: calc(var(--bottom-nav-height) + var(--safe-b)) !important;
+  }
 }`;
 
   var style = document.createElement('style');
