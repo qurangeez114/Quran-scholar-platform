@@ -1999,6 +1999,16 @@ function toggleWordByWord(sura, aya, btn) {
 // RESEARCH DEPTH BADGE
 // ============================================================
 // ─── loadCrossReferences ────────────────────────────────────────────
+// Cross-ref 📱 -> the shared social card in social-card.js, carrying the
+// theme's verse list so its arrows walk the theme, not the surah.
+// index.html's own inline modal is no longer used for cross-references.
+function qhXrefCard(listId, verseIdx) {
+  var list = (window._xrefLists || [])[listId];
+  if (!list || !list[verseIdx]) return;
+  var parts = String(list[verseIdx]).split(':');
+  openSocialCard(Number(parts[0]), Number(parts[1]), list, verseIdx);
+}
+
 async function loadCrossReferences(sura, aya) {
   const panel = document.getElementById('tp-' + aya + '-xrefs');
   const tab   = document.getElementById('xref-tab-' + aya);
@@ -2081,9 +2091,12 @@ async function loadCrossReferences(sura, aya) {
 
     Object.entries(byTheme).forEach(function(entry) {
       const theme = entry[0], verses = entry[1];
-      // Cache this theme's verses for cross-ref navigation
-      if (!window._crossRefThemeLists) window._crossRefThemeLists = {};
-      window._crossRefThemeLists[theme] = verses.map(function(v) { return String(v.related_sura) + ':' + String(v.related_aya); });
+      // Register this theme's verse list under a numeric id. Numeric ids keep
+      // the onclick free of quoted theme names, which is what kept breaking.
+      if (!window._xrefLists) window._xrefLists = [];
+      const _li = window._xrefLists.push(
+        verses.map(function(v) { return String(v.related_sura) + ':' + String(v.related_aya); })
+      ) - 1;
       html += '<div style="margin:0 12px 16px;">';
       html += '<div onclick="openThemeAnalysis(\'' + encodeURIComponent(theme) + '\')" style="background:linear-gradient(135deg,#FDF5DE,#FAF0C0);border:2px solid #E8C97B;border-radius:10px;padding:10px 14px;margin-bottom:10px;cursor:pointer;">';
       html += '<div style="display:flex;align-items:center;justify-content:space-between;">';
@@ -2092,7 +2105,7 @@ async function loadCrossReferences(sura, aya) {
       html += '<div style="font-size:20px;color:#B8902A;font-weight:700;">↗</div>';
       html += '</div></div>';
       html += '<div style="display:flex;flex-wrap:wrap;gap:6px;padding:0 4px;">';
-      verses.forEach(function(r) {
+      verses.forEach(function(r, _vi) {
         const si = allSuras.find(function(s){ return (s.sura_id||s.id) === r.related_sura; });
         const sn = si ? (si.sura_name_english || si.sura_name_translated || '') : '';
         // Paired control: the reference opens the verse, the 📱 opens the
@@ -2104,7 +2117,7 @@ async function loadCrossReferences(sura, aya) {
           + ' class="xref-chip-btn"'
           + ' style="padding:6px 12px;background:transparent;border:none;border-right:1px solid #E8E4DC;font-size:13px;font-weight:700;color:#2A3F4E;cursor:pointer;min-width:56px;text-align:center;"'
           + '>' + r.related_sura + ':' + r.related_aya + '</button>';
-        html += '<button data-theme-key="' + theme.replace(/"/g, '&quot;') + '" onclick="const t=this.getAttribute(\'data-theme-key\'); openCrossRefSocialCard(t, ' + r.related_sura + ', ' + r.related_aya + ')"'
+        html += '<button onclick="qhXrefCard(' + _li + ',' + _vi + ')"'
           + ' title="Create social media card for ' + r.related_sura + ':' + r.related_aya + '"'
           + ' aria-label="Create social media card for ' + r.related_sura + ':' + r.related_aya + '"'
           + ' style="padding:6px 9px;background:#FDF8EE;border:none;font-size:13px;line-height:1;cursor:pointer;color:#B8902A;"'
