@@ -6486,8 +6486,20 @@ async function openSocialCardMain(sura, aya, crossRefTheme){
       verses: verseList
     };
     console.log('[DEBUG] Context SET at END of openSocialCardMain:', _socialNavigationContext);
+    
+    // Update debug panel
+    if (document.getElementById('debugContext')) {
+      document.getElementById('debugContext').textContent = 'SET ✓';
+      document.getElementById('debugKeys').textContent = verseList.join(' → ').substring(0, 60);
+      document.getElementById('debugCurrent').textContent = sura + ':' + aya;
+    }
   } else {
     _socialNavigationContext = null;
+    if (document.getElementById('debugContext')) {
+      document.getElementById('debugContext').textContent = 'NULL ✗';
+      document.getElementById('debugKeys').textContent = crossRefTheme ? 'NOT IN CACHE' : 'NO THEME';
+      document.getElementById('debugCurrent').textContent = sura + ':' + aya;
+    }
   }
 }
 
@@ -6508,6 +6520,18 @@ function openCrossRefSocialCard(themeName, sura, aya) {
   console.log('[DEBUG] Cache available:', window._crossRefThemeLists);
   const list = window._crossRefThemeLists && window._crossRefThemeLists[themeName];
   console.log('[DEBUG] Theme list found:', list);
+  
+  // Update debug panel for mobile
+  if (document.getElementById('debugContext')) {
+    document.getElementById('debugContext').textContent = themeName.substring(0, 30);
+    if (list) {
+      document.getElementById('debugKeys').textContent = list.length + ' verses';
+      document.getElementById('debugCurrent').textContent = sura + ':' + aya;
+    } else {
+      document.getElementById('debugKeys').textContent = 'NOT FOUND';
+    }
+  }
+  
   // Pass theme to openSocialCardMain so it can set context at the END
   openSocialCardMain(sura, aya, themeName);
 }
@@ -6520,6 +6544,16 @@ function navigateSocialCardList(direction) {
   console.log('[NAVIGATE] direction=' + direction + ', current=' + currentKey);
   console.log('[NAVIGATE] context type=' + (ctx ? ctx.type : 'NULL'));
   if (ctx) console.log('[NAVIGATE] context verses=' + ctx.verses.join(' → '));
+  
+  // Update debug panel
+  if (document.getElementById('debugCurrent')) {
+    if (ctx && ctx.verses) {
+      const idx = ctx.verses.indexOf(currentKey);
+      document.getElementById('debugCurrent').textContent = 'idx=' + idx + ' → ' + direction;
+    } else {
+      document.getElementById('debugCurrent').textContent = 'NO CTX → CHAPTER NAV';
+    }
+  }
 
   // If we have a cross-reference context, use it
   if (ctx && ctx.type === 'cross-reference' && Array.isArray(ctx.verses) && ctx.verses.length > 0) {
