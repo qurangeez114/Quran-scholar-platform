@@ -6635,20 +6635,8 @@ async function openSocialCardMain(sura, aya, crossRefTheme){
       verses: verseList
     };
     console.log('[DEBUG] Context SET at END of openSocialCardMain:', _socialNavigationContext);
-    
-    // Update debug panel
-    if (document.getElementById('debugContext')) {
-      document.getElementById('debugContext').textContent = 'SET ✓';
-      document.getElementById('debugKeys').textContent = verseList.join(' → ').substring(0, 60);
-      document.getElementById('debugCurrent').textContent = sura + ':' + aya;
-    }
   } else {
     _socialNavigationContext = null;
-    if (document.getElementById('debugContext')) {
-      document.getElementById('debugContext').textContent = 'NULL ✗';
-      document.getElementById('debugKeys').textContent = crossRefTheme ? 'NOT IN CACHE' : 'NO THEME';
-      document.getElementById('debugCurrent').textContent = sura + ':' + aya;
-    }
   }
 }
 
@@ -6662,40 +6650,7 @@ async function openSocialCardWithList(sura, aya, idx, verseListJson) {
 }
 
 // Navigate within verse list
-// Open social card from cross-reference, setting navigation context
-function openCrossRefSocialCard(themeName, sura, aya) {
-  // Debug logging
-  console.log('[DEBUG] openCrossRefSocialCard called:', {themeName, sura, aya});
-  console.log('[DEBUG] Cache available:', window._crossRefThemeLists);
-  const list = window._crossRefThemeLists && window._crossRefThemeLists[themeName];
-  console.log('[DEBUG] Theme list found:', list);
-  
-  // SAVE TO localStorage FOR DEBUGGING
-  const cacheKeys = window._crossRefThemeLists ? Object.keys(window._crossRefThemeLists) : [];
-  localStorage.setItem('_qh_debug', JSON.stringify({
-    themeName: themeName,
-    themeFound: !!list,
-    cacheKeys: cacheKeys.slice(0, 3),
-    listLength: list ? list.length : 0,
-    sura: sura,
-    aya: aya,
-    timestamp: new Date().toLocaleTimeString()
-  }));
-  
-  // Update debug panel for mobile
-  if (document.getElementById('debugContext')) {
-    document.getElementById('debugContext').textContent = themeName.substring(0, 30);
-    if (list) {
-      document.getElementById('debugKeys').textContent = list.length + ' verses';
-      document.getElementById('debugCurrent').textContent = sura + ':' + aya;
-    } else {
-      document.getElementById('debugKeys').textContent = 'NOT FOUND';
-    }
-  }
-  
-  // Pass theme to openSocialCardMain so it can set context at the END
-  openSocialCardMain(sura, aya, themeName);
-}
+// Cross-references now use qhXrefCard() -> the shared social-card.js modal.
 
 function navigateSocialCardList(direction) {
   const currentKey = String(_socialMainSura) + ':' + String(_socialMainAya);
@@ -6705,16 +6660,6 @@ function navigateSocialCardList(direction) {
   console.log('[NAVIGATE] direction=' + direction + ', current=' + currentKey);
   console.log('[NAVIGATE] context type=' + (ctx ? ctx.type : 'NULL'));
   if (ctx) console.log('[NAVIGATE] context verses=' + ctx.verses.join(' → '));
-  
-  // Update debug panel
-  if (document.getElementById('debugCurrent')) {
-    if (ctx && ctx.verses) {
-      const idx = ctx.verses.indexOf(currentKey);
-      document.getElementById('debugCurrent').textContent = 'idx=' + idx + ' → ' + direction;
-    } else {
-      document.getElementById('debugCurrent').textContent = 'NO CTX → CHAPTER NAV';
-    }
-  }
 
   // If we have a cross-reference context, use it
   if (ctx && ctx.type === 'cross-reference' && Array.isArray(ctx.verses) && ctx.verses.length > 0) {
@@ -10819,8 +10764,26 @@ document.addEventListener('keydown', function(e) {
 }
 
 .floating-ui-hidden #qnav-return-bar,
-.floating-ui-hidden #qhist-drawer {
+.floating-ui-hidden #qhist-drawer,
+.floating-ui-hidden #pb-float-btn,
+.floating-ui-hidden #askqh-dock,
+.floating-ui-hidden #qs-support-card,
+.floating-ui-hidden #qs-donate-btn {
   display: none !important;
+}
+
+/* The presentation "+" sat at bottom:72px, directly over verse text on a
+   phone, and the minimize toggle did not cover it. Sit it above the ask
+   dock instead, and shrink it to an icon on narrow screens so it stops
+   competing with the content it floats over. */
+#pb-float-btn { bottom: 118px !important; }
+@media (max-width: 700px) {
+  #pb-float-btn {
+    bottom: 112px !important;
+    right: 10px !important;
+    padding: 10px 12px !important;
+    opacity: 0.92;
+  }
 }
 
 </style>
@@ -11569,12 +11532,7 @@ if (localStorage.getItem('floatingUIHidden') === 'true') {
 </script>
 
 
-<div id="debugPanel" style="position:fixed;bottom:70px;right:8px;z-index:8000;background:#000;color:#0f0;padding:8px;border-radius:4px;font-size:10px;max-width:200px;max-height:150px;overflow:auto;font-family:monospace;display:none;">
-  <div>Context: <span id="debugContext">null</span></div>
-  <div>Cache keys: <span id="debugKeys">none</span></div>
-  <div>Current: <span id="debugCurrent">--</span></div>
-</div>
-<button onclick="document.getElementById('debugPanel').style.display = document.getElementById('debugPanel').style.display === 'none' ? 'block' : 'none'" style="position:fixed;bottom:8px;right:8px;z-index:8000;width:32px;height:32px;border-radius:50%;background:#C9A84C;border:none;color:#fff;cursor:pointer;font-size:16px;" title="Toggle debug panel">🐛</button>
+
 
 </body>
 </html><!-- Force rebuild Sat Sep  5 08:51:17 UTC 2026 -->
