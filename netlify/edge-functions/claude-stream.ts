@@ -48,7 +48,7 @@ export default async (request: Request) => {
   }
 
   const payload: Record<string, unknown> = {
-    model: body.model || "claude-sonnet-4-6",
+    model: body.model || "claude-sonnet-4-5",
     max_tokens: Math.min(body.max_tokens || 2000, 4000),
     messages: body.messages,
     stream: true,
