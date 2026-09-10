@@ -2009,6 +2009,122 @@ function qhXrefCard(listId, verseIdx) {
   openSocialCard(Number(parts[0]), Number(parts[1]), list, verseIdx);
 }
 
+// ── Cross-reference relevance ranking ────────────────────────────────
+// thematic_cross_references_v2 was bulk-generated: every verse in a theme
+// was linked to every other verse in it, with a constant "Thematic
+// cross-reference" reason. Some verses carry 500+ links, which buries the
+// ones that matter. These helpers rank links by shared Arabic word-stems
+// between the source verse and each target, so the strongest surface first.
+// Nothing is deleted — the full list stays one tap away.
+
+var QH_XREF_SHOW = 10;      // how many chips to show unranked-collapsed
+var QH_XREF_MAX_SCORE = 140; // cap candidates scored, to bound the fetch
+var _qhAyaCache = {};
+
+// Arabic particles/pronouns that co-occur everywhere and carry no signal.
+var QH_STOP = {'من':1,'في':1,'على':1,'الي':1,'عن':1,'ما':1,'لا':1,'ان':1,'الا':1,'ثم':1,'قد':1,'كل':1,'هم':1,'هو':1,'هي':1,'ذلك':1,'الذي':1,'الذين':1,'التي':1,'كان':1,'لم':1,'لن':1,'او':1,'بل':1,'يا':1,'اذا':1,'عند':1,'بين':1,'بعد':1,'قبل':1,'غير':1,'كما':1,'حتي':1,'هذا':1,'هذه':1,'شيء':1};
+
+// Quranic text carries harakat, dagger alef, alef wasla and recitation
+// marks. These sit OUTSIDE the \u0621-\u064A letter block, so they must be
+// removed BEFORE splitting into words - otherwise every word fragments at
+// each diacritic and nothing matches.
+var QH_MARKS = /[\u064B-\u065F\u0670\u0640\u06D6-\u06ED]/g;
+
+function qhNorm(t) {
+  t = String(t || '').replace(QH_MARKS, '');
+  return t.replace(/[\u0623\u0625\u0622\u0671\u0672\u0673]/g, '\u0627')
+          .replace(/\u0649/g, '\u064A').replace(/\u0629/g, '\u0647')
+          .replace(/\u0624/g, '\u0648').replace(/\u0626/g, '\u064A')
+          .replace(/\u0621/g, '');
+}
+
+// Drop the definite article and common affixes to approximate a root.
+function qhStem(w) {
+  w = w.replace(/^(وال|فال|بال|كال|ال)/, '').replace(/^[وفبكل]/, '');
+  w = w.replace(/(هما|كما|هن|هم|كم|ها|نا|ه)$/, '');
+  return w.replace(/(ون|ين|ات|ان|وا|ي)$/, '');
+}
+
+function qhTokens(txt) {
+  var out = [], seen = {};
+  var parts = qhNorm(txt).split(/[^\u0621-\u064A]+/);
+  for (var i = 0; i < parts.length; i++) {
+    var raw = parts[i];
+    if (!raw || QH_STOP[raw]) continue;
+    var st = qhStem(raw);
+    if (st.length < 3 || QH_STOP[st] || seen[st]) continue;
+    seen[st] = 1; out.push(st);
+  }
+  return out;
+}
+
+// Jaccard-style overlap, slightly favouring rarer (longer) stems.
+function qhScore(aTok, bTok) {
+  if (!aTok.length || !bTok.length) return 0;
+  var set = {}, i, hit = 0, weight = 0;
+  for (i = 0; i < bTok.length; i++) set[bTok[i]] = 1;
+  for (i = 0; i < aTok.length; i++) {
+    if (set[aTok[i]]) { hit++; weight += Math.min(aTok[i].length, 6); }
+  }
+  if (!hit) return 0;
+  return weight / Math.sqrt(aTok.length * bTok.length);
+}
+
+// Fetch Arabic for a set of "sura:aya" keys, one request per sura.
+async function qhFetchAyas(keys) {
+  var bySura = {}, k, p;
+  for (var i = 0; i < keys.length; i++) {
+    if (_qhAyaCache[keys[i]] !== undefined) continue;
+    p = keys[i].split(':');
+    (bySura[p[0]] = bySura[p[0]] || []).push(p[1]);
+  }
+  var suras = Object.keys(bySura);
+  await Promise.all(suras.map(async function (s) {
+    try {
+      var url = SUPABASE_URL + '/rest/v1/ayas?select=sura_id,aya_number,arabic&sura_id=eq.'
+              + s + '&aya_number=in.(' + bySura[s].join(',') + ')';
+      var res = await fetch(url, { headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY } });
+      var rows = await res.json();
+      if (Array.isArray(rows)) rows.forEach(function (r) {
+        _qhAyaCache[r.sura_id + ':' + r.aya_number] = r.arabic || '';
+      });
+    } catch (e) { /* leave uncached; scoring falls back to original order */ }
+  }));
+}
+
+// Rank a theme's verse list against the source verse. Returns the same
+// objects, most-relevant first. On any failure returns the input untouched.
+async function qhRankVerses(srcSura, srcAya, verses) {
+  try {
+    if (!verses || verses.length < 3) return verses;
+    var cand = verses.slice(0, QH_XREF_MAX_SCORE);
+    var keys = [srcSura + ':' + srcAya];
+    cand.forEach(function (v) { keys.push(v.related_sura + ':' + v.related_aya); });
+    await qhFetchAyas(keys);
+    var srcTok = qhTokens(_qhAyaCache[srcSura + ':' + srcAya]);
+    if (!srcTok.length) return verses;
+    var scored = cand.map(function (v, i) {
+      var t = qhTokens(_qhAyaCache[v.related_sura + ':' + v.related_aya]);
+      return { v: v, s: qhScore(srcTok, t), i: i };
+    });
+    scored.sort(function (a, b) { return (b.s - a.s) || (a.i - b.i); });
+    var out = scored.map(function (x) { x.v._score = x.s; return x.v; });
+    return out.concat(verses.slice(QH_XREF_MAX_SCORE));
+  } catch (e) { return verses; }
+}
+
+// Toggle a theme's collapsed chip overflow.
+function qhXrefToggle(id, btn) {
+  var wrap = document.getElementById(id);
+  if (!wrap) return;
+  var open = wrap.getAttribute('data-open') === '1';
+  wrap.querySelectorAll('[data-overflow="1"]').forEach(function (el) {
+    el.style.display = open ? 'none' : 'inline-flex';
+  });
+  wrap.setAttribute('data-open', open ? '0' : '1');
+  btn.textContent = open ? btn.getAttribute('data-more') : 'Show fewer';
+}
+
 async function loadCrossReferences(sura, aya) {
   const panel = document.getElementById('tp-' + aya + '-xrefs');
   const tab   = document.getElementById('xref-tab-' + aya);
@@ -2089,7 +2205,15 @@ async function loadCrossReferences(sura, aya) {
 
     let html = '<div style="padding:12px 16px 4px;font-size:12px;color:#7A8FA6;">This verse belongs to <b>' + Object.keys(byTheme).length + '</b> theme(s). Tap any verse to open it.</div>';
 
-    Object.entries(byTheme).forEach(function(entry) {
+    const _themeEntries = Object.entries(byTheme);
+    // Rank each theme's links by Arabic-stem overlap with the source verse
+    // so the strongest surface first instead of raw sura order.
+    await Promise.all(_themeEntries.map(async function (entry) {
+      byTheme[entry[0]] = await qhRankVerses(sura, aya, entry[1]);
+      entry[1] = byTheme[entry[0]];
+    }));
+
+    _themeEntries.forEach(function(entry) {
       const theme = entry[0], verses = entry[1];
       // Register this theme's verse list under a numeric id. Numeric ids keep
       // the onclick free of quoted theme names, which is what kept breaking.
@@ -2104,14 +2228,18 @@ async function loadCrossReferences(sura, aya) {
       html += '<div style="font-size:11px;color:#B8902A;margin-top:2px;">' + verses.length + ' verse' + (verses.length>1?'s':'') + ' · tap to open full analysis ↗</div></div>';
       html += '<div style="font-size:20px;color:#B8902A;font-weight:700;">↗</div>';
       html += '</div></div>';
-      html += '<div style="display:flex;flex-wrap:wrap;gap:6px;padding:0 4px;">';
+      const _wrapId = 'xrefw-' + aya + '-' + _li;
+      html += '<div id="' + _wrapId + '" data-open="0" style="display:flex;flex-wrap:wrap;gap:6px;padding:0 4px;">';
       verses.forEach(function(r, _vi) {
         const si = allSuras.find(function(s){ return (s.sura_id||s.id) === r.related_sura; });
         const sn = si ? (si.sura_name_english || si.sura_name_translated || '') : '';
         // Paired control: the reference opens the verse, the 📱 opens the
         // social-card generator for that verse directly, matching the same
         // action available on a verse card itself.
-        html += '<span style="display:inline-flex;align-items:stretch;border:2px solid #D4C9A8;border-radius:8px;overflow:visible;background:#fff;">';
+        const _hide = _vi >= QH_XREF_SHOW;
+        html += '<span' + (_hide ? ' data-overflow="1"' : '')
+          + ' style="' + (_hide ? 'display:none;' : 'display:inline-flex;')
+          + 'align-items:stretch;border:2px solid #D4C9A8;border-radius:8px;overflow:visible;background:#fff;">';
         html += '<button onclick="navToVerse(' + r.related_sura + ',' + r.related_aya + ')"'
           + ' title="Open ' + escapeHtml(sn) + ' ' + r.related_sura + ':' + r.related_aya + '"'
           + ' class="xref-chip-btn"'
@@ -2124,7 +2252,15 @@ async function loadCrossReferences(sura, aya) {
           + '>📱</button>';
         html += '</span>';
       });
-      html += '</div></div>';
+      html += '</div>';
+      if (verses.length > QH_XREF_SHOW) {
+        const _moreLbl = 'Show all ' + verses.length + ' ↓';
+        html += '<button data-more="' + _moreLbl + '" onclick="qhXrefToggle(\'' + _wrapId + '\',this)"'
+          + ' style="margin:8px 4px 0;padding:5px 12px;background:transparent;border:1px solid #D4C9A8;'
+          + 'border-radius:8px;font-size:11px;font-weight:700;color:#B8902A;cursor:pointer;">'
+          + _moreLbl + '</button>';
+      }
+      html += '</div>';
     });
 
     panel.innerHTML = html;
