@@ -132,14 +132,19 @@
   display: none !important;
 }
 
+/* Parked against the mid-right edge as a slim half-tab. The top-right
+   corner is already taken on most pages (Donate sits there in the header),
+   and the bottom rows belong to the floating stack itself, so the vertical
+   middle of the right edge is the only reliably free spot. */
 #qh-float-toggle {
-  position: fixed; top: 8px; right: 8px; z-index: 100000;
-  width: 34px; height: 34px; border-radius: 50%;
-  background: #C9A84C; border: none; color: #fff;
-  font-size: 19px; line-height: 1; cursor: pointer; opacity: .85;
-  box-shadow: 0 2px 8px rgba(0,0,0,.25);
+  position: fixed; right: 0; top: 58%; z-index: 100000;
+  width: 26px; height: 44px;
+  border-radius: 10px 0 0 10px;
+  background: rgba(201,168,76,.82); border: none; color: #fff;
+  font-size: 16px; line-height: 1; cursor: pointer; padding: 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,.22);
 }
-#qh-float-toggle:active { transform: scale(.94); }`;
+#qh-float-toggle:active { opacity: .7; }`;
 
   var style = document.createElement('style');
   style.id = 'qh-mobile-floating-layout';
