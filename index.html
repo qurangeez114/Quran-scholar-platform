@@ -4484,10 +4484,20 @@ Be specific, scholarly, and cite actual sources where possible.`;
         select: 'hadith_text,collection,reference,narrator,hadith_grade,is_ai_generated',
         sura_id: 'eq.' + currentSura, aya_number: 'eq.' + num
       });
+      // Phase 1: Separate real from AI, but display both (AI as placeholders)
       const realHadiths = hadiths.filter(h => (h.hadith_grade||'').toLowerCase() !== 'ai_synthesis' && !h.is_ai_generated);
-      if (realHadiths.length) {
+      const aiHadiths = hadiths.filter(h => (h.hadith_grade||'').toLowerCase() === 'ai_synthesis' || h.is_ai_generated);
+      
+      // Display real hadith first, then AI as placeholders
+      const displayHadiths = [...realHadiths, ...aiHadiths];
+      
+      if (displayHadiths.length) {
         dbContext = '\n\nConnected hadiths from database:\n' +
-          realHadiths.slice(0,5).map(h => '[' + (h.collection||'') + '] ' + (h.hadith_text||'').slice(0,200)).join('\n');
+          displayHadiths.slice(0,5).map(h => {
+            const isAI = (h.hadith_grade||'').toLowerCase() === 'ai_synthesis' || h.is_ai_generated;
+            const label = isAI ? '⏳ [Placeholder]' : '✓';
+            return label + ' [' + (h.collection||'') + '] ' + (h.hadith_text||'').slice(0,200);
+          }).join('\n');
       }
     }
   } catch(e) { /* DB context optional */ }
