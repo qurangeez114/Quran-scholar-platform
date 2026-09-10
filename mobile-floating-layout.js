@@ -99,10 +99,85 @@
   html.floating-ui-hidden body {
     padding-bottom: calc(var(--bottom-nav-height) + var(--safe-b)) !important;
   }
-}`;
+  /* Everything above is position:fixed, so it is positioned into a tidy
+     stack but takes up no space in the document -- at the end of a scroll
+     the stack sits on top of the content. Reserving trailing padding only
+     helps pages where body is the scrolling element, which is not true
+     everywhere (stories.html sets html,body{overflow:hidden} and scrolls an
+     inner div), so padding is a best-effort nicety and the minimise control
+     below is the reliable escape hatch. */
+  body {
+    padding-bottom: calc(
+      var(--floating-base-bottom) + var(--floating-gap) + var(--nav-row)
+      + 52px + var(--floating-gap) + 52px + var(--floating-gap)
+    );
+    box-sizing: border-box;
+  }
+
+  html.floating-ui-hidden body { padding-bottom: 0; }
+}
+
+/* Minimise control. index.html shipped its own #floatingUIToggle; every
+   other page had no way to clear the stack at all, which is why the
+   floating controls kept covering content on themes / stories / tensions.
+   Defined here, outside the media query, so one definition serves all
+   pages and works whatever element the page scrolls. */
+.floating-ui-hidden #qnav-return-bar,
+.floating-ui-hidden #qhist-drawer,
+.floating-ui-hidden #qhist-btn,
+.floating-ui-hidden #fab-menu,
+.floating-ui-hidden #pb-float-btn,
+.floating-ui-hidden #askqh-dock,
+.floating-ui-hidden #quranhikma-global-donate {
+  display: none !important;
+}
+
+#qh-float-toggle {
+  position: fixed; top: 8px; right: 8px; z-index: 100000;
+  width: 34px; height: 34px; border-radius: 50%;
+  background: #C9A84C; border: none; color: #fff;
+  font-size: 19px; line-height: 1; cursor: pointer; opacity: .85;
+  box-shadow: 0 2px 8px rgba(0,0,0,.25);
+}
+#qh-float-toggle:active { transform: scale(.94); }`;
 
   var style = document.createElement('style');
   style.id = 'qh-mobile-floating-layout';
   style.textContent = css;
   document.head.appendChild(style);
+
+  // Restore the user's choice before first paint where possible.
+  try {
+    if (localStorage.getItem('floatingUIHidden') === 'true') {
+      document.documentElement.classList.add('floating-ui-hidden');
+    }
+  } catch (e) { /* private mode: fall through un-hidden */ }
+
+  function addToggle() {
+    // index.html already ships its own control; do not stack two.
+    if (document.getElementById('floatingUIToggle')) return;
+    if (document.getElementById('qh-float-toggle')) return;
+    if (!document.body) return;
+
+    var hidden = document.documentElement.classList.contains('floating-ui-hidden');
+    var btn = document.createElement('button');
+    btn.id = 'qh-float-toggle';
+    btn.textContent = hidden ? '+' : '\u2212';
+    btn.title = hidden ? 'Show floating buttons' : 'Hide floating buttons';
+    btn.setAttribute('aria-label', btn.title);
+    btn.onclick = function () {
+      var on = document.documentElement.classList.toggle('floating-ui-hidden');
+      btn.textContent = on ? '+' : '\u2212';
+      btn.title = on ? 'Show floating buttons' : 'Hide floating buttons';
+      btn.setAttribute('aria-label', btn.title);
+      try { localStorage.setItem('floatingUIHidden', on); } catch (e) {}
+    };
+    document.body.appendChild(btn);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', addToggle);
+  } else {
+    addToggle();
+  }
 })();
