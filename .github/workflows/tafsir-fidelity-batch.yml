@@ -16,14 +16,12 @@ on:
       model:
         description: "Claude model used by the existing QuranHikma API"
         required: true
-        default: "claude-sonnet-4-5"
+        default: "claude-sonnet-4-5-20250929"
         type: string
   push:
     paths:
       - ".github/tafsir-fidelity-run-trigger.txt"
   schedule:
-    # Keep advancing automatically until no eligible Arabic-English pairs remain.
-    # Once complete, later scheduled runs exit immediately with "Nothing to do."
     - cron: "*/30 * * * *"
 
 concurrency:
@@ -36,45 +34,32 @@ jobs:
     timeout-minutes: 350
     permissions:
       contents: write
-
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-
       - name: Validate evaluator syntax
         run: python -m py_compile batch_tafsir_accuracy.py
-
       - name: Evaluate next missing Ibn Kathir Arabic-English pairs
         shell: bash
         env:
           BATCH_LIMIT: ${{ inputs.limit || '100' }}
           BATCH_START: ${{ inputs.start || '' }}
-          BATCH_MODEL: ${{ inputs.model || 'claude-sonnet-4-5' }}
+          BATCH_MODEL: ${{ inputs.model || 'claude-sonnet-4-5-20250929' }}
         run: |
           set -uo pipefail
           args=(--limit "$BATCH_LIMIT" --model "$BATCH_MODEL")
-          if [[ -n "$BATCH_START" ]]; then
-            args+=(--start "$BATCH_START")
-          fi
+          if [[ -n "$BATCH_START" ]]; then args+=(--start "$BATCH_START"); fi
           set +e
           python batch_tafsir_accuracy.py "${args[@]}" 2>&1 | tee /tmp/evaluator_output.txt
           code=${PIPESTATUS[0]}
           set -e
-          {
-            echo "### Tafsir evaluator output (exit code $code)"
-            echo ""
-            echo '```'
-            tail -c 8000 /tmp/evaluator_output.txt
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+          { echo "### Tafsir evaluator output (exit code $code)"; echo ""; echo '```'; tail -c 8000 /tmp/evaluator_output.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           echo "$code" > /tmp/evaluator_exit_code.txt
           exit $code
-
       - name: Upload evaluator output
         if: always()
         uses: actions/upload-artifact@v4
@@ -84,11 +69,6 @@ jobs:
             /tmp/evaluator_output.txt
             /tmp/evaluator_exit_code.txt
           retention-days: 7
-
-      # Temporary diagnostic: both job logs and artifacts are served from
-      # *.blob.core.windows.net, unreachable from the diagnosis environment.
-      # Committing the tail of the output back to the repo makes the real
-      # error readable via git. Remove once the batch is confirmed working.
       - name: Commit evaluator output for diagnosis
         if: always()
         run: |
