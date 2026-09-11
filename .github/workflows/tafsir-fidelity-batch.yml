@@ -43,6 +43,27 @@ jobs:
           python-version: "3.12"
       - name: Validate evaluator syntax
         run: python -m py_compile batch_tafsir_accuracy.py
+      - name: Smoke-test production Claude proxy
+        shell: bash
+        env:
+          BATCH_MODEL: ${{ inputs.model || 'claude-sonnet-4-5-20250929' }}
+        run: |
+          set +e
+          payload=$(python - <<'PY'
+          import json, os
+          print(json.dumps({"model": os.environ["BATCH_MODEL"], "max_tokens": 32, "messages": [{"role": "user", "content": "Reply with exactly OK"}]}))
+          PY
+          )
+          code=$(curl -sS -o /tmp/claude_proxy_smoke_body.txt -w '%{http_code}' \
+            -H 'Content-Type: application/json' \
+            --data "$payload" \
+            https://quranhikma.com/api/claude-stream)
+          echo "Production Claude proxy smoke-test HTTP $code"
+          echo "Response:"
+          cat /tmp/claude_proxy_smoke_body.txt
+          echo
+          { echo "### Production Claude proxy smoke test"; echo "HTTP $code"; echo '```'; head -c 4000 /tmp/claude_proxy_smoke_body.txt; echo; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          exit 0
       - name: Evaluate next missing Ibn Kathir Arabic-English pairs
         shell: bash
         env:
@@ -68,6 +89,7 @@ jobs:
           path: |
             /tmp/evaluator_output.txt
             /tmp/evaluator_exit_code.txt
+            /tmp/claude_proxy_smoke_body.txt
           retention-days: 7
       - name: Commit evaluator output for diagnosis
         if: always()
@@ -75,8 +97,9 @@ jobs:
           set -e
           mkdir -p .github/diagnostics
           tail -c 6000 /tmp/evaluator_output.txt > .github/diagnostics/last-evaluator-output.txt || true
+          cp /tmp/claude_proxy_smoke_body.txt .github/diagnostics/last-claude-proxy-smoke.txt || true
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .github/diagnostics/last-evaluator-output.txt
+          git add .github/diagnostics/last-evaluator-output.txt .github/diagnostics/last-claude-proxy-smoke.txt
           git commit -m "chore: record evaluator diagnostic output [skip ci]" || exit 0
           git push
