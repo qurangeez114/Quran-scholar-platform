@@ -1,8 +1,7 @@
 // QuranHikma — persistent Tafsir translation-fidelity badges
 // Enhances the existing Ibn Kathir Arabic↔English accuracy control.
-// This file NEVER calls the AI itself. It only reads saved analysis and
-// presents the stored result immediately; the existing modal remains the
-// detail view when the badge is tapped.
+// This file NEVER calls AI. It only reads saved analysis and presents the
+// stored result immediately; the existing modal remains the detail view.
 (function () {
   'use strict';
 
@@ -32,24 +31,21 @@
   }
 
   async function getSavedAnalysis(sura, aya) {
+    const query = {
+      sura: `eq.${sura}`,
+      aya: `eq.${aya}`,
+      scholar_key: 'eq.ibn_kathir',
+      select: 'accuracy_score,verdict,omitted_content,mistranslated_sections,theological_concerns,arabic_excerpt,english_excerpt'
+    };
+
     if (typeof window.sbFetch === 'function') {
-      const rows = await window.sbFetch('tafsir_accuracy_analysis', {
-        sura: `eq.${sura}`,
-        aya: `eq.${aya}`,
-        scholar_key: 'eq.ibn_kathir',
-        select: 'accuracy_score,verdict,omitted_content,mistranslated_sections,theological_concerns'
-      });
+      const rows = await window.sbFetch('tafsir_accuracy_analysis', query);
       return rows && rows.length ? rows[0] : null;
     }
 
     try {
       if (typeof sbFetch === 'function') {
-        const rows = await sbFetch('tafsir_accuracy_analysis', {
-          sura: `eq.${sura}`,
-          aya: `eq.${aya}`,
-          scholar_key: 'eq.ibn_kathir',
-          select: 'accuracy_score,verdict,omitted_content,mistranslated_sections,theological_concerns'
-        });
+        const rows = await sbFetch('tafsir_accuracy_analysis', query);
         return rows && rows.length ? rows[0] : null;
       }
     } catch (_) {}
@@ -57,13 +53,14 @@
     return null;
   }
 
-  function ensureBrowseLink(button) {
+  function ensureBrowseLink(button, target) {
     if (!button || button.parentElement?.querySelector('.tafsir-fidelity-browser-link')) return;
     const link = document.createElement('a');
     link.className = 'tafsir-fidelity-browser-link';
-    link.href = '/tafsir-fidelity.html';
-    link.textContent = '📚 All evaluations';
-    link.title = 'Browse all saved Ibn Kathir Arabic–English fidelity evaluations';
+    link.href = `/tafsir-fidelity.html?verse=${encodeURIComponent(target.sura + ':' + target.aya)}`;
+    link.textContent = '📚 Evidence';
+    link.title = `Open the saved Ibn Kathir Arabic–English evidence for Qur'an ${target.sura}:${target.aya}`;
+    link.setAttribute('aria-label', `Open saved Tafsir fidelity evidence for verse ${target.sura}:${target.aya}`);
     link.style.cssText = 'display:inline-flex;align-items:center;padding:5px 12px;border-radius:20px;border:2px solid #8a6a17;background:#fff;color:#6f5312;font-size:12px;font-weight:700;text-decoration:none;';
     button.insertAdjacentElement('afterend', link);
   }
@@ -86,6 +83,8 @@
     button.dataset.accuracyState = 'saved';
     button.dataset.accuracyPercent = String(pct);
     button.dataset.accuracyGrade = grade;
+    button.dataset.hasArabicEvidence = row.arabic_excerpt ? 'true' : 'false';
+    button.dataset.hasEnglishEvidence = row.english_excerpt ? 'true' : 'false';
   }
 
   async function enhance(button) {
@@ -93,7 +92,7 @@
     const target = parseTarget(button);
     if (!target) return;
     seen.add(button);
-    ensureBrowseLink(button);
+    ensureBrowseLink(button, target);
 
     button.textContent = '🔍 Fidelity · …';
     button.title = 'Loading saved Arabic–English Tafsir fidelity assessment';
