@@ -330,6 +330,11 @@ def main():
         if last_error is not None:
             print(f"❌ {last_error}")
             failed.append((s, a, str(last_error)))
+            # A systematic empty/non-JSON proxy response will affect every
+            # verse. Stop this run instead of making hundreds of futile calls.
+            if isinstance(last_error, ValueError) and "model response" in str(last_error):
+                print("Stopping batch early: inspect the model/proxy response before retrying.")
+                break
         if args.delay > 0:
             time.sleep(args.delay)
 
