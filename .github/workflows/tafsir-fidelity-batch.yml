@@ -41,6 +41,14 @@ jobs:
           python-version: "3.12"
       - name: Validate evaluator syntax
         run: python -m py_compile batch_tafsir_accuracy.py
+      - name: Require Supabase write key before model calls
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          if [[ -z "$SUPABASE_SERVICE_KEY" ]]; then
+            echo 'SUPABASE_SERVICE_KEY is missing from repository Actions secrets.' >&2
+            exit 1
+          fi
       - name: Smoke-test production Claude proxy
         shell: bash
         env:
