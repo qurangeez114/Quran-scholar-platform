@@ -292,6 +292,14 @@ def main():
             continue
         missing.append((s, a, ar, en))
 
+    # Large tafsir blocks need a separate chunked evaluation path. The
+    # streaming proxy currently cuts long answers off mid-JSON, so prioritize
+    # complete shorter Arabic+English source pairs without marking large ones
+    # evaluated or changing their original order in the database.
+    deferred_large = sum(len(ar) + len(en) > 4000 for _, _, ar, en in missing)
+    missing = [pair for pair in missing if len(pair[2]) + len(pair[3]) <= 4000]
+    print(f"Long source pairs deferred for chunking: {deferred_large}")
+
     if args.limit:
         missing = missing[: args.limit]
 
