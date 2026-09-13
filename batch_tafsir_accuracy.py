@@ -146,8 +146,12 @@ Scoring rubric (0–10):
 
 Be conservative and evidence-based. Do NOT deduct points merely because English cannot mirror Arabic word order. Do NOT invent omissions that are not present. If an English explanatory phrase accurately makes an implicit Arabic referent explicit, identify it as interpretive but distinguish it from a mistranslation.
 
+First assess whether the Arabic and English entries cover the SAME tafsir passage. If either entry includes substantial commentary absent from the other, or the English stops before the Arabic, mark source_alignment "misaligned" regardless of translation quality. If you cannot establish coverage confidently, use "uncertain". Only use "aligned" when the main beginning AND end of both passages correspond. A verse heading or quoted Qur'an alone does not establish alignment. Do not score translation fidelity for misaligned or uncertain entries; the score field may be 0 as a placeholder and will not be saved.
+
 Keep each explanation concise (one or two sentences) while identifying any material mismatches. Return STRICT JSON only, with exactly these keys:
 {{
+  "source_alignment": "aligned",
+  "source_alignment_reason": "Briefly identify corresponding beginning and end, or the coverage mismatch.",
   "score": 0.0,
   "accurate": "What the English preserves accurately, with short Arabic anchors where useful.",
   "omitted": "Material present in Arabic but absent from English, or 'None material'.",
@@ -210,10 +214,15 @@ def parse_result(raw):
             raise ValueError("No JSON object in model response")
         obj = json.loads(text[start : end + 1])
 
-    required = ("score", "accurate", "omitted", "mistranslated", "concerns", "verdict")
+    required = ("source_alignment", "source_alignment_reason", "score", "accurate", "omitted", "mistranslated", "concerns", "verdict")
     missing = [k for k in required if k not in obj]
     if missing:
         raise ValueError("Missing fields: " + ", ".join(missing))
+
+    if obj["source_alignment"] not in ("aligned", "misaligned", "uncertain"):
+        raise ValueError("Invalid source_alignment")
+    if obj["source_alignment"] != "aligned":
+        return obj
 
     score = float(obj["score"])
     if not (0 <= score <= 10):
@@ -311,6 +320,7 @@ def main():
         return 0
 
     saved = 0
+    deferred_alignment = []
     failed = []
     for idx, (s, a, ar, en) in enumerate(missing, 1):
         print(f"[{idx}/{len(missing)}] {s}:{a} … ", end="", flush=True)
@@ -320,6 +330,11 @@ def main():
             try:
                 raw = call_claude(prompt, model=args.model)
                 result = parse_result(raw)
+                if result["source_alignment"] != "aligned":
+                    print(f"⏸ Source alignment {result['source_alignment']}: {str(result['source_alignment_reason'])[:180]}")
+                    deferred_alignment.append((s, a, result["source_alignment"]))
+                    last_error = None
+                    break
                 save_result(s, a, result, raw)
                 pct = round(result["score"] * 10)
                 print(f"✅ {pct}% ({result['score']}/10)")
@@ -351,6 +366,9 @@ def main():
 
     print("\n" + "=" * 58)
     print(f"Saved this run: {saved}")
+    print(f"Deferred for source alignment review: {len(deferred_alignment)}")
+    for s, a, status in deferred_alignment:
+        print(f"  {s}:{a} — {status}")
     print(f"Failed this run: {len(failed)}")
     if failed:
         print("Failed verses (safe to retry later):")
