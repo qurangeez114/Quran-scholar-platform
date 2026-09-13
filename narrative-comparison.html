@@ -40,9 +40,9 @@
   <div id="coreText"></div>
 </div>
 <div class="tabs" id="tabs" style="display:none">
-  <button class="tab active" data-tab="claims">Atomic claims</button>
-  <button class="tab" data-tab="source">Version detail</button>
+  <button class="tab active" data-tab="source">Narrations</button>
   <button class="tab" data-tab="compare">Comparison</button>
+  <button class="tab" data-tab="claims">Atomic claims</button>
 </div>
 <div class="status" id="status">Loading&hellip;</div>
 <div class="body" id="body" style="display:none"></div>
@@ -106,7 +106,7 @@ async function load() {
   document.getElementById('tabs').style.display = 'flex';
   document.getElementById('body').style.display = 'block';
 
-  renderTab('claims');
+  renderTab('source');
 
   document.querySelectorAll('.tab').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -124,6 +124,7 @@ function renderTab(tab) {
 
   if (tab === 'claims') {
     const claims = (v.claims || []).sort((a,b) => a.claim_order - b.claim_order);
+    if (!claims.length) { body.innerHTML = '<div class="empty">An atomic-claim breakdown has not been generated for this group yet.<br>See the full narrations under <strong>Narrations</strong>.</div>'; return; }
     body.innerHTML = claims.map(c => `
       <div class="card">
         <div style="display:flex;justify-content:space-between;align-items:flex-start">
@@ -140,29 +141,61 @@ function renderTab(tab) {
   }
 
   if (tab === 'source') {
-    body.innerHTML = `<div class="card">
-      ${row('Source type', v.source_type)}
-      ${row('Collection', v.source_collection)}
-      ${row('Reference', v.source_reference)}
-      ${row('Narrator', v.narrator)}
-      ${row('Transmission chain', v.transmission_chain)}
-      ${row('Approx. source date', v.approximate_source_date)}
-      ${row('Grade', v.hadith_grade)}
-      ${row('Reliability note', v.source_reliability)}
-      <div style="margin-top:10px;padding-top:10px;border-top:1px solid #E8D8A0">
-        <strong style="font-size:11px;text-transform:uppercase;color:#9C8354">Summary</strong>
-        <div style="margin-top:4px;font-size:13.5px">${v.version_summary || ''}</div>
-      </div>
-    </div>`;
+    body.innerHTML = versions.map(versionCard).join('');
   }
 
   if (tab === 'compare') {
     if (versions.length < 2) {
       body.innerHTML = `<div class="empty">Only one narration of this incident has been located so far.<br>A second version is required before a side-by-side comparison can be generated.</div>`;
     } else {
-      body.innerHTML = `<div class="empty">Comparison rendering for ${versions.length} versions not yet built.</div>`;
+      body.innerHTML = `<div style="font-size:12px;color:#8C7A52;margin:0 0 10px">Side-by-side of the ${versions.length} narrations / positions &mdash; compare the wording and where they diverge.</div>` +
+        versions.map(compareCard).join('');
     }
   }
+}
+
+function esc(s){ return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function gradeBadge(v){
+  const g = (v.hadith_grade||'').trim();
+  const bits = [];
+  if (g && g.toLowerCase().indexOf('not applicable') === -1) bits.push(esc(g));
+  if (v.grade_disputed) bits.push('grade disputed');
+  if (!bits.length) return '';
+  return `<span style="display:inline-block;font-size:10.5px;padding:2px 8px;border:1px solid #D8C88A;border-radius:10px;color:#8C7A52;white-space:nowrap">${bits.join(' &middot; ')}</span>`;
+}
+
+function versionCard(v){
+  const label = v.narrator || v.source_collection || ('Version ' + (v.sequence_order||''));
+  const src = [v.source_collection, v.source_reference].filter(Boolean).join(' ');
+  const type = (v.content_type && v.content_type !== 'hadith') ? ' &middot; ' + esc(v.content_type) : '';
+  const eng = v.english_translation || v.version_summary || '';
+  const ar = v.original_text || '';
+  const note = v.verification_notes || '';
+  return `<div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+      <div><span style="font-size:11px;color:#B0A480;font-weight:700">#${esc(v.sequence_order||'')}</span> <strong style="margin-left:4px">${esc(label)}</strong></div>
+      ${gradeBadge(v)}
+    </div>
+    ${src ? `<div style="font-size:12.5px;color:#9C8354;margin-top:2px">${esc(src)}${type}</div>` : ''}
+    ${ar ? `<div dir="rtl" lang="ar" style="margin-top:9px;font-size:19px;line-height:2;color:#3a2f14">${esc(ar)}</div>` : ''}
+    ${eng ? `<div style="margin-top:9px;font-size:14px;line-height:1.6">${esc(eng)}</div>` : ''}
+    ${note ? `<div style="margin-top:9px;padding-top:8px;border-top:1px solid #E8D8A0;font-size:11.5px;color:#8C7A52">${esc(note)}</div>` : ''}
+  </div>`;
+}
+
+function compareCard(v){
+  const label = v.narrator || v.source_collection || ('Version ' + (v.sequence_order||''));
+  const src = [v.source_collection, v.source_reference].filter(Boolean).join(' ');
+  const eng = v.english_translation || v.version_summary || '';
+  return `<div class="card" style="border-left:4px solid #C9A94E">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px">
+      <strong style="font-size:13px">${esc(label)}</strong>
+      <span style="font-size:10.5px;color:#9C8354;white-space:nowrap">${esc(src)}</span>
+    </div>
+    <div style="margin-top:6px;font-size:13.5px;line-height:1.55">${esc(eng)}</div>
+    <div style="margin-top:8px">${gradeBadge(v)}</div>
+  </div>`;
 }
 
 function row(label, value) {
