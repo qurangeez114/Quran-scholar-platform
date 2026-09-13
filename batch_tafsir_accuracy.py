@@ -32,6 +32,7 @@ ANTHROPIC_API_KEY remains server-side in Netlify and is never stored here.
 import argparse
 import http.client
 import json
+import os
 import re
 import sys
 import time
@@ -45,9 +46,11 @@ CLAUDE_URL = "https://quranhikma.com/api/claude-stream"
 SCHOLAR_KEY = "ibn_kathir"
 EVALUATOR_VERSION = "tafsir-fidelity-v1-2026-08-18"
 
+SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
+SB_KEY = SUPABASE_SERVICE_KEY or SUPABASE_ANON_KEY
 SB_HEADERS = {
-    "apikey": SUPABASE_ANON_KEY,
-    "Authorization": "Bearer " + SUPABASE_ANON_KEY,
+    "apikey": SB_KEY,
+    "Authorization": "Bearer " + SB_KEY,
     "Content-Type": "application/json",
 }
 
@@ -226,22 +229,14 @@ def save_result(sura, aya, result, raw):
         "aya": aya,
         "scholar_key": SCHOLAR_KEY,
         "accuracy_score": result["score"],
-        "accurately_translated": str(result["accurate"]),
-        "omitted": str(result["omitted"]),
-        "mistranslated": str(result["mistranslated"]),
+        "accurate_portions": str(result["accurate"]),
+        "omitted_content": str(result["omitted"]),
+        "mistranslated_sections": str(result["mistranslated"]),
         "theological_concerns": str(result["concerns"]),
         "verdict": str(result["verdict"]),
-        "full_analysis": json.dumps(
-            {
-                **result,
-                "sura": sura,
-                "aya": aya,
-                "scholar_key": SCHOLAR_KEY,
-                "evaluator_version": EVALUATOR_VERSION,
-                "raw_model_response": raw,
-            },
-            ensure_ascii=False,
-        ),
+        "reviewed_by": result.get("evaluator_version") or EVALUATOR_VERSION,
+        "confidence_level": "medium",
+        "notes": "Automated Arabic-English source comparison. Review source alignment before citing.",
     }
     headers = dict(SB_HEADERS)
     headers["Prefer"] = "resolution=merge-duplicates,return=minimal"
@@ -275,6 +270,8 @@ def main():
 
     if args.limit < 0:
         ap.error("--limit cannot be negative")
+    if not args.dry_run and not SUPABASE_SERVICE_KEY:
+        ap.error("SUPABASE_SERVICE_KEY is required for writes; refusing to spend model calls with an anonymous read-only key")
 
     print("Loading Ibn Kathir Arabic/English Tafsir pairs…")
     pairs = load_tafsir_pairs()
