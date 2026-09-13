@@ -331,6 +331,8 @@ def main():
                 break
             except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, ValueError, json.JSONDecodeError, http.client.IncompleteRead, http.client.HTTPException, OSError) as e:
                 last_error = e
+                if isinstance(e, urllib.error.HTTPError):
+                    print(f"upstream={e.read(350).decode('utf-8', errors='replace')!r} … ", end="", flush=True)
                 if isinstance(e, ValueError) and "model response" in str(e):
                     # Print a short escaped excerpt to distinguish empty output,
                     # upstream errors and a malformed answer without dumping tafsir.
