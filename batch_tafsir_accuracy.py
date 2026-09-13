@@ -323,6 +323,10 @@ def main():
                 break
             except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, ValueError, json.JSONDecodeError, http.client.IncompleteRead, http.client.HTTPException, OSError) as e:
                 last_error = e
+                if isinstance(e, ValueError) and "model response" in str(e):
+                    # Print a short escaped excerpt to distinguish empty output,
+                    # upstream errors and a malformed answer without dumping tafsir.
+                    print(f"response={raw[:160]!r} … ", end="", flush=True)
                 if attempt < args.retries:
                     wait = 2 ** attempt
                     print(f"retry {attempt + 1} in {wait}s … ", end="", flush=True)
