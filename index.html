@@ -10487,7 +10487,6 @@ function applyVpColor(colorClass) {
     }
   }
 }
-}
 
 function vpNote() {
   const area = document.getElementById('vpNoteArea');
@@ -11028,48 +11027,6 @@ async function analyzeTafsirAccuracy(sura, aya) {
     </div>
   `;
   return;
-    if (!raw) {
-      const _inner2 = document.getElementById('tafsir-accuracy-inner') || loadingDiv;
-      _inner2.innerHTML = '<div style="color:#c62828;padding:12px;">Empty response from API.</div>';
-      return;
-    }
-    let result;
-    try {
-      // Strip markdown fences first (Claude sometimes adds them despite instructions)
-      const cleaned = raw.replace(/```json\s*/gi,'').replace(/```\s*/g,'').trim();
-      result = JSON.parse(cleaned);
-    } catch(e) {
-      try {
-        // Extract just the JSON object
-        const m = raw.match(/\{[\s\S]*\}/);
-        if (m) result = JSON.parse(m[0]);
-      } catch(e2) {
-        try {
-          // Last resort: manually extract fields with regex
-          const get = (k) => { const rx = new RegExp('"' + k + '"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)"'); const mx = raw.match(rx); return mx ? mx[1] : '—'; };
-          const getNum = (k) => { const rx = new RegExp('"' + k + '"\\s*:\\s*([\\d.]+)'); const mx = raw.match(rx); return mx ? parseFloat(mx[1]) : 0; };
-          result = { score: getNum('score'), accurate: get('accurate'), omitted: get('omitted'), mistranslated: get('mistranslated'), concerns: get('concerns'), verdict: get('verdict') };
-        } catch(e3) {
-          const inner2 = document.getElementById('tafsir-accuracy-inner') || loadingDiv;
-        inner2.innerHTML = '<div style="padding:12px;"><div style="color:#c62828;font-weight:700;margin-bottom:8px;">Parse failed — raw AI response:</div><pre style="font-size:11px;white-space:pre-wrap;word-break:break-all;background:#f5f5f5;padding:8px;border-radius:6px;max-height:300px;overflow-y:auto;">' + raw + '</pre></div>';
-          return;
-        }
-      }
-    }
-    if (!result) { loadingDiv.innerHTML = '<div style="color:#c62828;">No result returned from AI.</div>'; return; }
-
-    // Save to DB
-    try {
-      const sbUrl = (typeof SUPABASE_URL !== 'undefined' ? SUPABASE_URL : 'https://ylosytbxpzxzwfzjpaej.supabase.co');
-      const sbKey = (typeof SUPABASE_ANON_KEY !== 'undefined' ? SUPABASE_ANON_KEY : 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs');
-      await fetch(sbUrl + '/rest/v1/tafsir_accuracy_analysis', {
-        method:'POST',
-        headers:{'Content-Type':'application/json','apikey':sbKey,'Authorization':'Bearer '+sbKey,'Prefer':'resolution=merge-duplicates'},
-        body: JSON.stringify({ sura, aya, scholar_key:'ibn_kathir', accuracy_score:result.score, accurately_translated:result.accurate, omitted:result.omitted, mistranslated:result.mistranslated, theological_concerns:result.concerns, verdict:result.verdict, full_analysis:raw })
-      });
-    } catch(e) {}
-    renderTafsirAnalysis(loadingDiv, result, sura, aya, false);
-  } catch(e) { loadingDiv.innerHTML = `<div style="color:#c62828;">Error: ${e.message}</div>`; }
 }
 
 function closeAccuracyModal() {
