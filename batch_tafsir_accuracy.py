@@ -143,7 +143,7 @@ Scoring rubric (0–10):
 
 Be conservative and evidence-based. Do NOT deduct points merely because English cannot mirror Arabic word order. Do NOT invent omissions that are not present. If an English explanatory phrase accurately makes an implicit Arabic referent explicit, identify it as interpretive but distinguish it from a mistranslation.
 
-Return STRICT JSON only, with exactly these keys:
+Keep each explanation concise (one or two sentences) while identifying any material mismatches. Return STRICT JSON only, with exactly these keys:
 {{
   "score": 0.0,
   "accurate": "What the English preserves accurately, with short Arabic anchors where useful.",
@@ -162,7 +162,7 @@ ENGLISH TRANSLATION:
 """
 
 
-def call_claude(prompt, model="claude-sonnet-4-6", max_tokens=900, timeout=180):
+def call_claude(prompt, model="claude-sonnet-4-6", max_tokens=3500, timeout=180):
     payload = {
         "model": model,
         "max_tokens": max_tokens,
