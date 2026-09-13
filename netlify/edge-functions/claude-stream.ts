@@ -48,21 +48,31 @@ export default async (request: Request) => {
   const encoder = new TextEncoder();
   let buf = "";
   const stream = new ReadableStream({
-    async pull(controller) {
-      const { done, value } = await upstreamReader.read();
-      if (done) { controller.close(); return; }
-      buf += decoder.decode(value, { stream: true });
-      const events = buf.split("\n\n");
-      buf = events.pop() || "";
-      for (const ev of events) {
-        const dataLine = ev.split("\n").find((l) => l.startsWith("data:"));
-        if (!dataLine) continue;
-        const jsonStr = dataLine.slice(5).trim();
-        if (!jsonStr || jsonStr === "[DONE]") continue;
-        try {
-          const data = JSON.parse(jsonStr);
-          if (data.type === "content_block_delta" && data.delta?.type === "text_delta") controller.enqueue(encoder.encode(data.delta.text || ""));
-        } catch {}
+    // Drain upstream independently of downstream pull/backpressure. A single
+    // pull can otherwise leave a long JSON answer cut off after its first
+    // text delta on some edge streaming paths.
+    async start(controller) {
+      try {
+        while (true) {
+          const { done, value } = await upstreamReader.read();
+          if (done) { controller.close(); return; }
+          buf += decoder.decode(value, { stream: true });
+          const events = buf.split(/\r?\n\r?\n/);
+          buf = events.pop() || "";
+          for (const ev of events) {
+            const dataLine = ev.split(/\r?\n/).find((l) => l.startsWith("data:"));
+            if (!dataLine) continue;
+            const jsonStr = dataLine.slice(5).trim();
+            if (!jsonStr || jsonStr === "[DONE]") continue;
+            let data: any;
+            try { data = JSON.parse(jsonStr); } catch { continue; }
+            if (data.type === "error") throw new Error(data.error?.message || "Anthropic stream error");
+            if (data.type === "content_block_delta" && data.delta?.type === "text_delta")
+              controller.enqueue(encoder.encode(data.delta.text || ""));
+          }
+        }
+      } catch (e) {
+        controller.error(e);
       }
     },
     cancel() { try { upstreamReader.cancel(); } catch {} },
