@@ -268,7 +268,7 @@ def main():
     ap.add_argument("--limit", type=int, default=20, help="maximum NEW evaluations this run (default: 20; 0 = all)")
     ap.add_argument("--start", type=parse_start, help="begin at or after SURA:AYA")
     ap.add_argument("--delay", type=float, default=1.0, help="seconds between successful API calls")
-    ap.add_argument("--retries", type=int, default=2, help="retries per failed verse")
+    ap.add_argument("--retries", type=int, default=0, help="retries per failed verse; opt in once stream health is verified")
     ap.add_argument("--model", default="claude-sonnet-4-6")
     ap.add_argument("--dry-run", action="store_true", help="show missing targets without calling AI or writing")
     args = ap.parse_args()
