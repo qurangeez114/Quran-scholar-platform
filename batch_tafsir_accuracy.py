@@ -45,6 +45,7 @@ SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS
 CLAUDE_URL = "https://quranhikma.com/api/claude-stream"
 SCHOLAR_KEY = "ibn_kathir"
 EVALUATOR_VERSION = "tafsir-fidelity-v1-2026-08-18"
+ALIGNMENT_DEFERRED_FILE = ".github/diagnostics/tafsir-alignment-deferred.json"
 
 SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
 SB_KEY = SUPABASE_SERVICE_KEY or SUPABASE_ANON_KEY
@@ -258,6 +259,26 @@ def save_result(sura, aya, result, raw):
     )
 
 
+def load_alignment_deferred():
+    try:
+        with open(ALIGNMENT_DEFERRED_FILE, encoding="utf-8") as handle:
+            return json.load(handle)
+    except FileNotFoundError:
+        return {}
+
+
+def record_alignment_deferred(sura, aya, status, reason):
+    deferred = load_alignment_deferred()
+    deferred[f"{sura}:{aya}"] = {
+        "status": status,
+        "reason": str(reason)[:500],
+    }
+    os.makedirs(os.path.dirname(ALIGNMENT_DEFERRED_FILE), exist_ok=True)
+    with open(ALIGNMENT_DEFERRED_FILE, "w", encoding="utf-8") as handle:
+        json.dump(deferred, handle, ensure_ascii=False, indent=2, sort_keys=True)
+        handle.write("\\n")
+
+
 def parse_start(value):
     if not value:
         return None
@@ -290,9 +311,11 @@ def main():
     existing = load_existing_keys()
     print(f"Already evaluated: {len(existing)}")
 
+    alignment_deferred = load_alignment_deferred()
+    print(f"Previously deferred for source alignment: {len(alignment_deferred)}")
     missing = []
     for s, a, ar, en in pairs:
-        if (s, a) in existing:
+        if (s, a) in existing or f"{s}:{a}" in alignment_deferred:
             continue
         if args.start and (s, a) < args.start:
             continue
@@ -332,6 +355,7 @@ def main():
                 result = parse_result(raw)
                 if result["source_alignment"] != "aligned":
                     print(f"⏸ Source alignment {result['source_alignment']}: {str(result['source_alignment_reason'])[:180]}")
+                    record_alignment_deferred(s, a, result["source_alignment"], result["source_alignment_reason"])
                     deferred_alignment.append((s, a, result["source_alignment"]))
                     last_error = None
                     break
