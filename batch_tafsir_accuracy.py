@@ -276,7 +276,7 @@ def record_alignment_deferred(sura, aya, status, reason):
     os.makedirs(os.path.dirname(ALIGNMENT_DEFERRED_FILE), exist_ok=True)
     with open(ALIGNMENT_DEFERRED_FILE, "w", encoding="utf-8") as handle:
         json.dump(deferred, handle, ensure_ascii=False, indent=2, sort_keys=True)
-        handle.write("\\n")
+        handle.write("\n")
 
 
 def parse_start(value):
