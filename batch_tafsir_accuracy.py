@@ -233,12 +233,14 @@ def parse_result(raw):
     return obj
 
 
-def save_result(sura, aya, result, raw):
+def save_result(sura, aya, result, arabic, english):
     body = {
         "sura": sura,
         "aya": aya,
         "scholar_key": SCHOLAR_KEY,
         "accuracy_score": result["score"],
+        "arabic_excerpt": arabic,
+        "english_excerpt": english,
         "accurate_portions": str(result["accurate"]),
         "omitted_content": str(result["omitted"]),
         "mistranslated_sections": str(result["mistranslated"]),
@@ -359,7 +361,7 @@ def main():
                     deferred_alignment.append((s, a, result["source_alignment"]))
                     last_error = None
                     break
-                save_result(s, a, result, raw)
+                save_result(s, a, result, ar, en)
                 pct = round(result["score"] * 10)
                 print(f"✅ {pct}% ({result['score']}/10)")
                 saved += 1
