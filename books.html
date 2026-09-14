@@ -313,12 +313,23 @@ const CATEGORY_STYLE = {
   hadith_collection: { icon: '📕', bg: 'linear-gradient(160deg,#8B5A2B,#5A3A18)', label: 'Hadith' },
   tafsir: { icon: '📘', bg: 'linear-gradient(160deg,#2E5A8B,#1A3A5A)', label: 'Tafsir' },
   asbab_al_nuzul: { icon: '📗', bg: 'linear-gradient(160deg,#2E7D32,#1A4A1E)', label: 'Asbab al-Nuzul' },
+  research: { icon: '📖', bg: 'linear-gradient(160deg,#654477,#352342)', label: 'Research' },
   default: { icon: '📙', bg: 'linear-gradient(160deg,#B8902A,#7A5010)', label: 'Book' }
 };
 
 async function loadBooks(){
   const res = await fetch(SB_URL + '/rest/v1/books?select=*&order=id', { headers: HDR });
   ALL_BOOKS = await res.json();
+  // The publisher hosts this free PDF; keep its card available alongside database books.
+  if (!ALL_BOOKS.some(b => (b.title_en || '').toLowerCase() === 'the great secret of islam')) {
+    ALL_BOOKS.push({
+      id: -1,
+      title_en: 'The Great Secret of Islam',
+      author_en: 'Odon Lafontaine',
+      category: 'research',
+      external_url: 'https://thegreatsecretofislam.org/wp-content/uploads/2025/10/the-great-secret-of-islam-pdf-edition.pdf'
+    });
+  }
   const cats = [...new Set(ALL_BOOKS.map(b => b.category || 'default'))];
   const filterRow = document.getElementById('libFilterRow');
   filterRow.innerHTML = ['all', ...cats].map(c => {
@@ -368,6 +379,11 @@ function renderBookGrid(){
 }
 
 async function openBook(id){
+  const linkedBook = ALL_BOOKS.find(b => b.id === id && b.external_url);
+  if (linkedBook) {
+    window.location.href = linkedBook.external_url;
+    return;
+  }
   const res = await fetch(SB_URL + '/rest/v1/books?id=eq.' + id + '&select=*', { headers: HDR });
   const rows = await res.json();
   CURRENT_BOOK = rows[0];
