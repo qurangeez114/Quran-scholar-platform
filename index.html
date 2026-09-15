@@ -1432,8 +1432,9 @@ body { padding-bottom: 80px !important; }
       <button onclick="closeSocialCardMain()" style="background:none;border:none;font-size:18px;color:#999;cursor:pointer;">✕</button>
     </div>
     <div style="display:flex;gap:6px;margin-bottom:12px;">
-      <button id="scm-fmt-square" class="active" onclick="setSocialFormatMain('square')" style="flex:1;padding:8px;border:1.5px solid #E8C97B;border-radius:8px;background:#C9A84C;color:#fff;font-size:12px;font-weight:700;cursor:pointer;">◻️ Square<br><span style="font-weight:400;font-size:10px;">Instagram/X post</span></button>
-      <button id="scm-fmt-story" onclick="setSocialFormatMain('story')" style="flex:1;padding:8px;border:1.5px solid #E8C97B;border-radius:8px;background:#fff;color:#1a1a1a;font-size:12px;font-weight:700;cursor:pointer;">📱 Story<br><span style="font-weight:400;font-size:10px;">Stories/TikTok/Reels</span></button>
+      <button id="scm-fmt-tiktok" class="active" onclick="setSocialFormatMain('tiktok')" style="flex:1;padding:8px;border:1.5px solid #E8C97B;border-radius:8px;background:#C9A84C;color:#fff;font-size:12px;font-weight:700;cursor:pointer;">🎵 TikTok<br><span style="font-weight:400;font-size:10px;">Full-screen 9:16</span></button>
+      <button id="scm-fmt-square" onclick="setSocialFormatMain('square')" style="flex:1;padding:8px;border:1.5px solid #E8C97B;border-radius:8px;background:#fff;color:#1a1a1a;font-size:12px;font-weight:700;cursor:pointer;">◻️ Square<br><span style="font-weight:400;font-size:10px;">Instagram/X post</span></button>
+      <button id="scm-fmt-story" onclick="setSocialFormatMain('story')" style="flex:1;padding:8px;border:1.5px solid #E8C97B;border-radius:8px;background:#fff;color:#1a1a1a;font-size:12px;font-weight:700;cursor:pointer;">📱 Story<br><span style="font-weight:400;font-size:10px;">IG/Reels (centered)</span></button>
       <button id="scm-fmt-wide" onclick="setSocialFormatMain('wide')" style="flex:1;padding:8px;border:1.5px solid #E8C97B;border-radius:8px;background:#fff;color:#1a1a1a;font-size:12px;font-weight:700;cursor:pointer;">▭ Wide<br><span style="font-weight:400;font-size:10px;">X/Twitter card</span></button>
     </div>
     <div id="scm-langs-wrap" style="margin-bottom:12px;display:none;">
@@ -6557,11 +6558,12 @@ function deleteNote() {
 
 // ─── Social Media Card generator ──────────────────────────────────
 const SOCIAL_FORMATS_MAIN = {
+  tiktok: { w: 1080, h: 1920 },
   square: { w: 1080, h: 1080 },
   story:  { w: 1080, h: 1920 },
   wide:   { w: 1200, h: 675 },
 };
-let _socialMainSura = null, _socialMainAya = null, _socialMainFormat = 'square';
+let _socialMainSura = null, _socialMainAya = null, _socialMainFormat = 'tiktok';
 let _socialNavigationContext = null;  // {type, theme, verses}
 let _socialMainVerseList = null, _socialMainVerseListIdx = 0;
 let _currentCrossRefList = null; // Store cross-ref list for social card navigation
@@ -6605,14 +6607,14 @@ function openSocialCardWithCrossRefList(sura, aya, verseListJson) {
 
 
 async function openSocialCardMain(sura, aya, crossRefTheme){
-  _socialMainSura = sura; _socialMainAya = aya; _socialMainFormat = 'square';
+  _socialMainSura = sura; _socialMainAya = aya; _socialMainFormat = 'tiktok';
   _socialMainVerseList = null; _socialMainVerseListIdx = 0;
   document.getElementById('socialOverlayMain').style.display = 'flex';
   document.getElementById('socialCanvasLoadingMain').style.display = 'block';
   document.getElementById('socialCanvasMain').style.display = 'none';
   const _lw = document.getElementById('scm-langs-wrap');
   if (_lw) _lw.style.display = 'none';
-  setSocialFormatMainUI('square');
+  setSocialFormatMainUI('tiktok');
   
   // DEBUGGING: Log the theme being passed
   console.log('[OPEN CARD] sura=' + sura + ', aya=' + aya + ', theme=' + (crossRefTheme || 'null'));
@@ -6716,7 +6718,7 @@ function updateSocialCardNavButtons() {
 function closeSocialCardMain(){ document.getElementById('socialOverlayMain').style.display = 'none'; }
 
 function setSocialFormatMainUI(fmt){
-  ['square','story','wide'].forEach(f => {
+  ['tiktok','square','story','wide'].forEach(f => {
     const btn = document.getElementById('scm-fmt-' + f);
     btn.style.background = f === fmt ? '#C9A84C' : '#fff';
     btn.style.color = f === fmt ? '#fff' : '#1a1a1a';
@@ -6765,7 +6767,10 @@ function drawSocialCardMain(){
   const hasArabic = activeLangs.includes('arabic');
   const otherLangs = activeLangs.filter(k => k !== 'arabic');
 
-  const topLimit = pad * 1.15, bottomLimit = H - pad * 1.55;
+  // TikTok overlays UI on the bottom (~35%) and top bar — keep the verse in the
+  // upper safe zone so captions/buttons/live UI never cover it.
+  const topLimit = _socialMainFormat === 'tiktok' ? H * 0.085 : pad * 1.15;
+  const bottomLimit = _socialMainFormat === 'tiktok' ? H * 0.66 : H - pad * 1.55;
   const avail = bottomLimit - topLimit;
 
   // Measure the whole composition at a given scale. Type starts LARGE and
@@ -6865,7 +6870,7 @@ function drawSocialCardMain(){
   ctx.font = `700 ${Math.round(W * 0.021)}px Georgia, serif`;
   ctx.fillStyle = 'rgba(255,214,64,0.80)';
   ctx.letterSpacing = `${Math.round(W*0.005)}px`;
-  ctx.fillText('quranhikma.com', W/2, H - pad * 0.72);
+  ctx.fillText('quranhikma.com', W/2, _socialMainFormat === 'tiktok' ? H * 0.70 : H - pad * 0.72);
   ctx.letterSpacing = '0px';
 }
 
