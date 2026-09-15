@@ -19,7 +19,7 @@
   var SC_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
   var SC_HDR = { apikey: SC_KEY, Authorization: 'Bearer ' + SC_KEY };
 
-  var SC_FORMATS = { square: { w: 1080, h: 1080 }, story: { w: 1080, h: 1920 }, wide: { w: 1200, h: 675 } };
+  var SC_FORMATS = { tiktok: { w: 1080, h: 1920 }, square: { w: 1080, h: 1080 }, story: { w: 1080, h: 1920 }, wide: { w: 1200, h: 675 } };
 
   // label + which ayas column (or verse_translations lang code) holds the text
   var SC_LANGS = {
@@ -44,7 +44,7 @@
   var SC_VT_CODES = Object.keys(SC_LANGS).filter(function (k) { return SC_LANGS[k].vt; })
     .map(function (k) { return SC_LANGS[k].vt; });
 
-  var scSura = null, scAya = null, scFormat = 'square', scVerse = null, scSel = null;
+  var scSura = null, scAya = null, scFormat = 'tiktok', scVerse = null, scSel = null;
   var scVerseList = null; // List of related verses (cross-references)
   var scListIndex = 0;   // Current position in cross-reference list
 
@@ -78,8 +78,9 @@
       + '<button onclick="closeSocialCard()" style="background:none;border:none;font-size:18px;color:#999;cursor:pointer;">✕</button>'
       + '</div>'
       + '<div style="display:flex;gap:6px;margin-bottom:12px;">'
-      + '<button id="scFmtSquare" onclick="scSetFormat(\'square\')" style="flex:1;padding:8px;border:1.5px solid #E8C97B;border-radius:8px;background:#C9A84C;color:#fff;font-size:12px;font-weight:700;cursor:pointer;">◻️ Square<br><span style="font-weight:400;font-size:10px;">Instagram/X post</span></button>'
-      + '<button id="scFmtStory" onclick="scSetFormat(\'story\')" style="flex:1;padding:8px;border:1.5px solid #E8C97B;border-radius:8px;background:#fff;color:#1a1a1a;font-size:12px;font-weight:700;cursor:pointer;">📱 Story<br><span style="font-weight:400;font-size:10px;">Stories/TikTok/Reels</span></button>'
+      + '<button id="scFmtTiktok" onclick="scSetFormat(\'tiktok\')" style="flex:1;padding:8px;border:1.5px solid #E8C97B;border-radius:8px;background:#C9A84C;color:#fff;font-size:12px;font-weight:700;cursor:pointer;">🎵 TikTok<br><span style="font-weight:400;font-size:10px;">Full-screen 9:16</span></button>'
+      + '<button id="scFmtSquare" onclick="scSetFormat(\'square\')" style="flex:1;padding:8px;border:1.5px solid #E8C97B;border-radius:8px;background:#fff;color:#1a1a1a;font-size:12px;font-weight:700;cursor:pointer;">◻️ Square<br><span style="font-weight:400;font-size:10px;">Instagram/X post</span></button>'
+      + '<button id="scFmtStory" onclick="scSetFormat(\'story\')" style="flex:1;padding:8px;border:1.5px solid #E8C97B;border-radius:8px;background:#fff;color:#1a1a1a;font-size:12px;font-weight:700;cursor:pointer;">📱 Story<br><span style="font-weight:400;font-size:10px;">IG/Reels (centered)</span></button>'
       + '<button id="scFmtWide" onclick="scSetFormat(\'wide\')" style="flex:1;padding:8px;border:1.5px solid #E8C97B;border-radius:8px;background:#fff;color:#1a1a1a;font-size:12px;font-weight:700;cursor:pointer;">▭ Wide<br><span style="font-weight:400;font-size:10px;">X/Twitter card</span></button>'
       + '</div>'
       + '<div id="scLangsWrap" style="margin-bottom:12px;display:none;">'
@@ -167,7 +168,7 @@
 
   window.scSetFormat = function (fmt) {
     scFormat = fmt;
-    [['square', 'scFmtSquare'], ['story', 'scFmtStory'], ['wide', 'scFmtWide']].forEach(function (p) {
+    [['tiktok', 'scFmtTiktok'], ['square', 'scFmtSquare'], ['story', 'scFmtStory'], ['wide', 'scFmtWide']].forEach(function (p) {
       var b = document.getElementById(p[1]);
       if (!b) return;
       b.style.background = (p[0] === fmt) ? '#C9A84C' : '#fff';
@@ -214,6 +215,9 @@
     var others = active.filter(function (k) { return k !== 'arabic'; });
 
     var topLimit = pad * 1.15, bottomLimit = H - pad * 1.55;
+    // TikTok overlays UI on the bottom (~35%: captions, username, action buttons)
+    // and the top bar — keep the verse in the upper safe zone so nothing covers it.
+    if (scFormat === 'tiktok') { topLimit = H * 0.085; bottomLimit = H * 0.66; }
     var avail = bottomLimit - topLimit;
 
     function build(sc) {
@@ -301,7 +305,7 @@
     ctx.font = '700 ' + Math.round(W * 0.021) + 'px Georgia, serif';
     ctx.fillStyle = 'rgba(255,214,64,0.80)';
     ctx.letterSpacing = Math.round(W * 0.005) + 'px';
-    ctx.fillText('quranhikma.com', W / 2, H - pad * 0.72);
+    ctx.fillText('quranhikma.com', W / 2, (scFormat === 'tiktok') ? H * 0.70 : H - pad * 0.72);
     ctx.letterSpacing = '0px';
   }
 
