@@ -11457,3 +11457,110 @@ if (localStorage.getItem('floatingUIHidden') === 'true') {
 
 </body>
 </html><!-- Force rebuild Sat Sep  5 08:51:17 UTC 2026 -->
+
+<!-- Hadith Card Action Buttons -->
+<script>
+function saveHadith(hadithId) {
+  const card = document.getElementById(hadithId);
+  if (!card) return;
+  
+  const text = card.innerText;
+  const savedItems = JSON.parse(localStorage.getItem('savedHadith') || '[]');
+  
+  if (!savedItems.find(item => item.id === hadithId)) {
+    savedItems.push({ id: hadithId, text: text, savedAt: new Date().toISOString() });
+    localStorage.setItem('savedHadith', JSON.stringify(savedItems));
+    
+    const btn = card.querySelector('.save-btn');
+    if (btn) {
+      btn.style.background = '#B8902A';
+      btn.style.color = '#fff';
+      btn.innerText = '✓ Saved';
+      setTimeout(() => {
+        btn.style.background = '#FFF';
+        btn.style.color = '#B8902A';
+        btn.innerHTML = '💾 Save';
+      }, 1500);
+    }
+  }
+}
+
+function highlightHadith(hadithId) {
+  const card = document.getElementById(hadithId);
+  if (!card) return;
+  
+  if (card.style.backgroundColor === 'rgba(212, 175, 55, 0.1)') {
+    card.style.backgroundColor = '';
+    card.style.borderLeft = '';
+  } else {
+    card.style.backgroundColor = 'rgba(212, 175, 55, 0.1)';
+    card.style.borderLeft = '4px solid #D4AF37';
+  }
+  
+  const btn = card.querySelector('.highlight-btn');
+  if (btn) {
+    btn.classList.toggle('active');
+    if (btn.classList.contains('active')) {
+      btn.style.background = '#C99A2E';
+      btn.style.color = '#fff';
+    } else {
+      btn.style.background = '#FFF';
+      btn.style.color = '#B8902A';
+    }
+  }
+}
+
+function shareHadith(hadithId) {
+  const card = document.getElementById(hadithId);
+  if (!card) return;
+  
+  const text = card.innerText;
+  const url = window.location.href + '#' + hadithId;
+  const shareText = encodeURIComponent(`Hadith: ${text.substring(0, 100)}...\n\n${url}`);
+  
+  const shareMenu = document.createElement('div');
+  shareMenu.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border-radius:12px;padding:16px;box-shadow:0 4px 20px rgba(0,0,0,0.2);z-index:1000;min-width:200px';
+  shareMenu.innerHTML = `
+    <div style="font-size:13px;font-weight:700;margin-bottom:12px;color:#B8902A">Share Hadith</div>
+    <a href="https://twitter.com/intent/tweet?text=${shareText}" target="_blank" 
+       style="display:block;padding:8px 12px;margin-bottom:6px;background:#1DA1F2;color:#fff;text-decoration:none;border-radius:6px;text-align:center;font-size:12px;font-weight:700">
+       𝕏 Twitter
+    </a>
+    <a href="https://www.facebook.com/sharer/sharer.php?u=${url}" target="_blank"
+       style="display:block;padding:8px 12px;margin-bottom:6px;background:#1877F2;color:#fff;text-decoration:none;border-radius:6px;text-align:center;font-size:12px;font-weight:700">
+       Facebook
+    </a>
+    <button onclick="this.parentElement.remove()" 
+       style="width:100%;padding:8px;background:#E8D8A0;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;color:#1A1A1A">
+       Close
+    </button>
+  `;
+  document.body.appendChild(shareMenu);
+  
+  setTimeout(() => shareMenu.remove(), 8000);
+}
+
+// Inject action buttons into hadith cards after they load
+const originalLoadHadithPanel = window.loadHadithPanel;
+window.loadHadithPanel = async function(sura, aya) {
+  await originalLoadHadithPanel(sura, aya);
+  
+  // Add action buttons to each scholar entry
+  document.querySelectorAll('.scholar-entry:not([data-buttons-added])').forEach(entry => {
+    if (entry.querySelector('.hadith-action-btn')) return; // Already has buttons
+    
+    const hadithId = entry.id || 'hadith-' + Math.random().toString(36).substr(2, 9);
+    entry.id = hadithId;
+    entry.setAttribute('data-buttons-added', 'true');
+    
+    const buttonContainer = document.createElement('div');
+    buttonContainer.style.cssText = 'margin-top:10px;padding-top:10px;border-top:1px solid #E8D8A0;display:flex;gap:8px;flex-wrap:wrap';
+    buttonContainer.innerHTML = `
+      <button class="hadith-action-btn save-btn" onclick="saveHadith('${hadithId}')" style="padding:6px 12px;border:1.5px solid #C9A94E;border-radius:8px;background:#FFF;color:#B8902A;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">💾 Save</button>
+      <button class="hadith-action-btn highlight-btn" onclick="highlightHadith('${hadithId}')" style="padding:6px 12px;border:1.5px solid #C9A94E;border-radius:8px;background:#FFF;color:#B8902A;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">🔆 Highlight</button>
+      <button class="hadith-action-btn share-btn" onclick="shareHadith('${hadithId}')" style="padding:6px 12px;border:1.5px solid #C9A94E;border-radius:8px;background:#FFF;color:#B8902A;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">🔗 Share</button>
+    `;
+    entry.appendChild(buttonContainer);
+  });
+};
+</script>
