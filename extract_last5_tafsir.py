@@ -7,6 +7,7 @@ AI="https://quranhikma.com/api/claude-stream"
 KEY=os.environ.get("SUPABASE_SERVICE_KEY","")
 HDR={"apikey":KEY,"Authorization":"Bearer "+KEY,"Content-Type":"application/json"}
 SCHOLARS=("tabari","ibn_kathir","qurtubi","jalalayn","saadi","ibn_abbas")
+WORK_ID={"tabari":1,"ibn_kathir":2,"qurtubi":3,"jalalayn":54,"saadi":55,"ibn_abbas":56}
 TAG="work-last5-v1"
 
 def req(url,method="GET",body=None,headers=None,timeout=180,parse_json=True):
@@ -34,6 +35,10 @@ def get(table,params):
 def post(table,body,return_row=True):
     h=dict(HDR); h["Prefer"]="return=representation" if return_row else "return=minimal"
     return req(f"{SB}/rest/v1/{table}","POST",body,h)
+
+def delete_tagged():
+    h=dict(HDR); h["Prefer"]="return=minimal"
+    req(f"{SB}/rest/v1/propositions?extracted_by=like.{TAG}%","DELETE",headers=h)
 
 def call_ai(prompt):
     h={"Content-Type":"application/json"}
@@ -96,7 +101,7 @@ def save_group(sura,scholar,units,result,dry=False):
         row={"claim_type_id":43,"statement_en":st,"extracted_by":f"{TAG}:{sura}:{scholar}","speaker_type":"unspecified","speaker_name":p.get("speaker_name"),"assertion_mode":assertion,"status":"active","source_type":"tafsir_entry","tafsir_entry_id":eid,"extraction_validity":"verified","verification_state":"source_language_proposition_verified","attribution_fidelity":fidelity,"quranic_textual_support":"not_stated","mufassir_own_position":p.get("mufassir_own_position") or "unclear"}
         if dry: saved+=1; continue
         pr=post("propositions",row)[0]; pid=pr["id"]
-        post("proposition_voice_chain",{"proposition_id":pid,"originating_voice_type":"exegete_own_view" if row["mufassir_own_position"]=="preferred" else "reported_authority","originating_voice_name":row["speaker_name"]},False)
+        post("proposition_voice_chain",{"proposition_id":pid,"reporting_work_id":WORK_ID[scholar],"originating_voice_type":"exegete_own_view" if row["mufassir_own_position"]=="preferred" else "reported_authority","originating_voice_name":row["speaker_name"]},False)
         for ev in p.get("evidence",[]):
             eu=post("evidence_units",{"unit_type":ev.get("unit_type") or "unnamed_report","attributed_authority_name":ev.get("authority"),"content_summary":str(ev.get("summary") or st)[:2000],"independence_state":"unknown"})[0]
             post("proposition_evidence",{"proposition_id":pid,"evidence_unit_id":eu["id"],"semantic_link_note":"Evidence extracted from the linked tafsir entry.","linked_by":TAG},False)
@@ -107,8 +112,9 @@ def save_group(sura,scholar,units,result,dry=False):
     return saved
 
 def main():
-    ap=argparse.ArgumentParser(); ap.add_argument("--limit-groups",type=int,default=30); ap.add_argument("--dry-run",action="store_true"); a=ap.parse_args()
+    ap=argparse.ArgumentParser(); ap.add_argument("--limit-groups",type=int,default=30); ap.add_argument("--dry-run",action="store_true"); ap.add_argument("--reset-tagged",action="store_true"); a=ap.parse_args()
     if not KEY and not a.dry_run: raise SystemExit("SUPABASE_SERVICE_KEY required")
+    if a.reset_tagged and not a.dry_run: delete_tagged()
     groups=source_groups(); done=existing_entry_ids(); todo=[]
     for (s,sch),rows in sorted(groups.items()):
         units=compact_sources(rows,done)
