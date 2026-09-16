@@ -112,9 +112,13 @@ def save_group(sura,scholar,units,result,dry=False):
         voice="exegete_own_view" if row["mufassir_own_position"]=="preferred" else ("named_earlier_exegete" if row["speaker_name"] else "unattributed_group")
         post("proposition_voice_chain",{"proposition_id":pid,"reporting_work_id":WORK_ID[scholar],"originating_voice_type":voice,"originating_voice_name":row["speaker_name"]},False)
         for ev in p.get("evidence",[]):
-            eu=post("evidence_units",{"unit_type":ev.get("unit_type") or "unnamed_report","attributed_authority_name":ev.get("authority"),"content_summary":str(ev.get("summary") or st)[:2000],"independence_state":"unknown"})[0]
+            routes=ev.get("routes",[]) or []
+            authority=ev.get("authority")
+            if not authority and not routes: continue
+            unit_type="single_hadith_citation" if "hadith" in str(ev.get("unit_type") or "") else "single_named_attribution"
+            eu=post("evidence_units",{"unit_type":unit_type,"attributed_authority_name":authority,"content_summary":str(ev.get("summary") or st)[:2000],"independence_state":"unknown"})[0]
             post("proposition_evidence",{"proposition_id":pid,"evidence_unit_id":eu["id"],"semantic_link_note":"Evidence extracted from the linked tafsir entry.","linked_by":TAG},False)
-            for rt in ev.get("routes",[]):
+            for rt in routes:
                 chain=rt.get("chain") or []
                 if chain: post("evidence_transmission_routes",{"evidence_unit_id":eu["id"],"route_description":str(rt.get("description") or "Explicit source route")[:1000],"transmitter_chain":chain},False)
         saved+=1
