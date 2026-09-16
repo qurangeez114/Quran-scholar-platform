@@ -45,7 +45,8 @@ def repair_voice_chains():
         parts=(p.get("extracted_by") or "").split(":")
         scholar=parts[-1] if parts else ""
         if scholar not in WORK_ID: continue
-        post("proposition_voice_chain",{"proposition_id":p["id"],"reporting_work_id":WORK_ID[scholar],"originating_voice_type":"exegete_own_view" if p.get("mufassir_own_position")=="preferred" else "reported_authority","originating_voice_name":p.get("speaker_name")},False)
+        voice="exegete_own_view" if p.get("mufassir_own_position")=="preferred" else ("named_earlier_exegete" if p.get("speaker_name") else "unattributed_group")
+        post("proposition_voice_chain",{"proposition_id":p["id"],"reporting_work_id":WORK_ID[scholar],"originating_voice_type":voice,"originating_voice_name":p.get("speaker_name")},False)
 
 def call_ai(prompt):
     h={"Content-Type":"application/json"}
@@ -108,7 +109,8 @@ def save_group(sura,scholar,units,result,dry=False):
         row={"claim_type_id":43,"statement_en":st,"extracted_by":f"{TAG}:{sura}:{scholar}","speaker_type":"unspecified","speaker_name":p.get("speaker_name"),"assertion_mode":assertion,"status":"active","source_type":"tafsir_entry","tafsir_entry_id":eid,"extraction_validity":"verified","verification_state":"source_language_proposition_verified","attribution_fidelity":fidelity,"quranic_textual_support":"not_stated","mufassir_own_position":p.get("mufassir_own_position") or "unclear"}
         if dry: saved+=1; continue
         pr=post("propositions",row)[0]; pid=pr["id"]
-        post("proposition_voice_chain",{"proposition_id":pid,"reporting_work_id":WORK_ID[scholar],"originating_voice_type":"exegete_own_view" if row["mufassir_own_position"]=="preferred" else "reported_authority","originating_voice_name":row["speaker_name"]},False)
+        voice="exegete_own_view" if row["mufassir_own_position"]=="preferred" else ("named_earlier_exegete" if row["speaker_name"] else "unattributed_group")
+        post("proposition_voice_chain",{"proposition_id":pid,"reporting_work_id":WORK_ID[scholar],"originating_voice_type":voice,"originating_voice_name":row["speaker_name"]},False)
         for ev in p.get("evidence",[]):
             eu=post("evidence_units",{"unit_type":ev.get("unit_type") or "unnamed_report","attributed_authority_name":ev.get("authority"),"content_summary":str(ev.get("summary") or st)[:2000],"independence_state":"unknown"})[0]
             post("proposition_evidence",{"proposition_id":pid,"evidence_unit_id":eu["id"],"semantic_link_note":"Evidence extracted from the linked tafsir entry.","linked_by":TAG},False)
