@@ -10892,7 +10892,7 @@ function renderTafsirAnalysis(container, analysis, sura, aya, isCached) {
 
   // Calculate grade letter
   function gradeFromScore(s) {
-    if (!s) return '—';
+    if (s == null || s === '' || !Number.isFinite(Number(s))) return '—';
     if (s >= 9) return 'A';
     if (s >= 8) return 'B';
     if (s >= 7) return 'C';
@@ -10901,7 +10901,8 @@ function renderTafsirAnalysis(container, analysis, sura, aya, isCached) {
   }
 
   const grade = gradeFromScore(analysis.accuracy_score);
-  const pct = Math.round((analysis.accuracy_score || 0) * 10);
+  const hasScore = analysis.accuracy_score != null && analysis.accuracy_score !== '' && Number.isFinite(Number(analysis.accuracy_score));
+  const pct = hasScore ? Math.round(Number(analysis.accuracy_score) * 10) : null;
 
   let html = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
@@ -10914,11 +10915,13 @@ function renderTafsirAnalysis(container, analysis, sura, aya, isCached) {
       <div style="font-size:12px;color:#2E7D32;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Fidelity Score</div>
       <div style="display:flex;align-items:baseline;gap:8px;">
         <div style="font-size:32px;font-weight:800;color:#2E7D32;">${grade}</div>
-        <div style="font-size:20px;color:#558B2F;font-weight:600;">${pct}%</div>
-        <div style="font-size:12px;color:#666;margin-left:auto;">${analysis.confidence_level || 'high'} confidence</div>
+        <div style="font-size:20px;color:#558B2F;font-weight:600;">${hasScore ? pct + '%' : 'Score withheld'}</div>
+        <div style="font-size:12px;color:#666;margin-left:auto;">${escapeHtml(analysis.confidence_level || 'unspecified')} confidence</div>
       </div>
     </div>
 
+    ${!hasScore ? '<p style="color:#805716;line-height:1.6;">A source comparison is saved. No numeric grade is assigned where passages differ substantially or source text is incomplete.</p>' : ''}
+    <p><a href="/tafsir-fidelity.html?verse=${sura}:${aya}" style="color:#805716;">Read the complete saved evidence and review</a></p>
     <!-- Side-by-side Arabic/English -->
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
       <div style="background:#faf8f5;border-left:4px solid #d0b59d;padding:12px;border-radius:6px;">
@@ -10966,7 +10969,7 @@ function renderTafsirAnalysis(container, analysis, sura, aya, isCached) {
 
     ${analysis.theological_concerns ? `
       <div style="background:#F3E5F5;border:1px solid #BA68C8;border-radius:8px;padding:12px;margin-bottom:12px;">
-        <div style="font-size:11px;font-weight:700;color:#6A1B9A;text-transform:uppercase;margin-bottom:6px;">⚠ Theological Concerns</div>
+        <div style="font-size:11px;font-weight:700;color:#6A1B9A;text-transform:uppercase;margin-bottom:6px;">⚠ Source and wording notes</div>
         <div style="font-size:13px;color:#4A148C;line-height:1.5;">
           ${escapeHtml(analysis.theological_concerns)}
         </div>
@@ -11047,7 +11050,9 @@ async function loadTafsirBadge(sura, aya) {
   try {
     const rows = await sbFetch('tafsir_accuracy_analysis', { sura: `eq.${sura}`, aya: `eq.${aya}`, scholar_key: 'eq.ibn_kathir', limit: '1' });
     if (!rows || !rows.length) return; // not yet evaluated -> no badge
-    const score = parseFloat(rows[0].accuracy_score || 0);
+    if (rows[0].accuracy_score == null || rows[0].accuracy_score === '') return;
+    const score = Number(rows[0].accuracy_score);
+    if (!Number.isFinite(score)) return;
     const col = score >= 8 ? '#2E7D32' : score >= 6 ? '#E65100' : '#c62828';
     const lbl = score >= 8 ? 'Reliable' : score >= 6 ? 'Moderate' : 'Unreliable';
     el.style.display = 'inline-flex';
@@ -11059,50 +11064,7 @@ async function loadTafsirBadge(sura, aya) {
   } catch (e) { /* badge is best-effort; leave hidden on error */ }
 }
 
-function renderTafsirAnalysis(div, r, sura, aya, fromCache) {
-  const score = parseFloat(r.accuracy_score || r.score || 0);
-  const col = score >= 8 ? '#2E7D32' : score >= 6 ? '#E65100' : '#c62828';
-  const lbl = score >= 8 ? 'Reliable' : score >= 6 ? 'Moderate' : 'Unreliable';
-  const inner = document.getElementById('tafsir-accuracy-inner') || div;
-  inner.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;border-bottom:2px solid #E8F5E9;padding-bottom:12px;">
-      <div>
-        <div style="color:#2E7D32;font-weight:700;font-size:17px;">🔍 Accuracy Analysis</div>
-        <div style="color:#888;font-size:13px;">Ibn Kathir — Verse ${sura}:${aya}${fromCache?' · 📦 Saved':''}  </div>
-      </div>
-      <div style="display:flex;align-items:center;gap:10px;">
-        <div style="text-align:center;">
-          <div style="background:${col};color:#fff;font-weight:700;font-size:20px;width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;">${score}</div>
-          <div style="font-size:10px;font-weight:700;color:${col};margin-top:2px;">${lbl}</div>
-        </div>
-        <button onclick="closeAccuracyModal()" style="background:#f5f5f5;border:none;width:36px;height:36px;border-radius:50%;font-size:18px;cursor:pointer;color:#666;">✕</button>
-      </div>
-    </div>
-    <div style="display:grid;gap:12px;font-size:14px;line-height:1.75;">
-      <div style="background:#F1F8E9;border-radius:10px;padding:12px;border-left:4px solid #4CAF50;">
-        <div style="font-weight:700;color:#2E7D32;margin-bottom:6px;">✅ Accurately Translated</div>
-        <div style="color:#333;">${r.accurately_translated||r.accurate||'—'}</div>
-      </div>
-      <div style="background:#FFF8E1;border-radius:10px;padding:12px;border-left:4px solid #FF9800;">
-        <div style="font-weight:700;color:#E65100;margin-bottom:6px;">⚠️ Omitted from English</div>
-        <div style="color:#333;">${r.omitted||'—'}</div>
-      </div>
-      <div style="background:#FFEBEE;border-radius:10px;padding:12px;border-left:4px solid #F44336;">
-        <div style="font-weight:700;color:#c62828;margin-bottom:6px;">❌ Mistranslated / Altered</div>
-        <div style="color:#333;">${r.mistranslated||'—'}</div>
-      </div>
-      <div style="background:#F3E5F5;border-radius:10px;padding:12px;border-left:4px solid #9C27B0;">
-        <div style="font-weight:700;color:#6A1B9A;margin-bottom:6px;">📚 Scholarly Concerns</div>
-        <div style="color:#333;">${r.theological_concerns||r.concerns||'—'}</div>
-      </div>
-      <div style="background:#E8EAF6;border-radius:10px;padding:14px;">
-        <div style="font-weight:700;color:#283593;margin-bottom:6px;">⚖️ Verdict</div>
-        <div style="color:#333;font-style:italic;">${r.verdict||'—'}</div>
-      </div>
-    </div>
-    <div style="margin-top:14px;font-size:11px;color:#bbb;text-align:center;">Analysis based on first 2,000 characters of each text.</div>
-    <div style="height:20px;"></div>`;
-}
+
 </script>
 
 <script src="ad-banner.js"></script>

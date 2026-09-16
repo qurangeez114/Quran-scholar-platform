@@ -8,6 +8,7 @@
   const seen = new WeakSet();
 
   function gradeFromScore(score) {
+    if (score == null || score === '') return null;
     const s = Number(score);
     if (!Number.isFinite(s)) return '—';
     if (s >= 9) return 'A';
@@ -18,6 +19,7 @@
   }
 
   function percentFromScore(score) {
+    if (score == null || score === '') return null;
     const s = Number(score);
     if (!Number.isFinite(s)) return null;
     return Math.max(0, Math.min(100, Math.round(s * 10)));
@@ -75,7 +77,9 @@
     const pct = percentFromScore(row.accuracy_score);
     const grade = gradeFromScore(row.accuracy_score);
     if (pct == null) {
-      setPending(button);
+      button.textContent = '🔍 Fidelity · Score withheld';
+      button.title = row.verdict || 'Source comparison saved; passage alignment is required before grading.';
+      button.dataset.accuracyState = 'reviewed-unscored';
       return;
     }
     button.textContent = `🔍 Fidelity ${pct}% · ${grade}`;

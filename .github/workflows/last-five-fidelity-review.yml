@@ -1,0 +1,26 @@
+name: Save Last Five Fidelity Source Reviews
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'research/last-five-fidelity-review.json'
+      - 'import_last_five_fidelity_review.py'
+      - '.github/workflows/last-five-fidelity-review.yml'
+concurrency:
+  group: tafsir-fidelity-batch
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  save-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify sources, save reviews, verify public readback
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python import_last_five_fidelity_review.py
