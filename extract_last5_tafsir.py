@@ -60,7 +60,7 @@ def source_groups():
     rows=get("tafsir_entries",{"select":"id,sura,aya,scholar_key,scholar_name,language,content,source_name,source_url","sura":"gte.110","and":"(sura.lte.114,scholar_key.in.(%s))"%",".join(SCHOLARS),"order":"sura.asc,aya.asc,scholar_key.asc,id.asc","limit":"1000"})
     groups={}
     for r in rows:
-        groups.setdefault((r["sura"],r["scholar_key"]),[]).append(r)
+        groups.setdefault((r["sura"],r["scholar_key"],r["aya"]),[]).append(r)
     return groups
 
 def existing_entry_ids():
@@ -85,7 +85,7 @@ def compact_sources(rows,done):
 
 def prompt(sura,scholar,units):
     return f'''Extract atomic, source-faithful tafsir propositions for Qur'an surah {sura}, scholar key {scholar}.
-Use only SOURCE_UNITS below. Do not add outside knowledge or harmonize variants. Keep distinct reported views distinct. Map every proposition to exactly one primary_entry_id. State the reporting scholar's preference only when explicit. Preserve named attributions. If a source is silent, produce nothing.
+Use only SOURCE_UNITS below. Do not add outside knowledge or harmonize variants. Keep distinct reported views distinct. Map every proposition to exactly one primary_entry_id. State the reporting scholar's preference only when explicit. Preserve named attributions. If a source is silent, produce nothing. Return at most 12 propositions, prioritizing distinct interpretive claims over incidental repetition.
 
 Return strict JSON only:
 {{"propositions":[{{"primary_entry_id":1,"statement_en":"...","speaker_type":"exegete|named_authority|unspecified","speaker_name":null,"assertion_mode":"quoted|paraphrase","mufassir_own_position":"preferred|rejected|reported_only|unclear","attribution_fidelity":"verbatim_translation|accurate_paraphrase|summary","evidence":[{{"unit_type":"single_named_attribution|multiple_named_attributions|unnamed_report|exegete_reasoning","authority":null,"summary":"...","routes":[{{"description":"...","chain":["..."]}}]}}]}}]}}
@@ -129,17 +129,23 @@ def main():
     if not KEY and not a.dry_run: raise SystemExit("SUPABASE_SERVICE_KEY required")
     if not a.dry_run: repair_voice_chains()
     groups=source_groups(); done=existing_entry_ids(); todo=[]
-    for (s,sch),rows in sorted(groups.items()):
+    for (s,sch,aya),rows in sorted(groups.items()):
         units=compact_sources(rows,done)
         if units: todo.append((s,sch,units))
     todo=todo[:a.limit_groups] if a.limit_groups else todo
     print(f"groups={len(groups)} pending={len(todo)} existing_entries={len(done)}")
-    total=0
+    total=0; failed=[]
     for n,(s,sch,units) in enumerate(todo,1):
         print(f"[{n}/{len(todo)}] {s} {sch} verses={len(units)}",flush=True)
-        result=call_ai(prompt(s,sch,units))
-        count=save_group(s,sch,units,result,a.dry_run); total+=count
-        print(f"saved={count}",flush=True); time.sleep(1)
-    print(f"TOTAL_SAVED={total}")
+        try:
+            result=call_ai(prompt(s,sch,units))
+            count=save_group(s,sch,units,result,a.dry_run); total+=count
+            print(f"saved={count}",flush=True)
+        except Exception as e:
+            failed.append((s,sch,str(e)))
+            print(f"FAILED {s} {sch}: {e}",flush=True)
+        time.sleep(1)
+    print(f"TOTAL_SAVED={total} FAILED_GROUPS={len(failed)}")
+    if failed: raise SystemExit(2)
 
 if __name__=="__main__": main()
