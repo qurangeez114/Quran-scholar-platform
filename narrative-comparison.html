@@ -194,15 +194,32 @@ function versionCard(v){
     ${eng ? `<div style="margin-top:9px;font-size:14px;line-height:1.6">${esc(eng)}</div>` : ''}
     ${note ? `<div style="margin-top:9px;padding-top:8px;border-top:1px solid #E8D8A0;font-size:11.5px;color:#8C7A52">${esc(note)}</div>` : ''}
     
-    <!-- Action Buttons -->
-    <div style="margin-top:12px;padding-top:10px;border-top:1px solid #E8D8A0;display:flex;gap:8px;flex-wrap:wrap">
-      <button class="hadith-action-btn save-btn" data-hadith-id="${vid}" title="Save this hadith" onclick="saveHadith('${vid}')">
+    <!-- Full Toolbar with All Features -->
+    <div style="margin-top:12px;padding-top:10px;border-top:1px solid #E8D8A0;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <button class="hadith-toolbar-btn audio-btn" onclick="speakHadithEntry('${vid}')" title="Play audio" style="padding:6px 10px;border:1.5px solid #C9A94E;border-radius:8px;background:#FFF;color:#B8902A;font-size:12px;cursor:pointer;font-weight:700;font-family:inherit;display:inline-flex;align-items:center;gap:4px">
+        <span style="font-size:14px">🔊</span>
+      </button>
+      <select class="hadith-toolbar-select language-select" onchange="setHadithLanguage(this.value)" style="padding:6px 10px;border:1.5px solid #C9A94E;border-radius:8px;background:#FFF;color:#B8902A;font-size:11px;cursor:pointer;font-weight:700;font-family:inherit">
+        <option value="english">English</option>
+        <option value="arabic">العربية</option>
+        <option value="tigrinya">ትግርኛ</option>
+      </select>
+      <button class="hadith-toolbar-btn tags-btn" onclick="toggleHadithTags('${vid}')" title="Show tags" style="padding:6px 10px;border:1.5px solid #C9A94E;border-radius:8px;background:#FFF;color:#B8902A;font-size:12px;cursor:pointer;font-weight:700;font-family:inherit;display:inline-flex;align-items:center;gap:4px">
+        <span style="font-size:14px">🏷️</span> Tags
+      </button>
+      <button class="hadith-toolbar-btn edit-btn" onclick="editHadithEntry('${vid}')" title="Edit hadith" style="padding:6px 10px;border:1.5px solid #C9A94E;border-radius:8px;background:#FFF;color:#B8902A;font-size:12px;cursor:pointer;font-weight:700;font-family:inherit;display:inline-flex;align-items:center;gap:4px">
+        <span style="font-size:14px">✏️</span> Edit
+      </button>
+      <button class="hadith-toolbar-btn document-btn" onclick="exportHadithAsDoc('${vid}')" title="View as document" style="padding:6px 10px;border:1.5px solid #C9A94E;border-radius:8px;background:#FFF;color:#B8902A;font-size:12px;cursor:pointer;font-weight:700;font-family:inherit;display:inline-flex;align-items:center;gap:4px">
+        <span style="font-size:14px">📄</span> Doc
+      </button>
+      <button class="hadith-toolbar-btn save-btn" onclick="saveHadith('${vid}')" title="Save hadith" style="padding:6px 10px;border:1.5px solid #C9A94E;border-radius:8px;background:#FFF;color:#B8902A;font-size:12px;cursor:pointer;font-weight:700;font-family:inherit;display:inline-flex;align-items:center;gap:4px">
         <span style="font-size:14px">💾</span> Save
       </button>
-      <button class="hadith-action-btn highlight-btn" data-hadith-id="${vid}" title="Highlight text" onclick="highlightHadith('${vid}')">
+      <button class="hadith-toolbar-btn highlight-btn" onclick="highlightHadith('${vid}')" title="Highlight text" style="padding:6px 10px;border:1.5px solid #C9A94E;border-radius:8px;background:#FFF;color:#B8902A;font-size:12px;cursor:pointer;font-weight:700;font-family:inherit;display:inline-flex;align-items:center;gap:4px">
         <span style="font-size:14px">🔆</span> Highlight
       </button>
-      <button class="hadith-action-btn share-btn" data-hadith-id="${vid}" title="Share this hadith" onclick="shareHadith('${vid}')">
+      <button class="hadith-toolbar-btn share-btn" onclick="shareHadith('${vid}')" title="Share hadith" style="padding:6px 10px;border:1.5px solid #C9A94E;border-radius:8px;background:#FFF;color:#B8902A;font-size:12px;cursor:pointer;font-weight:700;font-family:inherit;display:inline-flex;align-items:center;gap:4px">
         <span style="font-size:14px">🔗</span> Share
       </button>
     </div>
@@ -318,6 +335,70 @@ function updateAllHadithCards(currentState) {
 // HADITH ACTION BUTTON HANDLERS
 // ============================================
 
+// ============================================
+// HADITH FULL TOOLBAR HANDLERS
+// ============================================
+
+function speakHadithEntry(hadithId) {
+  const card = document.getElementById(hadithId);
+  if (!card || !('speechSynthesis' in window)) return;
+  const text = card.innerText;
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'en-US';
+  u.rate = 0.9;
+  window.speechSynthesis.speak(u);
+}
+
+function setHadithLanguage(lang) {
+  if (typeof ToolbarState !== 'undefined') {
+    ToolbarState.getInstance().setLanguage(lang);
+  }
+}
+
+function toggleHadithTags(hadithId) {
+  const card = document.getElementById(hadithId);
+  if (!card) return;
+  let tagBox = card.querySelector('.hadith-tags-box');
+  if (!tagBox) {
+    tagBox = document.createElement('div');
+    tagBox.className = 'hadith-tags-box';
+    tagBox.style.cssText = 'margin-top:10px;padding:10px;background:#FFF8E7;border-radius:6px;border:1px solid #D4C9A8';
+    tagBox.innerHTML = '<div style="font-size:11px;color:#9C8354;font-weight:700">Tags: <span style="font-weight:400">hadith, authentic, islamic law, guidance, comparison</span></div>';
+    card.appendChild(tagBox);
+  } else {
+    tagBox.remove();
+  }
+}
+
+function editHadithEntry(hadithId) {
+  const card = document.getElementById(hadithId);
+  if (!card) return;
+  const body = card.querySelector('.scholar-body') || card;
+  if (body.contentEditable === 'true') {
+    body.contentEditable = 'false';
+    body.style.border = 'none';
+  } else {
+    body.contentEditable = 'true';
+    body.style.border = '2px solid #C9A94E';
+    body.style.padding = '8px';
+    body.focus();
+  }
+}
+
+function exportHadithAsDoc(hadithId) {
+  const card = document.getElementById(hadithId);
+  if (!card) return;
+  const text = card.innerText;
+  const element = document.createElement('a');
+  element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(text));
+  element.setAttribute('download', 'hadith-' + hadithId + '.txt');
+  element.style.display = 'none';
+  document.body.appendChild(element);
+  element.click();
+  document.body.removeChild(element);
+}
+
 function saveHadith(hadithId) {
   const card = document.getElementById(hadithId);
   if (!card) return;
@@ -329,16 +410,17 @@ function saveHadith(hadithId) {
     savedItems.push({ id: hadithId, text: text, savedAt: new Date().toISOString() });
     localStorage.setItem('savedHadith', JSON.stringify(savedItems));
     
-    // Visual feedback
     const btn = card.querySelector('.save-btn');
-    btn.style.background = '#B8902A';
-    btn.style.color = '#fff';
-    btn.innerText = '✓ Saved';
-    setTimeout(() => {
-      btn.style.background = '#FFF';
-      btn.style.color = '#B8902A';
-      btn.innerHTML = '<span style="font-size:14px">💾</span> Save';
-    }, 1500);
+    if (btn) {
+      btn.style.background = '#B8902A';
+      btn.style.color = '#fff';
+      btn.innerText = '✓ Saved';
+      setTimeout(() => {
+        btn.style.background = '#FFF';
+        btn.style.color = '#B8902A';
+        btn.innerHTML = '<span style="font-size:14px">💾</span> Save';
+      }, 1500);
+    }
   }
 }
 
@@ -354,15 +436,16 @@ function highlightHadith(hadithId) {
     card.style.borderLeft = '4px solid #D4AF37';
   }
   
-  // Toggle button state
   const btn = card.querySelector('.highlight-btn');
-  btn.classList.toggle('active');
-  if (btn.classList.contains('active')) {
-    btn.style.background = '#C99A2E';
-    btn.style.color = '#fff';
-  } else {
-    btn.style.background = '#FFF';
-    btn.style.color = '#B8902A';
+  if (btn) {
+    btn.classList.toggle('active');
+    if (btn.classList.contains('active')) {
+      btn.style.background = '#C99A2E';
+      btn.style.color = '#fff';
+    } else {
+      btn.style.background = '#FFF';
+      btn.style.color = '#B8902A';
+    }
   }
 }
 
@@ -374,7 +457,6 @@ function shareHadith(hadithId) {
   const url = window.location.href + '#' + hadithId;
   const shareText = encodeURIComponent(`Hadith: ${text.substring(0, 100)}...\n\n${url}`);
   
-  // Show share options
   const shareMenu = document.createElement('div');
   shareMenu.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border-radius:12px;padding:16px;box-shadow:0 4px 20px rgba(0,0,0,0.2);z-index:1000;min-width:200px';
   shareMenu.innerHTML = `
