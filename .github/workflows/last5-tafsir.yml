@@ -1,0 +1,36 @@
+name: Last Five Surahs Tafsir Extraction
+
+on:
+  workflow_dispatch:
+    inputs:
+      limit_groups:
+        description: Scholar-surah groups to process (0 = all)
+        required: false
+        default: '30'
+  push:
+    paths:
+      - '.github/last5-tafsir-trigger.txt'
+
+concurrency:
+  group: last-five-surahs-tafsir
+  cancel-in-progress: false
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate extractor
+        run: python -m py_compile extract_last5_tafsir.py
+      - name: Require database write credential
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: test -n "$SUPABASE_SERVICE_KEY"
+      - name: Extract and save six-source propositions
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python extract_last5_tafsir.py --limit-groups "${{ inputs.limit_groups || '30' }}"
