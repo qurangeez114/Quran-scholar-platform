@@ -36,9 +36,16 @@ def post(table,body,return_row=True):
     h=dict(HDR); h["Prefer"]="return=representation" if return_row else "return=minimal"
     return req(f"{SB}/rest/v1/{table}","POST",body,h)
 
-def delete_tagged():
-    h=dict(HDR); h["Prefer"]="return=minimal"
-    req(f"{SB}/rest/v1/propositions?extracted_by=like.{TAG}%","DELETE",headers=h)
+def repair_voice_chains():
+    props=get("propositions",{"select":"id,extracted_by,speaker_name,mufassir_own_position","extracted_by":f"like.{TAG}%","limit":"10000"})
+    voices=get("proposition_voice_chain",{"select":"proposition_id","proposition_id":f"in.({','.join(str(p['id']) for p in props)})" if props else "eq.-1","limit":"10000"})
+    have={v["proposition_id"] for v in voices}
+    for p in props:
+        if p["id"] in have: continue
+        parts=(p.get("extracted_by") or "").split(":")
+        scholar=parts[-1] if parts else ""
+        if scholar not in WORK_ID: continue
+        post("proposition_voice_chain",{"proposition_id":p["id"],"reporting_work_id":WORK_ID[scholar],"originating_voice_type":"exegete_own_view" if p.get("mufassir_own_position")=="preferred" else "reported_authority","originating_voice_name":p.get("speaker_name")},False)
 
 def call_ai(prompt):
     h={"Content-Type":"application/json"}
@@ -114,7 +121,7 @@ def save_group(sura,scholar,units,result,dry=False):
 def main():
     ap=argparse.ArgumentParser(); ap.add_argument("--limit-groups",type=int,default=30); ap.add_argument("--dry-run",action="store_true"); ap.add_argument("--reset-tagged",action="store_true"); a=ap.parse_args()
     if not KEY and not a.dry_run: raise SystemExit("SUPABASE_SERVICE_KEY required")
-    if a.reset_tagged and not a.dry_run: delete_tagged()
+    if not a.dry_run: repair_voice_chains()
     groups=source_groups(); done=existing_entry_ids(); todo=[]
     for (s,sch),rows in sorted(groups.items()):
         units=compact_sources(rows,done)
