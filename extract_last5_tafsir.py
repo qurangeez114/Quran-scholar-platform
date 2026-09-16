@@ -9,7 +9,7 @@ HDR={"apikey":KEY,"Authorization":"Bearer "+KEY,"Content-Type":"application/json
 SCHOLARS=("tabari","ibn_kathir","qurtubi","jalalayn","saadi","ibn_abbas")
 TAG="work-last5-v1"
 
-def req(url,method="GET",body=None,headers=None,timeout=180):
+def req(url,method="GET",body=None,headers=None,timeout=180,parse_json=True):
     data=None if body is None else json.dumps(body,ensure_ascii=False).encode()
     q=urllib.request.Request(url,data=data,method=method,headers=headers or HDR)
     with urllib.request.urlopen(q,timeout=timeout) as r:
@@ -21,6 +21,7 @@ def req(url,method="GET",body=None,headers=None,timeout=180):
                 b.extend(p)
         except http.client.IncompleteRead as e: b.extend(e.partial or b"")
     s=bytes(b).decode(errors="replace")
+    if not parse_json: return s
     return json.loads(s) if s.strip() else None
 
 def get(table,params):
@@ -32,8 +33,7 @@ def post(table,body,return_row=True):
 
 def call_ai(prompt):
     h={"Content-Type":"application/json"}
-    raw=req(AI,"POST",{"model":"claude-sonnet-4-6","max_tokens":7000,"messages":[{"role":"user","content":prompt}]},h)
-    if not isinstance(raw,str): raw=json.dumps(raw,ensure_ascii=False)
+    raw=req(AI,"POST",{"model":"claude-sonnet-4-6","max_tokens":7000,"messages":[{"role":"user","content":prompt}]},h,parse_json=False)
     raw=re.sub(r"^```(?:json)?\s*|\s*```$","",raw.strip(),flags=re.I)
     a,b=raw.find("{"),raw.rfind("}")
     if a<0 or b<a: raise ValueError("model returned no JSON object")
