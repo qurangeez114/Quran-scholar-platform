@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Resumable six-source proposition extraction for Qur'an 110-114."""
-import argparse, json, os, re, time, urllib.parse, urllib.request, http.client
+import argparse, json, os, re, time, urllib.parse, urllib.request, urllib.error, http.client
 
 SB="https://ylosytbxpzxzwfzjpaej.supabase.co"
 AI="https://quranhikma.com/api/claude-stream"
@@ -12,7 +12,11 @@ TAG="work-last5-v1"
 def req(url,method="GET",body=None,headers=None,timeout=180,parse_json=True):
     data=None if body is None else json.dumps(body,ensure_ascii=False).encode()
     q=urllib.request.Request(url,data=data,method=method,headers=headers or HDR)
-    with urllib.request.urlopen(q,timeout=timeout) as r:
+    try: r=urllib.request.urlopen(q,timeout=timeout)
+    except urllib.error.HTTPError as e:
+        detail=e.read().decode(errors="replace")
+        raise RuntimeError(f"HTTP {e.code} {detail[:1200]}") from e
+    with r:
         b=bytearray()
         try:
             while True:
@@ -84,7 +88,12 @@ def save_group(sura,scholar,units,result,dry=False):
         eid=int(p.get("primary_entry_id",0))
         st=str(p.get("statement_en","")).strip()
         if eid not in allowed or not st: continue
-        row={"claim_type_id":43,"statement_en":st,"extracted_by":f"{TAG}:{sura}:{scholar}","speaker_type":p.get("speaker_type") or "unspecified","speaker_name":p.get("speaker_name"),"assertion_mode":p.get("assertion_mode") or "paraphrase","status":"active","source_type":"tafsir_entry","tafsir_entry_id":eid,"extraction_validity":"verified","verification_state":"source_language_proposition_verified","attribution_fidelity":p.get("attribution_fidelity") or "accurate_paraphrase","quranic_textual_support":"not_stated","mufassir_own_position":p.get("mufassir_own_position") or "unclear"}
+        fidelity=p.get("attribution_fidelity") or "accurate_paraphrase"
+        if fidelity=="verbatim_translation": fidelity="exact_quotation"
+        if fidelity not in ("exact_quotation","accurate_paraphrase","partial_paraphrase"): fidelity="accurate_paraphrase"
+        assertion=p.get("assertion_mode") or "explicit"
+        if assertion not in ("explicit","quoted"): assertion="explicit"
+        row={"claim_type_id":43,"statement_en":st,"extracted_by":f"{TAG}:{sura}:{scholar}","speaker_type":"unspecified","speaker_name":p.get("speaker_name"),"assertion_mode":assertion,"status":"active","source_type":"tafsir_entry","tafsir_entry_id":eid,"extraction_validity":"verified","verification_state":"source_language_proposition_verified","attribution_fidelity":fidelity,"quranic_textual_support":"not_stated","mufassir_own_position":p.get("mufassir_own_position") or "unclear"}
         if dry: saved+=1; continue
         pr=post("propositions",row)[0]; pid=pr["id"]
         post("proposition_voice_chain",{"proposition_id":pid,"originating_voice_type":"exegete_own_view" if row["mufassir_own_position"]=="preferred" else "reported_authority","originating_voice_name":row["speaker_name"]},False)
