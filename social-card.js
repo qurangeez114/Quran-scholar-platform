@@ -47,6 +47,12 @@
   var scSura = null, scAya = null, scFormat = 'tiktok', scVerse = null, scSel = null;
   var scVerseList = null; // List of related verses (cross-references)
   var scListIndex = 0;   // Current position in cross-reference list
+  
+  // Hadith Toolbar State
+  var toolbarState = null;
+  if (typeof ToolbarState !== 'undefined') {
+    toolbarState = ToolbarState.getInstance();
+  }
 
   function scEsc(s) {
     return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
@@ -206,6 +212,19 @@
     ctx.strokeStyle = 'rgba(255,214,64,0.32)'; ctx.lineWidth = Math.max(1, W * 0.0016);
     ctx.strokeRect(pad * 0.64, pad * 0.64, W - pad * 1.28, H - pad * 1.28);
 
+    // Draw toolbar state indicator (language + study mode)
+    if (toolbarState) {
+      var state = toolbarState.getState();
+      ctx.fillStyle = 'rgba(255, 214, 64, 0.9)';
+      ctx.font = 'bold 14px Arial';
+      ctx.textAlign = 'left';
+      var langLabel = state.language.charAt(0).toUpperCase() + state.language.slice(1);
+      ctx.fillText(langLabel, pad + 10, pad + 25);
+      if (state.studyMode) {
+        ctx.fillText('[STUDY]', pad + 10, pad + 50);
+      }
+    }
+
     ctx.textAlign = 'center';
 
     var active = Object.keys(SC_LANGS).filter(function (k) {
@@ -362,6 +381,15 @@
     scVerseList = verseList || null;  // Store cross-reference list if provided
     scListIndex = (typeof listIndex === 'number') ? listIndex : 0;
     
+    // Set language from toolbar state if available
+    if (toolbarState) {
+      var lang = toolbarState.getLanguage();
+      if (lang && SC_LANGS[lang]) {
+        scSel = {};
+        scSel[lang] = true;
+      }
+    }
+    
     document.getElementById('scCardOverlay').style.display = 'flex';
     document.getElementById('scLoading').style.display = 'block';
     document.getElementById('scLoading').textContent = 'Loading verse…';
@@ -402,4 +430,17 @@
       document.getElementById('scLoading').textContent = 'Could not load verse text.';
     }
   };
+
+// Subscribe to toolbar state changes and redraw social card when state changes
+if (typeof ToolbarState !== 'undefined') {
+  var toolbarState = ToolbarState.getInstance();
+  toolbarState.subscribe(function (newState) {
+    // Redraw social card if it's currently open
+    if (document.getElementById('scCardOverlay') && 
+        document.getElementById('scCardOverlay').style.display === 'flex' &&
+        typeof window.scDraw === 'function') {
+      window.scDraw();
+    }
+  });
+}
 })();

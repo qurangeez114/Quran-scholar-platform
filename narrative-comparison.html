@@ -6,6 +6,7 @@
 <title>Narrative Comparison — Quran Hikma</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=EB+Garamond:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./hadith-toolbar.css">
 <style>
   * { box-sizing: border-box; }
   body { margin:0; font-family:'EB Garamond','Georgia',serif; background:#FDFAF4; color:#1A1A1A; }
@@ -35,6 +36,7 @@
   <a href="index.html" class="btn-outline">&larr; Back</a>
   <h1 id="pageTitle">Narrative Comparison</h1>
 </div>
+<div id="hadith-toolbar-container"></div>
 <div class="core" id="coreBox" style="display:none">
   <strong>Shared historical core</strong>
   <div id="coreText"></div>
@@ -200,6 +202,93 @@ function compareCard(v){
 
 function row(label, value) {
   return `<div class="row"><div class="label">${label}</div><div>${value || '&mdash;'}</div></div>`;
+}
+
+// ============================================
+// HADITH TOOLBAR INITIALIZATION
+// ============================================
+document.write('<script src="./hadith-toolbar-state.js"><\/script>');
+
+// Initialize toolbar after state manager loads
+setTimeout(() => {
+  if (typeof ToolbarState !== 'undefined') {
+    const state = ToolbarState.getInstance();
+    
+    // Create toolbar HTML
+    const toolbarHTML = `
+      <div class="hadith-toolbar" id="main-hadith-toolbar">
+        <button class="toolbar-btn audio-btn" id="btn-audio" title="Play audio">
+          <span class="icon">🔊</span>
+        </button>
+        <div class="toolbar-select-group">
+          <select class="toolbar-select language-select" id="language-select">
+            <option value="english">English</option>
+            <option value="arabic">العربية</option>
+            <option value="tigrinya">ትግርኛ</option>
+            <option value="french">Français</option>
+            <option value="spanish">Español</option>
+            <option value="urdu">اردو</option>
+          </select>
+        </div>
+        <button class="toolbar-btn tags-btn" id="btn-tags" title="Show tags">
+          <span class="icon">🏷️</span>
+        </button>
+        <button class="toolbar-btn edit-btn" id="btn-edit" title="Edit hadith">
+          <span class="icon">✏️</span>
+        </button>
+        <button class="toolbar-btn document-btn" id="btn-document" title="View as document">
+          <span class="icon">📄</span>
+        </button>
+        <button class="toolbar-btn tafsir-btn" id="btn-tafsir" title="View tafsir">
+          <span class="icon">📚</span>
+        </button>
+        <button class="toolbar-btn words-btn" id="btn-words" title="Word analysis">
+          <span class="icon">abc</span><span>Words</span>
+        </button>
+        <button class="toolbar-btn study-btn" id="btn-study" title="Study mode">
+          <span class="icon">📖</span><span>Study</span>
+        </button>
+      </div>
+    `;
+    
+    document.getElementById('hadith-toolbar-container').innerHTML = toolbarHTML;
+    document.getElementById('language-select').value = state.getLanguage();
+    
+    // Bind events
+    document.getElementById('language-select').addEventListener('change', (e) => {
+      state.setLanguage(e.target.value);
+    });
+    
+    document.getElementById('btn-study').addEventListener('click', () => {
+      state.toggleStudyMode();
+      document.getElementById('btn-study').classList.toggle('active', state.getState().studyMode);
+    });
+    
+    // Subscribe to state changes
+    state.subscribe((newState) => {
+      document.getElementById('language-select').value = newState.language;
+      updateAllHadithCards(newState);
+    });
+  }
+}, 100);
+
+// Update hadith cards when language/state changes
+function updateAllHadithCards(currentState) {
+  const cards = document.querySelectorAll('.card');
+  cards.forEach(card => {
+    const source = card.querySelector('.row:first-child span');
+    if (currentState.studyMode) {
+      if (!card.querySelector('.study-badge')) {
+        const badge = document.createElement('span');
+        badge.className = 'study-badge';
+        badge.textContent = '📖 STUDY';
+        badge.style.cssText = 'background:#d4af37;color:#1a1a1a;padding:2px 8px;border-radius:4px;font-size:10px;margin-left:8px;';
+        if (source && source.parentElement) {
+          source.parentElement.parentElement.appendChild(badge);
+        }
+      }
+    }
+  });
 }
 
 document.getElementById('status').style.display = 'block';
