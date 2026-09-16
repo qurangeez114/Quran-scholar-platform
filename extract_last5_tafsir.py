@@ -36,17 +36,38 @@ def post(table,body,return_row=True):
     h=dict(HDR); h["Prefer"]="return=representation" if return_row else "return=minimal"
     return req(f"{SB}/rest/v1/{table}","POST",body,h)
 
+def voice_row(pid, scholar, name, position):
+    """Keep named earlier authorities even when the reporter prefers their view."""
+    aliases = {
+        "tabari": {"al-Tabari", "al-Ṭabarī"},
+        "ibn_kathir": {"Ibn Kathir", "Ibn Kathīr"},
+        "qurtubi": {"al-Qurtubi", "Al-Qurtubi", "al-Qurṭubī"},
+        "jalalayn": {"Jalalayn", "Jalālayn", "al-Jalalayn", "Al-Jalalayn", "al-Jalālayn"},
+        "saadi": {"al-Sa'di", "Ibn Sa'di", "al-Saʿdī"},
+        "ibn_abbas": set(),
+    }
+    own = name in aliases.get(scholar, set()) or (not name and position == "preferred")
+    voice = "exegete_own_view" if own else ("named_earlier_exegete" if name else "unattributed_group")
+    return {"proposition_id": pid, "reporting_work_id": WORK_ID[scholar],
+            "originating_voice_type": voice, "originating_voice_name": None if own else name}
+
 def repair_voice_chains():
     props=get("propositions",{"select":"id,extracted_by,speaker_name,mufassir_own_position","extracted_by":f"like.{TAG}%","limit":"10000"})
     voices=get("proposition_voice_chain",{"select":"proposition_id","proposition_id":f"in.({','.join(str(p['id']) for p in props)})" if props else "eq.-1","limit":"10000"})
     have={v["proposition_id"] for v in voices}
+    repaired=0
     for p in props:
         if p["id"] in have: continue
         parts=(p.get("extracted_by") or "").split(":")
         scholar=parts[-1] if parts else ""
         if scholar not in WORK_ID: continue
-        voice="exegete_own_view" if p.get("mufassir_own_position")=="preferred" else ("named_earlier_exegete" if p.get("speaker_name") else "unattributed_group")
-        post("proposition_voice_chain",{"proposition_id":p["id"],"reporting_work_id":WORK_ID[scholar],"originating_voice_type":voice,"originating_voice_name":p.get("speaker_name")},False)
+        post("proposition_voice_chain",voice_row(p["id"], scholar, p.get("speaker_name"), p.get("mufassir_own_position")),False)
+        repaired+=1
+
+    checked=get("proposition_voice_chain",{"select":"proposition_id","proposition_id":f"in.({','.join(str(p['id']) for p in props)})" if props else "eq.-1","limit":"10000"})
+    missing={p["id"] for p in props}-{v["proposition_id"] for v in checked}
+    print(f"VOICE_REPAIRED={repaired} VOICE_MISSING={len(missing)}",flush=True)
+    if missing: raise RuntimeError(f"Voice-chain postflight failed: {len(missing)} missing")
 
 def call_ai(prompt):
     h={"Content-Type":"application/json"}
@@ -109,8 +130,7 @@ def save_group(sura,scholar,units,result,dry=False):
         row={"claim_type_id":43,"statement_en":st,"extracted_by":f"{TAG}:{sura}:{scholar}","speaker_type":"unspecified","speaker_name":p.get("speaker_name"),"assertion_mode":assertion,"status":"active","source_type":"tafsir_entry","tafsir_entry_id":eid,"extraction_validity":"verified","verification_state":"source_language_proposition_verified","attribution_fidelity":fidelity,"quranic_textual_support":"not_stated","mufassir_own_position":p.get("mufassir_own_position") or "unclear"}
         if dry: saved+=1; continue
         pr=post("propositions",row)[0]; pid=pr["id"]
-        voice="exegete_own_view" if row["mufassir_own_position"]=="preferred" else ("named_earlier_exegete" if row["speaker_name"] else "unattributed_group")
-        post("proposition_voice_chain",{"proposition_id":pid,"reporting_work_id":WORK_ID[scholar],"originating_voice_type":voice,"originating_voice_name":row["speaker_name"]},False)
+        post("proposition_voice_chain",voice_row(pid, scholar, row["speaker_name"], row["mufassir_own_position"]),False)
         for ev in p.get("evidence",[]):
             routes=ev.get("routes",[]) or []
             authority=ev.get("authority")
@@ -125,9 +145,12 @@ def save_group(sura,scholar,units,result,dry=False):
     return saved
 
 def main():
-    ap=argparse.ArgumentParser(); ap.add_argument("--limit-groups",type=int,default=30); ap.add_argument("--dry-run",action="store_true"); ap.add_argument("--reset-tagged",action="store_true"); a=ap.parse_args()
+    ap=argparse.ArgumentParser(); ap.add_argument("--limit-groups",type=int,default=30); ap.add_argument("--dry-run",action="store_true"); ap.add_argument("--reset-tagged",action="store_true"); ap.add_argument("--repair-only",action="store_true"); a=ap.parse_args()
     if not KEY and not a.dry_run: raise SystemExit("SUPABASE_SERVICE_KEY required")
     if not a.dry_run: repair_voice_chains()
+    if a.repair_only:
+        print("Voice-chain repair complete; extraction not run.", flush=True)
+        return
     groups=source_groups(); done=existing_entry_ids(); todo=[]
     for (s,sch,aya),rows in sorted(groups.items()):
         units=compact_sources(rows,done)
