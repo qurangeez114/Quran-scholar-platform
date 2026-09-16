@@ -44,7 +44,7 @@ SUPABASE_URL = "https://ylosytbxpzxzwfzjpaej.supabase.co"
 SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs"
 CLAUDE_URL = "https://quranhikma.com/api/claude-stream"
 SCHOLAR_KEY = "ibn_kathir"
-EVALUATOR_VERSION = "tafsir-fidelity-v1-2026-08-18"
+EVALUATOR_VERSION = "tafsir-fidelity-v2-omissions-count-2026-09-16"
 ALIGNMENT_DEFERRED_FILE = ".github/diagnostics/tafsir-alignment-deferred.json"
 
 SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
@@ -147,12 +147,12 @@ Scoring rubric (0–10):
 
 Be conservative and evidence-based. Do NOT deduct points merely because English cannot mirror Arabic word order. Do NOT invent omissions that are not present. If an English explanatory phrase accurately makes an implicit Arabic referent explicit, identify it as interpretive but distinguish it from a mistranslation.
 
-First assess whether the Arabic and English entries cover the SAME tafsir passage. If either entry includes substantial commentary absent from the other, or the English stops before the Arabic, mark source_alignment "misaligned" regardless of translation quality. If you cannot establish coverage confidently, use "uncertain". Only use "aligned" when the main beginning AND end of both passages correspond. A verse heading or quoted Qur'an alone does not establish alignment. Do not score translation fidelity for misaligned or uncertain entries; the score field may be 0 as a placeholder and will not be saved.
+First establish that the supplied Arabic is a usable source for the English commentary. Use source_alignment "aligned" when the English is an abridgment or partial translation of that Arabic unit: omitted paragraphs, omitted reports, omitted criticism, and an English ending earlier than Arabic MUST reduce the numeric grade, even if abridgment is deliberate. Do not withhold a score just because coverage differs. Separate omissions from meaning changes in retained passages and from damaged English text; count all of them in the overall score without double-counting the same defect. A score is an editorial fidelity judgment, not a measured percentage of correct words. Use "misaligned" only for an actually unrelated/wrong source unit, and "uncertain" only when a usable Arabic source cannot be established (for example, corrupted or insufficient Arabic). Do not score those unusable-source cases.
 
 Keep each explanation concise (one or two sentences) while identifying any material mismatches. Return STRICT JSON only, with exactly these keys:
 {{
   "source_alignment": "aligned",
-  "source_alignment_reason": "Briefly identify corresponding beginning and end, or the coverage mismatch.",
+  "source_alignment_reason": "Identify the usable shared source unit; distinguish abridgment from an unrelated or unusable Arabic source.",
   "score": 0.0,
   "accurate": "What the English preserves accurately, with short Arabic anchors where useful.",
   "omitted": "Material present in Arabic but absent from English, or 'None material'.",
@@ -248,7 +248,7 @@ def save_result(sura, aya, result, arabic, english):
         "verdict": str(result["verdict"]),
         "reviewed_by": result.get("evaluator_version") or EVALUATOR_VERSION,
         "confidence_level": "medium",
-        "notes": "Automated Arabic-English source comparison. Review source alignment before citing.",
+        "notes": "Automated complete-source comparison. Omissions, including deliberate abridgment, reduce the score; the number is an editorial judgment, not a measured percentage. Review evidence before citing.",
     }
     headers = dict(SB_HEADERS)
     headers["Prefer"] = "resolution=merge-duplicates,return=minimal"

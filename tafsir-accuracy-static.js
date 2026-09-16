@@ -78,7 +78,7 @@
     const grade = gradeFromScore(row.accuracy_score);
     if (pct == null) {
       button.textContent = '🔍 Fidelity · Score withheld';
-      button.title = row.verdict || 'Source comparison saved; passage alignment is required before grading.';
+      button.title = row.verdict || 'Source comparison saved; a usable Arabic source is required before grading.';
       button.dataset.accuracyState = 'reviewed-unscored';
       return;
     }
