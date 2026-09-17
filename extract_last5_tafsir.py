@@ -48,8 +48,18 @@ def voice_row(pid, scholar, name, position):
     }
     own = name in aliases.get(scholar, set()) or (not name and position == "preferred")
     voice = "exegete_own_view" if own else ("named_earlier_exegete" if name else "unattributed_group")
+    own_names = {
+        "tabari": "al-Ṭabarī",
+        "ibn_kathir": "Ibn Kathīr",
+        "qurtubi": "al-Qurṭubī",
+        "jalalayn": "al-Jalālayn",
+        "saadi": "al-Saʿdī",
+        "ibn_abbas": "Ibn ʿAbbās",
+    }
+    # pvc_name_required_check requires a name for an exegete_own_view row.
+    voice_name = own_names.get(scholar) if own else name
     return {"proposition_id": pid, "reporting_work_id": WORK_ID[scholar],
-            "originating_voice_type": voice, "originating_voice_name": None if own else name}
+            "originating_voice_type": voice, "originating_voice_name": voice_name}
 
 def repair_voice_chains():
     props=get("propositions",{"select":"id,extracted_by,speaker_name,mufassir_own_position","extracted_by":f"like.{TAG}%","limit":"10000"})
