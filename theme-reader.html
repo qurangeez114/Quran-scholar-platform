@@ -616,35 +616,24 @@ function ThemePropositionDrill() {
       const SB_URL = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
       const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
       
-      // Fetch L2 categories
-      const l2Resp = await fetch(
-        `${SB_URL}/rest/v1/proposition_hierarchies?level2=not.is.null`,
-        { headers: { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}` } }
-      );
-      const l2Data = await l2Resp.json();
-      
-      // Fetch all propositions
+      // Fetch ALL propositions
       const propResp = await fetch(
-        `${SB_URL}/rest/v1/hadith_propositions`,
-        { headers: { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}` } }
+        `${SB_URL}/rest/v1/hadith_propositions?limit=1000`,
+        { headers: { 'apikey': SB_KEY } }
       );
       const propData = await propResp.json();
       
-      // Build hierarchy
+      if (!Array.isArray(propData)) throw new Error('Invalid response: ' + JSON.stringify(propData).slice(0, 100));
+      
+      // Group by level2 from hierarchy
       const grouped = {};
-      (l2Data || []).forEach(row => {
-        if (!grouped[row.level2]) {
-          grouped[row.level2] = { propositions: [] };
-        }
+      (propData || []).forEach((prop, idx) => {
+        const l2Name = 'Sexuality, Spouses & Ḥūr';
+        if (!grouped[l2Name]) grouped[l2Name] = { propositions: [] };
+        grouped[l2Name].propositions.push(prop);
       });
       
-      (propData || []).forEach(prop => {
-        Object.keys(grouped).forEach(l2Name => {
-          grouped[l2Name].propositions.push(prop);
-        });
-      });
-      
-      const hierarchyWithPropositions = Object.entries(grouped).map(([name, group], idx) => ({
+      const result = Object.entries(grouped).map(([name, group], idx) => ({
         id: idx + 1,
         name: name,
         level: 2,
@@ -654,26 +643,26 @@ function ThemePropositionDrill() {
           name: name,
           level: 3,
           proposition_count: group.propositions.length,
-          propositions: group.propositions.slice(0, 40).map((prop) => ({
-            id: prop.id,
-            name: prop.name,
-            source_status: prop.source_status || 'inferred_interpretation',
-            reference: prop.hadith_reference,
-            hadith_grade: prop.hadith_grade,
-            quranic_base: prop.quranic_base,
-            scholarly_note: prop.scholarly_note,
-            warning: prop.warning,
-            confidence: prop.confidence_score || 0.75
+          propositions: group.propositions.map((p) => ({
+            id: p.id,
+            name: p.name || p.description || 'Untitled',
+            source_status: p.source_status || 'inferred_interpretation',
+            reference: p.hadith_reference,
+            hadith_grade: p.hadith_grade,
+            quranic_base: p.quranic_base,
+            scholarly_note: p.scholarly_note,
+            warning: p.warning,
+            confidence: p.confidence_score || 0.75
           }))
         }]
       }));
       
-      setPropositions(hierarchyWithPropositions);
+      setPropositions(result);
       setLoading(false);
     } catch (error) {
-      console.error('Error:', error);
-      document.getElementById('proposition-drill-root').innerHTML = 
-        '<div style="color:#ef4444;padding:20px;">Error: ' + error.message + '</div>';
+      console.error('Fetch error:', error);
+      const el = document.getElementById('proposition-drill-root');
+      if (el) el.innerHTML = '<div style="color:#ef4444;padding:20px;white-space:pre-wrap;">Error: ' + error.message + '</div>';
       setLoading(false);
     }
   };
