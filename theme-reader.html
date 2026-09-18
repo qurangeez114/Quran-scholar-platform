@@ -245,16 +245,23 @@ window.addEventListener('load', async () => {
 // ============================================================================
 
 function setupLanguageButtons() {
+  // Initialize active state from localStorage or defaults (Arabic + English active)
+  const stored = localStorage.getItem('activeLangs');
+  const prefs = stored ? JSON.parse(stored) : { arabic: true, english: true, translit: false, tigrinya: false, amharic: false };
+  
   ['arabic', 'english', 'translit', 'tigrinya', 'amharic'].forEach(lang => {
     const btn = document.getElementById(`btn-${lang}`);
     if (btn) {
+      if (prefs[lang]) btn.classList.add('active');
+      else btn.classList.remove('active');
+      
       btn.addEventListener('click', () => {
         btn.classList.toggle('active');
-        const prefs = {};
+        const newPrefs = {};
         ['arabic', 'english', 'translit', 'tigrinya', 'amharic'].forEach(l => {
-          prefs[l] = document.getElementById(`btn-${l}`).classList.contains('active');
+          newPrefs[l] = document.getElementById(`btn-${l}`).classList.contains('active');
         });
-        localStorage.setItem('activeLangs', JSON.stringify(prefs));
+        localStorage.setItem('activeLangs', JSON.stringify(newPrefs));
         renderVerses();
       });
     }
