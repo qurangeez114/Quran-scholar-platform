@@ -102,7 +102,7 @@ for (s,sch,aya),items in sorted(groups.items()):
 pair_export={"rows":all_rows}
 Path("last5-language-pairs.json").write_text(json.dumps(pair_export,ensure_ascii=False,indent=2),encoding="utf-8")
 summary={}
-for sch in SCHOLARS:
+for sch in scholars:
     sr=[x for x in all_rows if x["scholar"]==sch]
     summary[sch]={
         "ar_rows":sum(1 for x in sr if x["language"]=="ar"),
