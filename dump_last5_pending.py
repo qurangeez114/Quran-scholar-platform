@@ -22,5 +22,7 @@ for (s,sch,aya),items in sorted(groups.items()):
     primary=next((x for x in items if x["language"]=="ar"),items[0])
     if primary["id"] in done: continue
     pending.append({"sura":s,"aya":aya,"scholar":sch,"primary_entry_id":primary["id"],"texts":[{"id":x["id"],"language":x["language"],"content":x["content"]} for x in items]})
+from pathlib import Path
+Path("pending-last5.json").write_text(json.dumps(pending,ensure_ascii=False,indent=2),encoding="utf-8")
 print("PENDING_COUNT="+str(len(pending)))
-print(json.dumps(pending,ensure_ascii=False,indent=2))
+print("WROTE=pending-last5.json")
