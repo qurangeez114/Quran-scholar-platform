@@ -33,7 +33,7 @@
     return Array.from(document.querySelectorAll('[data-verse]'))
       .map(el => el.getAttribute('data-verse'))
       .filter(ref => {
-        if (!/^\\d+:\\d+$/.test(ref || '') || seen.has(ref)) return false;
+        if (!/^\d+:\d+$/.test(ref || '') || seen.has(ref)) return false;
         seen.add(ref);
         return true;
       });
