@@ -63,3 +63,27 @@ Path("suspicious-last5-sources.json").write_text(json.dumps(sus_sources,ensure_a
 print("SUSPICIOUS_SOURCE_DUMP="+str(len(sus_sources)))
 
 # post-repair audit marker: 2026-09-17 final-five partial repair complete
+
+# Final source-language and proposition-integrity audit
+lang_groups={}
+for (s,sch,aya),items in groups.items():
+    langs={x.get("language") for x in items}
+    z=lang_groups.setdefault(sch,{"groups":0,"ar":0,"en":0,"both":0,"missing_ar":[],"missing_en":[]})
+    z["groups"]+=1
+    if "ar" in langs: z["ar"]+=1
+    else: z["missing_ar"].append(f"{s}:{aya}")
+    if "en" in langs: z["en"]+=1
+    else: z["missing_en"].append(f"{s}:{aya}")
+    if "ar" in langs and "en" in langs: z["both"]+=1
+print("LANG_COVERAGE="+json.dumps(lang_groups,ensure_ascii=False,sort_keys=True))
+
+tagged=get("propositions",{"select":"id,tafsir_entry_id,statement_en,extracted_by","extracted_by":"like.work-last5-v1%","limit":"10000"})
+tpids=[r["id"] for r in tagged]
+vset={r["proposition_id"] for r in get("proposition_voice_chain",{"select":"proposition_id","proposition_id":f"in.({','.join(map(str,tpids))})" if tpids else "eq.-1","limit":"10000"})}
+eset={r["proposition_id"] for r in get("proposition_evidence",{"select":"proposition_id","proposition_id":f"in.({','.join(map(str,tpids))})" if tpids else "eq.-1","limit":"10000"})}
+dups={}
+for r in tagged:
+    k=(r.get("tafsir_entry_id"),(r.get("statement_en") or "").strip())
+    dups.setdefault(k,[]).append(r["id"])
+dup_groups=[ids for ids in dups.values() if len(ids)>1]
+print("PROP_INTEGRITY="+json.dumps({"propositions":len(tagged),"voice_missing":sum(1 for x in tpids if x not in vset),"evidence_link_missing":sum(1 for x in tpids if x not in eset),"exact_duplicate_groups":len(dup_groups),"exact_duplicate_rows":sum(len(x)-1 for x in dup_groups)},ensure_ascii=False))
