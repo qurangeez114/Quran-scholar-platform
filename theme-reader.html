@@ -85,6 +85,22 @@ body { font-family: 'Georgia', serif; background: #FDFAF4; color: #1A1A1A; }
 .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid #E8D8A0; border-top-color: #B8902A; border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: middle; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* PROPOSITION DRILL */
+#proposition-drill-root h2 { font-size: 1.4rem; font-weight: bold; margin-bottom: 12px; color: #111; }
+#proposition-drill-root h3 { font-size: 1rem; font-weight: 600; margin-bottom: 12px; margin-top: 24px; color: #374151; }
+#proposition-drill-root .level-2 { border-left: 3px solid #d4af37; padding-left: 16px; margin-bottom: 16px; }
+#proposition-drill-root .level-2-name { cursor: pointer; font-size: 1.05rem; font-weight: bold; color: #1f2937; display: flex; align-items: center; gap: 8px; }
+#proposition-drill-root .level-2-name:hover { background-color: #f9fafb; }
+#proposition-drill-root .proposition-item { padding: 12px; margin-bottom: 10px; background-color: #f9fafb; border-radius: 6px; border-left: 3px solid #9ca3af; }
+#proposition-drill-root .status-badge { display: inline-block; padding: 4px 8px; border-radius: 4px; color: #fff; font-size: 0.85rem; margin-right: 6px; font-weight: 600; }
+#proposition-drill-root .status-explicit { background-color: #10b981; }
+#proposition-drill-root .status-inferred { background-color: #3b82f6; }
+#proposition-drill-root .status-disputed { background-color: #f59e0b; }
+#proposition-drill-root .status-weak { background-color: #ef4444; }
+#proposition-drill-root .status-consensus { background-color: #6366f1; }
+#proposition-drill-root .weak-warning { font-size: 0.85rem; color: #d97706; margin-top: 8px; padding: 6px; background-color: #fef3c7; border-radius: 4px; }
+#proposition-drill-root .legend { margin-top: 40px; padding: 16px; background-color: #f0f9ff; border-radius: 8px; border: 1px solid #cffafe; }
+
 /* RESPONSIVE */
 @media (max-width: 1024px) {
   .comparison-container { flex-direction: column; }
@@ -93,6 +109,14 @@ body { font-family: 'Georgia', serif; background: #FDFAF4; color: #1A1A1A; }
 }
 </style>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Ethiopic:wght@400;600;700&display=swap" rel="stylesheet">
+
+<!-- React & Babel for Proposition Drill Component -->
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+<!-- Supabase Client for Propositions API -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 
@@ -121,6 +145,7 @@ body { font-family: 'Georgia', serif; background: #FDFAF4; color: #1A1A1A; }
   <button class="main-tab active" onclick="switchMainTab('verses',this)">📖 All Verses</button>
   <button class="main-tab" onclick="switchMainTab('compare',this)">🔍 Compare Texts</button>
   <button class="main-tab" onclick="switchMainTab('hadith',this)">📿 Hadith</button>
+  <button class="main-tab" onclick="switchMainTab('propositions',this)">🏛️ Propositions</button>
   <button class="main-tab" onclick="switchMainTab('notes',this)">📝 My Notes</button>
 </div>
 
@@ -148,6 +173,16 @@ body { font-family: 'Georgia', serif; background: #FDFAF4; color: #1A1A1A; }
   </div>
   <div id="hadith-container" style="padding-bottom:80px;">
     <div style="text-align:center;padding:40px;color:#888;"><span class="spinner"></span> Loading...</div>
+  </div>
+</div>
+
+<!-- TAB: PROPOSITIONS -->
+<div id="tab-propositions" class="tab-panel">
+  <div style="padding:10px 14px;font-size:12px;color:#7A8FA6;background:#F8F4EE;">
+    🏛️ Hierarchical Proposition Taxonomy: Explore the theme through a structured taxonomy of propositions with source authenticity tracking. Green = explicit Quranic/Sahih | Blue = inferred from tafsir | Amber = disputed | Red = weak hadith | Indigo = later scholarship.
+  </div>
+  <div id="proposition-drill-root" style="padding:14px;padding-bottom:80px;">
+    <div style="text-align:center;padding:40px;color:#888;"><span class="spinner"></span> Loading propositions...</div>
   </div>
 </div>
 
@@ -533,5 +568,205 @@ Visit: https://quranhikma.com`);
 
 <!-- Social Media Card Generator -->
 <script src="social-card.js" defer></script>
+
+<!-- Proposition Drill Component (inline) -->
+<script type="text/babel">
+const { useState, useEffect } = React;
+
+function StatusBadge({ status }) {
+  const badges = {
+    explicit_text: { emoji: '✅', label: 'Explicit Quranic Text', color: '#10b981' },
+    inferred_interpretation: { emoji: '📖', label: 'Inferred from Tafsir', color: '#3b82f6' },
+    disputed_interpretation: { emoji: '⚖️', label: 'Disputed', color: '#f59e0b' },
+    weak_report: { emoji: '⚠️', label: 'Weak Hadith (Daif)', color: '#ef4444' },
+    scholarly_consensus: { emoji: '🤝', label: 'Later Scholarship', color: '#6366f1' }
+  };
+  
+  const badge = badges[status] || badges.inferred_interpretation;
+  return (
+    <span
+      style={{
+        display: 'inline-block',
+        padding: '4px 8px',
+        borderRadius: '4px',
+        backgroundColor: badge.color,
+        color: '#fff',
+        fontSize: '0.85rem',
+        marginRight: '6px',
+        title: badge.label
+      }}
+    >
+      {badge.emoji}
+    </span>
+  );
+}
+
+function ThemePropositionDrill() {
+  const [propositions, setPropositions] = useState([]);
+  const [expandedL2, setExpandedL2] = useState(null);
+  const [expandedL3, setExpandedL3] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchPropositions();
+  }, []);
+
+  const fetchPropositions = async () => {
+    try {
+      const response = await fetch('/.netlify/functions/propositions-sexuality-hierarchy');
+      if (!response.ok) throw new Error('API error: ' + response.status);
+      const data = await response.json();
+      setPropositions(data);
+      setLoading(false);
+    } catch (error) {
+      console.error('Error fetching propositions:', error);
+      document.getElementById('proposition-drill-root').innerHTML = 
+        '<div style="color:#ef4444;padding:20px;">Failed to load propositions. Please refresh.</div>';
+      setLoading(false);
+    }
+  };
+
+  if (loading) return <div style={{ padding: '20px', color: '#999' }}>Loading proposition hierarchy...</div>;
+  if (propositions.length === 0) return <div style={{ padding: '20px', color: '#999' }}>No propositions found.</div>;
+
+  return (
+    <div style={{ fontFamily: 'system-ui, sans-serif', lineHeight: '1.6', color: '#1f2937' }}>
+      <h2 style={{ fontSize: '1.4rem', fontWeight: 'bold', marginBottom: '12px', color: '#111' }}>Sexuality, Spouses & Ḥūr in Paradise</h2>
+      <p style={{ color: '#666', marginBottom: '20px' }}>
+        Explore the hierarchical taxonomy with source authenticity tracking.
+      </p>
+
+      {propositions.map((level2) => (
+        <div key={level2.id} style={{ marginBottom: '16px', borderLeft: '3px solid #d4af37', paddingLeft: '16px' }}>
+          <div
+            onClick={() => setExpandedL2(expandedL2 === level2.id ? null : level2.id)}
+            style={{
+              cursor: 'pointer',
+              fontSize: '1.05rem',
+              fontWeight: 'bold',
+              color: '#1f2937',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              userSelect: 'none'
+            }}
+          >
+            <span>{expandedL2 === level2.id ? '▼' : '▶'}</span>
+            {level2.name}
+            <span style={{ fontSize: '0.85rem', color: '#999', marginLeft: 'auto' }}>
+              {level2.tertiary_count} subtopics
+            </span>
+          </div>
+
+          {expandedL2 === level2.id && level2.tertiary.map((level3) => (
+            <div key={level3.id} style={{ marginTop: '12px', marginLeft: '24px' }}>
+              <div
+                onClick={() => setExpandedL3(expandedL3 === level3.id ? null : level3.id)}
+                style={{
+                  cursor: 'pointer',
+                  fontSize: '0.95rem',
+                  fontWeight: '600',
+                  color: '#374151',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  userSelect: 'none'
+                }}
+              >
+                <span>{expandedL3 === level3.id ? '▼' : '▶'}</span>
+                {level3.name}
+                <span style={{ fontSize: '0.85rem', color: '#999', marginLeft: 'auto' }}>
+                  {level3.proposition_count} propositions
+                </span>
+              </div>
+
+              {expandedL3 === level3.id && (
+                <div style={{ marginTop: '12px', marginLeft: '36px' }}>
+                  {level3.propositions.map((prop) => (
+                    <div
+                      key={prop.id}
+                      style={{
+                        padding: '12px',
+                        marginBottom: '10px',
+                        backgroundColor: '#f9fafb',
+                        borderRadius: '6px',
+                        borderLeft: '3px solid #9ca3af'
+                      }}
+                    >
+                      <div style={{ marginBottom: '8px' }}>
+                        <StatusBadge status={prop.source_status} />
+                        <span style={{ fontSize: '0.95rem', fontWeight: '500', color: '#1f2937' }}>
+                          {prop.name}
+                        </span>
+                      </div>
+
+                      {prop.reference && (
+                        <div style={{ fontSize: '0.85rem', color: '#666', marginBottom: '6px' }}>
+                          <strong>Source:</strong> {prop.reference}
+                          {prop.hadith_grade && <span style={{ marginLeft: '8px', fontStyle: 'italic' }}>({prop.hadith_grade})</span>}
+                        </div>
+                      )}
+
+                      {prop.quranic_base && (
+                        <div style={{ fontSize: '0.85rem', color: '#666', marginBottom: '6px' }}>
+                          <strong>Quranic Base:</strong> {prop.quranic_base}
+                        </div>
+                      )}
+
+                      {prop.scholarly_note && (
+                        <div style={{ fontSize: '0.85rem', color: '#555', marginTop: '8px', fontStyle: 'italic' }}>
+                          💭 {prop.scholarly_note}
+                        </div>
+                      )}
+
+                      {prop.source_status === 'weak_report' && prop.warning && (
+                        <div
+                          style={{
+                            fontSize: '0.85rem',
+                            color: '#d97706',
+                            marginTop: '8px',
+                            padding: '6px',
+                            backgroundColor: '#fef3c7',
+                            borderRadius: '4px'
+                          }}
+                        >
+                          ⚠️ {prop.warning}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      ))}
+
+      <div style={{ marginTop: '40px', padding: '16px', backgroundColor: '#f0f9ff', borderRadius: '8px' }}>
+        <h3 style={{ fontSize: '1rem', fontWeight: 'bold', marginBottom: '12px' }}>Source Authenticity Legend</h3>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '12px' }}>
+          <div><StatusBadge status="explicit_text" /> = Directly stated in Sahih hadith</div>
+          <div><StatusBadge status="inferred_interpretation" /> = Inferred by classical Tafsir scholars</div>
+          <div><StatusBadge status="disputed_interpretation" /> = Multiple scholarly interpretations</div>
+          <div><StatusBadge status="weak_report" /> = Daif (weak) hadith tradition</div>
+          <div><StatusBadge status="scholarly_consensus" /> = Later Islamic scholarship consensus</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Render component when tab is active
+document.addEventListener('DOMContentLoaded', () => {
+  const origSwitchTab = window.switchMainTab;
+  window.switchMainTab = function(tab, btn) {
+    origSwitchTab(tab, btn);
+    if (tab === 'propositions') {
+      const root = ReactDOM.createRoot(document.getElementById('proposition-drill-root'));
+      root.render(<ThemePropositionDrill />);
+    }
+  };
+});
+</script>
 </body>
 </html>
