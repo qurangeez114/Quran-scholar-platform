@@ -1266,10 +1266,83 @@ DATA=[
     "Al-Ṭabarī prefers a general interpretation: Satan may whisper toward disobedience or away from obedience, and he withdraws when the servant remembers God's command, obeys God and resists Satan.",
     "al-Ṭabarī",
     "preferred"
+  ]  ,
+  [
+    110,
+    3,
+    "jalalayn",
+    55672,
+    "Al-Jalālayn reports that after this surah was revealed, the Prophet frequently said, 'Glory and praise be to Allah; I seek Allah's forgiveness and repent to Him.'",
+    "al-Jalālayn",
+    "preferred"
+  ],
+  [
+    110,
+    3,
+    "jalalayn",
+    55672,
+    "Al-Jalālayn says the Prophet understood from this surah that his appointed end had drawn near.",
+    "al-Jalālayn",
+    "preferred"
+  ],
+  [
+    110,
+    3,
+    "jalalayn",
+    55672,
+    "Al-Jalālayn dates the conquest of Mecca to Ramadan in the eighth year.",
+    "al-Jalālayn",
+    "preferred"
+  ],
+  [
+    110,
+    3,
+    "jalalayn",
+    55672,
+    "Al-Jalālayn dates the Prophet's death to Rabiʿ al-Awwal in the tenth year.",
+    "al-Jalālayn",
+    "preferred"
+  ],
+  [
+    111,
+    1,
+    "jalalayn",
+    55673,
+    "Al-Jalālayn reports that when the Prophet warned his people of a severe punishment, Abu Lahab cursed him, after which the opening of Sūrat al-Masad was revealed.",
+    "al-Jalālayn",
+    "preferred"
+  ],
+  [
+    111,
+    1,
+    "jalalayn",
+    55673,
+    "Al-Jalālayn interprets the first 'tabbat' as 'perished' or 'was ruined' and treats the clause as a supplication against Abu Lahab.",
+    "al-Jalālayn",
+    "preferred"
+  ],
+  [
+    111,
+    1,
+    "jalalayn",
+    55673,
+    "Al-Jalālayn interprets 'wa-tabb' as stating that Abu Lahab himself was ruined, treating this second clause as a declarative statement.",
+    "al-Jalālayn",
+    "preferred"
+  ],
+  [
+    111,
+    1,
+    "jalalayn",
+    55673,
+    "Al-Jalālayn reports that when warned of punishment, Abu Lahab claimed he could ransom himself with his wealth and children, after which verse 111:2 was revealed.",
+    "al-Jalālayn",
+    "preferred"
   ]
+
 ]
-OWN={"tabari":"al-Ṭabarī","ibn_kathir":"Ibn Kathīr","qurtubi":"al-Qurṭubī","saadi":"al-Saʿdī"}
-WORK_ID={"tabari":1,"ibn_kathir":2,"qurtubi":3,"saadi":55}
+OWN={"tabari":"al-Ṭabarī","ibn_kathir":"Ibn Kathīr","qurtubi":"al-Qurṭubī","jalalayn":"al-Jalālayn","saadi":"al-Saʿdī"}
+WORK_ID={"tabari":1,"ibn_kathir":2,"qurtubi":3,"jalalayn":54,"saadi":55}
 
 def req(url, method="GET", body=None, headers=None):
     data=None if body is None else json.dumps(body,ensure_ascii=False).encode()
