@@ -43,8 +43,20 @@ def main():
     have={(r["sura"],r["aya"]):r for r in existing}
     inserted=skipped=0
     expected=[]
+    fallback = {
+        (114,2): {
+            "text":"﴿مَلِكِ النَّاس﴾",
+            "source_name":"Tafsir al-Jalalayn — Arabic (QuranPedia fallback for 114:2)",
+            "source_url":"https://quranpedia.net/surah/1/114/book/272"
+        }
+    }
     for s in range(110,115):
         rows,url=fetch_surah(s)
+        present={int(x["ayah"]) for x in rows}
+        for (fs,fa),fx in fallback.items():
+            if fs==s and fa not in present:
+                rows.append({"ayah":fa,"surah":fs,"text":fx["text"],"_fallback":fx})
+        rows=sorted(rows,key=lambda x:int(x["ayah"]))
         for x in rows:
             a=int(x["ayah"]); text=(x.get("text") or "").strip()
             if not text: raise RuntimeError(f"Empty Arabic Jalalayn source at {s}:{a}")
@@ -59,8 +71,8 @@ def main():
                 "tradition":"sunni",
                 "language":"ar",
                 "content":text,
-                "source_name":SOURCE_NAME,
-                "source_url":f"https://github.com/spa5k/tafsir_api/blob/{SOURCE_SHA}/tafsir/ar-tafsir-al-jalalayn/{s}.json"
+                "source_name":x.get("_fallback",{}).get("source_name",SOURCE_NAME),
+                "source_url":x.get("_fallback",{}).get("source_url",f"https://github.com/spa5k/tafsir_api/blob/{SOURCE_SHA}/tafsir/ar-tafsir-al-jalalayn/{s}.json")
             })
             inserted+=1
 
