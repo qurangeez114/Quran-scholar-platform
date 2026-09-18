@@ -87,3 +87,27 @@ for r in tagged:
     dups.setdefault(k,[]).append(r["id"])
 dup_groups=[ids for ids in dups.values() if len(ids)>1]
 print("PROP_INTEGRITY="+json.dumps({"propositions":len(tagged),"voice_missing":sum(1 for x in tpids if x not in vset),"evidence_link_missing":sum(1 for x in tpids if x not in eset),"exact_duplicate_groups":len(dup_groups),"exact_duplicate_rows":sum(len(x)-1 for x in dup_groups)},ensure_ascii=False))
+
+# Export exact language pairs and content hashes for fidelity grading.
+import hashlib
+all_rows=[]
+for (s,sch,aya),items in sorted(groups.items()):
+    for x in items:
+        txt=(x.get("content") or "").strip()
+        all_rows.append({
+            "id":x["id"],"sura":s,"aya":aya,"scholar":sch,"language":x.get("language"),
+            "content":txt,"source_name":x.get("source_name"),"source_url":x.get("source_url"),
+            "sha256":hashlib.sha256(txt.encode()).hexdigest(),"chars":len(txt)
+        })
+pair_export={"rows":all_rows}
+Path("last5-language-pairs.json").write_text(json.dumps(pair_export,ensure_ascii=False,indent=2),encoding="utf-8")
+summary={}
+for sch in SCHOLARS:
+    sr=[x for x in all_rows if x["scholar"]==sch]
+    summary[sch]={
+        "ar_rows":sum(1 for x in sr if x["language"]=="ar"),
+        "en_rows":sum(1 for x in sr if x["language"]=="en"),
+        "unique_ar_hashes":len({x["sha256"] for x in sr if x["language"]=="ar"}),
+        "unique_en_hashes":len({x["sha256"] for x in sr if x["language"]=="en"})
+    }
+print("PAIR_HASH_SUMMARY="+json.dumps(summary,ensure_ascii=False,sort_keys=True))
