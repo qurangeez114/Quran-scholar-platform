@@ -97,13 +97,17 @@ def main():
 
     existing=get("propositions",{"select":"id,tafsir_entry_id,statement_en","extracted_by":f"like.{TAG}%","limit":"1000"})
     have={(r["tafsir_entry_id"],r["statement_en"]):r["id"] for r in existing}
-    inserted=skipped=0
+    existing_ids=[r["id"] for r in existing]
+    voice_have={r["proposition_id"] for r in get("proposition_voice_chain",{"select":"proposition_id","proposition_id":f"in.({','.join(map(str,existing_ids))})" if existing_ids else "eq.-1","limit":"1000"})}
+    evidence_have={r["proposition_id"] for r in get("proposition_evidence",{"select":"proposition_id","proposition_id":f"in.({','.join(map(str,existing_ids))})" if existing_ids else "eq.-1","limit":"1000"})}
+    inserted=skipped=repaired_voice=repaired_evidence=0
     for s,a,sch,eid,statement,speaker,position in DATA:
         key=(eid,statement)
         if key in have:
+            pid=have[key]
             skipped+=1
-            continue
-        p=post("propositions",{
+        else:
+            p=post("propositions",{
             "claim_type_id":43,
             "statement_en":statement,
             "extracted_by":f"{TAG}:{s}:{sch}",
@@ -118,28 +122,35 @@ def main():
             "attribution_fidelity":"accurate_paraphrase",
             "quranic_textual_support":"not_stated",
             "mufassir_own_position":position
-        })[0]
-        pid=p["id"]
+            })[0]
+            pid=p["id"]
+            have[key]=pid
+            inserted+=1
         own=(speaker==OWN[sch])
-        post("proposition_voice_chain",{
+        if pid not in voice_have:
+            post("proposition_voice_chain",{
             "proposition_id":pid,
             "reporting_work_id":WORK_ID[sch],
             "originating_voice_type":"exegete_own_view" if own else "named_earlier_exegete",
-            "originating_voice_name":OWN[sch] if own else speaker
-        })
-        ev=post("evidence_units",{
+            "originating_voice_name":None if own else speaker
+            })
+            voice_have.add(pid)
+            repaired_voice+=1
+        if pid not in evidence_have:
+            ev=post("evidence_units",{
             "unit_type":"single_named_attribution",
             "attributed_authority_name":speaker,
             "content_summary":statement,
             "independence_state":"unknown"
-        })[0]
-        post("proposition_evidence",{
+            })[0]
+            post("proposition_evidence",{
             "proposition_id":pid,
             "evidence_unit_id":ev["id"],
             "semantic_link_note":"Manual no-AI completion from the linked tafsir entry.",
             "linked_by":TAG
-        })
-        inserted+=1
+            })
+            evidence_have.add(pid)
+            repaired_evidence+=1
 
     rows=get("propositions",{"select":"id,tafsir_entry_id,statement_en","extracted_by":f"like.{TAG}%","limit":"1000"})
     pids=[r["id"] for r in rows]
@@ -148,7 +159,7 @@ def main():
     missing=[r["id"] for r in rows if r["id"] not in linked]
     if len(rows)!=len(DATA) or missing:
         raise SystemExit(f"POSTFLIGHT_FAIL rows={len(rows)} expected={len(DATA)} voice_missing={len(missing)}")
-    print(f"MANUAL_PENDING_OK inserted={inserted} skipped={skipped} propositions={len(rows)} voices={len(linked)} source_entries={len(ids)}")
+    print(f"MANUAL_PENDING_OK inserted={inserted} skipped={skipped} repaired_voice={repaired_voice} repaired_evidence={repaired_evidence} propositions={len(rows)} voices={len(linked)} source_entries={len(ids)}")
 
 if __name__=="__main__":
     main()
