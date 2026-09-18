@@ -61,3 +61,5 @@ for (s,sch,aya),items in sorted(groups.items()):
     sus_sources.append({"sura":s,"aya":aya,"scholar":sch,"primary_entry_id":primary["id"],"proposition_count":pc.get(primary["id"],0),"existing_propositions":prop_by_eid.get(primary["id"],[]),"texts":[{"id":x["id"],"language":x["language"],"content":x["content"]} for x in items]})
 Path("suspicious-last5-sources.json").write_text(json.dumps(sus_sources,ensure_ascii=False,indent=2),encoding="utf-8")
 print("SUSPICIOUS_SOURCE_DUMP="+str(len(sus_sources)))
+
+# post-repair audit marker: 2026-09-17 final-five partial repair complete
