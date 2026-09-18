@@ -621,32 +621,65 @@ function ThemePropositionDrill() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Hardcoded sample data - no API call needed
-    const sampleData = [{
-      id:1,
-      name:'Sexuality, Spouses & Ḥūr',
-      level:2,
-      tertiary_count:1,
-      tertiary:[{
-        id:100,
-        name:'Sexuality, Spouses & Ḥūr',
-        level:3,
-        proposition_count:8,
-        propositions:[
-          {id:1,name:'Transformed Height (60 cubits)',source_status:'explicit_text',reference:'Ibn Majah 4325',hadith_grade:'sahih',quranic_base:'Q36:55-56',scholarly_note:'Classical scholars interpret as context for bodily transformation',confidence:0.85},
-          {id:2,name:'Sexual Capacity (strength of 100 men)',source_status:'explicit_text',reference:'Tirmidhi 2536',hadith_grade:'hasan',quranic_base:null,scholarly_note:'Metaphorical or literal capacity debate in tafsir',confidence:0.75},
-          {id:3,name:'Ḥūr Descriptions (pure companions)',source_status:'inferred_interpretation',reference:'Q36:55, Q44:54, Q52:20',hadith_grade:null,quranic_base:'Multiple verses',scholarly_note:'Classical mufassir interpretations',confidence:0.80},
-          {id:4,name:'Bodily Waste Elimination',source_status:'explicit_text',reference:'Muslim 2838, Tirmidhi 2536',hadith_grade:'sahih',quranic_base:'Q35:33',scholarly_note:'Interpreted as theological purity metaphor',confidence:0.90},
-          {id:5,name:'Virginity Restoration (weak tradition)',source_status:'weak_report',reference:'Tirmidhi 2550',hadith_grade:'daif',quranic_base:null,scholarly_note:'Daif tradition; Tirmidhi gharib',warning:'Weak hadith (daif); not in Sahih collections',confidence:0.40},
-          {id:6,name:'Marriage Dwelling (pearl pavilion)',source_status:'explicit_text',reference:'Tirmidhi 2535',hadith_grade:'hasan',quranic_base:'Q36:55-56',scholarly_note:'Paradise architecture description',confidence:0.78},
-          {id:7,name:'Perpetual Youth and Beauty',source_status:'explicit_text',reference:'Q36:56, Q44:54',hadith_grade:'sahih',quranic_base:'Multiple verses',scholarly_note:'Quranic description of paradise inhabitants',confidence:0.92},
-          {id:8,name:'No Menstruation or Impurity',source_status:'inferred_interpretation',reference:'Tafsir Ibn Kathir',hadith_grade:null,quranic_base:'Q35:33 (purified)',scholarly_note:'Scholarly interpretation of ritual purity',confidence:0.70}
-        ]
-      }]
-    }];
+    // Fetch real data from Supabase REST API
+    const fetchPropsData = async () => {
+      try {
+        const SB_URL = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
+        const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
+        
+        // Fetch all propositions for level2 = 'Sexuality, Spouses & Ḥūr'
+        const url = `${SB_URL}/rest/v1/proposition_hierarchies?level2=eq.Sexuality, Spouses %26 Ḥūr&order=id.asc`;
+        
+        const response = await fetch(url, {
+          headers: {
+            'apikey': SB_KEY,
+            'Authorization': `Bearer ${SB_KEY}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (!response.ok) {
+          console.error('API Error:', response.status, response.statusText);
+          setPropositions([]);
+          setLoading(false);
+          return;
+        }
+        
+        const data = await response.json();
+        
+        // Group by L3 categories
+        const grouped = {};
+        data.forEach(prop => {
+          const l3 = prop.level3 || 'Overview';
+          if (!grouped[l3]) {
+            grouped[l3] = {
+              id: prop.id,
+              name: l3,
+              level: 3,
+              propositions: []
+            };
+          }
+          grouped[l3].propositions.push(prop);
+        });
+        
+        // Format for component
+        const formatted = [{
+          id: 1,
+          name: 'Sexuality, Spouses & Ḥūr',
+          level: 2,
+          tertiary: Object.values(grouped)
+        }];
+        
+        setPropositions(formatted);
+        setLoading(false);
+      } catch (err) {
+        console.error('Fetch error:', err);
+        setPropositions([]);
+        setLoading(false);
+      }
+    };
     
-    setPropositions(sampleData);
-    setLoading(false);
+    fetchPropsData();
   }, []);
 
   const fetchPropositions = async () => {
