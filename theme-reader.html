@@ -616,8 +616,9 @@ function ThemePropositionDrill() {
       const SB_URL = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
       const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
       
+      // Fetch L2 categories
       const response = await fetch(
-        `${SB_URL}/rest/v1/proposition_hierarchies?level=eq.2&select=id,name,level,parent_id,proposition_hierarchies!parent_id(id,name,level,hadith_propositions(id,name,source_status,hadith_reference,hadith_grade,quranic_base,scholarly_note,warning,confidence_score))`,
+        `${SB_URL}/rest/v1/proposition_hierarchies?level2=not.is.null&select=id,level1,level2,level3,level4,hadith_propositions(id,name,source_status,hadith_reference,hadith_grade,quranic_base,scholarly_note,warning,confidence_score)`,
         {
           headers: {
             'apikey': SB_KEY,
@@ -627,20 +628,31 @@ function ThemePropositionDrill() {
         }
       );
       
-      if (!response.ok) throw new Error('API error: ' + response.status);
+      if (!response.ok) throw new Error('API error: ' + response.status + ' ' + response.statusText);
       const data = await response.json();
       
-      const hierarchyWithPropositions = (data || []).map((l2Category) => ({
-        id: l2Category.id,
-        name: l2Category.name,
+      // Group by L2 for drill-down structure
+      const grouped = {};
+      (data || []).forEach(row => {
+        if (!grouped[row.level2]) {
+          grouped[row.level2] = { name: row.level2, propositions: [] };
+        }
+        if (row.hadith_propositions) {
+          grouped[row.level2].propositions.push(...row.hadith_propositions);
+        }
+      });
+      
+      const hierarchyWithPropositions = Object.entries(grouped).map(([name, group], idx) => ({
+        id: idx + 1,
+        name: name,
         level: 2,
-        tertiary_count: (l2Category['proposition_hierarchies!parent_id'] || []).length,
-        tertiary: (l2Category['proposition_hierarchies!parent_id'] || []).map((l3Category) => ({
-          id: l3Category.id,
-          name: l3Category.name,
+        tertiary_count: 1,
+        tertiary: [{
+          id: idx + 100,
+          name: name,
           level: 3,
-          proposition_count: (l3Category.hadith_propositions || []).length,
-          propositions: (l3Category.hadith_propositions || []).map((prop) => ({
+          proposition_count: group.propositions.length,
+          propositions: group.propositions.map((prop) => ({
             id: prop.id,
             name: prop.name,
             source_status: prop.source_status || 'inferred_interpretation',
@@ -651,7 +663,7 @@ function ThemePropositionDrill() {
             warning: prop.warning,
             confidence: prop.confidence_score || 0.75
           }))
-        }))
+        }]
       }));
       
       setPropositions(hierarchyWithPropositions);
@@ -659,7 +671,7 @@ function ThemePropositionDrill() {
     } catch (error) {
       console.error('Error fetching propositions:', error);
       document.getElementById('proposition-drill-root').innerHTML = 
-        '<div style="color:#ef4444;padding:20px;">Failed to load propositions: ' + error.message + '</div>';
+        '<div style="color:#ef4444;padding:20px;">Error: ' + error.message + '</div>';
       setLoading(false);
     }
   };
