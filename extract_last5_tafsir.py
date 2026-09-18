@@ -56,8 +56,8 @@ def voice_row(pid, scholar, name, position):
         "saadi": "al-Saʿdī",
         "ibn_abbas": "Ibn ʿAbbās",
     }
-    # pvc_name_required_check requires a name for an exegete_own_view row.
-    voice_name = own_names.get(scholar) if own else name
+    # Existing valid rows use a null name for exegete_own_view; named earlier voices carry the name.
+    voice_name = None if own else name
     return {"proposition_id": pid, "reporting_work_id": WORK_ID[scholar],
             "originating_voice_type": voice, "originating_voice_name": voice_name}
 
