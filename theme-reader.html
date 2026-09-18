@@ -316,6 +316,12 @@ async function loadVerses() {
     renderVerses();
     renderComparisons();
     renderHadiths();
+
+    // Keep deep-link/swipe navigation constrained to verses that actually
+    // belong to this theme. This also removes stale/invalid sura+aya params.
+    if (window.VerseSwipeNav && typeof window.VerseSwipeNav.refresh === 'function') {
+      window.VerseSwipeNav.refresh();
+    }
   } catch (err) {
     console.error('Error loading verses:', err);
     document.getElementById('verses-container').innerHTML = `<div style="padding:20px;color:#C0392B;">Error loading verses. Check console.</div>`;
@@ -343,7 +349,7 @@ function renderVerses() {
       <div class="sura-header">Surah ${sura}</div>`;
     
     verses.forEach(v => {
-      html += `<div class="verse-card">
+      html += `<div class="verse-card" data-verse="${v.sura}:${v.aya}">
         <div class="verse-num">${v.sura}:${v.aya}</div>`;
       
       if (activeLangs.arabic) {
