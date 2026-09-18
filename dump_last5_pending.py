@@ -36,8 +36,15 @@ pc=Counter(r["tafsir_entry_id"] for r in props if r.get("tafsir_entry_id"))
 group_rows=[]
 for (s,sch,aya),items in sorted(groups.items()):
     primary=next((x for x in items if x["language"]=="ar"),items[0])
-    group_rows.append({"sura":s,"aya":aya,"scholar":sch,"primary_entry_id":primary["id"],"proposition_count":pc.get(primary["id"],0)})
+    distinct_texts=[]
+    seen_texts=set()
+    for item in items:
+        txt=(item.get("content") or "").strip()
+        if txt and txt not in seen_texts:
+            seen_texts.add(txt); distinct_texts.append(txt)
+    group_rows.append({"sura":s,"aya":aya,"scholar":sch,"primary_entry_id":primary["id"],"proposition_count":pc.get(primary["id"],0),"primary_chars":len((primary.get("content") or "").strip()),"total_distinct_chars":sum(map(len,distinct_texts))})
 dist=Counter(x["proposition_count"] for x in group_rows)
-audit={"groups":len(group_rows),"distribution":dict(sorted(dist.items())),"zero":[x for x in group_rows if x["proposition_count"]==0],"one":[x for x in group_rows if x["proposition_count"]==1],"two":[x for x in group_rows if x["proposition_count"]==2]}
+audit={"groups":len(group_rows),"distribution":dict(sorted(dist.items())),"zero":[x for x in group_rows if x["proposition_count"]==0],"one":[x for x in group_rows if x["proposition_count"]==1],"two":[x for x in group_rows if x["proposition_count"]==2],"suspicious_one":[x for x in group_rows if x["proposition_count"]==1 and x["total_distinct_chars"]>=800]}
 Path("last5-coverage-audit.json").write_text(json.dumps(audit,ensure_ascii=False,indent=2),encoding="utf-8")
-print("COVERAGE_AUDIT="+json.dumps({"groups":audit["groups"],"distribution":audit["distribution"],"zero":len(audit["zero"]),"one":len(audit["one"]),"two":len(audit["two"])},ensure_ascii=False))
+by_scholar=Counter(x["scholar"] for x in audit["suspicious_one"])
+print("COVERAGE_AUDIT="+json.dumps({"groups":audit["groups"],"distribution":audit["distribution"],"zero":len(audit["zero"]),"one":len(audit["one"]),"two":len(audit["two"]),"suspicious_one":len(audit["suspicious_one"]),"suspicious_by_scholar":dict(by_scholar)},ensure_ascii=False))
