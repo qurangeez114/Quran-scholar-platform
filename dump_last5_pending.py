@@ -31,8 +31,12 @@ voice_rows=get("proposition_voice_chain",{"select":"*","order":"id.desc","limit"
 print("VOICE_SAMPLE="+json.dumps(voice_rows,ensure_ascii=False))
 
 from collections import Counter
-props=get("propositions",{"select":"tafsir_entry_id,extracted_by","extracted_by":"like.work-last5-v1%","limit":"10000"})
+props=get("propositions",{"select":"id,tafsir_entry_id,extracted_by,statement_en,speaker_name,mufassir_own_position","extracted_by":"like.work-last5-v1%","limit":"10000"})
 pc=Counter(r["tafsir_entry_id"] for r in props if r.get("tafsir_entry_id"))
+prop_by_eid={}
+for r in props:
+    if r.get("tafsir_entry_id"):
+        prop_by_eid.setdefault(r["tafsir_entry_id"],[]).append(r)
 group_rows=[]
 for (s,sch,aya),items in sorted(groups.items()):
     primary=next((x for x in items if x["language"]=="ar"),items[0])
@@ -54,6 +58,6 @@ sus_sources=[]
 for (s,sch,aya),items in sorted(groups.items()):
     primary=next((x for x in items if x["language"]=="ar"),items[0])
     if primary["id"] not in sus_ids: continue
-    sus_sources.append({"sura":s,"aya":aya,"scholar":sch,"primary_entry_id":primary["id"],"proposition_count":pc.get(primary["id"],0),"texts":[{"id":x["id"],"language":x["language"],"content":x["content"]} for x in items]})
+    sus_sources.append({"sura":s,"aya":aya,"scholar":sch,"primary_entry_id":primary["id"],"proposition_count":pc.get(primary["id"],0),"existing_propositions":prop_by_eid.get(primary["id"],[]),"texts":[{"id":x["id"],"language":x["language"],"content":x["content"]} for x in items]})
 Path("suspicious-last5-sources.json").write_text(json.dumps(sus_sources,ensure_ascii=False,indent=2),encoding="utf-8")
 print("SUSPICIOUS_SOURCE_DUMP="+str(len(sus_sources)))
