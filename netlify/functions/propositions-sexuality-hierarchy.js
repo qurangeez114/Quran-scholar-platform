@@ -1,8 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
-  process.env.VITE_SUPABASE_URL || 'https://ylosytbxpzxzwfzjpaej.supabase.co',
-  process.env.VITE_SUPABASE_ANON_KEY || ''
+  'https://ylosytbxpzxzwfzjpaej.supabase.co',
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs'
 );
 
 export default async (req, context) => {
