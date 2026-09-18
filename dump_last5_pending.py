@@ -26,3 +26,6 @@ from pathlib import Path
 Path("pending-last5.json").write_text(json.dumps(pending,ensure_ascii=False,indent=2),encoding="utf-8")
 print("PENDING_COUNT="+str(len(pending)))
 print("WROTE=pending-last5.json")
+
+voice_rows=get("proposition_voice_chain",{"select":"*","order":"id.desc","limit":"20"})
+print("VOICE_SAMPLE="+json.dumps(voice_rows,ensure_ascii=False))
