@@ -20,7 +20,7 @@ for r in rows:
 pending=[]
 for (s,sch,aya),items in sorted(groups.items()):
     primary=next((x for x in items if x["language"]=="ar"),items[0])
-    if primary["id"] in done: continue
+    if any(x["id"] in done for x in items): continue
     pending.append({"sura":s,"aya":aya,"scholar":sch,"primary_entry_id":primary["id"],"texts":[{"id":x["id"],"language":x["language"],"content":x["content"]} for x in items]})
 from pathlib import Path
 Path("pending-last5.json").write_text(json.dumps(pending,ensure_ascii=False,indent=2),encoding="utf-8")
@@ -46,7 +46,7 @@ for (s,sch,aya),items in sorted(groups.items()):
         txt=(item.get("content") or "").strip()
         if txt and txt not in seen_texts:
             seen_texts.add(txt); distinct_texts.append(txt)
-    group_rows.append({"sura":s,"aya":aya,"scholar":sch,"primary_entry_id":primary["id"],"proposition_count":pc.get(primary["id"],0),"primary_chars":len((primary.get("content") or "").strip()),"total_distinct_chars":sum(map(len,distinct_texts))})
+    group_rows.append({"sura":s,"aya":aya,"scholar":sch,"primary_entry_id":primary["id"],"proposition_count":len({p["id"] for x in items for p in prop_by_eid.get(x["id"],[])}),"primary_chars":len((primary.get("content") or "").strip()),"total_distinct_chars":sum(map(len,distinct_texts))})
 dist=Counter(x["proposition_count"] for x in group_rows)
 audit={"groups":len(group_rows),"distribution":dict(sorted(dist.items())),"zero":[x for x in group_rows if x["proposition_count"]==0],"one":[x for x in group_rows if x["proposition_count"]==1],"two":[x for x in group_rows if x["proposition_count"]==2],"suspicious_one":[x for x in group_rows if x["proposition_count"]==1 and x["total_distinct_chars"]>=800]}
 Path("last5-coverage-audit.json").write_text(json.dumps(audit,ensure_ascii=False,indent=2),encoding="utf-8")
@@ -58,7 +58,7 @@ sus_sources=[]
 for (s,sch,aya),items in sorted(groups.items()):
     primary=next((x for x in items if x["language"]=="ar"),items[0])
     if primary["id"] not in sus_ids: continue
-    sus_sources.append({"sura":s,"aya":aya,"scholar":sch,"primary_entry_id":primary["id"],"proposition_count":pc.get(primary["id"],0),"existing_propositions":prop_by_eid.get(primary["id"],[]),"texts":[{"id":x["id"],"language":x["language"],"content":x["content"]} for x in items]})
+    sus_sources.append({"sura":s,"aya":aya,"scholar":sch,"primary_entry_id":primary["id"],"proposition_count":len({p["id"] for x in items for p in prop_by_eid.get(x["id"],[])}),"existing_propositions":[p for x in items for p in prop_by_eid.get(x["id"],[])],"texts":[{"id":x["id"],"language":x["language"],"content":x["content"]} for x in items]})
 Path("suspicious-last5-sources.json").write_text(json.dumps(sus_sources,ensure_ascii=False,indent=2),encoding="utf-8")
 print("SUSPICIOUS_SOURCE_DUMP="+str(len(sus_sources)))
 
