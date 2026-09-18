@@ -48,3 +48,12 @@ audit={"groups":len(group_rows),"distribution":dict(sorted(dist.items())),"zero"
 Path("last5-coverage-audit.json").write_text(json.dumps(audit,ensure_ascii=False,indent=2),encoding="utf-8")
 by_scholar=Counter(x["scholar"] for x in audit["suspicious_one"])
 print("COVERAGE_AUDIT="+json.dumps({"groups":audit["groups"],"distribution":audit["distribution"],"zero":len(audit["zero"]),"one":len(audit["one"]),"two":len(audit["two"]),"suspicious_one":len(audit["suspicious_one"]),"suspicious_by_scholar":dict(by_scholar)},ensure_ascii=False))
+
+sus_ids={x["primary_entry_id"] for x in audit["suspicious_one"]}
+sus_sources=[]
+for (s,sch,aya),items in sorted(groups.items()):
+    primary=next((x for x in items if x["language"]=="ar"),items[0])
+    if primary["id"] not in sus_ids: continue
+    sus_sources.append({"sura":s,"aya":aya,"scholar":sch,"primary_entry_id":primary["id"],"proposition_count":pc.get(primary["id"],0),"texts":[{"id":x["id"],"language":x["language"],"content":x["content"]} for x in items]})
+Path("suspicious-last5-sources.json").write_text(json.dumps(sus_sources,ensure_ascii=False,indent=2),encoding="utf-8")
+print("SUSPICIOUS_SOURCE_DUMP="+str(len(sus_sources)))
