@@ -24,27 +24,82 @@
     return VSN.surahLengths[sura] || 7;
   }
   
-  // Navigate to verse
+  function isThemeContext() {
+    return new URLSearchParams(window.location.search).has('theme');
+  }
+
+  function getThemeVerseRefs() {
+    const seen = new Set();
+    return Array.from(document.querySelectorAll('[data-verse]'))
+      .map(el => el.getAttribute('data-verse'))
+      .filter(ref => {
+        if (!/^\\d+:\\d+$/.test(ref || '') || seen.has(ref)) return false;
+        seen.add(ref);
+        return true;
+      });
+  }
+
+  function replaceVerseParams(params) {
+    const query = params.toString();
+    const url = window.location.pathname + (query ? '?' + query : '') + window.location.hash;
+    window.history.replaceState(null, '', url);
+  }
+
+  // Navigate to verse. On theme pages, never leave the theme's assigned verse set.
   function goToVerse(sura, aya) {
     const max = getMaxAya(sura);
     aya = Math.max(1, Math.min(aya, max));
+    const params = new URLSearchParams(window.location.search);
+    const themeMode = params.has('theme');
     
     // Scroll to verse in current page (if displayed)
     const verseEl = document.querySelector(`[data-verse="${sura}:${aya}"]`);
     if (verseEl) {
+      VSN.currentSura = sura;
+      VSN.currentAya = aya;
       verseEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+      if (themeMode) {
+        params.set('sura', sura);
+        params.set('aya', aya);
+        replaceVerseParams(params);
+      }
       return;
     }
+
+    // A theme deep-link must never manufacture a verse that is outside
+    // the theme just because it is numerically adjacent in the Qur'an.
+    if (themeMode) return;
     
-    // Otherwise reload with new verse (for theme pages, etc.)
-    const params = new URLSearchParams(window.location.search);
     params.set('sura', sura);
     params.set('aya', aya);
     window.location.search = params.toString();
   }
   
-  // Navigate relative to current position
+  // Navigate relative to current position.
+  // Theme pages move through the displayed/assigned theme verses only.
   function navigate(delta) {
+    if (isThemeContext()) {
+      const refs = getThemeVerseRefs();
+      if (!refs.length) return;
+
+      const currentRef = VSN.currentSura && VSN.currentAya
+        ? `${VSN.currentSura}:${VSN.currentAya}`
+        : '';
+      let index = refs.indexOf(currentRef);
+
+      // If the URL carried a stale/non-theme verse, start from the nearest
+      // boundary rather than stepping numerically outside the theme.
+      if (index < 0) index = delta > 0 ? -1 : refs.length;
+
+      const nextIndex = index + delta;
+      if (nextIndex < 0 || nextIndex >= refs.length) return;
+
+      const [sura, aya] = refs[nextIndex].split(':').map(Number);
+      goToVerse(sura, aya);
+      return;
+    }
+
     if (!VSN.currentSura || !VSN.currentAya) return;
     let newAya = VSN.currentAya + delta;
     
@@ -64,6 +119,39 @@
     }
     
     goToVerse(VSN.currentSura, newAya);
+  }
+
+  function refreshThemePosition() {
+    if (!isThemeContext()) return;
+
+    const refs = getThemeVerseRefs();
+    if (!refs.length) return;
+
+    const params = new URLSearchParams(window.location.search);
+    const sura = parseInt(params.get('sura'));
+    const aya = parseInt(params.get('aya'));
+    const requestedRef = Number.isFinite(sura) && Number.isFinite(aya)
+      ? `${sura}:${aya}`
+      : '';
+
+    if (requestedRef && refs.includes(requestedRef)) {
+      VSN.currentSura = sura;
+      VSN.currentAya = aya;
+      const el = document.querySelector(`[data-verse="${requestedRef}"]`);
+      if (el) el.scrollIntoView({ block: 'center' });
+      return;
+    }
+
+    // Invalid/stale deep-link: keep the theme, discard the misleading verse.
+    if (params.has('sura') || params.has('aya')) {
+      params.delete('sura');
+      params.delete('aya');
+      replaceVerseParams(params);
+    }
+
+    const [firstSura, firstAya] = refs[0].split(':').map(Number);
+    VSN.currentSura = firstSura;
+    VSN.currentAya = firstAya;
   }
   
   // Fix modal z-index issues
@@ -189,7 +277,8 @@
       watchModals();
     },
     navigate: navigate,
-    goToVerse: goToVerse
+    goToVerse: goToVerse,
+    refresh: refreshThemePosition
   };
   
   // Auto-init on load
