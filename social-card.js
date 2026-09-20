@@ -21,6 +21,14 @@
 
   var SC_FORMATS = { tiktok: { w: 1080, h: 1920 }, square: { w: 1080, h: 1080 }, story: { w: 1080, h: 1920 }, wide: { w: 1200, h: 675 } };
 
+  /* A design is part of the exported image—not merely a modal color. */
+  var SC_STYLES = {
+    midnight: { label: 'Midnight Gold', a: '#061229', b: '#12356E', c: '#0B2149', primary: '#FFD640', text: '#FFE97A', border: 'rgba(255,214,64,0.90)', glow: 'rgba(255,214,64,0.20)', motif: 'rgba(255,214,64,0.12)' },
+    emerald:  { label: 'Emerald Garden', a: '#062B27', b: '#0B5A4C', c: '#123B31', primary: '#E9CB70', text: '#FFF0B4', border: 'rgba(233,203,112,0.92)', glow: 'rgba(233,203,112,0.18)', motif: 'rgba(233,203,112,0.12)' },
+    parchment:{ label: 'Classic Parchment', a: '#F7E9C8', b: '#E6C982', c: '#FFF8E8', primary: '#77551E', text: '#34250E', border: 'rgba(119,85,30,0.90)', glow: 'rgba(173,123,39,0.16)', motif: 'rgba(119,85,30,0.11)', light: true },
+    rose:     { label: 'Rose & Night', a: '#210D25', b: '#5B1B4A', c: '#172346', primary: '#F3C873', text: '#FFF0CE', border: 'rgba(243,200,115,0.92)', glow: 'rgba(243,200,115,0.19)', motif: 'rgba(243,200,115,0.12)' }
+  };
+
   // label + which ayas column (or verse_translations lang code) holds the text
   var SC_LANGS = {
     arabic:   { label: 'Arabic',          field: 'arabic' },
@@ -44,7 +52,7 @@
   var SC_VT_CODES = Object.keys(SC_LANGS).filter(function (k) { return SC_LANGS[k].vt; })
     .map(function (k) { return SC_LANGS[k].vt; });
 
-  var scSura = null, scAya = null, scFormat = 'tiktok', scVerse = null, scSel = null;
+  var scSura = null, scAya = null, scFormat = 'tiktok', scStyle = 'midnight', scVerse = null, scSel = null;
   var scVerseList = null; // List of related verses (cross-references)
   var scListIndex = 0;   // Current position in cross-reference list
   
@@ -89,6 +97,14 @@
       + '<button id="scFmtStory" onclick="scSetFormat(\'story\')" style="flex:1;padding:8px;border:1.5px solid #E8C97B;border-radius:8px;background:#fff;color:#1a1a1a;font-size:12px;font-weight:700;cursor:pointer;">📱 Story<br><span style="font-weight:400;font-size:10px;">IG/Reels (centered)</span></button>'
       + '<button id="scFmtWide" onclick="scSetFormat(\'wide\')" style="flex:1;padding:8px;border:1.5px solid #E8C97B;border-radius:8px;background:#fff;color:#1a1a1a;font-size:12px;font-weight:700;cursor:pointer;">▭ Wide<br><span style="font-weight:400;font-size:10px;">X/Twitter card</span></button>'
       + '</div>'
+      + '<div style="margin:2px 0 12px;">'
+      + '<div style="font-size:11px;font-weight:700;color:#B8902A;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Card design</div>'
+      + '<div id="scStyles" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">'
+      + '<button id="scStyleMidnight" onclick="scSetStyle(\'midnight\')" style="padding:7px;border:1.5px solid #C9A84C;border-radius:8px;background:#0B2149;color:#FFE97A;font-size:11px;font-weight:700;cursor:pointer;">✦ Midnight Gold</button>'
+      + '<button id="scStyleEmerald" onclick="scSetStyle(\'emerald\')" style="padding:7px;border:1.5px solid #D4C9A8;border-radius:8px;background:#0B5A4C;color:#FFF0B4;font-size:11px;font-weight:700;cursor:pointer;">✦ Emerald Garden</button>'
+      + '<button id="scStyleParchment" onclick="scSetStyle(\'parchment\')" style="padding:7px;border:1.5px solid #D4C9A8;border-radius:8px;background:#F7E9C8;color:#34250E;font-size:11px;font-weight:700;cursor:pointer;">✦ Classic Parchment</button>'
+      + '<button id="scStyleRose" onclick="scSetStyle(\'rose\')" style="padding:7px;border:1.5px solid #D4C9A8;border-radius:8px;background:#5B1B4A;color:#FFF0CE;font-size:11px;font-weight:700;cursor:pointer;">✦ Rose & Night</button>'
+      + '</div></div>'
       + '<div id="scLangsWrap" style="margin-bottom:12px;display:none;">'
       + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">'
       + '<div style="font-size:11px;font-weight:700;color:#B8902A;text-transform:uppercase;letter-spacing:0.5px;">Languages on card</div>'
@@ -172,6 +188,17 @@
     try { scDraw(); } catch (e) { console.error('social card draw failed:', e); }
   };
 
+  window.scSetStyle = function (style) {
+    if (!SC_STYLES[style]) return;
+    scStyle = style;
+    Object.keys(SC_STYLES).forEach(function (key) {
+      var b = document.getElementById('scStyle' + key.charAt(0).toUpperCase() + key.slice(1));
+      if (!b) return;
+      b.style.boxShadow = key === style ? '0 0 0 2px #C9A84C inset' : 'none';
+    });
+    try { scDraw(); } catch (e) { console.error('social card draw failed:', e); }
+  };
+
   window.scSetFormat = function (fmt) {
     scFormat = fmt;
     [['tiktok', 'scFmtTiktok'], ['square', 'scFmtSquare'], ['story', 'scFmtStory'], ['wide', 'scFmtWide']].forEach(function (p) {
@@ -183,6 +210,32 @@
     try { scDraw(); } catch (e) { console.error('social card draw failed:', e); }
   };
 
+  function scDrawMotif(ctx, W, H, theme) {
+    var step = Math.max(75, Math.round(W * 0.12));
+    ctx.save();
+    ctx.strokeStyle = theme.motif;
+    ctx.lineWidth = Math.max(1, W * 0.0015);
+    for (var x = step / 2; x < W; x += step) {
+      for (var y = step / 2; y < H; y += step) {
+        ctx.beginPath();
+        for (var i = 0; i < 8; i++) {
+          var a = -Math.PI / 2 + i * Math.PI / 4, r = step * (i % 2 ? 0.24 : 0.42);
+          var px = x + Math.cos(a) * r, py = y + Math.sin(a) * r;
+          if (!i) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        }
+        ctx.closePath(); ctx.stroke();
+      }
+    }
+    /* A quiet mihrab/arch gives every vertical card a deliberate visual centre. */
+    if (H > W) {
+      ctx.beginPath();
+      ctx.arc(W / 2, H * 0.38, W * 0.31, Math.PI, 0);
+      ctx.lineTo(W * 0.81, H * 0.72); ctx.lineTo(W * 0.19, H * 0.72); ctx.closePath();
+      ctx.strokeStyle = theme.motif; ctx.lineWidth = Math.max(2, W * 0.003); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   function scDraw() {
     if (!scVerse) return;
     var fmt = SC_FORMATS[scFormat];
@@ -192,24 +245,26 @@
     var W = fmt.w, H = fmt.h;
     var pad = W * 0.085;
     var contentWidth = W - pad * 2;
+    var theme = SC_STYLES[scStyle] || SC_STYLES.midnight;
 
     var bg = ctx.createLinearGradient(0, 0, W, H);
-    bg.addColorStop(0, '#0B2149'); bg.addColorStop(0.5, '#12356E'); bg.addColorStop(1, '#061229');
+    bg.addColorStop(0, theme.c); bg.addColorStop(0.5, theme.b); bg.addColorStop(1, theme.a);
     ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
 
     var glow = ctx.createRadialGradient(W / 2, H * 0.44, 0, W / 2, H * 0.44, Math.max(W, H) * 0.62);
-    glow.addColorStop(0, 'rgba(255,214,64,0.20)');
-    glow.addColorStop(0.45, 'rgba(255,214,64,0.06)');
+    glow.addColorStop(0, theme.glow);
+    glow.addColorStop(0.45, theme.motif);
     glow.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = glow; ctx.fillRect(0, 0, W, H);
 
     var vig = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.28, W / 2, H / 2, Math.max(W, H) * 0.78);
     vig.addColorStop(0, 'rgba(4,12,28,0)'); vig.addColorStop(1, 'rgba(4,12,28,0.62)');
     ctx.fillStyle = vig; ctx.fillRect(0, 0, W, H);
+    scDrawMotif(ctx, W, H, theme);
 
-    ctx.strokeStyle = 'rgba(255,214,64,0.90)'; ctx.lineWidth = Math.max(2, W * 0.0045);
+    ctx.strokeStyle = theme.border; ctx.lineWidth = Math.max(2, W * 0.0045);
     ctx.strokeRect(pad * 0.42, pad * 0.42, W - pad * 0.84, H - pad * 0.84);
-    ctx.strokeStyle = 'rgba(255,214,64,0.32)'; ctx.lineWidth = Math.max(1, W * 0.0016);
+    ctx.strokeStyle = theme.motif; ctx.lineWidth = Math.max(1, W * 0.0016);
     ctx.strokeRect(pad * 0.64, pad * 0.64, W - pad * 1.28, H - pad * 1.28);
 
     // Draw toolbar state indicator (language + study mode)
@@ -278,7 +333,7 @@
 
     layout.blocks.forEach(function (b) {
       if (b.type === 'title') {
-        ctx.fillStyle = '#FFD640';
+        ctx.fillStyle = theme.primary;
         ctx.font = '700 ' + b.size + 'px Georgia, serif';
         ctx.letterSpacing = Math.round(W * 0.004) + 'px';
         ctx.fillText("QUR'AN " + scSura + ':' + scAya, W / 2, cursor + b.size);
@@ -287,7 +342,7 @@
         var ruleW = Math.min(contentWidth * 0.34, W * 0.30);
         var rg = ctx.createLinearGradient(W / 2 - ruleW / 2, 0, W / 2 + ruleW / 2, 0);
         rg.addColorStop(0, 'rgba(255,214,64,0)');
-        rg.addColorStop(0.5, 'rgba(255,214,64,0.90)');
+        rg.addColorStop(0.5, theme.border);
         rg.addColorStop(1, 'rgba(255,214,64,0)');
         ctx.fillStyle = rg;
         ctx.fillRect(W / 2 - ruleW / 2, ruleY, ruleW, Math.max(1, W * 0.0018));
@@ -296,8 +351,8 @@
       } else if (b.type === 'arabic') {
         ctx.direction = 'rtl';
         ctx.font = b.size + 'px "Times New Roman", serif';
-        ctx.fillStyle = '#FFE45C';
-        ctx.shadowColor = 'rgba(255,214,64,0.50)';
+        ctx.fillStyle = theme.primary;
+        ctx.shadowColor = theme.glow;
         ctx.shadowBlur = W * 0.022;
         b.lines.forEach(function (line) { ctx.fillText(line, W / 2, cursor + b.size * 0.92); cursor += b.lh; });
         ctx.shadowBlur = 0; ctx.shadowColor = 'transparent';
@@ -305,7 +360,7 @@
         cursor += b.gapAfter;
 
       } else {
-        ctx.fillStyle = 'rgba(255,214,64,0.95)';
+        ctx.fillStyle = theme.primary;
         ctx.font = '700 ' + b.labelSize + 'px Georgia, serif';
         ctx.letterSpacing = Math.round(W * 0.0045) + 'px';
         ctx.fillText(SC_LANGS[b.key].label.toUpperCase(), W / 2, cursor + b.labelSize);
@@ -314,7 +369,7 @@
 
         ctx.direction = (b.key === 'urdu') ? 'rtl' : 'ltr';
         ctx.font = (b.key === 'english' ? 'italic ' : '') + b.size + 'px Georgia, serif';
-        ctx.fillStyle = '#FFE97A';
+        ctx.fillStyle = theme.text;
         b.lines.forEach(function (line) { ctx.fillText(line, W / 2, cursor + b.size * 0.9); cursor += b.lh; });
         ctx.direction = 'ltr';
         cursor += b.gapAfter;
@@ -322,7 +377,7 @@
     });
 
     ctx.font = '700 ' + Math.round(W * 0.021) + 'px Georgia, serif';
-    ctx.fillStyle = 'rgba(255,214,64,0.80)';
+    ctx.fillStyle = theme.primary;
     ctx.letterSpacing = Math.round(W * 0.005) + 'px';
     ctx.fillText('quranhikma.com', W / 2, (scFormat === 'tiktok') ? H * 0.70 : H - pad * 0.72);
     ctx.letterSpacing = '0px';
@@ -377,7 +432,7 @@
 
   window.openSocialCard = async function (sura, aya, verseList, listIndex) {
     scEnsureModal();
-    scSura = sura; scAya = aya; scFormat = 'square'; scVerse = null; scSel = null;
+    scSura = sura; scAya = aya; scFormat = 'square'; scStyle = 'midnight'; scVerse = null; scSel = null;
     scVerseList = verseList || null;  // Store cross-reference list if provided
     scListIndex = (typeof listIndex === 'number') ? listIndex : 0;
     
@@ -396,6 +451,7 @@
     document.getElementById('scCanvas').style.display = 'none';
     document.getElementById('scLangsWrap').style.display = 'none';
     window.scSetFormat('square');
+    window.scSetStyle('midnight');
     
     // Attach keyboard listener when modal opens
     if (!window.scKeyListenerAttached) {
