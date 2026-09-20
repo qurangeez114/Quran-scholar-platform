@@ -113,9 +113,6 @@ body { font-family: 'Georgia', serif; background: #FDFAF4; color: #1A1A1A; }
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Ethiopic:wght@400;600;700&display=swap" rel="stylesheet">
 
 <!-- React & Babel for Proposition Drill Component -->
-<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
 <script src="verse-toolbar.js"></script>
 <!-- Supabase Client for Propositions API -->
@@ -337,6 +334,7 @@ async function loadVerses() {
     renderComparisons();
     renderHadiths();
     renderParallels();
+    renderPropositions();
 
     // Keep deep-link/swipe navigation constrained to verses that actually
     // belong to this theme. This also removes stale/invalid sura+aya params.
@@ -473,6 +471,69 @@ async function renderComparisons() {
 // HADITH LOADING & DISPLAY
 // ============================================================================
 
+
+
+async function renderPropositions() {
+  const root = document.getElementById('proposition-drill-root');
+  if (!root) return;
+  try {
+    const res = await fetch(
+      `${SB_URL}/rest/v1/proposition_hierarchies?level2=eq.${encodeURIComponent('Sexuality, Spouses & Ḥūr')}` +
+      `&select=id,level2,level3,level4,description,quranic_anchors,scholarly_debate_notes&order=id.asc`,
+      { headers: HDR }
+    );
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (!data.length) {
+      root.innerHTML = '<div style="padding:20px;color:#888;">No propositions recorded for this theme yet.</div>';
+      return;
+    }
+
+    // Badge by the strongest signal available in the notes
+    function badgeFor(p) {
+      const t = ((p.scholarly_debate_notes || '') + ' ' + (p.level3 || '')).toLowerCase();
+      if (/fabricat|mawdu/.test(t))              return { e:'⛔', c:'#7f1d1d', l:'fabricated' };
+      if (/munkar/.test(t))                       return { e:'⚠️', c:'#b91c1c', l:'munkar' };
+      if (/\bda[ʿ\u02BF\']?if\b|weak/.test(t))    return { e:'⚠️', c:'#ef4444', l:'weak' };
+      if (/unestablish|mursal|athar|tābiʿī|tabii/.test(t)) return { e:'📜', c:'#a16207', l:'athar' };
+      if (/disput|differ|contradict|conflict/.test(t))     return { e:'⚖️', c:'#f59e0b', l:'disputed' };
+      if (/shiʿi|shii|imāmī|imami|al-kāfī|al-kafi/.test(t))return { e:'🔷', c:'#6366f1', l:'Shiʿi' };
+      if (/sahih|ṣaḥīḥ|hasan|explicit|qur/.test(t))        return { e:'✅', c:'#10b981', l:'explicit' };
+      return { e:'📖', c:'#3b82f6', l:'inferred' };
+    }
+
+    const groups = {};
+    data.forEach(p => { (groups[p.level3 || 'Overview'] ||= []).push(p); });
+
+    let html = '<h2>Sexuality, Spouses &amp; Ḥūr in Paradise</h2>';
+    html += `<p style="color:#666;font-size:0.9rem;margin:0 0 14px;">${data.length} propositions across Quranic verses, hadith, tafsīr and later scholarship. Graded by source status:</p>`;
+
+    Object.keys(groups).forEach((g, gi) => {
+      const items = groups[g];
+      const gid = 'pg-' + gi;
+      html += `<div class="level-2">
+        <div class="level-2-name" onclick="const b=document.getElementById('${gid}');b.style.display=b.style.display==='none'?'block':'none';this.querySelector('span').textContent=b.style.display==='none'?'▶':'▼';">
+          <span>▼</span> ${g} <span style="font-weight:500;color:#6b7280;font-size:.85rem;">(${items.length})</span>
+        </div>
+        <div id="${gid}">`;
+      items.forEach(p => {
+        const b = badgeFor(p);
+        const anchors = Array.isArray(p.quranic_anchors) ? p.quranic_anchors.filter(Boolean) : [];
+        html += `<div class="proposition-item" style="border-left-color:${b.c};">
+          <div><span class="status-badge" style="background:${b.c};">${b.e} ${b.l}</span><strong>${p.level4 || g}</strong></div>
+          ${p.description ? `<div style="margin-top:6px;font-size:.92rem;color:#374151;">${p.description}</div>` : ''}
+          ${anchors.length ? `<div style="margin-top:6px;font-size:.85rem;color:#8A6A18;">📌 Qur'an ${anchors.join(', ')}</div>` : ''}
+          ${p.scholarly_debate_notes ? `<div style="margin-top:6px;font-size:.85rem;color:#555;line-height:1.55;">💭 ${p.scholarly_debate_notes}</div>` : ''}
+        </div>`;
+      });
+      html += '</div></div>';
+    });
+    root.innerHTML = html;
+  } catch (err) {
+    console.error('Error loading propositions:', err);
+    root.innerHTML = '<div style="padding:20px;color:#C0392B;">Error loading propositions.</div>';
+  }
+}
 
 async function renderParallels() {
   const cont = document.getElementById('parallels-container');
@@ -693,344 +754,5 @@ Visit: https://quranhikma.com`);
 <script src="social-card.js" defer></script>
 
 <!-- Proposition Drill Component (inline) -->
-<script type="text/babel">
-const { useState, useEffect } = React;
-
-function StatusBadge({ status }) {
-  const badges = {
-    explicit_text: { emoji: '✅', label: 'Explicit Quranic Text', color: '#10b981' },
-    inferred_interpretation: { emoji: '📖', label: 'Inferred from Tafsir', color: '#3b82f6' },
-    disputed_interpretation: { emoji: '⚖️', label: 'Disputed', color: '#f59e0b' },
-    weak_report: { emoji: '⚠️', label: 'Weak Hadith (Daif)', color: '#ef4444' },
-    scholarly_consensus: { emoji: '🤝', label: 'Later Scholarship', color: '#6366f1' }
-  };
-  
-  const badge = badges[status] || badges.inferred_interpretation;
-  return (
-    <span
-      style={{
-        display: 'inline-block',
-        padding: '4px 8px',
-        borderRadius: '4px',
-        backgroundColor: badge.color,
-        color: '#fff',
-        fontSize: '0.85rem',
-        marginRight: '6px',
-        title: badge.label
-      }}
-    >
-      {badge.emoji}
-    </span>
-  );
-}
-
-function ThemePropositionDrill() {
-  const [propositions, setPropositions] = useState([]);
-  const [expandedL2, setExpandedL2] = useState(null);
-  const [expandedL3, setExpandedL3] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    // Fetch real data from Supabase REST API
-    const fetchPropsData = async () => {
-      try {
-        const SB_URL = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
-        const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
-        
-        // Fetch all propositions for level2 = 'Sexuality, Spouses & Ḥūr'
-        const url = `${SB_URL}/rest/v1/proposition_hierarchies?level2=eq.Sexuality, Spouses %26 Ḥūr&order=id.asc`;
-        
-        const response = await fetch(url, {
-          headers: {
-            'apikey': SB_KEY,
-            'Authorization': `Bearer ${SB_KEY}`,
-            'Content-Type': 'application/json'
-          }
-        });
-        
-        if (!response.ok) {
-          console.error('API Error:', response.status, response.statusText);
-          setPropositions([]);
-          setLoading(false);
-          return;
-        }
-        
-        const data = await response.json();
-        
-        // Group by L3 categories
-        const grouped = {};
-        data.forEach(prop => {
-          const l3 = prop.level3 || 'Overview';
-          if (!grouped[l3]) {
-            grouped[l3] = {
-              id: prop.id,
-              name: l3,
-              level: 3,
-              propositions: []
-            };
-          }
-          grouped[l3].propositions.push(prop);
-        });
-        
-        // Format for component
-        const formatted = [{
-          id: 1,
-          name: 'Sexuality, Spouses & Ḥūr',
-          level: 2,
-          tertiary: Object.values(grouped)
-        }];
-        
-        setPropositions(formatted);
-        setLoading(false);
-      } catch (err) {
-        console.error('Fetch error:', err);
-        setPropositions([]);
-        setLoading(false);
-      }
-    };
-    
-    fetchPropsData();
-  }, []);
-
-  const fetchPropositions = async () => {
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 5000);
-      
-      const SB_URL = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
-      const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
-      
-      // Use static test data if API fails
-      const testData = [
-        {
-          id: 1,
-          name: 'Sexuality, Spouses & Ḥūr',
-          level: 2,
-          tertiary_count: 1,
-          tertiary: [{
-            id: 100,
-            name: 'Sexuality, Spouses & Ḥūr',
-            level: 3,
-            proposition_count: 5,
-            propositions: [
-              {id:1,name:'Transformed Height (60 cubits)',source_status:'explicit_text',reference:'Ibn Majah 4325',hadith_grade:'sahih',quranic_base:'Q36:55-56',scholarly_note:'Classical scholars interpret as context for bodily transformation',confidence:0.85},
-              {id:2,name:'Sexual Capacity (strength of 100 men)',source_status:'explicit_text',reference:'Tirmidhi 2536',hadith_grade:'hasan',quranic_base:null,scholarly_note:'Metaphorical or literal capacity debate in tafsir',confidence:0.75},
-              {id:3,name:'Ḥūr Descriptions (pure companions)',source_status:'inferred_interpretation',reference:'Q36:55, Q44:54',hadith_grade:null,quranic_base:'Multiple verses',scholarly_note:'Classical mufassir interpretations',confidence:0.80},
-              {id:4,name:'Bodily Waste Elimination',source_status:'explicit_text',reference:'Muslim 2838, Tirmidhi 2536',hadith_grade:'sahih',quranic_base:'Q35:33',scholarly_note:'Interpreted as theological purity metaphor',confidence:0.90},
-              {id:5,name:'Virginity Restoration (weak tradition)',source_status:'weak_report',reference:'Tirmidhi 2550',hadith_grade:'daif',quranic_base:null,scholarly_note:'Daif tradition; not in Sahih collections',warning:'Weak hadith (daif); popular but unverified',confidence:0.40}
-            ]
-          }]
-        }
-      ];
-      
-      const propResp = await fetch(
-        `${SB_URL}/rest/v1/hadith_propositions?limit=100`,
-        { headers: { 'apikey': SB_KEY }, signal: controller.signal }
-      );
-      
-      clearTimeout(timeout);
-      
-      if (!propResp.ok) throw new Error('API error: ' + propResp.status);
-      const propData = await propResp.json();
-      
-      if (!Array.isArray(propData) || propData.length === 0) {
-        console.warn('No data from API, using test data');
-        setPropositions(testData);
-        setLoading(false);
-        return;
-      }
-      
-      const grouped = {};
-      const l2Name = 'Sexuality, Spouses & Ḥūr';
-      grouped[l2Name] = { propositions: propData };
-      
-      const result = Object.entries(grouped).map(([name, group], idx) => ({
-        id: idx + 1,
-        name: name,
-        level: 2,
-        tertiary_count: 1,
-        tertiary: [{
-          id: idx + 100,
-          name: name,
-          level: 3,
-          proposition_count: group.propositions.length,
-          propositions: group.propositions.map((p) => ({
-            id: p.id,
-            name: p.name || p.description || 'Untitled',
-            source_status: p.source_status || 'inferred_interpretation',
-            reference: p.hadith_reference,
-            hadith_grade: p.hadith_grade,
-            quranic_base: p.quranic_base,
-            scholarly_note: p.scholarly_note,
-            warning: p.warning,
-            confidence: p.confidence_score || 0.75
-          }))
-        }]
-      }));
-      
-      setPropositions(result);
-      setLoading(false);
-    } catch (error) {
-      console.error('Fetch error:', error);
-      const el = document.getElementById('proposition-drill-root');
-      if (el) el.innerHTML = '<div style="color:#ef4444;padding:20px;font-size:0.9rem;">Timeout or error loading data. Showing sample propositions...</div>';
-      // Show test data on timeout
-      setPropositions([{
-        id:1,name:'Sexuality, Spouses & Ḥūr',level:2,tertiary_count:1,tertiary:[{
-          id:100,name:'Sexuality, Spouses & Ḥūr',level:3,proposition_count:5,propositions:[
-            {id:1,name:'Transformed Height (60 cubits)',source_status:'explicit_text',reference:'Ibn Majah 4325',hadith_grade:'sahih',quranic_base:'Q36:55-56',scholarly_note:'Classical scholars interpret as context for bodily transformation',confidence:0.85},
-            {id:2,name:'Sexual Capacity (strength of 100 men)',source_status:'explicit_text',reference:'Tirmidhi 2536',hadith_grade:'hasan',quranic_base:null,scholarly_note:'Metaphorical or literal capacity debate',confidence:0.75},
-            {id:3,name:'Ḥūr Descriptions',source_status:'inferred_interpretation',reference:'Q36:55, Q44:54',hadith_grade:null,quranic_base:'Multiple verses',scholarly_note:'Classical mufassir interpretations',confidence:0.80},
-            {id:4,name:'Bodily Waste Elimination',source_status:'explicit_text',reference:'Muslim 2838',hadith_grade:'sahih',quranic_base:'Q35:33',scholarly_note:'Theological purity metaphor',confidence:0.90},
-            {id:5,name:'Virginity Restoration (weak)',source_status:'weak_report',reference:'Tirmidhi 2550',hadith_grade:'daif',quranic_base:null,scholarly_note:null,warning:'Weak hadith (daif)',confidence:0.40}
-          ]
-        }]
-      }]);
-      setLoading(false);
-    }
-  };
-
-  if (loading) return <div style={{ padding: '20px', color: '#999' }}>Loading proposition hierarchy...</div>;
-  if (propositions.length === 0) return <div style={{ padding: '20px', color: '#999' }}>No propositions found.</div>;
-
-  return (
-    <div style={{ fontFamily: 'system-ui, sans-serif', lineHeight: '1.6', color: '#1f2937' }}>
-      <h2 style={{ fontSize: '1.4rem', fontWeight: 'bold', marginBottom: '12px', color: '#111' }}>Sexuality, Spouses & Ḥūr in Paradise</h2>
-      <p style={{ color: '#666', marginBottom: '20px' }}>
-        Explore the hierarchical taxonomy with source authenticity tracking.
-      </p>
-
-      {propositions.map((level2) => (
-        <div key={level2.id} style={{ marginBottom: '16px', borderLeft: '3px solid #d4af37', paddingLeft: '16px' }}>
-          <div
-            onClick={() => setExpandedL2(expandedL2 === level2.id ? null : level2.id)}
-            style={{
-              cursor: 'pointer',
-              fontSize: '1.05rem',
-              fontWeight: 'bold',
-              color: '#1f2937',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              userSelect: 'none'
-            }}
-          >
-            <span>{expandedL2 === level2.id ? '▼' : '▶'}</span>
-            {level2.name}
-            <span style={{ fontSize: '0.85rem', color: '#999', marginLeft: 'auto' }}>
-              {level2.tertiary_count} subtopics
-            </span>
-          </div>
-
-          {expandedL2 === level2.id && level2.tertiary.map((level3) => (
-            <div key={level3.id} style={{ marginTop: '12px', marginLeft: '24px' }}>
-              <div
-                onClick={() => setExpandedL3(expandedL3 === level3.id ? null : level3.id)}
-                style={{
-                  cursor: 'pointer',
-                  fontSize: '0.95rem',
-                  fontWeight: '600',
-                  color: '#374151',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  userSelect: 'none'
-                }}
-              >
-                <span>{expandedL3 === level3.id ? '▼' : '▶'}</span>
-                {level3.name}
-                <span style={{ fontSize: '0.85rem', color: '#999', marginLeft: 'auto' }}>
-                  {level3.proposition_count} propositions
-                </span>
-              </div>
-
-              {expandedL3 === level3.id && (
-                <div style={{ marginTop: '12px', marginLeft: '36px' }}>
-                  {level3.propositions.map((prop) => (
-                    <div
-                      key={prop.id}
-                      style={{
-                        padding: '12px',
-                        marginBottom: '10px',
-                        backgroundColor: '#f9fafb',
-                        borderRadius: '6px',
-                        borderLeft: '3px solid #9ca3af'
-                      }}
-                    >
-                      <div style={{ marginBottom: '8px' }}>
-                        <StatusBadge status={prop.source_status} />
-                        <span style={{ fontSize: '0.95rem', fontWeight: '500', color: '#1f2937' }}>
-                          {prop.name}
-                        </span>
-                      </div>
-
-                      {prop.reference && (
-                        <div style={{ fontSize: '0.85rem', color: '#666', marginBottom: '6px' }}>
-                          <strong>Source:</strong> {prop.reference}
-                          {prop.hadith_grade && <span style={{ marginLeft: '8px', fontStyle: 'italic' }}>({prop.hadith_grade})</span>}
-                        </div>
-                      )}
-
-                      {prop.quranic_base && (
-                        <div style={{ fontSize: '0.85rem', color: '#666', marginBottom: '6px' }}>
-                          <strong>Quranic Base:</strong> {prop.quranic_base}
-                        </div>
-                      )}
-
-                      {prop.scholarly_note && (
-                        <div style={{ fontSize: '0.85rem', color: '#555', marginTop: '8px', fontStyle: 'italic' }}>
-                          💭 {prop.scholarly_note}
-                        </div>
-                      )}
-
-                      {prop.source_status === 'weak_report' && prop.warning && (
-                        <div
-                          style={{
-                            fontSize: '0.85rem',
-                            color: '#d97706',
-                            marginTop: '8px',
-                            padding: '6px',
-                            backgroundColor: '#fef3c7',
-                            borderRadius: '4px'
-                          }}
-                        >
-                          ⚠️ {prop.warning}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      ))}
-
-      <div style={{ marginTop: '40px', padding: '16px', backgroundColor: '#f0f9ff', borderRadius: '8px' }}>
-        <h3 style={{ fontSize: '1rem', fontWeight: 'bold', marginBottom: '12px' }}>Source Authenticity Legend</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '12px' }}>
-          <div><StatusBadge status="explicit_text" /> = Directly stated in Sahih hadith</div>
-          <div><StatusBadge status="inferred_interpretation" /> = Inferred by classical Tafsir scholars</div>
-          <div><StatusBadge status="disputed_interpretation" /> = Multiple scholarly interpretations</div>
-          <div><StatusBadge status="weak_report" /> = Daif (weak) hadith tradition</div>
-          <div><StatusBadge status="scholarly_consensus" /> = Later Islamic scholarship consensus</div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// Render component when tab is active
-document.addEventListener('DOMContentLoaded', () => {
-  const origSwitchTab = window.switchMainTab;
-  window.switchMainTab = function(tab, btn) {
-    origSwitchTab(tab, btn);
-    if (tab === 'propositions') {
-      const root = ReactDOM.createRoot(document.getElementById('proposition-drill-root'));
-      root.render(<ThemePropositionDrill />);
-    }
-  };
-});
-</script>
 </body>
 </html>
