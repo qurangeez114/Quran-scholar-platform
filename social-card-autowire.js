@@ -81,12 +81,33 @@
     return b;
   }
 
+  /* True if this verse already offers a social-card control, whether it came
+     from us, from the page's own toolbar (onclick=openSocialCard/…Main), or
+     from any other 📱 button. Checking only our own class produced duplicates
+     on pages that render their own button. */
+  function hasShareControl(el) {
+    if (el.querySelector('.sc-share-btn')) return true;
+    var nodes = el.querySelectorAll('button, a, [onclick]');
+    for (var i = 0; i < nodes.length; i++) {
+      var n = nodes[i];
+      var oc = n.getAttribute('onclick') || '';
+      if (/openSocialCard/.test(oc)) return true;
+      if ((n.textContent || '').indexOf('\uD83D\uDCF1') !== -1) return true;
+    }
+    return false;
+  }
+
   function wire(el) {
     if (!el || el.getAttribute(MARK)) return;
-    if (el.querySelector('.sc-share-btn')) { el.setAttribute(MARK, '1'); return; }
+    if (hasShareControl(el)) { el.setAttribute(MARK, '1'); return; }
 
     var ref = refFor(el);
     if (!ref || ref.sura < 1 || ref.sura > 114) return;
+
+    // Selectors can match both a card and something inside it; wire the outer
+    // one only, or the same verse gets two bars.
+    if (el.parentElement && el.parentElement.closest &&
+        el.parentElement.closest('[' + MARK + ']')) { el.setAttribute(MARK, '1'); return; }
 
     el.setAttribute(MARK, '1');
 
