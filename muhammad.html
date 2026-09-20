@@ -158,6 +158,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <button id="sc-fmt-story" onclick="setSocialFormat('story')" style="flex:1;padding:8px;border:1.5px solid #D4C9A8;border-radius:8px;background:#fff;color:#5A3A10;font-size:12px;font-weight:700;cursor:pointer;">📱 Story<br><span style="font-weight:400;font-size:10px;">Stories/TikTok/Reels</span></button>
       <button id="sc-fmt-wide" onclick="setSocialFormat('wide')" style="flex:1;padding:8px;border:1.5px solid #D4C9A8;border-radius:8px;background:#fff;color:#5A3A10;font-size:12px;font-weight:700;cursor:pointer;">▭ Wide<br><span style="font-weight:400;font-size:10px;">X/Twitter card</span></button>
     </div>
+<div style="margin:2px 0 12px;"><div style="font-size:11px;font-weight:700;color:#B8902A;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Card design</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;"><button id="sc-style-midnight" onclick="setSocialStyle('midnight')" style="padding:7px;border:1.5px solid #C9A84C;border-radius:8px;background:#0B2149;color:#FFE97A;font-size:11px;font-weight:700;cursor:pointer;box-shadow:0 0 0 2px #C9A84C inset;">✦ Midnight Gold</button><button id="sc-style-emerald" onclick="setSocialStyle('emerald')" style="padding:7px;border:1.5px solid #D4C9A8;border-radius:8px;background:#0B5A4C;color:#FFF0B4;font-size:11px;font-weight:700;cursor:pointer;">✦ Emerald Garden</button><button id="sc-style-parchment" onclick="setSocialStyle('parchment')" style="padding:7px;border:1.5px solid #D4C9A8;border-radius:8px;background:#F7E9C8;color:#34250E;font-size:11px;font-weight:700;cursor:pointer;">✦ Classic Parchment</button><button id="sc-style-rose" onclick="setSocialStyle('rose')" style="padding:7px;border:1.5px solid #D4C9A8;border-radius:8px;background:#5B1B4A;color:#FFF0CE;font-size:11px;font-weight:700;cursor:pointer;">✦ Rose & Night</button></div></div>
     <div style="text-align:center;background:#F0EDE6;border-radius:8px;padding:10px;margin-bottom:12px;">
       <canvas id="socialCanvas" style="max-width:100%;height:auto;border-radius:6px;box-shadow:0 2px 10px rgba(0,0,0,0.15);"></canvas>
     </div>
@@ -603,6 +604,13 @@ function saveVerseToResearch(sura, aya, v){
 }
 
 // ── Social Media Card generator ──────────────────────────────────────────
+const CARD_STYLES = {
+  midnight:{a:'#061229',b:'#12356E',c:'#0B2149',primary:'#FFD640',text:'#FFE97A',border:'rgba(255,214,64,0.90)',glow:'rgba(255,214,64,0.20)',motif:'rgba(255,214,64,0.12)'},
+  emerald:{a:'#062B27',b:'#0B5A4C',c:'#123B31',primary:'#E9CB70',text:'#FFF0B4',border:'rgba(233,203,112,0.92)',glow:'rgba(233,203,112,0.18)',motif:'rgba(233,203,112,0.12)'},
+  parchment:{a:'#F7E9C8',b:'#E6C982',c:'#FFF8E8',primary:'#77551E',text:'#34250E',border:'rgba(119,85,30,0.90)',glow:'rgba(173,123,39,0.16)',motif:'rgba(119,85,30,0.11)'},
+  rose:{a:'#210D25',b:'#5B1B4A',c:'#172346',primary:'#F3C873',text:'#FFF0CE',border:'rgba(243,200,115,0.92)',glow:'rgba(243,200,115,0.19)',motif:'rgba(243,200,115,0.12)'}
+};
+let _socialStyle='midnight';
 const SOCIAL_FORMATS = {
   square: { w: 1080, h: 1080, label: 'Square' },
   story:  { w: 1080, h: 1920, label: 'Story' },
@@ -628,6 +636,8 @@ function wrapCanvasText(ctx, text, x, maxWidth, lineHeight, rtl){
   return lines;
 }
 
+function setSocialStyle(style){if(!CARD_STYLES[style])return;_socialStyle=style;Object.keys(CARD_STYLES).forEach(k=>{const b=document.getElementById('sc-style-'+k);if(b)b.style.boxShadow=k===style?'0 0 0 2px #C9A84C inset':'none';});drawSocialCard();}
+function drawSocialMotif(ctx,W,H,t){const step=Math.max(75,Math.round(W*.12));ctx.save();ctx.strokeStyle=t.motif;ctx.lineWidth=Math.max(1,W*.0015);for(let x=step/2;x<W;x+=step)for(let y=step/2;y<H;y+=step){ctx.beginPath();for(let i=0;i<8;i++){const a=-Math.PI/2+i*Math.PI/4,r=step*(i%2?.24:.42),px=x+Math.cos(a)*r,py=y+Math.sin(a)*r;i?ctx.lineTo(px,py):ctx.moveTo(px,py);}ctx.closePath();ctx.stroke();}ctx.restore();}
 function drawSocialCard(){
   const v = _socialVerse;
   if (!v) return;
@@ -639,14 +649,13 @@ function drawSocialCard(){
   const W = fmt.w, H = fmt.h;
   const pad = W * 0.09;
   const contentWidth = W - pad * 2;
-
-  // Background
+  const theme = CARD_STYLES[_socialStyle] || CARD_STYLES.midnight;
   const grad = ctx.createLinearGradient(0, 0, W, H);
-  grad.addColorStop(0, '#FDF8EE');
-  grad.addColorStop(1, '#F5EBD0');
+  grad.addColorStop(0, theme.c);
+  grad.addColorStop(1, theme.a);
   ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, W, H);
-  ctx.strokeStyle = '#D4A830';
+  ctx.fillRect(0, 0, W, H); drawSocialMotif(ctx,W,H,theme);
+  ctx.strokeStyle = theme.border;
   ctx.lineWidth = W * 0.006;
   ctx.strokeRect(pad*0.35, pad*0.35, W-pad*0.7, H-pad*0.7);
 
@@ -654,7 +663,7 @@ function drawSocialCard(){
 
   // Reference badge
   ctx.textAlign = 'center';
-  ctx.fillStyle = '#B8902A';
+  ctx.fillStyle = theme.primary;
   ctx.font = `700 ${Math.round(W*0.032)}px Georgia, serif`;
   ctx.fillText(`Qur'an ${v.reference}`, W/2, y);
   y += H * 0.06;
@@ -663,7 +672,7 @@ function drawSocialCard(){
   if (v.arabic) {
     ctx.direction = 'rtl';
     ctx.font = `${Math.round(W*0.052)}px "Times New Roman", serif`;
-    ctx.fillStyle = '#1a1a1a';
+    ctx.fillStyle = theme.text;
     const arLines = wrapCanvasText(ctx, v.arabic, W/2, contentWidth, 0, true);
     arLines.forEach(line => { ctx.fillText(line, W/2, y); y += W * 0.075; });
     ctx.direction = 'ltr';
@@ -673,7 +682,7 @@ function drawSocialCard(){
   // English
   if (v.english) {
     ctx.font = `italic ${Math.round(W*0.032)}px Georgia, serif`;
-    ctx.fillStyle = '#333';
+    ctx.fillStyle = theme.text;
     const enLines = wrapCanvasText(ctx, v.english, W/2, contentWidth);
     // Cap lines so long verses don't overflow the canvas — truncate with ellipsis
     const maxLines = Math.floor((H - y - H*0.15) / (W*0.045));
@@ -701,10 +710,10 @@ function setSocialFormat(fmt){
 
 function openSocialCard(v){
   _socialVerse = v;
-  _socialFormat = 'square';
+  _socialFormat = 'square'; _socialStyle = 'midnight';
   document.getElementById('socialOverlay').style.display = 'flex';
   try {
-    setSocialFormat('square');
+    setSocialFormat('square'); setSocialStyle('midnight');
   } catch (e) {
     console.error('Social card draw failed:', e);
     toast('Could not render preview — try again');
