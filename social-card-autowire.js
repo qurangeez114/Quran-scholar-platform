@@ -1,8 +1,10 @@
 /* ============================================================================
  * social-card-autowire.js
  * ----------------------------------------------------------------------------
- * Adds the 📱 social-card button to every verse on the site, without editing
- * each page's markup.
+ * Adds the verse tools to every verse on the site, without editing each
+ * page's markup. Where verse-toolbar.js is loaded it injects the full toolbar
+ * (audio, language, bookmark, highlight, note, copy, share, presentation,
+ * social card, Words); otherwise it adds the social-card button alone.
  *
  * Pages render verses differently — some use data-sura/data-aya, some
  * data-surah/data-ayah, some an id of the form vc-{sura}-{aya}, some a
@@ -81,17 +83,35 @@
 
   function wire(el) {
     if (!el || el.getAttribute(MARK)) return;
-    // Already has a share control from the page's own toolbar? Leave it alone.
     if (el.querySelector('.sc-share-btn')) { el.setAttribute(MARK, '1'); return; }
 
     var ref = refFor(el);
     if (!ref || ref.sura < 1 || ref.sura > 114) return;
 
     el.setAttribute(MARK, '1');
+
+    // The page already renders its own toolbar: only the social card is missing.
     var host = el.querySelector('.verse-actions');
     if (host) { host.appendChild(makeButton(ref)); return; }
 
-    // No toolbar on this page — add a small right-aligned row instead.
+    // No toolbar here. Inject the full set if verse-toolbar.js is loaded,
+    // so these pages get the same tools as the Quran and theme readers.
+    if (typeof window.buildVerseToolbar === 'function') {
+      var wrap = document.createElement('div');
+      wrap.innerHTML = window.buildVerseToolbar(ref.sura, ref.aya);
+      var bar = wrap.firstElementChild;
+      if (bar) {
+        // Give the toolbar the ids/attributes its handlers look the verse up by.
+        if (!el.id) el.id = 'vc-' + ref.sura + '-' + ref.aya;
+        el.setAttribute('data-sura', ref.sura);
+        el.setAttribute('data-aya', ref.aya);
+        el.insertBefore(bar, el.firstChild);
+        bar.appendChild(makeButton(ref));
+        return;
+      }
+    }
+
+    // Fallback: social card only.
     var row = document.createElement('div');
     row.setAttribute('style', 'display:flex;justify-content:flex-end;margin-top:6px;');
     row.appendChild(makeButton(ref));

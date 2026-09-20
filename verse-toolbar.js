@@ -552,7 +552,10 @@
   function showVerseHlPicker(ayaNum, suraId, btn) {
     _hlVerseNum = ayaNum;
     _hlSuraId = suraId;
+    // The picker markup lives on the Quran page only. On pages that embed the
+    // toolbar without it, skip rather than throwing.
     const picker = document.getElementById('verseHlPicker');
+    if (!picker || !btn) return;
     const rect = btn.getBoundingClientRect();
     picker.style.top = (rect.bottom + window.scrollY + 6) + 'px';
     picker.style.left = Math.min(rect.left, window.innerWidth - 180) + 'px';
