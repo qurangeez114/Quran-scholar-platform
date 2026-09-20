@@ -336,7 +336,7 @@
         ctx.fillStyle = theme.primary;
         ctx.font = '700 ' + b.size + 'px Georgia, serif';
         ctx.letterSpacing = Math.round(W * 0.004) + 'px';
-        ctx.fillText("QUR'AN " + scSura + ':' + scAya, W / 2, cursor + b.size);
+        ctx.fillText('CHAPTER ' + scSura + ' • VERSE ' + scAya, W / 2, cursor + b.size);
         ctx.letterSpacing = '0px';
         var ruleY = cursor + b.size + b.gapAfter * 0.45;
         var ruleW = Math.min(contentWidth * 0.34, W * 0.30);
