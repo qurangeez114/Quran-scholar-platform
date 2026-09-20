@@ -249,6 +249,30 @@ function activeLangMap() {
 }
 
 let currentVerses = [];
+let currentParallels = [];
+
+// Shared renderer for an inline "pre-Islamic parallel" card, so the comparison
+// appears beside the Islamic source rather than only in its own tab.
+function parallelCard(r) {
+  const STRENGTH = { striking:'#C0392B', close:'#B8651B', general:'#1A6FA8', contrast:'#6d28d9' };
+  const c = STRENGTH[r.parallel_strength] || '#1A6FA8';
+  return `<div style="margin:10px 0 2px;padding:9px 11px;background:#F7F9FC;border-left:3px solid ${c};border-radius:0 6px 6px 0;">
+    <div style="font-size:10.5px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:${c};margin-bottom:4px;">
+      Pre-Islamic parallel &middot; ${r.parallel_strength || 'observed'}
+    </div>
+    <div style="font-size:12.5px;color:#24405a;"><strong>${r.tradition}</strong>${r.era && r.era !== '\u2014' ? ` (${r.era})` : ''} &mdash; ${r.source_text || ''}${r.source_location && r.source_location !== '\u2014' ? ` ${r.source_location}` : ''}</div>
+    ${r.source_quote ? `<div style="margin-top:5px;font-style:italic;color:#24405a;font-size:12.5px;">"${r.source_quote}"</div>` : ''}
+    ${r.caution ? `<div style="margin-top:5px;font-size:11.5px;color:#6B5A2A;"><strong>Caution:</strong> ${r.caution}</div>` : ''}
+  </div>`;
+}
+function parallelsForVerse(sura, aya) {
+  const key = sura + ':' + aya;
+  return currentParallels.filter(r => Array.isArray(r.anchor_verses) && r.anchor_verses.includes(key));
+}
+function parallelsForHadith(collection, number) {
+  const key = (collection || '') + '|' + (number || '');
+  return currentParallels.filter(r => Array.isArray(r.anchor_hadith) && r.anchor_hadith.includes(key));
+}
 
 // Lets the shared verse toolbar resolve verse text on this page
 // (the Quran page uses its own CURRENT_AYAS global instead).
@@ -442,6 +466,8 @@ function renderVerses() {
         html += `<div class="${l.cls} lang-${l.key}">${txt}</div>`;
       });
 
+      parallelsForVerse(v.sura, v.aya).forEach(r => { html += parallelCard(r); });
+
       html += `</div>`;
     });
     
@@ -583,10 +609,12 @@ async function renderParallels() {
   if (!cont) return;
   try {
     const res = await fetch(
-      `${SB_URL}/rest/v1/theme_parallels?theme=eq.${encodeURIComponent(currentTheme)}&select=tradition,era,motif,source_text,source_location,source_quote,description,islamic_parallel,islamic_source_ref,islamic_arabic,parallel_strength,scholarly_status,scholars,caution,source_url&order=id`,
+      `${SB_URL}/rest/v1/theme_parallels?theme=eq.${encodeURIComponent(currentTheme)}&select=tradition,era,motif,source_text,source_location,source_quote,description,islamic_parallel,islamic_source_ref,islamic_arabic,parallel_strength,scholarly_status,scholars,caution,source_url,anchor_verses,anchor_hadith&order=id`,
       { headers: HDR }
     );
     const rows = await res.json();
+    currentParallels = rows || [];
+    renderVerses(); renderHadiths();
     if (!rows || !rows.length) {
       cont.innerHTML = '<div style="padding:20px;color:#888;">No comparative parallels recorded for this theme yet.</div>';
       return;
@@ -730,6 +758,7 @@ async function renderHadiths() {
         ${h.related_reports ? `<div style="margin-top:4px;font-size:12.5px;color:#555;">🔗 Related: ${h.related_reports}</div>` : ''}
         ${h.difference_note ? `<div style="margin-top:8px;padding:8px 10px;background:#FFF8E7;border-left:3px solid #E8C97B;font-size:12.5px;color:#6B5A2A;">${h.difference_note}</div>` : ''}
         ${h.source_url ? `<div class="hadith-source">Source: <a href="${h.source_url}" target="_blank" rel="noopener">${srcLabel}</a></div>` : ''}
+        ${parallelsForHadith(h.collection, h.hadith_number).map(parallelCard).join('')}
       </div>`;
     });
 
