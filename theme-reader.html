@@ -115,6 +115,7 @@ body { font-family: 'Georgia', serif; background: #FDFAF4; color: #1A1A1A; }
 <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
+<script src="verse-toolbar.js"></script>
 <!-- Supabase Client for Propositions API -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
@@ -216,6 +217,14 @@ const HDR = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY };
 
 let currentTheme = '';
 let currentVerses = [];
+
+// Lets the shared verse toolbar resolve verse text on this page
+// (the Quran page uses its own CURRENT_AYAS global instead).
+window.VERSE_TOOLBAR_SOURCE = function (suraId, ayaNum) {
+  return (currentVerses || []).find(function (v) {
+    return Number(v.sura) === Number(suraId) && Number(v.aya) === Number(ayaNum);
+  }) || {};
+};
 
 // ============================================================================
 // INITIALIZATION
@@ -358,8 +367,12 @@ function renderVerses() {
       <div class="sura-header">Surah ${sura}</div>`;
     
     verses.forEach(v => {
-      html += `<div class="verse-card" data-verse="${v.sura}:${v.aya}">
+      html += `<div class="verse-card" id="vc-${v.sura}-${v.aya}" data-sura="${v.sura}" data-aya="${v.aya}">
         <div class="verse-num">${v.sura}:${v.aya}</div>`;
+
+      if (typeof buildVerseToolbar === 'function') {
+        html += buildVerseToolbar(v.sura, v.aya);
+      }
       
       if (activeLangs.arabic) {
         html += `<div class="verse-arabic">${v.arabic || ''}</div>`;
