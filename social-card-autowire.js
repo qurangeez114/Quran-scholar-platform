@@ -127,7 +127,16 @@
         el.setAttribute('data-sura', ref.sura);
         el.setAttribute('data-aya', ref.aya);
         el.insertBefore(bar, el.firstChild);
-        bar.appendChild(makeButton(ref));
+        /* The shared toolbar already contains one social-card button. Rewire
+           that existing control to the shared designer—never append another. */
+        var existing = bar.querySelector('button[onclick*="openSocialCardMain"]');
+        if (existing) {
+          existing.setAttribute('onclick', 'event.stopPropagation();openSocialCard(' + ref.sura + ',' + ref.aya + ')');
+          existing.setAttribute('title', 'Create social media card');
+          existing.setAttribute('aria-label', 'Create social media card for ' + ref.sura + ':' + ref.aya);
+        } else if (!hasShareControl(bar)) {
+          bar.appendChild(makeButton(ref));
+        }
         return;
       }
     }
