@@ -131,13 +131,7 @@ body { font-family: 'Georgia', serif; background: #FDFAF4; color: #1A1A1A; }
 <!-- LANGUAGE CONTROLS (Only for All Verses tab) -->
 <div class="controls" id="lang-controls">
   <div class="section-label" style="margin-bottom:6px;">Show Languages</div>
-  <div class="controls-row">
-    <button class="lang-btn active" id="btn-arabic">🕌 Arabic</button>
-    <button class="lang-btn" id="btn-translit">🔤 Translit</button>
-    <button class="lang-btn active" id="btn-english">🇬🇧 English</button>
-    <button class="lang-btn" id="btn-tigrinya">🇪🇷 Tigrinya</button>
-    <button class="lang-btn" id="btn-amharic">🇪🇹 Amharic</button>
-  </div>
+  <div class="controls-row" id="lang-btn-row"></div>
 </div>
 
 <!-- MAIN TABS -->
@@ -225,6 +219,32 @@ const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 const HDR = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY };
 
 let currentTheme = '';
+
+// Single source of truth for languages. `col` is the column in `ayas`.
+const LANGS = [
+  { key:'arabic',   label:'🕌 Arabic',      col:'arabic',                 cls:'verse-arabic',          def:true  },
+  { key:'translit', label:'🔤 Translit',    col:'arabic_transliteration', cls:'verse-transliteration', def:false },
+  { key:'english',  label:'🇬🇧 English',    col:'english',                cls:'verse-english',         def:true  },
+  { key:'tigrinya', label:'🇪🇷 Tigrinya',   col:'tigrinya',               cls:'verse-tigrinya',        def:false },
+  { key:'amharic',  label:'🇪🇹 Amharic',    col:'amharic',                cls:'verse-amharic',         def:false },
+  { key:'oromo',    label:'🇪🇹 Oromo',      col:'oromo',                  cls:'verse-oromo',           def:false },
+  { key:'somali',   label:'🇸🇴 Somali',     col:'somali',                 cls:'verse-somali',          def:false },
+  { key:'german',   label:'🇩🇪 Deutsch',    col:'german',                 cls:'verse-german',          def:false },
+  { key:'urdu',     label:'🇵🇰 اردو',       col:'urdu',                   cls:'verse-urdu',            def:false },
+  { key:'warsh',    label:'📜 Warsh',       col:'arabic_warsh',           cls:'verse-arabic',          def:false },
+  { key:'qalun',    label:'📜 Qālūn',       col:'arabic_qalun',           cls:'verse-arabic',          def:false },
+  { key:'duri',     label:'📜 Dūrī',        col:'arabic_duri',            cls:'verse-arabic',          def:false }
+];
+const LANG_KEYS = LANGS.map(l => l.key);
+function activeLangMap() {
+  const m = {};
+  LANGS.forEach(l => {
+    const b = document.getElementById('btn-' + l.key);
+    m[l.key] = b ? b.classList.contains('active') : false;
+  });
+  return m;
+}
+
 let currentVerses = [];
 
 // Lets the shared verse toolbar resolve verse text on this page
@@ -265,9 +285,16 @@ window.addEventListener('load', async () => {
 function setupLanguageButtons() {
   // Initialize active state from localStorage or defaults (Arabic + English active)
   const stored = localStorage.getItem('activeLangs');
-  const prefs = stored ? JSON.parse(stored) : { arabic: true, english: true, translit: false, tigrinya: false, amharic: false };
-  
-  ['arabic', 'english', 'translit', 'tigrinya', 'amharic'].forEach(lang => {
+  const defaults = {}; LANGS.forEach(l => defaults[l.key] = l.def);
+  const prefs = stored ? Object.assign({}, defaults, JSON.parse(stored)) : defaults;
+
+  // Render the buttons from LANGS so adding a language needs no markup change
+  const row = document.getElementById('lang-btn-row');
+  if (row && !row.children.length) {
+    row.innerHTML = LANGS.map(l => `<button class="lang-btn" id="btn-${l.key}">${l.label}</button>`).join('');
+  }
+
+  LANG_KEYS.forEach(lang => {
     const btn = document.getElementById(`btn-${lang}`);
     if (btn) {
       if (prefs[lang]) btn.classList.add('active');
@@ -276,8 +303,9 @@ function setupLanguageButtons() {
       btn.addEventListener('click', () => {
         btn.classList.toggle('active');
         const newPrefs = {};
-        ['arabic', 'english', 'translit', 'tigrinya', 'amharic'].forEach(l => {
-          newPrefs[l] = document.getElementById(`btn-${l}`).classList.contains('active');
+        LANG_KEYS.forEach(l => {
+          const b = document.getElementById(`btn-${l}`);
+          newPrefs[l] = b ? b.classList.contains('active') : false;
         });
         localStorage.setItem('activeLangs', JSON.stringify(newPrefs));
         renderVerses();
@@ -287,7 +315,7 @@ function setupLanguageButtons() {
 }
 
 function applyLanguagePreferences(prefs) {
-  ['arabic', 'english', 'translit', 'tigrinya', 'amharic'].forEach(lang => {
+  LANG_KEYS.forEach(lang => {
     const btn = document.getElementById(`btn-${lang}`);
     if (btn) {
       if (prefs[lang] !== undefined) {
@@ -316,21 +344,45 @@ function transliterateArabic(arabicText) {
 
 async function loadVerses() {
   try {
-    const res = await fetch(
-      `${SB_URL}/rest/v1/theme_verses?theme=eq.${encodeURIComponent(currentTheme)}&select=sura,aya,arabic,arabic_transliteration,english,tigrinya,amharic&order=sura,aya&limit=10000`,
+    // theme_verses says WHICH verses belong to the theme
+    const refRes = await fetch(
+      `${SB_URL}/rest/v1/theme_verses?theme=eq.${encodeURIComponent(currentTheme)}&select=sura,aya&order=sura,aya&limit=10000`,
       { headers: HDR }
     );
-    const data = await res.json();
-    currentVerses = data || [];
-    
-    // Group by sura
-    const bySura = {};
-    currentVerses.forEach(v => {
-      if (!bySura[v.sura]) bySura[v.sura] = [];
-      bySura[v.sura].push(v);
+    const refs = await refRes.json();
+
+    if (!refs || !refs.length) {
+      currentVerses = [];
+      currentVerses.groupedBySura = {};
+      renderVerses(); renderComparisons(); renderHadiths();
+      return;
+    }
+
+    // `ayas` supplies the TEXT, in every language it holds, so new languages
+    // become available without touching theme_verses.
+    const cols = ['sura_id','aya_number','aya_text'].concat(LANGS.map(l => l.col));
+    const or = refs.map(r => `and(sura_id.eq.${r.sura},aya_number.eq.${r.aya})`).join(',');
+    const ayaRes = await fetch(
+      `${SB_URL}/rest/v1/ayas?or=(${or})&select=${[...new Set(cols)].join(',')}&limit=10000`,
+      { headers: HDR }
+    );
+    const ayas = ayaRes.ok ? await ayaRes.json() : [];
+
+    const byRef = {};
+    ayas.forEach(a => { byRef[a.sura_id + ':' + a.aya_number] = a; });
+
+    currentVerses = refs.map(r => {
+      const a = byRef[r.sura + ':' + r.aya] || {};
+      const v = { sura: r.sura, aya: r.aya };
+      LANGS.forEach(l => { v[l.key] = a[l.col] || ''; });
+      v.arabic = v.arabic || a.aya_text || '';
+      return v;
     });
+
+    const bySura = {};
+    currentVerses.forEach(v => { (bySura[v.sura] ||= []).push(v); });
     currentVerses.groupedBySura = bySura;
-    
+
     renderVerses();
     renderComparisons();
     renderHadiths();
@@ -355,14 +407,8 @@ function renderVerses() {
     return;
   }
   
-  const activeLangs = {
-    arabic: document.getElementById('btn-arabic').classList.contains('active'),
-    translit: document.getElementById('btn-translit').classList.contains('active'),
-    english: document.getElementById('btn-english').classList.contains('active'),
-    tigrinya: document.getElementById('btn-tigrinya').classList.contains('active'),
-    amharic: document.getElementById('btn-amharic').classList.contains('active'),
-  };
-  
+  const activeLangs = activeLangMap();
+
   let html = '';
   // Sort sura numbers numerically
   const suraNumbers = Object.keys(currentVerses.groupedBySura || {})
@@ -385,28 +431,14 @@ function renderVerses() {
         html += buildVerseToolbar(v.sura, v.aya);
       }
       
-      if (activeLangs.arabic) {
-        html += `<div class="verse-arabic lang-arabic">${v.arabic || ''}</div>`;
-      }
-      
-      if (activeLangs.translit) {
-        const isGeez = v.arabic_transliteration && /[\u1200-\u137F]/.test(v.arabic_transliteration);
-        const translit = (isGeez || !v.arabic_transliteration) ? transliterateArabic(v.arabic || '') : v.arabic_transliteration;
-        html += `<div class="verse-transliteration lang-translit">${translit}</div>`;
-      }
-      
-      if (activeLangs.english) {
-        html += `<div class="verse-english lang-english">${v.english || ''}</div>`;
-      }
-      
-      if (activeLangs.tigrinya && v.tigrinya) {
-        html += `<div class="verse-tigrinya lang-tigrinya">${v.tigrinya}</div>`;
-      }
-      
-      if (activeLangs.amharic && v.amharic) {
-        html += `<div class="verse-amharic lang-amharic">${v.amharic}</div>`;
-      }
-      
+      LANGS.forEach(l => {
+        if (!activeLangs[l.key]) return;
+        let txt = v[l.key] || '';
+        if (l.key === 'translit' && !txt) txt = transliterateArabic(v.arabic || '');
+        if (!txt) return;
+        html += `<div class="${l.cls} lang-${l.key}">${txt}</div>`;
+      });
+
       html += `</div>`;
     });
     
@@ -422,57 +454,36 @@ function renderVerses() {
 
 async function renderComparisons() {
   const cont = document.getElementById('compare-container');
-  
-  // Get all sura/aya combinations to group by
-  const byRef = {};
-  currentVerses.forEach(v => {
-    const ref = `${v.sura}:${v.aya}`;
-    if (!byRef[ref]) byRef[ref] = [];
-    byRef[ref].push(v);
-  });
-  
-  if (!Object.keys(byRef).length) {
+  if (!cont) return;
+  if (!currentVerses.length) {
     cont.innerHTML = '<div style="padding:20px;color:#888;">No verses to compare.</div>';
     return;
   }
-  
+  const activeLangs = activeLangMap();
+  const shown = LANGS.filter(l => activeLangs[l.key]);
+
   let html = '';
-  for (const [ref, verses] of Object.entries(byRef)) {
-    if (verses.length > 1) {
-      // Multiple verses with same reference (shouldn't happen, but handle it)
-      html += `<div style="margin:14px;"><strong>${ref}:</strong></div>`;
-      verses.forEach((v, idx) => {
-        html += `<div class="comparison-container">
-          <div class="comparison-col">
-            <div class="comparison-col-header">Verse ${idx + 1}</div>
-            <div class="comparison-verse-text">${v.english || ''}</div>
-          </div>
-        </div>`;
-      });
-    } else {
-      // Single verse display
-      const v = verses[0];
-      html += `<div class="comparison-container">
-        <div class="comparison-col" style="flex: 0 0 100%;">
-          <div class="comparison-col-header">${ref}</div>
-          <div class="comparison-verse-text" style="font-size:14px;line-height:1.8;">${v.english || ''}</div>
-          <div style="margin-top:12px;font-size:11px;color:#7A8FA6;">
-            <strong>Arabic:</strong> ${v.arabic || ''}<br>
-            <strong>Transliteration:</strong> ${transliterateArabic(v.arabic || '')}
-          </div>
-        </div>
-      </div>`;
+  currentVerses.forEach(v => {
+    html += `<div class="comparison-container">
+      <div class="comparison-col" style="flex: 0 0 100%;">
+        <div class="comparison-col-header">${v.sura}:${v.aya}</div>`;
+    if (!shown.length) {
+      html += `<div style="padding:8px 0;color:#888;font-size:12.5px;">No languages selected.</div>`;
     }
-  }
-  
-  cont.innerHTML = html || '<div style="padding:20px;color:#888;">No comparison data.</div>';
+    shown.forEach(l => {
+      let txt = v[l.key] || '';
+      if (l.key === 'translit' && !txt) txt = transliterateArabic(v.arabic || '');
+      if (!txt) return;
+      html += `<div style="margin-top:10px;">
+        <div style="font-size:10.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:#8A6A18;margin-bottom:3px;">${l.label}</div>
+        <div class="${l.cls} lang-${l.key}" style="font-size:14px;line-height:1.8;">${txt}</div>
+      </div>`;
+    });
+    html += `</div></div>`;
+  });
+
+  cont.innerHTML = html;
 }
-
-// ============================================================================
-// HADITH LOADING & DISPLAY
-// ============================================================================
-
-
 
 async function renderPropositions() {
   const root = document.getElementById('proposition-drill-root');
