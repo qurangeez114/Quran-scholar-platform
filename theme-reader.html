@@ -67,6 +67,8 @@ body { font-family: 'Georgia', serif; background: #FDFAF4; color: #1A1A1A; }
 .grade-hasan { background: #FEF9E7; color: #B7950B; }
 .grade-weak { background: #FDEDEC; color: #C0392B; }
 .grade-disputed { background: #FDF2E0; color: #B8651B; }
+.grade-ungraded { background: #EEEEEE; color: #555; }
+.grade-ai { background: #4A1010; color: #FFE0E0; font-weight: 800; }
 .grade-fabricated { background: #4A1010; color: #FFD9D9; font-weight: 800; }
 .hadith-collection { font-weight: 700; }
 .hadith-number { color: #7A6A50; }
@@ -613,7 +615,7 @@ async function renderHadiths() {
   
   try {
     const res = await fetch(
-      `${SB_URL}/rest/v1/theme_hadith_links?theme=eq.${encodeURIComponent(currentTheme)}&select=collection,hadith_number,hadith_text,hadith_grade,source_url,narrator,book_ref,chapter_ref,source_class,arabic_exact,literal_translation,related_quran,related_reports,tradition,attribution_level,difference_note&order=collection,hadith_number`,
+      `${SB_URL}/rest/v1/theme_hadith_links?theme=eq.${encodeURIComponent(currentTheme)}&select=collection,hadith_number,hadith_text,hadith_grade,grade_normalized,grade_rank,source_url,narrator,book_ref,chapter_ref,source_class,arabic_exact,literal_translation,related_quran,related_reports,tradition,attribution_level,difference_note&order=grade_rank.asc,collection.asc,hadith_number.asc`,
       { headers: HDR }
     );
     
@@ -625,24 +627,26 @@ async function renderHadiths() {
     }
     
     // Order by evidentiary strength: sahih -> hasan -> disputed -> daif -> athar -> fabricated
-    const GRADE_RANK = {
-      'sahih': 1, 'hasan': 2, 'disputed': 3,
-      'daif': 4, 'athar-unverified': 5, 'shia-source': 5,
-      'munkar': 6, 'mawdu': 7, 'batil': 7
-    };
+    // Ranking is computed in the database (grade_rank) because the stored
+    // grade strings are inconsistent: composites like "Sahih | Sahih | Daif",
+    // empty values, and ai_synthesis rows. Matching those in the browser put
+    // authentic Bukhari/Muslim narrations in the weak tier.
     const GRADE_TIERS = [
-      { rank: 1, label: 'Sahih - Authenticated', cls: 'grade-sahih' },
-      { rank: 2, label: 'Hasan - Good', cls: 'grade-hasan' },
-      { rank: 3, label: 'Disputed - Scholars differ', cls: 'grade-disputed' },
-      { rank: 4, label: "Da'if - Weak", cls: 'grade-weak' },
-      { rank: 5, label: 'Athar - Authentication unestablished', cls: 'grade-weak' },
-      { rank: 6, label: 'Munkar - Rejected as raised', cls: 'grade-fabricated' },
-      { rank: 7, label: "Mawdu' / Batil - Fabricated or false", cls: 'grade-fabricated' }
+      { rank: 1,  label: 'Sahih - Authenticated',            cls: 'grade-sahih' },
+      { rank: 2,  label: 'Hasan - Good',                     cls: 'grade-hasan' },
+      { rank: 3,  label: 'Disputed - Graders differ',        cls: 'grade-disputed' },
+      { rank: 4,  label: "Da'if - Weak",                     cls: 'grade-weak' },
+      { rank: 5,  label: 'Athar - Companion/Successor',      cls: 'grade-weak' },
+      { rank: 6,  label: 'Munkar - Rejected',                cls: 'grade-fabricated' },
+      { rank: 7,  label: 'Fabricated / False',               cls: 'grade-fabricated' },
+      { rank: 8,  label: 'Shi\u02BFi source',                  cls: 'grade-disputed' },
+      { rank: 80, label: 'Not yet graded',                   cls: 'grade-ungraded' },
+      { rank: 90, label: 'AI synthesis - NOT a sourced narration', cls: 'grade-ai' }
     ];
-    const rankOf = g => GRADE_RANK[String(g || '').trim().toLowerCase()] || 4;
+    const rankOf = h => (h && h.grade_rank != null) ? h.grade_rank : 80;
 
     hadiths.sort((a, b) => {
-      const d = rankOf(a.hadith_grade) - rankOf(b.hadith_grade);
+      const d = rankOf(a) - rankOf(b);
       if (d) return d;
       const c = String(a.collection || '').localeCompare(String(b.collection || ''));
       return c || String(a.hadith_number || '').localeCompare(String(b.hadith_number || ''));
@@ -651,7 +655,7 @@ async function renderHadiths() {
     let html = '';
     let lastRank = null;
     hadiths.forEach(h => {
-      const rank = rankOf(h.hadith_grade);
+      const rank = rankOf(h);
       const tier = GRADE_TIERS.find(t => t.rank === rank) || GRADE_TIERS[3];
 
       if (rank !== lastRank) {
@@ -674,7 +678,7 @@ async function renderHadiths() {
         <div class="hadith-meta">
           <div class="hadith-meta-item"><span class="hadith-collection">${h.collection}</span> <span class="hadith-number">#${h.hadith_number}</span></div>
           <div class="hadith-meta-item">
-            <span class="hadith-grade ${tier.cls}">${h.hadith_grade || 'ungraded'}</span>
+            <span class="hadith-grade ${tier.cls}">${h.grade_normalized || 'ungraded'}</span>
             ${h.tradition === 'shia' ? '<span class="hadith-grade" style="background:#EEF0FF;color:#4338ca;">Shiʿi</span>' : ''}
           </div>
         </div>
