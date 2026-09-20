@@ -264,18 +264,16 @@ window.addEventListener('load', async () => {
   currentTheme = params.get('theme') || 'Satan and Iblis';
   document.getElementById('pageTitle').textContent = currentTheme;
   
-  // Load language preferences from localStorage
-  const savedLangs = JSON.parse(localStorage.getItem('activeLangs') || '{}');
-  applyLanguagePreferences(savedLangs);
-  
+  // Build the language buttons and apply stored prefs BEFORE the first render:
+  // the renderers read the active state off these buttons, so if they do not
+  // exist yet every language reads as inactive.
+  setupLanguageButtons();
+
   // Load notes from localStorage
   loadNotes();
-  
+
   // Fetch verses
   await loadVerses();
-  
-  // Setup language button listeners
-  setupLanguageButtons();
 });
 
 // ============================================================================
@@ -309,6 +307,7 @@ function setupLanguageButtons() {
         });
         localStorage.setItem('activeLangs', JSON.stringify(newPrefs));
         renderVerses();
+        renderComparisons();
       });
     }
   });
