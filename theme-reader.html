@@ -66,6 +66,8 @@ body { font-family: 'Georgia', serif; background: #FDFAF4; color: #1A1A1A; }
 .grade-sahih { background: #D5F5E3; color: #1E8449; }
 .grade-hasan { background: #FEF9E7; color: #B7950B; }
 .grade-weak { background: #FDEDEC; color: #C0392B; }
+.grade-disputed { background: #FDF2E0; color: #B8651B; }
+.grade-fabricated { background: #4A1010; color: #FFD9D9; font-weight: 800; }
 .hadith-collection { font-weight: 700; }
 .hadith-number { color: #7A6A50; }
 .hadith-text { font-size: 13px; line-height: 1.75; color: #2C2C2C; margin: 12px 0; padding: 12px; background: #FFFAF0; border-left: 3px solid #B8902A; }
@@ -477,23 +479,53 @@ async function renderHadiths() {
       return;
     }
     
+    // Order by evidentiary strength: sahih -> hasan -> disputed -> daif -> athar -> fabricated
+    const GRADE_RANK = {
+      'sahih': 1, 'hasan': 2, 'disputed': 3,
+      'daif': 4, 'athar-unverified': 5, 'mawdu': 6
+    };
+    const GRADE_TIERS = [
+      { rank: 1, label: 'Sahih - Authenticated', cls: 'grade-sahih' },
+      { rank: 2, label: 'Hasan - Good', cls: 'grade-hasan' },
+      { rank: 3, label: 'Disputed - Scholars differ', cls: 'grade-disputed' },
+      { rank: 4, label: "Da'if - Weak", cls: 'grade-weak' },
+      { rank: 5, label: 'Athar - Authentication unestablished', cls: 'grade-weak' },
+      { rank: 6, label: "Mawdu' - Fabricated", cls: 'grade-fabricated' }
+    ];
+    const rankOf = g => GRADE_RANK[String(g || '').trim().toLowerCase()] || 4;
+
+    hadiths.sort((a, b) => {
+      const d = rankOf(a.hadith_grade) - rankOf(b.hadith_grade);
+      if (d) return d;
+      const c = String(a.collection || '').localeCompare(String(b.collection || ''));
+      return c || String(a.hadith_number || '').localeCompare(String(b.hadith_number || ''));
+    });
+
     let html = '';
+    let lastRank = null;
     hadiths.forEach(h => {
-      const gradeClass = h.hadith_grade.includes('Sahih') ? 'grade-sahih' :
-                        h.hadith_grade.includes('Hasan') ? 'grade-hasan' : 'grade-weak';
-      
+      const rank = rankOf(h.hadith_grade);
+      const tier = GRADE_TIERS.find(t => t.rank === rank) || GRADE_TIERS[3];
+
+      if (rank !== lastRank) {
+        html += `<div class="hadith-tier-header" style="margin:18px 0 8px;padding:6px 0 4px;border-bottom:2px solid #E8DDC0;font-size:11px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:#8A6A18;">${tier.label}</div>`;
+        lastRank = rank;
+      }
+
+      const srcLabel = /sunnah\.com/.test(h.source_url || '') ? 'sunnah.com'
+                     : /dorar\.net/.test(h.source_url || '') ? 'dorar.net'
+                     : 'source';
+
       html += `<div class="hadith-card">
         <div class="hadith-meta">
           <div class="hadith-meta-item"><span class="hadith-collection">${h.collection}</span> <span class="hadith-number">#${h.hadith_number}</span></div>
-          <div class="hadith-meta-item"><span class="hadith-grade ${gradeClass}">${h.hadith_grade}</span></div>
+          <div class="hadith-meta-item"><span class="hadith-grade ${tier.cls}">${h.hadith_grade || 'ungraded'}</span></div>
         </div>
         <div class="hadith-text">${h.hadith_text || 'Text not available'}</div>
-        <div class="hadith-source">
-          Source: <a href="${h.source_url}" target="_blank">sunnah.com</a>
-        </div>
+        ${h.source_url ? `<div class="hadith-source">Source: <a href="${h.source_url}" target="_blank" rel="noopener">${srcLabel}</a></div>` : ''}
       </div>`;
     });
-    
+
     cont.innerHTML = html;
   } catch (err) {
     console.error('Error loading hadiths:', err);
