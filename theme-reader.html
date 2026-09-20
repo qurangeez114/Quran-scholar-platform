@@ -533,17 +533,32 @@ async function renderPropositions() {
     const groups = {};
     data.forEach(p => { (groups[p.level3 || 'Overview'] ||= []).push(p); });
 
-    let html = `<h2>${currentTheme}</h2>`;
-    html += `<p style="color:#666;font-size:0.9rem;margin:0 0 14px;">${data.length} propositions across Quranic verses, hadith, tafsīr and later scholarship. Graded by source status:</p>`;
+    // Question-led ordering. The distinctions a reader most needs in order to
+    // interpret everything else come first; the classification of sources that
+    // do not carry doctrine comes last. Grade still orders within a group.
+    const GROUP_PRIORITY = [
+      'Critical Source Distinctions',      // what the Qur'an does and does not say
+      'Classical Tafsīr',                  // how the text was read
+      'Extreme, Weak, Sectarian & Folkloric Traditions',
+      'Paradise Lore & Rejected Claims'
+    ];
+    const FIRST = GROUP_PRIORITY.slice(0, 1);
+    const LAST  = GROUP_PRIORITY.slice(2);
+    const rank = g => FIRST.includes(g) ? 0 : LAST.includes(g) ? 2 : 1;
+    const ordered = Object.keys(groups).sort((a, b) =>
+      rank(a) - rank(b) || a.localeCompare(b));
 
-    Object.keys(groups).forEach((g, gi) => {
+    let html = `<h2>${currentTheme}</h2>`;
+    html += `<p style="color:#666;font-size:0.9rem;margin:0 0 14px;">${data.length} propositions across Quranic verses, hadith, tafsīr and later scholarship. Each carries its source status; start with the distinctions below before reading the detail.</p>`;
+
+    ordered.forEach((g, gi) => {
       const items = groups[g];
       const gid = 'pg-' + gi;
       html += `<div class="level-2">
         <div class="level-2-name" onclick="const b=document.getElementById('${gid}');b.style.display=b.style.display==='none'?'block':'none';this.querySelector('span').textContent=b.style.display==='none'?'▶':'▼';">
-          <span>▼</span> ${g} <span style="font-weight:500;color:#6b7280;font-size:.85rem;">(${items.length})</span>
+          <span>${rank(g) === 0 ? '▼' : '▶'}</span> ${g} <span style="font-weight:500;color:#6b7280;font-size:.85rem;">(${items.length})</span>
         </div>
-        <div id="${gid}">`;
+        <div id="${gid}"${rank(g) === 0 ? '' : ' style="display:none;"'}>`;
       items.forEach(p => {
         const b = badgeFor(p);
         const anchors = Array.isArray(p.quranic_anchors) ? p.quranic_anchors.filter(Boolean) : [];
@@ -654,14 +669,33 @@ async function renderHadiths() {
       return c || String(a.hadith_number || '').localeCompare(String(b.hadith_number || ''));
     });
 
+    // Evidence map: the tiers are long, and a reader who stops after the sahih
+    // block never reaches the disputed tier - which is where the scholarly
+    // disagreement actually sits. Show the shape of the evidence up front.
+    const counts = {};
+    hadiths.forEach(h => { const r = rankOf(h); counts[r] = (counts[r] || 0) + 1; });
     let html = '';
+    const present = GRADE_TIERS.filter(t => counts[t.rank]);
+    if (present.length > 1) {
+      html += '<div style="margin:0 0 16px;padding:10px 12px;background:#FBF8F0;border:1px solid #E8DDC0;border-radius:8px;">';
+      html += '<div style="font-size:11px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:#8A6A18;margin-bottom:8px;">Evidence map &mdash; ' + hadiths.length + ' narrations</div>';
+      html += '<div style="display:flex;flex-wrap:wrap;gap:6px;">';
+      present.forEach(t => {
+        html += `<a href="#tier-${t.rank}" style="text-decoration:none;"><span class="hadith-grade ${t.cls}">${t.label.split(' - ')[0]} · ${counts[t.rank]}</span></a>`;
+      });
+      html += '</div>';
+      if (counts[3]) {
+        html += '<div style="margin-top:8px;font-size:12px;color:#6B5A2A;">' + counts[3] + ' narration(s) are graded differently by different critics &mdash; those are where the scholarly disagreement lies.</div>';
+      }
+      html += '</div>';
+    }
     let lastRank = null;
     hadiths.forEach(h => {
       const rank = rankOf(h);
       const tier = GRADE_TIERS.find(t => t.rank === rank) || GRADE_TIERS[3];
 
       if (rank !== lastRank) {
-        html += `<div class="hadith-tier-header" style="margin:18px 0 8px;padding:6px 0 4px;border-bottom:2px solid #E8DDC0;font-size:11px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:#8A6A18;">${tier.label}</div>`;
+        html += `<div id="tier-${rank}" class="hadith-tier-header" style="margin:18px 0 8px;padding:6px 0 4px;border-bottom:2px solid #E8DDC0;font-size:11px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:#8A6A18;">${tier.label}</div>`;
         if (rank === 50) {
           html += `<div style="margin:0 0 10px;padding:8px 10px;background:#F4F5FF;border-left:3px solid #4338ca;font-size:12.5px;color:#3b3f8f;">These narrations come from Shi\u02BFi collections. Sunni grading is not applied to them: Twelver hadith criticism uses its own categories (including muwaththaq, which has no Sunni equivalent) and different criteria. Absence of a grade here is not a judgement of weakness.</div>`;
         }
