@@ -81,7 +81,7 @@
     if (document.getElementById('scCardOverlay')) return;
     var el = document.createElement('div');
     el.id = 'scCardOverlay';
-    el.setAttribute('style', 'display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:99999998;align-items:center;justify-content:center;padding:12px;overflow-y:auto;');
+    el.setAttribute('style', 'display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:99999998;align-items:flex-start;justify-content:center;padding:12px;overflow-y:auto;');
     el.onclick = function (e) { if (e.target === el) closeSocialCard(); };
     el.innerHTML =
       '<div style="background:#fff;border-radius:14px;padding:16px;width:100%;max-width:480px;">'
