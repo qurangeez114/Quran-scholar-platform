@@ -291,17 +291,17 @@
     var topLimit = pad * 1.15, bottomLimit = H - pad * 1.55;
     // TikTok overlays UI on the bottom (~35%: captions, username, action buttons)
     // and the top bar — keep the verse in the upper safe zone so nothing covers it.
-    if (scFormat === 'tiktok') { topLimit = H * 0.085; bottomLimit = H * 0.66; }
+    if (scFormat === 'tiktok') { topLimit = H * 0.055; bottomLimit = H * 0.78; }
     var avail = bottomLimit - topLimit;
 
     function build(sc) {
       var blocks = [], total = 0;
-      var titleSize = Math.round(W * 0.030 * sc), titleGap = W * 0.050 * sc;
+      var titleSize = Math.round(W * 0.026 * sc), titleGap = W * 0.038 * sc;
       blocks.push({ type: 'title', size: titleSize, gapAfter: titleGap });
       total += titleSize + titleGap;
 
       if (hasArabic) {
-        var aSize = Math.round(W * 0.092 * sc);
+        var aSize = Math.round(W * 0.100 * sc);
         ctx.direction = 'rtl';
         ctx.font = aSize + 'px "Times New Roman", serif';
         var aLines = scWrap(ctx, scVerse.arabic, contentWidth);
@@ -313,7 +313,7 @@
       }
 
       others.forEach(function (k, i) {
-        var fSize = Math.round(W * 0.044 * sc), labelSize = Math.round(W * 0.021 * sc);
+        var fSize = Math.round(W * 0.052 * sc), labelSize = Math.round(W * 0.020 * sc);
         ctx.direction = (k === 'urdu') ? 'rtl' : 'ltr';
         ctx.font = (k === 'english' ? 'italic ' : '') + fSize + 'px Georgia, serif';
         var lines = scWrap(ctx, scVerse[SC_LANGS[k].field], contentWidth * 0.94);
@@ -379,7 +379,7 @@
     ctx.font = '700 ' + Math.round(W * 0.021) + 'px Georgia, serif';
     ctx.fillStyle = theme.primary;
     ctx.letterSpacing = Math.round(W * 0.005) + 'px';
-    ctx.fillText('quranhikma.com', W / 2, (scFormat === 'tiktok') ? H * 0.70 : H - pad * 0.72);
+    ctx.fillText('quranhikma.com', W / 2, (scFormat === 'tiktok') ? H * 0.85 : H - pad * 0.72);
     ctx.letterSpacing = '0px';
   }
 
