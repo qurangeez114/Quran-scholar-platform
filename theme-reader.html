@@ -354,6 +354,7 @@ async function loadVerses() {
       currentVerses = [];
       currentVerses.groupedBySura = {};
       renderVerses(); renderComparisons(); renderHadiths();
+      renderParallels(); renderPropositions();
       return;
     }
 
@@ -487,9 +488,22 @@ async function renderComparisons() {
 async function renderPropositions() {
   const root = document.getElementById('proposition-drill-root');
   if (!root) return;
+
+  // Propositions are keyed by level2, which is NOT the theme name. Only themes
+  // with an explicit mapping have a taxonomy; every other theme must show its
+  // own empty state rather than another theme's content.
+  const PROPOSITION_LEVEL2 = {
+    'Sexuality, Spouses & Ḥūr in Paradise': 'Sexuality, Spouses & Ḥūr'
+  };
+  const level2 = PROPOSITION_LEVEL2[currentTheme];
+  if (!level2) {
+    root.innerHTML = '<div style="padding:20px;color:#888;">No proposition taxonomy has been built for this theme yet.</div>';
+    return;
+  }
+
   try {
     const res = await fetch(
-      `${SB_URL}/rest/v1/proposition_hierarchies?level2=eq.${encodeURIComponent('Sexuality, Spouses & Ḥūr')}` +
+      `${SB_URL}/rest/v1/proposition_hierarchies?level2=eq.${encodeURIComponent(level2)}` +
       `&select=id,level2,level3,level4,description,quranic_anchors,scholarly_debate_notes&order=id.asc`,
       { headers: HDR }
     );
@@ -516,7 +530,7 @@ async function renderPropositions() {
     const groups = {};
     data.forEach(p => { (groups[p.level3 || 'Overview'] ||= []).push(p); });
 
-    let html = '<h2>Sexuality, Spouses &amp; Ḥūr in Paradise</h2>';
+    let html = `<h2>${currentTheme}</h2>`;
     html += `<p style="color:#666;font-size:0.9rem;margin:0 0 14px;">${data.length} propositions across Quranic verses, hadith, tafsīr and later scholarship. Graded by source status:</p>`;
 
     Object.keys(groups).forEach((g, gi) => {
