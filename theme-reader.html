@@ -149,6 +149,7 @@ body { font-family: 'Georgia', serif; background: #FDFAF4; color: #1A1A1A; }
   <button class="main-tab" onclick="switchMainTab('compare',this)">🔍 Compare Texts</button>
   <button class="main-tab" onclick="switchMainTab('hadith',this)">📿 Hadith</button>
   <button class="main-tab" onclick="switchMainTab('propositions',this)">🏛️ Propositions</button>
+  <button class="main-tab" onclick="switchMainTab('parallels',this)">🌍 Parallels</button>
   <button class="main-tab" onclick="switchMainTab('notes',this)">📝 My Notes</button>
 </div>
 
@@ -177,6 +178,14 @@ body { font-family: 'Georgia', serif; background: #FDFAF4; color: #1A1A1A; }
   <div id="hadith-container" style="padding-bottom:80px;">
     <div style="text-align:center;padding:40px;color:#888;"><span class="spinner"></span> Loading...</div>
   </div>
+<div id="tab-parallels" class="tab-panel">
+  <div class="tab-note" style="padding:10px 14px;font-size:12.5px;color:#5A6B7A;background:#F4F7FA;border-bottom:1px solid #E1E8EF;">
+    🌍 Comparative Parallels: motifs in pre-Islamic and neighbouring traditions that scholars have compared with this theme.
+    Shared imagery does not establish derivation — each entry carries its own status.
+  </div>
+  <div id="parallels-container"><div style="text-align:center;padding:40px;color:#888;"><span class="spinner"></span> Loading parallels...</div></div>
+</div>
+
 </div>
 
 <!-- TAB: PROPOSITIONS -->
@@ -327,6 +336,7 @@ async function loadVerses() {
     renderVerses();
     renderComparisons();
     renderHadiths();
+    renderParallels();
 
     // Keep deep-link/swipe navigation constrained to verses that actually
     // belong to this theme. This also removes stale/invalid sura+aya params.
@@ -462,6 +472,52 @@ async function renderComparisons() {
 // ============================================================================
 // HADITH LOADING & DISPLAY
 // ============================================================================
+
+
+async function renderParallels() {
+  const cont = document.getElementById('parallels-container');
+  if (!cont) return;
+  try {
+    const res = await fetch(
+      `${SB_URL}/rest/v1/theme_parallels?theme=eq.${encodeURIComponent(currentTheme)}&select=tradition,era,motif,source_text,description,islamic_parallel,scholarly_status,scholars,caution,source_url&order=id`,
+      { headers: HDR }
+    );
+    const rows = await res.json();
+    if (!rows || !rows.length) {
+      cont.innerHTML = '<div style="padding:20px;color:#888;">No comparative parallels recorded for this theme yet.</div>';
+      return;
+    }
+    const STATUS = {
+      'observed-parallel': { label: 'Observed parallel', bg: '#E8F1F8', fg: '#1A6FA8' },
+      'proposed-influence': { label: 'Proposed influence', bg: '#FDF2E0', fg: '#B8651B' },
+      'contested-thesis':  { label: 'Contested thesis',  bg: '#FDEDEC', fg: '#C0392B' },
+      'fringe':            { label: 'Fringe claim',      bg: '#4A1010', fg: '#FFD9D9' },
+      'method':            { label: 'Method note',       bg: '#EFEFEF', fg: '#555' }
+    };
+    let html = '';
+    rows.forEach(r => {
+      const st = STATUS[r.scholarly_status] || STATUS['observed-parallel'];
+      const isMethod = r.scholarly_status === 'method';
+      html += `<div class="hadith-card" style="${isMethod ? 'background:#FAFAFA;' : ''}">
+        <div class="hadith-meta">
+          <div class="hadith-meta-item"><span class="hadith-collection">${r.tradition || ''}</span>${r.era && r.era !== '\u2014' ? ` <span class="hadith-number">${r.era}</span>` : ''}</div>
+          <div class="hadith-meta-item"><span class="hadith-grade" style="background:${st.bg};color:${st.fg};">${st.label}</span></div>
+        </div>
+        ${r.motif && !isMethod ? `<div style="font-weight:700;margin-bottom:6px;color:#1f2937;">${r.motif}</div>` : ''}
+        ${r.source_text && r.source_text !== '\u2014' ? `<div style="font-size:12.5px;color:#8A6A18;margin-bottom:6px;">\u{1F4D6} ${r.source_text}</div>` : ''}
+        <div class="hadith-text">${r.description || ''}</div>
+        ${r.islamic_parallel ? `<div style="margin-top:8px;font-size:13px;"><strong>Compared with:</strong> ${r.islamic_parallel}</div>` : ''}
+        ${r.scholars && r.scholars !== '\u2014' ? `<div style="margin-top:6px;font-size:12.5px;color:#555;"><strong>Argued by:</strong> ${r.scholars}</div>` : ''}
+        ${r.caution ? `<div style="margin-top:8px;padding:8px 10px;background:#FFF8E7;border-left:3px solid #E8C97B;font-size:12.5px;color:#6B5A2A;"><strong>Caution:</strong> ${r.caution}</div>` : ''}
+        ${r.source_url ? `<div class="hadith-source">Source: <a href="${r.source_url}" target="_blank" rel="noopener">reference</a></div>` : ''}
+      </div>`;
+    });
+    cont.innerHTML = html;
+  } catch (err) {
+    console.error('Error loading parallels:', err);
+    cont.innerHTML = '<div style="padding:20px;color:#C0392B;">Error loading parallels.</div>';
+  }
+}
 
 async function renderHadiths() {
   const cont = document.getElementById('hadith-container');
