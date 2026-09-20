@@ -28,6 +28,15 @@
   }
   global.CURRENT_AYAS = global.CURRENT_AYAS || [];
 
+
+  /* Card id differs per page: index.html uses vc-{aya}, theme pages use
+     vc-{sura}-{aya}. Resolve either. */
+  function vtCard(suraId, ayaNum) {
+    return document.getElementById('vc-' + suraId + '-' + ayaNum) ||
+           document.getElementById('vc-' + ayaNum) ||
+           document.querySelector('.verse-card[data-sura="' + suraId + '"][data-aya="' + ayaNum + '"]');
+  }
+
   function bmKey(suraId, ayaNum) { return 'bm_' + suraId + '_' + ayaNum; }
   function isBookmarked(ayaNum, suraId) { return !!localStorage.getItem(bmKey(suraId, ayaNum)); }
 
@@ -86,10 +95,70 @@
       '</div>';
   }
 
+
+  /* --- module-level state required by the ported functions --- */
+  let _verseTtsSpeaking = false, _verseTtsBtn = null;
+  let _hlSuraId = null, _hlVerseNum = null;
+  let _socialMainLangs = null, _socialMainVerse = null;
+  let _socialMainSura = null, _socialMainAya = null, _socialMainFormat = 'tiktok';
+  let _socialMainVerseList = null, _socialMainVerseListIdx = 0;
+  let _socialNavigationContext = null;
+  let currentNoteAya = null, currentNoteKey = null, currentNoteSura = null;
+
+  const ALL_LANGS = {
+    arabic:    { label:'Arabic',         badge:'🔤', aliases:['saudi arabia','quran','fusha'] },
+    translit:  { label:'Transliteration',badge:'Aa', aliases:['romanization','latin'] },
+    english:   { label:'English',        badge:'A',  aliases:['usa','uk','united states','united kingdom'] },
+    tigrinya:  { label:'Tigrinya',       badge:'ት',  aliases:['eritrea','tigray'] },
+    amharic:   { label:'Amharic',        badge:'አ',  aliases:['ethiopia'] },
+    oromo:     { label:'Oromo',          badge:'O',  aliases:['ethiopia','afaan oromoo'] },
+    somali:    { label:'Somali',         badge:'S',  aliases:['somalia','soomaali'] },
+    german:    { label:'German',         badge:'DE', aliases:['germany','deutsch','austria'] },
+    urdu:      { label:'Urdu',           badge:'اردو', aliases:['pakistan'] },
+    bengali:   { label:'Bengali',        badge:'ব',  aliases:['bangladesh','bangla','india'] },
+    malay:     { label:'Malay',          badge:'M',  aliases:['malaysia','brunei','singapore','bahasa melayu'] },
+    spanish:   { label:'Spanish',        badge:'E',  aliases:['spain','mexico','latin america','español'] },
+    chinese:   { label:'Chinese',        badge:'中', aliases:['china','mandarin','中文'] },
+    swahili:   { label:'Swahili',        badge:'K',  aliases:['kenya','tanzania','uganda','kiswahili'] },
+    hausa:     { label:'Hausa',          badge:'H',  aliases:['nigeria','niger','west africa'] },
+  };
+
+  const LANG_TTS_MAP = {
+    arabic:'ar-SA', english:'en-US', tigrinya:'', amharic:'am-ET',
+    oromo:'', somali:'so-SO', german:'de-DE', urdu:'ur-PK', translit:'en-US'
+  };
+
+  const SOCIAL_FIELD_MAP = {
+    arabic:'arabic', translit:'arabic_transliteration', english:'english', tigrinya:'tigrinya',
+    amharic:'amharic', oromo:'oromo', somali:'somali', german:'german', urdu:'urdu',
+    bengali:'bengali', malay:'malay', spanish:'spanish', chinese:'chinese', swahili:'swahili', hausa:'hausa',
+  };
+
+  const SOCIAL_FORMATS_MAIN = {
+    tiktok: { w: 1080, h: 1920 },
+    square: { w: 1080, h: 1080 },
+    story:  { w: 1080, h: 1920 },
+    wide:   { w: 1200, h: 675 },
+  };
+
+  const SOCIAL_VT_LANGS = { bn:'bengali', ms:'malay', es:'spanish', zh:'chinese', sw:'swahili', ha:'hausa' };
+
+  const langStateDefault = {
+  arabic: true, english: true,
+  translit: false, tigrinya: false, amharic: false, oromo: false, somali: false, german: false, urdu: false,
+  bengali: false, malay: false, spanish: false, chinese: false, swahili: false, hausa: false
+};
+  const langState = (() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('langState'));
+      return saved && typeof saved === 'object' ? { ...langStateDefault, ...saved } : { ...langStateDefault };
+    } catch { return { ...langStateDefault }; }
+  })();
+
 /* ---- functions ported verbatim from index.html ---- */
   function addVerseToPresentation(ayaNum, suraId) {
     // Get text from already-rendered verse card
-    var card = document.getElementById('vc-' + ayaNum);
+    var card = vtCard(suraId, ayaNum);
     var english = card ? (card.querySelector('.verse-english') || card.querySelector('[class*="english"]') || {innerText:''}).innerText : '';
     var arabic = card ? (card.querySelector('.verse-arabic') || card.querySelector('[class*="arabic"]') || {innerText:''}).innerText : '';
     var key = 'presentationBasket';
@@ -115,7 +184,7 @@
     // If a specific card element is provided, use it (for search-result cards
     // which don't have the standard vc-{n} ID). Otherwise fall back to the
     // main verse view by ID.
-    let card = cardEl || document.getElementById('vc-' + ayaNum);
+    let card = cardEl || vtCard(suraId, ayaNum);
     if (!card) return { title: '', text: '' };
     // Most cards have a .verse-body; result cards don't. Scan the card itself
     // if there's no .verse-body inside.
@@ -508,7 +577,7 @@
       _verseTtsSpeaking = false;
       if (_verseTtsBtn === btn) return;
     }
-    const card = document.getElementById('vc-' + ayaNum);
+    const card = vtCard(suraId, ayaNum);
     if (!card) return;
     const langEl = card.querySelector('.lang-' + lang);
     if (!langEl) return;
