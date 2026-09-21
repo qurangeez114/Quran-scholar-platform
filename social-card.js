@@ -32,7 +32,7 @@
   // label + which ayas column (or verse_translations lang code) holds the text
   var SC_LANGS = {
     arabic:   { label: 'Arabic',          field: 'arabic' },
-    translit: { label: 'Transliteration', field: 'arabic_transliteration' },
+    translit: { label: 'Transliteration', field: 'arabic_transliteration', fallback: true },
     english:  { label: 'English',         field: 'english' },
     tigrinya: { label: 'Tigrinya',        field: 'tigrinya' },
     amharic:  { label: 'Amharic',         field: 'amharic' },
@@ -139,6 +139,9 @@
   function scAvailable() {
     return Object.keys(SC_LANGS).filter(function (k) {
       var v = scVerse && scVerse[SC_LANGS[k].field];
+      if (v && SC_LANGS[k].fallback && scIsArabic(v)) {
+        v = scTransliterate(scVerse.arabic || scVerse.aya_text || '');
+      }
       return typeof v === 'string' && v.trim();
     });
   }
@@ -316,7 +319,11 @@
         var fSize = Math.round(W * 0.052 * sc), labelSize = Math.round(W * 0.020 * sc);
         ctx.direction = (k === 'urdu') ? 'rtl' : 'ltr';
         ctx.font = (k === 'english' ? 'italic ' : '') + fSize + 'px Georgia, serif';
-        var lines = scWrap(ctx, scVerse[SC_LANGS[k].field], contentWidth * 0.94);
+        var _fval = scVerse[SC_LANGS[k].field] || '';
+        if (SC_LANGS[k].fallback && scIsArabic(_fval)) {
+          _fval = scTransliterate(scVerse.arabic || scVerse.aya_text || '');
+        }
+        var lines = scWrap(ctx, _fval, contentWidth * 0.94);
         ctx.direction = 'ltr';
         var lh = fSize * 1.44;
         var gapAfter = (i === others.length - 1) ? 0 : W * 0.042 * sc;
@@ -429,6 +436,36 @@
     if (e.key === 'ArrowLeft') { e.preventDefault(); window.scNavigate(-1); }
     else if (e.key === 'ArrowRight') { e.preventDefault(); window.scNavigate(1); }
   };
+
+
+  /* Generate Latin transliteration when the database column holds Arabic.
+     The arabic_transliteration column currently stores Arabic text in all
+     6,190 rows; this function produces a usable Latin rendering from arabic. */
+  function scTransliterate(text) {
+    if (!text) return '';
+    var map = {
+      0x0628:'b',0x062A:'t',0x062B:'th',0x062C:'j',0x062D:'h',0x062E:'kh',
+      0x062F:'d',0x0630:'dh',0x0631:'r',0x0632:'z',0x0633:'s',0x0634:'sh',
+      0x0635:'s',0x0636:'d',0x0637:'t',0x0638:'z',0x0639:"'",0x063A:'gh',
+      0x0641:'f',0x0642:'q',0x0643:'k',0x0644:'l',0x0645:'m',0x0646:'n',
+      0x0647:'h',0x0648:'w',0x064A:'y',0x0649:'a',0x0627:'a',0x0623:'a',
+      0x0625:'i',0x0622:'aa',0x0621:"'",0x0626:'y',0x0624:'w',0x0629:'a',
+      0x064E:'a',0x064F:'u',0x0650:'i',0x0651:'',0x0652:'',0x0670:'a',
+      0x064B:'an',0x064C:'un',0x064D:'in'
+    };
+    var r='';
+    for (var i=0;i<text.length;i++){
+      var c=text.charCodeAt(i);
+      if (map[c]!==undefined) r+=map[c];
+      else if (c===32) r+=' ';
+    }
+    return r.replace(/ +/g,' ').trim();
+  }
+
+  /* True when a string contains only Arabic/diacritic codepoints (no Latin). */
+  function scIsArabic(str) {
+    return str && /^[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF\s]+$/.test(str);
+  }
 
   window.openSocialCard = async function (sura, aya, verseList, listIndex) {
     scEnsureModal();
