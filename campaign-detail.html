@@ -97,8 +97,20 @@ async function get(table,filter){
 
 window.addEventListener('load',async()=>{
   if(!slug){document.getElementById('pageTitle').textContent='Campaign not found';return;}
-  const data=await get('campaigns',`slug=eq.${slug}&select=*`);
-  if(!data.length){document.getElementById('pageTitle').textContent='Not found';return;}
+  let data=await get('campaigns',`slug=eq.${slug}&select=*`);
+  let isSaraya=false;
+  if(!data.length){
+    const sd=await get('campaign_saraya',`slug=eq.${slug}&select=*`);
+    if(!sd.length){document.getElementById('pageTitle').textContent='Not found';return;}
+    const r=sd[0]; isSaraya=true;
+    data=[{id:null,slug:r.slug,name:r.name,name_arabic:r.name_arabic||null,
+      date_hijri:r.ah_period||null,date_ce:r.date_ce,year_ce:r.year_ce,
+      location:r.target,opponent:r.target,outcome:r.outcome,
+      classification:r.classification,
+      classification_note:'Commander: '+(r.commander||'—')+'. '+(r.summary||''),
+      period:r.period,sort_order:r.sort_order,summary:r.summary,
+      commander:r.commander,watt_number:r.watt_number}];
+  }
   campaign=data[0];
   document.getElementById('pageTitle').textContent=campaign.name;
   document.getElementById('pageSub').textContent=(campaign.date_hijri||'')+(campaign.date_ce?' / '+campaign.date_ce:'');
@@ -268,7 +280,8 @@ async function renderAll(){
 
 function renderOverview(){
   const c=campaign;
-  document.getElementById('tab-overview').innerHTML=`
+  var _sarayaNote=isSaraya?'<div class="card" style="background:#FFF8E7;border:1px solid #E8DDC0;border-radius:10px;padding:14px;margin-bottom:12px;"><div style="font-size:13px;font-weight:800;color:#8A6A18;letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px;">Commissioned Expedition</div><div style="font-size:13px;line-height:1.7;">This is a sariya — commissioned by the Prophet but not personally led. The source-comparison framework (registry, quotations, contradiction analysis) is built and ready. Tabs populate as research dossiers are added using the same Badr model.</div></div>':'';
+  document.getElementById('tab-overview').innerHTML=_sarayaNote+`
     <div class="overview-grid">
       <div class="overview-item"><div class="overview-label">Date</div><div class="overview-value">${c.date_hijri||''} / ${c.date_ce||''}</div></div>
       <div class="overview-item"><div class="overview-label">Location</div><div class="overview-value">${c.location||'—'}</div></div>
