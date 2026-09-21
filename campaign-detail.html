@@ -63,6 +63,7 @@ a { color: #B8902A; }
   <button class="tab-btn" onclick="switchTab('classification',this)">⚖️ Classification</button>
   <button class="tab-btn" onclick="switchTab('comparison',this)">🔍 Sources</button>
   <button class="tab-btn" onclick="switchTab('people',this)">👥 People</button>
+  <button class="tab-btn" onclick="switchTab('sources-db',this)">📜 Sources</button>
 </div>
 
 <div id="tab-overview" class="tab-panel active"><div class="loading"><span class="spinner"></span></div></div>
@@ -72,6 +73,7 @@ a { color: #B8902A; }
 <div id="tab-classification" class="tab-panel"><div class="loading"><span class="spinner"></span></div></div>
 <div id="tab-comparison" class="tab-panel"><div class="loading"><span class="spinner"></span></div></div>
 <div id="tab-people"   class="tab-panel"><div class="loading"><span class="spinner"></span></div></div>
+<div id="tab-sources-db" class="tab-panel"><div class="loading"><span class="spinner"></span></div></div>
 
 <script>
 const SB_URL='https://ylosytbxpzxzwfzjpaej.supabase.co';
@@ -103,6 +105,83 @@ window.addEventListener('load',async()=>{
   renderAll();
 });
 
+
+async function renderSourcesDb() {
+  const id = campaign.id;
+  /* Three parallel fetches: source registry, quotations+source, analysis+quotation */
+  const [sources, analysis] = await Promise.all([
+    get('maghazi_sources', 'select=*&order=years_after_badr.asc.nullslast'),
+    get('campaign_source_analysis',
+      `campaign_id=eq.${id}&select=aspect,agreement_status,agreement_note,quotation_id,quotations(topic,arabic_text,english_text,volume,page,chapter,isnad,isnad_grade,source_id)`)
+  ]);
+  const srcMap = {};
+  sources.forEach(s => { srcMap[s.id] = s; });
+
+  let h = '';
+
+  /* --- Source registry --- */
+  h += '<h3 style="font-size:14px;font-weight:800;color:#8A6A18;margin:0 0 10px;text-transform:uppercase;letter-spacing:.6px;">Source Registry — ordered by distance from Badr</h3>';
+  const TIER_COLOR = {
+    'primary':'#065F46','hadith-critical':'#1e40af',
+    'secondary':'#92400e','late':'#7f1d1d','modern':'#374151'
+  };
+  sources.forEach(src => {
+    const tc = TIER_COLOR[src.reliability_tier] || '#555';
+    h += `<div class="card" style="border-left:4px solid ${tc};">
+      <div style="display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap;">
+        <div style="flex:1;">
+          <div class="card-title">${src.author} — <em>${src.work}</em></div>
+          <div class="meta">${src.author_arabic ? src.author_arabic + ' &nbsp;' : ''}d.${src.death_ce || '—'} CE
+            ${src.years_after_badr ? `&nbsp;·&nbsp; <strong>${src.years_after_badr} years after Badr</strong>` : ''}
+          </div>
+        </div>
+        <span class="status-badge" style="background:${tc};color:#fff;flex-shrink:0;">${src.reliability_tier}</span>
+      </div>
+      <div class="english-text" style="margin-top:8px;">${src.reliability_note || ''}</div>
+      ${src.hadith_critical_view ? `<div class="note-box" style="margin-top:8px;"><strong>Rijāl critics:</strong> ${src.hadith_critical_view}</div>` : ''}
+      ${src.modern_assessment ? `<div class="note-box" style="background:#F4F8FB;border-color:#1A6FA8;margin-top:6px;"><strong>Modern assessment:</strong> ${src.modern_assessment}</div>` : ''}
+      ${src.edition_used ? `<div class="meta" style="margin-top:6px;">📚 Edition: ${src.edition_used}</div>` : ''}
+    </div>`;
+  });
+
+  /* --- Source analysis --- */
+  if (analysis.length) {
+    h += '<h3 style="font-size:14px;font-weight:800;color:#8A6A18;margin:20px 0 10px;text-transform:uppercase;letter-spacing:.6px;">Source Comparison — Badr</h3>';
+    const STATUS_ORDER = ['agreed','contradicted','disputed','expanded','silence','later_development'];
+    const sorted = [...analysis].sort((a,b) =>
+      STATUS_ORDER.indexOf(a.agreement_status) - STATUS_ORDER.indexOf(b.agreement_status));
+    const STATUS_STYLE = {
+      'agreed':'background:#D1FAE5;color:#065F46',
+      'contradicted':'background:#FEE2E2;color:#7F1D1D',
+      'disputed':'background:#FEF3C7;color:#78350F',
+      'silence':'background:#EEEEEE;color:#555',
+      'later_development':'background:#EEF2FF;color:#3730A3',
+      'expanded':'background:#F3E8FF;color:#581c87'
+    };
+    sorted.forEach(a => {
+      const q = a.quotations;
+      const ss = STATUS_STYLE[a.agreement_status] || '';
+      const src = q ? srcMap[q.source_id] : null;
+      h += `<div class="card">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+          <strong style="flex:1;font-size:14px;">${a.aspect}</strong>
+          <span class="status-badge" style="${ss}">${(a.agreement_status||'').replace(/_/g,' ')}</span>
+        </div>
+        ${q ? `<div class="meta" style="margin-bottom:6px;">
+          Source: <strong>${src ? src.author : '—'}</strong>
+          ${q.volume || q.page ? `· Vol.${q.volume||''} p.${q.page||''}` : ''}
+          ${q.chapter ? `· ${q.chapter}` : ''}
+          ${q.isnad_grade ? `· <span class="grade-badge grade-${q.isnad_grade}">${q.isnad_grade}</span>` : ''}
+        </div>` : ''}
+        ${q && q.arabic_text ? `<div class="arabic-text" style="font-size:18px;">${q.arabic_text}</div>` : ''}
+        ${q && q.english_text ? `<div class="english-text" style="font-style:italic;margin:6px 0;">"${q.english_text}"</div>` : ''}
+        <div class="english-text" style="margin-top:6px;">${a.agreement_note || ''}</div>
+      </div>`;
+    });
+  }
+
+  document.getElementById('tab-sources-db').innerHTML = h;
+}
 async function renderAll(){
   const id=campaign.id;
   renderOverview();
@@ -119,6 +198,7 @@ async function renderAll(){
   renderClassification(sirahs);
   renderComparison(comparisons);
   renderPeople(people);
+  renderSourcesDb();
 }
 
 function renderOverview(){
