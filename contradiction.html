@@ -260,7 +260,7 @@ body{background:var(--bg);color:var(--ink);font-family:'EB Garamond',serif;min-h
     <div class="hero-eye">⚔ Textual Tensions · Internal Debates · Abrogation Claims</div>
     <div class="hero-title">Where the text breaks<br>against itself</div>
     <div class="hero-desc">Documented contradictions, abrogation claims, and scholarly debates within Islamic sources — with both traditional defenses and critical analyses.</div>
-    <div class="hero-stats">
+    <div id="srcBreakdown" style="font-family:Inconsolata,monospace;font-size:9px;letter-spacing:.08em;color:var(--ink4);margin-bottom:10px;"></div><div class="hero-stats">
       <div class="stat-chip"><span id="totalCount">—</span>Contradictions</div>
       <div class="stat-chip"><span id="highCount">—</span>High Severity</div>
       <div class="stat-chip"><span id="typeCount">—</span>Tension Types</div>
@@ -320,60 +320,619 @@ function toast(msg){
 }
 
 async function load() {
-  const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
-  const H={apikey:SB_KEY,Authorization:'Bearer '+SB_KEY};
-  const get=async(table,q)=>{
-    try{const r=await fetch(SB_URL+'/rest/v1/'+table+'?'+q,{headers:H});return r.ok?r.json():[];}
-    catch(e){return[];}
+  const get = async (table, query) => {
+    try {
+      const response = await fetch(SB_URL + '/rest/v1/' + table + '?' + query, { headers: HDRS });
+      return response.ok ? response.json() : [];
+    } catch (error) {
+      return [];
+    }
   };
-  const safe=v=>{if(!v)return[];if(Array.isArray(v))return v;try{return JSON.parse(v);}catch{return[];}};
-
-  const[ca,hqt,mtp,t,tc]=await Promise.all([
-    get('contradiction_analysis','select=id,topic,severity,category,contradiction_type,claim,position_a,position_a_holders,position_a_defense,position_b,position_b_holders,position_b_defense,sectarian_impact,socratic_questions,external_references,contradicted_by,claim_side,counter_side&order=id&limit=500'),
-    get('hadith_quran_tensions','select=id,topic,severity,category,claim,quran_position,hadith_position,hadith_position_holders,hadith_position_defense,sectarian_impact,socratic_questions,external_references,hadith_collection,hadith_reference,hadith_grade&order=id'),
-    get('muhammad_tension_pairs','select=id,title,pole_a,pole_a_verses,pole_b,pole_b_verses,core_question,status&order=id'),
-    get('tensions','select=id,title,category,severity,primary_text_ref,conflicting_text_ref,contradiction_statement,classical_responses,modern_responses&order=id'),
-    get('theme_contradictions','select=id,title,supporting_verses,opposing_verses,traditional_explanation,academic_explanation,study_questions&order=id')
+  const safe = value => {
+    if (!value) return [];
+    if (Array.isArray(value)) return value;
+    try { return JSON.parse(value); } catch (error) { return []; }
+  };
+  const [ca, hqt, mtp, core, themed] = await Promise.all([
+    get('contradiction_analysis', 'select=id,topic,severity,category,contradiction_type,claim,position_a,position_a_holders,position_a_defense,position_b,position_b_holders,position_b_defense,sectarian_impact,socratic_questions,external_references,contradicted_by,claim_side,counter_side&order=id&limit=500'),
+    get('hadith_quran_tensions', 'select=id,topic,severity,category,claim,quran_position,hadith_position,hadith_position_holders,hadith_position_defense,sectarian_impact,socratic_questions,external_references,hadith_collection,hadith_reference,hadith_grade&order=id'),
+    get('muhammad_tension_pairs', 'select=id,title,pole_a,pole_a_verses,pole_b,pole_b_verses,core_question,status&order=id'),
+    get('tensions', 'select=id,title,category,severity,primary_text_ref,conflicting_text_ref,contradiction_statement,classical_responses,modern_responses&order=id'),
+    get('theme_contradictions', 'select=id,title,supporting_verses,opposing_verses,traditional_explanation,academic_explanation,study_questions&order=id')
   ]);
-
-  const norm=(rows,src,map)=>rows.map(r=>Object.assign({_src:src},map(r)));
-  _all=[
-    ...norm(ca,'Qurʾān tensions',r=>({id:'ca-'+r.id,topic:r.topic,severity:r.severity||'medium',
-      category:r.category,contradiction_type:r.contradiction_type,claim:r.claim,
-      position_a:r.position_a,position_a_holders:r.position_a_holders,position_a_defense:r.position_a_defense,
-      position_b:r.position_b,position_b_holders:r.position_b_holders,position_b_defense:r.position_b_defense,
-      sectarian_impact:r.sectarian_impact,socratic_questions:safe(r.socratic_questions),
-      external_references:safe(r.external_references),contradicted_by:r.contradicted_by,
-      claim_side:safe(r.claim_side),counter_side:safe(r.counter_side)})),
-    ...norm(hqt,'Hadith vs Qurʾān',r=>({id:'hq-'+r.id,topic:r.topic,severity:r.severity||'medium',
-      category:r.category||'hadith / quran',contradiction_type:'Hadith vs Qurʾān',claim:r.claim,
-      position_a:r.quran_position,position_b:r.hadith_position,
-      position_b_holders:r.hadith_position_holders,position_b_defense:r.hadith_position_defense,
-      sectarian_impact:r.sectarian_impact,socratic_questions:safe(r.socratic_questions),
-      external_references:safe(r.external_references),
-      _hadith:(r.hadith_collection||'')+' '+(r.hadith_reference||'')+(r.hadith_grade?' ['+r.hadith_grade+']':'')})),
-    ...norm(mtp,'Prophetic tensions',r=>({id:'mp-'+r.id,topic:r.title,severity:'medium',
-      category:'prophetic tensions',contradiction_type:'Prophetic tension pair',claim:r.core_question,
-      position_a:r.pole_a,position_b:r.pole_b,
-      claim_side:safe(r.pole_a_verses),counter_side:safe(r.pole_b_verses),
-      socratic_questions:[],external_references:[]})),
-    ...norm(t,'Core tensions',r=>({id:'tn-'+r.id,topic:r.title,severity:r.severity||'medium',
-      category:r.category,contradiction_type:'Core tension',claim:r.contradiction_statement,
-      position_a:r.classical_responses,position_b:r.modern_responses,
-      socratic_questions:[],external_references:[],
-      claim_side:r.primary_text_ref?[r.primary_text_ref]:[],
-      counter_side:r.conflicting_text_ref?[r.conflicting_text_ref]:[]})),
-    ...norm(tc,'Theme contradictions',r=>({id:'tc-'+r.id,topic:r.title,severity:'medium',
-      category:'thematic',contradiction_type:'Theme contradiction',
-      position_a:r.traditional_explanation,position_b:r.academic_explanation,
-      claim_side:safe(r.supporting_verses),counter_side:safe(r.opposing_verses),
-      socratic_questions:safe(r.study_questions),external_references:[]}))
+  const norm = (rows, source, mapper) => rows.map(row => Object.assign({ _src: source }, mapper(row)));
+  _all = [
+    ...norm(ca, 'Qurʾān tensions', row => ({id:'ca-'+row.id,topic:row.topic,severity:row.severity||'medium',category:row.category,contradiction_type:row.contradiction_type,claim:row.claim,position_a:row.position_a,position_a_holders:row.position_a_holders,position_a_defense:row.position_a_defense,position_b:row.position_b,position_b_holders:row.position_b_holders,position_b_defense:row.position_b_defense,sectarian_impact:row.sectarian_impact,socratic_questions:safe(row.socratic_questions),external_references:safe(row.external_references),contradicted_by:row.contradicted_by,claim_side:safe(row.claim_side),counter_side:safe(row.counter_side)})),
+    ...norm(hqt, 'Hadith vs Qurʾān', row => ({id:'hq-'+row.id,topic:row.topic,severity:row.severity||'medium',category:row.category||'hadith / quran',contradiction_type:'Hadith vs Qurʾān',claim:row.claim,position_a:row.quran_position,position_b:row.hadith_position,position_b_holders:row.hadith_position_holders,position_b_defense:row.hadith_position_defense,sectarian_impact:row.sectarian_impact,socratic_questions:safe(row.socratic_questions),external_references:safe(row.external_references),_hadith:(row.hadith_collection||'')+' '+(row.hadith_reference||'')+(row.hadith_grade?' ['+row.hadith_grade+']':'')})),
+    ...norm(mtp, 'Prophetic tensions', row => ({id:'mp-'+row.id,topic:row.title,severity:'medium',category:'prophetic tensions',contradiction_type:'Prophetic tension pair',claim:row.core_question,position_a:row.pole_a,position_b:row.pole_b,claim_side:safe(row.pole_a_verses),counter_side:safe(row.pole_b_verses),socratic_questions:[],external_references:[]})),
+    ...norm(core, 'Core tensions', row => ({id:'tn-'+row.id,topic:row.title,severity:row.severity||'medium',category:row.category,contradiction_type:'Core tension',claim:row.contradiction_statement,position_a:row.classical_responses,position_b:row.modern_responses,socratic_questions:[],external_references:[],claim_side:row.primary_text_ref?[row.primary_text_ref]:[],counter_side:row.conflicting_text_ref?[row.conflicting_text_ref]:[]})),
+    ...norm(themed, 'Theme contradictions', row => ({id:'tc-'+row.id,topic:row.title,severity:'medium',category:'thematic',contradiction_type:'Theme contradiction',position_a:row.traditional_explanation,position_b:row.academic_explanation,claim_side:safe(row.supporting_verses),counter_side:safe(row.opposing_verses),socratic_questions:safe(row.study_questions),external_references:[]}))
   ];
+  document.getElementById('totalCount').textContent = _all.length;
+  document.getElementById('highCount').textContent = _all.filter(function(item){ return item.severity === 'high'; }).length;
+  const types = new Set(_all.map(function(item){ return item.contradiction_type; }).filter(Boolean));
+  document.getElementById('typeCount').textContent = types.size;
+  document.getElementById('resultCount').textContent = _all.length + ' shown';
+  render(_all);
+}
 
-  document.getElementById('highCount').textContent=_all.filter(x=>x.severity==='high').length;
-  var totalEl=document.getElementById('totalCount');
-  if(totalEl)totalEl.textContent=_all.length;
-  var srcEl=document.getElementById('srcBreakdown');
-  if(srcEl){var srcs={};_all.forEach(x=>{srcs[x._src]=(srcs[x._src]||0)+1;});
-    srcEl.textContent=Object.entries(srcs).map(e=>e[1]+' '+e[0]).join(' · ');}
-  var types=new Set(_all.map(x=>x.contradiction_type).filter(Boolean));
+function getFiltered() {
+  var q = document.getElementById('searchInput').value.toLowerCase().trim();
+  return _all.filter(function(c) {
+    if (_sevFilter && c.severity !== _sevFilter) return false;
+    if (_typeFilter && c.contradiction_type !== _typeFilter) return false;
+    if (q) {
+      var haystack = (c.topic||'') + ' ' + (c.category||'') + ' ' + (c.contradiction_type||'') + ' ' + (c.claim||'') + ' ' + (c.sectarian_impact||'');
+      if (haystack.toLowerCase().indexOf(q) === -1) return false;
+    }
+    return true;
+  });
+}
+
+function filterList() {
+  var filtered = getFiltered();
+  document.getElementById('resultCount').textContent = filtered.length + ' shown';
+  render(filtered);
+}
+
+function toggleSev(btn) {
+  var sev = btn.dataset.sev;
+  if (_sevFilter === sev) {
+    _sevFilter = null;
+    document.querySelectorAll('.filter-btn[data-sev]').forEach(function(b){b.classList.remove('active');});
+  } else {
+    _sevFilter = sev;
+    document.querySelectorAll('.filter-btn[data-sev]').forEach(function(b){b.classList.toggle('active', b.dataset.sev===sev);});
+  }
+  filterList();
+}
+
+function toggleType(btn) {
+  var type = btn.dataset.type;
+  if (_typeFilter === type) {
+    _typeFilter = null;
+    document.querySelectorAll('.filter-btn[data-type]').forEach(function(b){b.classList.remove('active');});
+  } else {
+    _typeFilter = type;
+    document.querySelectorAll('.filter-btn[data-type]').forEach(function(b){b.classList.toggle('active', b.dataset.type===type);});
+  }
+  filterList();
+}
+
+function sevClass(s){ return s==='high'?'sev-high':s==='medium'?'sev-medium':'sev-low'; }
+function sevTag(s){ return s==='high'?'tag-high':s==='medium'?'tag-medium':'tag-low'; }
+
+function parseVerseList(raw) {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw;
+  try { return JSON.parse(raw); } catch(e) { return String(raw).split(',').map(function(s){return s.trim();}); }
+}
+
+function parseQuestions(raw) {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw;
+  try { var p=JSON.parse(raw); return Array.isArray(p)?p:[p]; } catch(e) { return [String(raw)]; }
+}
+
+function verseUrl(ref) {
+  var parts = String(ref).split(':');
+  if (parts.length === 2) return 'index.html?sura='+parts[0].trim()+'&aya='+parts[1].trim().split('-')[0]+'&from=contradiction';
+  return 'index.html?from=contradiction';
+}
+
+function render(items) {
+  var wrap = document.getElementById('listWrap');
+  if (!items.length) {
+    wrap.innerHTML = '<div class="loading-state" style="color:var(--ink4);font-style:italic;">No contradictions match your filters.</div>';
+    return;
+  }
+  document.getElementById('resultCount').textContent = items.length + ' shown';
+
+  wrap.innerHTML = items.map(function(c, idx) {
+    var sc = sevClass(c.severity);
+    var verses_a = parseVerseList(c.claim_side);
+    var verses_b = parseVerseList(c.counter_side);
+    var all_refs = parseVerseList(c.external_references);
+    var questions = parseQuestions(c.socratic_questions);
+    var sevLabel = c.severity ? (c.severity.charAt(0).toUpperCase()+c.severity.slice(1)) : 'Unknown';
+
+    return '<div class="contra-card '+sc+'" id="cc_'+c.id+'">' +
+      '<div class="card-header" onclick="toggleCard('+c.id+')">' +
+        '<div class="card-sev"></div>' +
+        '<div class="card-main">' +
+          '<div class="card-topic">'+esc(c.topic)+'</div>' +
+          '<div class="card-meta">' +
+            (c.contradiction_type ? '<span class="tag tag-type">'+esc(c.contradiction_type)+'</span>' : '') +
+            '<span class="tag '+sevTag(c.severity)+'">'+sevLabel+'</span>' +
+            (c.category ? '<span class="tag tag-cat">'+esc(c.category)+'</span>' : '') +
+          '</div>' +
+          '<div class="card-verse">'+esc(String(c.sura)+':'+String(c.aya))+(c.contradicted_by ? ' · vs '+esc(c.contradicted_by.substring(0,60)) : '')+'</div>' +
+        '</div>' +
+        '<div class="card-arrow">›</div>' +
+      '</div>' +
+
+      '<div class="card-detail">' +
+        '<div class="detail-inner">' +
+
+          // Claim
+          (c.claim ? '<div class="claim-strip"><div class="claim-label">⚡ The Claim</div><div class="claim-text">'+esc(c.claim)+'</div></div>' : '') +
+
+          // Positions
+          '<div class="positions-grid">' +
+            '<div class="position-card pos-a">' +
+              '<div class="pos-label">✦ Position A · Traditional Defense</div>' +
+              '<div class="pos-text">'+esc(c.position_a||c.traditional_response||'')+'</div>' +
+              (c.position_a_holders ? '<div class="pos-holders">Held by: '+esc(c.position_a_holders)+'</div>' : '') +
+            '</div>' +
+            '<div class="position-card pos-b">' +
+              '<div class="pos-label">⚔ Position B · Critical Challenge</div>' +
+              '<div class="pos-text">'+esc(c.position_b||c.critical_analysis||'')+'</div>' +
+              (c.position_b_holders ? '<div class="pos-holders">Held by: '+esc(c.position_b_holders)+'</div>' : '') +
+            '</div>' +
+          '</div>' +
+
+          // Verses
+          (verses_a.length || verses_b.length || all_refs.length ? 
+            '<div class="detail-section"><div class="section-label">📖 Key Verses</div>' +
+            '<div class="verse-chips">' +
+              verses_a.map(function(v){ return '<a class="verse-chip vchip-a" href="'+verseUrl(v)+'" title="Supporting verse">'+esc(v)+'</a>'; }).join('') +
+              verses_b.map(function(v){ return '<a class="verse-chip vchip-b" href="'+verseUrl(v)+'" title="Challenging verse">'+esc(v)+'</a>'; }).join('') +
+              all_refs.filter(function(v){ return verses_a.indexOf(v)===-1 && verses_b.indexOf(v)===-1; }).map(function(v){ return '<a class="verse-chip neutral" href="'+verseUrl(v)+'">'+esc(v)+'</a>'; }).join('') +
+            '</div></div>' : '') +
+
+          // Sectarian impact
+          (c.sectarian_impact ? '<div class="impact-box"><div class="impact-label">⚠ Real-World Impact</div><div class="impact-text">'+esc(c.sectarian_impact)+'</div></div>' : '') +
+
+          // Position defenses
+          (c.position_a_defense || c.position_b_defense ?
+            '<div class="positions-grid">' +
+              (c.position_a_defense ? '<div class="detail-section"><div class="section-label">🛡 Traditional Argument</div><div class="section-body">'+esc(c.position_a_defense)+'</div></div>' : '<div></div>') +
+              (c.position_b_defense ? '<div class="detail-section"><div class="section-label">⚡ Critical Argument</div><div class="section-body">'+esc(c.position_b_defense)+'</div></div>' : '<div></div>') +
+            '</div>' : '') +
+
+          // Socratic questions
+          (questions.length ? '<div class="detail-section"><div class="section-label">💬 Questions to Consider</div><ul class="socratic-list">' +
+            questions.map(function(q){ return '<li>'+esc(q)+'</li>'; }).join('') +
+          '</ul></div>' : '') +
+
+          // AI Analysis
+          '<div class="ai-panel">' +
+            '<div class="section-label" style="margin-bottom:8px;">🤖 AI Analysis</div>' +
+            '<div class="ai-btns">' +
+              '<button class="ai-btn ai-btn-trad" onclick="runAI('+c.id+', \'traditional\', this)">🛡 Traditional Response</button>' +
+              '<button class="ai-btn ai-btn-crit" onclick="runAI('+c.id+', \'critical\', this)">⚡ Critical Analysis</button>' +
+              '<button class="ai-btn ai-btn-acad" onclick="runAI('+c.id+', \'academic\', this)">📚 Academic View</button>' +
+            '</div>' +
+            '<div class="ai-loading" id="ai_loading_'+c.id+'">Thinking…</div>' +
+            '<div class="ai-output" id="ai_out_'+c.id+'"></div>' +
+          '</div>' +
+
+          // Cross links
+          '<div class="cross-links">' +
+            '<a class="cross-link" href="index.html?sura='+c.sura+'&aya='+c.aya+'&from=contradiction">📖 Open Verse '+esc(String(c.sura)+':'+String(c.aya))+'</a>' +
+            '<a class="cross-link" href="madhhab.html?from=contradiction">⚖️ Madhhab Rulings</a>' +
+            '<a class="cross-link" href="research.html?q='+encodeURIComponent(c.topic||'')+'&from=contradiction">🔬 Research</a>' +
+          '</div>' +
+
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function toggleCard(id) {
+  var card = document.getElementById('cc_'+id);
+  card.classList.toggle('open');
+}
+
+async function runAI(id, mode, btn) {
+  var c = _all.find(function(x){return x.id===id;});
+  if (!c) return;
+  var loadEl = document.getElementById('ai_loading_'+id);
+  var outEl = document.getElementById('ai_out_'+id);
+  if (!loadEl || !outEl) return;
+
+  var prompts = {
+    traditional: 'You are a classical Islamic scholar. Provide the strongest traditional reconciliation of this apparent contradiction.\n\nTopic: "'+c.topic+'"\nClaim: '+(c.claim||c.topic)+'\nPosition A (traditional): '+(c.position_a||'')+'\n\nRespond in 3-4 paragraphs. Be scholarly and cite classical sources.',
+    critical: 'You are a critical scholar of Islamic texts. Provide a rigorous critical analysis of this textual tension.\n\nTopic: "'+c.topic+'"\nClaim: '+(c.claim||c.topic)+'\nPosition B (critical): '+(c.position_b||'')+'\n\nRespond in 3-4 paragraphs. Be analytically rigorous.',
+    academic: 'You are an academic scholar of Islamic studies. Provide a neutral, evidence-based academic analysis of this textual tension.\n\nTopic: "'+c.topic+'"\nBoth positions: A) '+(c.position_a||'')+' B) '+(c.position_b||'')+'\n\nRespond in 3-4 paragraphs. Cite both traditional and critical scholarship.'
+  };
+
+  loadEl.classList.add('visible');
+  outEl.classList.remove('visible');
+  outEl.textContent = '';
+
+  try {
+    var resp = await fetch('/.netlify/functions/claude-proxy', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 800,
+        messages: [{role:'user', content: prompts[mode]}]
+      })
+    });
+    var data = await resp.json();
+    var text = (data.content && data.content[0]) ? data.content[0].text : 'No response.';
+    loadEl.classList.remove('visible');
+    outEl.textContent = text;
+    outEl.classList.add('visible');
+  } catch(e) {
+    loadEl.classList.remove('visible');
+    outEl.textContent = 'Error: ' + e.message;
+    outEl.classList.add('visible');
+  }
+}
+
+// Deep link ?id=
+function checkDeepLink() {
+  var p = new URLSearchParams(window.location.search);
+  var id = p.get('id');
+  if (id) {
+    setTimeout(function() {
+      var card = document.getElementById('cc_'+id);
+      if (card) {
+        card.scrollIntoView({behavior:'smooth', block:'center'});
+        setTimeout(function(){ toggleCard(parseInt(id)); }, 300);
+      }
+    }, 600);
+  }
+}
+
+load().then(checkDeepLink);
+</script>
+
+<div id="donateModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.5);align-items:center;justify-content:center;">
+      <div style="background:#FDFAF2;border-radius:14px;max-width:380px;width:90%;padding:24px;text-align:center;border:2px solid #D4A830;box-shadow:0 8px 30px rgba(0,0,0,.25);">
+        <div style="font-size:32px;margin-bottom:8px;">❤️</div>
+        <h3 style="margin:0 0 8px;color:#7a5c14;font-family:Georgia,serif;">Support Quran Hikma</h3>
+        <p style="font-size:13px;color:#555;margin:0 0 18px;line-height:1.5;">
+          Your donation or subscription helps keep this project free, ad-light, and growing —
+          new languages, deeper research tools, and more scholarly resources for everyone.
+        </p>
+        <a href="https://www.paypal.com/donate/?hosted_button_id=YRYY537HG4RX2" target="_blank" rel="noopener"
+           style="display:block;background:#B8902A;color:#fff;font-weight:700;padding:12px;border-radius:24px;text-decoration:none;margin-bottom:10px;">
+          Donate / Subscribe via PayPal
+        </a>
+        <button onclick="document.getElementById('donateModal').style.display='none'"
+          style="background:none;border:none;color:#999;font-size:13px;cursor:pointer;padding:6px;">Maybe later</button>
+      </div>
+    </div>
+    <script>
+      if(typeof openDonateModal === 'undefined'){
+        function openDonateModal(){ document.getElementById('donateModal').style.display='flex'; }
+        document.getElementById('donateModal')?.addEventListener('click', function(e){ if(e.target===this) this.style.display='none'; });
+      }
+    </script>
+
+<script src="ask-widget.js"></script>
+<script>
+window.QNAV_PAGE_LABEL = 'Tensions';
+window.QNAV_PAGE_ICON = '⚔️';
+</script>
+<script>
+/* ═══ UNIFIED SITE-WIDE HISTORY + PRECISE BACK NAVIGATION (v2) ═══
+   One system, same on every page: Quran, Themes, Concept, Research,
+   Madhhab, Sīra, Stories, Tensions, Graph, Qira'at.
+   - qnav_hist   (localStorage) : persistent "recently visited" list -> drawer
+   - qnav_stack  (sessionStorage): real back-stack -> precise "Back to X" bar + scroll restore
+
+   Links: mark any in-app forward link with data-qnav (no inline onclick, no
+   hand-written label/icon — the destination page records its own real title
+   after it loads). Mark any "back" link with data-qnav-back. A single
+   delegated click listener handles both while preserving normal browser
+   link behavior (new tab, Ctrl/Cmd/Shift/Alt-click, middle-click, downloads,
+   external links, long-press on mobile).
+*/
+(function(W) {
+  var MAX = 60;
+  var HIST_VERSION = 2; // bump when the entry format/semantics change
+  var MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+  function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function ago(ts){
+    var s=Math.floor((Date.now()-ts)/1000);
+    if(s<60) return 'just now';
+    if(s<3600) return Math.floor(s/60)+'m ago';
+    if(s<86400) return Math.floor(s/3600)+'h ago';
+    return Math.floor(s/86400)+'d ago';
+  }
+  function getHist(){
+    try{
+      // One-time purge: entries recorded before HIST_VERSION carry the old
+      // "total verse count mislabeled as a reference" bug and stale links
+      // with no specific verse. Rather than guess which old entries are
+      // "safe", wipe once per version bump — it's just a recents list.
+      var storedVersion = parseInt(localStorage.getItem('qnav_hist_version') || '0');
+      if (storedVersion < HIST_VERSION) {
+        localStorage.removeItem('qnav_hist');
+        localStorage.setItem('qnav_hist_version', String(HIST_VERSION));
+        return [];
+      }
+      var h = JSON.parse(localStorage.getItem('qnav_hist')||'[]');
+      // Auto-expire anything older than MAX_AGE_MS so stale entries never
+      // silently accumulate again.
+      var now = Date.now();
+      var fresh = h.filter(function(x){ return (now - (x.time||0)) < MAX_AGE_MS; });
+      if (fresh.length !== h.length) saveHist(fresh);
+      return fresh;
+    }catch(e){ return []; }
+  }
+  function saveHist(h){ try{ localStorage.setItem('qnav_hist',JSON.stringify(h)); }catch(e){} }
+  function getStack(){ try{ return JSON.parse(sessionStorage.getItem('qnav_stack')||'[]'); }catch(e){ return []; } }
+  function saveStack(s){ try{ sessionStorage.setItem('qnav_stack', JSON.stringify(s)); }catch(e){} }
+  function getForward(){ try{ return JSON.parse(sessionStorage.getItem('qnav_forward')||'[]'); }catch(e){ return []; } }
+  function saveForward(s){ try{ sessionStorage.setItem('qnav_forward', JSON.stringify(s)); }catch(e){} }
+  function clearForward(){ try{ sessionStorage.removeItem('qnav_forward'); }catch(e){} }
+
+  /* Push `entry` onto `stack`, deduping only against the immediately
+     preceding item (same rule used for qnav_stack pushes elsewhere). */
+  function pushDeduped(stack, entry, cap){
+    var last = stack[stack.length - 1];
+    if (last && stateKey(last) === stateKey(entry)) {
+      stack[stack.length - 1] = entry;
+    } else {
+      stack.push(entry);
+    }
+    if (cap && stack.length > cap) stack = stack.slice(stack.length - cap);
+    return stack;
+  }
+
+  function captureCurrent(){
+    return {
+      url: location.href,
+      label: (W.QNAV_PAGE_LABEL || document.title || 'QuranHikma'),
+      icon: (W.QNAV_PAGE_ICON || '📄'),
+      scrollX: window.scrollX,
+      scrollY: window.scrollY,
+      state: null,
+      savedAt: Date.now()
+    };
+  }
+
+  /* Normalized identity for an entry: same destination + same label counts
+     as "the same place", regardless of incidental query-param variance
+     (e.g. a trailing &from=stories) or exact scroll position. */
+  function stateKey(entry){
+    var u;
+    try { u = new URL(entry.url, location.href); } catch(e){ return entry.url || ''; }
+    return [u.pathname, u.search, entry.label || ''].join('|');
+  }
+
+  /* Record the CURRENT page into the persistent activity list.
+     Dedup across the WHOLE list — qnav_hist is a "recently visited" log,
+     not a journey, so any earlier visit to the same place should collapse
+     into this one, most-recent occurrence. */
+  function record(label, url, icon, sub) {
+    url = url || window.location.href;
+    var entry = { label: label||document.title||'Page', url: url, icon: icon||'📄', sub: sub||'', time: Date.now() };
+    var key = stateKey(entry);
+    var h = getHist().filter(function(x){ return stateKey(x) !== key; });
+    h.unshift(entry);
+    if(h.length > MAX) h = h.slice(0, MAX);
+    saveHist(h);
+    renderList();
+    updateBadge();
+  }
+  W.qhistRecord = record;
+
+  function renderList(){
+    var el = document.getElementById('qhist-scroll');
+    if(!el) return;
+    var h = getHist();
+    if(!h.length){ el.innerHTML='<div class="qhist-empty">No history yet — start exploring!</div>'; return; }
+    el.innerHTML = h.map(function(item){
+      var safeUrl = esc(item.url);
+      var goArg = JSON.stringify(item.url || '').replace(/'/g, '&#39;');
+      return '<a class="qhist-item" href="'+safeUrl+'" onclick="event.preventDefault();qhistGo('+goArg+')">'
+        +'<span class="qhist-ico">'+esc(item.icon||'📄')+'</span>'
+        +'<span class="qhist-body">'
+        +'<div class="qhist-lbl">'+esc(item.label)+'</div>'
+        +'<div class="qhist-sub">'+esc(item.sub)+'</div>'
+        +'</span>'
+        +'<span class="qhist-ago">'+ago(item.time)+'</span>'
+        +'</a>';
+    }).join('');
+  }
+
+  function updateBadge(){
+    var b = document.getElementById('qhist-badge');
+    if(!b) return;
+    var n = getHist().length;
+    b.textContent = n; b.style.display = n ? 'flex' : 'none';
+  }
+
+  W.qnavToggleHist = function(){
+    var d = document.getElementById('qhist-drawer');
+    if(!d) return;
+    d.classList.toggle('open');
+    if(d.classList.contains('open')) renderList();
+  };
+  W.qnavClearHist = function(){
+    saveHist([]); renderList(); updateBadge();
+  };
+
+  /* Jump to any item straight from the Activity History drawer */
+  W.qhistGo = function(url){
+    window.location.href = url;
+  };
+
+  /* ── THE REAL BACK-STACK ──
+     Save exactly where the user is right now before we ever navigate away. */
+  function saveCurrentPosition() {
+    var entry = captureCurrent();
+    var stack = pushDeduped(getStack(), entry, 25);
+    saveStack(stack);
+  }
+  W.qnavSaveCurrentPosition = saveCurrentPosition;
+
+  /* Navigate forward to a NEW destination. This is a fresh branch, so any
+     previously-recorded forward path is no longer valid (same rule a
+     browser follows: Back then choosing a different link drops "Forward"). */
+  W.qnavGoTo = function(url) {
+    saveCurrentPosition();
+    clearForward();
+    window.location.assign(url);
+  };
+
+  /* Pop the back-stack and go to the exact previous page + scroll position.
+     The page we're leaving gets pushed onto the forward-stack so "Forward"
+     can return to it. */
+  W.qnavBack = function() {
+    var stack = getStack();
+    var entry = stack.pop();
+    saveStack(stack);
+    if (entry) {
+      var fwd = pushDeduped(getForward(), captureCurrent(), 25);
+      saveForward(fwd);
+      try {
+        localStorage.setItem('qnav_restore_scroll', JSON.stringify({ x: entry.scrollX||0, y: entry.scrollY||0 }));
+      } catch(e) {}
+      window.location.href = entry.url;
+      return;
+    }
+    if (window.history.length > 1) window.history.back();
+  };
+
+  /* Mirror of Back: pop the forward-stack, push current page back onto the
+     back-stack, go to the destination + scroll position. */
+  W.qnavForward = function() {
+    var fwd = getForward();
+    var entry = fwd.pop();
+    if (!entry) return;
+    saveForward(fwd);
+    var stack = pushDeduped(getStack(), captureCurrent(), 25);
+    saveStack(stack);
+    try {
+      localStorage.setItem('qnav_restore_scroll', JSON.stringify({ x: entry.scrollX||0, y: entry.scrollY||0 }));
+    } catch(e) {}
+    window.location.href = entry.url;
+  };
+
+  /* ── Delegated click handler: preserves new-tab, modifier-clicks,
+     middle-click, downloads, external links, long-press on mobile. ── */
+  document.addEventListener('click', function(e){
+    var link = e.target.closest('a[data-qnav], a[data-qnav-back]');
+    if (!link) return;
+    if (
+      e.defaultPrevented ||
+      e.button !== 0 ||
+      e.ctrlKey || e.metaKey || e.shiftKey || e.altKey ||
+      link.target === '_blank' ||
+      link.hasAttribute('download')
+    ) return;
+
+    if (link.hasAttribute('data-qnav-back')) {
+      e.preventDefault();
+      W.qnavBack();
+      return;
+    }
+
+    var dest;
+    try { dest = new URL(link.href, location.href); } catch(err) { return; }
+    if (dest.origin !== location.origin) return;
+
+    e.preventDefault();
+    W.qnavGoTo(dest.href);
+  });
+
+  /* Inject the floating button + drawer */
+  function injectDrawer(){
+    if(document.getElementById('qhist-btn')) return;
+
+    var btn = document.createElement('button');
+    btn.id = 'qhist-btn';
+    btn.title = 'Your browsing history';
+    btn.setAttribute('onclick','qnavToggleHist()');
+    btn.innerHTML = '🕐<span id="qhist-badge" class="qhist-badge"></span>';
+    document.body.appendChild(btn);
+
+    var drawer = document.createElement('div');
+    drawer.id = 'qhist-drawer';
+    drawer.innerHTML = '<div class="qhist-head"><span class="qhist-title">📖 Activity History</span><button class="qhist-clearall" onclick="qnavClearHist()">Clear all</button></div><div class="qhist-scroll" id="qhist-scroll"></div>';
+    document.body.appendChild(drawer);
+
+    document.addEventListener('click', function(e){
+      var d = document.getElementById('qhist-drawer');
+      var b = document.getElementById('qhist-btn');
+      if(d && d.classList.contains('open') && !d.contains(e.target) && b && !b.contains(e.target))
+        d.classList.remove('open');
+    });
+
+    updateBadge();
+  }
+
+  /* Show the generic "← Back to X" bar (and "Forward →" when available) */
+  function injectReturnBar(){
+    var existing = document.getElementById('qnav-return-bar');
+    if (existing) existing.remove();
+    var stack = getStack();
+    var prev = stack.length ? stack[stack.length - 1] : null;
+    var fwd = getForward();
+    var next = fwd.length ? fwd[fwd.length - 1] : null;
+    if (!prev && !next) return;
+
+    var bar = document.createElement('div');
+    bar.id = 'qnav-return-bar';
+
+    if (prev) {
+      var backBtn = document.createElement('button');
+      backBtn.innerHTML = '← Back: ' + esc(prev.icon || '📄') + ' ' + esc(prev.label || 'Back');
+      backBtn.onclick = W.qnavBack;
+      bar.appendChild(backBtn);
+    }
+
+    var desc = document.createElement('span');
+    desc.className = 'qnav-desc';
+    desc.textContent = 'Tap to return to the exact spot you left';
+    bar.appendChild(desc);
+
+    if (next) {
+      var fwdBtn = document.createElement('button');
+      fwdBtn.className = 'qnav-fwd';
+      fwdBtn.innerHTML = 'Forward: ' + esc(next.icon || '📄') + ' ' + esc(next.label || 'Forward') + ' →';
+      fwdBtn.onclick = W.qnavForward;
+      bar.appendChild(fwdBtn);
+    }
+
+    document.body.insertBefore(bar, document.body.firstChild);
+  }
+
+  /* Restore scroll position (both axes) after a Back jump, once content has
+     had a moment to render. */
+  function restoreScroll(){
+    try {
+      var raw = localStorage.getItem('qnav_restore_scroll');
+      if (raw === null) return;
+      localStorage.removeItem('qnav_restore_scroll');
+      var pos = JSON.parse(raw);
+      var x = (typeof pos === 'number') ? 0 : (pos.x||0);
+      var y = (typeof pos === 'number') ? pos : (pos.y||0);
+      var tries = 0;
+      var settle = setInterval(function(){
+        window.scrollTo(x, y);
+        tries++;
+        if (tries >= 6) clearInterval(settle);
+      }, 200);
+    } catch(e) {}
+  }
+
+  function init(){
+    injectDrawer();
+    injectReturnBar();
+    restoreScroll();
+  }
+
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})(window);
+</script>
+
+<script>
+window.QNAV_PAGE_LABEL='Tensions';window.QNAV_PAGE_ICON='⚔️';if(window.qhistRecord)qhistRecord('Tensions',location.href,'⚔️','Contradiction workspace');
+</script>
+</body>
+</html>
