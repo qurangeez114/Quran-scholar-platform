@@ -49,7 +49,7 @@ header h1 { font-size: 1.1rem; flex: 1; }
   <h2>Prophetic Lifetime Campaigns</h2>
   <p>Each campaign is documented with Qurʾān, hadith and sīrah sources. Classification labels show where disputes exist — no certainty is imposed where evidence is mixed.</p>
   <div id="count-note" style="margin-top:10px;padding:10px;background:#FFF8E7;border-left:3px solid #E8C97B;font-size:13px;color:#6B5A2A;border-radius:0 6px 6px 0;">
-    <strong>Why source counts differ:</strong> this page follows Watt's reconstruction (28 personally-led + 73 commissioned = 101). Traditional sources cite 26–27 personally-led campaigns because some events (e.g., Ḥamrāʾ al-Asad, al-Ḥudaybiyya) are classified differently. Source totals are shown in the table below.
+    <strong>Why source counts differ:</strong> this page currently documents 28 personally-led and 65 commissioned expeditions (93 records). Some reconstructions report 73 commissioned expeditions (101 total); those additional eight are not presented here until their identification and sources are verified. Traditional sources also cite 26–27 personally-led campaigns because some events (e.g., Ḥamrāʾ al-Asad, al-Ḥudaybiyya) are classified differently. Source totals are shown in the table below.
   </div>
 </div>
 <div class="legend">
@@ -66,6 +66,13 @@ header h1 { font-size: 1.1rem; flex: 1; }
 <div id="list-ghazwa"><div class="timeline" id="timeline">
   <div class="loading"><span class="spinner"></span></div>
 </div>
+</div>
+<div id="list-saraya" style="display:none;"><div class="timeline" id="saraya-list">
+  <div class="loading"><span class="spinner"></span></div>
+</div></div>
+<div id="list-sources" style="display:none;"><div class="timeline" id="sources-list">
+  <div class="loading"><span class="spinner"></span></div>
+</div></div>
 
 <script>
 const SB_URL = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
@@ -110,35 +117,41 @@ window.addEventListener('load', async()=>{
 
 async function loadSaraya(){
   const div=document.getElementById('saraya-list');
-  const r=await fetch(`${SB_URL}/rest/v1/campaign_saraya?period=eq.lifetime&select=*&order=sort_order.asc`,{headers:HDR});
-  const data=await r.json();
-  let prev='';let h='';
-  data.forEach(c=>{
-    if(c.ah_period!==prev){h+=`<div class="period-header">${c.ah_period}</div>`;prev=c.ah_period;}
-    h+=`<div class="campaign-card" style="cursor:default;">
-      <div class="card-header">
-        <div class="sort-num">${c.sort_order}</div>
-        <div class="card-name"><strong>${c.name}</strong></div>
-        ${classBadge(c.classification)}
-      </div>
-      <div class="card-body">
-        <div class="meta-row">
-          <div class="meta-item">👤 Commander: <span>${c.commander||'—'}</span></div>
-          <div class="meta-item">📅 <span>${c.date_ce||''}</span></div>
-          ${c.target?`<div class="meta-item">🎯 <span>${c.target}</span></div>`:''}
+  if(!div)return;
+  try{
+    const r=await fetch(`${SB_URL}/rest/v1/campaign_saraya?period=eq.lifetime&select=*&order=sort_order.asc`,{headers:HDR});
+    if(!r.ok)throw new Error(`Could not load commissioned expeditions (${r.status})`);
+    const data=await r.json();
+    if(!Array.isArray(data))throw new Error('Commissioned expedition data was not returned in the expected format.');
+    let prev='';let h='';
+    data.forEach(c=>{
+      if(c.ah_period!==prev){h+=`<div class="period-header">${c.ah_period}</div>`;prev=c.ah_period;}
+      h+=`<div class="campaign-card" style="cursor:default;">
+        <div class="card-header">
+          <div class="sort-num">${c.sort_order}</div>
+          <div class="card-name"><strong>${c.name}</strong></div>
+          ${classBadge(c.classification)}
         </div>
-        ${c.outcome?`<div class="meta-item">📋 <span>${c.outcome}</span></div>`:''}
-        ${c.summary?`<div class="card-summary">${c.summary}</div>`:''}
-      </div></div>`;
-  });
-  div.innerHTML=h;
+        <div class="card-body">
+          <div class="meta-row">
+            <div class="meta-item">👤 Commander: <span>${c.commander||'—'}</span></div>
+            <div class="meta-item">📅 <span>${c.date_ce||''}</span></div>
+            ${c.target?`<div class="meta-item">🎯 <span>${c.target}</span></div>`:''}
+          </div>
+          ${c.outcome?`<div class="meta-item">📋 <span>${c.outcome}</span></div>`:''}
+          ${c.summary?`<div class="card-summary">${c.summary}</div>`:''}
+        </div></div>`;
+    });
+    div.innerHTML=h||'<div class="loading">No commissioned expeditions are currently recorded.</div>';
+  }catch(e){div.innerHTML='<div class="error">'+e.message+'</div>';}
 }
 
 async function loadSources(){
   const div=document.getElementById('sources-list');
+  if(!div)return;
   const r=await fetch(`${SB_URL}/rest/v1/campaign_source_counts?select=*&order=total_count.desc.nullslast`,{headers:HDR});
   const data=await r.json();
-  let h='<div class="card" style="background:#fff;border:1px solid #E8DDC0;border-radius:10px;padding:14px;margin-bottom:12px;"><div class="card-title">Why the counts differ</div><div class="english-text">Early Arabic sources define and count some events differently. Ḥamrāʾ al-Asad and al-Ḥudaybiyya are included by some sources as independent ghazawāt and excluded by others. Al-Wāqidī and Ibn Isḥāq/Ibn Hishām sometimes treat the same event as one expedition or two. The sarāyā (commissioned) count varies even more sharply: Watt reconstructs 73 from combined sources; al-Wāqidī lists 38.</div></div>';
+  let h='<div class="card" style="background:#fff;border:1px solid #E8DDC0;border-radius:10px;padding:14px;margin-bottom:12px;"><div class="card-title">Why the counts differ</div><div class="english-text">Early Arabic sources define and count some events differently. Ḥamrāʾ al-Asad and al-Ḥudaybiyya are included by some sources as independent ghazawāt and excluded by others. Al-Wāqidī and Ibn Isḥāq/Ibn Hishām sometimes treat the same event as one expedition or two. The sarāyā (commissioned) count varies even more sharply: Watt reconstructs 73 from combined sources; al-Wāqidī lists 38. This page displays the 65 commissioned expeditions currently verified in the database, rather than treating a source-count claim as a completed record list.</div></div>';
   data.forEach(v=>{
     h+=`<div class="campaign-card" style="cursor:default;">
       <div class="card-body" style="padding:12px 14px;">
