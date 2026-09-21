@@ -47,7 +47,10 @@ header h1 { font-size: 1.1rem; flex: 1; }
 </header>
 <div class="intro">
   <h2>Prophetic Lifetime Campaigns</h2>
-  <p>Each campaign is documented with Qurʾān, authenticated hadith, and early sīrah sources. Classification labels show the scholarly consensus and where disputes exist — no certainty is imposed where the evidence is mixed.</p>
+  <p>Each campaign is documented with Qurʾān, hadith and sīrah sources. Classification labels show where disputes exist — no certainty is imposed where evidence is mixed.</p>
+  <div id="count-note" style="margin-top:10px;padding:10px;background:#FFF8E7;border-left:3px solid #E8C97B;font-size:13px;color:#6B5A2A;border-radius:0 6px 6px 0;">
+    <strong>Why source counts differ:</strong> this page follows Watt's reconstruction (28 personally-led + 73 commissioned = 101). Traditional sources cite 26–27 personally-led campaigns because some events (e.g., Ḥamrāʾ al-Asad, al-Ḥudaybiyya) are classified differently. Source totals are shown in the table below.
+  </div>
 </div>
 <div class="legend">
   <span class="badge defensive">● Defensive</span>
@@ -55,7 +58,12 @@ header h1 { font-size: 1.1rem; flex: 1; }
   <span class="badge disputed">● Disputed</span>
   <span class="badge no-battle">● No battle</span>
 </div>
-<div class="timeline" id="timeline">
+<div style="display:flex;gap:8px;padding:0 16px 12px;max-width:680px;margin:0 auto;">
+    <button onclick="showList('ghazwa',this)" id="btn-ghazwa" style="flex:1;padding:8px;background:#1a1a2e;color:#E8C97B;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">⚔️ Personally Led (28)</button>
+    <button onclick="showList('saraya',this)" id="btn-saraya" style="flex:1;padding:8px;background:#fff;color:#6B5A2A;border:1px solid #E8DDC0;border-radius:8px;font-size:13px;cursor:pointer;">📜 Commissioned (65)</button>
+    <button onclick="showList('sources',this)" id="btn-sources" style="flex:1;padding:8px;background:#fff;color:#6B5A2A;border:1px solid #E8DDC0;border-radius:8px;font-size:13px;cursor:pointer;">📚 Sources</button>
+  </div>
+<div id="list-ghazwa"><div class="timeline" id="timeline">
   <div class="loading"><span class="spinner"></span></div>
 </div>
 
@@ -63,59 +71,86 @@ header h1 { font-size: 1.1rem; flex: 1; }
 const SB_URL = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
 const HDR = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY };
+function classBadge(c){const m={'defensive':'<span class="badge defensive">Defensive</span>','offensive':'<span class="badge offensive">Offensive</span>','disputed':'<span class="badge disputed">Disputed</span>','pre-emptive':'<span class="badge offensive">Pre-emptive</span>','retaliatory':'<span class="badge disputed">Retaliatory</span>','diplomatic':'<span class="badge no-battle">Diplomatic</span>'};return m[c]||`<span class="badge disputed">${c||''}</span>`;}
 
-function classBadge(c) {
-  if (!c) return '';
-  if (c === 'defensive')   return '<span class="badge defensive">Defensive</span>';
-  if (c === 'offensive')   return '<span class="badge offensive">Offensive</span>';
-  if (c === 'disputed')    return '<span class="badge disputed">Disputed</span>';
-  if (c === 'pre-emptive') return '<span class="badge offensive">Pre-emptive</span>';
-  if (c === 'retaliatory') return '<span class="badge disputed">Retaliatory</span>';
-  return `<span class="badge disputed">${c}</span>`;
+let loaded={};
+function showList(type,btn){
+  document.querySelectorAll('[id^="btn-"]').forEach(b=>{b.style.background='#fff';b.style.color='#6B5A2A';b.style.border='1px solid #E8DDC0';});
+  btn.style.background='#1a1a2e';btn.style.color='#E8C97B';btn.style.border='none';
+  document.getElementById('list-ghazwa').style.display=type==='ghazwa'?'block':'none';
+  const sd=document.getElementById('list-saraya'),ss=document.getElementById('list-sources');
+  if(sd) sd.style.display=type==='saraya'?'block':'none';
+  if(ss) ss.style.display=type==='sources'?'block':'none';
+  if(!loaded[type]){loaded[type]=true;if(type==='saraya')loadSaraya();if(type==='sources')loadSources();}
 }
 
-window.addEventListener('load', async () => {
-  const el = document.getElementById('timeline');
-  try {
-    const res = await fetch(
-      `${SB_URL}/rest/v1/campaigns?period=eq.lifetime&select=slug,name,name_arabic,date_hijri,date_ce,location,opponent,outcome,classification,classification_note,summary,sort_order,muslim_forces,opponent_forces&order=sort_order.asc`,
-      { headers: HDR }
-    );
-    const data = await res.json();
-    if (!data.length) { el.innerHTML = '<div class="error">No campaigns found.</div>'; return; }
-
-    let html = '<div class="period-header">During the Prophet\'s Lifetime (622–632 CE)</div>';
-    data.forEach(c => {
-      const outcome = c.outcome ? `<div class="meta-item">📋 Outcome: <span>${c.outcome}</span></div>` : '';
-      const forces = c.muslim_forces ? `<div class="meta-item">👥 Forces: <span>${c.muslim_forces.toLocaleString()} Muslim</span>${c.opponent_forces ? ` vs <span>${c.opponent_forces.toLocaleString()}</span>` : ''}</div>` : '';
-      html += `<a class="campaign-card" href="campaign-detail.html?slug=${c.slug}">
+window.addEventListener('load', async()=>{
+  const el=document.getElementById('timeline');
+  try{
+    const r=await fetch(`${SB_URL}/rest/v1/campaigns?period=eq.lifetime&select=slug,name,name_arabic,date_hijri,date_ce,location,opponent,outcome,classification,summary,sort_order,muslim_forces,opponent_forces&order=sort_order.asc`,{headers:HDR});
+    const data=await r.json();
+    let h='<div class="period-header">Personally-led campaigns — Watt count: 28 (traditional: 26–27)</div>';
+    data.forEach(c=>{
+      h+=`<a class="campaign-card" href="campaign-detail.html?slug=${c.slug}">
         <div class="card-header">
           <div class="sort-num">${c.sort_order}</div>
-          <div class="card-name">
-            <strong>${c.name}</strong>
-            ${c.name_arabic ? `<span class="arabic">${c.name_arabic}</span>` : ''}
-          </div>
+          <div class="card-name"><strong>${c.name}</strong>${c.name_arabic?`<span class="arabic">${c.name_arabic}</span>`:''}</div>
           ${classBadge(c.classification)}
         </div>
         <div class="card-body">
-          <div class="meta-row">
-            <div class="meta-item">📅 <span>${c.date_hijri} / ${c.date_ce}</span></div>
-            <div class="meta-item">📍 <span>${c.location}</span></div>
-          </div>
-          <div class="meta-row">
-            <div class="meta-item">⚔️ Opponent: <span>${c.opponent}</span></div>
-          </div>
-          ${outcome}${forces}
-          <div class="card-summary">${c.summary || ''}</div>
+          <div class="meta-row"><div class="meta-item">📅 <span>${c.date_ce||c.date_hijri||''}</span></div><div class="meta-item">📍 <span>${c.location||''}</span></div></div>
+          <div class="meta-row"><div class="meta-item">⚔️ <span>${c.opponent||''}</span></div></div>
+          <div class="card-summary">${c.summary||''}</div>
           <span class="open-btn">Full Sources →</span>
-        </div>
-      </a>`;
+        </div></a>`;
     });
-    el.innerHTML = html;
-  } catch (e) {
-    el.innerHTML = '<div class="error">Error loading campaigns: ' + e.message + '</div>';
-  }
+    el.innerHTML=h;
+  }catch(e){el.innerHTML='<div class="error">'+e.message+'</div>';}
 });
+
+async function loadSaraya(){
+  const div=document.getElementById('saraya-list');
+  const r=await fetch(`${SB_URL}/rest/v1/campaign_saraya?period=eq.lifetime&select=*&order=sort_order.asc`,{headers:HDR});
+  const data=await r.json();
+  let prev='';let h='';
+  data.forEach(c=>{
+    if(c.ah_period!==prev){h+=`<div class="period-header">${c.ah_period}</div>`;prev=c.ah_period;}
+    h+=`<div class="campaign-card" style="cursor:default;">
+      <div class="card-header">
+        <div class="sort-num">${c.sort_order}</div>
+        <div class="card-name"><strong>${c.name}</strong></div>
+        ${classBadge(c.classification)}
+      </div>
+      <div class="card-body">
+        <div class="meta-row">
+          <div class="meta-item">👤 Commander: <span>${c.commander||'—'}</span></div>
+          <div class="meta-item">📅 <span>${c.date_ce||''}</span></div>
+          ${c.target?`<div class="meta-item">🎯 <span>${c.target}</span></div>`:''}
+        </div>
+        ${c.outcome?`<div class="meta-item">📋 <span>${c.outcome}</span></div>`:''}
+        ${c.summary?`<div class="card-summary">${c.summary}</div>`:''}
+      </div></div>`;
+  });
+  div.innerHTML=h;
+}
+
+async function loadSources(){
+  const div=document.getElementById('sources-list');
+  const r=await fetch(`${SB_URL}/rest/v1/campaign_source_counts?select=*&order=total_count.desc.nullslast`,{headers:HDR});
+  const data=await r.json();
+  let h='<div class="card" style="background:#fff;border:1px solid #E8DDC0;border-radius:10px;padding:14px;margin-bottom:12px;"><div class="card-title">Why the counts differ</div><div class="english-text">Early Arabic sources define and count some events differently. Ḥamrāʾ al-Asad and al-Ḥudaybiyya are included by some sources as independent ghazawāt and excluded by others. Al-Wāqidī and Ibn Isḥāq/Ibn Hishām sometimes treat the same event as one expedition or two. The sarāyā (commissioned) count varies even more sharply: Watt reconstructs 73 from combined sources; al-Wāqidī lists 38.</div></div>';
+  data.forEach(v=>{
+    h+=`<div class="campaign-card" style="cursor:default;">
+      <div class="card-body" style="padding:12px 14px;">
+        <strong>${v.source_name}</strong> — <em>${v.author}</em>${v.death_ce?' (d.'+v.death_ce+' CE)':''}
+        <div class="meta-row" style="margin-top:8px;">
+          ${v.ghazwa_count!=null?`<div class="meta-item">⚔️ Ghazawāt: <span>${v.ghazwa_count}</span></div>`:''}
+          ${v.sariya_count!=null?`<div class="meta-item">📜 Sarāyā: <span>${v.sariya_count}</span></div>`:''}
+          ${v.total_count!=null?`<div class="meta-item">📊 Total: <span>${v.total_count}</span></div>`:''}
+        </div>
+        ${v.notes?`<div class="card-summary" style="margin-top:6px;">${v.notes}</div>`:''}
+      </div></div>`;
+  });
+  div.innerHTML=h;
+}
 </script>
-</body>
-</html>
