@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Campaign — Qurān Ḥikma</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: Georgia, serif; background: #FBF8F0; color: #1a1a1a; padding-bottom: 80px; }
+header { background: #1a1a2e; color: #E8C97B; padding: 14px 16px; position: sticky; top: 0; z-index: 100; }
+header h1 { font-size: 1rem; }
+header .sub { font-size: 12px; color: #b89a4a; margin-top: 2px; }
+.back-btn { color: #E8C97B; text-decoration: none; font-size: 13px; }
+.tab-bar { display: flex; overflow-x: auto; gap: 0; background: #fff; border-bottom: 2px solid #E8DDC0; position: sticky; top: 52px; z-index: 99; }
+.tab-btn { padding: 10px 14px; font-size: 13px; white-space: nowrap; cursor: pointer; border: none; background: none; color: #6B5A2A; border-bottom: 2px solid transparent; margin-bottom: -2px; }
+.tab-btn.active { color: #B8902A; border-bottom-color: #B8902A; font-weight: 700; }
+.tab-panel { display: none; padding: 16px; max-width: 680px; margin: 0 auto; }
+.tab-panel.active { display: block; }
+.card { background: #fff; border: 1px solid #E8DDC0; border-radius: 10px; padding: 14px; margin-bottom: 12px; }
+.card-title { font-size: 13px; font-weight: 800; color: #8A6A18; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 8px; }
+.arabic-text { font-family: 'Scheherazade New', serif; font-size: 22px; line-height: 2; color: #1a1a2e; text-align: right; direction: rtl; margin: 6px 0; }
+.english-text { font-size: 14px; line-height: 1.7; color: #333; margin: 4px 0; }
+.meta { font-size: 12px; color: #8A6A18; margin: 4px 0; }
+.grade-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 800; margin: 4px 0; }
+.grade-sahih   { background: #D1FAE5; color: #065F46; }
+.grade-hasan   { background: #FEF9E7; color: #B7950B; }
+.grade-daif    { background: #FEE2E2; color: #7F1D1D; }
+.grade-disputed{ background: #FEF3C7; color: #78350F; }
+.status-badge  { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 800; }
+.agreed        { background: #D1FAE5; color: #065F46; }
+.contradicted  { background: #FEE2E2; color: #7F1D1D; }
+.disputed      { background: #FEF3C7; color: #78350F; }
+.later_development { background: #EEF2FF; color: #3730A3; }
+.silence       { background: #EEEEEE; color: #555; }
+.note-box { margin-top: 8px; padding: 8px 10px; background: #FFF8E7; border-left: 3px solid #E8C97B; font-size: 12.5px; color: #6B5A2A; line-height: 1.6; }
+.reliability-primary  { color: #065F46; font-weight: 700; }
+.reliability-secondary{ color: #B7950B; font-weight: 700; }
+.reliability-late     { color: #7F1D1D; font-weight: 700; }
+.reliability-disputed { color: #78350F; font-weight: 700; }
+.overview-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+.overview-item { background: #fff; border: 1px solid #E8DDC0; border-radius: 8px; padding: 10px 12px; }
+.overview-label { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: #8A6A18; margin-bottom: 4px; }
+.overview-value { font-size: 14px; font-weight: 600; }
+.class-section { background: #fff; border: 1px solid #E8DDC0; border-radius: 10px; padding: 14px; margin-bottom: 12px; }
+.spinner { display: inline-block; width: 18px; height: 18px; border: 3px solid #E8DDC0; border-top-color: #B8902A; border-radius: 50%; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading { text-align: center; padding: 40px; color: #888; }
+a { color: #B8902A; }
+</style>
+</head>
+<body>
+<header>
+  <a href="campaigns.html" class="back-btn">← All Campaigns</a>
+  <h1 id="pageTitle">Loading...</h1>
+  <div class="sub" id="pageSub"></div>
+</header>
+
+<div class="tab-bar">
+  <button class="tab-btn active" onclick="switchTab('overview',this)">📋 Overview</button>
+  <button class="tab-btn" onclick="switchTab('quran',this)">📖 Qurʾān</button>
+  <button class="tab-btn" onclick="switchTab('hadith',this)">📿 Hadith</button>
+  <button class="tab-btn" onclick="switchTab('sirah',this)">📚 Sīrah</button>
+  <button class="tab-btn" onclick="switchTab('classification',this)">⚖️ Classification</button>
+  <button class="tab-btn" onclick="switchTab('comparison',this)">🔍 Sources</button>
+  <button class="tab-btn" onclick="switchTab('people',this)">👥 People</button>
+</div>
+
+<div id="tab-overview" class="tab-panel active"><div class="loading"><span class="spinner"></span></div></div>
+<div id="tab-quran"    class="tab-panel"><div class="loading"><span class="spinner"></span></div></div>
+<div id="tab-hadith"   class="tab-panel"><div class="loading"><span class="spinner"></span></div></div>
+<div id="tab-sirah"    class="tab-panel"><div class="loading"><span class="spinner"></span></div></div>
+<div id="tab-classification" class="tab-panel"><div class="loading"><span class="spinner"></span></div></div>
+<div id="tab-comparison" class="tab-panel"><div class="loading"><span class="spinner"></span></div></div>
+<div id="tab-people"   class="tab-panel"><div class="loading"><span class="spinner"></span></div></div>
+
+<script>
+const SB_URL='https://ylosytbxpzxzwfzjpaej.supabase.co';
+const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
+const HDR={apikey:SB_KEY,Authorization:'Bearer '+SB_KEY};
+const slug=new URLSearchParams(location.search).get('slug');
+let campaign=null;
+
+function switchTab(tab,btn){
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tab-'+tab).classList.add('active');
+  btn.classList.add('active');
+}
+function grade(g){const c={'sahih':'grade-sahih','hasan':'grade-hasan','daif':'grade-daif','disputed':'grade-disputed'}[g]||'grade-disputed';return`<span class="grade-badge ${c}">${g||'ungraded'}</span>`;}
+function status(s){return`<span class="status-badge ${s||'disputed'}">${(s||'').replace(/_/g,' ')}</span>`;}
+async function get(table,filter){
+  const r=await fetch(`${SB_URL}/rest/v1/${table}?${filter}`,{headers:HDR});
+  return r.json();
+}
+
+window.addEventListener('load',async()=>{
+  if(!slug){document.getElementById('pageTitle').textContent='Campaign not found';return;}
+  const data=await get('campaigns',`slug=eq.${slug}&select=*`);
+  if(!data.length){document.getElementById('pageTitle').textContent='Not found';return;}
+  campaign=data[0];
+  document.getElementById('pageTitle').textContent=campaign.name;
+  document.getElementById('pageSub').textContent=(campaign.date_hijri||'')+(campaign.date_ce?' / '+campaign.date_ce:'');
+  renderAll();
+});
+
+async function renderAll(){
+  const id=campaign.id;
+  renderOverview();
+  const[verses,hadiths,sirahs,comparisons,people]=await Promise.all([
+    get('campaign_verses',`campaign_id=eq.${id}&select=*&order=sura,aya`),
+    get('campaign_hadith',`campaign_id=eq.${id}&select=*`),
+    get('campaign_sirah',`campaign_id=eq.${id}&select=*&order=author_death_ce`),
+    get('campaign_source_comparison',`campaign_id=eq.${id}&select=*`),
+    get('campaign_people',`campaign_id=eq.${id}&select=*`)
+  ]);
+  renderQuran(verses);
+  renderHadith(hadiths);
+  renderSirah(sirahs);
+  renderClassification(sirahs);
+  renderComparison(comparisons);
+  renderPeople(people);
+}
+
+function renderOverview(){
+  const c=campaign;
+  document.getElementById('tab-overview').innerHTML=`
+    <div class="overview-grid">
+      <div class="overview-item"><div class="overview-label">Date</div><div class="overview-value">${c.date_hijri||''} / ${c.date_ce||''}</div></div>
+      <div class="overview-item"><div class="overview-label">Location</div><div class="overview-value">${c.location||'—'}</div></div>
+      <div class="overview-item"><div class="overview-label">Opponent</div><div class="overview-value">${c.opponent||'—'}</div></div>
+      <div class="overview-item"><div class="overview-label">Outcome</div><div class="overview-value">${c.outcome||'—'}</div></div>
+      ${c.muslim_forces?`<div class="overview-item"><div class="overview-label">Muslim Forces</div><div class="overview-value">${c.muslim_forces.toLocaleString()}</div></div>`:''}
+      ${c.opponent_forces?`<div class="overview-item"><div class="overview-label">Opponent Forces</div><div class="overview-value">${c.opponent_forces.toLocaleString()}</div></div>`:''}
+      ${c.muslim_casualties!=null?`<div class="overview-item"><div class="overview-label">Muslim Casualties</div><div class="overview-value">${c.muslim_casualties}</div></div>`:''}
+      ${c.opponent_casualties!=null?`<div class="overview-item"><div class="overview-label">Opponent Casualties</div><div class="overview-value">${c.opponent_casualties}</div></div>`:''}
+    </div>
+    <div class="card"><div class="card-title">Summary</div><div class="english-text">${c.summary||''}</div></div>
+    ${c.name_arabic?`<div class="card"><div class="card-title">Arabic Name</div><div class="arabic-text">${c.name_arabic}</div></div>`:''}`;
+}
+
+function renderQuran(verses){
+  if(!verses.length){document.getElementById('tab-quran').innerHTML='<div class="loading">No verse links recorded for this campaign.</div>';return;}
+  let h='';
+  verses.forEach(v=>{
+    h+=`<div class="card">
+      <div class="card-title">Q${v.sura}:${v.aya} &nbsp; <span style="font-size:11px;color:#555;">${v.relevance||''}</span></div>
+      ${v.arabic?`<div class="arabic-text">${v.arabic}</div>`:''}
+      <div class="english-text">${v.english||''}</div>
+      ${v.tafsir_note?`<div class="note-box">📖 Tafsīr: ${v.tafsir_note}</div>`:''}
+      ${v.source_ref?`<div class="meta">Source: ${v.source_ref}</div>`:''}
+    </div>`;
+  });
+  document.getElementById('tab-quran').innerHTML=h;
+}
+
+function renderHadith(hadiths){
+  if(!hadiths.length){document.getElementById('tab-hadith').innerHTML='<div class="loading">No hadith recorded for this campaign.</div>';return;}
+  let h='';
+  hadiths.forEach(v=>{
+    h+=`<div class="card">
+      <div class="card-title">${v.collection} #${v.hadith_number}</div>
+      <div class="meta">Narrator: ${v.narrator||'—'} &nbsp; Topic: ${v.topic||'—'}</div>
+      ${grade(v.hadith_grade)} ${v.grade_source?`<span class="meta">${v.grade_source}</span>`:''}
+      ${v.arabic_exact?`<div class="arabic-text">${v.arabic_exact}</div>`:''}
+      <div class="english-text">${v.english_text||''}</div>
+      ${v.notes?`<div class="note-box">${v.notes}</div>`:''}
+      ${v.source_url?`<div class="meta" style="margin-top:6px;"><a href="${v.source_url}" target="_blank">Verify source ↗</a></div>`:''}
+    </div>`;
+  });
+  document.getElementById('tab-hadith').innerHTML=h;
+}
+
+function renderSirah(sirahs){
+  if(!sirahs.length){document.getElementById('tab-sirah').innerHTML='<div class="loading">No sīrah sources recorded.</div>';return;}
+  let h='<div class="card" style="background:#FFF8E7;"><div class="card-title">Source Distance from Event</div><div class="english-text" style="font-size:13px;">Author death dates are shown. Earlier = closer to the event. All sīrah accounts passed through oral and written chains before their current form.</div></div>';
+  sirahs.forEach(v=>{
+    const rc=`reliability-${v.reliability||'secondary'}`;
+    h+=`<div class="card">
+      <div class="card-title">${v.author} (d.${v.author_death_ce} CE) — <em>${v.work}</em></div>
+      <div class="meta">Genre: ${v.genre||'—'} &nbsp; <span class="${rc}">${(v.reliability||'').toUpperCase()}</span></div>
+      <div class="english-text" style="margin-top:6px;">${v.distance_note||''}</div>
+      <div class="english-text" style="margin-top:8px;">${v.english_text||''}</div>
+      ${v.notes?`<div class="note-box">${v.notes}</div>`:''}
+    </div>`;
+  });
+  document.getElementById('tab-sirah').innerHTML=h;
+}
+
+function renderClassification(sirahs){
+  const c=campaign;
+  let h=`<div class="class-section">
+    <div class="card-title">Classification</div>
+    <div style="font-size:1.1rem;font-weight:700;text-transform:capitalize;margin:8px 0;">${c.classification||'—'}</div>
+    <div class="english-text">${c.classification_note||'No classification note.'}</div>
+  </div>
+  <div class="card" style="background:#FFF8E7;">
+    <div class="card-title">Why classification matters</div>
+    <div class="english-text" style="font-size:13px;">Islamic law (fiqh) distinguishes between defensive jihad (farḍ ʿayn — individual obligation) and offensive expeditions (farḍ kifāya — collective). Modern legal, political and apologetic debates about Islamic warfare all turn on which label applies to which campaign. The evidence here is shown without forcing a conclusion.</div>
+  </div>`;
+  document.getElementById('tab-classification').innerHTML=h;
+}
+
+function renderComparison(comparisons){
+  if(!comparisons.length){document.getElementById('tab-comparison').innerHTML='<div class="loading">No source comparisons recorded.</div>';return;}
+  let h='';
+  // Group: agreed first, then contradicted, then disputed, then later
+  const order=['agreed','contradicted','disputed','later_development','silence'];
+  const sorted=[...comparisons].sort((a,b)=>order.indexOf(a.status)-order.indexOf(b.status));
+  sorted.forEach(v=>{
+    const agree=v.sources_agree&&v.sources_agree.length?'<div class="meta" style="margin-top:6px;">✅ Agree: '+v.sources_agree.join(', ')+'</div>':'';
+    const differ=v.sources_differ&&v.sources_differ.length?'<div class="meta">❌ Differ: '+v.sources_differ.join(', ')+'</div>':'';
+    h+=`<div class="card">
+      <div class="card-title">${v.aspect}</div>
+      ${status(v.status)}
+      <div class="english-text" style="margin-top:8px;">${v.summary||''}</div>
+      ${agree}${differ}
+      ${v.notes?`<div class="note-box">${v.notes}</div>`:''}
+    </div>`;
+  });
+  document.getElementById('tab-comparison').innerHTML=h;
+}
+
+function renderPeople(people){
+  if(!people.length){document.getElementById('tab-people').innerHTML='<div class="loading">No people recorded.</div>';return;}
+  let h='';
+  const sides={'muslim':'#D1FAE5','opponent':'#FEE2E2','neutral':'#EEF2FF'};
+  people.forEach(v=>{
+    h+=`<div class="card" style="border-left:4px solid ${sides[v.side]||'#E8DDC0'};">
+      <div class="card-title">${v.name} ${v.name_arabic?`<span class="arabic-text" style="font-size:16px;display:inline;">${v.name_arabic}</span>`:''}</div>
+      <div class="meta">Role: ${v.role||'—'} &nbsp; Side: ${v.side||'—'}</div>
+      ${v.statement?`<div class="english-text" style="margin-top:8px;font-style:italic;">"${v.statement}"</div>`:''}
+      ${v.source_ref?`<div class="meta" style="margin-top:4px;">Source: ${v.source_ref} ${grade(v.grade)}</div>`:''}
+      ${v.notes?`<div class="note-box">${v.notes}</div>`:''}
+    </div>`;
+  });
+  document.getElementById('tab-people').innerHTML=h;
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Muhammad's Campaigns — Qurān Ḥikma</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: Georgia, serif; background: #FBF8F0; color: #1a1a1a; padding-bottom: 80px; }
+header { background: #1a1a2e; color: #E8C97B; padding: 14px 16px; position: sticky; top: 0; z-index: 100; display: flex; align-items: center; gap: 12px; }
+header h1 { font-size: 1.1rem; flex: 1; }
+.back-btn { color: #E8C97B; text-decoration: none; font-size: 14px; }
+.intro { padding: 16px; max-width: 680px; margin: 0 auto; }
+.intro h2 { font-size: 1rem; color: #8A6A18; margin-bottom: 8px; text-transform: uppercase; letter-spacing: .6px; }
+.intro p { font-size: 14px; color: #555; line-height: 1.7; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 16px 12px; max-width: 680px; margin: 0 auto; }
+.badge { font-size: 11px; padding: 3px 8px; border-radius: 10px; font-weight: 700; }
+.badge.defensive   { background: #D1FAE5; color: #065F46; }
+.badge.offensive   { background: #FEE2E2; color: #7F1D1D; }
+.badge.disputed    { background: #FEF3C7; color: #78350F; }
+.badge.no-battle   { background: #EEF2FF; color: #3730A3; }
+.timeline { max-width: 680px; margin: 0 auto; padding: 0 16px; }
+.campaign-card { background: #fff; border-radius: 10px; border: 1px solid #E8DDC0; margin-bottom: 12px; overflow: hidden; cursor: pointer; text-decoration: none; display: block; color: inherit; }
+.campaign-card:hover { border-color: #B8902A; }
+.card-header { display: flex; align-items: center; gap: 10px; padding: 12px 14px 8px; }
+.sort-num { background: #E8C97B; color: #1a1a2e; font-weight: 800; width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; flex-shrink: 0; }
+.card-name { flex: 1; }
+.card-name strong { font-size: 15px; }
+.card-name .arabic { font-family: 'Scheherazade New', serif; font-size: 17px; color: #B8902A; display: block; margin-top: 2px; }
+.card-body { padding: 0 14px 12px; font-size: 13px; color: #555; }
+.meta-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0; }
+.meta-item { font-size: 12px; color: #6B5A2A; }
+.meta-item span { color: #333; font-weight: 600; }
+.card-summary { font-size: 13px; line-height: 1.6; color: #444; margin-top: 6px; }
+.open-btn { display: inline-block; margin-top: 8px; padding: 5px 12px; background: #E8C97B; color: #1a1a2e; border-radius: 15px; font-size: 12px; font-weight: 700; }
+.spinner { display: inline-block; width: 18px; height: 18px; border: 3px solid #E8DDC0; border-top-color: #B8902A; border-radius: 50%; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading { text-align: center; padding: 40px; color: #888; }
+.error { text-align: center; padding: 40px; color: #C0392B; }
+.period-header { font-size: 11px; font-weight: 800; letter-spacing: .8px; text-transform: uppercase; color: #8A6A18; border-bottom: 2px solid #E8DDC0; padding-bottom: 4px; margin: 20px 0 10px; }
+</style>
+</head>
+<body>
+<header>
+  <a href="index.html" class="back-btn">← Back</a>
+  <h1>⚔️ Muḥammad's Campaigns</h1>
+</header>
+<div class="intro">
+  <h2>Prophetic Lifetime Campaigns</h2>
+  <p>Each campaign is documented with Qurʾān, authenticated hadith, and early sīrah sources. Classification labels show the scholarly consensus and where disputes exist — no certainty is imposed where the evidence is mixed.</p>
+</div>
+<div class="legend">
+  <span class="badge defensive">● Defensive</span>
+  <span class="badge offensive">● Offensive</span>
+  <span class="badge disputed">● Disputed</span>
+  <span class="badge no-battle">● No battle</span>
+</div>
+<div class="timeline" id="timeline">
+  <div class="loading"><span class="spinner"></span></div>
+</div>
+
+<script>
+const SB_URL = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
+const HDR = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY };
+
+function classBadge(c) {
+  if (!c) return '';
+  if (c === 'defensive')   return '<span class="badge defensive">Defensive</span>';
+  if (c === 'offensive')   return '<span class="badge offensive">Offensive</span>';
+  if (c === 'disputed')    return '<span class="badge disputed">Disputed</span>';
+  if (c === 'pre-emptive') return '<span class="badge offensive">Pre-emptive</span>';
+  if (c === 'retaliatory') return '<span class="badge disputed">Retaliatory</span>';
+  return `<span class="badge disputed">${c}</span>`;
+}
+
+window.addEventListener('load', async () => {
+  const el = document.getElementById('timeline');
+  try {
+    const res = await fetch(
+      `${SB_URL}/rest/v1/campaigns?period=eq.lifetime&select=slug,name,name_arabic,date_hijri,date_ce,location,opponent,outcome,classification,classification_note,summary,sort_order,muslim_forces,opponent_forces&order=sort_order.asc`,
+      { headers: HDR }
+    );
+    const data = await res.json();
+    if (!data.length) { el.innerHTML = '<div class="error">No campaigns found.</div>'; return; }
+
+    let html = '<div class="period-header">During the Prophet\'s Lifetime (622–632 CE)</div>';
+    data.forEach(c => {
+      const outcome = c.outcome ? `<div class="meta-item">📋 Outcome: <span>${c.outcome}</span></div>` : '';
+      const forces = c.muslim_forces ? `<div class="meta-item">👥 Forces: <span>${c.muslim_forces.toLocaleString()} Muslim</span>${c.opponent_forces ? ` vs <span>${c.opponent_forces.toLocaleString()}</span>` : ''}</div>` : '';
+      html += `<a class="campaign-card" href="campaign-detail.html?slug=${c.slug}">
+        <div class="card-header">
+          <div class="sort-num">${c.sort_order}</div>
+          <div class="card-name">
+            <strong>${c.name}</strong>
+            ${c.name_arabic ? `<span class="arabic">${c.name_arabic}</span>` : ''}
+          </div>
+          ${classBadge(c.classification)}
+        </div>
+        <div class="card-body">
+          <div class="meta-row">
+            <div class="meta-item">📅 <span>${c.date_hijri} / ${c.date_ce}</span></div>
+            <div class="meta-item">📍 <span>${c.location}</span></div>
+          </div>
+          <div class="meta-row">
+            <div class="meta-item">⚔️ Opponent: <span>${c.opponent}</span></div>
+          </div>
+          ${outcome}${forces}
+          <div class="card-summary">${c.summary || ''}</div>
+          <span class="open-btn">Full Sources →</span>
+        </div>
+      </a>`;
+    });
+    el.innerHTML = html;
+  } catch (e) {
+    el.innerHTML = '<div class="error">Error loading campaigns: ' + e.message + '</div>';
+  }
+});
+</script>
+</body>
+</html>
