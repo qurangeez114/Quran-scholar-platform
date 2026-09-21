@@ -120,13 +120,20 @@ window.addEventListener('load',async()=>{
 
 async function renderSourcesDb() {
   const id = campaign.id;
+  // saraya rows have id:null; skip campaign-specific queries that would error
+  const campaignQ = id
+    ? [
+      get('campaign_source_analysis',
+        `campaign_id=eq.${id}&select=aspect,agreement_status,agreement_note,quotations(topic,arabic_text,english_text,volume,page,chapter,isnad_grade,source_id)`),
+      get('textual_tensions', `campaign_id=eq.${id}&select=*&order=id`),
+      get('later_interpretations', 'select=*&order=tension_id,scholar_death_ce.asc')
+    ]
+    : [Promise.resolve([]),Promise.resolve([]),Promise.resolve([])];
+
   const [sources, rijal, analysis, tensions, interps] = await Promise.all([
     get('maghazi_sources', 'select=*&order=years_after_badr.asc.nullslast'),
     get('rijal_assessments', 'select=*,maghazi_sources(slug)&order=source_id,critic_death_ce.asc'),
-    get('campaign_source_analysis',
-      `campaign_id=eq.${id}&select=aspect,agreement_status,agreement_note,quotations(topic,arabic_text,english_text,volume,page,chapter,isnad_grade,source_id)`),
-    get('textual_tensions', `campaign_id=eq.${id}&select=*&order=id`),
-    get('later_interpretations', 'select=*&order=tension_id,scholar_death_ce.asc')
+    ...campaignQ
   ]);
 
   const srcMap = {};
@@ -232,6 +239,12 @@ async function renderSourcesDb() {
   });
 
   /* ── SOURCE ANALYSIS ── */
+  if (!analysis.length && !isSaraya) {
+    h += '<div class="card" style="background:#FBF8F0;"><div class="card-title">Source Analysis</div><div class="english-text">No source-comparison records have been entered for this campaign yet. The source registry above identifies which of these sources covers the campaigns of this period. Research dossiers are added using the Badr model.</div></div>';
+  }
+  if (!analysis.length && isSaraya) {
+    h += '<div class="card" style="background:#FFF8E7;"><div class="card-title">Source Coverage</div><div class="english-text">Al-Kharrār and similar brief early expeditions are mentioned in passing by Ibn Isḥāq/Ibn Hishām and al-Wāqidī; neither devotes substantial analysis to them. The hadith collections (Bukhārī, Muslim) do not record specific narrations for this expedition. The Qurʾān does not address it. This is typical of expeditions that resulted in no engagement — the sources note them in lists rather than narratives.</div></div>';
+  }
   if (analysis.length) {
     h += '<h3 style="font-size:13px;font-weight:800;color:#8A6A18;margin:16px 0 10px;text-transform:uppercase;letter-spacing:.6px;">Source Comparison — Badr</h3>';
     const STATUS_STYLE = {
@@ -350,6 +363,9 @@ function renderClassification(sirahs){
     <div class="card-title">Classification</div>
     <div style="font-size:1.1rem;font-weight:700;text-transform:capitalize;margin:8px 0;">${c.classification||'—'}</div>
     <div class="english-text">${c.classification_note||'No classification note.'}</div>
+    <div class="note-box" style="margin-top:10px;">
+      <strong>Primary sources:</strong> Ibn Isḥāq/Ibn Hishām (d.833) is the earliest narrative source for all expeditions of this period. Al-Wāqidī (d.823) provides additional detail but is classed as secondary by hadith critics. Classification labels — defensive, offensive, pre-emptive — are modern analytical categories applied to early sources; they do not appear in the Arabic primary texts as fixed terms.
+    </div>
   </div>
   <div class="card" style="background:#FFF8E7;">
     <div class="card-title">Why classification matters</div>
