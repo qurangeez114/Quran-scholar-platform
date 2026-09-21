@@ -334,7 +334,7 @@ async function load() {
     try { return JSON.parse(value); } catch (error) { return []; }
   };
   const [ca, hqt, mtp, core, themed] = await Promise.all([
-    get('contradiction_analysis', 'select=id,topic,severity,category,contradiction_type,claim,position_a,position_a_holders,position_a_defense,position_b,position_b_holders,position_b_defense,sectarian_impact,socratic_questions,external_references,contradicted_by,claim_side,counter_side&order=id&limit=500'),
+    get('contradiction_analysis', 'select=id,topic,severity,category,contradiction_type,claim,sura,aya,position_a,position_a_holders,position_a_defense,position_b,position_b_holders,position_b_defense,sectarian_impact,socratic_questions,external_references,contradicted_by,claim_side,counter_side&order=id&limit=500'),
     get('hadith_quran_tensions', 'select=id,topic,severity,category,claim,quran_position,hadith_position,hadith_position_holders,hadith_position_defense,sectarian_impact,socratic_questions,external_references,hadith_collection,hadith_reference,hadith_grade&order=id'),
     get('muhammad_tension_pairs', 'select=id,title,pole_a,pole_a_verses,pole_b,pole_b_verses,core_question,status&order=id'),
     get('tensions', 'select=id,title,category,severity,primary_text_ref,conflicting_text_ref,contradiction_statement,classical_responses,modern_responses&order=id'),
@@ -342,7 +342,7 @@ async function load() {
   ]);
   const norm = (rows, source, mapper) => rows.map(row => Object.assign({ _src: source }, mapper(row)));
   _all = [
-    ...norm(ca, 'Qurʾān tensions', row => ({id:'ca-'+row.id,topic:row.topic,severity:row.severity||'medium',category:row.category,contradiction_type:row.contradiction_type,claim:row.claim,position_a:row.position_a,position_a_holders:row.position_a_holders,position_a_defense:row.position_a_defense,position_b:row.position_b,position_b_holders:row.position_b_holders,position_b_defense:row.position_b_defense,sectarian_impact:row.sectarian_impact,socratic_questions:safe(row.socratic_questions),external_references:safe(row.external_references),contradicted_by:row.contradicted_by,claim_side:safe(row.claim_side),counter_side:safe(row.counter_side)})),
+    ...norm(ca, 'Qurʾān tensions', row => ({id:'ca-'+row.id,topic:row.topic,severity:row.severity||'medium',category:row.category,contradiction_type:row.contradiction_type,claim:row.claim,sura:row.sura,aya:row.aya,position_a:row.position_a,position_a_holders:row.position_a_holders,position_a_defense:row.position_a_defense,position_b:row.position_b,position_b_holders:row.position_b_holders,position_b_defense:row.position_b_defense,sectarian_impact:row.sectarian_impact,socratic_questions:safe(row.socratic_questions),external_references:safe(row.external_references),contradicted_by:row.contradicted_by,claim_side:safe(row.claim_side),counter_side:safe(row.counter_side)})),
     ...norm(hqt, 'Hadith vs Qurʾān', row => ({id:'hq-'+row.id,topic:row.topic,severity:row.severity||'medium',category:row.category||'hadith / quran',contradiction_type:'Hadith vs Qurʾān',claim:row.claim,position_a:row.quran_position,position_b:row.hadith_position,position_b_holders:row.hadith_position_holders,position_b_defense:row.hadith_position_defense,sectarian_impact:row.sectarian_impact,socratic_questions:safe(row.socratic_questions),external_references:safe(row.external_references),_hadith:(row.hadith_collection||'')+' '+(row.hadith_reference||'')+(row.hadith_grade?' ['+row.hadith_grade+']':'')})),
     ...norm(mtp, 'Prophetic tensions', row => ({id:'mp-'+row.id,topic:row.title,severity:'medium',category:'prophetic tensions',contradiction_type:'Prophetic tension pair',claim:row.core_question,position_a:row.pole_a,position_b:row.pole_b,claim_side:safe(row.pole_a_verses),counter_side:safe(row.pole_b_verses),socratic_questions:[],external_references:[]})),
     ...norm(core, 'Core tensions', row => ({id:'tn-'+row.id,topic:row.title,severity:row.severity||'medium',category:row.category,contradiction_type:'Core tension',claim:row.contradiction_statement,position_a:row.classical_responses,position_b:row.modern_responses,socratic_questions:[],external_references:[],claim_side:row.primary_text_ref?[row.primary_text_ref]:[],counter_side:row.conflicting_text_ref?[row.conflicting_text_ref]:[]})),
@@ -440,9 +440,10 @@ function render(items) {
     var all_refs = parseVerseList(c.external_references);
     var questions = parseQuestions(c.socratic_questions);
     var sevLabel = c.severity ? (c.severity.charAt(0).toUpperCase()+c.severity.slice(1)) : 'Unknown';
+    var cardReference = (c.sura != null && c.aya != null) ? String(c.sura)+':'+String(c.aya) : (verses_a[0] || verses_b[0] || all_refs[0] || '');
 
     return '<div class="contra-card '+sc+'" id="cc_'+c.id+'">' +
-      '<div class="card-header" onclick="toggleCard('+c.id+')">' +
+      '<div class="card-header" onclick="toggleCard('+JSON.stringify(c.id)+')">' +
         '<div class="card-sev"></div>' +
         '<div class="card-main">' +
           '<div class="card-topic">'+esc(c.topic)+'</div>' +
@@ -451,7 +452,7 @@ function render(items) {
             '<span class="tag '+sevTag(c.severity)+'">'+sevLabel+'</span>' +
             (c.category ? '<span class="tag tag-cat">'+esc(c.category)+'</span>' : '') +
           '</div>' +
-          '<div class="card-verse">'+esc(String(c.sura)+':'+String(c.aya))+(c.contradicted_by ? ' · vs '+esc(c.contradicted_by.substring(0,60)) : '')+'</div>' +
+          (cardReference ? '<div class="card-verse">'+esc(cardReference)+(c.contradicted_by ? ' · vs '+esc(c.contradicted_by.substring(0,60)) : '')+'</div>' : '') +
         '</div>' +
         '<div class="card-arrow">›</div>' +
       '</div>' +
