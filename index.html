@@ -159,6 +159,7 @@ body { font-family: 'EB Garamond', Georgia, serif; background: #F5EDD8; color: #
 .verse-arabic { font-family: 'Scheherazade New', 'Amiri', serif; font-size: 28px; color: #000000; direction: rtl; text-align: right; line-height: 2.1; margin-bottom: 12px; font-weight: 600; }
 .verse-english { font-size: 17px; color: #111111; line-height: 1.9; font-style: italic; font-weight: 500; font-family: 'EB Garamond', serif; letter-spacing: 0.1px; }
 .verse-tigrinya { font-size: 16px; color: #1A1A1A; margin-top: 8px; line-height: 1.85; font-weight: 600; font-family: 'Noto Sans Ethiopic', sans-serif; }
+.verse-tigrinya2 { font-size: 15px; color: #333; margin-top: 8px; line-height: 1.9; font-family: 'Noto Sans Ethiopic', sans-serif; }
 .expand-btn { padding: 6px 12px; border: 2px solid #D4C9A8; border-radius: 20px; background: #F5F3EC; cursor: pointer; font-size: 12px; color: #555; font-weight: 700; flex-shrink: 0; align-self: center; }
 .verse-card.open .expand-btn { border-color: #B8902A; color: #B8902A; background: #FDF5DE; }
 .verse-detail { border-top: 2px solid #D4C9A8; display: none; }
@@ -2844,7 +2845,7 @@ async function loadSura(id) {
 
     // Languages that live in verse_translations (verse_key + lang) rather than
     // their own column on `ayas`. Fetched separately and merged in below.
-    const VT_LANGS = { bn: 'bengali', ms: 'malay', es: 'spanish', zh: 'chinese', sw: 'swahili', ha: 'hausa' };
+    const VT_LANGS = { bn: 'bengali', ms: 'malay', es: 'spanish', zh: 'chinese', sw: 'swahili', ha: 'hausa', ti2: 'tigrinya2', sv: 'swedish', no: 'norwegian' };
     try {
       const vtRows = await sbFetch('verse_translations', {
         select: 'verse_key,lang,text',
@@ -2963,6 +2964,7 @@ function renderVerses(ayas, suraId) {
     const arabic = getSafeArabicText(aya);
     const english = aya.english || '';
     const tigrinya = aya.tigrinya || aya.aya_text || '';
+    const tigrinya2 = aya.tigrinya2 || '';
     const amharic = aya.amharic || '';
     const oromo = aya.oromo || '';
     const somali = aya.somali || '';
@@ -3013,6 +3015,12 @@ function renderVerses(ayas, suraId) {
               <div style="font-size:10px;font-weight:700;letter-spacing:1.2px;color:#8B5A2B;text-transform:uppercase;font-style:normal;">Tigrinya · ትግርኛ · ${suraId}:${aya.aya_number}</div>
             </div>
             <div style="font-size:15px;color:#1A1A1A;line-height:1.75;font-weight:700;font-family:'Noto Sans Ethiopic',sans-serif;">${tigrinya}</div>
+          </div>` : ''}
+          ${tigrinya2 ? `<div class="verse-tigrinya2 lang-tigrinya2" style="margin-top:14px;padding-bottom:12px;border-bottom:1px solid #E8DDC0;${!langState.tigrinya2?'display:none':''}">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">
+              <div style="font-size:10px;font-weight:700;letter-spacing:1.2px;color:#7A5C2B;text-transform:uppercase;font-style:normal;">Tigrinya Tafsīr · ትግርኛ ተፍሲር · ${suraId}:${aya.aya_number}</div>
+            </div>
+            <div style="font-size:15px;color:#333;line-height:1.9;font-family:'Noto Sans Ethiopic',sans-serif;">${tigrinya2}</div>
           </div>` : ''}
           ${amharic ? `<div class="lang-amharic" style="margin-top:14px;padding-bottom:12px;border-bottom:1px solid #E8DDC0;${!langState.amharic?'display:none':''}">
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">
@@ -5092,7 +5100,8 @@ function toggleReadMode() {
 const langStateDefault = {
   arabic: true, english: true,
   translit: false, tigrinya: false, amharic: false, oromo: false, somali: false, german: false, urdu: false,
-  bengali: false, malay: false, spanish: false, chinese: false, swahili: false, hausa: false
+  bengali: false, malay: false, spanish: false, chinese: false, swahili: false, hausa: false,
+  tigrinya2: false, swedish: false, norwegian: false
 };
 const langState = (() => {
   try {
@@ -5511,7 +5520,7 @@ async function loadVerseContext(suraId, targetAya, before, after) {
     translitResults.forEach(r => { translitMap[r.n] = r.text; });
     arabicResults.forEach(r => { arabicMap[r.n] = r.text; });
 
-    const VT_LANGS = { bn: 'bengali', ms: 'malay', es: 'spanish', zh: 'chinese', sw: 'swahili', ha: 'hausa' };
+    const VT_LANGS = { bn: 'bengali', ms: 'malay', es: 'spanish', zh: 'chinese', sw: 'swahili', ha: 'hausa', ti2: 'tigrinya2', sv: 'swedish', no: 'norwegian' };
     try {
       const keys = ayaRows.map(a => `${suraId}:${a.aya_number}`).join(',');
       const vtRows = await sbFetch('verse_translations', {
@@ -6604,7 +6613,7 @@ function wrapCanvasTextMain(ctx, text, maxWidth){
 
 const SOCIAL_FIELD_MAP = {
   arabic:'arabic', translit:'arabic_transliteration', english:'english', tigrinya:'tigrinya',
-  amharic:'amharic', oromo:'oromo', somali:'somali', german:'german', urdu:'urdu', swedish:'swedish', norwegian:'norwegian',
+  amharic:'amharic', oromo:'oromo', somali:'somali', german:'german', urdu:'urdu', swedish:'swedish', norwegian:'norwegian', tigrinya2:'tigrinya2',
   bengali:'bengali', malay:'malay', spanish:'spanish', chinese:'chinese', swahili:'swahili', hausa:'hausa',
 };
 const SOCIAL_VT_LANGS = { bn:'bengali', ms:'malay', es:'spanish', zh:'chinese', sw:'swahili', ha:'hausa' };
@@ -8566,6 +8575,7 @@ const ALL_LANGS = {
   translit:  { label:'Transliteration',badge:'Aa', aliases:['romanization','latin'] },
   english:   { label:'English',        badge:'A',  aliases:['usa','uk','united states','united kingdom'] },
   tigrinya:  { label:'Tigrinya',       badge:'ት',  aliases:['eritrea','tigray'] },
+  tigrinya2: { label:'ትግርኛ ተፍሲር',      badge:'ት²', aliases:['tigrinya tafsir','tigrinya commentary','eritrea','tigray'] },
   amharic:   { label:'Amharic',        badge:'አ',  aliases:['ethiopia'] },
   oromo:     { label:'Oromo',          badge:'O',  aliases:['ethiopia','afaan oromoo'] },
   somali:    { label:'Somali',         badge:'S',  aliases:['somalia','soomaali'] },
