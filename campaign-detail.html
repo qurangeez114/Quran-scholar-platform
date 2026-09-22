@@ -61,6 +61,7 @@ a { color: #B8902A; }
   <button class="tab-btn" onclick="switchTab('hadith',this)">📿 Hadith</button>
   <button class="tab-btn" onclick="switchTab('sirah',this)">📚 Sīrah</button>
   <button class="tab-btn" onclick="switchTab('classification',this)">⚖️ Classification</button>
+  <button class="tab-btn" onclick="switchTab('fiqh',this)">⚖️ Fiqh</button>
   <button class="tab-btn" onclick="switchTab('comparison',this)">🔍 Comparison</button>
   <button class="tab-btn" onclick="switchTab('people',this)">👥 People</button>
   <button class="tab-btn" onclick="switchTab('sources-db',this)">📜 Registry</button>
@@ -77,6 +78,7 @@ a { color: #B8902A; }
 <div id="tab-people"   class="tab-panel"><div class="loading"><span class="spinner"></span></div></div>
 <div id="tab-sources-db" class="tab-panel"><div class="loading"><span class="spinner"></span></div></div>
 <div id="tab-videos" class="tab-panel"><div class="loading"><span class="spinner"></span></div></div>
+<div id="tab-fiqh" class="tab-panel"><div class="loading"><span class="spinner"></span></div></div>
 <div id="tab-videos" class="tab-panel"><div class="loading"><span class="spinner"></span></div></div>
 
 <script>
@@ -380,6 +382,42 @@ async function renderVideos() {
   el.innerHTML = h;
 }
 
+
+async function renderFiqh() {
+  const key = campaign_key_global || campaign.slug;
+  const rows = await get('campaign_fiqh', `campaign_key=eq.${key}&select=*&order=sort_order`);
+  const el = document.getElementById('tab-fiqh');
+  if (!rows.length) { el.innerHTML = noEvidence('fiqh (legal) rulings','al-Hidāya, al-Mudawwana, Minhāj al-ṭālibīn, al-Mughnī'); return; }
+
+  const SCHOOL = {hanafi:'Ḥanafī', maliki:'Mālikī', shafii:'Shāfiʿī', hanbali:'Ḥanbalī'};
+  const SCHOOL_COLOR = {hanafi:'#1e6f5c', maliki:'#8a5a18', shafii:'#1e40af', hanbali:'#7f1d1d'};
+
+  let h = '<div class="card" style="background:#F4F8FB;margin-bottom:14px;"><div style="font-size:12px;font-weight:800;color:#1A6FA8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Legal Afterlife</div><div style="font-size:13px;line-height:1.7;">Fiqh converts the Qurʾānic and hadith material of this campaign into enforceable legal status across the four Sunni schools. Tafsīr moralises; fiqh administers. The schools are not uniform — where they differ, both positions are shown.</div></div>';
+
+  rows.forEach(r => {
+    h += `<div class="card">
+      <div class="card-title">${r.topic}</div>
+      ${r.quran_basis?`<div class="meta" style="margin-bottom:6px;">Qurʾānic basis: <strong>${r.quran_basis}</strong></div>`:''}
+      <div class="english-text" style="margin-bottom:10px;">${r.ruling}</div>`;
+    if (r.schools) {
+      Object.keys(r.schools).forEach(k => {
+        if (k === 'note') {
+          h += `<div class="note-box" style="margin-top:6px;background:#FBF8F0;"><strong>Note:</strong> ${r.schools[k]}</div>`;
+        } else if (SCHOOL[k]) {
+          h += `<div style="margin:6px 0;padding:8px 10px;background:#FAFAF5;border-left:3px solid ${SCHOOL_COLOR[k]};border-radius:0 6px 6px 0;">
+            <span style="font-weight:800;color:${SCHOOL_COLOR[k]};font-size:13px;">${SCHOOL[k]}</span>
+            <div style="font-size:13px;line-height:1.6;margin-top:3px;">${r.schools[k]}</div>
+          </div>`;
+        }
+      });
+    }
+    if (r.sources) h += `<div class="meta" style="margin-top:8px;">📚 ${r.sources}</div>`;
+    if (r.caution) h += `<div class="note-box" style="margin-top:8px;background:#FFF8F8;border-color:#E8A0A0;"><strong>⚠ Caution:</strong> ${r.caution}</div>`;
+    h += `</div>`;
+  });
+  el.innerHTML = h;
+}
+
 async function renderAll(){
   const id=campaign.id;
   const key=campaign.slug||campaign.campaign_key||campaign_key_global;
@@ -399,6 +437,7 @@ async function renderAll(){
   renderPeople(people);
   renderSourcesDb();
   renderVideos();
+  renderFiqh();
   renderVideos();
 }
 
