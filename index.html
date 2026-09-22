@@ -2981,16 +2981,10 @@ function renderVerses(ayas, suraId) {
         <div class="verse-body">
           <div class="verse-actions" style="display:flex;gap:4px;justify-content:flex-end;margin-bottom:10px;flex-wrap:wrap;">
             <button onclick="event.stopPropagation();speakVerseSelected(${aya.aya_number},${suraId},this)" class="verse-tts-btn" title="Listen in selected language">🔊</button>
-            <select id="tts-lang-${aya.aya_number}" onclick="event.stopPropagation()" style="padding:3px 6px;border:1px solid #E8C97B;border-radius:8px;font-size:11px;background:#FDF8EE;color:#B8902A;outline:none;max-width:90px;" title="Select language">
-              <option value="english">English</option>
-              <option value="arabic">Arabic</option>
-              <option value="german">Deutsch</option>
-              <option value="urdu">اردو</option>
-              <option value="amharic">Amharic</option>
-              <option value="somali">Somali</option>
-              <option value="tigrinya">Tigrinya</option>
-              <option value="oromo">Oromo</option>
-            </select>
+<input type="hidden" id="tts-lang-${aya.aya_number}" value="english">
+            <div class="tts-lang-chips" onclick="event.stopPropagation()" style="display:flex;gap:4px;overflow-x:auto;max-width:100%;-webkit-overflow-scrolling:touch;padding:2px 0;flex:1;min-width:0;">
+              ${['english:English','arabic:عربي','translit:Translit','german:Deutsch','urdu:اردو','swedish:Svenska','norwegian:Norsk','amharic:አማርኛ','somali:Somali','tigrinya:ትግርኛ','oromo:Oromo'].map(function(pair){var parts=pair.split(':');var lk=parts[0];var ll=parts[1];return '<button type="button" class="tts-chip'+(lk==='english'?' active':'')+'" data-lang="'+lk+'" onclick="event.stopPropagation();selectTtsLang('+aya.aya_number+',\''+lk+'\',this)" style="flex:0 0 auto;padding:3px 9px;border:1px solid #E8C97B;border-radius:12px;font-size:11px;background:'+(lk==='english'?'#B8902A':'#FDF8EE')+';color:'+(lk==='english'?'#fff':'#B8902A')+';cursor:pointer;white-space:nowrap;font-family:inherit;">'+ll+'</button>';}).join('')}
+            </div>
             <button id="bm-${aya.aya_number}" onclick="event.stopPropagation();toggleBookmark(${aya.aya_number},${suraId})" title="Bookmark" style="background:#FDF8EE;border:1px solid #E8C97B;border-radius:6px;width:32px;height:30px;font-size:14px;cursor:pointer;padding:0;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;">${isBookmarked(aya.aya_number,suraId)?'🔖':'🏷️'}</button>
             <button onclick="event.stopPropagation();showVerseHlPicker(${aya.aya_number},${suraId},this)" title="Highlight text" style="background:#FDF8EE;border:1px solid #E8C97B;border-radius:6px;width:32px;height:30px;font-size:14px;cursor:pointer;padding:0;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;">🖊</button>
             <button onclick="event.stopPropagation();openNote(${aya.aya_number},${suraId})" title="Add note" style="background:#FDF8EE;border:1px solid #E8C97B;border-radius:6px;width:32px;height:30px;font-size:14px;cursor:pointer;padding:0;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;">📝</button>
@@ -8462,6 +8456,21 @@ const LANG_TTS_MAP = {
 
 let _verseTtsSpeaking = false;
 let _verseTtsBtn = null;
+
+
+function selectTtsLang(ayaNum, lang, btn) {
+  var inp = document.getElementById('tts-lang-' + ayaNum);
+  if (inp) inp.value = lang;
+  var row = btn.parentElement;
+  Array.prototype.forEach.call(row.querySelectorAll('.tts-chip'), function(c){
+    c.classList.remove('active');
+    c.style.background = '#FDF8EE';
+    c.style.color = '#B8902A';
+  });
+  btn.classList.add('active');
+  btn.style.background = '#B8902A';
+  btn.style.color = '#fff';
+}
 
 function speakVerseSelected(ayaNum, suraId, btn) {
   const sel = document.getElementById('tts-lang-' + ayaNum);
