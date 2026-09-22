@@ -16,8 +16,9 @@
   .qbtn.active{background:#5A3A10;color:#fff;border-color:#5A3A10}
   .question{padding:12px 14px;background:#FBF3DE;border-bottom:1px solid #EFE3C4;font-size:13px;color:#5A3A10}
   .question b{color:#B8902A}
-  .cols{display:flex;flex-wrap:wrap;gap:10px;padding:12px 14px 40px;align-items:flex-start}
+  .cols{display:flex;flex-wrap:nowrap;gap:12px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding:12px 14px 40px;align-items:flex-start}
   .col{flex:0 0 300px;max-width:300px}
+  .tier-col .col{flex:1 1 auto !important;max-width:100% !important;width:100%}
   .fac-header{font-size:13px;font-weight:800;color:#fff;padding:8px 12px;border-radius:8px 8px 0 0}
   .verse-card{padding:12px;border:1px solid #E8E0D0;border-top:none;background:#FFF;border-left-width:4px}
   .vk{font-size:10px;font-weight:700;color:#B8902A}
@@ -269,16 +270,21 @@ function render(){
   const tierOf=fa=>{const m=/^(good|bad|worst)_/.exec(fa);return m?m[1]:null;};
   const hasTiers=facets.some(tierOf);
   if(hasTiers){
+    // Three tier COLUMNS side by side; each holds its banner + facet cards stacked
     ['good','bad','worst'].forEach(tk=>{
       const tierFacets=facets.filter(fa=>tierOf(fa)===tk);
       if(!tierFacets.length)return;
       const t=TIER[tk];
-      const banner=document.createElement('div');banner.className='tier-banner';
-      banner.style.cssText='flex:0 0 100%;width:100%;background:'+t.color+';color:#fff;padding:10px 14px;border-radius:10px;margin:4px 0 2px;font-weight:800;font-size:13px;letter-spacing:.3px;';
+      const tierCol=document.createElement('div');
+      tierCol.className='tier-col';
+      tierCol.style.cssText='flex:0 0 320px;max-width:320px;display:flex;flex-direction:column;gap:8px;';
       const cnt=F.filter(r=>tierOf(r.facet)===tk).length;
+      const banner=document.createElement('div');
+      banner.style.cssText='background:'+t.color+';color:#fff;padding:10px 14px;border-radius:10px;font-weight:800;font-size:13px;letter-spacing:.3px;position:sticky;top:0;z-index:2;';
       banner.innerHTML=t.label+' <span style="opacity:.85;font-weight:600">('+cnt+' verses)</span>';
-      wrap.appendChild(banner);
-      renderFacetCols(tierFacets,wrap);
+      tierCol.appendChild(banner);
+      renderFacetCols(tierFacets,tierCol);
+      wrap.appendChild(tierCol);
     });
   } else {
     renderFacetCols(facets,wrap);
