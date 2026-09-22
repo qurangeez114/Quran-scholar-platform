@@ -55,7 +55,7 @@
       localStorage.setItem(key, JSON.stringify({
         sura: suraId, aya: ayaNum,
         arabic: v.arabic || '', english: v.english || '',
-        tigrinya: v.tigrinya || '', amharic: v.amharic || '',
+        tigrinya: v.tigrinya || '', tigrinya2: v.tigrinya2 || '', swedish: v.swedish || '', norwegian: v.norwegian || '', amharic: v.amharic || '',
         saved: new Date().toISOString()
       }));
       if (btn) btn.textContent = '\u{1F516}';
@@ -80,7 +80,8 @@
         '<button onclick="event.stopPropagation();speakVerseSelected(' + a + ',' + s + ',this)" class="verse-tts-btn" title="Listen in selected language">\u{1F50A}</button>' +
         '<select id="tts-lang-' + a + '" onclick="event.stopPropagation()" title="Select language" style="padding:3px 6px;border:1px solid #E8C97B;border-radius:8px;font-size:11px;background:#FDF8EE;color:#B8902A;outline:none;max-width:90px;">' +
           '<option value="english">English</option><option value="arabic">Arabic</option>' +
-          '<option value="tigrinya">Tigrinya</option><option value="amharic">Amharic</option>' +
+          '<option value="tigrinya">Tigrinya</option><option value="tigrinya2">ትግርኛ ተፍሲር</option><option value="amharic">Amharic</option>' +
+          '<option value="swedish">Svenska</option><option value="norwegian">Norsk</option>' +
           '<option value="german">Deutsch</option><option value="urdu">\u0627\u0631\u062F\u0648</option>' +
           '<option value="somali">Somali</option><option value="oromo">Oromo</option>' +
         '</select>' +
@@ -110,6 +111,7 @@
     translit:  { label:'Transliteration',badge:'Aa', aliases:['romanization','latin'] },
     english:   { label:'English',        badge:'A',  aliases:['usa','uk','united states','united kingdom'] },
     tigrinya:  { label:'Tigrinya',       badge:'ት',  aliases:['eritrea','tigray'] },
+    tigrinya2: { label:'ትግርኛ ተፍሲር',      badge:'ት²', aliases:['tigrinya tafsir','tigrinya commentary','eritrea','tigray'] },
     amharic:   { label:'Amharic',        badge:'አ',  aliases:['ethiopia'] },
     oromo:     { label:'Oromo',          badge:'O',  aliases:['ethiopia','afaan oromoo'] },
     somali:    { label:'Somali',         badge:'S',  aliases:['somalia','soomaali'] },
@@ -121,17 +123,21 @@
     chinese:   { label:'Chinese',        badge:'中', aliases:['china','mandarin','中文'] },
     swahili:   { label:'Swahili',        badge:'K',  aliases:['kenya','tanzania','uganda','kiswahili'] },
     hausa:     { label:'Hausa',          badge:'H',  aliases:['nigeria','niger','west africa'] },
+    swedish:   { label:'Svenska',        badge:'🇸🇪', aliases:['sweden','sverige'] },
+    norwegian: { label:'Norsk',          badge:'🇳🇴', aliases:['norway','norge'] },
   };
 
   const LANG_TTS_MAP = {
     arabic:'ar-SA', english:'en-US', tigrinya:'', amharic:'am-ET',
-    oromo:'', somali:'so-SO', german:'de-DE', urdu:'ur-PK', translit:'en-US'
+    oromo:'', somali:'so-SO', german:'de-DE', urdu:'ur-PK', translit:'en-US',
+    tigrinya2:'', swedish:'sv-SE', norwegian:'nb-NO'
   };
 
   const SOCIAL_FIELD_MAP = {
     arabic:'arabic', translit:'arabic_transliteration', english:'english', tigrinya:'tigrinya',
     amharic:'amharic', oromo:'oromo', somali:'somali', german:'german', urdu:'urdu',
     bengali:'bengali', malay:'malay', spanish:'spanish', chinese:'chinese', swahili:'swahili', hausa:'hausa',
+    tigrinya2:'tigrinya2', swedish:'swedish', norwegian:'norwegian',
   };
 
   const SOCIAL_FORMATS_MAIN = {
@@ -141,12 +147,13 @@
     wide:   { w: 1200, h: 675 },
   };
 
-  const SOCIAL_VT_LANGS = { bn:'bengali', ms:'malay', es:'spanish', zh:'chinese', sw:'swahili', ha:'hausa' };
+  const SOCIAL_VT_LANGS = { bn:'bengali', ms:'malay', es:'spanish', zh:'chinese', sw:'swahili', ha:'hausa', ti2:'tigrinya2', sv:'swedish', no:'norwegian' };
 
   const langStateDefault = {
   arabic: true, english: true,
   translit: false, tigrinya: false, amharic: false, oromo: false, somali: false, german: false, urdu: false,
-  bengali: false, malay: false, spanish: false, chinese: false, swahili: false, hausa: false
+  bengali: false, malay: false, spanish: false, chinese: false, swahili: false, hausa: false,
+  tigrinya2: false, swedish: false, norwegian: false
 };
   const langState = (() => {
     try {
@@ -196,6 +203,9 @@
       'lang-translit': 'Transliteration',
       'lang-english': 'English',
       'lang-tigrinya': 'Tigrinya',
+      'lang-tigrinya2': 'ትግርኛ ተፍሲር',
+      'lang-swedish': 'Svenska',
+      'lang-norwegian': 'Norsk',
       'lang-amharic': 'Amharic',
       'lang-oromo': 'Oromo',
       'lang-somali': 'Somali'
@@ -435,7 +445,7 @@
     console.log('[OPEN CARD] Cache keys available:', window._crossRefThemeLists ? Object.keys(window._crossRefThemeLists) : 'NO CACHE');
   
     try {
-      const res = await fetch(`${SUPABASE_URL}/rest/v1/ayas?select=arabic,arabic_transliteration,english,tigrinya,amharic,oromo,somali,german,urdu&sura_id=eq.${sura}&aya_number=eq.${aya}`,
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/ayas?select=arabic,arabic_transliteration,english,tigrinya,tigrinya2,amharic,oromo,somali,german,urdu,swedish,norwegian&sura_id=eq.${sura}&aya_number=eq.${aya}`,
         { headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY } });
       const rows = await res.json();
       _socialMainVerse = rows[0] || {};
