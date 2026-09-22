@@ -16,7 +16,7 @@
   .qbtn.active{background:#5A3A10;color:#fff;border-color:#5A3A10}
   .question{padding:12px 14px;background:#FBF3DE;border-bottom:1px solid #EFE3C4;font-size:13px;color:#5A3A10}
   .question b{color:#B8902A}
-  .cols{display:flex;gap:10px;overflow-x:auto;padding:12px 14px 40px;align-items:flex-start}
+  .cols{display:flex;flex-wrap:wrap;gap:10px;padding:12px 14px 40px;align-items:flex-start}
   .col{flex:0 0 300px;max-width:300px}
   .fac-header{font-size:13px;font-weight:800;color:#fff;padding:8px 12px;border-radius:8px 8px 0 0}
   .verse-card{padding:12px;border:1px solid #E8E0D0;border-top:none;background:#FFF;border-left-width:4px}
@@ -262,6 +262,29 @@ function saveToNotes(idx){
 function render(){
   const facets=[...new Set(F.map(r=>r.facet))];const wrap=document.getElementById('cols');wrap.innerHTML='';
   SPEAK_CARDS=[];
+  // Group facets into tiers by prefix (good_/bad_/worst_) when present
+  const TIER={good:{label:'The Good — honor, recognition, coexistence',color:'#2E7D32',bg:'#F0F8F0'},
+              bad:{label:'The Bad — polemic, correction, conflict',color:'#E67E22',bg:'#FDF6EF'},
+              worst:{label:'The Worst — curse, transformation, imprecation',color:'#C0392B',bg:'#FCF0EF'}};
+  const tierOf=fa=>{const m=/^(good|bad|worst)_/.exec(fa);return m?m[1]:null;};
+  const hasTiers=facets.some(tierOf);
+  if(hasTiers){
+    ['good','bad','worst'].forEach(tk=>{
+      const tierFacets=facets.filter(fa=>tierOf(fa)===tk);
+      if(!tierFacets.length)return;
+      const t=TIER[tk];
+      const banner=document.createElement('div');banner.className='tier-banner';
+      banner.style.cssText='flex:0 0 100%;width:100%;background:'+t.color+';color:#fff;padding:10px 14px;border-radius:10px;margin:4px 0 2px;font-weight:800;font-size:13px;letter-spacing:.3px;';
+      const cnt=F.filter(r=>tierOf(r.facet)===tk).length;
+      banner.innerHTML=t.label+' <span style="opacity:.85;font-weight:600">('+cnt+' verses)</span>';
+      wrap.appendChild(banner);
+      renderFacetCols(tierFacets,wrap);
+    });
+  } else {
+    renderFacetCols(facets,wrap);
+  }
+}
+function renderFacetCols(facets,wrap){
   facets.forEach(fa=>{const vs=F.filter(r=>r.facet===fa);const col=document.createElement('div');col.className='col';
     const color=vs[0].highlight_color||'#9E9E9E';
     let h='<div class="fac-header" style="background:'+color+'">'+(vs[0].facet_label||fa)+'</div>';
