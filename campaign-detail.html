@@ -64,6 +64,7 @@ a { color: #B8902A; }
   <button class="tab-btn" onclick="switchTab('comparison',this)">🔍 Comparison</button>
   <button class="tab-btn" onclick="switchTab('people',this)">👥 People</button>
   <button class="tab-btn" onclick="switchTab('sources-db',this)">📜 Registry</button>
+  <button class="tab-btn" onclick="switchTab('videos',this)">🎥 Videos</button>
 </div>
 
 <div id="tab-overview" class="tab-panel active"><div class="loading"><span class="spinner"></span></div></div>
@@ -74,6 +75,7 @@ a { color: #B8902A; }
 <div id="tab-comparison" class="tab-panel"><div class="loading"><span class="spinner"></span></div></div>
 <div id="tab-people"   class="tab-panel"><div class="loading"><span class="spinner"></span></div></div>
 <div id="tab-sources-db" class="tab-panel"><div class="loading"><span class="spinner"></span></div></div>
+<div id="tab-videos" class="tab-panel"><div class="loading"><span class="spinner"></span></div></div>
 
 <script>
 const SB_URL='https://ylosytbxpzxzwfzjpaej.supabase.co';
@@ -275,6 +277,60 @@ async function renderSourcesDb() {
 
   document.getElementById('tab-sources-db').innerHTML = h;
 }
+
+async function renderVideos() {
+  const key = campaign_key_global || campaign.slug;
+  const videos = await get('campaign_video_resources',
+    `campaign_key=eq.${key}&select=*&order=perspective.asc,id.asc`);
+
+  const PERSP_STYLE = {
+    traditional:  { bg:'#FFF8E7', border:'#C8A83A', label:'Traditional Islamic',  badge:'background:#C8A83A;color:#fff' },
+    academic:     { bg:'#EFF6FF', border:'#1A6FA8', label:'Academic / Historical', badge:'background:#1A6FA8;color:#fff' },
+    critical:     { bg:'#FEF2F2', border:'#B91C1C', label:'Critical / Comparative',badge:'background:#B91C1C;color:#fff' },
+    comparative:  { bg:'#F0FDF4', border:'#166534', label:'Comparative',           badge:'background:#166534;color:#fff' }
+  };
+
+  const disclaimer = `<div class="card" style="background:#FBF8F0;border:1px solid #E8DDC0;margin-bottom:14px;">
+    <div style="font-size:12px;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">About These Videos</div>
+    <div style="font-size:13px;line-height:1.7;">Videos are supplementary learning material — not independent early sources. They never replace the Qurʾān, hadith, sīrah, or source-comparison evidence in the other tabs. Each video is labelled by perspective and carries a caution note about its approach to primary sources.</div>
+  </div>`;
+
+  if (!videos.length) {
+    document.getElementById('tab-videos').innerHTML = disclaimer
+      + noEvidence('video resources','This tab will be updated as vetted content is identified. Perspective labels and caution notes are required for inclusion.');
+    return;
+  }
+
+  let h = disclaimer;
+  videos.forEach(v => {
+    const ps = PERSP_STYLE[v.perspective] || PERSP_STYLE.traditional;
+    const ytURL = v.youtube_id ? `https://www.youtube.com/watch?v=${v.youtube_id}` : v.url;
+    const thumbURL = v.youtube_id ? `https://img.youtube.com/vi/${v.youtube_id}/mqdefault.jpg` : null;
+    h += `<div class="card" style="background:${ps.bg};border-left:4px solid ${ps.border};margin-bottom:12px;">
+      <div style="display:flex;gap:10px;align-items:flex-start;">
+        ${thumbURL ? `<a href="${ytURL}" target="_blank" rel="noopener" style="flex-shrink:0;">
+          <img src="${thumbURL}" alt="" style="width:100px;height:56px;object-fit:cover;border-radius:5px;border:1px solid ${ps.border};">
+        </a>` : ''}
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:14px;font-weight:700;margin-bottom:4px;line-height:1.3;">
+            <a href="${ytURL}" target="_blank" rel="noopener" style="color:#1A3A5C;text-decoration:none;">${v.title} ↗</a>
+          </div>
+          <div style="font-size:12px;color:#666;margin-bottom:6px;">${v.channel}${v.speaker && v.speaker !== v.channel ? ' · ' + v.speaker : ''}</div>
+          <span style="font-size:11px;padding:2px 7px;border-radius:10px;font-weight:700;${ps.badge}">${ps.label}</span>
+          ${v.duration_min ? `<span class="meta" style="margin-left:6px;">${v.duration_min} min</span>` : ''}
+          ${v.language && v.language !== 'English' ? `<span class="meta" style="margin-left:6px;">${v.language}</span>` : ''}
+        </div>
+      </div>
+      ${v.covers ? `<div style="margin-top:10px;font-size:12.5px;"><strong>Covers:</strong> ${v.covers}</div>` : ''}
+      ${v.caution ? `<div style="margin-top:6px;font-size:12px;color:#7F1D1D;background:#FFF0F0;border-radius:5px;padding:6px 8px;">
+        <strong>⚠ Note:</strong> ${v.caution}
+      </div>` : ''}
+    </div>`;
+  });
+
+  document.getElementById('tab-videos').innerHTML = h;
+}
+
 async function renderAll(){
   const id=campaign.id;
   const key=campaign.slug||campaign.campaign_key||campaign_key_global;
@@ -293,6 +349,7 @@ async function renderAll(){
   renderComparison(comparisons);
   renderPeople(people);
   renderSourcesDb();
+  renderVideos();
 }
 
 function renderOverview(){
