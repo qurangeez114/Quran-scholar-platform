@@ -82,6 +82,7 @@ const HDR={apikey:SB_KEY,Authorization:'Bearer '+SB_KEY};
 const slug=new URLSearchParams(location.search).get('slug');
 let campaign=null;
 let isSaraya=false;
+let campaign_key_global="";
 
 function switchTab(tab,btn){
   document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
@@ -112,6 +113,7 @@ window.addEventListener('load',async()=>{
       commander:r.commander,watt_number:r.watt_number}];
   }
   campaign=data[0];
+  campaign_key_global=campaign.slug||slug;
   document.getElementById('pageTitle').textContent=campaign.name;
   document.getElementById('pageSub').textContent=(campaign.date_hijri||'')+(campaign.date_ce?' / '+campaign.date_ce:'');
   renderAll();
@@ -120,12 +122,13 @@ window.addEventListener('load',async()=>{
 
 async function renderSourcesDb() {
   const id = campaign.id;
+  const key = campaign_key_global || campaign.slug;
   // saraya rows have id:null; skip campaign-specific queries that would error
-  const campaignQ = id
+  const campaignQ = (key && key.length>0)
     ? [
       get('campaign_source_analysis',
-        `campaign_id=eq.${id}&select=aspect,agreement_status,agreement_note,quotations(topic,arabic_text,english_text,volume,page,chapter,isnad_grade,source_id)`),
-      get('textual_tensions', `campaign_id=eq.${id}&select=*&order=id`),
+        `campaign_key=eq.${key}&select=aspect,agreement_status,agreement_note,quotations(topic,arabic_text,english_text,volume,page,chapter,isnad_grade,source_id)`),
+      get('textual_tensions', `campaign_key=eq.${key}&select=*&order=id`),
       get('later_interpretations', 'select=*&order=tension_id,scholar_death_ce.asc')
     ]
     : [Promise.resolve([]),Promise.resolve([]),Promise.resolve([])];
@@ -274,13 +277,14 @@ async function renderSourcesDb() {
 }
 async function renderAll(){
   const id=campaign.id;
+  const key=campaign.slug||campaign.campaign_key||campaign_key_global;
   renderOverview();
   const[verses,hadiths,sirahs,comparisons,people]=await Promise.all([
-    get('campaign_verses',`campaign_id=eq.${id}&select=*&order=sura,aya`),
-    get('campaign_hadith',`campaign_id=eq.${id}&select=*`),
-    get('campaign_sirah',`campaign_id=eq.${id}&select=*&order=author_death_ce`),
-    get('campaign_source_comparison',`campaign_id=eq.${id}&select=*`),
-    get('campaign_people',`campaign_id=eq.${id}&select=*`)
+    get('campaign_verses',`campaign_key=eq.${key}&select=*&order=sura,aya`),
+    get('campaign_hadith',`campaign_key=eq.${key}&select=*`),
+    get('campaign_sirah',`campaign_key=eq.${key}&select=*&order=author_death_ce`),
+    get('campaign_source_comparison',`campaign_key=eq.${key}&select=*`),
+    get('campaign_people',`campaign_key=eq.${key}&select=*`)
   ]);
   renderQuran(verses);
   renderHadith(hadiths);
@@ -309,8 +313,19 @@ function renderOverview(){
     ${c.name_arabic?`<div class="card"><div class="card-title">Arabic Name</div><div class="arabic-text">${c.name_arabic}</div></div>`:''}`;
 }
 
+
+function noEvidence(tabName, searchedSources) {
+  searchedSources = searchedSources || 'Ṣaḥīḥ al-Bukhārī, Ṣaḥīḥ Muslim, Sunan Abī Dāwūd, Jāmiʿ al-Tirmidhī, Musnad Aḥmad';
+  return '<div class="card" style="background:#F8F8F0;border:1px solid #DDD;border-radius:10px;padding:14px;">'
+    + '<div style="font-size:12px;font-weight:800;color:#888;letter-spacing:.5px;text-transform:uppercase;margin-bottom:8px;">No Direct Evidence Located</div>'
+    + '<div style="font-size:13px;line-height:1.7;color:#444;">No ' + tabName + ' material directly attesting to this specific expedition has been located in the sources searched. '
+    + 'This does not mean the expedition did not occur; it reflects the limits of the preserved record.</div>'
+    + '<div style="margin-top:8px;font-size:12px;color:#888;"><strong>Sources searched:</strong> ' + searchedSources + '</div>'
+    + '</div>';
+}
+
 function renderQuran(verses){
-  if(!verses.length){document.getElementById('tab-quran').innerHTML='<div class="loading">No verse links recorded for this campaign.</div>';return;}
+  if(!verses.length){document.getElementById('tab-quran').innerHTML=noEvidence('Qurʾānic verses');return;}
   let h='';
   verses.forEach(v=>{
     h+=`<div class="card verse-card" data-sura="${v.sura}" data-aya="${v.aya}">
@@ -325,7 +340,7 @@ function renderQuran(verses){
 }
 
 function renderHadith(hadiths){
-  if(!hadiths.length){document.getElementById('tab-hadith').innerHTML='<div class="loading">No hadith recorded for this campaign.</div>';return;}
+  if(!hadiths.length){document.getElementById('tab-hadith').innerHTML=noEvidence('hadith','Ṣaḥīḥ al-Bukhārī, Ṣaḥīḥ Muslim, Sunan Abī Dāwūd, Jāmiʿ al-Tirmidhī, Sunan Ibn Mājah, Musnad Aḥmad');return;}
   let h='';
   hadiths.forEach(v=>{
     h+=`<div class="card">
@@ -342,7 +357,7 @@ function renderHadith(hadiths){
 }
 
 function renderSirah(sirahs){
-  if(!sirahs.length){document.getElementById('tab-sirah').innerHTML='<div class="loading">No sīrah sources recorded.</div>';return;}
+  if(!sirahs.length){document.getElementById('tab-sirah').innerHTML=noEvidence('sīrah source material','Ibn Isḥāq (ed. Ibn Hishām), Al-Wāqidī, Ibn Saʿd, Al-Ṭabarī');return;}
   let h='<div class="card" style="background:#FFF8E7;"><div class="card-title">Source Distance from Event</div><div class="english-text" style="font-size:13px;">Author death dates are shown. Earlier = closer to the event. All sīrah accounts passed through oral and written chains before their current form.</div></div>';
   sirahs.forEach(v=>{
     const rc=`reliability-${v.reliability||'secondary'}`;
@@ -395,7 +410,7 @@ function renderComparison(comparisons){
 }
 
 function renderPeople(people){
-  if(!people.length){document.getElementById('tab-people').innerHTML='<div class="loading">No people recorded.</div>';return;}
+  if(!people.length){document.getElementById('tab-people').innerHTML=noEvidence('named participants','Ibn Isḥāq, Al-Wāqidī, Ibn Saʿd');return;}
   let h='';
   const sides={'muslim':'#D1FAE5','opponent':'#FEE2E2','neutral':'#EEF2FF'};
   people.forEach(v=>{
