@@ -429,7 +429,7 @@ async function renderAll(){
     get('campaign_source_comparison',`campaign_key=eq.${key}&select=*`),
     get('campaign_people',`campaign_key=eq.${key}&select=*`)
   ]);
-  renderQuran(verses);
+  await renderQuran(verses);
   renderHadith(hadiths);
   renderSirah(sirahs);
   renderClassification(sirahs);
@@ -470,19 +470,63 @@ function noEvidence(tabName, searchedSources) {
     + '</div>';
 }
 
-function renderQuran(verses){
-  if(!verses.length){document.getElementById('tab-quran').innerHTML=noEvidence('Qurʾānic verses');return;}
+const QV_LANGS = [
+  {code:'en', col:'english',   label:'English'},
+  {code:'ar', col:'arabic',    label:'عربي', arabic:true},
+  {code:'de', col:'german',    label:'Deutsch'},
+  {code:'ur', col:'urdu',      label:'اردو', arabic:true},
+  {code:'am', col:'amharic',   label:'አማርኛ'},
+  {code:'so', col:'somali',    label:'Somali'},
+  {code:'ti', col:'tigrinya',  label:'ትግርኛ'},
+  {code:'ti2',col:'tigrinya2', label:'ትግርኛ ተፍሲር'},
+  {code:'om', col:'oromo',     label:'Oromoo'},
+  {code:'sv', col:'swedish',   label:'Svenska'},
+  {code:'no', col:'norwegian', label:'Norsk'}
+];
+
+async function renderQuran(verses){
+  const el=document.getElementById('tab-quran');
+  if(!verses.length){el.innerHTML=noEvidence('Qurʾānic verses');return;}
+
+  // Fetch full translations for each referenced ayah from the ayas table
+  const keys=verses.map(v=>`and(sura_id.eq.${v.sura},aya_number.eq.${v.aya})`).join(',');
+  let ayaMap={};
+  try{
+    const rows=await get('ayas', `or=(${keys})&select=sura_id,aya_number,arabic,english,german,urdu,amharic,somali,tigrinya,tigrinya2,oromo,swedish,norwegian`);
+    rows.forEach(r=>{ ayaMap[r.sura_id+':'+r.aya_number]=r; });
+  }catch(e){/* fall back to stored english/arabic only */}
+
   let h='';
-  verses.forEach(v=>{
+  verses.forEach((v,idx)=>{
+    const aya=ayaMap[v.sura+':'+v.aya]||{};
+    const avail=QV_LANGS.filter(l=>{
+      if(l.code==='en') return true;
+      if(l.code==='ar') return !!(aya.arabic||v.arabic);
+      return !!aya[l.col];
+    });
+    const chips=avail.map(l=>`<button type="button" class="qv-chip${l.code==='en'?' active':''}" data-v="${idx}" data-lang="${l.code}" onclick="qvPick(${idx},'${l.code}',this)" style="flex:0 0 auto;padding:3px 9px;border:1px solid #E8C97B;border-radius:12px;font-size:11px;background:${l.code==='en'?'#B8902A':'#FDF8EE'};color:${l.code==='en'?'#fff':'#B8902A'};cursor:pointer;white-space:nowrap;font-family:inherit;">${l.label}</button>`).join('');
+    const bodies=avail.map(l=>{
+      const txt = l.code==='ar' ? (aya.arabic||v.arabic||'') : (l.code==='en' ? (aya.english||v.english||'') : (aya[l.col]||''));
+      const cls = (l.arabic) ? 'arabic-text' : 'english-text';
+      return `<div class="qv-body" data-v="${idx}" data-lang="${l.code}" style="${l.code==='en'?'':'display:none;'}"><div class="${cls}">${txt}</div></div>`;
+    }).join('');
     h+=`<div class="card verse-card" data-sura="${v.sura}" data-aya="${v.aya}">
       <div class="card-title">Q${v.sura}:${v.aya} &nbsp; <span style="font-size:11px;color:#555;">${v.relevance||''}</span></div>
-      ${v.arabic?`<div class="arabic-text">${v.arabic}</div>`:''}
-      <div class="english-text">${v.english||''}</div>
+      ${(aya.arabic||v.arabic)?`<div class="arabic-text">${aya.arabic||v.arabic}</div>`:''}
+      <div class="qv-chips" style="display:flex;gap:4px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding:6px 0;margin-top:6px;">${chips}</div>
+      ${bodies}
       ${v.tafsir_note?`<div class="note-box">📖 Tafsīr: ${v.tafsir_note}</div>`:''}
       ${v.source_ref?`<div class="meta">Source: ${v.source_ref}</div>`:''}
     </div>`;
   });
-  document.getElementById('tab-quran').innerHTML=h;
+  el.innerHTML=h;
+}
+
+function qvPick(idx,lang,btn){
+  const card=btn.closest('.card');
+  card.querySelectorAll('.qv-chip[data-v="'+idx+'"]').forEach(c=>{c.classList.remove('active');c.style.background='#FDF8EE';c.style.color='#B8902A';});
+  btn.classList.add('active');btn.style.background='#B8902A';btn.style.color='#fff';
+  card.querySelectorAll('.qv-body[data-v="'+idx+'"]').forEach(b=>{ b.style.display = (b.getAttribute('data-lang')===lang)?'':'none'; });
 }
 
 function renderHadith(hadiths){
