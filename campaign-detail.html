@@ -102,6 +102,23 @@ async function get(table,filter){
   const r=await fetch(`${SB_URL}/rest/v1/${table}?${filter}`,{headers:HDR});
   return r.json();
 }
+function uniqById(rows){
+  const out=[], seen=new Set();
+  (rows||[]).forEach(r=>{
+    const k = (r && r.id!=null) ? ('id:'+r.id) : JSON.stringify(r);
+    if(seen.has(k)) return;
+    seen.add(k); out.push(r);
+  });
+  return out;
+}
+async function getByCampaignKeys(table, keys, extra){
+  const ks=[...new Set((keys||[]).filter(Boolean))];
+  if(!ks.length) return [];
+  const parts=ks.map(k=>'campaign_key.eq.'+encodeURIComponent(k));
+  const filter='or=('+parts.join(',')+')&'+(extra||'select=*');
+  const rows=await get(table, filter);
+  return Array.isArray(rows)?uniqById(rows):[];
+}
 
 window.addEventListener('load',async()=>{
   if(!slug){document.getElementById('pageTitle').textContent='Campaign not found';return;}
@@ -119,7 +136,7 @@ window.addEventListener('load',async()=>{
       commander:r.commander,watt_number:r.watt_number}];
   }
   campaign=data[0];
-  campaign_key_global=campaign.slug||slug;
+  campaign_key_global=campaign.campaign_key||campaign.slug||slug;
   document.getElementById('pageTitle').textContent=campaign.name;
   document.getElementById('pageSub').textContent=(campaign.date_hijri||'')+(campaign.date_ce?' / '+campaign.date_ce:'');
   renderAll();
@@ -385,7 +402,7 @@ async function renderVideos() {
 
 async function renderFiqh() {
   const key = campaign_key_global || campaign.slug;
-  const rows = await get('campaign_fiqh', `campaign_key=eq.${key}&select=*&order=sort_order`);
+  const rows = await getByCampaignKeys('campaign_fiqh', [key, campaign.campaign_key, campaign.slug, slug], 'select=*&order=sort_order');
   const el = document.getElementById('tab-fiqh');
   if (!rows.length) { el.innerHTML = noEvidence('fiqh (legal) rulings','al-Hidāya, al-Mudawwana, Minhāj al-ṭālibīn, al-Mughnī'); return; }
 
@@ -420,14 +437,15 @@ async function renderFiqh() {
 
 async function renderAll(){
   const id=campaign.id;
-  const key=campaign.slug||campaign.campaign_key||campaign_key_global;
+  const key=campaign.campaign_key||campaign.slug||campaign_key_global;
+  const keys=[campaign.campaign_key, campaign.slug, campaign_key_global, slug];
   renderOverview();
   const[verses,hadiths,sirahs,comparisons,people]=await Promise.all([
-    get('campaign_verses',`campaign_key=eq.${key}&select=*&order=sura,aya`),
-    get('campaign_hadith',`campaign_key=eq.${key}&select=*`),
-    get('campaign_sirah',`campaign_key=eq.${key}&select=*&order=author_death_ce`),
-    get('campaign_source_comparison',`campaign_key=eq.${key}&select=*`),
-    get('campaign_people',`campaign_key=eq.${key}&select=*`)
+    getByCampaignKeys('campaign_verses', keys, 'select=*&order=sura,aya'),
+    getByCampaignKeys('campaign_hadith', keys, 'select=*'),
+    getByCampaignKeys('campaign_sirah', keys, 'select=*&order=author_death_ce'),
+    getByCampaignKeys('campaign_source_comparison', keys, 'select=*'),
+    getByCampaignKeys('campaign_people', keys, 'select=*')
   ]);
   await renderQuran(verses);
   renderHadith(hadiths);
