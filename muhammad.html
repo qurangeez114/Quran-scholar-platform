@@ -1329,6 +1329,18 @@ function renderQulPatternCallback(){
 
 function renderQulAllVersesCallback(){
   document.getElementById('count').textContent = '115 Qul Pattern Verses';
+  
+  // Check if verses loaded, if not retry in 1 second
+  if (!window.AYA_MAP || Object.keys(window.AYA_MAP || {}).length === 0) {
+    console.log('⏳ Waiting for verses to load...');
+    setTimeout(() => {
+      if (CURRENT_VIEW === 'qul-all' && (window.AYA_MAP && Object.keys(window.AYA_MAP).length > 0)) {
+        console.log('✅ Verses ready, rendering...');
+        document.getElementById('list').innerHTML = renderQulAllVerses();
+        renderQulAllVersesCallback();
+      }
+    }, 1000);
+  }
 }
 
 function renderQulAllVerses(){
@@ -1347,6 +1359,14 @@ function renderQulAllVerses(){
     "22:49","22:72","64:7","23:29","23:93","23:97","23:118","67:26","67:28",
     "25:57","25:77","72:1","72:20","72:21","72:22","72:25","26:216","113:1","27:92","114:1"
   ];
+
+  // Check if verses are ready
+  if (!window.AYA_MAP || Object.keys(window.AYA_MAP || {}).length === 0) {
+    return `<div style="padding:20px; text-align:center;">
+      <div style="font-size:16px; color:#999; margin:40px 0;">⏳ Loading verses...</div>
+      <div style="font-size:12px; color:#ccc;">This may take a moment. If it keeps loading, refresh the page.</div>
+    </div>`;
+  }
 
   let html = `
     <div style="padding:0;">
@@ -1377,6 +1397,7 @@ function renderQulAllVerses(){
     bySura[sura].push(aya);
   });
 
+  let loadedCount = 0;
   // Render each verse
   Object.keys(bySura).sort((a, b) => parseInt(a) - parseInt(b)).forEach(sura => {
     bySura[sura].forEach(aya => {
@@ -1385,6 +1406,7 @@ function renderQulAllVerses(){
       const v = window.AYA_MAP && window.AYA_MAP[ayaKey];
       
       if (!v) return; // Skip if verse not loaded
+      loadedCount++;
 
       const langBlocks = Object.keys(ALL_LANGS)
         .filter(k => langState[k] && ALL_LANGS[k].field && v[ALL_LANGS[k].field])
