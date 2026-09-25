@@ -192,6 +192,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <button id="btn-verses" class="active" onclick="setView('verses')">📋 Verses</button>
     <button id="btn-tensions" onclick="setView('tensions')">⚖️ Tension Pairs</button>
     <button id="btn-voices" onclick="setView('voices')">🗣️ Four Voices</button>
+    <button id="btn-qul" onclick="setView('qul')">📖 Qul Pattern</button>
+    <button id="btn-qul-all" onclick="setView('qul-all')">💯 115 Verses</button>
   </div>
   <input class="search-input" id="searchInput" placeholder="🔍 Search summaries, categories, references..." oninput="filter()">
   <div class="view-toggle" id="relevance-toggle">
@@ -279,6 +281,7 @@ const ALL_LANGS = {
   translit:  { label:'Transliteration',badge:'Aa', field:'translit',  aliases:['romanization','latin'] },
   english:   { label:'English',        badge:'A',  field:'english',   aliases:['usa','uk'] },
   tigrinya:  { label:'Tigrinya',       badge:'ት',  field:'tigrinya',  aliases:['eritrea','tigray'] },
+  tigrinya2: { label:'ትግርኛ ተፍሲር',     badge:'📖', field:'tigrinya2', aliases:['tigrinya tafsir','tigray tafsir'] },
   amharic:   { label:'Amharic',        badge:'አ',  field:'amharic',   aliases:['ethiopia'] },
   oromo:     { label:'Oromo',          badge:'O',  field:'oromo',     aliases:['ethiopia','afaan oromoo'] },
   somali:    { label:'Somali',         badge:'S',  field:'somali',    aliases:['somalia','soomaali'] },
@@ -293,7 +296,7 @@ const ALL_LANGS = {
 };
 const VT_LANGS = { bn: 'bengali', ms: 'malay', es: 'spanish', zh: 'chinese', sw: 'swahili', ha: 'hausa' };
 
-const langStateDefault = { arabic: true, english: true };
+const langStateDefault = { arabic: true, english: true, tigrinya2: true };
 let langState = (() => {
   let saved = null;
   try { saved = JSON.parse(localStorage.getItem('muhammadLangState')); } catch {}
@@ -849,8 +852,22 @@ function setView(v){
   document.getElementById('btn-verses').classList.toggle('active', v==='verses');
   document.getElementById('btn-tensions').classList.toggle('active', v==='tensions');
   document.getElementById('btn-voices').classList.toggle('active', v==='voices');
+  document.getElementById('btn-qul').classList.toggle('active', v==='qul');
+  document.getElementById('btn-qul-all').classList.toggle('active', v==='qul-all');
   document.getElementById('cat-filter-wrap').style.display = v==='verses' ? 'block' : 'none';
-  filter();
+  document.getElementById('searchInput').style.display = (v==='qul' || v==='qul-all') ? 'none' : 'block';
+  document.getElementById('relevance-toggle').style.display = (v==='qul' || v==='qul-all') ? 'none' : 'flex';
+  document.getElementById('langPickerBtn').style.display = v==='qul-all' ? 'flex' : 'flex';
+  document.getElementById('display-toggle').style.display = (v==='qul' || v==='qul-all') ? 'none' : 'flex';
+  if (v === 'qul') {
+    document.getElementById('list').innerHTML = renderQulPattern();
+    renderQulPatternCallback();
+  } else if (v === 'qul-all') {
+    document.getElementById('list').innerHTML = renderQulAllVerses();
+    renderQulAllVersesCallback();
+  } else {
+    filter();
+  }
 }
 
 async function load(){
@@ -893,7 +910,7 @@ async function load(){
       const [s, a] = k.split(':');
       return `and(sura_id.eq.${s},aya_number.eq.${a})`;
     }).join(',');
-    const ayasRes = await fetch(`${SB_URL}/rest/v1/ayas?select=sura_id,aya_number,arabic,arabic_transliteration,english,tigrinya,amharic,oromo,somali,german,urdu&or=(${orFilter})`, {headers:HDR});
+    const ayasRes = await fetch(`${SB_URL}/rest/v1/ayas?select=sura_id,aya_number,arabic,arabic_transliteration,english,tigrinya,tigrinya2,amharic,oromo,somali,german,urdu&or=(${orFilter})`, {headers:HDR});
     const ayasRows = await ayasRes.json();
     if (Array.isArray(ayasRows)) {
       ayasRows.forEach(a => { ayaMap[`${a.sura_id}:${a.aya_number}`] = a; });
@@ -921,6 +938,7 @@ async function load(){
     v.translit = a.arabic_transliteration || '';
     v.english = a.english || '';
     v.tigrinya = a.tigrinya || '';
+    v.tigrinya2 = a.tigrinya2 || '';
     v.amharic = a.amharic || '';
     v.oromo = a.oromo || '';
     v.somali = a.somali || '';
@@ -934,6 +952,7 @@ async function load(){
     v.swahili = vt.swahili || '';
     v.hausa = vt.hausa || '';
   });
+  window.AYA_MAP = ayaMap;
 
   buildCatDropdown();
   updateLangCount();
@@ -987,7 +1006,7 @@ async function load(){
       const [s, a] = p.split(':');
       return `and(sura_id.eq.${s},aya_number.eq.${a})`;
     }).join(',');
-    const tAyasRes = await fetch(`${SB_URL}/rest/v1/ayas?select=sura_id,aya_number,arabic,arabic_transliteration,english,tigrinya,amharic,oromo,somali,german,urdu&or=(${orFilter})`, {headers:HDR});
+    const tAyasRes = await fetch(`${SB_URL}/rest/v1/ayas?select=sura_id,aya_number,arabic,arabic_transliteration,english,tigrinya,tigrinya2,amharic,oromo,somali,german,urdu&or=(${orFilter})`, {headers:HDR});
     const tAyasRows = await tAyasRes.json();
 
     // Same 6 newer languages as the main Verses view, fetched from
@@ -1039,6 +1058,234 @@ function buildCatDropdown(){
   document.getElementById('cat-dropdown').innerHTML = html;
 }
 
+function renderQulPattern(){
+  // Map pattern metadata to verse references
+  const qulPatternMetadata = {
+    '18:110': { pattern: "Clear Muhammad Attribution", analysis: "Allah cannot be 'like you' humans; only Muhammad can make this claim about himself.", color: "#2ECC71" },
+    '6:50': { pattern: "Clear Muhammad Attribution", analysis: "Muhammad claims powerlessness; the verse shifts to 3rd-person Allah. Distinct speakers.", color: "#2ECC71" },
+    '7:188': { pattern: "Clear Muhammad Attribution", analysis: "Muhammad asserts his own powerlessness; contrast with Allah's power is the verse's point.", color: "#2ECC71" },
+    '46:9': { pattern: "Clear Muhammad Attribution", analysis: "Muhammad places himself in a category of messengers; only makes sense if he is the speaker.", color: "#2ECC71" },
+    '39:53': { pattern: "Ambiguous - The Outlier", analysis: "My servants (1st singular possessive) but then shifts to 3rd-person Allah as subject. Grammatical tension.", color: "#E74C3C" }
+  };
+
+  let html = `
+    <div style="padding:0;">
+      <!-- Header -->
+      <div style="background:linear-gradient(135deg,#1a1a2e,#2d2d44);color:#fff;padding:20px 16px;margin-bottom:0;">
+        <div style="font-size:24px;font-weight:800;margin-bottom:8px;color:#E8C97B;">📖 Qul Pattern Analysis</div>
+        <div style="font-size:13px;line-height:1.6;opacity:0.95;">Grammatical study of first-person speech after قُلْ (Qul / "Say") in the Qur'an</div>
+      </div>
+
+      <!-- Quick Stats -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;padding:12px;background:#F0EDE6;border-bottom:1px solid #E8E4DC;">
+        <div style="text-align:center;padding:8px;background:#fff;border-radius:8px;border:1px solid #E8C97B;">
+          <div style="font-size:16px;font-weight:800;color:#B8902A;">119</div>
+          <div style="font-size:11px;color:#666;font-weight:600;">Candidates</div>
+        </div>
+        <div style="text-align:center;padding:8px;background:#fff;border-radius:8px;border:1px solid #E8C97B;">
+          <div style="font-size:16px;font-weight:800;color:#B8902A;">115</div>
+          <div style="font-size:11px;color:#666;font-weight:600;">Clear Cases</div>
+        </div>
+        <div style="text-align:center;padding:8px;background:#fff;border-radius:8px;border:1px solid #E8C97B;">
+          <div style="font-size:16px;font-weight:800;color:#A83240;">4</div>
+          <div style="font-size:11px;color:#666;font-weight:600;">Ambiguous</div>
+        </div>
+      </div>
+
+      <!-- Core Pattern Section -->
+      <div class="verse-card" style="border-left:4px solid #E8C97B;">
+        <div style="font-size:14px;font-weight:800;color:#1A5276;margin-bottom:10px;">🔍 The Pattern</div>
+        <div style="font-size:13px;line-height:1.6;color:#333;margin-bottom:10px;">
+          <p style="margin-bottom:8px;">In 119 verses, the imperative <b>قُلْ</b> (Qul / "Say!") is immediately followed by first-person singular forms: I, me, my, or we, us, our.</p>
+          <p style="margin-bottom:8px;">In <b>115 cases</b>, this pattern is unambiguous: the first-person speech is naturally attributed to Muhammad, as instructed to relay a divine message in his own words.</p>
+          <p><b>4 cases</b> present ambiguity where the outer speaker (Allah) might retain possession of the first-person forms.</p>
+        </div>
+      </div>
+
+      <!-- Example Verses with Full Cards -->
+      <div style="font-size:14px;font-weight:800;color:#1A5276;margin:12px 12px 8px;padding:8px 0;">✓ Example Verses</div>
+  `;
+
+  // Render each example from actual verse data
+  Object.entries(qulPatternMetadata).forEach(([ref, meta]) => {
+    const [sura, aya] = ref.split(':').map(Number);
+    const ayaKey = `${sura}:${aya}`;
+    const v = window.AYA_MAP && window.AYA_MAP[ayaKey];
+    
+    if (!v) return; // Skip if verse not loaded
+
+    const langBlocks = Object.keys(ALL_LANGS)
+      .filter(k => langState[k] && ALL_LANGS[k].field && v[ALL_LANGS[k].field])
+      .map(k => {
+        const fieldName = ALL_LANGS[k].field;
+        const metaLang = ALL_LANGS[k];
+        const rtl = (k === 'arabic' || k === 'urdu');
+        const text = v[fieldName];
+        return `<div class="verse-lang-block">
+          <div class="verse-lang-label">${metaLang.badge} ${esc(metaLang.label)}</div>
+          <div class="verse-lang-text"${rtl ? ' style="direction:rtl;text-align:right;font-size:19px;line-height:1.9;"' : ''}>${esc(text)}</div>
+        </div>`;
+      }).join('');
+
+    html += `<div class="verse-card" id="mvc-${sura}-${aya}" style="border-left:4px solid ${meta.color};">
+      <div class="verse-toolbar">
+        <button class="vt-btn" title="Listen" onclick='speakVerseCard(${JSON.stringify(v).replace(/'/g,"&#39;")})'>🔊</button>
+        <button class="vt-btn" title="Save to Research" onclick='saveVerseToResearch(${sura},${aya},${JSON.stringify(v).replace(/'/g,"&#39;")})'>📚</button>
+        <button class="vt-btn${isBookmarked(sura,aya)?' active-toggle':''}" title="Bookmark" onclick="toggleBookmark(${sura},${aya},this)">${isBookmarked(sura,aya)?'🔖':'🏷️'}</button>
+        <button class="vt-btn" title="Highlight color" onclick="showHlPicker(${sura},${aya},this)">🖊</button>
+        <button class="vt-btn${hasNote(sura,aya)?' active-toggle':''}" title="Note" onclick="openNote(${sura},${aya})">📝</button>
+        <button class="vt-btn" title="Copy" onclick='copyVerseCard(${JSON.stringify(v).replace(/'/g,"&#39;")})'>📋</button>
+        <button class="vt-btn" title="Share" onclick='shareVerseCard(${JSON.stringify(v).replace(/'/g,"&#39;")})'>📤</button>
+        <a class="vt-btn" style="text-decoration:none;color:#B8902A;" title="Open in Qur'an" href="index.html?sura=${sura}&aya=${aya}&from=qul-pattern" onclick="recordHistory(${sura},${aya},'${esc(meta.pattern).replace(/'/g,"\\'")}')">🔗</a>
+      </div>
+      <div class="verse-ref">${esc(ref)}</div>
+      <div class="verse-badges"><span class="badge" style="background:${meta.color}33;color:${meta.color};border-color:${meta.color};">${esc(meta.pattern)}</span></div>
+      ${langBlocks}
+      <div class="verse-summary">${esc(meta.analysis)}</div>
+    </div>`;
+  });
+
+  // Rest of the analysis
+  html += `
+      <!-- Cross-Verse Pattern -->
+      <div class="verse-card" style="border-left:4px solid #3498DB;">
+        <div style="font-size:14px;font-weight:800;color:#1A5276;margin-bottom:10px;">🔗 Cross-Verse Patterns</div>
+        <div style="font-size:13px;line-height:1.6;color:#333;margin-bottom:10px;">
+          <p style="margin-bottom:8px;"><b>Sura 109, Verses 1–2:</b> Qul appears in v1; Muhammad's "I" naturally continues into v2 without a second Qul. This shows that first-person continuity across verse boundaries is standard Qur'anic practice.</p>
+          <p style="margin-bottom:8px;"><b>Conservative counting:</b> The 119-verse count only includes verses where Qul and first-person forms appear in the <b>same verse</b>, likely undercounting the total by excluding clear same-speaker continuities across boundaries.</p>
+        </div>
+      </div>
+
+      <!-- Research Question -->
+      <div class="verse-card" style="border-left:4px solid #F39C12;">
+        <div style="font-size:14px;font-weight:800;color:#BA4A00;margin-bottom:10px;">❓ Research Question for Q39:53</div>
+        <div style="font-size:13px;line-height:1.6;color:#333;margin-bottom:8px;">
+          <b>Does Q39:53 break the qul pattern, or does it retain it?</b>
+        </div>
+        <div style="font-size:12px;line-height:1.6;color:#555;">
+          <p style="margin-bottom:6px;"><b>Option A (Muhammad speaks):</b> "My servants" = Muhammad's apostolic relay; the shift to "Allah forgives" introduces Allah's own act as the substance of the message.</p>
+          <p style="margin-bottom:6px;"><b>Option B (Allah speaks):</b> "My servants" = Allah's ownership; Muhammad merely relays the entire message, and Allah's voice is sustained throughout.</p>
+          <p><b>Linguistic marker:</b> The verse provides no explicit boundary signal (like a second qul), leaving the interpretation to grammatical convention and rhetorical context.</p>
+        </div>
+      </div>
+
+      <!-- How to Use This Analysis -->
+      <div class="verse-card" style="border-left:4px solid #9B59B6;">
+        <div style="font-size:14px;font-weight:800;color:#6C3A73;margin-bottom:10px;">💡 How to Use This Analysis</div>
+        <div style="font-size:13px;line-height:1.6;color:#333;">
+          <p style="margin-bottom:8px;">✓ <b>Bookmark & highlight</b> the 5 key examples above to compare patterns.</p>
+          <p style="margin-bottom:8px;">✓ <b>Toggle languages</b> (🌐) to see these verses in all available translations & tafseers.</p>
+          <p style="margin-bottom:8px;">✓ <b>Compare with Q39:53</b> to understand why this verse stands out—and whether it represents an exception or a nuanced variant of the same pattern.</p>
+          <p>✓ <b>Note the theological implications:</b> If Muhammad speaks in the first person after qul, then the message is framed as his relay of divine words—not his own commentary.</p>
+        </div>
+      </div>
+
+      <!-- Footer Note -->
+      <div style="margin:12px;padding:12px;background:#FFF8E1;border:1px solid #E8C97B;border-radius:8px;">
+        <div style="font-size:11px;color:#6B5A3E;line-height:1.5;">
+          <b>📌 Scope:</b> This analysis focuses on grammar and syntax. It makes no theological claims about whether speakers are divine or prophetic—only identifies who is speaking based on linguistic markers (imperative qul, first-person agreement, pronoun antecedent relationships).
+        </div>
+      </div>
+    </div>
+  `;
+  return html;
+}
+
+    html += `<div class="verse-card" id="mvc-${v.sura}-${v.aya}" style="border-left:4px solid ${v.color};">
+      <div class="verse-toolbar">
+        <button class="vt-btn" title="Listen" onclick='speakQulVerse(${JSON.stringify(v).replace(/'/g,"&#39;")})'>🔊</button>
+        <button class="vt-btn" title="Save to Research" onclick='saveVerseToResearch(${v.sura},${v.aya},${JSON.stringify(v).replace(/'/g,"&#39;")})'>📚</button>
+        <button class="vt-btn${isBookmarked(v.sura,v.aya)?' active-toggle':''}" title="Bookmark" onclick="toggleBookmark(${v.sura},${v.aya},this)">${isBookmarked(v.sura,v.aya)?'🔖':'🏷️'}</button>
+        <button class="vt-btn" title="Highlight color" onclick="showHlPicker(${v.sura},${v.aya},this)">🖊</button>
+        <button class="vt-btn${hasNote(v.sura,v.aya)?' active-toggle':''}" title="Note" onclick="openNote(${v.sura},${v.aya})">📝</button>
+        <button class="vt-btn" title="Copy" onclick='copyQulVerse(${JSON.stringify(v).replace(/'/g,"&#39;")})'>📋</button>
+        <button class="vt-btn" title="Share" onclick='shareQulVerse(${JSON.stringify(v).replace(/'/g,"&#39;")})'>📤</button>
+        <a class="vt-btn" style="text-decoration:none;color:#B8902A;" title="Open in Qur'an" href="index.html?sura=${v.sura}&aya=${v.aya}&from=qul-pattern" onclick="recordHistory(${v.sura},${v.aya},'${esc(v.pattern).replace(/'/g,"\\'")}')">🔗</a>
+      </div>
+      <div class="verse-ref">${esc(v.reference)}</div>
+      <div class="verse-badges"><span class="badge" style="background:${v.color}33;color:${v.color};border-color:${v.color};">${esc(v.pattern)}</span></div>
+      ${langBlocks}
+      <div class="verse-summary">${esc(v.analysis)}</div>
+    </div>`;
+  });
+
+  // Rest of the analysis
+  html += `
+      <!-- Cross-Verse Pattern -->
+      <div class="verse-card" style="border-left:4px solid #3498DB;">
+        <div style="font-size:14px;font-weight:800;color:#1A5276;margin-bottom:10px;">🔗 Cross-Verse Patterns</div>
+        <div style="font-size:13px;line-height:1.6;color:#333;margin-bottom:10px;">
+          <p style="margin-bottom:8px;"><b>Sura 109, Verses 1–2:</b> Qul appears in v1; Muhammad's "I" naturally continues into v2 without a second Qul. This shows that first-person continuity across verse boundaries is standard Qur'anic practice.</p>
+          <p style="margin-bottom:8px;"><b>Conservative counting:</b> The 119-verse count only includes verses where Qul and first-person forms appear in the <b>same verse</b>, likely undercounting the total by excluding clear same-speaker continuities across boundaries.</p>
+        </div>
+      </div>
+
+      <!-- Research Question -->
+      <div class="verse-card" style="border-left:4px solid #F39C12;">
+        <div style="font-size:14px;font-weight:800;color:#BA4A00;margin-bottom:10px;">❓ Research Question for Q39:53</div>
+        <div style="font-size:13px;line-height:1.6;color:#333;margin-bottom:8px;">
+          <b>Does Q39:53 break the qul pattern, or does it retain it?</b>
+        </div>
+        <div style="font-size:12px;line-height:1.6;color:#555;">
+          <p style="margin-bottom:6px;"><b>Option A (Muhammad speaks):</b> "My servants" = Muhammad's apostolic relay; the shift to "Allah forgives" introduces Allah's own act as the substance of the message.</p>
+          <p style="margin-bottom:6px;"><b>Option B (Allah speaks):</b> "My servants" = Allah's ownership; Muhammad merely relays the entire message, and Allah's voice is sustained throughout.</p>
+          <p><b>Linguistic marker:</b> The verse provides no explicit boundary signal (like a second qul), leaving the interpretation to grammatical convention and rhetorical context.</p>
+        </div>
+      </div>
+
+      <!-- How to Use This Analysis -->
+      <div class="verse-card" style="border-left:4px solid #9B59B6;">
+        <div style="font-size:14px;font-weight:800;color:#6C3A73;margin-bottom:10px;">💡 How to Use This Analysis</div>
+        <div style="font-size:13px;line-height:1.6;color:#333;">
+          <p style="margin-bottom:8px;">✓ <b>Bookmark & highlight</b> the 5 key examples above to compare patterns.</p>
+          <p style="margin-bottom:8px;">✓ <b>Compare with Q39:53</b> to understand why this verse stands out—and whether it represents an exception or a nuanced variant of the same pattern.</p>
+          <p style="margin-bottom:8px;">✓ <b>Examine voice markers</b> across the Qur'an to distinguish prophetic authority, divine address, and communal apostrophe.</p>
+          <p>✓ <b>Note the theological implications:</b> If Muhammad speaks in the first person after qul, then the message is framed as his relay of divine words—not his own commentary.</p>
+        </div>
+      </div>
+
+      <!-- Footer Note -->
+      <div style="margin:12px;padding:12px;background:#FFF8E1;border:1px solid #E8C97B;border-radius:8px;">
+        <div style="font-size:11px;color:#6B5A3E;line-height:1.5;">
+          <b>📌 Scope:</b> This analysis focuses on grammar and syntax. It makes no theological claims about whether speakers are divine or prophetic—only identifies who is speaking based on linguistic markers (imperative qul, first-person agreement, pronoun antecedent relationships).
+        </div>
+      </div>
+    </div>
+  `;
+  return html;
+}
+
+function speakQulVerse(v){
+  if (!('speechSynthesis' in window)) { alert('Speech not supported in this browser.'); return; }
+  window.speechSynthesis.cancel();
+  const preferred = Object.keys(ALL_LANGS).find(k => langState[k] && k !== 'arabic' && k !== 'tigrinya' && k !== 'tigrinya2') || 'english';
+  const text = preferred === 'arabic' ? v.arabic : v.english;
+  if (!text) return;
+  const u = new SpeechSynthesisUtterance(text);
+  const langMap = { english:'en-US', arabic:'ar-SA', urdu:'ur-PK', german:'de-DE' };
+  u.lang = langMap[preferred] || 'en-US';
+  window.speechSynthesis.speak(u);
+}
+
+function copyQulVerse(v){
+  const text = `${v.reference}
+Arabic: ${v.arabic}
+English: ${v.english}
+
+Pattern: ${v.pattern}
+${v.analysis}`;
+  navigator.clipboard.writeText(text).then(() => alert('Copied to clipboard')).catch(() => alert('Copy failed'));
+}
+
+function shareQulVerse(v){
+  const msg = `${v.reference} — ${v.pattern}\n${v.analysis}\n\n${window.location.href}`;
+  if (navigator.share) {
+    navigator.share({title: `Qul Pattern: ${v.reference}`, text: msg});
+  } else {
+    alert(msg);
+  }
+}
+
 function filter(){
   const q = (document.getElementById('searchInput').value || '').toLowerCase().trim();
 
@@ -1074,6 +1321,112 @@ function filter(){
 function catName(slug){
   const c = CATEGORIES.find(c => c.slug === slug);
   return c ? c.name : slug;
+}
+
+function renderQulPatternCallback(){
+  document.getElementById('count').textContent = 'Qul Pattern Study';
+}
+
+function renderQulAllVersesCallback(){
+  document.getElementById('count').textContent = '115 Qul Pattern Verses';
+}
+
+function renderQulAllVerses(){
+  // All 115 verses from research document
+  const allQulVerses = [
+    "3:15","3:20","3:31","3:183","28:49","28:85","5:60","29:50","29:52",
+    "6:14","6:15","6:19","6:50","6:56","6:57","6:58","6:66","6:90","6:135","6:143","6:145","6:151","6:161","6:162","6:164",
+    "33:28","7:29","7:33","7:158","7:187","7:188","7:195","7:203",
+    "34:3","34:27","34:36","34:39","34:46","34:47","34:48","34:50","9:83","9:129","35:40",
+    "10:15","10:16","10:20","10:41","10:49","10:53","10:102","10:104","10:108","38:65","38:86",
+    "11:35","39:11","39:13","39:14","39:38","39:39","39:64","12:108","40:66",
+    "13:30","13:36","13:43","41:6","41:13","15:89","42:15","42:23",
+    "17:24","17:80","17:85","17:93","17:96","17:100","43:81",
+    "18:22","18:24","18:83","18:109","18:110","46:4","46:8","46:9",
+    "20:105","20:114","49:17","21:24","21:45","21:108","21:109","52:31",
+    "22:49","22:72","64:7","23:29","23:93","23:97","23:118","67:26","67:28",
+    "25:57","25:77","72:1","72:20","72:21","72:22","72:25","26:216","113:1","27:92","114:1"
+  ];
+
+  let html = `
+    <div style="padding:0;">
+      <!-- Header -->
+      <div style="background:linear-gradient(135deg,#1a1a2e,#2d2d44);color:#fff;padding:20px 16px;margin-bottom:0;">
+        <div style="font-size:24px;font-weight:800;margin-bottom:8px;color:#E8C97B;">💯 115 Qul Pattern Verses</div>
+        <div style="font-size:13px;line-height:1.6;opacity:0.95;">Complete list of verses with first-person speech after قُلْ (Qul / "Say")</div>
+      </div>
+
+      <!-- Stats and Description -->
+      <div class="verse-card" style="border-left:4px solid #E8C97B;">
+        <div style="font-size:13px;line-height:1.6;color:#333;">
+          <p style="margin-bottom:8px;"><b>✅ 115 Verses:</b> Verses where the imperative قُلْ is followed in the same verse by first-person singular forms (I, me, my, we, us, our). These represent Muhammad's direct speech instructed by divine command.</p>
+          <p style="margin-bottom:8px;"><b>📊 Sorted by sura:</b> Browse all 115 verses below. Use 🌐 Languages to toggle translations and ترجمات (Tigrinya Tafsir) if available.</p>
+          <p><b>🔔 Note:</b> This count excludes 4 ambiguous "My servants" cases (Q14:31, Q17:53, Q39:10, Q39:53). See the Qul Pattern tab for analysis of those outliers.</p>
+        </div>
+      </div>
+
+      <!-- Verse Cards -->
+      <div style="font-size:13px;font-weight:700;color:#B8902A;margin:12px 12px 6px;padding:8px 0;letter-spacing:0.3px;text-transform:uppercase;">📖 All Verses (115)</div>
+  `;
+
+  // Group by sura for better readability
+  const bySura = {};
+  allQulVerses.forEach(ref => {
+    const [sura, aya] = ref.split(':').map(Number);
+    if (!bySura[sura]) bySura[sura] = [];
+    bySura[sura].push(aya);
+  });
+
+  // Render each verse
+  Object.keys(bySura).sort((a, b) => parseInt(a) - parseInt(b)).forEach(sura => {
+    bySura[sura].forEach(aya => {
+      const ref = `${sura}:${aya}`;
+      const ayaKey = ref;
+      const v = window.AYA_MAP && window.AYA_MAP[ayaKey];
+      
+      if (!v) return; // Skip if verse not loaded
+
+      const langBlocks = Object.keys(ALL_LANGS)
+        .filter(k => langState[k] && ALL_LANGS[k].field && v[ALL_LANGS[k].field])
+        .map(k => {
+          const fieldName = ALL_LANGS[k].field;
+          const metaLang = ALL_LANGS[k];
+          const rtl = (k === 'arabic' || k === 'urdu');
+          const text = v[fieldName];
+          return `<div class="verse-lang-block">
+            <div class="verse-lang-label">${metaLang.badge} ${esc(metaLang.label)}</div>
+            <div class="verse-lang-text"${rtl ? ' style="direction:rtl;text-align:right;font-size:19px;line-height:1.9;"' : ''}>${esc(text)}</div>
+          </div>`;
+        }).join('');
+
+      html += `<div class="verse-card" id="mvc-${sura}-${aya}" style="border-left:4px solid #2ECC71;">
+        <div class="verse-toolbar">
+          <button class="vt-btn" title="Listen" onclick='speakVerseCard(${JSON.stringify(v).replace(/'/g,"&#39;")})'>🔊</button>
+          <button class="vt-btn" title="Save to Research" onclick='saveVerseToResearch(${sura},${aya},${JSON.stringify(v).replace(/'/g,"&#39;")})'>📚</button>
+          <button class="vt-btn${isBookmarked(sura,aya)?' active-toggle':''}" title="Bookmark" onclick="toggleBookmark(${sura},${aya},this)">${isBookmarked(sura,aya)?'🔖':'🏷️'}</button>
+          <button class="vt-btn" title="Highlight color" onclick="showHlPicker(${sura},${aya},this)">🖊</button>
+          <button class="vt-btn${hasNote(sura,aya)?' active-toggle':''}" title="Note" onclick="openNote(${sura},${aya})">📝</button>
+          <button class="vt-btn" title="Copy" onclick='copyVerseCard(${JSON.stringify(v).replace(/'/g,"&#39;")})'>📋</button>
+          <button class="vt-btn" title="Share" onclick='shareVerseCard(${JSON.stringify(v).replace(/'/g,"&#39;")})'>📤</button>
+          <a class="vt-btn" style="text-decoration:none;color:#B8902A;" title="Open in Qur'an" href="index.html?sura=${sura}&aya=${aya}&from=qul-115" onclick="recordHistory(${sura},${aya},'Qul Pattern')">🔗</a>
+        </div>
+        <div class="verse-ref">${esc(ref)}</div>
+        <div class="verse-badges"><span class="badge" style="background:#2ECC7133;color:#2ECC71;border-color:#2ECC71;">Clear Attribution</span></div>
+        ${langBlocks}
+      </div>`;
+    });
+  });
+
+  html += `
+      <!-- Footer -->
+      <div style="margin:12px;padding:12px;background:#FFF8E1;border:1px solid #E8C97B;border-radius:8px;">
+        <div style="font-size:11px;color:#6B5A3E;line-height:1.5;">
+          <b>📌 Source:</b> Grammatical analysis of the Quranic Arabic Corpus. These 115 verses contain قُلْ (2MS imperative) immediately followed by first-person singular morphology in the same verse, naturally attributable to Muhammad as the speaker being instructed to communicate a divine message.
+        </div>
+      </div>
+    </div>
+  `;
+  return html;
 }
 
 function renderVerses(list){
