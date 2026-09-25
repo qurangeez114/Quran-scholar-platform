@@ -1330,16 +1330,22 @@ function renderQulPatternCallback(){
 function renderQulAllVersesCallback(){
   document.getElementById('count').textContent = '115 Qul Pattern Verses';
   
-  // Check if verses loaded, if not retry in 1 second
+  // Check if verses loaded, if not retry in 500ms
   if (!window.AYA_MAP || Object.keys(window.AYA_MAP || {}).length === 0) {
-    console.log('⏳ Waiting for verses to load...');
-    setTimeout(() => {
-      if (CURRENT_VIEW === 'qul-all' && (window.AYA_MAP && Object.keys(window.AYA_MAP).length > 0)) {
-        console.log('✅ Verses ready, rendering...');
-        document.getElementById('list').innerHTML = renderQulAllVerses();
-        renderQulAllVersesCallback();
+    console.log('⏳ Waiting for AYA_MAP to populate...');
+    const retryTimer = setInterval(() => {
+      // Keep retrying as long as user is on this view
+      if (CURRENT_VIEW !== 'qul-all') {
+        clearInterval(retryTimer);
+        return;
       }
-    }, 1000);
+      
+      if (window.AYA_MAP && Object.keys(window.AYA_MAP).length > 0) {
+        console.log('✅ AYA_MAP ready! Rendering 115 verses...');
+        clearInterval(retryTimer);
+        document.getElementById('list').innerHTML = renderQulAllVerses();
+      }
+    }, 500); // Check every 500ms
   }
 }
 
