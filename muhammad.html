@@ -793,12 +793,18 @@ function copyVerseCard(v){
 }
 
 function shareVerseCard(v){
-  const url = `${location.origin}${location.pathname.replace('muhammad.html','index.html')}?sura=${v.sura}&aya=${v.aya}&from=muhammad`;
-  const text = `${v.reference} — ${v.english || v.summary || ''}`;
-  if (navigator.share) {
-    navigator.share({ title: v.reference, text, url }).catch(() => {});
+  if (window.openSocialCard) {
+    // Use the social card generator (with TikTok support)
+    window.openSocialCard(v.sura, v.aya);
   } else {
-    navigator.clipboard?.writeText(`${text}\n${url}`).then(() => alert('Link copied to clipboard'));
+    // Fallback to native share
+    const url = `${location.origin}${location.pathname.replace('muhammad.html','index.html')}?sura=${v.sura}&aya=${v.aya}&from=muhammad`;
+    const text = `${v.reference} — ${v.english || v.summary || ''}`;
+    if (navigator.share) {
+      navigator.share({ title: v.reference, text, url }).catch(() => {});
+    } else {
+      navigator.clipboard?.writeText(`${text}\n${url}`).then(() => alert('Link copied to clipboard'));
+    }
   }
 }
 
