@@ -119,6 +119,18 @@ async function getByCampaignKeys(table, keys, extra){
   const rows=await get(table, filter);
   return Array.isArray(rows)?uniqById(rows):[];
 }
+async function getByCampaignId(table, extra){
+  if(!campaign || campaign.id==null) return [];
+  const rows=await get(table, `campaign_id=eq.${campaign.id}&`+(extra||'select=*'));
+  return Array.isArray(rows)?uniqById(rows):[];
+}
+async function getByCampaignIdOrKeys(table, keys, extra){
+  const [byId, byKey]=await Promise.all([
+    getByCampaignId(table, extra),
+    getByCampaignKeys(table, keys, extra)
+  ]);
+  return uniqById([].concat(byId||[], byKey||[]));
+}
 
 window.addEventListener('load',async()=>{
   if(!slug){document.getElementById('pageTitle').textContent='Campaign not found';return;}
@@ -149,9 +161,9 @@ async function renderSourcesDb() {
   // saraya rows have id:null; skip campaign-specific queries that would error
   const campaignQ = (key && key.length>0)
     ? [
-      get('campaign_source_analysis',
-        `campaign_key=eq.${key}&select=aspect,agreement_status,agreement_note,quotations(topic,arabic_text,english_text,volume,page,chapter,isnad_grade,source_id)`),
-      get('textual_tensions', `campaign_key=eq.${key}&select=*&order=id`),
+      getByCampaignIdOrKeys('campaign_source_analysis', [key, campaign.campaign_key, campaign.slug, slug],
+        'select=aspect,agreement_status,agreement_note,quotations(topic,arabic_text,english_text,volume,page,chapter,isnad_grade,source_id)'),
+      getByCampaignIdOrKeys('textual_tensions', [key, campaign.campaign_key, campaign.slug, slug], 'select=*&order=id'),
       get('later_interpretations', 'select=*&order=tension_id,scholar_death_ce.asc')
     ]
     : [Promise.resolve([]),Promise.resolve([]),Promise.resolve([])];
@@ -444,7 +456,7 @@ async function renderAll(){
     getByCampaignKeys('campaign_verses', keys, 'select=*&order=sura,aya'),
     getByCampaignKeys('campaign_hadith', keys, 'select=*'),
     getByCampaignKeys('campaign_sirah', keys, 'select=*&order=author_death_ce'),
-    getByCampaignKeys('campaign_source_comparison', keys, 'select=*'),
+    getByCampaignIdOrKeys('campaign_source_comparison', keys, 'select=*'),
     getByCampaignKeys('campaign_people', keys, 'select=*')
   ]);
   await renderQuran(verses);
