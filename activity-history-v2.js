@@ -473,10 +473,20 @@
   }
 
   // Start when ready
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
-    init();
+  try {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+  } catch (e) {
+    console.error('[qhikma] Failed to initialize:', e);
   }
+
+  // Catch any unhandled errors on page
+  window.addEventListener('error', function(event) {
+    console.error('[qhikma] Page error detected:', event.message);
+    // Don't prevent - let page handle it, but Activity History should keep working
+  }, true);
 
 })(window);
