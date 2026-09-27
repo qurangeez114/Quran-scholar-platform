@@ -158,14 +158,16 @@
   function injectActivityHistory() {
     if (document.getElementById('qhist-drawer')) return; // already injected
 
+    // Top-right toggle button (minimal footprint)
     var btn = document.createElement('button');
-    btn.className = 'qhist-btn';
-    btn.id = 'qhist-btn';
-    btn.title = 'Your browsing history';
+    btn.className = 'qhist-btn-top';
+    btn.id = 'qhist-btn-top';
+    btn.title = 'Toggle Activity History';
     btn.setAttribute('onclick', 'qnavToggleHist()');
     btn.innerHTML = '🕐<span id="qhist-badge" class="qhist-badge"></span>';
     document.body.appendChild(btn);
 
+    // Drawer (slides in from top-right)
     var drawer = document.createElement('div');
     drawer.id = 'qhist-drawer';
     drawer.innerHTML = '<div class="qhist-head"><span class="qhist-title">📖 Activity History</span><button class="qhist-clearall" onclick="qnavClearHist()">Clear all</button></div><div class="qhist-scroll" id="qhist-scroll"></div>';
@@ -173,7 +175,7 @@
 
     document.addEventListener('click', function(e) {
       var d = document.getElementById('qhist-drawer');
-      var b = document.getElementById('qhist-btn');
+      var b = document.getElementById('qhist-btn-top');
       if (d && d.classList.contains('open') && !d.contains(e.target) && b && !b.contains(e.target))
         d.classList.remove('open');
     });
@@ -187,34 +189,34 @@
     var style = document.createElement('style');
     style.id = 'activity-history-styles';
     style.textContent = `
-      .qhist-btn {
+      .qhist-btn-top {
         position: fixed;
-        bottom: 20px;
-        right: 20px;
-        width: 56px;
-        height: 56px;
+        top: 16px;
+        right: 16px;
+        width: 48px;
+        height: 48px;
         border-radius: 50%;
         background: linear-gradient(135deg, #8B5E0A 0%, #B8902A 100%);
         color: #fff;
-        border: none;
+        border: 2px solid #fff;
         cursor: pointer;
-        font-size: 24px;
+        font-size: 20px;
         box-shadow: 0 4px 12px rgba(139, 94, 10, 0.3);
         transition: all 0.3s ease;
-        z-index: 999;
+        z-index: 998;
         display: flex;
         align-items: center;
         justify-content: center;
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
       }
-      .qhist-btn:hover {
+      .qhist-btn-top:hover {
         transform: scale(1.1);
         box-shadow: 0 6px 16px rgba(139, 94, 10, 0.4);
       }
       .qhist-badge {
         position: absolute;
-        top: -4px;
-        right: -4px;
+        top: -6px;
+        right: -6px;
         background: #C0392B;
         color: #fff;
         border-radius: 50%;
@@ -223,39 +225,40 @@
         display: none;
         align-items: center;
         justify-content: center;
-        font-size: 11px;
+        font-size: 10px;
         font-weight: bold;
         border: 2px solid #fff;
       }
 
       #qhist-drawer {
         position: fixed;
-        bottom: 80px;
-        right: 20px;
-        width: 350px;
-        max-height: 500px;
+        top: 0;
+        right: -380px;
+        width: 360px;
+        height: 100vh;
+        max-height: 100%;
         background: #FBF8F0;
-        border: 2px solid #D4C9A8;
-        border-radius: 12px;
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
-        display: none;
+        border-left: 2px solid #D4C9A8;
+        box-shadow: -8px 0 24px rgba(0, 0, 0, 0.15);
+        display: flex;
         flex-direction: column;
-        z-index: 1000;
+        z-index: 999;
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        transition: right 0.3s ease;
       }
 
       #qhist-drawer.open {
-        display: flex;
+        right: 0;
       }
 
       .qhist-head {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 12px 16px;
+        padding: 16px;
         border-bottom: 1px solid #E8DCC0;
         background: linear-gradient(135deg, #FDF8EE 0%, #FBF0D0 100%);
-        border-radius: 10px 10px 0 0;
+        flex-shrink: 0;
       }
 
       .qhist-title {
@@ -271,7 +274,7 @@
         padding: 4px 10px;
         border-radius: 4px;
         cursor: pointer;
-        font-size: 12px;
+        font-size: 11px;
         transition: all 0.2s;
       }
 
@@ -351,19 +354,21 @@
 
       @media (max-width: 480px) {
         #qhist-drawer {
-          width: calc(100vw - 40px);
-          right: 20px;
-          left: 20px;
-          max-height: 60vh;
+          width: 100%;
+          right: -100%;
         }
-        .qhist-btn {
-          bottom: 80px;
+        .qhist-btn-top {
+          top: 12px;
+          right: 12px;
+          width: 44px;
+          height: 44px;
+          font-size: 18px;
         }
       }
 
       html[data-theme="dark"] #qhist-drawer {
         background: #242220;
-        border-color: #3A3630;
+        border-left-color: #3A3630;
       }
 
       html[data-theme="dark"] .qhist-head {
