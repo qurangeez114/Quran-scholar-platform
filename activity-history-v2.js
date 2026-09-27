@@ -33,18 +33,23 @@
 
   function load(key) {
     try {
-      return JSON.parse(localStorage.getItem(key) || '[]');
+      const raw = localStorage.getItem(key);
+      const parsed = JSON.parse(raw || '[]');
+      console.log('[qhikma] Loaded', key, ':', parsed.length, 'items');
+      return parsed;
     } catch (e) {
-      console.error('Load failed:', key, e);
+      console.error('[qhikma] Load failed:', key, e);
       return [];
     }
   }
 
   function save(key, data) {
     try {
-      localStorage.setItem(key, JSON.stringify(data));
+      const json = JSON.stringify(data);
+      localStorage.setItem(key, json);
+      console.log('[qhikma] Saved', key, ':', data.length, 'items, size:', json.length, 'bytes');
     } catch (e) {
-      console.error('Save failed:', key, e);
+      console.error('[qhikma] Save failed:', key, e.message);
     }
   }
 
@@ -52,24 +57,43 @@
   // HISTORY TRACKING
   // ═══════════════════════════════════════════════════════════
 
-  function trackPage() {
+  function addToHistory(pageData) {
     try {
       const page = {
+        title: pageData.title || 'Untitled',
+        url: pageData.url || window.location.href,
+        icon: pageData.icon || getPageIcon(),
+        timestamp: pageData.timestamp || Date.now()
+      };
+
+      console.log('[qhikma] Adding to history:', page.title);
+
+      // Keep max 100 entries
+      const idx = historyData.findIndex(h => h.url === page.url);
+      if (idx !== -1) {
+        console.log('[qhikma] Page already in history (index', idx, '), moving to top');
+        historyData.splice(idx, 1);
+      }
+      historyData.unshift(page);
+      if (historyData.length > 100) historyData.pop();
+      
+      console.log('[qhikma] History now has', historyData.length, 'entries');
+      save(KEYS.history, historyData);
+    } catch (e) {
+      console.error('[qhikma] Add to history failed:', e);
+    }
+  }
+
+  function trackPage() {
+    try {
+      addToHistory({
         title: document.title || 'Untitled',
         url: window.location.href,
         icon: getPageIcon(),
         timestamp: Date.now()
-      };
-
-      // Keep max 100 entries
-      const idx = historyData.findIndex(h => h.url === page.url);
-      if (idx !== -1) historyData.splice(idx, 1);
-      historyData.unshift(page);
-      if (historyData.length > 100) historyData.pop();
-      
-      save(KEYS.history, historyData);
+      });
     } catch (e) {
-      console.error('Track page failed:', e);
+      console.error('[qhikma] Track page failed:', e);
     }
   }
 
@@ -412,9 +436,22 @@
 
   function init() {
     try {
+      // Test localStorage first
+      try {
+        localStorage.setItem('qhikma_test', '1');
+        localStorage.removeItem('qhikma_test');
+        console.log('[qhikma] ✅ localStorage available');
+      } catch (e) {
+        console.error('[qhikma] ❌ localStorage unavailable:', e.message);
+      }
+
       historyData = load(KEYS.history);
       researchData = load(KEYS.research);
       presentationData = load(KEYS.presentations);
+
+      console.log('[qhikma] Loaded history:', historyData.length, 'entries');
+      console.log('[qhikma] Loaded research:', researchData.length, 'entries');
+      console.log('[qhikma] Loaded presentations:', presentationData.length, 'entries');
 
       // Track page load
       trackPage();
@@ -422,13 +459,16 @@
       // Expose global API
       window.qhikmaOpenModal = openModal;
       window.qhikmaCloseModal = closeModal;
+      window.qhikmaAddToHistory = addToHistory;
       window.qhikmaAddToResearch = qhikmaAddToResearch;
       window.qhikmaAddToPresentation = qhikmaAddToPresentation;
       window.qhikmaEditNotes = qhikmaEditNotes;
       window.qhikmaRemoveResearch = qhikmaRemoveResearch;
       window.qhikmaRemovePresentation = qhikmaRemovePresentation;
+      
+      console.log('[qhikma] ✅ Initialization complete');
     } catch (e) {
-      console.error('Initialization error:', e);
+      console.error('[qhikma] Initialization error:', e);
     }
   }
 
