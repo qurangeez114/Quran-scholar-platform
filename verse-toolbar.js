@@ -90,7 +90,6 @@
         '<button onclick="event.stopPropagation();openNote(' + a + ',' + s + ')" title="Add note" style="' + btn + '">\u{1F4DD}</button>' +
         '<button id="copy-' + a + '" onclick="event.stopPropagation();copyVerse(' + a + ',' + s + ')" title="Copy visible languages" style="' + btn + '">\u{1F4CB}</button>' +
         '<button onclick="event.stopPropagation();shareVerse(' + a + ',' + s + ')" title="Share verse" style="' + btn + '">\u{1F4E4}</button>' +
-        '<button onclick="event.stopPropagation();addVerseToPresentation(' + a + ',' + s + ')" data-sura="' + s + '" data-aya="' + a + '" title="Add to Presentation" style="background:#FDF8EE;border:1px solid #C9A85C;border-radius:6px;height:30px;padding:0 8px;font-size:11px;font-weight:700;cursor:pointer;flex-shrink:0;display:inline-flex;align-items:center;color:#B8902A;">\uFF0B</button>' +
         '<button onclick="event.stopPropagation();openSocialCardMain(' + s + ',' + a + ')" title="Create social media card" style="' + btn + '">\u{1F4F1}</button>' +
         '<button onclick="event.stopPropagation();openWordsFor(' + s + ',' + a + ')" title="Word-by-word study" class="wbw-toggle-btn">\u{1F524} Words</button>' +
       '</div>';
@@ -163,30 +162,6 @@
   })();
 
 /* ---- functions ported verbatim from index.html ---- */
-  function addVerseToPresentation(ayaNum, suraId) {
-    // Get text from already-rendered verse card
-    var card = vtCard(suraId, ayaNum);
-    var english = card ? (card.querySelector('.verse-english') || card.querySelector('[class*="english"]') || {innerText:''}).innerText : '';
-    var arabic = card ? (card.querySelector('.verse-arabic') || card.querySelector('[class*="arabic"]') || {innerText:''}).innerText : '';
-    var key = 'presentationBasket';
-    var existing = [];
-    try { existing = JSON.parse(localStorage.getItem(key)||'[]'); } catch(e){}
-    var id = 'v_'+suraId+'_'+ayaNum+'_'+Date.now();
-    var alreadyExists = existing.find(function(s){ return s.type==='quran' && s.reference==='Quran '+suraId+':'+ayaNum; });
-    if (alreadyExists) { showToastMsg('Already in presentation'); return; }
-    existing.push({
-      type: 'quran',
-      id: id,
-      title: 'Quran ' + suraId + ':' + ayaNum,
-      reference: 'Quran ' + suraId + ':' + ayaNum,
-      text: english || '',
-      arabic: arabic || '',
-      sourceUrl: 'index.html?sura=' + suraId + '&aya=' + ayaNum
-    });
-    try { localStorage.setItem(key, JSON.stringify(existing)); } catch(e){}
-    showToastMsg('✓ Added to presentation (' + existing.length + ' slides)');
-  }
-
   function buildVerseShareText(ayaNum, suraId, cardEl) {
     // If a specific card element is provided, use it (for search-result cards
     // which don't have the standard vc-{n} ID). Otherwise fall back to the
@@ -656,7 +631,6 @@
   global.openNote = openNote;
   global.copyVerse = copyVerse;
   global.shareVerse = shareVerse;
-  global.addVerseToPresentation = addVerseToPresentation;
   global.openSocialCardMain = openSocialCardMain;
   global.showToastMsg = showToastMsg;
   global.buildVerseShareText = buildVerseShareText;
