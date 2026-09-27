@@ -453,10 +453,7 @@
       console.log('[qhikma] Loaded research:', researchData.length, 'entries');
       console.log('[qhikma] Loaded presentations:', presentationData.length, 'entries');
 
-      // Track page load
-      trackPage();
-
-      // Expose global API
+      // Expose global API FIRST (so it's available immediately)
       window.qhikmaOpenModal = openModal;
       window.qhikmaCloseModal = closeModal;
       window.qhikmaAddToHistory = addToHistory;
@@ -472,12 +469,43 @@
     }
   }
 
+  function trackPageWhenReady() {
+    try {
+      // Wait for title to be set (max 5 seconds)
+      let attempts = 0;
+      const maxAttempts = 50; // 5 seconds at 100ms intervals
+      
+      const checkTitle = setInterval(() => {
+        attempts++;
+        const title = document.title || '';
+        
+        if (title && title.length > 0 && title !== 'undefined') {
+          clearInterval(checkTitle);
+          console.log('[qhikma] Page title ready:', title);
+          trackPage();
+          console.log('[qhikma] ✅ Page tracked');
+        } else if (attempts >= maxAttempts) {
+          clearInterval(checkTitle);
+          console.log('[qhikma] ⚠️  Timeout waiting for title, tracking anyway');
+          trackPage();
+        }
+      }, 100);
+    } catch (e) {
+      console.error('[qhikma] Track page when ready error:', e);
+    }
+  }
+
   // Start when ready
   try {
+    init();
+    
     if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', init);
+      document.addEventListener('DOMContentLoaded', trackPageWhenReady);
     } else {
-      init();
+      // Also track on load event (more reliable)
+      window.addEventListener('load', trackPageWhenReady);
+      // And try immediately if page is already loaded
+      trackPageWhenReady();
     }
   } catch (e) {
     console.error('[qhikma] Failed to initialize:', e);
