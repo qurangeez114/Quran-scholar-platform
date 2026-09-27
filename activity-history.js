@@ -377,9 +377,9 @@
 
       @media (max-width: 480px) {
         #qhist-drawer {
-          width: 75%;
-          max-width: 280px;
-          right: -75%;
+          width: 65%;
+          max-width: 240px;
+          right: -65%;
         }
         .qhist-btn-top {
           top: max(12px, calc(env(safe-area-inset-top) + 8px));
