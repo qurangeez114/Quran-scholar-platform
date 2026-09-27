@@ -24,8 +24,6 @@ export default async (_request: Request, context: any) => {
   injectScript('/mobile-floating-layout.js');
   injectScript('/tafsir-accuracy-static.js');
 
-  if (!changed) return new Response(html, response);
-
   const headers = new Headers(response.headers);
   headers.delete("content-length");
   return new Response(html, {
