@@ -2821,8 +2821,13 @@ async function loadSura(id) {
     _histSuraArabic = ARABIC_NAMES[id] || '';
     _histLabel = _histSuraArabic ? _histSuraArabic + ' · ' + _histSuraEnglish : _histSuraEnglish;
     _histTotal = info?.number_of_ayas || '';
-    const targetAya = window._pendingHistAya || null;
+    let targetAya = window._pendingHistAya || null;
     window._pendingHistAya = null;
+    // Same defensive clamp as loadVerseContext: don't let a bad caller
+    // (stale cross-reference, bad deep link, etc.) write an impossible
+    // verse number like "Verse 250" into a 40-verse sura's history entry.
+    if (targetAya && _histTotal && targetAya > _histTotal) targetAya = _histTotal;
+    if (targetAya && targetAya < 1) targetAya = 1;
     const url = window.location.pathname + '?sura=' + id + (targetAya ? '&aya=' + targetAya : '');
     const sub = targetAya
       ? 'Verse ' + targetAya + ' · ' + (_histTotal || '') + ' verses total'
@@ -5513,6 +5518,17 @@ async function loadVerseContext(suraId, targetAya, before, after) {
   after = (after === undefined) ? 2 : after;
   const info = allSuras.find(s => (s.sura_id || s.id) === suraId);
   const maxAya = info?.number_of_ayas || 9999;
+  // Defensive clamp: some callers (cross-references, hadith-verse links,
+  // story comparisons) can pass a verse number that doesn't actually exist
+  // in this sura -- e.g. bad/stale linking data pointing at "49:50" when
+  // Al-Hujurat only has 18 verses. Without this, the range math below
+  // already clamps which rows get FETCHED (so no crash), but every display
+  // string (history entry, URL, error messages, the auto-scroll target)
+  // still used the raw, out-of-range number -- producing exactly that kind
+  // of impossible "Verse 50 · 18 verses total" history entry. Clamping here,
+  // before anything reads targetAya, fixes all of those call sites at once.
+  if (targetAya < 1) targetAya = 1;
+  if (targetAya > maxAya) targetAya = maxAya;
   // Window redistribution: if one side is clamped by a sura boundary, shift
   // the deficit to the other side so the context window stays at its full
   // size instead of just shrinking. E.g. 1:1 with before=2/after=2 has no
