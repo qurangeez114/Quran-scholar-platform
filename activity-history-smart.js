@@ -188,57 +188,30 @@
     return false;
   }
 
-  /* Position toggle button to avoid existing controls */
+  /* Position toggle button: bottom-left is safest (least conflicts) */
   function calculateButtonPosition() {
     var vw = window.innerWidth;
     var vh = window.innerHeight;
-    var interactives = getInteractiveRects();
     var btnSize = 48;
     var margin = 16;
-
-    var positions = [
-      { top: margin, right: margin, name: 'tr' },
-      { top: margin, left: margin, name: 'tl' },
-      { bottom: margin, right: margin, name: 'br' },
-      { bottom: margin, left: margin, name: 'bl' }
-    ];
-
-    for (var i = 0; i < positions.length; i++) {
-      var p = positions[i];
-      var x = p.left !== undefined ? p.left : vw - btnSize - p.right;
-      var y = p.top !== undefined ? p.top : vh - btnSize - p.bottom;
-
-      if (!hasCollision(x, y, btnSize, btnSize, interactives)) {
-        return { x: x, y: y, name: p.name };
-      }
-    }
-
-    // Fallback: top-left
-    return { x: margin, y: margin, name: 'tl' };
+    var x = margin;
+    var y = vh - btnSize - margin;
+    return { x: x, y: y, name: 'bl' };
   }
 
-  /* Calculate best position for drawer: tries bottom-right, bottom-left, top-right, top-left */
+  /* Calculate drawer position: try safe corners in order */
   function calculateOptimalPosition() {
     var vw = window.innerWidth;
     var vh = window.innerHeight;
-    var interactives = getInteractiveRects();
+    var margin = SAFE_MARGIN;
 
-    var positions = [
-      { x: vw - DRAWER_WIDTH - SAFE_MARGIN, y: vh - DRAWER_HEIGHT_MIN - SAFE_MARGIN, name: 'br' },
-      { x: SAFE_MARGIN, y: vh - DRAWER_HEIGHT_MIN - SAFE_MARGIN, name: 'bl' },
-      { x: vw - DRAWER_WIDTH - SAFE_MARGIN, y: SAFE_MARGIN, name: 'tr' },
-      { x: SAFE_MARGIN, y: SAFE_MARGIN, name: 'tl' }
-    ];
-
-    for (var i = 0; i < positions.length; i++) {
-      var p = positions[i];
-      if (!hasCollision(p.x, p.y, DRAWER_WIDTH, DRAWER_HEIGHT_MIN, interactives)) {
-        return p;
-      }
+    // On mobile, prefer bottom-left (avoids bottom nav tabs)
+    if (vw < 480) {
+      return { x: margin, y: vh - DRAWER_HEIGHT_MIN - margin, name: 'bl' };
     }
 
-    // Fallback: bottom-right
-    return positions[0];
+    // On desktop, use bottom-right
+    return { x: vw - DRAWER_WIDTH - margin, y: vh - DRAWER_HEIGHT_MIN - margin, name: 'br' };
   }
 
   function injectActivityHistory() {
@@ -274,16 +247,6 @@
       if (d && d.classList.contains('open') && !d.contains(e.target) && b && !b.contains(e.target)) {
         d.classList.remove('open');
       }
-    });
-
-    // Reposition on resize
-    window.addEventListener('resize', function() {
-      var newBtnPos = calculateButtonPosition();
-      var newDrawerPos = calculateOptimalPosition();
-      btn.style.left = newBtnPos.x + 'px';
-      btn.style.top = newBtnPos.y + 'px';
-      drawer.setAttribute('data-position', newDrawerPos.name);
-      updateDrawerPosition(drawer, newDrawerPos);
     });
 
     updateDrawerPosition(drawer, drawerPos);
