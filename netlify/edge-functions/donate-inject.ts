@@ -23,6 +23,7 @@ export default async (_request: Request, context: any) => {
   injectScript('/donate-global.js');
   injectScript('/mobile-floating-layout.js');
   injectScript('/tafsir-accuracy-static.js');
+  injectScript('/activity-history-smart.js');
 
   const headers = new Headers(response.headers);
   headers.delete("content-length");
