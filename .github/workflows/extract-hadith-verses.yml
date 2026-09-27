@@ -1,0 +1,71 @@
+name: Extract Hadith Verses (Scheduled)
+
+on:
+  schedule:
+    # Every 2 days at 03:00 UTC
+    - cron: "0 3 */2 * *"
+  # Allow manual trigger
+  workflow_dispatch:
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    name: Hadith Verse Extraction
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Call extraction endpoint
+        id: extract
+        run: |
+          NETLIFY_URL="${{ secrets.NETLIFY_SITE_URL }}"
+          ENDPOINT="${NETLIFY_URL}/api/extract-hadith-verses"
+          
+          echo "Calling extraction endpoint: $ENDPOINT"
+          
+          RESPONSE=$(curl -s -X POST "$ENDPOINT" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${{ secrets.NETLIFY_AUTH_TOKEN }}")
+          
+          echo "response=$RESPONSE" >> $GITHUB_OUTPUT
+          
+          # Check for errors
+          if echo "$RESPONSE" | grep -q '"errors":0'; then
+            echo "✓ Extraction completed successfully"
+            exit 0
+          else
+            echo "⚠ Extraction completed with warnings"
+            echo "$RESPONSE"
+            exit 0  # Don't fail the workflow, just report
+          fi
+
+      - name: Parse results
+        if: always()
+        run: |
+          RESPONSE='${{ steps.extract.outputs.response }}'
+          echo "Extraction Results:"
+          echo "$RESPONSE" | jq '.' 2>/dev/null || echo "$RESPONSE"
+
+      - name: Report status
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const response = JSON.parse(`${{ steps.extract.outputs.response }}`);
+            const summary = `
+            **Hadith Verse Extraction Report**
+            
+            - Hadith Processed: ${response.hadith_processed}
+            - Verses Extracted: ${response.verses_extracted}
+            - Links Inserted: ${response.links_inserted}
+            - Errors: ${response.errors}
+            - Duration: ${(response.duration_ms / 1000).toFixed(2)}s
+            `;
+            
+            console.log(summary);
+            
+            // Create workflow summary
+            const fs = require('fs');
+            fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary);
