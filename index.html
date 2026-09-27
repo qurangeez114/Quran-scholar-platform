@@ -2812,17 +2812,26 @@ async function loadSura(id) {
   // exact spot rather than always restarting at verse 1. Without this, a
   // label like "Surah 5 · 119 verses" (total count) looked like a verse
   // reference ("5:119") but always reopened at 5:1.
+  // These are hoisted to function scope (not just this try-block) because
+  // the reading-progress tracker further down reuses the same label/total
+  // every time the user scrolls to a different verse in this sura.
+  let _histSuraEnglish = '', _histSuraArabic = '', _histLabel = '', _histTotal = '';
   try {
-    const suraEnglish = info?.sura_name_english || info?.sura_name_translated || info?.sura_name || ('Sura ' + id);
-    const suraArabic = ARABIC_NAMES[id] || '';
-    const label = suraArabic ? suraArabic + ' · ' + suraEnglish : suraEnglish;
+    _histSuraEnglish = info?.sura_name_english || info?.sura_name_translated || info?.sura_name || ('Sura ' + id);
+    _histSuraArabic = ARABIC_NAMES[id] || '';
+    _histLabel = _histSuraArabic ? _histSuraArabic + ' · ' + _histSuraEnglish : _histSuraEnglish;
+    _histTotal = info?.number_of_ayas || '';
     const targetAya = window._pendingHistAya || null;
     window._pendingHistAya = null;
     const url = window.location.pathname + '?sura=' + id + (targetAya ? '&aya=' + targetAya : '');
     const sub = targetAya
-      ? 'Verse ' + targetAya + ' · ' + (info?.number_of_ayas || '') + ' verses total'
-      : (info?.number_of_ayas || '') + ' verses total';
-    if (window.qhistRecord) qhistRecord(label, url, '📖', sub);
+      ? 'Verse ' + targetAya + ' · ' + (_histTotal || '') + ' verses total'
+      : (_histTotal || '') + ' verses total';
+    // Use the in-place updater (not qhistRecord) so opening the same sura
+    // again — or later scrolling within it — collapses into ONE history
+    // row for this sura instead of stacking a fresh entry every time.
+    if (window.qhistUpdateVerseProgress) qhistUpdateVerseProgress(_histLabel, url, '📖', sub);
+    else if (window.qhistRecord) qhistRecord(_histLabel, url, '📖', sub);
   } catch(e) {}
   document.getElementById('verseArea').innerHTML = `<div class="loading"><span class="spinner"></span>Loading verses...</div>`;
 
@@ -2892,9 +2901,59 @@ async function loadSura(id) {
     renderVerses(ayas, id);
     applyLangState();
     setTimeout(restoreVerseHighlights, 100);
+    // Keep the Activity History entry for this sura pointed at whichever
+    // verse the user is actually reading, not frozen on wherever they
+    // first landed. Small delay lets the freshly-rendered verse cards
+    // settle into their layout before we start observing them.
+    try {
+      const totalForTracker = _histTotal || info?.number_of_ayas || ayas.length;
+      setTimeout(() => startVerseProgressTracker(id, _histLabel, totalForTracker), 150);
+    } catch(e) {}
   } catch(e) {
     document.getElementById('verseArea').innerHTML = `<div class="error-box">⚠️ Failed to load sura ${id}. ${e.message}</div>`;
   }
+}
+
+/* ── Reading-progress tracker ──
+   Watches the verse cards currently rendered in #verseArea and, whenever
+   the user settles on a different verse (scrolling while reading), updates
+   the sura's Activity History entry to name that specific verse — e.g.
+   "Verse 42 · 107 verses total" instead of just the sura's total count. */
+let _verseProgressObserver = null;
+let _verseProgressDebounceTimer = null;
+let _verseProgressLastCommitted = null;
+function startVerseProgressTracker(suraId, label, total) {
+  if (_verseProgressObserver) { _verseProgressObserver.disconnect(); _verseProgressObserver = null; }
+  _verseProgressLastCommitted = null;
+  const area = document.getElementById('verseArea');
+  if (!area || typeof IntersectionObserver === 'undefined') return;
+  const cards = area.querySelectorAll('.verse-card[data-aya]');
+  if (!cards.length) return;
+
+  const commit = (ayaNum) => {
+    if (!ayaNum || ayaNum === _verseProgressLastCommitted) return;
+    if (currentSura !== suraId) return; // user has since navigated to a different sura
+    _verseProgressLastCommitted = ayaNum;
+    const url = window.location.pathname + '?sura=' + suraId + '&aya=' + ayaNum;
+    const sub = 'Verse ' + ayaNum + ' · ' + (total || '') + ' verses total';
+    if (window.qhistUpdateVerseProgress) qhistUpdateVerseProgress(label, url, '📖', sub);
+  };
+
+  _verseProgressObserver = new IntersectionObserver((entries) => {
+    let best = null, bestRatio = 0;
+    entries.forEach(en => {
+      if (en.isIntersecting && en.intersectionRatio > bestRatio) { bestRatio = en.intersectionRatio; best = en.target; }
+    });
+    if (!best) return;
+    const aya = parseInt(best.getAttribute('data-aya'), 10);
+    if (!aya) return;
+    // Debounce so a fast scroll-past doesn't fire a write for every verse
+    // flying by — only the verse the user actually stops and reads.
+    clearTimeout(_verseProgressDebounceTimer);
+    _verseProgressDebounceTimer = setTimeout(() => commit(aya), 1200);
+  }, { threshold: [0.25, 0.5, 0.75, 1.0] });
+
+  cards.forEach(c => _verseProgressObserver.observe(c));
 }
 
 function containsArabicText(value) {
@@ -5480,14 +5539,22 @@ async function loadVerseContext(suraId, targetAya, before, after) {
   document.getElementById('topArabic').textContent = ARABIC_NAMES[suraId] || info?.sura_name || '';
   document.getElementById('topEnglish').textContent = info?.sura_name_english || info?.sura_name_translated || info?.sura_name || '';
   document.getElementById('topMeta').innerHTML = `<span>${info?.number_of_ayas || ''} verses</span>`;
+  // Hoisted to function scope (not just the try-block below) because the
+  // reading-progress tracker call further down, in the second try-block,
+  // reuses this same label.
+  let label = '';
   try {
     const suraEnglish = info?.sura_name_english || info?.sura_name_translated || info?.sura_name || ('Sura ' + suraId);
     const suraArabic = ARABIC_NAMES[suraId] || '';
-    const label = suraArabic ? suraArabic + ' · ' + suraEnglish : suraEnglish;
+    label = suraArabic ? suraArabic + ' · ' + suraEnglish : suraEnglish;
     window._pendingHistAya = null; // already used by caller; avoid double-consuming
     const url = window.location.pathname + '?sura=' + suraId + '&aya=' + targetAya;
     const sub = 'Verse ' + targetAya + ' · ' + (info?.number_of_ayas || '') + ' verses total';
-    if (window.qhistRecord) qhistRecord(label, url, '📖', sub);
+    // Same-sura entries collapse into one row (see qhistUpdateVerseProgress),
+    // so a direct verse deep-link merges with any existing history row for
+    // this sura instead of creating a second, separate one.
+    if (window.qhistUpdateVerseProgress) qhistUpdateVerseProgress(label, url, '📖', sub);
+    else if (window.qhistRecord) qhistRecord(label, url, '📖', sub);
   } catch (e) {}
   document.getElementById('verseArea').innerHTML = `<div class="loading"><span class="spinner"></span>Loading verse...</div>`;
 
@@ -5576,6 +5643,12 @@ async function loadVerseContext(suraId, targetAya, before, after) {
       }
     });
     setTimeout(restoreVerseHighlights, 100);
+    // Keep tracking which verse is on screen within this context window too,
+    // so scrolling among the few surrounding verses still updates the
+    // sura's Activity History entry to the exact verse being read.
+    try {
+      setTimeout(() => startVerseProgressTracker(suraId, label, info?.number_of_ayas || ''), 150);
+    } catch (e) {}
   } catch (e) {
     document.getElementById('verseArea').innerHTML = `<div class="error-box">⚠️ Failed to load verse ${suraId}:${targetAya}. ${e.message}</div>`;
   }
@@ -11290,6 +11363,33 @@ window.QNAV_PAGE_ICON = '📖';
     updateBadge();
   }
   W.qhistRecord = record;
+
+  /* Same as record(), but for "reading progress" entries (currently: the
+     Quran reader tracking which verse is on screen). Dedupes by sura+label
+     while IGNORING the aya query param, so scrolling from verse 1 to verse
+     50 updates that ONE history row in place — moving it to the top with
+     a fresh timestamp — instead of leaving a trail of one entry per verse
+     visited. Whatever verse the user most recently settled on is what
+     the drawer shows. */
+  function stripAyaParam(u){
+    try{
+      var uo = new URL(u, location.href);
+      uo.searchParams.delete('aya');
+      return uo.pathname + uo.search;
+    }catch(e){ return u || ''; }
+  }
+  function updateVerseProgress(label, url, icon, sub) {
+    url = url || window.location.href;
+    var entry = { label: label||document.title||'Page', url: url, icon: icon||'📖', sub: sub||'', time: Date.now() };
+    var baseKey = stripAyaParam(url) + '|' + (label||'');
+    var h = getHist().filter(function(x){ return (stripAyaParam(x.url) + '|' + (x.label||'')) !== baseKey; });
+    h.unshift(entry);
+    if(h.length > MAX) h = h.slice(0, MAX);
+    saveHist(h);
+    renderList();
+    updateBadge();
+  }
+  W.qhistUpdateVerseProgress = updateVerseProgress;
 
   function renderList(){
     var el = document.getElementById('qhist-scroll');
