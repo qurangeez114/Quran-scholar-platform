@@ -164,7 +164,10 @@
     selectors.forEach(function(sel) {
       var els = document.querySelectorAll(sel);
       for (var i = 0; i < els.length; i++) {
-        var rect = els[i].getBoundingClientRect();
+        var el = els[i];
+        // Skip our own button
+        if (el.id === 'qhist-btn') continue;
+        var rect = el.getBoundingClientRect();
         if (rect.width > 0 && rect.height > 0) {
           rects.push({ top: rect.top, left: rect.left, right: rect.right, bottom: rect.bottom });
         }
@@ -173,23 +176,52 @@
     return rects;
   }
 
+  function hasCollision(x, y, w, h, interactives) {
+    var rect = { left: x, right: x + w, top: y, bottom: y + h };
+    for (var i = 0; i < interactives.length; i++) {
+      var iRect = interactives[i];
+      if (!(rect.right < iRect.left || rect.left > iRect.right ||
+            rect.bottom < iRect.top || rect.top > iRect.bottom)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /* Position toggle button to avoid existing controls */
+  function calculateButtonPosition() {
+    var vw = window.innerWidth;
+    var vh = window.innerHeight;
+    var interactives = getInteractiveRects();
+    var btnSize = 48;
+    var margin = 16;
+
+    var positions = [
+      { top: margin, right: margin, name: 'tr' },
+      { top: margin, left: margin, name: 'tl' },
+      { bottom: margin, right: margin, name: 'br' },
+      { bottom: margin, left: margin, name: 'bl' }
+    ];
+
+    for (var i = 0; i < positions.length; i++) {
+      var p = positions[i];
+      var x = p.left !== undefined ? p.left : vw - btnSize - p.right;
+      var y = p.top !== undefined ? p.top : vh - btnSize - p.bottom;
+
+      if (!hasCollision(x, y, btnSize, btnSize, interactives)) {
+        return { x: x, y: y, name: p.name };
+      }
+    }
+
+    // Fallback: top-left
+    return { x: margin, y: margin, name: 'tl' };
+  }
+
   /* Calculate best position for drawer: tries bottom-right, bottom-left, top-right, top-left */
   function calculateOptimalPosition() {
     var vw = window.innerWidth;
     var vh = window.innerHeight;
     var interactives = getInteractiveRects();
-
-    function hasCollision(x, y, w, h) {
-      var drawRect = { left: x, right: x + w, top: y, bottom: y + h };
-      for (var i = 0; i < interactives.length; i++) {
-        var iRect = interactives[i];
-        if (!(drawRect.right < iRect.left || drawRect.left > iRect.right ||
-              drawRect.bottom < iRect.top || drawRect.top > iRect.bottom)) {
-          return true;
-        }
-      }
-      return false;
-    }
 
     var positions = [
       { x: vw - DRAWER_WIDTH - SAFE_MARGIN, y: vh - DRAWER_HEIGHT_MIN - SAFE_MARGIN, name: 'br' },
@@ -200,19 +232,20 @@
 
     for (var i = 0; i < positions.length; i++) {
       var p = positions[i];
-      if (!hasCollision(p.x, p.y, DRAWER_WIDTH, DRAWER_HEIGHT_MIN)) {
+      if (!hasCollision(p.x, p.y, DRAWER_WIDTH, DRAWER_HEIGHT_MIN, interactives)) {
         return p;
       }
     }
 
-    // Fallback: bottom-right (will likely overlap, but better than no drawer)
+    // Fallback: bottom-right
     return positions[0];
   }
 
   function injectActivityHistory() {
     if (document.getElementById('qhist-drawer')) return;
 
-    var pos = calculateOptimalPosition();
+    var btnPos = calculateButtonPosition();
+    var drawerPos = calculateOptimalPosition();
 
     // Toggle button
     var btn = document.createElement('button');
@@ -221,12 +254,16 @@
     btn.title = 'Toggle Activity History';
     btn.setAttribute('onclick', 'qnavToggleHist()');
     btn.innerHTML = '🕐<span id="qhist-badge" class="qhist-badge"></span>';
+    btn.style.position = 'fixed';
+    btn.style.left = btnPos.x + 'px';
+    btn.style.top = btnPos.y + 'px';
+    btn.style.right = 'auto';
     document.body.appendChild(btn);
 
     // Drawer
     var drawer = document.createElement('div');
     drawer.id = 'qhist-drawer';
-    drawer.setAttribute('data-position', pos.name);
+    drawer.setAttribute('data-position', drawerPos.name);
     drawer.innerHTML = '<div class="qhist-head"><span class="qhist-title">📖 Activity</span><div><button class="qhist-clearall" onclick="qnavClearHist()">Clear</button><button class="qhist-close" onclick="qnavToggleHist()" title="Close">✕</button></div></div><div class="qhist-scroll" id="qhist-scroll"></div>';
     document.body.appendChild(drawer);
 
@@ -241,12 +278,15 @@
 
     // Reposition on resize
     window.addEventListener('resize', function() {
-      var newPos = calculateOptimalPosition();
-      drawer.setAttribute('data-position', newPos.name);
-      updateDrawerPosition(drawer, newPos);
+      var newBtnPos = calculateButtonPosition();
+      var newDrawerPos = calculateOptimalPosition();
+      btn.style.left = newBtnPos.x + 'px';
+      btn.style.top = newBtnPos.y + 'px';
+      drawer.setAttribute('data-position', newDrawerPos.name);
+      updateDrawerPosition(drawer, newDrawerPos);
     });
 
-    updateDrawerPosition(drawer, pos);
+    updateDrawerPosition(drawer, drawerPos);
     updateBadge();
   }
 
@@ -262,7 +302,6 @@
     style.id = 'activity-history-styles';
     style.textContent = `
       .qhist-btn {
-        position: fixed;
         width: 48px;
         height: 48px;
         border-radius: 50%;
@@ -278,8 +317,6 @@
         align-items: center;
         justify-content: center;
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        top: 16px;
-        right: 16px;
       }
       .qhist-btn:hover {
         transform: scale(1.1);
