@@ -1,117 +1,102 @@
-import { createClient } from '@supabase/supabase-js';
+const { createClient } = require('@supabase/supabase-js');
 
 const supabase = createClient(
-  'https://ylosytbxpzxzwfzjpaej.supabase.co',
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs'
+  process.env.SUPABASE_URL || 'https://ylosytbxpzxzwfzjpaej.supabase.co',
+  process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
 );
 
-export default async (req, context) => {
-  // CORS headers
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type'
-  };
-
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
-
-  if (req.method !== 'GET') {
-    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-      status: 405,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
-  }
-
+exports.handler = async (event, context) => {
   try {
-    // Fetch L2 categories under "Sexuality, Spouses & Ḥūr"
-    const { data: level2, error: l2Error } = await supabase
+    const { theme_id } = event.queryStringParameters || {};
+    
+    if (!theme_id) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: 'theme_id required' })
+      };
+    }
+
+    // Fetch all hierarchy levels for this theme
+    const { data: hierarchies, error: hierError } = await supabase
       .from('proposition_hierarchies')
       .select(`
         id,
-        name,
-        level,
-        parent_id,
+        level1_name,
+        level2_name,
+        level3_name,
+        level4_name,
+        description,
+        hierarchy_path,
         quranic_anchors,
-        scholarly_debate_notes,
-        proposition_hierarchies!parent_id (
-          id,
-          name,
-          level,
-          quranic_anchors,
-          scholarly_debate_notes,
-          hadith_propositions (
-            id,
-            name,
-            description,
-            source_status,
-            quranic_base,
-            hadith_reference,
-            hadith_grade,
-            scholarly_note,
-            warning,
-            confidence_score
-          )
-        )
+        scholarly_debate_notes
       `)
-      .eq('level', 2)
-      .in('name', [
-        'Sexuality, Spouses & Ḥūr',
-        'Marriage & Companionship',
-        'Physical Appearance & Youth',
-        'Food & Drink',
-        'Gardens, Rivers & Dwellings',
-        'Pleasure, Joy & Desire',
-        'Peace, Security & Immortality',
-        'Spiritual Rewards & Divine Presence',
-        'Ranks & Degrees of Paradise',
-        'Descriptions of the People of Paradise',
-        'Quranic–Hadith Detail Expansion & Disputes'
-      ]);
+      .eq('theme_id', theme_id)
+      .order('level2_name, level3_name, level4_name');
 
-    if (l2Error) {
-      console.error('Supabase error:', l2Error);
-      throw l2Error;
-    }
+    if (hierError) throw hierError;
 
-    // Transform into drill-down structure
-    const hierarchyWithPropositions = (level2 || []).map((l2Category) => ({
-      id: l2Category.id,
-      name: l2Category.name,
-      level: 2,
-      tertiary_count: (l2Category['proposition_hierarchies!parent_id'] || []).length,
-      tertiary: (l2Category['proposition_hierarchies!parent_id'] || []).map((l3Category) => ({
-        id: l3Category.id,
-        name: l3Category.name,
-        level: 3,
-        proposition_count: (l3Category.hadith_propositions || []).length,
-        propositions: (l3Category.hadith_propositions || []).map((prop) => ({
-          id: prop.id,
-          name: prop.name,
-          source_status: prop.source_status || 'inferred_interpretation',
-          reference: prop.hadith_reference,
-          hadith_grade: prop.hadith_grade,
-          quranic_base: prop.quranic_base,
-          scholarly_note: prop.scholarly_note,
-          warning: prop.warning,
-          confidence: prop.confidence_score || 0.75
-        }))
-      }))
+    // Fetch propositions linked to this theme
+    const { data: propositions, error: propError } = await supabase
+      .from('hadith_propositions')
+      .select(`
+        id,
+        hierarchy_id,
+        proposition_text,
+        description,
+        source_status,
+        quranic_anchors,
+        hadith_references,
+        confidence
+      `)
+      .eq('theme_id', theme_id);
+
+    if (propError) throw propError;
+
+    // Organize hierarchically
+    const level2Map = {};
+    hierarchies.forEach(h => {
+      if (!level2Map[h.level2_name]) {
+        level2Map[h.level2_name] = {
+          level2_name: h.level2_name,
+          level3_items: {}
+        };
+      }
+      
+      if (!level2Map[h.level2_name].level3_items[h.level3_name]) {
+        level2Map[h.level2_name].level3_items[h.level3_name] = {
+          level3_name: h.level3_name,
+          propositions: []
+        };
+      }
+    });
+
+    // Attach propositions to level 3
+    propositions.forEach(prop => {
+      const hier = hierarchies.find(h => h.id === prop.hierarchy_id);
+      if (hier && level2Map[hier.level2_name]?.level3_items[hier.level3_name]) {
+        level2Map[hier.level2_name].level3_items[hier.level3_name].propositions.push(prop);
+      }
+    });
+
+    // Convert to array format
+    const result = Object.values(level2Map).map(l2 => ({
+      ...l2,
+      level3_items: Object.values(l2.level3_items)
     }));
 
-    return new Response(JSON.stringify(hierarchyWithPropositions), {
-      status: 200,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
+    return {
+      statusCode: 200,
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*'
+      },
+      body: JSON.stringify(result)
+    };
   } catch (error) {
-    console.error('Proposition fetch error:', error);
-    return new Response(
-      JSON.stringify({ error: 'Failed to fetch propositions', details: error.message }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      }
-    );
+    console.error('Error:', error);
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: error.message })
+    };
   }
 };

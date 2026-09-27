@@ -868,6 +868,129 @@ Present the evidence. Let scholars think. No interpretation imposed.
 CONTACT:
 Visit: https://quranhikma.com`);
 }
+
+// ============================================================================
+// PROPOSITIONS LOADING
+// ============================================================================
+
+async function loadPropositions() {
+  const container = document.getElementById('proposition-drill-root');
+  const themeSlug = new URLSearchParams(window.location.search).get('theme');
+  
+  if (!themeSlug) {
+    container.innerHTML = '<div style="padding:40px;color:red;text-align:center;">No theme specified</div>';
+    return;
+  }
+
+  try {
+    const response = await fetch(
+      `/.netlify/functions/propositions-sexuality-hierarchy?theme=${encodeURIComponent(themeSlug)}`
+    );
+    
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const hierarchies = await response.json();
+    
+    let html = '';
+    
+    hierarchies.forEach(l2 => {
+      html += `<div class="level-2">
+        <div class="level-2-name" onclick="toggleLevel2(this)">
+          <span>▶</span> ${l2.level2_name}
+        </div>
+        <div class="level-2-content" style="display:none;margin-left:16px;">`;
+      
+      if (l2.level3_items && l2.level3_items.length > 0) {
+        l2.level3_items.forEach((l3, l3Idx) => {
+          html += `<div style="margin-bottom:12px;padding:10px;background:#F9FAFB;border-radius:4px;border-left:2px solid #D4AF37;">
+            <div onclick="toggleLevel3(this)" style="cursor:pointer;font-weight:600;color:#1F2937;display:flex;justify-content:space-between;">
+              <span>
+                <span style="margin-right:8px;">▶</span>${l3.level3_name}
+              </span>
+              <span style="font-size:0.85rem;color:#999;">${l3.propositions?.length || 0}</span>
+            </div>
+            <div class="level-3-content" style="display:none;margin-top:10px;border-left:2px solid #D4AF37;padding-left:12px;">`;
+          
+          if (l3.propositions && l3.propositions.length > 0) {
+            l3.propositions.forEach(prop => {
+              const badgeMap = {
+                'explicit_text': { emoji: '✅', label: 'Explicit', color: '#4CAF50' },
+                'inferred_interpretation': { emoji: '📖', label: 'Inferred', color: '#2196F3' },
+                'disputed_interpretation': { emoji: '⚖️', label: 'Disputed', color: '#FF9800' },
+                'weak_report': { emoji: '⚠️', label: 'Weak', color: '#F44336' },
+                'scholarly_consensus': { emoji: '🤝', label: 'Consensus', color: '#9C27B0' }
+              };
+              const badge = badgeMap[prop.source_status] || badgeMap.scholarly_consensus;
+              
+              html += `<div class="proposition-item" style="padding:12px;margin-bottom:10px;background:#FFFAF0;border-radius:4px;border-left:3px solid ${badge.color};">
+                <div style="font-weight:600;color:#212121;margin-bottom:6px;">
+                  ${prop.proposition_text}
+                  <span style="display:inline-block;margin-left:8px;padding:4px 8px;border-radius:4px;background:${badge.color}20;color:${badge.color};font-size:0.85rem;font-weight:bold;">${badge.emoji} ${badge.label}</span>
+                </div>
+                <div style="font-size:0.9rem;color:#666;line-height:1.5;margin-bottom:8px;">
+                  ${prop.description || ''}
+                </div>`;
+              
+              if (prop.quranic_anchors && prop.quranic_anchors.length > 0) {
+                html += `<div style="font-size:0.85rem;color:#1976D2;margin-bottom:4px;">
+                  <strong>Quranic:</strong> ${prop.quranic_anchors.join(', ')}
+                </div>`;
+              }
+              
+              if (prop.hadith_references && prop.hadith_references.length > 0) {
+                html += `<div style="font-size:0.85rem;color:#D32F2F;">
+                  <strong>Hadith:</strong> ${prop.hadith_references.join(', ')}
+                </div>`;
+              }
+              
+              html += '</div>';
+            });
+          } else {
+            html += '<div style="padding:10px;color:#999;font-style:italic;">No propositions at this level</div>';
+          }
+          
+          html += '</div></div>';
+        });
+      }
+      
+      html += '</div></div>';
+    });
+    
+    container.innerHTML = html;
+  } catch (error) {
+    console.error('Propositions load error:', error);
+    container.innerHTML = `<div style="padding:40px;color:red;text-align:center;">Error loading propositions: ${error.message}</div>`;
+  }
+}
+
+function toggleLevel2(element) {
+  const content = element.nextElementSibling;
+  const arrow = element.querySelector('span');
+  if (content) {
+    content.style.display = content.style.display === 'none' ? 'block' : 'none';
+    arrow.textContent = content.style.display === 'none' ? '▶' : '▼';
+  }
+}
+
+function toggleLevel3(element) {
+  const content = element.parentElement.querySelector('.level-3-content');
+  const arrow = element.querySelector('span');
+  if (content) {
+    content.style.display = content.style.display === 'none' ? 'block' : 'none';
+    arrow.textContent = content.style.display === 'none' ? '▶' : '▼';
+  }
+}
+
+// Load propositions when tab is clicked
+document.addEventListener('DOMContentLoaded', () => {
+  const propButton = document.querySelector('[onclick*=\"propositions\"]');
+  if (propButton) {
+    const originalClick = propButton.onclick;
+    propButton.onclick = function(e) {
+      originalClick.call(this, e);
+      loadPropositions();
+    };
+  }
+});
 </script>
 
 <!-- Verse Navigation: Swipe, Arrow Keys, Modal Management -->
