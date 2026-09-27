@@ -170,7 +170,7 @@
     // Drawer (slides in from top-right)
     var drawer = document.createElement('div');
     drawer.id = 'qhist-drawer';
-    drawer.innerHTML = '<div class="qhist-head"><span class="qhist-title">📖 Activity History</span><button class="qhist-clearall" onclick="qnavClearHist()">Clear all</button></div><div class="qhist-scroll" id="qhist-scroll"></div>';
+    drawer.innerHTML = '<div class="qhist-head"><span class="qhist-title">📖 Activity History</span><div><button class="qhist-clearall" onclick="qnavClearHist()">Clear all</button><button class="qhist-close" onclick="qnavToggleHist()" style="background:none;border:none;color:#8B5E0A;cursor:pointer;font-size:20px;padding:0 4px;margin-left:8px;" title="Close">✕</button></div></div><div class="qhist-scroll" id="qhist-scroll"></div>';
     document.body.appendChild(drawer);
 
     document.addEventListener('click', function(e) {
@@ -191,8 +191,8 @@
     style.textContent = `
       .qhist-btn-top {
         position: fixed;
-        top: 16px;
-        right: 16px;
+        top: max(16px, calc(env(safe-area-inset-top) + 12px));
+        right: max(16px, calc(env(safe-area-inset-right) + 12px));
         width: 48px;
         height: 48px;
         border-radius: 50%;
@@ -245,6 +245,7 @@
         z-index: 999;
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         transition: right 0.3s ease;
+        padding-top: env(safe-area-inset-top);
       }
 
       #qhist-drawer.open {
@@ -259,6 +260,7 @@
         border-bottom: 1px solid #E8DCC0;
         background: linear-gradient(135deg, #FDF8EE 0%, #FBF0D0 100%);
         flex-shrink: 0;
+        gap: 8px;
       }
 
       .qhist-title {
@@ -276,11 +278,32 @@
         cursor: pointer;
         font-size: 11px;
         transition: all 0.2s;
+        white-space: nowrap;
       }
 
       .qhist-clearall:hover {
         background: #FFF5E6;
         border-color: #B8902A;
+      }
+
+      .qhist-close {
+        background: none;
+        border: none;
+        color: #8B5E0A;
+        cursor: pointer;
+        font-size: 20px;
+        padding: 0 4px;
+        display: none;
+      }
+
+      .qhist-close:hover {
+        opacity: 0.7;
+      }
+
+      @media (max-width: 480px) {
+        .qhist-close {
+          display: block;
+        }
       }
 
       .qhist-scroll {
@@ -354,15 +377,26 @@
 
       @media (max-width: 480px) {
         #qhist-drawer {
-          width: 100%;
-          right: -100%;
+          width: 75%;
+          max-width: 280px;
+          right: -75%;
         }
         .qhist-btn-top {
-          top: 12px;
-          right: 12px;
+          top: max(12px, calc(env(safe-area-inset-top) + 8px));
+          right: max(12px, calc(env(safe-area-inset-right) + 8px));
           width: 44px;
           height: 44px;
           font-size: 18px;
+        }
+        .qhist-head {
+          padding: 12px;
+        }
+        .qhist-title {
+          font-size: 13px;
+        }
+        .qhist-clearall {
+          font-size: 10px;
+          padding: 3px 8px;
         }
       }
 
@@ -374,6 +408,10 @@
       html[data-theme="dark"] .qhist-head {
         background: #2A2620;
         border-bottom-color: #3A3630;
+      }
+
+      html[data-theme="dark"] .qhist-close {
+        color: #E0D5C7;
       }
 
       html[data-theme="dark"] .qhist-item {
