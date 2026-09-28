@@ -20,8 +20,17 @@
     }
   }
 
+  var PARENT = {'campaign-detail.html':'campaigns.html','verse-detail.html':'index.html','narration.html':'narrations.html','theme-reader.html':'themes.html','theme-analysis.html':'themes.html','study_page.html':'index.html','qiraat-comparison.html':'index.html','quran-crossref.html':'index.html'};
+  function navHtml() {
+    var cur = PARENT[file()] || file();
+    return NAV.map(function (n) {
+      return '<button class="bnav-btn' + (n[0] === cur ? ' active' : '') + '" onclick="location.href=\'' + n[0] + '\'"><span class="bni">' + n[1] + '</span><span>' + n[2] + '</span></button>';
+    }).join('');
+  }
+
   function addNav() {
-    if (document.getElementById('bottom-nav')) return;
+    var existing = document.getElementById('bottom-nav');
+    if (existing) { existing.innerHTML = navHtml(); return; } /* same full menu on every page */
     var st = document.createElement('style');
     st.textContent =
       '#bottom-nav{position:fixed;bottom:0;left:0;right:0;height:54px;background:#FDFAF4;border-top:1.5px solid #E8DDC0;display:flex;z-index:9999;box-shadow:0 -2px 8px rgba(0,0,0,.1);overflow-x:auto;scrollbar-width:none}' +
@@ -31,10 +40,7 @@
       'body{padding-bottom:80px}';
     document.head.appendChild(st);
     var nav = document.createElement('nav'); nav.id = 'bottom-nav';
-    var cur = file();
-    nav.innerHTML = NAV.map(function (n) {
-      return '<button class="bnav-btn' + (n[0] === cur ? ' active' : '') + '" onclick="location.href=\'' + n[0] + '\'"><span class="bni">' + n[1] + '</span><span>' + n[2] + '</span></button>';
-    }).join('');
+    nav.innerHTML = navHtml();
     document.body.appendChild(nav);
   }
 
