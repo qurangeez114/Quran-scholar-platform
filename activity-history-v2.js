@@ -12,9 +12,9 @@
 (function(window) {
   'use strict';
 
-  // Storage keys
+  // Storage keys - use existing qnav_hist for history
   const KEYS = {
-    history: 'qhikma_activity_history',
+    history: 'qnav_hist',  // USE EXISTING STORAGE
     research: 'qhikma_research_saved',
     presentations: 'qhikma_presentations'
   };
@@ -56,55 +56,11 @@
   // ═══════════════════════════════════════════════════════════
   // HISTORY TRACKING
   // ═══════════════════════════════════════════════════════════
-
-  function addToHistory(pageData) {
-    try {
-      const page = {
-        title: pageData.title || 'Untitled',
-        url: pageData.url || window.location.href,
-        icon: pageData.icon || getPageIcon(),
-        timestamp: pageData.timestamp || Date.now()
-      };
-
-      console.log('[qhikma] Adding to history:', page.title);
-
-      // Keep max 100 entries
-      const idx = historyData.findIndex(h => h.url === page.url);
-      if (idx !== -1) {
-        console.log('[qhikma] Page already in history (index', idx, '), moving to top');
-        historyData.splice(idx, 1);
-      }
-      historyData.unshift(page);
-      if (historyData.length > 100) historyData.pop();
-      
-      console.log('[qhikma] History now has', historyData.length, 'entries');
-      save(KEYS.history, historyData);
-    } catch (e) {
-      console.error('[qhikma] Add to history failed:', e);
-    }
-  }
-
-  function trackPage() {
-    try {
-      addToHistory({
-        title: document.title || 'Untitled',
-        url: window.location.href,
-        icon: getPageIcon(),
-        timestamp: Date.now()
-      });
-    } catch (e) {
-      console.error('[qhikma] Track page failed:', e);
-    }
-  }
-
-  function getPageIcon() {
-    const path = window.location.pathname.toLowerCase();
-    if (path.includes('research')) return '📚';
-    if (path.includes('presentation')) return '🎞';
-    if (path.includes('theme')) return '🏛';
-    if (path.includes('story')) return '📖';
-    return '📖';
-  }
+  // 
+  // Tracking is handled by track-page-visits.js
+  // This modal just READS from qnav_hist
+  // 
+  // ═══════════════════════════════════════════════════════════
 
   // ═══════════════════════════════════════════════════════════
   // MODAL CREATION (Lazy — only on first open)
@@ -200,7 +156,7 @@
       if (!isInitialized) createModal();
       if (!modalEl) return;
       modalEl.classList.add('open');
-      trackPage(); // Track when user opens history
+      // Tracking is handled by track-page-visits.js on page load
     } catch (e) {
       console.error('Open modal error:', e);
     }
@@ -261,11 +217,32 @@
       }
 
       list.innerHTML = data.map((item, idx) => {
-        const time = formatTime(item.timestamp);
-        const title = escapeHtml(item.title || 'Untitled');
+        // Handle both formats: qnav_hist uses 'label'/'time', manual uses 'title'/'timestamp'
+        const title = escapeHtml(item.label || item.title || 'Page');
         const url = escapeHtml(item.url || '');
-        const icon = item.icon || '📖';
+        const icon = item.icon || '📄';
+        const time = formatTime(item.time || item.timestamp);
 
+        // For history tab, make row a clickable link
+        if (tab === 'history') {
+          return `
+<a href="${escapeAttr(item.url || '')}" class="qhikma-item qhikma-item-link">
+  <div class="qhikma-item-header">
+    <span class="qhikma-icon">${icon}</span>
+    <div class="qhikma-item-text">
+      <div class="qhikma-title">${title}</div>
+      <div class="qhikma-time">${time}</div>
+    </div>
+  </div>
+  <div class="qhikma-item-actions">
+    <button class="qhikma-btn-small" onclick="event.preventDefault(); qhikmaAddToResearch('${escapeAttr(title)}', '${escapeAttr(url)}')" title="Save">💾</button>
+    <button class="qhikma-btn-small" onclick="event.preventDefault(); qhikmaAddToPresentation('${escapeAttr(title)}', '${escapeAttr(url)}')" title="Add to slides">🎞</button>
+  </div>
+</a>
+          `;
+        }
+
+        // Research and Presentations tabs (non-clickable, with delete)
         return `
 <div class="qhikma-item">
   <div class="qhikma-item-header">
@@ -276,11 +253,7 @@
     </div>
   </div>
   <div class="qhikma-item-actions">
-    ${tab === 'history' ? `
-      <button class="qhikma-btn-small" onclick="qhikmaAddToResearch('${escapeAttr(title)}', '${escapeAttr(url)}')" title="Save">💾</button>
-      <button class="qhikma-btn-small" onclick="qhikmaAddToPresentation('${escapeAttr(title)}', '${escapeAttr(url)}')" title="Add to slides">🎞</button>
-      <button class="qhikma-btn-small" onclick="window.open('${escapeAttr(url)}', '_blank')" title="Open">🔗</button>
-    ` : tab === 'research' ? `
+    ${tab === 'research' ? `
       <button class="qhikma-btn-small" onclick="qhikmaEditNotes(${idx})" title="Edit notes">✏️</button>
       <button class="qhikma-btn-small qhikma-danger" onclick="qhikmaRemoveResearch(${idx})" title="Delete">🗑</button>
     ` : `
@@ -436,15 +409,6 @@
 
   function init() {
     try {
-      // Test localStorage first
-      try {
-        localStorage.setItem('qhikma_test', '1');
-        localStorage.removeItem('qhikma_test');
-        console.log('[qhikma] ✅ localStorage available');
-      } catch (e) {
-        console.error('[qhikma] ❌ localStorage unavailable:', e.message);
-      }
-
       historyData = load(KEYS.history);
       researchData = load(KEYS.research);
       presentationData = load(KEYS.presentations);
@@ -453,68 +417,26 @@
       console.log('[qhikma] Loaded research:', researchData.length, 'entries');
       console.log('[qhikma] Loaded presentations:', presentationData.length, 'entries');
 
-      // Expose global API FIRST (so it's available immediately)
+      // Expose global API
       window.qhikmaOpenModal = openModal;
       window.qhikmaCloseModal = closeModal;
-      window.qhikmaAddToHistory = addToHistory;
       window.qhikmaAddToResearch = qhikmaAddToResearch;
       window.qhikmaAddToPresentation = qhikmaAddToPresentation;
       window.qhikmaEditNotes = qhikmaEditNotes;
       window.qhikmaRemoveResearch = qhikmaRemoveResearch;
       window.qhikmaRemovePresentation = qhikmaRemovePresentation;
       
-      console.log('[qhikma] ✅ Initialization complete');
+      console.log('[qhikma] ✅ Initialized (tracking via track-page-visits.js)');
     } catch (e) {
       console.error('[qhikma] Initialization error:', e);
     }
   }
 
-  function trackPageWhenReady() {
-    try {
-      // Wait for title to be set (max 5 seconds)
-      let attempts = 0;
-      const maxAttempts = 50; // 5 seconds at 100ms intervals
-      
-      const checkTitle = setInterval(() => {
-        attempts++;
-        const title = document.title || '';
-        
-        if (title && title.length > 0 && title !== 'undefined') {
-          clearInterval(checkTitle);
-          console.log('[qhikma] Page title ready:', title);
-          trackPage();
-          console.log('[qhikma] ✅ Page tracked');
-        } else if (attempts >= maxAttempts) {
-          clearInterval(checkTitle);
-          console.log('[qhikma] ⚠️  Timeout waiting for title, tracking anyway');
-          trackPage();
-        }
-      }, 100);
-    } catch (e) {
-      console.error('[qhikma] Track page when ready error:', e);
-    }
-  }
-
-  // Start when ready
-  try {
+  // Initialize when ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
     init();
-    
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', trackPageWhenReady);
-    } else {
-      // Also track on load event (more reliable)
-      window.addEventListener('load', trackPageWhenReady);
-      // And try immediately if page is already loaded
-      trackPageWhenReady();
-    }
-  } catch (e) {
-    console.error('[qhikma] Failed to initialize:', e);
   }
-
-  // Catch any unhandled errors on page
-  window.addEventListener('error', function(event) {
-    console.error('[qhikma] Page error detected:', event.message);
-    // Don't prevent - let page handle it, but Activity History should keep working
-  }, true);
 
 })(window);
