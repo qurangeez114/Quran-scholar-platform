@@ -52,7 +52,7 @@ export default async () => {
     st.new_links = out.length;
     for (let i = 0; i < out.length; i += 500) {
       const b = out.slice(i, i + 500);
-      const r = await fetch(`${SUPABASE_URL}/rest/v1/hadith_verse_links`, { method: "POST", headers: { ...HEADERS, "Content-Type": "application/json", Prefer: "return=minimal" }, body: JSON.stringify(b) });
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/hadith_verse_links`, { method: "POST", headers: { ...HEADERS, "Content-Type": "application/json", Prefer: "return=minimal,resolution=ignore-duplicates" }, body: JSON.stringify(b) });
       if (r.ok) st.inserted += b.length; else { st.errors++; console.error("insert", r.status, (await r.text()).slice(0, 200)); }
     }
   } catch (e) { st.errors++; console.error("FATAL", e.message); }
