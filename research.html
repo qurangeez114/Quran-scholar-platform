@@ -1730,12 +1730,12 @@ async function doSearch() {
     const scholar    = document.getElementById('scholarFilter').value;
     const relatedTerms = getRelatedTerms(q);
 
-    const exactResults = await fetchAllSources(q, tradFilter, collection, scholar);
+    const exactResults = await fetchAllSources(q, tradFilter, tafsirTradFilter, collection, scholar);
 
     let relatedResults = [];
     if (relatedTerms.length) {
       const exactIds = new Set(exactResults.map(r => r.type + '-' + (r._tbl||'') + '-' + r.id));
-      const batches  = await Promise.all(relatedTerms.slice(0,5).map(t => fetchAllSources(t, tradFilter, collection, scholar)));
+      const batches  = await Promise.all(relatedTerms.slice(0,5).map(t => fetchAllSources(t, tradFilter, tafsirTradFilter, collection, scholar)));
       const seen = new Set(exactIds);
       batches.flat().forEach(r => {
         const k = r.type + '-' + (r._tbl||'') + '-' + r.id;
@@ -1762,7 +1762,7 @@ async function doSearch() {
   }
 }
 
-async function fetchAllSources(q, tradFilter, collection, scholar) {
+async function fetchAllSources(q, tradFilter, tafsirTradFilter, collection, scholar) {
   const results = [];
 
   // Detect verse reference pattern like "96:1" or "2:255" and query by exact sura/aya instead of text search
