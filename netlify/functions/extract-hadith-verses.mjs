@@ -56,5 +56,7 @@ export default async () => {
       if (r.ok) st.inserted += b.length; else { st.errors++; console.error("insert", r.status, (await r.text()).slice(0, 200)); }
     }
   } catch (e) { st.errors++; console.error("FATAL", e.message); }
-  console.log("hadith-extraction", JSON.stringify({ ...st, ms: Date.now() - t0 }));
+  const result = { ...st, ms: Date.now() - t0 };
+  console.log("hadith-extraction", JSON.stringify(result));
+  return new Response(JSON.stringify(result), { headers: { "Content-Type": "application/json" } });
 };
