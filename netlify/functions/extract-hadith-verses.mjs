@@ -1,20 +1,49 @@
-/* Scheduled Netlify function: every 2 days at 03:00 UTC.
-   Finds hadith whose English text contains SURA:AYA references (e.g. "(36:12)"),
-   validates each against real verse counts, and inserts rows into
-   hadith_verse_links (link_method 'regex:text_reference'). Reads/inserts only.
-   Key comes from Netlify env; nothing hardcoded. */
+/* Scheduled Netlify function: every 2 days at 03:00 UTC. Also callable
+   on-demand via HTTP (used by the GitHub Actions fallback in
+   .github/workflows/extract-hadith-verses.yml), and via POST body
+   {"full": true} to force a one-time full-corpus rescan.
+
+   Finds hadith whose English text contains SURA:AYA references (e.g.
+   "(36:12)"), validates each against real verse counts, and inserts rows
+   into hadith_verse_links (link_method 'regex:text_reference').
+   Reads/inserts only. Key comes from Netlify env; nothing hardcoded.
+
+   NORMAL MODE (default): only fetches hadith created in the last 4 days
+   (a comfortable margin over the 2-day schedule) using a plain created_at
+   filter, then checks each one for a reference locally. This table's
+   server-side regex `match` filter was found to fail almost every time
+   under real testing (5+ retries, 60-100+ seconds, still failing) — this
+   avoids it entirely. The cheap created_at filter keeps each run's fetch
+   small and fast, since only new hadith need checking after the initial
+   backlog has been cleared once.
+
+   FULL MODE: paginates the entire table with no filter (used once to
+   clear a backlog; not needed for routine operation — the one for this
+   corpus already ran manually and inserted 745 links, full coverage
+   confirmed).
+
+   Inserts happen per page, not batched at the end, so a killed
+   invocation still keeps whatever progress it made. */
 export const config = { schedule: "0 3 */2 * *" };
 
 const SUPABASE_URL = process.env.SUPABASE_URL || "https://ylosytbxpzxzwfzjpaej.supabase.co";
 const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || "";
 const HEADERS = KEY.startsWith("sb_") ? { apikey: KEY } : { apikey: KEY, Authorization: `Bearer ${KEY}` };
 const METHOD = "regex:text_reference";
+const PAGE_SIZE = 1000;
+const LOOKBACK_DAYS = 4;
 const VERSES = [7,286,200,176,120,165,206,75,129,109,123,111,43,52,99,128,111,110,98,135,112,78,118,64,77,227,93,88,69,60,34,30,73,54,45,83,182,88,75,85,54,53,89,59,37,35,38,29,18,45,60,49,62,55,78,96,29,22,24,13,14,11,11,18,12,12,30,52,52,44,28,28,20,56,40,31,50,40,46,42,29,19,36,25,22,17,19,26,30,20,15,21,11,8,8,19,5,8,8,11,11,8,3,9,5,4,7,3,6,3,5,4,5,6];
 
-async function page(path, from, size) {
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, { headers: { ...HEADERS, Range: `${from}-${from + size - 1}`, "Range-Unit": "items" } });
-  if (!r.ok) throw new Error(`GET ${path.split("?")[0]} ${r.status}`);
-  return r.json();
+async function page(path, from, size, retries = 4) {
+  for (let attempt = 1; ; attempt++) {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, { headers: { ...HEADERS, Range: `${from}-${from + size - 1}`, "Range-Unit": "items" } });
+    if (r.ok) return r.json();
+    if (r.status >= 500 && attempt <= retries) {
+      await new Promise((res) => setTimeout(res, Math.min(attempt * 1000, 5000)));
+      continue;
+    }
+    throw new Error(`GET ${path.split("?")[0]} ${r.status}`);
+  }
 }
 
 export function extract(text) {
@@ -26,10 +55,27 @@ export function extract(text) {
   return out;
 }
 
-export default async () => {
+async function insertBatch(links) {
+  if (!links.length) return { inserted: 0, ok: true };
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/hadith_verse_links?on_conflict=hadith_id,sura_id,aya_number`, {
+    method: "POST",
+    headers: { ...HEADERS, "Content-Type": "application/json", Prefer: "return=minimal,resolution=ignore-duplicates" },
+    body: JSON.stringify(links),
+  });
+  if (r.ok) return { inserted: links.length, ok: true };
+  console.error("insert", r.status, (await r.text()).slice(0, 200));
+  return { inserted: 0, ok: false };
+}
+
+export default async (req) => {
   const t0 = Date.now();
-  const st = { candidates: 0, new_links: 0, inserted: 0, errors: 0 };
+  const st = { mode: "incremental", candidates: 0, new_links: 0, inserted: 0, errors: 0, pages_done: 0 };
   if (!KEY) { console.error("No Supabase key in env"); return; }
+
+  let full = false;
+  try { full = req && (await req.clone().json())?.full === true; } catch { /* no/invalid body — default incremental */ }
+  if (full) st.mode = "full";
+
   try {
     const have = new Set();
     for (let f = 0; ; f += 1000) {
@@ -37,23 +83,32 @@ export default async () => {
       rows.forEach((r) => have.add(`${r.hadith_id}|${r.sura_id}|${r.aya_number}`));
       if (rows.length < 1000) break;
     }
-    const rows = [];
-    const q = "hadith_corpus_canonical?select=id,text_english&order=id&text_english=match." + encodeURIComponent("\\y\\d{1,3}:\\d{1,3}\\y");
-    for (let f = 0; ; f += 500) {
-      const p = await page(q, f, 500);
-      rows.push(...p);
-      if (p.length < 500) break;
+
+    let q = "hadith_corpus_canonical?select=id,text_english&order=id";
+    if (!full) {
+      const cutoff = new Date(Date.now() - LOOKBACK_DAYS * 86400000).toISOString();
+      q += "&created_at=gte." + encodeURIComponent(cutoff);
     }
-    st.candidates = rows.length;
-    const now = new Date().toISOString(), out = [];
-    for (const h of rows)
-      for (const [s, a] of extract(h.text_english))
-        if (!have.has(`${h.id}|${s}|${a}`)) out.push({ hadith_id: h.id, sura_id: s, aya_number: a, link_method: METHOD, created_at: now });
-    st.new_links = out.length;
-    for (let i = 0; i < out.length; i += 500) {
-      const b = out.slice(i, i + 500);
-      const r = await fetch(`${SUPABASE_URL}/rest/v1/hadith_verse_links?on_conflict=hadith_id,sura_id,aya_number`, { method: "POST", headers: { ...HEADERS, "Content-Type": "application/json", Prefer: "return=minimal,resolution=ignore-duplicates" }, body: JSON.stringify(b) });
-      if (r.ok) st.inserted += b.length; else { st.errors++; console.error("insert", r.status, (await r.text()).slice(0, 200)); }
+
+    const now = new Date().toISOString();
+    for (let f = 0; ; f += PAGE_SIZE) {
+      const rows = await page(q, f, PAGE_SIZE);
+      st.candidates += rows.length;
+
+      const links = [];
+      for (const h of rows)
+        for (const [s, a] of extract(h.text_english)) {
+          const k = `${h.id}|${s}|${a}`;
+          if (!have.has(k)) { links.push({ hadith_id: h.id, sura_id: s, aya_number: a, link_method: METHOD, created_at: now }); have.add(k); }
+        }
+      st.new_links += links.length;
+
+      const { inserted, ok } = await insertBatch(links);
+      st.inserted += inserted;
+      if (!ok) st.errors++;
+      st.pages_done++;
+
+      if (rows.length < PAGE_SIZE) break;
     }
   } catch (e) { st.errors++; console.error("FATAL", e.message); }
   const result = { ...st, ms: Date.now() - t0 };
