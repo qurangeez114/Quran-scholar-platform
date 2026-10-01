@@ -6425,7 +6425,27 @@ async function loadHadithComparison(sura, aya, container) {
     });
     const data = await resp.json();
     if (data.error) { container.innerHTML = ''; return; }
-    if (data.verdict === 'single' || data.verdict === 'none') { container.innerHTML = ''; return; }
+
+    const contentNotesHtml = (data.content_notes && data.content_notes.length) ? data.content_notes.map(n => {
+      const idx = n.hadith_idx;
+      const consensusLabel = { settled: 'Well-established scholarly response', debated: 'Scholars differ on the resolution', unaddressed: 'Not resolved in available scholarship' }[n.scholarly_consensus] || '';
+      return `<div style="padding:8px 0;border-top:1px dashed #D8CBA0;font-size:12px;">
+        <div style="font-weight:600;color:#8A5A1A;margin-bottom:3px;">📖 Hadith [${idx}] — apparent difficulty</div>
+        <div style="color:#3a3a3a;margin-bottom:3px;"><b>Reading literally:</b> ${escapeHtml(n.issue || '')}</div>
+        <div style="color:#3a3a3a;"><b>Scholarly response:</b> ${escapeHtml(n.scholarly_response || '')}</div>
+        ${consensusLabel ? `<div style="color:#8B7355;font-style:italic;margin-top:2px;font-size:11px;">${consensusLabel}</div>` : ''}
+      </div>`;
+    }).join('') : '';
+
+    if (data.verdict === 'single') {
+      if (!contentNotesHtml) { container.innerHTML = ''; return; }
+      container.innerHTML = `
+        <div class="hadith-compare-panel" style="margin:12px 14px;padding:12px;border-radius:10px;background:#FEF9E7;border:1px solid #8A6A0033;">
+          ${contentNotesHtml}
+        </div>`;
+      return;
+    }
+    if (data.verdict === 'none') { container.innerHTML = ''; return; }
 
     const verdictMeta = {
       corroborating: { icon: '✅', label: 'Hadith corroborate each other', color: '#1A7A48', bg: '#D5F5E3' },
@@ -6462,6 +6482,7 @@ async function loadHadithComparison(sura, aya, container) {
         <div style="font-size:12.5px;color:#3a3a3a;line-height:1.6;margin-bottom:8px;">${escapeHtml(data.summary || '')}</div>
         ${pairsHtml ? `<div style="margin:8px 0;">${pairsHtml}</div>` : ''}
         ${data.reliability_note ? `<div style="font-size:11.5px;color:#6B5A2A;font-style:italic;border-top:1px solid ${verdictMeta.color}33;padding-top:8px;margin-top:4px;">🔍 Reliability: ${escapeHtml(data.reliability_note)}</div>` : ''}
+        ${contentNotesHtml ? `<div style="margin-top:4px;">${contentNotesHtml}</div>` : ''}
         <div style="margin-top:8px;">${refsHtml}</div>
       </div>`;
   } catch (e) {
@@ -6574,7 +6595,7 @@ async function loadHadithPanel(sura, aya) {
     html += renderScholarEntries(directEntries, current, '');
     html += `<button class="hadith-action-btn secondary" onclick="switchToTafsir(${aya})">📖 Read Tafsīr for context</button>`;
     panel.innerHTML = html;
-    if (directEntries.length >= 2) {
+    if (directEntries.length >= 1) {
       const cmpContainer = document.getElementById(`hadith-compare-${aya}`);
       if (cmpContainer) loadHadithComparison(sura, aya, cmpContainer);
     }

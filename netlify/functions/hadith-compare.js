@@ -99,13 +99,60 @@ exports.handler = async (event) => {
       all = picked;
     }
 
+    const CONTENT_EVAL_INSTRUCTIONS = `
+For each hadith, also check for a content difficulty: a case where a LITERAL reading of the hadith appears to conflict with established scientific fact, documented history, or another authenticated report — AND where this specific conflict is already a well-known, documented point of discussion in classical tafsir/hadith commentary (e.g. Ibn Kathir, al-Qurtubi, al-Tabari) or significant modern scholarship (e.g. the "spring of murky/warm water" at 18:86, long discussed via the phenomenological reading — described as it visually appeared to the observer, not a literal claim about the sun's physical location).
+
+Do NOT flag a hadith just because it describes a miracle, the unseen, or something supernatural — that is normal, expected content in hadith literature and is not a "difficulty." Only flag it if you are confident there is a REAL, documented scholarly discussion resolving an apparent conflict. If you are not confident such a documented discussion exists for a given hadith, do not include it — never invent or speculate a novel objection yourself.`;
+
     if (all.length < 2) {
+      if (all.length === 0) {
+        const result = { sura_id: sura, aya_number: aya, hadith_count: 0, verdict: 'none', summary: 'No hadith linked to this verse.', pairs: [], content_notes: [] };
+        return { statusCode: 200, headers: cors, body: JSON.stringify({ cached: false, ...result }) };
+      }
+      // Single hadith: nothing to compare, but still worth a content check.
+      const h = all[0];
+      const soloPrompt = `A single hadith is linked to Qur'anic verse ${sura}:${aya}. Check it for a content difficulty.${CONTENT_EVAL_INSTRUCTIONS}
+
+HADITH:
+${h.collection || 'Unknown collection'}${h.reference ? ' #' + h.reference : ''} (${h.tradition || 'unspecified'}, grade: ${h.hadith_grade || 'ungraded'})
+${h.hadith_text.trim()}
+
+Respond ONLY with valid JSON, no markdown:
+{
+  "content_notes": [{"issue": "...", "scholarly_response": "...", "scholarly_consensus": "settled" | "debated" | "unaddressed"}]
+}
+Leave content_notes as an empty array if nothing qualifies. Length rule: every string value must be a single line.`;
+
+      let contentNotes = [];
+      try {
+        const soloResp = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-api-key': AKEY, 'anthropic-version': '2023-06-01' },
+          body: JSON.stringify({ model: 'claude-sonnet-5-5', max_tokens: 1200, messages: [{ role: 'user', content: soloPrompt }] })
+        });
+        if (soloResp.ok) {
+          const soloData = await soloResp.json();
+          let t = (soloData.content && soloData.content[0] && soloData.content[0].text) || '{}';
+          t = t.trim().replace(/^```json\s*/i, '').replace(/```\s*$/, '');
+          const soloParsed = JSON.parse(t);
+          contentNotes = (soloParsed.content_notes || []).map(n => ({ ...n, hadith_idx: 1 }));
+        }
+      } catch {}
+
       const result = {
-        sura_id: sura, aya_number: aya, hadith_count: all.length,
-        verdict: all.length === 1 ? 'single' : 'none',
-        summary: all.length === 1 ? 'Only one hadith is linked to this verse — nothing to compare yet.' : 'No hadith linked to this verse.',
-        pairs: []
+        sura_id: sura, aya_number: aya, hadith_count: 1,
+        verdict: 'single',
+        summary: 'Only one hadith is linked to this verse — nothing to compare yet.',
+        pairs: [], content_notes: contentNotes,
+        hadith_refs: [{ idx: 1, collection: h.collection, reference: h.reference, tradition: h.tradition, grade: h.hadith_grade }]
       };
+      try {
+        await sb(`hadith_verse_comparisons?on_conflict=sura_id,aya_number`, {
+          method: 'POST',
+          headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+          body: JSON.stringify([{ ...result, created_at: new Date().toISOString() }])
+        });
+      } catch {}
       return { statusCode: 200, headers: cors, body: JSON.stringify({ cached: false, ...result }) };
     }
 
@@ -139,17 +186,26 @@ Respond ONLY with valid JSON, no markdown, no preamble:
       "note": "One sentence stating specifically what agrees, differs, or conflicts. Quote or closely paraphrase the actual claims."
     }
   ],
-  "reliability_note": "Given the grades, traditions, and any contradictions found, one honest sentence on how reliably this hadith evidence supports a reading of ${sura}:${aya}. Do not inflate confidence — if evidence is thin, weak-graded, or conflicting, say so plainly."
+  "reliability_note": "Given the grades, traditions, and any contradictions found, one honest sentence on how reliably this hadith evidence supports a reading of ${sura}:${aya}. Do not inflate confidence — if evidence is thin, weak-graded, or conflicting, say so plainly.",
+  "content_notes": [
+    {
+      "hadith_idx": 1,
+      "issue": "...",
+      "scholarly_response": "...",
+      "scholarly_consensus": "settled" | "debated" | "unaddressed"
+    }
+  ]
 }
+${CONTENT_EVAL_INSTRUCTIONS}
 
-Only include pairs where there is something meaningful to say (skip pairs that are trivially identical in content with nothing to compare), and cap it at the 15 most meaningful pairs if there would otherwise be more. Length rule: every string value must be a single line.`;
+Only include pairs where there is something meaningful to say (skip pairs that are trivially identical in content with nothing to compare), and cap it at the 15 most meaningful pairs if there would otherwise be more. Leave content_notes as an empty array if nothing qualifies for any hadith. Length rule: every string value must be a single line.`;
 
     const aiResp = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': AKEY, 'anthropic-version': '2023-06-01' },
       body: JSON.stringify({
         model: 'claude-sonnet-5-5',
-        max_tokens: 4000,
+        max_tokens: 5000,
         messages: [{ role: 'user', content: prompt }]
       })
     });
@@ -174,6 +230,7 @@ Only include pairs where there is something meaningful to say (skip pairs that a
       summary: parsed.summary || '',
       reliability_note: parsed.reliability_note || '',
       pairs: parsed.pairs || [],
+      content_notes: parsed.content_notes || [],
       hadith_refs: all.map((h, i) => ({ idx: i + 1, collection: h.collection, reference: h.reference, tradition: h.tradition, grade: h.hadith_grade }))
     };
 
