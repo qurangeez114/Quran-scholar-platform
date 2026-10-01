@@ -1,0 +1,34 @@
+name: AI-Scan Hadith Verses (Scheduled)
+
+on:
+  schedule:
+    # Every 2 days at 04:00 UTC — 30 min after the regex-based extraction —
+    # plan-independent fallback in case Netlify's own scheduled-functions
+    # feature (Pro+) isn't active on this site.
+    - cron: "0 4 */2 * *"
+  workflow_dispatch:
+
+jobs:
+  ai-scan:
+    runs-on: ubuntu-latest
+    name: AI Hadith Verse Scan
+    timeout-minutes: 15
+
+    steps:
+      - name: Call AI scan endpoint
+        id: scan
+        run: |
+          ENDPOINT="https://quranhikma.com/.netlify/functions/ai-scan-hadith-verses"
+          echo "Calling AI scan endpoint: $ENDPOINT"
+          RESPONSE=$(curl -s -X POST "$ENDPOINT")
+          echo "response=$RESPONSE" >> "$GITHUB_OUTPUT"
+          echo "$RESPONSE"
+
+      - name: Report status
+        if: always()
+        run: |
+          RESPONSE='${{ steps.scan.outputs.response }}'
+          echo "### AI Hadith Verse Scan Report" >> "$GITHUB_STEP_SUMMARY"
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          echo "$RESPONSE" | (jq '.' 2>/dev/null || cat) >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
