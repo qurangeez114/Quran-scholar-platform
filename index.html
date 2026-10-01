@@ -6528,6 +6528,35 @@ async function loadHadithPanel(sura, aya) {
       });
       suraHadith = rows.filter(isRealHadith).map(rowToHadithEntry);
     } catch {}
+
+    // Also pull the sura-wide hadith_verse_links -> hadith_corpus_canonical
+    // data (the same source merged into directEntries above) — without this,
+    // the fallback only ever draws from the older, much smaller
+    // hadith_connections table and misses most of what's actually linked.
+    try {
+      const linkRows = await sbFetch('hadith_verse_links', {
+        select: 'hadith_id,aya_number',
+        sura_id: `eq.${sura}`,
+        order: 'aya_number',
+        limit: 200
+      });
+      if (linkRows.length) {
+        const ayaById = {};
+        linkRows.forEach(r => { ayaById[r.hadith_id] = r.aya_number; });
+        const ids = linkRows.map(r => r.hadith_id).join(',');
+        const corpusRows = await sbFetch('hadith_corpus_canonical', {
+          select: 'id,collection,hadith_number,tradition,text_english,grade,source_url',
+          id: `in.(${ids})`
+        });
+        const existingKeys = new Set(suraHadith.map(e => (e.scholar || '') + '|' + (e.text || '').slice(0, 60)));
+        corpusRows.forEach(r => {
+          if (!r.text_english) return;
+          const entry = rowToHadithEntryFromCorpus({ ...r, aya_number: ayaById[r.id] });
+          const key = (entry.scholar || '') + '|' + (entry.text || '').slice(0, 60);
+          if (!existingKeys.has(key)) { suraHadith.push(entry); existingKeys.add(key); }
+        });
+      }
+    } catch {}
   }
 
   if (tabBtn) {
@@ -6578,14 +6607,24 @@ async function loadHadithPanel(sura, aya) {
     });
 
     if (verseNumbers.length > 0) {
-      const firstVerse = verseNumbers[0];
+      // Build a sample spread across several verses (not just the first one
+      // with hadith), and balanced across traditions — otherwise an
+      // id-ordered pick tends to front-load one tradition (e.g. Sunni
+      // entries happen to cluster at lower āyah numbers in some sūrahs),
+      // making the toggle exist but the other tradition look empty even
+      // when it isn't.
+      const flatAll = [];
+      verseNumbers.forEach(v => grouped[v].forEach(item => flatAll.push(item)));
+      const bucket = t => flatAll.filter(e => (e.tradition || '').toLowerCase().startsWith(t));
+      const sample = [...bucket('shia').slice(0, 6), ...flatAll.filter(e => !(e.tradition || '').toLowerCase().startsWith('shia')).slice(0, 6)];
       html += `<div class="hadith-section-divider"><span class="hadith-section-title">Sample Hadith from this Sūrah</span></div>`;
-      html += renderScholarEntries(grouped[firstVerse].slice(0, 3), current, '');
+      html += buildTradToggle(sura, aya, 'hadith', current);
+      html += renderScholarEntries(sample, current, emptyTabMessage(current, 'hadith'));
     }
   } else {
     html += `<div class="hadith-empty-notice" style="background:#F5F3EC">
       <b>No hadith available for Sūrah ${sura} yet</b><br>
-      <span style="font-weight:500;font-size:12px">The <code>hadith_connections</code> table currently contains 501 entries across the Qur'ān. More are being added.</span>
+      <span style="font-weight:500;font-size:12px">Coverage is being added gradually as more hadith are linked to verses.</span>
     </div>`;
   }
 
