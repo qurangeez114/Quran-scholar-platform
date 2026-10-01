@@ -68,7 +68,36 @@ exports.handler = async (event) => {
       }));
     }
 
-    const all = [...realDirect, ...fromCorpus].filter(h => h.hadith_text && h.hadith_text.trim());
+    let all = [...realDirect, ...fromCorpus].filter(h => h.hadith_text && h.hadith_text.trim());
+
+    // Cap how many hadith go into a single comparison prompt. A verse can have
+    // dozens or even 100+ linked hadith (e.g. famous short verses like 112:1),
+    // and sending all of them would blow past the model's practical output
+    // budget for a pairwise comparison, producing truncated/unparseable JSON.
+    // When over the cap, prefer a diverse, graded sample: keep hadith with a
+    // real grade first, spread across distinct collections, rather than just
+    // taking the first N (which could all be the same collection/narration).
+    const totalLinked = all.length;
+    const MAX_HADITH_IN_PROMPT = 24;
+    let truncated = false;
+    if (all.length > MAX_HADITH_IN_PROMPT) {
+      truncated = true;
+      const graded = all.filter(h => h.hadith_grade && h.hadith_grade.toLowerCase() !== 'ungraded');
+      const ungraded = all.filter(h => !graded.includes(h));
+      const byCollectionSpread = (arr) => {
+        const seen = new Map();
+        const ordered = [];
+        for (const h of arr) {
+          const key = h.collection || 'unknown';
+          const n = seen.get(key) || 0;
+          ordered.push({ h, n });
+          seen.set(key, n + 1);
+        }
+        return ordered.sort((a, b) => a.n - b.n).map(o => o.h);
+      };
+      const picked = [...byCollectionSpread(graded), ...byCollectionSpread(ungraded)].slice(0, MAX_HADITH_IN_PROMPT);
+      all = picked;
+    }
 
     if (all.length < 2) {
       const result = {
@@ -88,7 +117,11 @@ exports.handler = async (event) => {
       return parts.join('\n');
     }).join('\n\n---\n\n');
 
-    const prompt = `You are comparing hadith that have all been linked to the same Qur'anic verse, ${sura}:${aya}. Your job is strictly evidentiary: assess whether they corroborate each other, differ in detail, or genuinely contradict each other on a factual or doctrinal claim.
+    const truncationNote = truncated
+      ? `\n\nNote: this verse has ${totalLinked} linked hadith in total. To keep this comparison focused, you are shown a representative sample of ${all.length} (prioritizing graded hadith and spread across different collections/narrations). Base your verdict and summary on this sample, and say in the reliability_note that this is a sample of ${totalLinked}, not the full set.`
+      : '';
+
+    const prompt = `You are comparing hadith that have all been linked to the same Qur'anic verse, ${sura}:${aya}. Your job is strictly evidentiary: assess whether they corroborate each other, differ in detail, or genuinely contradict each other on a factual or doctrinal claim.${truncationNote}
 
 HADITH LIST:
 ${list}
@@ -109,14 +142,14 @@ Respond ONLY with valid JSON, no markdown, no preamble:
   "reliability_note": "Given the grades, traditions, and any contradictions found, one honest sentence on how reliably this hadith evidence supports a reading of ${sura}:${aya}. Do not inflate confidence — if evidence is thin, weak-graded, or conflicting, say so plainly."
 }
 
-Only include pairs where there is something meaningful to say (skip pairs that are trivially identical in content with nothing to compare). Length rule: every string value must be a single line.`;
+Only include pairs where there is something meaningful to say (skip pairs that are trivially identical in content with nothing to compare), and cap it at the 15 most meaningful pairs if there would otherwise be more. Length rule: every string value must be a single line.`;
 
     const aiResp = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': AKEY, 'anthropic-version': '2023-06-01' },
       body: JSON.stringify({
         model: 'claude-sonnet-5-5',
-        max_tokens: 2000,
+        max_tokens: 4000,
         messages: [{ role: 'user', content: prompt }]
       })
     });
@@ -135,6 +168,8 @@ Only include pairs where there is something meaningful to say (skip pairs that a
       sura_id: sura,
       aya_number: aya,
       hadith_count: all.length,
+      total_linked_count: totalLinked,
+      sampled: truncated,
       verdict: parsed.verdict || 'mixed',
       summary: parsed.summary || '',
       reliability_note: parsed.reliability_note || '',
