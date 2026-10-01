@@ -6391,6 +6391,84 @@ function switchToTafsir(aya) {
   if (tafsirBtn) tafsirBtn.click();
 }
 
+function rowToHadithEntryFromCorpus(r) {
+  const metaParts = [];
+  if (r.collection) metaParts.push(r.collection);
+  if (r.hadith_number) metaParts.push('📖 ' + r.hadith_number);
+  let gradeBadge = '';
+  const g = (r.grade || '').toLowerCase();
+  if (g) {
+    const gradeColor = g.includes('sahih') ? '#1A7A48' : g.includes('hasan') ? '#1A6FA8' : (g.includes('daif') || g.includes('weak')) ? '#C0621A' : '#666';
+    const gradeBg = g.includes('sahih') ? '#D5F5E3' : g.includes('hasan') ? '#D6EAF8' : (g.includes('daif') || g.includes('weak')) ? '#FDEBD0' : '#F0F0F0';
+    gradeBadge = `<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:${gradeBg};color:${gradeColor};border:1px solid ${gradeColor};margin-left:6px;">${r.grade}</span>`;
+  }
+  return {
+    scholar: (r.collection || 'Hadith') + (gradeBadge ? ' ' + gradeBadge : ''),
+    tradition: r.tradition,
+    text: r.text_english || '',
+    meta: metaParts.join(' · ') || null,
+    isAI: false,
+    aya_number: r.aya_number,
+    gradeBadge,
+    sourceUrl: r.source_url,
+    _fromLinkTable: true
+  };
+}
+
+async function loadHadithComparison(sura, aya, container) {
+  container.innerHTML = `<div class="hadith-compare-loading" style="padding:12px 14px;font-size:12px;color:#8B7355;font-style:italic;">⚖️ Comparing linked hadith for consistency…</div>`;
+  try {
+    const resp = await fetch('/.netlify/functions/hadith-compare', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sura, aya })
+    });
+    const data = await resp.json();
+    if (data.error) { container.innerHTML = ''; return; }
+    if (data.verdict === 'single' || data.verdict === 'none') { container.innerHTML = ''; return; }
+
+    const verdictMeta = {
+      corroborating: { icon: '✅', label: 'Hadith corroborate each other', color: '#1A7A48', bg: '#D5F5E3' },
+      mixed:         { icon: '⚖️', label: 'Hadith differ in some details', color: '#8A6A00', bg: '#FEF9E7' },
+      contradictory: { icon: '⚠️', label: 'Hadith contain real contradictions', color: '#A6321A', bg: '#FDECEA' }
+    }[data.verdict] || { icon: '⚖️', label: 'Mixed evidence', color: '#8A6A00', bg: '#FEF9E7' };
+
+    let pairsHtml = '';
+    if (data.pairs && data.pairs.length) {
+      const relMeta = {
+        corroborating: { icon: '✅', color: '#1A7A48' },
+        differs_in_detail: { icon: '➖', color: '#8A6A00' },
+        contradicting: { icon: '⚠️', color: '#A6321A' }
+      };
+      pairsHtml = data.pairs.map(p => {
+        const m = relMeta[p.relation] || relMeta.differs_in_detail;
+        return `<div style="display:flex;gap:8px;padding:6px 0;border-bottom:1px solid #F0ECE0;font-size:12px;">
+          <span style="flex-shrink:0;color:${m.color};">${m.icon}</span>
+          <span><b>[${p.hadith_a}] × [${p.hadith_b}]</b> — ${escapeHtml(p.note || '')}</span>
+        </div>`;
+      }).join('');
+    }
+
+    const refsHtml = (data.hadith_refs || []).map(r =>
+      `<span style="display:inline-block;margin:2px 4px 2px 0;padding:2px 7px;background:#F5F3EC;border-radius:8px;font-size:10px;color:#6B5A2A;">[${r.idx}] ${escapeHtml(r.collection || '')}${r.reference ? ' #' + escapeHtml(String(r.reference)) : ''} · ${r.tradition || '?'} · ${r.grade || 'ungraded'}</span>`
+    ).join('');
+
+    container.innerHTML = `
+      <div class="hadith-compare-panel" style="margin:12px 14px;padding:12px;border-radius:10px;background:${verdictMeta.bg};border:1px solid ${verdictMeta.color}33;">
+        <div style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px;color:${verdictMeta.color};margin-bottom:6px;">
+          <span>${verdictMeta.icon}</span><span>${verdictMeta.label}</span>
+          <span style="font-weight:500;font-size:11px;color:#8B7355;margin-left:auto;">${data.hadith_count} hadith compared</span>
+        </div>
+        <div style="font-size:12.5px;color:#3a3a3a;line-height:1.6;margin-bottom:8px;">${escapeHtml(data.summary || '')}</div>
+        ${pairsHtml ? `<div style="margin:8px 0;">${pairsHtml}</div>` : ''}
+        ${data.reliability_note ? `<div style="font-size:11.5px;color:#6B5A2A;font-style:italic;border-top:1px solid ${verdictMeta.color}33;padding-top:8px;margin-top:4px;">🔍 Reliability: ${escapeHtml(data.reliability_note)}</div>` : ''}
+        <div style="margin-top:8px;">${refsHtml}</div>
+      </div>`;
+  } catch (e) {
+    container.innerHTML = '';
+  }
+}
+
 async function loadHadithPanel(sura, aya) {
   const panel = document.getElementById(`tp-${aya}-hadith`);
   if (!panel || !panel.querySelector('.loading')) return;
@@ -6412,6 +6490,32 @@ async function loadHadithPanel(sura, aya) {
       aya_number: `eq.${aya}`
     });
     directEntries = rows.filter(isRealHadith).map(rowToHadithEntry);
+  } catch {}
+
+  // Merge in hadith linked via hadith_verse_links -> hadith_corpus_canonical
+  // (a separate source populated by the pattern-extraction automation).
+  // Combined so the tab shows the COMPLETE set of linked hadith, not just
+  // whichever table happened to be queried first.
+  try {
+    const linkRows = await sbFetch('hadith_verse_links', {
+      select: 'hadith_id',
+      sura_id: `eq.${sura}`,
+      aya_number: `eq.${aya}`
+    });
+    if (linkRows.length) {
+      const ids = linkRows.map(r => r.hadith_id).join(',');
+      const corpusRows = await sbFetch('hadith_corpus_canonical', {
+        select: 'id,collection,hadith_number,tradition,text_english,grade,source_url,aya_number',
+        id: `in.(${ids})`
+      });
+      const existingKeys = new Set(directEntries.map(e => (e.scholar || '') + '|' + (e.text || '').slice(0, 60)));
+      corpusRows.forEach(r => {
+        if (!r.text_english) return;
+        const entry = rowToHadithEntryFromCorpus(r);
+        const key = (entry.scholar || '') + '|' + (entry.text || '').slice(0, 60);
+        if (!existingKeys.has(key)) { directEntries.push(entry); existingKeys.add(key); }
+      });
+    }
   } catch {}
 
   if (directEntries.length === 0) {
@@ -6436,10 +6540,15 @@ async function loadHadithPanel(sura, aya) {
 
   if (directEntries.length > 0) {
     html += buildTradToggle(sura, aya, 'hadith', current);
-    html += `<div class="hadith-section-divider"><span class="hadith-section-title">Hadith linked to ${sura}:${aya}</span></div>`;
+    html += `<div class="hadith-section-divider"><span class="hadith-section-title">Hadith linked to ${sura}:${aya} (${directEntries.length})</span></div>`;
+    html += `<div id="hadith-compare-${aya}"></div>`;
     html += renderScholarEntries(directEntries, current, '');
     html += `<button class="hadith-action-btn secondary" onclick="switchToTafsir(${aya})">📖 Read Tafsīr for context</button>`;
     panel.innerHTML = html;
+    if (directEntries.length >= 2) {
+      const cmpContainer = document.getElementById(`hadith-compare-${aya}`);
+      if (cmpContainer) loadHadithComparison(sura, aya, cmpContainer);
+    }
     return;
   }
 
