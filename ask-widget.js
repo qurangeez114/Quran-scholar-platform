@@ -19,23 +19,17 @@
   }
 
   function loadWidget() {
-    if (window.customElements && customElements.get('elevenlabs-convai')) {
-      mountWidget();
-      return;
-    }
+    // Mount first: a custom element created before its script loads is upgraded
+    // automatically after registration, which also avoids a cached-script race.
+    mountWidget();
 
-    var existing = document.querySelector('script[data-quranhikma-elevenlabs]');
-    if (existing) {
-      existing.addEventListener('load', mountWidget, { once: true });
-      return;
-    }
+    if (document.querySelector('script[data-quranhikma-elevenlabs]')) return;
 
     var script = document.createElement('script');
     script.src = WIDGET_SRC;
     script.async = true;
     script.type = 'text/javascript';
     script.setAttribute('data-quranhikma-elevenlabs', 'true');
-    script.addEventListener('load', mountWidget, { once: true });
     document.head.appendChild(script);
   }
 
