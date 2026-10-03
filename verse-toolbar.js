@@ -490,9 +490,67 @@
   function setSocialFormatMainUI(fmt){
     ['tiktok','square','story','wide'].forEach(f => {
       const btn = document.getElementById('scm-fmt-' + f);
+      if (!btn) return;
       btn.style.background = f === fmt ? '#C9A84C' : '#fff';
       btn.style.color = f === fmt ? '#fff' : '#1a1a1a';
     });
+  }
+
+  /* Actually changes the card size and redraws it — setSocialFormatMainUI
+     above only updates which button looks selected. Without this wrapper,
+     clicking a format button changed nothing but its own highlight. */
+  function setSocialFormatMain(fmt){
+    _socialMainFormat = fmt;
+    setSocialFormatMainUI(fmt);
+    try { drawSocialCardMain(); } catch(e) { console.error('drawSocialCardMain failed:', e); }
+  }
+
+  function closeSocialCardMain(){
+    var el = document.getElementById('socialOverlayMain');
+    if (el) el.style.display = 'none';
+  }
+
+  function updateSocialCardNavButtons() {
+    var prevBtn = document.getElementById('scm-nav-prev');
+    var nextBtn = document.getElementById('scm-nav-next');
+    if (!prevBtn || !nextBtn || !_socialMainVerseList) return;
+    prevBtn.style.opacity = _socialMainVerseListIdx > 0 ? '1' : '0.3';
+    prevBtn.style.pointerEvents = _socialMainVerseListIdx > 0 ? 'auto' : 'none';
+    nextBtn.style.opacity = _socialMainVerseListIdx < _socialMainVerseList.length - 1 ? '1' : '0.3';
+    nextBtn.style.pointerEvents = _socialMainVerseListIdx < _socialMainVerseList.length - 1 ? 'auto' : 'none';
+  }
+
+  function navigateSocialCardList(direction) {
+    var currentKey = String(_socialMainSura) + ':' + String(_socialMainAya);
+    var ctx = _socialNavigationContext;
+    if (ctx && ctx.type === 'cross-reference' && Array.isArray(ctx.verses) && ctx.verses.length > 0) {
+      var currentIdx = ctx.verses.indexOf(currentKey);
+      if (currentIdx !== -1) {
+        var newIdx = currentIdx + direction;
+        if (newIdx >= 0 && newIdx < ctx.verses.length) {
+          var parts = ctx.verses[newIdx].split(':');
+          var savedContext = _socialNavigationContext;
+          openSocialCardMain(Number(parts[0]), Number(parts[1]));
+          _socialNavigationContext = savedContext;
+          return;
+        }
+      }
+    }
+    // Fallback: plain chapter navigation when there's no cross-reference list
+    var newAya = _socialMainAya + direction;
+    var surahLengths = {1:7,2:286,3:200,4:176,5:120,6:165,7:206,8:75,9:129,10:109,11:123,12:111,13:43,14:52,15:99,16:128,17:111,18:110,19:98,20:135,21:112,22:78,23:118,24:64,25:77,26:227,27:93,28:88,29:69,30:60,31:34,32:30,33:73,34:54,35:45,36:83,37:182,38:88,39:75,40:85,41:54,42:53,43:89,44:59,45:37,46:35,47:38,48:29,49:18,50:45,51:60,52:49,53:62,54:55,55:78,56:96,57:29,58:22,59:24,60:13,61:14,62:11,63:11,64:18,65:12,66:12,67:30,68:52,69:52,70:44,71:28,72:28,73:20,74:56,75:40,76:31,77:50,78:40,79:46,80:42,81:29,82:19,83:36,84:45,85:22,86:17,87:19,88:26,89:30,90:20,91:15,92:21,93:11,94:8,95:8,96:19,97:5,98:8,99:8,100:11,101:11,102:8,103:3,104:9,105:5,106:4,107:7,108:3,109:6,110:3,111:5,112:4,113:5,114:6};
+    var maxAya = surahLengths[_socialMainSura] || _socialMainAya;
+    if (newAya < 1 || newAya > maxAya) return;
+    openSocialCardMain(_socialMainSura, newAya);
+  }
+
+  function downloadSocialCardMain(){
+    var canvas = document.getElementById('socialCanvasMain');
+    if (!canvas) return;
+    var link = document.createElement('a');
+    link.download = 'quran-' + _socialMainSura + '-' + _socialMainAya + '-' + _socialMainFormat + '.png';
+    link.href = canvas.toDataURL('image/png');
+    link.click();
   }
 
   async function shareVerse(ayaNum, suraId) {
@@ -632,6 +690,11 @@
   global.copyVerse = copyVerse;
   global.shareVerse = shareVerse;
   global.openSocialCardMain = openSocialCardMain;
+  global.setSocialFormatMain = setSocialFormatMain;
+  global.closeSocialCardMain = closeSocialCardMain;
+  global.navigateSocialCardList = navigateSocialCardList;
+  global.updateSocialCardNavButtons = updateSocialCardNavButtons;
+  global.downloadSocialCardMain = downloadSocialCardMain;
   global.showToastMsg = showToastMsg;
   global.buildVerseShareText = buildVerseShareText;
 })(window);
