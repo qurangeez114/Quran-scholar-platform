@@ -100,7 +100,14 @@
   let _verseTtsSpeaking = false, _verseTtsBtn = null;
   let _hlSuraId = null, _hlVerseNum = null;
   let _socialMainLangs = null, _socialMainVerse = null;
-  let _socialMainSura = null, _socialMainAya = null, _socialMainFormat = 'tiktok';
+  let _socialMainSura = null, _socialMainAya = null, _socialMainFormat = 'tiktok', _socialMainStyle = 'midnight';
+
+  const SOCIAL_STYLES_MAIN = {
+    midnight:  { label:'Midnight Gold',     a:'#061229', b:'#12356E', c:'#0B2149', primary:'#FFD640', text:'#FFE97A', border:'rgba(255,214,64,0.90)', glow:'rgba(255,214,64,0.20)', motif:'rgba(255,214,64,0.12)' },
+    emerald:   { label:'Emerald Garden',    a:'#062B27', b:'#0B5A4C', c:'#123B31', primary:'#E9CB70', text:'#FFF0B4', border:'rgba(233,203,112,0.92)', glow:'rgba(233,203,112,0.18)', motif:'rgba(233,203,112,0.12)' },
+    parchment: { label:'Classic Parchment', a:'#F7E9C8', b:'#E6C982', c:'#FFF8E8', primary:'#77551E', text:'#34250E', border:'rgba(119,85,30,0.90)',  glow:'rgba(173,123,39,0.16)',  motif:'rgba(119,85,30,0.11)' },
+    rose:      { label:'Rose & Night',      a:'#210D25', b:'#5B1B4A', c:'#172346', primary:'#F3C873', text:'#FFF0CE', border:'rgba(243,200,115,0.92)', glow:'rgba(243,200,115,0.19)', motif:'rgba(243,200,115,0.12)' }
+  };
   let _socialMainVerseList = null, _socialMainVerseListIdx = 0;
   let _socialNavigationContext = null;
   let currentNoteAya = null, currentNoteKey = null, currentNoteSura = null;
@@ -232,6 +239,36 @@
     }
   }
 
+  /* Decorative geometric motif behind the text -- an 8-point star tiled
+     across the card, plus a large central arc on tall formats. Colored
+     from the active style so it reads as part of the card, not an
+     unrelated overlay. */
+  function drawSocialMotifMain(ctx, W, H, theme){
+    const step = Math.max(75, Math.round(W * 0.12));
+    ctx.save();
+    ctx.strokeStyle = theme.motif;
+    ctx.lineWidth = Math.max(1, W * 0.0015);
+    for (let x = step / 2; x < W; x += step) {
+      for (let y = step / 2; y < H; y += step) {
+        ctx.beginPath();
+        for (let i = 0; i < 8; i++) {
+          const a = -Math.PI / 2 + i * Math.PI / 4;
+          const r = step * (i % 2 ? 0.24 : 0.42);
+          const px = x + Math.cos(a) * r, py = y + Math.sin(a) * r;
+          if (!i) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        }
+        ctx.closePath(); ctx.stroke();
+      }
+    }
+    if (H > W) {
+      ctx.beginPath();
+      ctx.arc(W / 2, H * 0.38, W * 0.31, Math.PI, 0);
+      ctx.lineTo(W * 0.81, H * 0.72); ctx.lineTo(W * 0.19, H * 0.72); ctx.closePath();
+      ctx.strokeStyle = theme.motif; ctx.lineWidth = Math.max(2, W * 0.003); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   function drawSocialCardMain(){
     if (!_socialMainVerse) return;
     const fmt = SOCIAL_FORMATS_MAIN[_socialMainFormat];
@@ -241,26 +278,28 @@
     const W = fmt.w, H = fmt.h;
     const pad = W * 0.085;
     const contentWidth = W - pad * 2;
+    const theme = SOCIAL_STYLES_MAIN[_socialMainStyle] || SOCIAL_STYLES_MAIN.midnight;
 
-    // ── Cinematic backdrop: deep warm black, gold glow behind the text,
-    //    vignette at the edges, double gold frame. ──
+    // ── Cinematic backdrop: style-colored gradient, glow behind the text,
+    //    vignette at the edges, double frame in the style's border color. ──
     const bg = ctx.createLinearGradient(0, 0, W, H);
-    bg.addColorStop(0, '#0B2149'); bg.addColorStop(0.5, '#12356E'); bg.addColorStop(1, '#061229');
+    bg.addColorStop(0, theme.c); bg.addColorStop(0.5, theme.b); bg.addColorStop(1, theme.a);
     ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
 
     const glow = ctx.createRadialGradient(W/2, H*0.44, 0, W/2, H*0.44, Math.max(W, H) * 0.62);
-    glow.addColorStop(0, 'rgba(255,214,64,0.20)');
-    glow.addColorStop(0.45, 'rgba(255,214,64,0.06)');
+    glow.addColorStop(0, theme.glow);
+    glow.addColorStop(0.45, theme.motif);
     glow.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = glow; ctx.fillRect(0, 0, W, H);
 
     const vig = ctx.createRadialGradient(W/2, H/2, Math.min(W, H) * 0.28, W/2, H/2, Math.max(W, H) * 0.78);
     vig.addColorStop(0, 'rgba(4,12,28,0)'); vig.addColorStop(1, 'rgba(4,12,28,0.62)');
     ctx.fillStyle = vig; ctx.fillRect(0, 0, W, H);
+    drawSocialMotifMain(ctx, W, H, theme);
 
-    ctx.strokeStyle = 'rgba(255,214,64,0.90)'; ctx.lineWidth = Math.max(2, W * 0.0045);
+    ctx.strokeStyle = theme.border; ctx.lineWidth = Math.max(2, W * 0.0045);
     ctx.strokeRect(pad*0.42, pad*0.42, W - pad*0.84, H - pad*0.84);
-    ctx.strokeStyle = 'rgba(255,214,64,0.32)'; ctx.lineWidth = Math.max(1, W * 0.0016);
+    ctx.strokeStyle = theme.motif; ctx.lineWidth = Math.max(1, W * 0.0016);
     ctx.strokeRect(pad*0.64, pad*0.64, W - pad*1.28, H - pad*1.28);
 
     ctx.textAlign = 'center';
@@ -325,18 +364,18 @@
 
     layout.blocks.forEach(b => {
       if (b.type === 'title') {
-        ctx.fillStyle = '#FFD640';
+        ctx.fillStyle = theme.primary;
         ctx.font = `700 ${b.size}px Georgia, serif`;
         ctx.letterSpacing = `${Math.round(W*0.004)}px`;
         ctx.fillText(`QUR'AN ${_socialMainSura}:${_socialMainAya}`, W/2, cursor + b.size);
         ctx.letterSpacing = '0px';
-        // thin gold rule under the reference
+        // thin rule under the reference, in the style's border color
         const ruleY = cursor + b.size + b.gapAfter * 0.45;
         const ruleW = Math.min(contentWidth * 0.34, W * 0.30);
         const rg = ctx.createLinearGradient(W/2 - ruleW/2, 0, W/2 + ruleW/2, 0);
-        rg.addColorStop(0, 'rgba(255,214,64,0)');
-        rg.addColorStop(0.5, 'rgba(255,214,64,0.90)');
-        rg.addColorStop(1, 'rgba(255,214,64,0)');
+        rg.addColorStop(0, 'rgba(255,255,255,0)');
+        rg.addColorStop(0.5, theme.border);
+        rg.addColorStop(1, 'rgba(255,255,255,0)');
         ctx.fillStyle = rg;
         ctx.fillRect(W/2 - ruleW/2, ruleY, ruleW, Math.max(1, W*0.0018));
         cursor += b.size + b.gapAfter;
@@ -344,8 +383,8 @@
       } else if (b.type === 'arabic') {
         ctx.direction = 'rtl';
         ctx.font = `${b.size}px "Times New Roman", serif`;
-        ctx.fillStyle = '#FFE45C';
-        ctx.shadowColor = 'rgba(255,214,64,0.50)';
+        ctx.fillStyle = theme.primary;
+        ctx.shadowColor = theme.glow;
         ctx.shadowBlur = W * 0.022;
         b.lines.forEach(line => { ctx.fillText(line, W/2, cursor + b.size * 0.92); cursor += b.lh; });
         ctx.shadowBlur = 0; ctx.shadowColor = 'transparent';
@@ -353,7 +392,7 @@
         cursor += b.gapAfter;
 
       } else {
-        ctx.fillStyle = 'rgba(255,214,64,0.95)';
+        ctx.fillStyle = theme.primary;
         ctx.font = `700 ${b.labelSize}px Georgia, serif`;
         ctx.letterSpacing = `${Math.round(W*0.0045)}px`;
         ctx.fillText(ALL_LANGS[b.key].label.toUpperCase(), W/2, cursor + b.labelSize);
@@ -362,7 +401,7 @@
 
         ctx.direction = (b.key === 'urdu') ? 'rtl' : 'ltr';
         ctx.font = `${b.key === 'english' ? 'italic ' : ''}${b.size}px Georgia, serif`;
-        ctx.fillStyle = '#FFE97A';
+        ctx.fillStyle = theme.text;
         b.lines.forEach(line => { ctx.fillText(line, W/2, cursor + b.size * 0.9); cursor += b.lh; });
         ctx.direction = 'ltr';
         cursor += b.gapAfter;
@@ -370,7 +409,7 @@
     });
 
     ctx.font = `700 ${Math.round(W * 0.021)}px Georgia, serif`;
-    ctx.fillStyle = 'rgba(255,214,64,0.80)';
+    ctx.fillStyle = theme.primary;
     ctx.letterSpacing = `${Math.round(W*0.005)}px`;
     ctx.fillText('quranhikma.com', W/2, _socialMainFormat === 'tiktok' ? H * 0.70 : H - pad * 0.72);
     ctx.letterSpacing = '0px';
@@ -406,7 +445,7 @@
   }
 
   async function openSocialCardMain(sura, aya, crossRefTheme){
-    _socialMainSura = sura; _socialMainAya = aya; _socialMainFormat = 'tiktok';
+    _socialMainSura = sura; _socialMainAya = aya; _socialMainFormat = 'tiktok'; _socialMainStyle = 'midnight';
     _socialMainVerseList = null; _socialMainVerseListIdx = 0;
     document.getElementById('socialOverlayMain').style.display = 'flex';
     document.getElementById('socialCanvasLoadingMain').style.display = 'block';
@@ -414,6 +453,7 @@
     const _lw = document.getElementById('scm-langs-wrap');
     if (_lw) _lw.style.display = 'none';
     setSocialFormatMainUI('tiktok');
+    setSocialStyleMain('midnight');
   
     // DEBUGGING: Log the theme being passed
     console.log('[OPEN CARD] sura=' + sura + ', aya=' + aya + ', theme=' + (crossRefTheme || 'null'));
@@ -502,6 +542,20 @@
   function setSocialFormatMain(fmt){
     _socialMainFormat = fmt;
     setSocialFormatMainUI(fmt);
+    try { drawSocialCardMain(); } catch(e) { console.error('drawSocialCardMain failed:', e); }
+  }
+
+  /* Same gap as setSocialFormatMain: the style buttons in the modal call
+     this directly, but it never existed on this page, so the "Card design"
+     colors could never actually be changed even though drawSocialCardMain
+     has always supported them. */
+  function setSocialStyleMain(style){
+    if (!SOCIAL_STYLES_MAIN[style]) return;
+    _socialMainStyle = style;
+    Object.keys(SOCIAL_STYLES_MAIN).forEach(function(key){
+      var button = document.getElementById('scm-style-' + key);
+      if (button) button.style.boxShadow = key === style ? '0 0 0 2px #C9A84C inset' : 'none';
+    });
     try { drawSocialCardMain(); } catch(e) { console.error('drawSocialCardMain failed:', e); }
   }
 
@@ -691,10 +745,13 @@
   global.shareVerse = shareVerse;
   global.openSocialCardMain = openSocialCardMain;
   global.setSocialFormatMain = setSocialFormatMain;
+  global.setSocialStyleMain = setSocialStyleMain;
   global.closeSocialCardMain = closeSocialCardMain;
   global.navigateSocialCardList = navigateSocialCardList;
   global.updateSocialCardNavButtons = updateSocialCardNavButtons;
   global.downloadSocialCardMain = downloadSocialCardMain;
+  global.resetSocialLangsMain = resetSocialLangsMain;
+  global.toggleSocialLangMain = toggleSocialLangMain;
   global.showToastMsg = showToastMsg;
   global.buildVerseShareText = buildVerseShareText;
 })(window);
