@@ -361,16 +361,97 @@ function applyLanguagePreferences(prefs) {
   });
 }
 
+/* Proper contextual Arabic -> Latin transliteration, not a bare character
+   map (the previous version mapped each letter independently with no
+   handling of hamza, shadda gemination, long-vowel collapse, the definite
+   article's sun-letter assimilation, or any of the Quranic recitation/pause
+   marks embedded throughout the stored Uthmani-script text -- all of which
+   either produced garbled output or let raw Arabic-block characters leak
+   straight through unconverted). This client-side copy is kept in sync with
+   the one used to backfill ayas.arabic_transliteration in the database;
+   it's a fallback for the rare case that field is empty, not the primary
+   path (the DB value is used first wherever it's available). */
 function transliterateArabic(arabicText) {
   if (!arabicText) return '';
-  const map = {
-    'ا': 'a', 'ب': 'b', 'ت': 't', 'ث': 'th', 'ج': 'j', 'ح': 'h', 'خ': 'kh',
-    'د': 'd', 'ذ': 'dh', 'ر': 'r', 'ز': 'z', 'س': 's', 'ش': 'sh', 'ص': 's',
-    'ض': 'd', 'ط': 't', 'ظ': 'z', 'ع': "'", 'غ': 'gh', 'ف': 'f', 'ق': 'q',
-    'ك': 'k', 'ل': 'l', 'م': 'm', 'ن': 'n', 'ه': 'h', 'و': 'w', 'ي': 'y',
-    'ة': 'h', 'ة': 'ah', 'َ': 'a', 'ُ': 'u', 'ِ': 'i', 'ّ': '', 'ْ': '',
-  };
-  return arabicText.split('').map(c => map[c] || c).join('');
+  const HAMZA_CHARS = new Set(['ء','أ','إ','ؤ','ئ']);
+  const SHORT_VOWEL = { 'َ':'a', 'ُ':'u', 'ِ':'i' };
+  const TANWEEN = { 'ً':'an', 'ٌ':'un', 'ٍ':'in' };
+  const SUKUN = 'ْ', SHADDA = 'ّ', MADDA = 'آ', WASLA = 'ٱ', TA_MARBUTA = 'ة';
+  const DAGGER_ALIF = 'ٰ', MADDAH_ABOVE = '\u0653', HAMZA_ABOVE = '\u0654', TATWEEL = '\u0640';
+  const IGNORE_MARKS = new Set((
+    '\u06D6\u06D7\u06D8\u06D9\u06DA\u06DB\u06DC\u06DD\u06DE\u06DF' +
+    '\u06E0\u06E1\u06E2\u06E3\u06E4\u06E5\u06E6\u06E7\u06E8\u06E9' +
+    '\u06EA\u06EB\u06EC\u06ED\u06F0\u06F1\u06F2\u06F3\u06F4' +
+    '\u06F5\u06F6\u06F7\u06F8\u06F9\u08F0\u08F1\u08F2\u08F3' +
+    '\u0655\u0658\u0659\u065A\u065B\u065C\u065D\u065E\u065F' +
+    '\u0609\u060A\u060C\u061B\u061F' + TATWEEL).split(''));
+  const CONSONANTS = { 'ب':'b','ت':'t','ث':'th','ج':'j','ح':'h','خ':'kh','د':'d','ذ':'dh','ر':'r','ز':'z',
+    'س':'s','ش':'sh','ص':'s','ض':'d','ط':'t','ظ':'z','ع':"'",'غ':'gh','ف':'f','ق':'q','ك':'k',
+    'ل':'l','م':'m','ن':'n','ه':'h' };
+  const SUN_LETTERS = new Set('تثدذرزسشصضطظلن'.split(''));
+
+  const chars = Array.from(arabicText);
+  const n = chars.length;
+  const out = [];
+  let i = 0;
+  const peek = (offset = 1) => (i + offset >= 0 && i + offset < n ? chars[i + offset] : '');
+
+  while (i < n) {
+    const c = chars[i];
+    if (IGNORE_MARKS.has(c)) { i++; continue; }
+    if (c === MADDAH_ABOVE) { i++; continue; }
+    if (c === HAMZA_ABOVE) {
+      const nxt = peek(1);
+      if (SHORT_VOWEL[nxt]) { out.push(SHORT_VOWEL[nxt]); i += 2; continue; }
+      out.push("'"); i++; continue;
+    }
+    if (c === ' ') { out.push(' '); i++; continue; }
+    if (c === SUKUN) { i++; continue; }
+    if (c === SHADDA) {
+      const last = out.length ? out[out.length - 1] : '';
+      if (last && /[a-z]/i.test(last[last.length - 1])) out.push(last[last.length - 1]);
+      i++; continue;
+    }
+    if (TANWEEN[c]) { out.push(TANWEEN[c]); i++; continue; }
+    if (c === WASLA) { i++; continue; }
+    if (c === DAGGER_ALIF) { out.push('a'); i++; continue; }
+    if (c === 'ا' && peek(1) === 'ل') {
+      const after = peek(2);
+      if (SUN_LETTERS.has(after)) { out.push('a'); i += 2; continue; }
+      out.push('al'); i += 2; continue;
+    }
+    if (c === MADDA) { out.push('aa'); i++; continue; }
+    if (HAMZA_CHARS.has(c)) {
+      const nxt = peek(1);
+      if (SHORT_VOWEL[nxt]) { out.push(SHORT_VOWEL[nxt]); i += 2; continue; }
+      out.push(c === 'أ' || c === 'إ' ? (c === 'أ' ? 'a' : 'i') : "'");
+      i++; continue;
+    }
+    if (c === TA_MARBUTA) { out.push('h'); i++; continue; }
+    if (c === 'ا') { out.push('a'); i++; continue; }
+    if (c === 'ى') { out.push('aa'); i++; continue; }
+    if (c === 'و') {
+      const prev = i > 0 ? chars[i - 1] : '';
+      if (prev === 'ُ') { i++; continue; }
+      const nxt = peek(1);
+      if (SHORT_VOWEL[nxt]) { out.push('w'); out.push(SHORT_VOWEL[nxt]); i += 2; continue; }
+      out.push('w'); i++; continue;
+    }
+    if (c === 'ي') {
+      const prev = i > 0 ? chars[i - 1] : '';
+      if (prev === 'ِ') { i++; continue; }
+      const nxt = peek(1);
+      if (SHORT_VOWEL[nxt]) { out.push('y'); out.push(SHORT_VOWEL[nxt]); i += 2; continue; }
+      out.push('y'); i++; continue;
+    }
+    if (SHORT_VOWEL[c]) { out.push(SHORT_VOWEL[c]); i++; continue; }
+    if (CONSONANTS[c]) { out.push(CONSONANTS[c]); i++; continue; }
+    out.push(c); i++;
+  }
+
+  let result = out.join('').replace(/(.)\1\1+/g, '$1$1').replace(/\s+/g, ' ').trim();
+  if (result) result = result[0].toUpperCase() + result.slice(1);
+  return result;
 }
 
 // ============================================================================
