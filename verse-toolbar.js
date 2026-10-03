@@ -15,6 +15,17 @@
 (function (global) {
   'use strict';
 
+  /* Host pages name their Supabase credentials differently (index.html uses
+     SUPABASE_URL/SUPABASE_KEY, theme-reader.html uses SB_URL/SB_KEY). Rather
+     than require every page that includes this shared file to match one
+     convention -- easy to miss and silently breaks data fetches with no
+     visible error until something like openSocialCardMain's try/catch
+     surfaces it as "Could not load verse text" -- resolve either name here.
+     Read lazily (function, not a value computed once) since some pages
+     may define these after this script tag runs. */
+  function sbUrl() { return (typeof SUPABASE_URL !== 'undefined' && SUPABASE_URL) || (typeof SB_URL !== 'undefined' && SB_URL) || ''; }
+  function sbKey() { return (typeof SUPABASE_KEY !== 'undefined' && SUPABASE_KEY) || (typeof SB_KEY !== 'undefined' && SB_KEY) || ''; }
+
   function vtVerse(suraId, ayaNum) {
     try {
       if (typeof global.VERSE_TOOLBAR_SOURCE === 'function') {
@@ -460,13 +471,13 @@
     console.log('[OPEN CARD] Cache keys available:', window._crossRefThemeLists ? Object.keys(window._crossRefThemeLists) : 'NO CACHE');
   
     try {
-      const res = await fetch(`${SUPABASE_URL}/rest/v1/ayas?select=arabic,arabic_transliteration,english,tigrinya,tigrinya2,amharic,oromo,somali,german,urdu,swedish,norwegian&sura_id=eq.${sura}&aya_number=eq.${aya}`,
-        { headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY } });
+      const res = await fetch(`${sbUrl()}/rest/v1/ayas?select=arabic,arabic_transliteration,english,tigrinya,tigrinya2,amharic,oromo,somali,german,urdu,swedish,norwegian&sura_id=eq.${sura}&aya_number=eq.${aya}`,
+        { headers: { apikey: sbKey(), Authorization: 'Bearer ' + sbKey() } });
       const rows = await res.json();
       _socialMainVerse = rows[0] || {};
       // The 6 newer languages live in verse_translations, not as ayas columns.
-      const vtRes = await fetch(`${SUPABASE_URL}/rest/v1/verse_translations?select=lang,text&verse_key=eq.${sura}:${aya}&lang=in.(${Object.keys(SOCIAL_VT_LANGS).join(',')})`,
-        { headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY } });
+      const vtRes = await fetch(`${sbUrl()}/rest/v1/verse_translations?select=lang,text&verse_key=eq.${sura}:${aya}&lang=in.(${Object.keys(SOCIAL_VT_LANGS).join(',')})`,
+        { headers: { apikey: sbKey(), Authorization: 'Bearer ' + sbKey() } });
       const vtRows = await vtRes.json();
       if (Array.isArray(vtRows)) vtRows.forEach(r => { _socialMainVerse[SOCIAL_VT_LANGS[r.lang]] = r.text; });
       resetSocialLangsMain();
