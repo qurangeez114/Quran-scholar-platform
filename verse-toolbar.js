@@ -88,7 +88,8 @@
     var s = suraId, a = ayaNum;
     return '' +
       '<div class="verse-actions" style="display:flex;gap:4px;justify-content:flex-end;margin-bottom:10px;flex-wrap:wrap;">' +
-        '<button onclick="event.stopPropagation();speakVerseSelected(' + a + ',' + s + ',this)" class="verse-tts-btn" title="Listen in selected language">\u{1F50A}</button>' +
+        '<button onclick="event.stopPropagation();toggleAudioPanel(' + a + ',' + s + ',this)" title="Listen to real recitation (Husary, Alafasy and others)" style="' + btn + '">\u{1F3A7}</button>' +
+        '<button onclick="event.stopPropagation();speakVerseSelected(' + a + ',' + s + ',this)" class="verse-tts-btn" title="Listen in selected language (synthesized speech)">\u{1F50A}</button>' +
         '<select id="tts-lang-' + a + '" onclick="event.stopPropagation()" title="Select language" style="padding:3px 6px;border:1px solid #E8C97B;border-radius:8px;font-size:11px;background:#FDF8EE;color:#B8902A;outline:none;max-width:90px;">' +
           '<option value="english">English</option><option value="arabic">Arabic</option>' +
           '<option value="tigrinya">Tigrinya</option><option value="tigrinya2">ትግርኛ ተፍሲር</option><option value="amharic">Amharic</option>' +
@@ -108,6 +109,205 @@
 
 
   /* --- module-level state required by the ported functions --- */
+  /* Real reciter audio (not browser speech synthesis), ported from
+     index.html's verse-by-verse audio player so pages using this shared
+     toolbar (theme-reader.html etc.) get the same actual-recitation
+     playback, not just the robotic TTS further down this file. */
+  const SURA_AYA_COUNTS = [7,286,200,176,120,165,206,75,129,109,123,111,43,52,99,128,111,110,98,135,112,78,118,64,77,227,93,88,69,60,34,30,73,54,45,83,182,88,75,85,54,53,89,59,37,35,38,29,18,45,60,49,62,55,78,96,29,22,24,13,14,11,11,18,12,12,30,52,52,44,28,28,20,56,40,31,50,40,46,42,29,19,36,25,22,17,19,26,30,20,15,21,11,8,8,19,5,8,8,11,11,8,3,9,5,4,7,3,6,3,5,4,5,6];
+  function verseGlobalNumber(surahNum, ayahNum) {
+    let total = 0;
+    for (let i = 0; i < surahNum - 1; i++) total += SURA_AYA_COUNTS[i] || 0;
+    return total + ayahNum;
+  }
+  function fmtTime(s) {
+    if (!isFinite(s)) return '–:––';
+    const m = Math.floor(s / 60);
+    const sec = Math.floor(s % 60);
+    return `${m}:${sec.toString().padStart(2,'0')}`;
+  }
+  function _eaPad(suraId, ayaNum) {
+    return String(suraId).padStart(3,'0') + String(ayaNum).padStart(3,'0') + '.mp3';
+  }
+  function _aqcUrl(reciter, suraId, ayaNum, bitrate) {
+    return `https://cdn.islamic.network/quran/audio/${bitrate||128}/${reciter}/${verseGlobalNumber(suraId, ayaNum)}.mp3`;
+  }
+  const AUDIO_RECITERS = [
+    { id:'husary',   label:'Husary',   sub:'Hafs',  riwayah:'hafs',  build:(s,a)=>_aqcUrl('ar.husary', s, a) },
+    { id:'alafasy',  label:'Alafasy',  sub:'Hafs',  riwayah:'hafs',  build:(s,a)=>_aqcUrl('ar.alafasy', s, a) },
+    { id:'minshawi', label:'Minshawi', sub:'Hafs',  riwayah:'hafs',  build:(s,a)=>_aqcUrl('ar.minshawi', s, a) },
+    { id:'warsh_dosary', label:'Al-Dosary', sub:'Warsh', riwayah:'warsh',
+      build:(s,a)=>`https://everyayah.com/data/warsh/warsh_ibrahim_aldosary_128kbps/${_eaPad(s,a)}` },
+    { id:'duri_dussary', label:'ad-Dussary', sub:'ad-Dūrī', riwayah:'duri',
+      build:(s,a)=>`https://everyayah.com/data/Yasser_Ad-Dussary_128kbps/${_eaPad(s,a)}` },
+  ];
+  const _audioState = {}; // keyed by ayaNum (same convention as index.html)
+
+  function toggleAudioPanel(ayaNum, suraId, btn) {
+    const card = vtCard(suraId, ayaNum);
+    if (!card) return;
+    let panel = card.querySelector('.vt-audio-panel');
+    if (!panel) {
+      panel = document.createElement('div');
+      panel.className = 'vt-audio-panel';
+      panel.id = 'audio-panel-' + ayaNum;
+      panel.style.marginTop = '10px';
+      card.appendChild(panel);
+    }
+    const isOpen = panel.style.display !== 'none' && panel.dataset.initialized;
+    if (isOpen) { panel.style.display = 'none'; return; }
+    panel.style.display = '';
+    initAudioPanel(ayaNum, suraId);
+  }
+
+  function initAudioPanel(ayaNum, suraId) {
+    const panel = document.getElementById('audio-panel-' + ayaNum);
+    if (!panel || panel.dataset.initialized) return;
+    panel.dataset.initialized = '1';
+    const state = { reciterIdx: 0, audio: new Audio(), suraId, ayaNum, autoplay: false, speed: 1.0 };
+    _audioState[ayaNum] = state;
+    panel.innerHTML = buildAudioPlayerHTML(ayaNum);
+    wireAudioEvents(ayaNum, state);
+    loadAudioVerse(ayaNum, state);
+  }
+
+  function buildAudioPlayerHTML(ayaNum) {
+    const reciters = AUDIO_RECITERS.map((r, i) =>
+      `<button class="audio-reciter-btn${i === 0 ? ' active' : ''}" id="arc-${ayaNum}-${i}" onclick="selectReciter(${ayaNum},${i})">${r.label}<br><span style="font-size:10px;font-weight:600;opacity:0.7">${r.sub}</span></button>`
+    ).join('');
+    return `
+    <div class="audio-player-wrap">
+      <div style="font-size:11px;font-weight:700;letter-spacing:1px;color:#B8902A;text-transform:uppercase;margin-bottom:10px;">🎧 Reciter</div>
+      <div class="audio-reciter-row">${reciters}</div>
+      <div id="audio-loading-${ayaNum}" class="audio-loading-msg"><span class="spinner"></span> Loading audio...</div>
+      <div id="audio-main-${ayaNum}" style="display:none">
+        <div class="audio-controls">
+          <button class="audio-play-btn" id="audio-play-${ayaNum}" onclick="toggleAudioPlay(${ayaNum})">▶</button>
+          <div class="audio-progress-wrap">
+            <input type="range" class="audio-progress" id="audio-prog-${ayaNum}" value="0" min="0" max="100" step="0.1" oninput="seekAudio(${ayaNum}, this.value)">
+            <div class="audio-time"><span id="audio-cur-${ayaNum}">0:00</span><span id="audio-dur-${ayaNum}">–:––</span></div>
+          </div>
+        </div>
+        <div class="audio-nav-row">
+          <button class="audio-nav-btn" onclick="prevVerseAudio(${ayaNum})">⏮ Prev</button>
+          <select class="audio-speed-select" id="audio-speed-${ayaNum}" onchange="setAudioSpeed(${ayaNum}, this.value)">
+            <option value="0.75">×0.75</option><option value="1.0" selected>×1.0</option><option value="1.25">×1.25</option>
+          </select>
+          <label class="audio-autoplay-label"><input type="checkbox" id="audio-auto-${ayaNum}" onchange="toggleAutoplay(${ayaNum}, this.checked)" style="accent-color:#B8902A"> Auto-next</label>
+          <button class="audio-nav-btn" onclick="nextVerseAudio(${ayaNum})">Next ⏭</button>
+        </div>
+      </div>
+      <div id="audio-error-${ayaNum}" style="display:none" class="audio-error">⚠️ Could not load audio. Check connection and try a different reciter.</div>
+    </div>`;
+  }
+
+  function wireAudioEvents(ayaNum, state) {
+    const audio = state.audio;
+    audio.addEventListener('loadedmetadata', () => {
+      document.getElementById('audio-loading-' + ayaNum).style.display = 'none';
+      document.getElementById('audio-main-' + ayaNum).style.display = '';
+      document.getElementById('audio-error-' + ayaNum).style.display = 'none';
+      document.getElementById('audio-dur-' + ayaNum).textContent = fmtTime(audio.duration);
+      audio.playbackRate = state.speed;
+    });
+    audio.addEventListener('timeupdate', () => {
+      const prog = document.getElementById('audio-prog-' + ayaNum);
+      const cur = document.getElementById('audio-cur-' + ayaNum);
+      if (!prog || !cur) return;
+      if (audio.duration) prog.value = (audio.currentTime / audio.duration) * 100;
+      cur.textContent = fmtTime(audio.currentTime);
+    });
+    audio.addEventListener('play', () => {
+      const btn = document.getElementById('audio-play-' + ayaNum);
+      if (btn) btn.textContent = '⏸';
+      Object.entries(_audioState).forEach(([k, s]) => {
+        if (parseInt(k) !== ayaNum && !s.audio.paused) {
+          s.audio.pause();
+          const ob = document.getElementById('audio-play-' + k);
+          if (ob) ob.textContent = '▶';
+        }
+      });
+    });
+    audio.addEventListener('pause', () => {
+      const btn = document.getElementById('audio-play-' + ayaNum);
+      if (btn) btn.textContent = '▶';
+    });
+    audio.addEventListener('ended', () => {
+      const btn = document.getElementById('audio-play-' + ayaNum);
+      if (btn) btn.textContent = '▶';
+      if (state.autoplay) nextVerseAudio(ayaNum);
+    });
+    audio.addEventListener('error', () => {
+      document.getElementById('audio-loading-' + ayaNum).style.display = 'none';
+      document.getElementById('audio-main-' + ayaNum).style.display = 'none';
+      document.getElementById('audio-error-' + ayaNum).style.display = '';
+    });
+  }
+
+  function loadAudioVerse(ayaNum, state) {
+    const reciter = AUDIO_RECITERS[state.reciterIdx];
+    const url = reciter.build(state.suraId, state.ayaNum);
+    const loadingEl = document.getElementById('audio-loading-' + ayaNum);
+    const mainEl = document.getElementById('audio-main-' + ayaNum);
+    const errEl = document.getElementById('audio-error-' + ayaNum);
+    if (loadingEl) { loadingEl.style.display = ''; loadingEl.innerHTML = '<span class="spinner"></span> Loading audio...'; }
+    if (mainEl) mainEl.style.display = 'none';
+    if (errEl) errEl.style.display = 'none';
+    state.audio.pause();
+    state.audio.src = url;
+    state.audio.load();
+  }
+
+  function toggleAudioPlay(ayaNum) {
+    const state = _audioState[ayaNum];
+    if (!state) return;
+    if (state.audio.paused) state.audio.play(); else state.audio.pause();
+  }
+  function seekAudio(ayaNum, val) {
+    const state = _audioState[ayaNum];
+    if (!state || !state.audio.duration) return;
+    state.audio.currentTime = (val / 100) * state.audio.duration;
+  }
+  function setAudioSpeed(ayaNum, val) {
+    const state = _audioState[ayaNum];
+    if (!state) return;
+    state.speed = parseFloat(val);
+    state.audio.playbackRate = state.speed;
+  }
+  function toggleAutoplay(ayaNum, checked) {
+    const state = _audioState[ayaNum];
+    if (state) state.autoplay = checked;
+  }
+  function selectReciter(ayaNum, idx) {
+    const state = _audioState[ayaNum];
+    if (!state) return;
+    state.reciterIdx = idx;
+    AUDIO_RECITERS.forEach((_, i) => {
+      const btn = document.getElementById(`arc-${ayaNum}-${i}`);
+      if (btn) btn.classList.toggle('active', i === idx);
+    });
+    const wasPlaying = !state.audio.paused;
+    loadAudioVerse(ayaNum, state);
+    if (wasPlaying) state.audio.addEventListener('canplay', () => state.audio.play(), { once: true });
+  }
+  function prevVerseAudio(ayaNum) {
+    const state = _audioState[ayaNum];
+    if (!state || state.ayaNum <= 1) return;
+    state.ayaNum--;
+    document.getElementById('audio-loading-' + ayaNum).innerHTML = `<span class="spinner"></span> Loading verse ${state.suraId}:${state.ayaNum}...`;
+    loadAudioVerse(ayaNum, state);
+    state.audio.addEventListener('canplay', () => state.audio.play(), { once: true });
+  }
+  function nextVerseAudio(ayaNum) {
+    const state = _audioState[ayaNum];
+    if (!state) return;
+    const maxAyas = SURA_AYA_COUNTS[state.suraId - 1] || 286;
+    if (state.ayaNum >= maxAyas) return;
+    state.ayaNum++;
+    document.getElementById('audio-loading-' + ayaNum).innerHTML = `<span class="spinner"></span> Loading verse ${state.suraId}:${state.ayaNum}...`;
+    loadAudioVerse(ayaNum, state);
+    state.audio.addEventListener('canplay', () => state.audio.play(), { once: true });
+  }
+
   let _verseTtsSpeaking = false, _verseTtsBtn = null;
   let _hlSuraId = null, _hlVerseNum = null;
   let _socialMainLangs = null, _socialMainVerse = null;
@@ -763,6 +963,14 @@
   global.downloadSocialCardMain = downloadSocialCardMain;
   global.resetSocialLangsMain = resetSocialLangsMain;
   global.toggleSocialLangMain = toggleSocialLangMain;
+  global.toggleAudioPanel = toggleAudioPanel;
+  global.toggleAudioPlay = toggleAudioPlay;
+  global.seekAudio = seekAudio;
+  global.setAudioSpeed = setAudioSpeed;
+  global.toggleAutoplay = toggleAutoplay;
+  global.selectReciter = selectReciter;
+  global.prevVerseAudio = prevVerseAudio;
+  global.nextVerseAudio = nextVerseAudio;
   global.showToastMsg = showToastMsg;
   global.buildVerseShareText = buildVerseShareText;
 })(window);
