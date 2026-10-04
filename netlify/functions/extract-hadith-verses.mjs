@@ -1,29 +1,31 @@
 /* Scheduled Netlify function: every 2 days at 03:00 UTC. Also callable
    on-demand via HTTP (used by the GitHub Actions fallback in
-   .github/workflows/extract-hadith-verses.yml), and via POST body
-   {"full": true} to force a one-time full-corpus rescan.
+   .github/workflows/extract-hadith-verses.yml).
 
    Finds hadith whose English text contains SURA:AYA references (e.g.
    "(36:12)"), validates each against real verse counts, and inserts rows
    into hadith_verse_links (link_method 'regex:text_reference').
    Reads/inserts only. Key comes from Netlify env; nothing hardcoded.
 
-   NORMAL MODE (default): only fetches hadith created in the last 4 days
-   (a comfortable margin over the 2-day schedule) using a plain created_at
-   filter, then checks each one for a reference locally. This table's
-   server-side regex `match` filter was found to fail almost every time
-   under real testing (5+ retries, 60-100+ seconds, still failing) — this
-   avoids it entirely. The cheap created_at filter keeps each run's fetch
-   small and fast, since only new hadith need checking after the initial
-   backlog has been cleared once.
+   Always does a full paginated scan of hadith_corpus_canonical -- there
+   is no cheaper correct way to find "not yet covered by this method"
+   without a dedicated tracking column. A previous version filtered by
+   created_at over the last few days to keep each run fast, on the
+   assumption new hadith get inserted into this table regularly between
+   runs. That assumption was wrong: this corpus was imported once and is
+   effectively static, so created_at >= (now - N days) matched zero rows
+   on every single scheduled run from deployment (2026-09-27) through at
+   least 2026-10-03 -- four separate "successful" runs that silently did
+   nothing. Confirmed via link_method breakdown in hadith_verse_links:
+   zero rows under this method's name from any date in that window.
 
-   FULL MODE: paginates the entire table with no filter (used once to
-   clear a backlog; not needed for routine operation — the one for this
-   corpus already ran manually and inserted 745 links, full coverage
-   confirmed).
-
-   Inserts happen per page, not batched at the end, so a killed
-   invocation still keeps whatever progress it made. */
+   The already-linked lookup (the `have` set below) is loaded once up
+   front specifically so a full scan stays correctness-safe and cheap to
+   re-run: re-scanning hadith whose text yields no match, or whose match
+   is already linked, costs a page fetch and a regex pass, not a wasted
+   insert. A full pass over the corpus in 1000-row pages is lightweight
+   SELECT+regex+INSERT work, not heavy computation, so it fits the
+   function's time budget comfortably at this corpus size. */
 export const config = { schedule: "0 3 */2 * *" };
 
 const SUPABASE_URL = process.env.SUPABASE_URL || "https://ylosytbxpzxzwfzjpaej.supabase.co";
@@ -31,7 +33,6 @@ const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVIC
 const HEADERS = KEY.startsWith("sb_") ? { apikey: KEY } : { apikey: KEY, Authorization: `Bearer ${KEY}` };
 const METHOD = "regex:text_reference";
 const PAGE_SIZE = 1000;
-const LOOKBACK_DAYS = 4;
 const VERSES = [7,286,200,176,120,165,206,75,129,109,123,111,43,52,99,128,111,110,98,135,112,78,118,64,77,227,93,88,69,60,34,30,73,54,45,83,182,88,75,85,54,53,89,59,37,35,38,29,18,45,60,49,62,55,78,96,29,22,24,13,14,11,11,18,12,12,30,52,52,44,28,28,20,56,40,31,50,40,46,42,29,19,36,25,22,17,19,26,30,20,15,21,11,8,8,19,5,8,8,11,11,8,3,9,5,4,7,3,6,3,5,4,5,6];
 
 async function page(path, from, size, retries = 4) {
@@ -69,12 +70,8 @@ async function insertBatch(links) {
 
 export default async (req) => {
   const t0 = Date.now();
-  const st = { mode: "incremental", candidates: 0, new_links: 0, inserted: 0, errors: 0, pages_done: 0 };
+  const st = { mode: "full", candidates: 0, new_links: 0, inserted: 0, errors: 0, pages_done: 0 };
   if (!KEY) { console.error("No Supabase key in env"); return; }
-
-  let full = false;
-  try { full = req && (await req.clone().json())?.full === true; } catch { /* no/invalid body — default incremental */ }
-  if (full) st.mode = "full";
 
   try {
     const have = new Set();
@@ -84,12 +81,7 @@ export default async (req) => {
       if (rows.length < 1000) break;
     }
 
-    let q = "hadith_corpus_canonical?select=id,text_english&order=id";
-    if (!full) {
-      const cutoff = new Date(Date.now() - LOOKBACK_DAYS * 86400000).toISOString();
-      q += "&created_at=gte." + encodeURIComponent(cutoff);
-    }
-
+    const q = "hadith_corpus_canonical?select=id,text_english&order=id";
     const now = new Date().toISOString();
     for (let f = 0; ; f += PAGE_SIZE) {
       const rows = await page(q, f, PAGE_SIZE);
