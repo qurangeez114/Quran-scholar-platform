@@ -68,10 +68,21 @@ async function insertBatch(links) {
   return { inserted: 0, ok: false };
 }
 
+async function diag(phase, detail) {
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/automation_runs`, {
+      method: "POST",
+      headers: { ...HEADERS, "Content-Type": "application/json", Prefer: "return=minimal" },
+      body: JSON.stringify([{ function_name: "extract-hadith-verses", phase, detail }]),
+    });
+  } catch { /* diagnostic only, never let this break the real run */ }
+}
+
 export default async (req) => {
   const t0 = Date.now();
   const st = { mode: "full", candidates: 0, new_links: 0, inserted: 0, errors: 0, pages_done: 0 };
-  if (!KEY) { console.error("No Supabase key in env"); return; }
+  await diag("start", { has_key: !!KEY, key_prefix: KEY ? KEY.slice(0, 6) : null });
+  if (!KEY) { console.error("No Supabase key in env"); await diag("fatal_no_key", {}); return; }
 
   try {
     const have = new Set();
@@ -102,8 +113,9 @@ export default async (req) => {
 
       if (rows.length < PAGE_SIZE) break;
     }
-  } catch (e) { st.errors++; console.error("FATAL", e.message); }
+  } catch (e) { st.errors++; console.error("FATAL", e.message); await diag("fatal_exception", { message: e.message }); }
   const result = { ...st, ms: Date.now() - t0 };
   console.log("hadith-extraction", JSON.stringify(result));
+  await diag("end", result);
   return new Response(JSON.stringify(result), { headers: { "Content-Type": "application/json" } });
 };
