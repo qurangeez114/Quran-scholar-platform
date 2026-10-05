@@ -3037,6 +3037,7 @@ function renderVerses(ayas, suraId) {
         <div class="verse-body">
           <div class="verse-actions" style="display:flex;gap:4px;justify-content:flex-end;margin-bottom:10px;flex-wrap:wrap;">
             <button onclick="event.stopPropagation();speakVerseSelected(${aya.aya_number},${suraId},this)" class="verse-tts-btn" aria-label="Read this verse aloud in the selected language" title="Read aloud in the selected language (device speech)">🔊</button>
+            ${SIMPLE_RECITATION_VERSES.has(suraId + ':' + aya.aya_number) ? '<button type="button" onclick="event.stopPropagation();playSimpleRecitation(' + suraId + ',' + aya.aya_number + ',this)" aria-label="Play plain audio for verse ' + suraId + ':' + aya.aya_number + '" title="Play plain recitation audio" style="background:#FDF8EE;border:1px solid #E8C97B;border-radius:6px;min-width:32px;height:30px;font-size:13px;cursor:pointer;padding:0 7px;flex:0 0 auto;color:#B8902A;">▶</button>' : ''}
 <input type="hidden" id="tts-lang-${aya.aya_number}" value="english">
             <div class="tts-language-control" role="group" aria-label="Choose the language for verse read-aloud" style="display:flex;align-items:center;gap:5px;flex:1 1 190px;min-width:150px;max-width:100%;">
               <span style="font-size:10px;color:#7A8FA6;white-space:nowrap;flex:0 0 auto;">Read aloud in:</span>
@@ -8734,6 +8735,65 @@ function selectTtsLang(ayaNum, lang, btn) {
   btn.setAttribute('aria-pressed', 'true');
   btn.style.background = '#B8902A';
   btn.style.color = '#fff';
+}
+
+// Plain, prerecorded audio pilot. Add verse keys here as more approved audio files are added.
+const SIMPLE_RECITATION_VERSES = new Set(['1:1','1:2','1:3','1:4','1:5','1:6','1:7']);
+let _simpleRecitationAudio = null;
+let _simpleRecitationCurrentButton = null;
+
+function _simpleRecitationSetButton(btn, playing) {
+  if (!btn) return;
+  btn.textContent = playing ? '⏸' : '▶';
+  btn.title = playing ? 'Pause plain recitation audio' : 'Play plain recitation audio';
+  btn.setAttribute('aria-pressed', playing ? 'true' : 'false');
+}
+
+function playSimpleRecitation(suraId, ayaNum, btn) {
+  const key = String(suraId) + ':' + String(ayaNum);
+  if (!SIMPLE_RECITATION_VERSES.has(key)) return;
+
+  if (!_simpleRecitationAudio) {
+    _simpleRecitationAudio = new Audio();
+    _simpleRecitationAudio.preload = 'none';
+    _simpleRecitationAudio.addEventListener('ended', function() {
+      _simpleRecitationSetButton(_simpleRecitationCurrentButton, false);
+      _simpleRecitationCurrentButton = null;
+    });
+    _simpleRecitationAudio.addEventListener('error', function() {
+      if (_simpleRecitationCurrentButton) {
+        const failedButton = _simpleRecitationCurrentButton;
+        _simpleRecitationSetButton(failedButton, false);
+        failedButton.title = 'Could not load audio. Please try again.';
+        _simpleRecitationCurrentButton = null;
+      }
+    });
+  }
+
+  const pad = function(value) { return String(value).padStart(3, '0'); };
+  const url = '/audio/simple-recitation/' + pad(suraId) + '_' + pad(ayaNum) + '.mp3';
+  const absoluteUrl = new URL(url, window.location.href).href;
+
+  if (_simpleRecitationAudio.src === absoluteUrl && !_simpleRecitationAudio.paused) {
+    _simpleRecitationAudio.pause();
+    _simpleRecitationSetButton(btn, false);
+    _simpleRecitationCurrentButton = null;
+    return;
+  }
+
+  if (_simpleRecitationCurrentButton && _simpleRecitationCurrentButton !== btn) {
+    _simpleRecitationSetButton(_simpleRecitationCurrentButton, false);
+  }
+  _simpleRecitationAudio.pause();
+  _simpleRecitationCurrentButton = btn;
+  _simpleRecitationSetButton(btn, true);
+  _simpleRecitationAudio.src = url;
+  _simpleRecitationAudio.load();
+  _simpleRecitationAudio.play().catch(function() {
+    _simpleRecitationSetButton(btn, false);
+    btn.title = 'Could not play audio. Tap to try again.';
+    _simpleRecitationCurrentButton = null;
+  });
 }
 
 function speakVerseSelected(ayaNum, suraId, btn) {
