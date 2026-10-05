@@ -1,0 +1,105 @@
+name: SILMA Surah audio generator
+
+on:
+  workflow_dispatch:
+    inputs:
+      sura_id:
+        description: "Surah number to generate (first batch: 114, 113, or 112)"
+        required: true
+        default: "114"
+        type: choice
+        options:
+          - "114"
+          - "113"
+          - "112"
+  push:
+    paths:
+      - ".github/workflows/silma-short-surahs.yml"
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install FFmpeg and SILMA TTS
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          python -m pip install --upgrade pip
+          pip install silma-tts
+      - name: Generate per-verse audio from Uthmani Arabic text
+        env:
+          SURA_ID: ${{ github.event.inputs.sura_id || '114' }}
+        run: |
+          cat > /tmp/generate_surah.py <<'PY'
+          from pathlib import Path
+          import json
+          import os
+          import site
+          import urllib.request
+          from silma_tts.api import SilmaTTS
+
+          sura_id = int(os.environ["SURA_ID"])
+          if sura_id not in (112, 113, 114):
+              raise ValueError("This pilot currently accepts only surahs 112, 113, and 114.")
+
+          url = f"https://api.alquran.cloud/v1/surah/{sura_id}/quran-uthmani"
+          with urllib.request.urlopen(url, timeout=30) as response:
+              payload = json.load(response)
+          if payload.get("code") != 200 or not payload.get("data", {}).get("ayahs"):
+              raise RuntimeError(f"Could not retrieve Arabic text for surah {sura_id}.")
+
+          data = payload["data"]
+          verses = data["ayahs"]
+          expected = int(data["numberOfAyahs"])
+          if len(verses) != expected or any(int(v["numberInSurah"]) != i for i, v in enumerate(verses, 1)):
+              raise RuntimeError(f"Verse sequence/count validation failed for surah {sura_id}.")
+
+          out = Path("silma-surah-audio")
+          out.mkdir(exist_ok=True)
+          tts = SilmaTTS()
+          ref_file = getattr(tts, "default_ref_audio", None)
+          ref_text = "ويدقق النظر في القرآن الكريم وسائر الكتب السماوية ويتبع مسالك الرسل العظام عليهم الصلاة والسلام."
+
+          if not ref_file:
+              roots = [Path(p) for p in site.getsitepackages()]
+              candidates = []
+              for root in roots:
+                  if root.exists():
+                      candidates.extend(root.rglob("ar.ref.24k.wav"))
+              if not candidates:
+                  raise FileNotFoundError("SILMA Arabic reference audio ar.ref.24k.wav not found")
+              ref_file = str(candidates[0])
+
+          print(f"Generating surah {sura_id}: {data['name']} ({expected} verses)")
+          for verse in verses:
+              aya = int(verse["numberInSurah"])
+              text = verse["text"].strip()
+              if not text:
+                  raise RuntimeError(f"Arabic text missing for {sura_id}:{aya}")
+              tts.infer(
+                  ref_file=str(ref_file),
+                  ref_text=ref_text,
+                  gen_text=text,
+                  file_wave=str(out / f"{sura_id:03d}_{aya:03d}.wav"),
+                  seed=42,
+                  speed=1,
+              )
+          PY
+          python /tmp/generate_surah.py
+      - name: Convert WAV to MP3
+        run: |
+          for f in silma-surah-audio/*.wav; do
+            ffmpeg -y -i "$f" -ar 24000 -ac 1 -codec:a libmp3lame -b:a 64k "${f%.wav}.mp3"
+          done
+      - name: Upload generated audio artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: silma-surah-${{ github.event.inputs.sura_id || '114' }}-audio
+          path: silma-surah-audio/*
+          retention-days: 30
