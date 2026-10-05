@@ -2890,7 +2890,9 @@ async function loadSura(id) {
       // Only set tigrinya from aya_text if no dedicated tigrinya translation exists
       if (!a.tigrinya) a.tigrinya = '';
     });
-    document.getElementById('topMeta').innerHTML = `<span>${info?.number_of_ayas || ayas.length} verses</span>${SIMPLE_RECITATION_CHAPTERS.has(id) ? '<button type="button" class="simple-recitation-chapter-btn" onclick="event.stopPropagation();playSimpleRecitationChapter(' + id + ',this)" aria-label="Play Al-Fātiḥah continuously" aria-pressed="false" title="Play all seven Al-Fātiḥah verses continuously" style="border:1px solid #D4A830;border-radius:16px;background:#FDF5DE;color:#77581A;padding:5px 10px;font:700 12px inherit;cursor:pointer;white-space:nowrap;">▶ Play Al-Fātiḥah</button>' : ''}`;
+    const simpleRecitationChapterName = _simpleRecitationChapterName(id);
+    const simpleRecitationChapterCount = info?.number_of_ayas || ayas.length;
+    document.getElementById('topMeta').innerHTML = `<span>${simpleRecitationChapterCount} verses</span>${SIMPLE_RECITATION_CHAPTERS.has(id) ? '<button type="button" class="simple-recitation-chapter-btn" data-sura-id="' + id + '" onclick="event.stopPropagation();playSimpleRecitationChapter(' + id + ',this)" aria-label="Play ' + simpleRecitationChapterName + ' continuously" aria-pressed="false" title="Play all ' + simpleRecitationChapterCount + ' ' + simpleRecitationChapterName + ' verses continuously" style="border:1px solid #D4A830;border-radius:16px;background:#FDF5DE;color:#77581A;padding:5px 10px;font:700 12px inherit;cursor:pointer;white-space:nowrap;">▶ Play ' + simpleRecitationChapterName + '</button>' : ''}`;
     renderVerses(ayas, id);
     applyLangState();
     setTimeout(restoreVerseHighlights, 100);
@@ -8738,12 +8740,17 @@ function selectTtsLang(ayaNum, lang, btn) {
 }
 
 // Plain, prerecorded audio pilot. Add verse keys here as more approved audio files are added.
-const SIMPLE_RECITATION_VERSES = new Set(['1:1','1:2','1:3','1:4','1:5','1:6','1:7']);
-const SIMPLE_RECITATION_CHAPTERS = new Map([[1, 7]]);
+const SIMPLE_RECITATION_VERSES = new Set(['1:1','1:2','1:3','1:4','1:5','1:6','1:7','114:1','114:2','114:3','114:4','114:5','114:6']);
+const SIMPLE_RECITATION_CHAPTERS = new Map([[1, 7],[114, 6]]);
 let _simpleRecitationAudio = null;
 let _simpleRecitationCurrentButton = null;
 let _simpleRecitationPlaylist = null;
 let _simpleRecitationPlaylistButton = null;
+
+function _simpleRecitationChapterName(suraId) {
+  const names = {1:'Al-Fātiḥah',112:'Al-Ikhlāṣ',113:'Al-Falaq',114:'An-Nās'};
+  return names[suraId] || ('Surah ' + suraId);
+}
 
 function _simpleRecitationUrl(suraId, ayaNum) {
   const pad = function(value) { return String(value).padStart(3, '0'); };
@@ -8760,17 +8767,20 @@ function _simpleRecitationSetButton(btn, playing) {
 function _simpleRecitationSetChapterButton(mode) {
   const btn = _simpleRecitationPlaylistButton;
   if (!btn) return;
+  const suraId = Number(btn.dataset.suraId || 1);
+  const name = _simpleRecitationChapterName(suraId);
+  const total = SIMPLE_RECITATION_CHAPTERS.get(suraId) || 0;
   if (mode === 'playing') {
-    btn.textContent = '⏸ Pause Al-Fātiḥah';
-    btn.title = 'Pause continuous Al-Fātiḥah playback';
+    btn.textContent = '⏸ Pause ' + name;
+    btn.title = 'Pause continuous ' + name + ' playback';
     btn.setAttribute('aria-pressed', 'true');
   } else if (mode === 'paused') {
-    btn.textContent = '▶ Resume Al-Fātiḥah';
-    btn.title = 'Resume continuous Al-Fātiḥah playback';
+    btn.textContent = '▶ Resume ' + name;
+    btn.title = 'Resume continuous ' + name + ' playback';
     btn.setAttribute('aria-pressed', 'false');
   } else {
-    btn.textContent = '▶ Play Al-Fātiḥah';
-    btn.title = 'Play all seven Al-Fātiḥah verses continuously';
+    btn.textContent = '▶ Play ' + name;
+    btn.title = 'Play all ' + total + ' ' + name + ' verses continuously';
     btn.setAttribute('aria-pressed', 'false');
   }
 }
