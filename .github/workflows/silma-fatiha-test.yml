@@ -1,0 +1,83 @@
+name: SILMA Al-Fatiha pronunciation test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install FFmpeg and SILMA TTS
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          python -m pip install --upgrade pip
+          pip install silma-tts
+
+      - name: Generate Al-Fatiha verse samples
+        run: |
+          cat > /tmp/generate_fatiha.py <<'PY'
+          from pathlib import Path
+          from silma_tts.api import SilmaTTS
+
+          verses = [
+              "بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ",
+              "الْحَمْدُ لِلَّهِ رَبِّ الْعَالَمِينَ",
+              "الرَّحْمَٰنِ الرَّحِيمِ",
+              "مَالِكِ يَوْمِ الدِّينِ",
+              "إِيَّاكَ نَعْبُدُ وَإِيَّاكَ نَسْتَعِينُ",
+              "اهْدِنَا الصِّرَاطَ الْمُسْتَقِيمَ",
+              "صِرَاطَ الَّذِينَ أَنْعَمْتَ عَلَيْهِمْ غَيْرِ الْمَغْضُوبِ عَلَيْهِمْ وَلَا الضَّالِّينَ",
+          ]
+
+          out = Path("silma-fatiha-test")
+          out.mkdir(exist_ok=True)
+          tts = SilmaTTS()
+
+          ref_file = tts.default_ref_audio if hasattr(tts, "default_ref_audio") else None
+          ref_text = None
+
+          # Prefer the package's bundled Arabic reference sample when exposed.
+          # If not exposed, locate it in the installed package.
+          if ref_file is None:
+              import silma_tts, os
+              root = Path(silma_tts.__file__).resolve().parent
+              candidates = list(root.rglob("ar.ref.24k.wav"))
+              if not candidates:
+                  raise FileNotFoundError("Bundled SILMA Arabic reference audio ar.ref.24k.wav not found")
+              ref_file = str(candidates[0])
+              ref_text = "ويدقق النظر في القرآن الكريم وسائر الكتب السماوية ويتبع مسالك الرسل العظام عليهم الصلاة والسلام."
+
+          for i, verse in enumerate(verses, 1):
+              wav_path = out / f"001_{i:03d}.wav"
+              tts.infer(
+                  ref_file=str(ref_file),
+                  ref_text=ref_text,
+                  gen_text=verse,
+                  file_wave=str(wav_path),
+                  seed=42,
+                  speed=1,
+              )
+          PY
+          python /tmp/generate_fatiha.py
+
+      - name: Convert WAV to MP3
+        run: |
+          for f in silma-fatiha-test/*.wav; do
+            ffmpeg -y -i "$f" -codec:a libmp3lame -q:a 2 "${f%.wav}.mp3"
+          done
+
+      - name: Upload pronunciation-test audio
+        uses: actions/upload-artifact@v4
+        with:
+          name: silma-fatiha-pronunciation-test
+          path: silma-fatiha-test/*
+          retention-days: 7
