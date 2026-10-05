@@ -3036,10 +3036,13 @@ function renderVerses(ayas, suraId) {
         <div class="verse-num" data-ref="${suraId}:${aya.aya_number}" aria-label="${suraId} ${suraDisplayName} : ${aya.aya_number}">${suraId} ${suraDisplayName} : ${aya.aya_number}</div>
         <div class="verse-body">
           <div class="verse-actions" style="display:flex;gap:4px;justify-content:flex-end;margin-bottom:10px;flex-wrap:wrap;">
-            <button onclick="event.stopPropagation();speakVerseSelected(${aya.aya_number},${suraId},this)" class="verse-tts-btn" title="Listen in selected language">🔊</button>
+            <button onclick="event.stopPropagation();speakVerseSelected(${aya.aya_number},${suraId},this)" class="verse-tts-btn" aria-label="Read this verse aloud in the selected language" title="Read aloud in the selected language (device speech)">🔊</button>
 <input type="hidden" id="tts-lang-${aya.aya_number}" value="english">
-            <div class="tts-lang-chips" onclick="event.stopPropagation()" style="display:flex;gap:4px;overflow-x:auto;max-width:100%;-webkit-overflow-scrolling:touch;padding:2px 0;flex:1;min-width:0;">
-              ${['english:English','arabic:عربي','translit:Translit','german:Deutsch','urdu:اردو','swedish:Svenska','norwegian:Norsk','amharic:አማርኛ','somali:Somali','tigrinya:ትግርኛ','oromo:Oromo'].map(function(pair){var parts=pair.split(':');var lk=parts[0];var ll=parts[1];return '<button type="button" class="tts-chip'+(lk==='english'?' active':'')+'" data-lang="'+lk+'" onclick="event.stopPropagation();selectTtsLang('+aya.aya_number+',\''+lk+'\',this)" style="flex:0 0 auto;padding:3px 9px;border:1px solid #E8C97B;border-radius:12px;font-size:11px;background:'+(lk==='english'?'#B8902A':'#FDF8EE')+';color:'+(lk==='english'?'#fff':'#B8902A')+';cursor:pointer;white-space:nowrap;font-family:inherit;">'+ll+'</button>';}).join('')}
+            <div class="tts-language-control" role="group" aria-label="Choose the language for verse read-aloud" style="display:flex;align-items:center;gap:5px;flex:1 1 190px;min-width:150px;max-width:100%;">
+              <span style="font-size:10px;color:#7A8FA6;white-space:nowrap;flex:0 0 auto;">Read aloud in:</span>
+              <div class="tts-lang-chips" role="group" aria-label="Read-aloud language choices" onclick="event.stopPropagation()" style="display:flex;gap:4px;overflow-x:auto;max-width:100%;-webkit-overflow-scrolling:touch;padding:2px 0;flex:1;min-width:0;">
+                ${['english:English','arabic:عربي','translit:Translit','german:Deutsch','urdu:اردو','swedish:Svenska','norwegian:Norsk','amharic:አማርኛ','somali:Somali','tigrinya:ትግርኛ','oromo:Oromo'].map(function(pair){var parts=pair.split(':');var lk=parts[0];var ll=parts[1];return '<button type="button" class="tts-chip'+(lk==='english'?' active':'')+'" data-lang="'+lk+'" aria-label="Read aloud in '+ll+'" aria-pressed="'+(lk==='english'?'true':'false')+'" title="Read aloud in '+ll+'" onclick="event.stopPropagation();selectTtsLang('+aya.aya_number+',\''+lk+'\',this)" style="flex:0 0 auto;padding:3px 9px;border:1px solid #E8C97B;border-radius:12px;font-size:11px;background:'+(lk==='english'?'#B8902A':'#FDF8EE')+';color:'+(lk==='english'?'#fff':'#B8902A')+';cursor:pointer;white-space:nowrap;font-family:inherit;">'+ll+'</button>';}).join('')}
+              </div>
             </div>
             <button id="bm-${aya.aya_number}" onclick="event.stopPropagation();toggleBookmark(${aya.aya_number},${suraId})" title="Bookmark" style="background:#FDF8EE;border:1px solid #E8C97B;border-radius:6px;width:32px;height:30px;font-size:14px;cursor:pointer;padding:0;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;">${isBookmarked(aya.aya_number,suraId)?'🔖':'🏷️'}</button>
             <button onclick="event.stopPropagation();showVerseHlPicker(${aya.aya_number},${suraId},this)" title="Highlight text" style="background:#FDF8EE;border:1px solid #E8C97B;border-radius:6px;width:32px;height:30px;font-size:14px;cursor:pointer;padding:0;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;">🖊</button>
@@ -8709,8 +8712,8 @@ document.addEventListener('keydown', function(e) {
 
 // ── VERSE TTS ────────────────────────────────────────────────────
 const LANG_TTS_MAP = {
-  arabic:'ar-SA', english:'en-US', tigrinya:'', amharic:'am-ET',
-  oromo:'', somali:'so-SO', german:'de-DE', urdu:'ur-PK', translit:'en-US', swedish:'sv-SE', norwegian:'nb-NO'
+  arabic:'ar-SA', english:'en-US', tigrinya:'ti-ER', amharic:'am-ET',
+  oromo:'om-ET', somali:'so-SO', german:'de-DE', urdu:'ur-PK', translit:'en-US', swedish:'sv-SE', norwegian:'nb-NO'
 };
 
 let _verseTtsSpeaking = false;
@@ -8723,10 +8726,12 @@ function selectTtsLang(ayaNum, lang, btn) {
   var row = btn.parentElement;
   Array.prototype.forEach.call(row.querySelectorAll('.tts-chip'), function(c){
     c.classList.remove('active');
+    c.setAttribute('aria-pressed', 'false');
     c.style.background = '#FDF8EE';
     c.style.color = '#B8902A';
   });
   btn.classList.add('active');
+  btn.setAttribute('aria-pressed', 'true');
   btn.style.background = '#B8902A';
   btn.style.color = '#fff';
 }
@@ -8743,7 +8748,10 @@ function speakScholarEntry(btn) {
 }
 
 function speakVerse(ayaNum, suraId, lang, btn) {
-  if (!('speechSynthesis' in window)) return;
+  if (!('speechSynthesis' in window)) {
+    alert('Read-aloud is not supported in this browser.');
+    return;
+  }
   if (_verseTtsSpeaking) {
     window.speechSynthesis.cancel();
     if (_verseTtsBtn) { _verseTtsBtn.classList.remove('playing'); _verseTtsBtn.textContent = '🔊'; }
@@ -8756,10 +8764,24 @@ function speakVerse(ayaNum, suraId, lang, btn) {
   if (!langEl) return;
   const text = langEl.innerText.trim();
   if (!text) return;
-  const ttsCode = LANG_TTS_MAP[lang] || 'en-US';
-  if (!ttsCode) { alert('TTS not available for ' + lang); return; }
+  const ttsCode = LANG_TTS_MAP[lang];
+  const languageName = lang.charAt(0).toUpperCase() + lang.slice(1);
+  if (!ttsCode) {
+    alert('Read-aloud is not configured for ' + languageName + '.');
+    return;
+  }
+  const voices = window.speechSynthesis.getVoices();
+  const languagePrefix = ttsCode.split('-')[0].toLowerCase();
+  const matchingVoice = voices.find(function(voice) {
+    return (voice.lang || '').toLowerCase().split('-')[0] === languagePrefix;
+  });
+  if (voices.length && !matchingVoice) {
+    alert('No ' + languageName + ' speech voice is available in this browser or device. Choose another language or install a matching speech voice.');
+    return;
+  }
   const utt = new SpeechSynthesisUtterance(text);
   utt.lang = ttsCode;
+  if (matchingVoice) utt.voice = matchingVoice;
   utt.rate = 0.85;
   utt.onstart = () => { _verseTtsSpeaking = true; _verseTtsBtn = btn; btn.classList.add('playing'); btn.textContent = '⏹'; };
   utt.onend = () => { _verseTtsSpeaking = false; btn.classList.remove('playing'); btn.textContent = '🔊'; };
