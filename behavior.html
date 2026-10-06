@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Behavior study — Quran Hikma</title>
+  <style>
+    body { margin: 0; font-family: Georgia, serif; background: #14110e; color: #f3ead8; }
+    main { max-width: 1100px; margin: 0 auto; padding: 28px 16px 72px; }
+    a { color: #e2c98a; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+    .card { background: #1d1914; border: 1px solid #3d3428; border-radius: 12px; padding: 14px; }
+    .card b { display: block; font-size: 1.4rem; }
+    table { width: 100%; border-collapse: collapse; font-size: .9rem; margin-top: 18px; }
+    th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid #3d3428; }
+    th { color: #e2c98a; }
+    input, button { padding: 8px 10px; border-radius: 8px; border: 1px solid #5a4d3b; background: #100e0c; color: #f3ead8; }
+    button { background: #c4a46a; color: #1a140c; border: 0; font-weight: 700; cursor: pointer; }
+    .note { color: #cbbfa8; }
+  </style>
+</head>
+<body>
+  <main>
+    <p><a href="/">Quran</a> · <a href="/login.html">Sign in</a></p>
+    <h1>User behavior for monetization</h1>
+    <p class="note">Sessions, time on site, country, signup-wall hits, and donate or advertise clicks. Paste the service-role key only in this private report. It stays in this tab and is not saved in the site code.</p>
+    <p>
+      <input id="key" type="password" placeholder="service role key" style="width:min(420px,100%)">
+      <button id="load" type="button">Load study</button>
+    </p>
+    <p id="status">Waiting for the key.</p>
+    <div class="cards" id="cards"></div>
+    <h2>Where people are</h2>
+    <table><thead><tr><th>Place</th><th>Sessions</th><th>Avg minutes</th></tr></thead><tbody id="places"></tbody></table>
+    <h2>What they open</h2>
+    <table><thead><tr><th>Page</th><th>Views</th></tr></thead><tbody id="pages"></tbody></table>
+    <h2>Monetization signals</h2>
+    <table><thead><tr><th>Signal</th><th>Count</th></tr></thead><tbody id="signals"></tbody></table>
+    <h2>Latest sessions</h2>
+    <table><thead><tr><th>Seen</th><th>Email</th><th>Place</th><th>Minutes</th><th>Pages</th><th>Device</th></tr></thead><tbody id="latest"></tbody></table>
+  </main>
+  <script>
+    const SB = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
+    const status = document.getElementById('status');
+    function card(label, value) {
+      const el = document.createElement('div');
+      el.className = 'card';
+      el.innerHTML = '<span>' + label + '</span><b></b>';
+      el.querySelector('b').textContent = value;
+      return el;
+    }
+    function rows(id, items, cells) {
+      const body = document.getElementById(id);
+      body.innerHTML = '';
+      items.forEach(function (item) {
+        const tr = document.createElement('tr');
+        cells(item).forEach(function (v) {
+          const td = document.createElement('td');
+          td.textContent = v;
+          tr.appendChild(td);
+        });
+        body.appendChild(tr);
+      });
+    }
+    async function get(key, path) {
+      const r = await fetch(SB + path, { headers: { apikey: key, Authorization: 'Bearer ' + key } });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.message || data.error || r.status);
+      return data;
+    }
+    document.getElementById('load').onclick = async () => {
+      const key = document.getElementById('key').value.trim();
+      if (!key) return;
+      status.textContent = 'Loading…';
+      try {
+        const sessions = await get(key, '/rest/v1/behavior_sessions?select=*&order=last_seen_at.desc&limit=500');
+        const events = await get(key, '/rest/v1/behavior_events?select=event_type,path,label,country&order=created_at.desc&limit=2000');
+        const minutes = sessions.reduce(function (s, r) { return s + (r.duration_seconds || 0); }, 0) / 60;
+        const signed = sessions.filter(function (r) { return r.signed_in; }).length;
+        const cards = document.getElementById('cards');
+        cards.innerHTML = '';
+        cards.appendChild(card('Sessions', sessions.length));
+        cards.appendChild(card('Avg minutes', sessions.length ? (minutes / sessions.length).toFixed(1) : '0'));
+        cards.appendChild(card('Signed in', signed));
+        cards.appendChild(card('Signup walls', events.filter(function (e) { return e.event_type === 'signup_wall'; }).length));
+        const places = {};
+        sessions.forEach(function (r) {
+          const k = [r.city, r.country].filter(Boolean).join(', ') || 'Unknown';
+          places[k] = places[k] || { n: 0, secs: 0 };
+          places[k].n += 1;
+          places[k].secs += r.duration_seconds || 0;
+        });
+        rows('places', Object.keys(places).sort(function (a, b) { return places[b].n - places[a].n; }).slice(0, 20), function (k) {
+          return [k, places[k].n, (places[k].secs / places[k].n / 60).toFixed(1)];
+        });
+        const pages = {};
+        events.filter(function (e) { return e.event_type === 'page_view'; }).forEach(function (e) {
+          pages[e.path || '/'] = (pages[e.path || '/'] || 0) + 1;
+        });
+        rows('pages', Object.keys(pages).sort(function (a, b) { return pages[b] - pages[a]; }).slice(0, 20), function (k) {
+          return [k, pages[k]];
+        });
+        const signals = {};
+        events.filter(function (e) { return e.event_type === 'monetization_click' || e.event_type === 'signup_wall'; }).forEach(function (e) {
+          const k = e.event_type + (e.label ? ': ' + e.label : '');
+          signals[k] = (signals[k] || 0) + 1;
+        });
+        rows('signals', Object.keys(signals), function (k) { return [k, signals[k]]; });
+        rows('latest', sessions.slice(0, 40), function (r) {
+          return [r.last_seen_at, r.email || 'guest', [r.city, r.country].filter(Boolean).join(', '), ((r.duration_seconds || 0) / 60).toFixed(1), r.page_views || 0, r.device || ''];
+        });
+        status.textContent = 'Loaded ' + sessions.length + ' sessions and ' + events.length + ' events.';
+      } catch (err) {
+        status.textContent = err.message + ' — run sql/behavior_analytics.sql first.';
+      }
+    };
+  </script>
+</body>
+</html>
