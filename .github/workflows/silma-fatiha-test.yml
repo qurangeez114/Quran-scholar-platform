@@ -1,4 +1,4 @@
-name: SILMA Quran plain-reading production
+name: SILMA Quran plain-reading production 113-50
 
 on:
   push:
@@ -6,78 +6,51 @@ on:
     paths:
       - ".github/workflows/silma-fatiha-test.yml"
   workflow_dispatch:
-    inputs:
-      surah:
-        description: "Surah number to generate"
-        required: true
-        default: "114"
 
 permissions:
   contents: write
 
 jobs:
   generate:
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        surah: [113, 112, 111, 110, 109, 108, 107, 106, 105, 104, 103, 102, 101, 100, 99, 98, 97, 96, 95, 94, 93, 92, 91, 90, 89, 88, 87, 86, 85, 84, 83, 82, 81, 80, 79, 78, 77, 76, 75, 74, 73, 72, 71, 70, 69, 68, 67, 66, 65, 64, 63, 62, 61, 60, 59, 58, 57, 56, 55, 54, 53, 52, 51, 50]
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Install dependencies
+      - name: Install SILMA and ffmpeg
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg
           python -m pip install --upgrade pip
           pip install silma-tts
-      - name: Generate selected surah
+      - name: Fetch verified Uthmani verses and generate
         env:
-          SURAH: ${{ inputs.surah || '114' }}
+          SURAH: ${{ matrix.surah }}
         run: |
           cat > /tmp/generate.py <<'PY'
           from pathlib import Path
-          import os, site
+          import json, os, site, urllib.request
           from silma_tts.api import SilmaTTS
 
-          # Production begins at the back of the Quran. Expand only after review.
-          surahs = {
-            114: [
-              "قُلْ أَعُوذُ بِرَبِّ النَّاسِ",
-              "مَلِكِ النَّاسِ",
-              "إِلَٰهِ النَّاسِ",
-              "مِن شَرِّ الْوَسْوَاسِ الْخَنَّاسِ",
-              "الَّذِي يُوَسْوِسُ فِي صُدُورِ النَّاسِ",
-              "مِنَ الْجِنَّةِ وَالنَّاسِ",
-            ],
-            113: [
-              "قُلْ أَعُوذُ بِرَبِّ الْفَلَقِ",
-              "مِن شَرِّ مَا خَلَقَ",
-              "وَمِن شَرِّ غَاسِقٍ إِذَا وَقَبَ",
-              "وَمِن شَرِّ النَّفَّاثَاتِ فِي الْعُقَدِ",
-              "وَمِن شَرِّ حَاسِدٍ إِذَا حَسَدَ",
-            ],
-            112: [
-              "قُلْ هُوَ اللَّهُ أَحَدٌ",
-              "اللَّهُ الصَّمَدُ",
-              "لَمْ يَلِدْ وَلَمْ يُولَدْ",
-              "وَلَمْ يَكُن لَّهُ كُفُوًا أَحَدٌ",
-            ],
-            111: [
-              "تَبَّتْ يَدَا أَبِي لَهَبٍ وَتَبَّ",
-              "مَا أَغْنَىٰ عَنْهُ مَالُهُ وَمَا كَسَبَ",
-              "سَيَصْلَىٰ نَارًا ذَاتَ لَهَبٍ",
-              "وَامْرَأَتُهُ حَمَّالَةَ الْحَطَبِ",
-              "فِي جِيدِهَا حَبْلٌ مِّن مَّسَدٍ",
-            ],
-            110: [
-              "إِذَا جَاءَ نَصْرُ اللَّهِ وَالْفَتْحُ",
-              "وَرَأَيْتَ النَّاسَ يَدْخُلُونَ فِي دِينِ اللَّهِ أَفْوَاجًا",
-              "فَسَبِّحْ بِحَمْدِ رَبِّكَ وَاسْتَغْفِرْهُ إِنَّهُ كَانَ تَوَّابًا",
-            ],
-          }
           s = int(os.environ["SURAH"])
-          if s not in surahs:
-              raise SystemExit(f"Surah {s} is not enabled yet.")
+          url = f"https://api.alquran.cloud/v1/surah/{s}/quran-uthmani"
+          with urllib.request.urlopen(url, timeout=30) as response:
+              payload = json.load(response)
+          if payload.get("code") != 200:
+              raise RuntimeError(f"Quran text API failed for surah {s}: {payload}")
+          ayahs = payload["data"]["ayahs"]
+          if not ayahs:
+              raise RuntimeError(f"No ayahs returned for surah {s}")
+
           out = Path("quran-plain-audio") / f"{s:03d}"
           out.mkdir(parents=True, exist_ok=True)
           tts = SilmaTTS()
@@ -91,25 +64,32 @@ jobs:
               if not candidates:
                   raise FileNotFoundError("SILMA Arabic reference audio ar.ref.24k.wav not found")
               ref_file = str(candidates[0])
-          for i, verse in enumerate(surahs[s], 1):
+
+          for ayah in ayahs:
+              i = int(ayah["numberInSurah"])
+              verse = ayah["text"]
               tts.infer(ref_file=str(ref_file), ref_text=ref_text, gen_text=verse,
                         file_wave=str(out / f"{s:03d}_{i:03d}.wav"),
                         seed=42, speed=1)
           PY
           python /tmp/generate.py
-      - name: Convert verses and build whole-surah MP3
+      - name: Convert to MP3 and build whole surah
         env:
-          SURAH: ${{ inputs.surah || '114' }}
+          SURAH: ${{ matrix.surah }}
         run: |
-          D="quran-plain-audio/$(printf '%03d' "$SURAH")"
+          S="$(printf '%03d' "$SURAH")"
+          D="quran-plain-audio/$S"
           for f in "$D"/*.wav; do
-            ffmpeg -y -i "$f" -codec:a libmp3lame -q:a 2 "${f%.wav}.mp3"
+            ffmpeg -loglevel error -y -i "$f" -codec:a libmp3lame -q:a 2 "${f%.wav}.mp3"
           done
-          printf "file '%s'\n" "$PWD"/"$D"/*.wav > /tmp/concat.txt
-          ffmpeg -y -f concat -safe 0 -i /tmp/concat.txt -c:a libmp3lame -q:a 2 "$D/surah_$(printf '%03d' "$SURAH")_complete.mp3"
-      - name: Deploy MP3 audio to repository
+          : > /tmp/concat.txt
+          for f in "$D"/*.wav; do
+            printf "file '%s'\n" "$PWD/$f" >> /tmp/concat.txt
+          done
+          ffmpeg -loglevel error -y -f concat -safe 0 -i /tmp/concat.txt -c:a libmp3lame -q:a 2 "$D/surah_${S}_complete.mp3"
+      - name: Deploy MP3s to QuranHikma repository
         env:
-          SURAH: ${{ inputs.surah || '114' }}
+          SURAH: ${{ matrix.surah }}
         run: |
           S="$(printf '%03d' "$SURAH")"
           mkdir -p audio/simple-recitation
@@ -117,13 +97,15 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add audio/simple-recitation/
-          if ! git diff --cached --quiet; then
-            git commit -m "Deploy SILMA plain-reading audio for Surah $SURAH"
-            git push
-          fi
-      - name: Upload production audio
+          git commit -m "Deploy SILMA plain-reading audio for Surah $SURAH"
+          for attempt in 1 2 3 4 5; do
+            git pull --rebase origin main && git push origin HEAD:main && exit 0
+            sleep $((attempt * 5))
+          done
+          exit 1
+      - name: Upload backup artifact
         uses: actions/upload-artifact@v4
         with:
-          name: quran-plain-audio-surah-${{ inputs.surah }}
+          name: quran-plain-audio-surah-${{ matrix.surah }}
           path: quran-plain-audio/
           retention-days: 30
