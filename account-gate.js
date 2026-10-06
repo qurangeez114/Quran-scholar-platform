@@ -9,7 +9,7 @@
 
   var FREE_MS = 10 * 60 * 1000;
   var SB_URL = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
-  var SB_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmem9qcGFlaiIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzQ0MjIyNzg0LCJleHAiOjIwNTk3OTg3ODR9.yk1pBzCdkadF11U5tj0XAiQMIPBLLo1SG6R-ydXHWn4';
+  var SB_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
   var USED_KEY = 'qh_trial_used_ms';
   var path = location.pathname.toLowerCase();
   if (path.indexOf('login.html') !== -1 || path.indexOf('sessions.html') !== -1) return;
