@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign in — Quran Hikma</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root { color-scheme: dark; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center;
+      font-family: Georgia, "Times New Roman", serif; background: #14110e; color: #f3ead8; }
+    main { width: min(420px, calc(100% - 32px)); background: #1d1914; border: 1px solid #3d3428;
+      border-radius: 14px; padding: 28px 24px; box-shadow: 0 12px 40px rgba(0,0,0,.35); }
+    h1 { font-size: 1.45rem; margin: 0 0 6px; }
+    p { color: #cbbfa8; line-height: 1.45; }
+    label { display: block; font-size: .85rem; margin: 14px 0 6px; }
+    input { width: 100%; box-sizing: border-box; padding: 11px 12px; border-radius: 8px;
+      border: 1px solid #5a4d3b; background: #100e0c; color: #f3ead8; font-size: 1rem; }
+    .row { display: flex; gap: 8px; margin-top: 16px; }
+    button { flex: 1; padding: 11px 12px; border-radius: 8px; border: 0; cursor: pointer; font-weight: 600; }
+    #signup { background: #c4a46a; color: #1a140c; }
+    #signin { background: transparent; color: #f3ead8; border: 1px solid #5a4d3b; }
+    #msg { min-height: 1.2em; margin-top: 14px; }
+    a { color: #e2c98a; }
+    .fine { font-size: .8rem; color: #a89880; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Quran Hikma</h1>
+    <p>Create an account or sign in. New accounts must confirm the email before they can sign in.</p>
+    <form id="auth">
+      <label for="email">Email</label>
+      <input id="email" type="email" autocomplete="email" required>
+      <label for="password">Password</label>
+      <input id="password" type="password" autocomplete="current-password" minlength="8" required>
+      <div class="row">
+        <button id="signup" type="button">Create account</button>
+        <button id="signin" type="button">Sign in</button>
+      </div>
+    </form>
+    <p id="msg" role="status"></p>
+    <p class="fine">Country and city are recorded from the network location of the visit, not GPS. Session length is the time the tab stays open. <a href="/">Back to the Quran</a> · <a href="/sessions.html">Session report</a></p>
+  </main>
+  <script src="session-tracker.js"></script>
+  <script>
+    const SB_URL = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
+    const SB_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmem9qcGFlaiIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzQ0MjIyNzg0LCJleHAiOjIwNTk3OTg3ODR9.yk1pBzCdkadF11U5tj0XAiQMIPBLLo1SG6R-ydXHWn4';
+    const sb = window.supabase.createClient(SB_URL, SB_ANON);
+    const msg = document.getElementById('msg');
+    const email = () => document.getElementById('email').value.trim();
+    const password = () => document.getElementById('password').value;
+
+    document.getElementById('signup').onclick = async () => {
+      msg.textContent = 'Sending confirmation email…';
+      const { error } = await sb.auth.signUp({
+        email: email(),
+        password: password(),
+        options: { emailRedirectTo: location.origin + '/login.html' }
+      });
+      msg.textContent = error ? error.message : 'Check your email and open the confirmation link, then sign in here.';
+    };
+
+    document.getElementById('signin').onclick = async () => {
+      msg.textContent = 'Signing in…';
+      const { data, error } = await sb.auth.signInWithPassword({ email: email(), password: password() });
+      if (error) { msg.textContent = error.message; return; }
+      if (window.QHikmaSession) window.QHikmaSession.attachUser(data.user);
+      msg.textContent = 'Signed in as ' + data.user.email + '.';
+    };
+
+    sb.auth.getSession().then(({ data }) => {
+      if (data.session) msg.textContent = 'Already signed in as ' + data.session.user.email + '.';
+    });
+  </script>
+</body>
+</html>

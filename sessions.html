@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sessions — Quran Hikma</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body { margin: 0; font-family: Georgia, serif; background: #14110e; color: #f3ead8; }
+    main { max-width: 980px; margin: 0 auto; padding: 28px 16px 64px; }
+    a { color: #e2c98a; }
+    table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+    th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid #3d3428; vertical-align: top; }
+    th { color: #e2c98a; }
+    input, button { padding: 8px 10px; border-radius: 8px; border: 1px solid #5a4d3b; background: #100e0c; color: #f3ead8; }
+    button { background: #c4a46a; color: #1a140c; border: 0; font-weight: 600; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <main>
+    <p><a href="/login.html">Sign in</a> · <a href="/">Quran</a></p>
+    <h1>Where people sign in, and how long they stay</h1>
+    <p id="status">Sign in with the admin account, then load sessions.</p>
+    <p>
+      <input id="email" type="email" placeholder="admin email">
+      <input id="password" type="password" placeholder="password">
+      <button id="go" type="button">Load sessions</button>
+    </p>
+    <table>
+      <thead><tr><th>When</th><th>Email</th><th>Place</th><th>Minutes</th><th>Page</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </main>
+  <script>
+    const SB_URL = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
+    const SB_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmem9qcGFlaiIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzQ0MjIyNzg0LCJleHAiOjIwNTk3OTg3ODR9.yk1pBzCdkadF11U5tj0XAiQMIPBLLo1SG6R-ydXHWn4';
+    const sb = window.supabase.createClient(SB_URL, SB_ANON);
+    const status = document.getElementById('status');
+    document.getElementById('go').onclick = async () => {
+      status.textContent = 'Signing in…';
+      const { error } = await sb.auth.signInWithPassword({
+        email: document.getElementById('email').value.trim(),
+        password: document.getElementById('password').value
+      });
+      if (error) { status.textContent = error.message; return; }
+      const { data, error: qErr } = await sb.from('site_sessions').select('*').order('started_at', { ascending: false }).limit(200);
+      if (qErr) { status.textContent = qErr.message + ' — run sql/site_sessions.sql and set your admin email in the read policy.'; return; }
+      const body = document.getElementById('rows');
+      body.innerHTML = '';
+      (data || []).forEach(function (row) {
+        const tr = document.createElement('tr');
+        const place = [row.city, row.region, row.country].filter(Boolean).join(', ') || '—';
+        const mins = row.duration_seconds == null ? '—' : (row.duration_seconds / 60).toFixed(1);
+        [row.started_at, row.email || 'guest', place, mins, row.path || ''].forEach(function (v) {
+          const td = document.createElement('td');
+          td.textContent = v;
+          tr.appendChild(td);
+        });
+        body.appendChild(tr);
+      });
+      status.textContent = (data || []).length + ' sessions.';
+    };
+  </script>
+</body>
+</html>
