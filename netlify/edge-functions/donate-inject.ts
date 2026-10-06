@@ -1,5 +1,6 @@
 // Inject shared site-wide scripts into every HTML page: donation,
-// mobile floating-UI positioning, and persistent Tafsir fidelity badges.
+// mobile floating-UI positioning, persistent Tafsir fidelity badges,
+// and the free-trial account gate.
 // Each is checked and injected independently, so a page that already
 // hardcodes one tag doesn't cause the others to be skipped.
 // Non-HTML responses pass through unchanged.
@@ -23,6 +24,7 @@ export default async (_request: Request, context: any) => {
   injectScript('/donate-global.js');
   injectScript('/mobile-floating-layout.js');
   injectScript('/tafsir-accuracy-static.js');
+  injectScript('/account-gate.js');
 
   const headers = new Headers(response.headers);
   headers.delete("content-length");
