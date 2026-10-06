@@ -7,7 +7,7 @@
 (function () {
   'use strict';
 
-  var FREE_MS = 10 * 60 * 1000;
+  var FREE_MS = 20 * 60 * 1000;
   var SB_URL = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
   var SB_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
   var USED_KEY = 'qh_trial_used_ms';
