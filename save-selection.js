@@ -1,6 +1,7 @@
 /**
  * Lets a signed-in user send selected site text, or the presentation basket,
- * into My pages.
+ * into My pages. Buttons stay in the top bar so they do not cover the
+ * bottom navigation icons.
  */
 (function () {
   'use strict';
@@ -8,20 +9,30 @@
   var SB_URL = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
   var SB_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
 
-  function chip(id, text, left) {
+  var style = document.createElement('style');
+  style.textContent = '#qh-trial-badge{top:62px!important;right:12px!important;bottom:auto!important;left:auto!important}#qh-account-tools{position:fixed;z-index:2147483002;top:62px;left:12px;display:flex;gap:6px;flex-wrap:wrap;max-width:70vw}#qh-account-tools button{border:0;border-radius:999px;padding:8px 12px;background:#1d1914;color:#e2c98a;font:600 13px Georgia,serif;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.35)}';
+  document.head.appendChild(style);
+
+  function bar() {
+    var el = document.getElementById('qh-account-tools');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'qh-account-tools';
+      document.body.appendChild(el);
+    }
+    return el;
+  }
+  function chip(id, text) {
     var el = document.getElementById(id);
     if (!el) {
       el = document.createElement('button');
       el.id = id;
       el.type = 'button';
-      el.style.cssText = 'position:fixed;z-index:2147483002;bottom:12px;border:0;border-radius:999px;padding:8px 12px;background:#1d1914;color:#e2c98a;font:600 13px Georgia,serif;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.35)';
-      document.body.appendChild(el);
+      bar().appendChild(el);
     }
-    el.style.left = left;
     el.textContent = text;
     return el;
   }
-
   function go(payload) {
     try { sessionStorage.setItem('qh_page_capture', JSON.stringify(payload)); } catch (e) {}
     location.href = '/my-pages.html';
@@ -35,7 +46,7 @@
         if (btn) btn.remove();
         return;
       }
-      btn = chip('qh-save-selection', 'Save selection to my page', '12px');
+      btn = chip('qh-save-selection', 'Save selection');
       btn.onclick = function () {
         go({ title: document.title || 'Saved selection', body: text, source: location.href });
       };
@@ -58,12 +69,10 @@
     var sb = window.supabase.createClient(SB_URL, SB_ANON);
     var { data } = await sb.auth.getSession();
     if (!data.session) return;
-    var mine = chip('qh-my-pages', 'My pages', '168px');
-    mine.onclick = function () { location.href = '/my-pages.html'; };
+    chip('qh-my-pages', 'My pages').onclick = function () { location.href = '/my-pages.html'; };
     var basket = localStorage.getItem('presentationBasket') || localStorage.getItem('savedPresentations');
     if (basket) {
-      var pres = chip('qh-save-presentation', 'Save presentation', '250px');
-      pres.onclick = function () {
+      chip('qh-save-presentation', 'Save presentation').onclick = function () {
         go({ title: 'Presentation', body: basket, source: 'presentation.html' });
       };
     }
