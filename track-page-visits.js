@@ -52,9 +52,6 @@
     }
   }
 
-  // Self-contained fallback — only used on pages that don't already define
-  // window.qhistRecord. Mirrors the exact entry shape/dedupe rule used
-  // elsewhere so everything lives together correctly in one list.
   function fallbackRecord(label, url, icon, sub) {
     try {
       url = url || location.href;
@@ -80,16 +77,13 @@
       if (raw.length > MAX) raw = raw.slice(0, MAX);
 
       localStorage.setItem(KEY, JSON.stringify(raw));
-    } catch (e) {
-      // localStorage unavailable/full — fail silently, never break the page
-    }
+    } catch (e) {}
   }
 
   function record() {
     var title = getTitle();
     var icon = getIcon();
     if (typeof window.qhistRecord === 'function') {
-      // Page already has its own recorder (index.html, madhhab.html, etc.)
       window.qhistRecord(title, location.href, icon, '');
     } else {
       fallbackRecord(title, location.href, icon, '');
@@ -98,10 +92,6 @@
 
   function fire() {
     record();
-    // If the title is set asynchronously after initial render (some pages
-    // fetch data before setting document.title), do one more short pass so
-    // the row gets the real title instead of the raw path. This UPDATES the
-    // same row (same URL) rather than adding a second one.
     setTimeout(record, 500);
   }
 
@@ -111,10 +101,11 @@
     fire();
   }
 
-  // Android/iOS back-forward cache restores the page without rerunning
-  // most scripts except this listener — record again so a bfcache visit
-  // still counts and moves back to the top.
   window.addEventListener('pageshow', function (e) {
     if (e.persisted) record();
   });
+
+  var gate = document.createElement('script');
+  gate.src = 'account-gate.js';
+  document.head.appendChild(gate);
 })();
