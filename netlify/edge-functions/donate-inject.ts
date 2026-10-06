@@ -20,6 +20,7 @@ export default async (_request: Request, context: any) => {
   injectScript('/tafsir-accuracy-static.js');
   injectScript('/account-gate.js');
   injectScript('/behavior-collector.js');
+  injectScript('/save-selection.js');
 
   const headers = new Headers(response.headers);
   headers.delete("content-length");

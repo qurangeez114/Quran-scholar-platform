@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>My pages — Quran Hikma</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body { margin: 0; font-family: Georgia, serif; background: #14110e; color: #f3ead8; }
+    main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 72px; display: grid; grid-template-columns: 280px 1fr; gap: 16px; }
+    h1 { grid-column: 1 / -1; margin: 0; }
+    .note, #status { grid-column: 1 / -1; color: #cbbfa8; }
+    aside, section { background: #1d1914; border: 1px solid #3d3428; border-radius: 12px; padding: 12px; }
+    button, input, textarea { font: inherit; }
+    input, textarea { width: 100%; box-sizing: border-box; margin: 6px 0; padding: 8px; border-radius: 8px; border: 1px solid #5a4d3b; background: #100e0c; color: #f3ead8; }
+    textarea { min-height: 320px; }
+    button { margin: 4px 4px 4px 0; padding: 8px 10px; border-radius: 8px; border: 0; background: #c4a46a; color: #1a140c; font-weight: 700; cursor: pointer; }
+    .ghost { background: transparent; color: #f3ead8; border: 1px solid #5a4d3b; }
+    li { list-style: none; margin: 0 0 6px; }
+    ul { padding: 0; }
+    a { color: #e2c98a; }
+    @media (max-width: 800px) { main { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>My pages</h1>
+    <p class="note">Create a page by file name. Edit it, paste outside material, or import the presentation basket from this site. Only your confirmed account can see these pages.</p>
+    <p id="status">Checking sign-in…</p>
+    <aside>
+      <input id="filename" placeholder="File name, e.g. badr-notes">
+      <button id="create" type="button">Create page</button>
+      <button id="import-pres" class="ghost" type="button">Import presentation file</button>
+      <button id="paste" class="ghost" type="button">Paste outside text</button>
+      <ul id="list"></ul>
+    </aside>
+    <section>
+      <input id="title" placeholder="Page title">
+      <textarea id="body" placeholder="Write, paste, or import material here."></textarea>
+      <button id="save" type="button">Save edits</button>
+      <button id="up" class="ghost" type="button">Move up</button>
+      <button id="down" class="ghost" type="button">Move down</button>
+      <button id="del" class="ghost" type="button">Delete</button>
+    </section>
+  </main>
+  <script>
+    const SB_URL = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
+    const SB_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
+    const sb = window.supabase.createClient(SB_URL, SB_ANON);
+    const status = document.getElementById('status');
+    let user = null;
+    let pages = [];
+    let current = null;
+
+    function slug(name) {
+      return String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
+    }
+    function presentationText() {
+      var raw = localStorage.getItem('presentationBasket') || localStorage.getItem('savedPresentations') || localStorage.getItem('qs_presentation_slides') || '';
+      if (!raw) return '';
+      try {
+        var data = JSON.parse(raw);
+        if (Array.isArray(data)) return data.map(function (item, i) {
+          return 'Slide ' + (i + 1) + '\n' + JSON.stringify(item, null, 2);
+        }).join('\n\n');
+        return JSON.stringify(data, null, 2);
+      } catch (e) { return raw; }
+    }
+    function renderList() {
+      const ul = document.getElementById('list');
+      ul.innerHTML = '';
+      pages.forEach(function (page) {
+        const li = document.createElement('li');
+        const b = document.createElement('button');
+        b.className = 'ghost';
+        b.textContent = page.title;
+        b.onclick = function () { openPage(page); };
+        li.appendChild(b);
+        ul.appendChild(li);
+      });
+    }
+    function openPage(page) {
+      current = page;
+      document.getElementById('title').value = page.title;
+      document.getElementById('body').value = page.body || '';
+      status.textContent = 'Editing ' + page.slug;
+    }
+    async function load() {
+      const { data, error } = await sb.from('user_pages').select('*').order('sort_order');
+      if (error) { status.textContent = error.message + ' — run sql/user_pages.sql first.'; return; }
+      pages = data || [];
+      renderList();
+      if (!current && pages[0]) openPage(pages[0]);
+    }
+    document.getElementById('create').onclick = async () => {
+      const name = document.getElementById('filename').value.trim();
+      const file = slug(name);
+      if (!file) { status.textContent = 'Give the page a file name.'; return; }
+      const { data, error } = await sb.from('user_pages').insert({
+        user_id: user.id,
+        title: name,
+        slug: file,
+        body: '',
+        sort_order: pages.length
+      }).select().single();
+      if (error) { status.textContent = error.message; return; }
+      pages.push(data);
+      renderList();
+      openPage(data);
+    };
+    document.getElementById('save').onclick = async () => {
+      if (!current) return;
+      const patch = {
+        title: document.getElementById('title').value.trim() || current.title,
+        body: document.getElementById('body').value,
+        updated_at: new Date().toISOString()
+      };
+      const { error } = await sb.from('user_pages').update(patch).eq('id', current.id);
+      status.textContent = error ? error.message : 'Saved.';
+      if (!error) Object.assign(current, patch);
+      renderList();
+    };
+    async function move(dir) {
+      if (!current) return;
+      const i = pages.findIndex(function (p) { return p.id === current.id; });
+      const j = i + dir;
+      if (j < 0 || j >= pages.length) return;
+      const a = pages[i], b = pages[j];
+      await sb.from('user_pages').update({ sort_order: b.sort_order }).eq('id', a.id);
+      await sb.from('user_pages').update({ sort_order: a.sort_order }).eq('id', b.id);
+      await load();
+      openPage(pages.find(function (p) { return p.id === a.id; }));
+    }
+    document.getElementById('up').onclick = function () { move(-1); };
+    document.getElementById('down').onclick = function () { move(1); };
+    document.getElementById('del').onclick = async () => {
+      if (!current || !confirm('Delete this page?')) return;
+      await sb.from('user_pages').delete().eq('id', current.id);
+      current = null;
+      await load();
+    };
+    document.getElementById('import-pres').onclick = function () {
+      const text = presentationText();
+      if (!text) { status.textContent = 'No presentation basket found in this browser.'; return; }
+      document.getElementById('body').value += (document.getElementById('body').value ? '\n\n' : '') + text;
+      status.textContent = 'Presentation added to the editor. Save edits to keep it.';
+    };
+    document.getElementById('paste').onclick = async () => {
+      try {
+        const text = await navigator.clipboard.readText();
+        document.getElementById('body').value += (document.getElementById('body').value ? '\n\n' : '') + text;
+      } catch (e) { status.textContent = 'Clipboard permission was blocked. Paste into the editor with the keyboard.'; }
+    };
+    sb.auth.getSession().then(async function ({ data }) {
+      user = data.session && data.session.user;
+      if (!user || !(user.email_confirmed_at || user.confirmed_at)) {
+        status.textContent = 'Sign in with a confirmed account first.';
+        location.href = '/login.html';
+        return;
+      }
+      status.textContent = 'Signed in as ' + user.email;
+      await load();
+      try {
+        const captured = JSON.parse(sessionStorage.getItem('qh_page_capture') || 'null');
+        if (captured && captured.body) {
+          document.getElementById('filename').value = captured.title || 'saved-material';
+          document.getElementById('body').value = captured.body;
+          sessionStorage.removeItem('qh_page_capture');
+          status.textContent = 'Captured material is in the editor. Create a page, then save.';
+        }
+      } catch (e) {}
+    });
+  </script>
+</body>
+</html>
