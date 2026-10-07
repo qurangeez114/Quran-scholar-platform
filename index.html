@@ -230,6 +230,8 @@ body { font-family: 'EB Garamond', Georgia, serif; background: #F5EDD8; color: #
 .word-diff-hafs { background: #D6EAF8; border-radius: 3px; padding: 0 2px; border-bottom: 3px solid #1A6FA8; }
 .word-diff-warsh { background: #FDEBD0; border-radius: 3px; padding: 0 2px; border-bottom: 3px solid #C0621A; }
 .word-diff-qalun { background: #D5F5E3; border-radius: 3px; padding: 0 2px; border-bottom: 3px solid #1A7A48; }
+.rw-diff { background: #EEEEEE; border: 1px solid #999999; border-radius: 3px; padding: 0 3px; color: #444444; }
+.rw-total { font-weight: 800; text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 6px; }
 .word-variant { cursor: pointer; padding: 2px 5px !important; border-radius: 5px !important; box-shadow: 0 0 0 1px rgba(0,0,0,0.1), inset 0 0 0 1px rgba(255,255,255,0.4); transition: transform 0.1s; font-weight: 600; }
 .word-variant:hover { transform: scale(1.05); box-shadow: 0 2px 6px rgba(0,0,0,0.15); }
 .xref-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; }
@@ -3447,14 +3449,13 @@ function charDiff(primary, reference) {
 }
 
 function renderWordWithLetterDiff(primary, reference, baseClass) {
-  // baseClass = 'word-diff-hafs' | 'word-diff-warsh' | etc.
-  // The whole word gets baseClass (which provides the riwayat color).
-  // Individual extra letters get an additional inline style for red color.
+  // Neutral chip (baseClass = 'rw-diff'); differing letters get a dotted
+  // dark-gold underline instead of red, per updated legend.
   const diff = charDiff(primary, reference);
   if (!diff.length) return '';
   const inner = diff.map(d => {
     if (d.extra) {
-      return `<span style="color:#C0202C;font-weight:700">${d.c}</span>`;
+      return `<span style="color:#5A3A00;font-weight:800;text-decoration:underline dotted;text-decoration-color:#5A3A00;">${d.c}</span>`;
     }
     return d.c;
   }).join('');
@@ -3473,14 +3474,32 @@ function pickReference(thisWord, otherWords) {
 }
 
 function highlightDiffs(hafs, warsh, qalun, duri, shubah, suraId, ayaNum, soosi='', bazzi='', qumbul='') {
-  const hafsW   = (hafs   || '').split(/\s+/).filter(Boolean);
-  const warshW  = (warsh  || '').split(/\s+/).filter(Boolean);
-  const qalunW  = (qalun  || '').split(/\s+/).filter(Boolean);
-  const duriW   = (duri   || '').split(/\s+/).filter(Boolean);
-  const shubahW = (shubah || '').split(/\s+/).filter(Boolean);
-  const soosiW  = (soosi  || '').split(/\s+/).filter(Boolean);
-  const bazziW  = (bazzi  || '').split(/\s+/).filter(Boolean);
-  const qumbulW = (qumbul || '').split(/\s+/).filter(Boolean);
+  // Rejoin stray single-letter / diacritic-only tokens onto the preceding
+  // word before splitting on whitespace — otherwise a detached letter or a
+  // waqf mark (e.g. a lone ى or a standalone ۛ) shifts word-position
+  // alignment and makes two readings of the SAME word look like a split.
+  const toks = (s) => {
+    const raw = (s || '').split(/\s+/).filter(Boolean);
+    const out = [];
+    for (const t of raw) {
+      const lettersOnly = t.replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g, '');
+      if (out.length && lettersOnly.length <= 1) {
+        out[out.length - 1] = out[out.length - 1] + t;
+      } else {
+        out.push(t);
+      }
+    }
+    return out;
+  };
+
+  const hafsW   = toks(hafs);
+  const warshW  = toks(warsh);
+  const qalunW  = toks(qalun);
+  const duriW   = toks(duri);
+  const shubahW = toks(shubah);
+  const soosiW  = toks(soosi);
+  const bazziW  = toks(bazzi);
+  const qumbulW = toks(qumbul);
 
   const maxLen = Math.max(hafsW.length, warshW.length, qalunW.length, duriW.length, shubahW.length, soosiW.length, bazziW.length, qumbulW.length);
   let hafsHtml='', warshHtml='', qalunHtml='', duriHtml='', shubahHtml='', soosiHtml='', bazziHtml='', qumbulHtml='';
@@ -3490,7 +3509,6 @@ function highlightDiffs(hafs, warsh, qalun, duri, shubah, suraId, ayaNum, soosi=
     const dw = duriW[i]||'',  sw = shubahW[i]||'';
     const oow = soosiW[i]||'', bw = bazziW[i]||'', kw = qumbulW[i]||'';
 
-    // Build set of all present words to check if all same rasm
     const present = [hw,ww,qw,dw,sw,oow,bw,kw].filter(Boolean);
     const allSame = present.every(w => rasmEqual(w, present[0]));
 
@@ -3502,33 +3520,49 @@ function highlightDiffs(hafs, warsh, qalun, duri, shubah, suraId, ayaNum, soosi=
       const onClickArgs = `${suraId},${ayaNum},${i},'${hw.replace(/'/g,"\\'")}','${ww.replace(/'/g,"\\'")}','${qw.replace(/'/g,"\\'")}','${dw.replace(/'/g,"\\'")}','${sw.replace(/'/g,"\\'")}'`;
       const dataAttr = `data-rwa-pos="${suraId}-${ayaNum}-${i}"`;
 
-      // Only compare non-empty words — empty string means that riwayah
-      // has a different word count at this position (verse split difference),
-      // not a real consonantal difference with the other riwayat
+      // Every reading is compared ONLY against Ḥafṣ (the baseline), not
+      // against each other — matches the stated legend.
       const neq = (a, b) => a && b && !rasmEqual(a, b);
       const hDiff  = neq(hw,ww)||neq(hw,qw)||neq(hw,dw)||neq(hw,sw)||neq(hw,oow)||neq(hw,bw)||neq(hw,kw);
-      const wDiff  = neq(ww,hw)||neq(ww,qw)||neq(ww,dw)||neq(ww,sw);
-      const qDiff  = neq(qw,hw)||neq(qw,ww)||neq(qw,dw)||neq(qw,sw);
-      const dDiff  = neq(dw,hw)||neq(dw,ww)||neq(dw,qw)||neq(dw,sw);
-      const sDiff  = neq(sw,hw)||neq(sw,ww)||neq(sw,qw)||neq(sw,dw);
-      const ooDiff = oow && (neq(oow,hw)||neq(oow,ww)||neq(oow,qw)||neq(oow,dw));
-      const bDiff  = bw  && (neq(bw,hw) ||neq(bw,ww) ||neq(bw,qw) ||neq(bw,dw));
-      const kDiff  = kw  && (neq(kw,hw) ||neq(kw,ww) ||neq(kw,qw) ||neq(kw,dw));
+      const wDiff  = neq(ww,hw);
+      const qDiff  = neq(qw,hw);
+      const dDiff  = neq(dw,hw);
+      const sDiff  = neq(sw,hw);
+      const ooDiff = oow && neq(oow,hw);
+      const bDiff  = bw  && neq(bw,hw);
+      const kDiff  = kw  && neq(kw,hw);
 
-      const wrap = (word, isDiff, baseCls, refWord) => {
-        if (!isDiff) return word+' ';
-        const inner = renderWordWithLetterDiff(word, refWord, baseCls) || word;
-        return `<span class="${baseCls} word-variant" ${dataAttr} onclick="explainWord(${onClickArgs})" title="Click for analysis">${inner}</span> `;
+      // Whole-word-different detection via LCS letter-overlap ratio against
+      // Hafs; below 0.5 shared letters, mark bold + thick underline.
+      const letterRatio = (a, b) => {
+        const A = (a||'').replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g, '');
+        const B = (b||'').replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g, '');
+        if (!A || !B) return 1;
+        const m = A.length, n = B.length;
+        const dp = Array.from({length: m+1}, () => new Array(n+1).fill(0));
+        for (let x = 1; x <= m; x++) {
+          for (let y = 1; y <= n; y++) {
+            dp[x][y] = A[x-1] === B[y-1] ? dp[x-1][y-1] + 1 : Math.max(dp[x-1][y], dp[x][y-1]);
+          }
+        }
+        return dp[m][n] / Math.max(m, n);
       };
 
-      hafsHtml   += wrap(hw,  hDiff,  'word-diff-hafs',   pickReference(hw,  [ww,qw,dw,sw]));
-      warshHtml  += wrap(ww,  wDiff,  'word-diff-warsh',  pickReference(ww,  [hw,qw,dw,sw]));
-      qalunHtml  += wrap(qw,  qDiff,  'word-diff-qalun',  pickReference(qw,  [hw,ww,dw,sw]));
-      duriHtml   += wrap(dw,  dDiff,  'word-diff-duri',   pickReference(dw,  [hw,ww,qw,sw]));
-      shubahHtml += wrap(sw,  sDiff,  'word-diff-shubah', pickReference(sw,  [hw,ww,qw,dw]));
-      soosiHtml  += wrap(oow, !!ooDiff,'word-diff-soosi', pickReference(oow, [hw,ww,qw,dw]));
-      bazziHtml  += wrap(bw,  !!bDiff, 'word-diff-bazzi', pickReference(bw,  [hw,ww,qw,dw]));
-      qumbulHtml += wrap(kw,  !!kDiff, 'word-diff-qumbul',pickReference(kw,  [hw,ww,qw,dw]));
+      const wrap = (word, isDiff, refWord) => {
+        if (!isDiff) return word+' ';
+        const inner = renderWordWithLetterDiff(word, refWord, 'rw-diff') || word;
+        const totalCls = letterRatio(word, refWord) < 0.5 ? ' rw-total' : '';
+        return `<span class="rw-diff word-variant${totalCls}" ${dataAttr} onclick="explainWord(${onClickArgs})" title="Click for analysis">${inner}</span> `;
+      };
+
+      hafsHtml   += wrap(hw,  hDiff,  present.find(w => w !== hw) || hw);
+      warshHtml  += wrap(ww,  wDiff,  hw);
+      qalunHtml  += wrap(qw,  qDiff,  hw);
+      duriHtml   += wrap(dw,  dDiff,  hw);
+      shubahHtml += wrap(sw,  sDiff,  hw);
+      soosiHtml  += wrap(oow, !!ooDiff, hw);
+      bazziHtml  += wrap(bw,  !!bDiff,  hw);
+      qumbulHtml += wrap(kw,  !!kDiff,  hw);
     }
   }
   return {
@@ -4236,6 +4270,7 @@ function buildRiwayatPanel(aya) {
       <span style="background:#EEE;padding:1px 6px;border-radius:3px;color:#666;font-size:11px;">○ pronunciation only</span>
       <span style="background:#FFF3CD;padding:1px 6px;border-radius:3px;color:#8B6914;font-size:11px;">◐ slight nuance</span>
       <span style="background:#FFD6D6;padding:1px 6px;border-radius:3px;color:#A02020;font-size:11px;">● meaning differs</span>
+      <span style="font-weight:800;text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:4px;padding:1px 6px;font-size:11px;color:#444;">bold underline = whole word differs</span>
     </div>
     ${sections.join('')}`;
 }
