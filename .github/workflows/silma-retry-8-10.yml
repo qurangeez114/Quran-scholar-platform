@@ -1,0 +1,112 @@
+name: Retry SILMA plain-reading audio for Surahs 8-10
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/silma-retry-8-10.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      max-parallel: 10
+      matrix:
+        include:
+          - { surah: 8, offset: 0 }
+          - { surah: 8, offset: 30 }
+          - { surah: 8, offset: 60 }
+          - { surah: 9, offset: 0 }
+          - { surah: 9, offset: 30 }
+          - { surah: 9, offset: 60 }
+          - { surah: 9, offset: 90 }
+          - { surah: 9, offset: 120 }
+          - { surah: 10, offset: 0 }
+          - { surah: 10, offset: 30 }
+          - { surah: 10, offset: 60 }
+          - { surah: 10, offset: 90 }
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install SILMA and ffmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          python -m pip install --upgrade pip
+          pip install silma-tts
+      - name: Generate verified Uthmani verse audio chunk
+        env:
+          SURAH: ${{ matrix.surah }}
+          OFFSET: ${{ matrix.offset }}
+        run: |
+          cat > /tmp/generate_chunk.py <<'PY'
+          from pathlib import Path
+          import json, os, site, subprocess, urllib.request
+
+          s = int(os.environ["SURAH"])
+          offset = int(os.environ["OFFSET"])
+          url = f"https://api.alquran.cloud/v1/surah/{s}/quran-uthmani"
+          with urllib.request.urlopen(url, timeout=30) as response:
+              payload = json.load(response)
+          if payload.get("code") != 200:
+              raise RuntimeError(f"Quran text API failed for surah {s}: {payload}")
+          ayahs = payload["data"]["ayahs"][offset:offset + 30]
+          if not ayahs:
+              print(f"No verses at offset {offset} for surah {s}; nothing to do.")
+              raise SystemExit(0)
+
+          from silma_tts.api import SilmaTTS
+          tts = SilmaTTS()
+          ref_file = getattr(tts, "default_ref_audio", None)
+          ref_text = "ويدقق النظر في القرآن الكريم وسائر الكتب السماوية ويتبع مسالك الرسل العظام عليهم الصلاة والسلام."
+          if not ref_file:
+              candidates = []
+              for root in map(Path, site.getsitepackages()):
+                  if root.exists():
+                      candidates.extend(root.rglob("ar.ref.24k.wav"))
+              if not candidates:
+                  raise FileNotFoundError("SILMA Arabic reference audio ar.ref.24k.wav not found")
+              ref_file = str(candidates[0])
+
+          out = Path("audio/simple-recitation")
+          out.mkdir(parents=True, exist_ok=True)
+          for ayah in ayahs:
+              i = int(ayah["numberInSurah"])
+              mp3 = out / f"{s:03d}_{i:03d}.mp3"
+              if mp3.exists() and mp3.stat().st_size > 1000:
+                  print(f"Keeping existing audio {mp3}")
+                  continue
+              wav = out / f"{s:03d}_{i:03d}.wav"
+              tts.infer(ref_file=str(ref_file), ref_text=ref_text, gen_text=ayah["text"],
+                        file_wave=str(wav), seed=42, speed=1)
+              subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", str(wav),
+                              "-ar", "24000", "-ac", "1", "-codec:a", "libmp3lame",
+                              "-q:a", "2", str(mp3)], check=True)
+              wav.unlink()
+          PY
+          python /tmp/generate_chunk.py
+      - name: Deploy generated verse audio
+        env:
+          SURAH: ${{ matrix.surah }}
+          OFFSET: ${{ matrix.offset }}
+        run: |
+          S="$(printf '%03d' "$SURAH")"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "audio/simple-recitation/${S}_"*.mp3
+          git diff --cached --quiet && { echo "No new audio to commit"; exit 0; }
+          git commit -m "Retry SILMA plain-reading audio for Surah $SURAH"
+          for attempt in 1 2 3 4 5 6; do
+            git pull --rebase -X theirs origin main && git push origin HEAD:main && exit 0
+            sleep $((attempt * 5))
+          done
+          exit 1
