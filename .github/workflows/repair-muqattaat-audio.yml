@@ -35,17 +35,21 @@ jobs:
           set -euo pipefail
           cat > /tmp/repair_muqattaa.py <<'PY'
           from pathlib import Path
-          import json
-          import os
           import site
           import subprocess
           import unicodedata
-          import urllib.request
           from silma_tts.api import SilmaTTS
 
-          # Numbered opening verses that consist only of disjointed letters.
-          # Store the printed letter sequence separately from explicit letter names
-          # for speech, so the clip cannot start with a basmala or read as a word.
+          def arabic_letters(text):
+              normalized = unicodedata.normalize("NFKD", text)
+              return "".join(
+                  ch for ch in normalized
+                  if unicodedata.category(ch).startswith("L")
+                  and "\u0600" <= ch <= "\u06ff"
+              )
+
+          # The numbered verse text is only disjointed letters in these surahs.
+          # Speak the letter names explicitly so no basmala is added or inferred.
           targets = {
               2: ("الم", "أَلِفْ لَامْ مِيمْ"),
               3: ("الم", "أَلِفْ لَامْ مِيمْ"),
@@ -68,13 +72,6 @@ jobs:
               46: ("حم", "حَا مِيمْ"),
           }
 
-          verses = {}
-          for surah, (expected, spoken) in targets.items():
-              actual = arabic_letters(expected)
-              if actual != expected:
-                  raise RuntimeError(f"Invalid normalized letter sequence for {surah}:1")
-              verses[surah] = spoken
-
           out = Path("audio/simple-recitation")
           out.mkdir(parents=True, exist_ok=True)
           tts = SilmaTTS()
@@ -90,13 +87,15 @@ jobs:
               ref_file = str(candidates[0])
 
           generated = []
-          for surah, text in verses.items():
+          for surah, (verse_text, spoken_text) in targets.items():
+              if arabic_letters(verse_text) != verse_text:
+                  raise RuntimeError(f"Invalid letter sequence configured for {surah}:1")
               wav = out / f"{surah:03d}_001.wav"
               mp3 = out / f"{surah:03d}_001.mp3"
               tts.infer(
                   ref_file=str(ref_file),
                   ref_text=ref_text,
-                  gen_text=text,
+                  gen_text=spoken_text,
                   file_wave=str(wav),
                   seed=42,
                   speed=1,
@@ -127,4 +126,8 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add audio/simple-recitation/*_001.mp3
           git commit -m "Correct audio for muqattaat opening verses"
-          git push origin HEAD:main
+          for attempt in 1 2 3 4 5; do
+            git pull --rebase origin main && git push origin HEAD:main && exit 0
+            sleep $((attempt * 5))
+          done
+          exit 1
