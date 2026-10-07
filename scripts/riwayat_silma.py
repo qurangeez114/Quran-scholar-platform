@@ -16,12 +16,6 @@ def get(path):
 
 targets = get(f"riwayat_audio_targets?riwayah=eq.{RW}&select=sura_id,aya_number&order=sura_id,aya_number&offset={OFFSET}&limit={LIMIT}")
 print("targets in this chunk:", len(targets))
-TANWIN = {"ࣰ": "ً", "ࣱ": "ٌ", "ࣲ": "ٍ"}
-def clean(t):
-    for a, b in TANWIN.items(): t = t.replace(a, b)
-    t = re.sub(r"[ۖ-ۜ۟-۪ۤۧۨ-ۭ࣓-ࣿ‌-‏]", "", t)
-    return re.sub(r"\s+", " ", t).strip()
-
 from silma_tts.api import SilmaTTS
 tts = SilmaTTS()
 ref_file = getattr(tts, "default_ref_audio", None)
@@ -36,11 +30,10 @@ cache = {}; done = 0
 for t in targets:
     s, a = t["sura_id"], t["aya_number"]
     mp3 = out / f"{s:03d}_{a:03d}.mp3"
-    if mp3.exists() and mp3.stat().st_size > 1000: continue
     if s not in cache:
         rows = get(f"ayas?sura_id=eq.{s}&select=aya_number,arabic_{RW}&limit=300")
         cache[s] = {r["aya_number"]: r[f"arabic_{RW}"] for r in rows}
-    text = clean(cache[s].get(a) or "")
+    text = (cache[s].get(a) or "").strip()  # exactly as stored, no changes
     if not text: raise RuntimeError(f"no {RW} text for {s}:{a}")
     wav = out / f"{s:03d}_{a:03d}.wav"
     tts.infer(ref_file=str(ref_file), ref_text=ref_text, gen_text=text, file_wave=str(wav), seed=42, speed=1)
