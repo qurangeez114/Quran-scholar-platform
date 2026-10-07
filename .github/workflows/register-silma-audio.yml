@@ -39,18 +39,25 @@ jobs:
 
           audio_dir = Path("audio/simple-recitation")
           actual = {path.name for path in audio_dir.glob("[0-9][0-9][0-9]_[0-9][0-9][0-9].mp3")}
-          expected = {
-              f"{surah:03d}_{ayah:03d}.mp3"
-              for surah, total in enumerate(counts, start=1)
-              for ayah in range(1, total + 1)
-          }
-          missing = sorted(expected - actual)
-          if missing:
-              print(f"Registration skipped: {len(missing)} verse MP3s are missing.")
-              print("First missing files:", ", ".join(missing[:20]))
-              raise SystemExit(1)
+          complete = {}
+          for surah, total in enumerate(counts, start=1):
+              expected = {
+                  f"{surah:03d}_{ayah:03d}.mp3"
+                  for ayah in range(1, total + 1)
+              }
+              if expected <= actual:
+                  complete[surah] = total
 
-          pairs = ",".join(f"[{surah}, {total}]" for surah, total in enumerate(counts, start=1))
+          if not complete:
+              raise SystemExit("No surahs have complete verse-by-verse audio coverage.")
+
+          incomplete = [str(surah) for surah in range(1, 115) if surah not in complete]
+          print(f"Registering {len(complete)} complete surahs; skipping {len(incomplete)} incomplete surahs.")
+
+          pairs = ",".join(
+              f"[{surah}, {total}]"
+              for surah, total in sorted(complete.items())
+          )
           replacement = f"const SIMPLE_RECITATION_CHAPTERS = new Map([{pairs}]);"
           html, replacements = re.subn(
               r"^const SIMPLE_RECITATION_CHAPTERS = new Map\(.*?\);$",
