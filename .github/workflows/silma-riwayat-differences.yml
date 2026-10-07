@@ -1,0 +1,56 @@
+name: SILMA riwayat differences audio
+
+on:
+  workflow_dispatch:
+    inputs:
+      riwayah:
+        description: "warsh, qalun or duri"
+        required: true
+        default: "warsh"
+  push:
+    paths:
+      - ".github/workflows/silma-riwayat-differences.yml"
+      - "scripts/riwayat_silma.py"
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      max-parallel: 10
+      matrix:
+        offset: [0,100,200,300,400,500,600,700,800,900,1000,1100,1200,1300,1400,1500,1600,1700,1800,1900]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install FFmpeg and SILMA TTS
+        run: |
+          sudo apt-get update && sudo apt-get install -y ffmpeg
+          python -m pip install --upgrade pip
+          pip install silma-tts
+      - name: Generate audio for this chunk
+        env:
+          RIWAYAH: ${{ github.event.inputs.riwayah || 'warsh' }}
+          OFFSET: ${{ matrix.offset }}
+          LIMIT: "100"
+        run: python scripts/riwayat_silma.py
+      - name: Commit MP3s
+        env:
+          RIWAYAH: ${{ github.event.inputs.riwayah || 'warsh' }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "audio/riwayat/$RIWAYAH/"*.mp3 || true
+          git diff --cached --quiet && { echo "nothing to commit"; exit 0; }
+          git commit -m "Add $RIWAYAH differences audio (offset ${{ matrix.offset }})"
+          for i in 1 2 3 4 5 6; do
+            git pull --rebase origin main && git push origin HEAD:main && exit 0
+            sleep $((RANDOM % 20 + 5))
+          done
+          exit 1
