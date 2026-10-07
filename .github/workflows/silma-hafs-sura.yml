@@ -1,4 +1,4 @@
-name: SILMA Hafs plain-reading for one surah
+name: SILMA Hafs plain-reading for Sura 5
 
 on:
   workflow_dispatch:
@@ -6,7 +6,7 @@ on:
       sura_id:
         description: "Surah number"
         required: true
-        default: "2"
+        default: "5"
   push:
     paths:
       - ".github/workflows/silma-hafs-sura.yml"
@@ -18,37 +18,45 @@ permissions:
 jobs:
   generate:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 180
     strategy:
       fail-fast: false
-      max-parallel: 10
+      max-parallel: 1
       matrix:
-        offset: [0,30,60,90,120,150,180,210,240,270]
+        offset: [0, 30, 60, 90]
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
       - name: Install FFmpeg and SILMA TTS
         run: |
-          sudo apt-get update && sudo apt-get install -y ffmpeg
+          if ! command -v ffmpeg >/dev/null 2>&1; then
+            sudo timeout 10m apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update
+            sudo timeout 10m apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 install -y ffmpeg
+          fi
           python -m pip install --upgrade pip
-          pip install silma-tts
+          pip install --retries 5 --timeout 120 silma-tts
       - name: Generate audio for this chunk
         env:
-          SURA: ${{ github.event.inputs.sura_id || '2' }}
+          SURA: ${{ github.event.inputs.sura_id || '5' }}
           OFFSET: ${{ matrix.offset }}
           LIMIT: "30"
         run: python scripts/hafs_silma.py
       - name: Commit MP3s
+        env:
+          SURA: ${{ github.event.inputs.sura_id || '5' }}
         run: |
+          S="$(printf '%03d' "$SURA")"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add audio/simple-recitation/*.mp3 || true
+          git add "audio/simple-recitation/${S}_"*.mp3
           git diff --cached --quiet && { echo "nothing to commit"; exit 0; }
-          git commit -m "Add Hafs plain-reading audio (offset ${{ matrix.offset }})"
+          git commit -m "Add SILMA plain-reading audio for Surah $SURA (offset ${{ matrix.offset }})"
           for i in 1 2 3 4 5 6; do
             git pull --rebase -X theirs origin main && git push origin HEAD:main && exit 0
-            sleep $((RANDOM % 20 + 5))
+            sleep $((i * 5))
           done
           exit 1
