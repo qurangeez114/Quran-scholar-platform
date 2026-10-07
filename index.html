@@ -2644,11 +2644,45 @@ async function sbSearch(table, select, column, query) {
   return rows.filter(row => !row[column] || re.test(row[column]) || query.length <= 3);
 }
 
+// Remember the reader's place (sura + top visible verse) so a refresh returns to it.
+(function () {
+  let timer = null;
+  function save() {
+    timer = null;
+    try {
+      if (typeof currentSura !== 'number' || !currentSura) return;
+      const cards = document.querySelectorAll('[id^="vc-"]');
+      let aya = 0;
+      for (const c of cards) {
+        const r = c.getBoundingClientRect();
+        if (r.bottom > 140) { aya = parseInt(c.id.slice(3)) || 0; break; }
+      }
+      localStorage.setItem('qh_last_pos', JSON.stringify({ sura: currentSura, aya: aya, t: Date.now() }));
+      const u = new URL(window.location.href);
+      if (!u.searchParams.get('from')) {
+        u.search = '?sura=' + currentSura + (aya ? '&aya=' + aya : '') + '&pos=1';
+        history.replaceState(null, '', u.toString());
+      }
+    } catch (e) {}
+  }
+  window.addEventListener('scroll', function () { if (!timer) timer = setTimeout(save, 600); }, true);
+})();
+
 async function init() {
   // Handle direct URL params e.g. ?sura=2&aya=218
   const urlParams = new URLSearchParams(window.location.search);
-  const urlSura = parseInt(urlParams.get('sura'));
-  const urlAya = parseInt(urlParams.get('aya'));
+  let urlSura = parseInt(urlParams.get('sura'));
+  let urlAya = parseInt(urlParams.get('aya'));
+  // Refresh / reopen: return to the last place the reader was (saved as they scroll).
+  let _restorePos = urlParams.get('pos') === '1';
+  if (!urlSura && !window.location.search) {
+    try {
+      const sv = JSON.parse(localStorage.getItem('qh_last_pos') || 'null');
+      if (sv && sv.sura >= 1 && sv.sura <= 114 && (Date.now() - (sv.t || 0)) < 30 * 86400000) {
+        urlSura = sv.sura; urlAya = sv.aya || 0; _restorePos = true;
+      }
+    } catch (e) {}
+  }
   try {
     const suras = await sbFetch('suras', { select: '*,sura_name_english,sura_name_tigrinya,sura_name_amharic', order: 'sura_id' });
     allSuras = suras;
@@ -2703,7 +2737,18 @@ async function init() {
       }
 
       if (urlAya) window._pendingHistAya = urlAya;
-      if (urlAya && urlAya >= 1) {
+      if (_restorePos) {
+        // Back where the reader left off: load the whole sura, then scroll to the verse.
+        await loadSura(urlSura);
+        if (urlAya >= 1) {
+          let tries = 0;
+          const t = setInterval(() => {
+            const c = document.getElementById('vc-' + urlAya);
+            if (c) { c.scrollIntoView({ block: 'start' }); clearInterval(t); }
+            else if (++tries > 40) clearInterval(t);
+          }, 250);
+        }
+      } else if (urlAya && urlAya >= 1) {
         // Direct-verse deep link (e.g. ?sura=53&aya=5): fetch that verse plus
         // 2 verses of surrounding context, not the whole sura. Same helper
         // used by gotoVerse()/navToVerse().
