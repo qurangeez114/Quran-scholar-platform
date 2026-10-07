@@ -1,0 +1,131 @@
+name: Repair muqattaat first-verse audio
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/repair-muqattaat-audio.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  replace-letter-verse-audio:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install audio tools and SILMA
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          python -m pip install --upgrade pip
+          pip install silma-tts
+
+      - name: Generate only verified letter-opening verses
+        run: |
+          set -euo pipefail
+          cat > /tmp/repair_muqattaa.py <<'PY'
+          from pathlib import Path
+          import json
+          import os
+          import site
+          import subprocess
+          import unicodedata
+          import urllib.request
+          from silma_tts.api import SilmaTTS
+
+          # Only first verses whose actual text consists of disjointed letters.
+          # 26:1 was separately corrected and validated as Husary audio.
+          targets = {
+              2: "الم", 3: "الم", 7: "المص",
+              10: "الر", 11: "الر", 12: "الر", 13: "المر",
+              14: "الر", 15: "الر", 19: "كهيعص", 20: "طه",
+              27: "طس", 28: "طسم", 29: "الم", 30: "الم",
+              31: "الم", 32: "الم", 36: "يس", 38: "ص",
+              40: "حم", 41: "حم", 42: "حم", 43: "حم",
+              44: "حم", 45: "حم", 46: "حم", 50: "ق", 68: "ن",
+          }
+
+          def arabic_letters(text):
+              normalized = unicodedata.normalize("NFKD", text)
+              return "".join(
+                  ch for ch in normalized
+                  if unicodedata.category(ch).startswith("L")
+                  and "\u0600" <= ch <= "\u06ff"
+              )
+
+          verses = {}
+          for surah, expected in targets.items():
+              url = f"https://api.alquran.cloud/v1/surah/{surah}/quran-uthmani"
+              with urllib.request.urlopen(url, timeout=45) as response:
+                  payload = json.load(response)
+              if payload.get("code") != 200:
+                  raise RuntimeError(f"Arabic text request failed for {surah}:1")
+              first = payload["data"]["ayahs"][0]
+              if int(first["numberInSurah"]) != 1:
+                  raise RuntimeError(f"Unexpected verse mapping for {surah}:1")
+              actual = arabic_letters(first["text"])
+              if actual != expected:
+                  raise RuntimeError(
+                      f"Refusing to replace {surah}:1: expected letters {expected}, got {actual}"
+                  )
+              verses[surah] = first["text"].strip()
+
+          out = Path("audio/simple-recitation")
+          out.mkdir(parents=True, exist_ok=True)
+          tts = SilmaTTS()
+          ref_file = getattr(tts, "default_ref_audio", None)
+          ref_text = "ويدقق النظر في القرآن الكريم وسائر الكتب السماوية ويتبع مسالك الرسل العظام عليهم الصلاة والسلام."
+          if not ref_file:
+              candidates = []
+              for root in map(Path, site.getsitepackages()):
+                  if root.exists():
+                      candidates.extend(root.rglob("ar.ref.24k.wav"))
+              if not candidates:
+                  raise FileNotFoundError("SILMA Arabic reference audio ar.ref.24k.wav not found")
+              ref_file = str(candidates[0])
+
+          generated = []
+          for surah, text in verses.items():
+              wav = out / f"{surah:03d}_001.wav"
+              mp3 = out / f"{surah:03d}_001.mp3"
+              tts.infer(
+                  ref_file=str(ref_file),
+                  ref_text=ref_text,
+                  gen_text=text,
+                  file_wave=str(wav),
+                  seed=42,
+                  speed=1,
+              )
+              subprocess.run([
+                  "ffmpeg", "-y", "-i", str(wav), "-ar", "24000", "-ac", "1",
+                  "-codec:a", "libmp3lame", "-b:a", "64k", str(mp3)
+              ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+              if not mp3.is_file() or mp3.stat().st_size < 1000:
+                  raise RuntimeError(f"Generated audio is missing or too small: {mp3}")
+              duration = float(subprocess.check_output([
+                  "ffprobe", "-v", "error", "-show_entries", "format=duration",
+                  "-of", "default=noprint_wrappers=1:nokey=1", str(mp3)
+              ], text=True).strip())
+              if not 0.3 < duration < 20:
+                  raise RuntimeError(f"Unexpected duration for {surah}:1: {duration}")
+              generated.append(mp3)
+              wav.unlink()
+
+          print(f"Generated and validated {len(generated)} letter-opening verse clips.")
+          PY
+          python /tmp/repair_muqattaa.py
+
+      - name: Commit replacement verse clips
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add audio/simple-recitation/*_001.mp3
+          git commit -m "Correct audio for muqattaat opening verses"
+          git push origin HEAD:main
