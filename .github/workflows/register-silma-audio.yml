@@ -1,0 +1,78 @@
+name: Register complete SILMA verse audio
+
+on:
+  workflow_run:
+    workflows:
+      - SILMA Quran plain-reading production 19-2
+    types:
+      - completed
+
+permissions:
+  contents: write
+
+jobs:
+  register:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Register only complete verse coverage
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          import subprocess
+
+          index_path = Path("index.html")
+          html = index_path.read_text(encoding="utf-8")
+          counts_match = re.search(r"^const SURA_AYA_COUNTS = \\[([^\\]]+)\\];$", html, re.MULTILINE)
+          if not counts_match:
+              raise SystemExit("Could not find the site's canonical surah verse counts")
+          counts = [int(value) for value in re.findall(r"\\d+", counts_match.group(1))]
+          if len(counts) != 114:
+              raise SystemExit(f"Expected counts for 114 surahs; found {len(counts)}")
+
+          audio_dir = Path("audio/simple-recitation")
+          actual = {path.name for path in audio_dir.glob("[0-9][0-9][0-9]_[0-9][0-9][0-9].mp3")}
+          expected = {
+              f"{surah:03d}_{ayah:03d}.mp3"
+              for surah, total in enumerate(counts, start=1)
+              for ayah in range(1, total + 1)
+          }
+          missing = sorted(expected - actual)
+          if missing:
+              print(f"Registration skipped: {len(missing)} verse MP3s are missing.")
+              print("First missing files:", ", ".join(missing[:20]))
+              raise SystemExit(1)
+
+          pairs = ",".join(f"[{surah}, {total}]" for surah, total in enumerate(counts, start=1))
+          replacement = f"const SIMPLE_RECITATION_CHAPTERS = new Map([{pairs}]);"
+          html, replacements = re.subn(
+              r"^const SIMPLE_RECITATION_CHAPTERS = new Map\\(.*?\\);$",
+              replacement,
+              html,
+              count=1,
+              flags=re.MULTILINE,
+          )
+          if replacements != 1:
+              raise SystemExit(f"Expected one recitation availability map; replaced {replacements}")
+          index_path.write_text(html, encoding="utf-8")
+
+          subprocess.run(["git", "config", "user.name", "github-actions[bot]"], check=True)
+          subprocess.run(["git", "config", "user.email", "41898282+github-actions[bot]@users.noreply.github.com"], check=True)
+          subprocess.run(["git", "add", "index.html"], check=True)
+          result = subprocess.run(["git", "diff", "--cached", "--quiet"])
+          if result.returncode == 1:
+              subprocess.run(["git", "commit", "-m", "Register complete plain recitation coverage"], check=True)
+              subprocess.run(["git", "push", "origin", "HEAD:main"], check=True)
+              print("All 6,236 verse files verified; player availability map updated.")
+          elif result.returncode == 0:
+              print("All verse audio is already registered.")
+          else:
+              raise SystemExit(result.returncode)
+          PY
