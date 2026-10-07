@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Hadith Linking Progress · Quran Hikma</title>
+<style>
+:root{--bg:#faf6ea;--card:#fff;--ink:#2a2418;--mute:#7a6f58;--gold:#a8842c;--ok:#2e7d4f;--warn:#c0762b;--line:#e6dcc0}
+@media (prefers-color-scheme:dark){:root{--bg:#14110b;--card:#1d1910;--ink:#efe6cf;--mute:#a79b7c;--line:#33291a}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,sans-serif;padding:16px;max-width:760px;margin-inline:auto}
+h1{font-size:1.25rem;margin:4px 0 2px}
+.sub{color:var(--mute);font-size:.85rem;margin-bottom:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
+.big{font-size:1.9rem;font-weight:700;color:var(--gold);line-height:1.1}
+.lbl{font-size:.8rem;color:var(--mute);text-transform:uppercase;letter-spacing:.04em}
+.bar{height:10px;background:var(--line);border-radius:6px;overflow:hidden;margin:8px 0 4px}
+.bar>i{display:block;height:100%;background:var(--gold)}
+.delta{font-size:.85rem;color:var(--ok)}
+.row{display:flex;justify-content:space-between;gap:8px;font-size:.9rem;padding:3px 0}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(34px,1fr));gap:3px;margin-top:8px}
+.c{aspect-ratio:1;border-radius:4px;font-size:9px;display:flex;align-items:center;justify-content:center;color:#000a;background:var(--line)}
+.legend{font-size:.75rem;color:var(--mute);margin-top:8px}
+table{width:100%;border-collapse:collapse;font-size:.85rem}
+td,th{text-align:left;padding:4px 6px;border-bottom:1px solid var(--line)}
+a{color:var(--gold)}
+#err{color:var(--warn)}
+</style>
+</head>
+<body>
+<h1>Hadith Linking Progress</h1>
+<div class="sub" id="stamp">Loading…</div>
+<div id="err"></div>
+
+<div class="card">
+  <div class="lbl">Verses with at least one hadith</div>
+  <div class="big" id="v1">–</div>
+  <div class="bar"><i id="b1" style="width:0"></i></div>
+  <div class="delta" id="d1"></div>
+</div>
+
+<div class="card">
+  <div class="lbl">Hadith linked to a verse</div>
+  <div class="big" id="v2">–</div>
+  <div class="bar"><i id="b2" style="width:0"></i></div>
+  <div class="delta" id="d2"></div>
+</div>
+
+<div class="card">
+  <div class="lbl">Verses with a written evaluation</div>
+  <div class="big" id="v3">–</div>
+  <div class="bar"><i id="b3" style="width:0"></i></div>
+  <div class="delta" id="d3"></div>
+</div>
+
+<div class="card">
+  <div class="lbl">Links by method</div>
+  <div id="methods"></div>
+</div>
+
+<div class="card">
+  <div class="lbl">Sura by sura (tap-free map, suras 1–114)</div>
+  <div class="grid" id="grid"></div>
+  <div class="legend">Colour = share of that sura's verses with hadith linked. Empty → full. Outlined = evaluations complete for the whole sura.</div>
+</div>
+
+<div class="card">
+  <div class="lbl">Recent snapshots</div>
+  <table id="hist"></table>
+</div>
+
+<script>
+const SB='https://ylosytbxpzxzwfzjpaej.supabase.co',KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
+const H={apikey:KEY,Authorization:'Bearer '+KEY};
+const pct=(a,b)=>b?Math.round(a/b*1000)/10:0;
+const f=n=>Number(n).toLocaleString();
+function set(id,v,t,prev){
+  document.getElementById('v'+id).textContent=f(v)+' / '+f(t)+'  ('+pct(v,t)+'%)';
+  document.getElementById('b'+id).style.width=pct(v,t)+'%';
+  if(prev!=null&&v!==prev){document.getElementById('d'+id).textContent=(v>prev?'+':'')+f(v-prev)+' since previous snapshot'}
+}
+(async()=>{
+  try{
+    const r=await fetch(SB+"/rest/v1/automation_runs?function_name=eq.progress_snapshot&order=id.desc&limit=12&select=id,phase,detail,created_at",{headers:H});
+    const rows=await r.json();
+    if(!rows.length){document.getElementById('err').textContent='No snapshots yet.';return}
+    const s=rows[0].detail,p=rows[1]&&rows[1].detail;
+    document.getElementById('stamp').textContent='Latest snapshot: '+new Date(rows[0].created_at).toLocaleString()+' · '+rows[0].phase;
+    set(1,s.ayas_with_link,s.total_ayas,p&&p.ayas_with_link);
+    set(2,s.hadith_linked,s.hadith_total,p&&p.hadith_linked);
+    set(3,s.evaluated_ayas,s.total_ayas,p&&p.evaluated_ayas);
+    document.getElementById('methods').innerHTML=Object.entries(s.by_method||{}).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<div class="row"><span>${k}</span><b>${f(v)}</b></div>`).join('');
+    document.getElementById('grid').innerHTML=(s.by_sura||[]).map(x=>{
+      const q=x.t?x.l/x.t:0, full=x.e>=x.t;
+      const bg=q===0?'':`rgba(168,132,44,${0.15+0.85*q})`;
+      return `<div class="c" title="Sura ${x.s}: ${x.l}/${x.t} linked, ${x.e}/${x.t} evaluated" style="${bg?'background:'+bg+';':''}${full?'outline:2px solid var(--ok);':''}">${x.s}</div>`}).join('');
+    document.getElementById('hist').innerHTML='<tr><th>When</th><th>Verses</th><th>Hadith</th><th>Eval</th></tr>'+rows.map(x=>`<tr><td>${new Date(x.created_at).toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</td><td>${f(x.detail.ayas_with_link)}</td><td>${f(x.detail.hadith_linked)}</td><td>${f(x.detail.evaluated_ayas)}</td></tr>`).join('');
+  }catch(e){document.getElementById('err').textContent='Could not load progress: '+e.message}
+})();
+</script>
+</body>
+</html>
