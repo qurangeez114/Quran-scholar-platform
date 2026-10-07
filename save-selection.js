@@ -1,7 +1,7 @@
 /**
  * Lets a signed-in user send selected site text, or the presentation basket,
- * into My pages. Buttons stay in the top bar so they do not cover the
- * bottom navigation icons.
+ * into My pages. The control sits in normal flow at the top of the sidebar
+ * so it does not cover the sura tabs or the bottom navigation.
  */
 (function () {
   'use strict';
@@ -10,17 +10,41 @@
   var SB_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
 
   var style = document.createElement('style');
-  style.textContent = '#qh-trial-badge{top:62px!important;right:12px!important;bottom:auto!important;left:auto!important}#qh-account-tools{position:fixed;z-index:2147483002;top:62px;left:12px;display:flex;gap:6px;flex-wrap:wrap;max-width:70vw}#qh-account-tools button{border:0;border-radius:999px;padding:8px 12px;background:#1d1914;color:#e2c98a;font:600 13px Georgia,serif;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.35)}';
+  style.textContent = [
+    '#qh-trial-badge{top:12px!important;right:12px!important;bottom:auto!important;left:auto!important}',
+    '#qh-account-tools{position:relative;z-index:5;display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:8px 10px 6px;background:#f6f1e7;border-bottom:1px solid #e4dcc8}',
+    '#qh-account-tools button{border:0;border-radius:999px;padding:6px 12px;background:#1d1914;color:#e2c98a;font:600 12px Georgia,serif;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.18)}',
+    '#qh-account-tools.qh-fallback{position:fixed;z-index:2147483002;top:12px;right:12px;left:auto;max-width:40vw;padding:0;background:transparent;border:0}',
+    '#qh-account-tools.qh-in-nav{position:static;padding:0 8px;background:transparent;border:0;flex:0 0 auto}'
+  ].join('');
   document.head.appendChild(style);
+
+  function mount(el) {
+    var sidebar = document.querySelector('.sidebar');
+    if (sidebar) {
+      el.classList.remove('qh-fallback', 'qh-in-nav');
+      if (el.parentNode !== sidebar) sidebar.insertBefore(el, sidebar.firstChild);
+      return el;
+    }
+    var nav = document.getElementById('bottom-nav');
+    if (nav) {
+      el.classList.remove('qh-fallback');
+      el.classList.add('qh-in-nav');
+      if (el.parentNode !== nav) nav.appendChild(el);
+      return el;
+    }
+    el.classList.add('qh-fallback');
+    if (el.parentNode !== document.body) document.body.appendChild(el);
+    return el;
+  }
 
   function bar() {
     var el = document.getElementById('qh-account-tools');
     if (!el) {
       el = document.createElement('div');
       el.id = 'qh-account-tools';
-      document.body.appendChild(el);
     }
-    return el;
+    return mount(el);
   }
   function chip(id, text) {
     var el = document.getElementById(id);
