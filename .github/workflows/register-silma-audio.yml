@@ -1,9 +1,16 @@
 name: Register complete SILMA verse audio
 
 on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/register-silma-audio.yml"
   workflow_run:
     workflows:
       - SILMA Quran plain-reading production 19-2
+      - SILMA Hafs plain-reading for Sura 3
+      - SILMA Hafs plain-reading for Sura 4
+      - SILMA Hafs plain-reading for Sura 7
     types:
       - completed
 
@@ -13,8 +20,9 @@ permissions:
 jobs:
   register:
     if: >-
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.head_branch == 'main'
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -76,8 +84,18 @@ jobs:
           result = subprocess.run(["git", "diff", "--cached", "--quiet"])
           if result.returncode == 1:
               subprocess.run(["git", "commit", "-m", "Register complete plain recitation coverage"], check=True)
-              subprocess.run(["git", "push", "origin", "HEAD:main"], check=True)
-              print("All 6,236 verse files verified; player availability map updated.")
+              for attempt in range(6):
+              pull = subprocess.run(["git", "pull", "--rebase", "-X", "theirs", "origin", "main"])
+              if pull.returncode:
+                  raise SystemExit("Could not rebase registration commit on latest main")
+              push = subprocess.run(["git", "push", "origin", "HEAD:main"])
+              if push.returncode == 0:
+                  break
+              import time
+              time.sleep(5 * (attempt + 1))
+          else:
+              raise SystemExit("Failed to push registration after six attempts")
+              print(f"Registered {len(complete)} complete surahs and {sum(complete.values())} verses; {len(incomplete)} surahs remain incomplete.")
           elif result.returncode == 0:
               print("All verse audio is already registered.")
           else:
