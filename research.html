@@ -96,6 +96,7 @@ section.src h2{font-size:25px;font-weight:600;margin-top:34px}
 .ev .row b{font-size:12.5px;letter-spacing:.1em;color:var(--gold);margin-bottom:2px}
 @media (max-width:600px){.ov{padding:18px 16px}.ov p{font-size:17.5px}.ov h2{font-size:26px}}
 .areas{max-width:880px;margin:22px auto 0;text-align:left}.areas-h{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);margin-bottom:10px;text-align:center}.agrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px}.agrid a,.agrid button{display:block;text-align:left;background:#fff;border:1px solid #d9e0da;border-radius:12px;padding:13px 15px;text-decoration:none;color:inherit;font:inherit;cursor:pointer}.agrid a:hover,.agrid button:hover{border-color:#244d3e}.agrid b{display:block;color:#244d3e;margin-bottom:3px}.agrid span{font-size:13.5px;color:var(--ink2);line-height:1.4}
+.picker{margin:18px 0;padding:16px 18px;background:#fff;border:1px solid #d9e0da;border-radius:14px}.picker h2{margin:0 0 4px;font-size:20px}.pg{margin:10px 0}.pgt{display:block;font-size:12.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink2);margin-bottom:6px}.pk{font:inherit;font-size:14px;background:#f6f4ec;border:1px solid #e0d6b4;border-radius:18px;padding:5px 12px;margin:0 6px 6px 0;cursor:pointer;color:inherit}.pk b{color:#244d3e;margin-left:4px}.pk.on{background:#244d3e;color:#fff;border-color:#244d3e}.pk.on b{color:#fff}.bvh{margin:14px 0 6px}.bvh small{font-weight:400;color:var(--ink2);margin-left:8px}.pk.clr{margin-left:12px;font-size:12.5px}
 </style>
 </head>
 <body>
@@ -315,6 +316,43 @@ function render(results,vars,q,dg){
   $('out').innerHTML=h;
 }
 
+
+/* ---- Choose where to look: per-book picker ---- */
+let PICK={sb:[],q:'',cur:null,off:0};
+function insertPicker(sb,q){
+  PICK={sb:sb||[],q:q,cur:null,off:0};
+  if(!PICK.sb.length) return;
+  const grp=(kind,title)=>{
+    const items=PICK.sb.map((x,i)=>[x,i]).filter(([x])=>x.kind===kind);
+    if(!items.length) return '';
+    return `<div class="pg"><span class="pgt">${title}</span>${items.map(([x,i])=>`<button type="button" class="pk" data-i="${i}" onclick="pickBook(${i})">${esc(x.name)} <b>${n(x.n)}${x.n>=3000&&kind==='hadith'?'+':''}</b></button>`).join('')}</div>`;
+  };
+  const el=document.createElement('section');
+  el.className='picker'; el.id='picker';
+  el.innerHTML=`<h2>Choose where to look</h2><p class="what">Pick a book to see only its passages for this search. Counts are matches in that book.</p>`
+    +grp('hadith','Hadith books')+grp('tafsir','Tafsir')+grp('library','Library books')
+    +`<div id="bookview"></div>`;
+  const tabs=document.querySelector('#out .tabs');
+  if(tabs) tabs.parentNode.insertBefore(el,tabs.nextSibling); else $('out').prepend(el);
+}
+async function pickBook(i,more){
+  const x=PICK.sb[i]; if(!x) return;
+  if(!more){PICK.cur=i;PICK.off=0;}
+  document.querySelectorAll('#picker .pk').forEach(b=>b.classList.toggle('on',+b.dataset.i===i));
+  const bv=$('bookview');
+  if(!more) bv.innerHTML='<div class="empty"><span class="spin"></span>Loading '+esc(x.name)+'…</div>';
+  let rows=[]; try{rows=await rpc('book_rows',{kind:x.kind,name:x.name,q:PICK.q,lim:10,off:PICK.off});}catch(e){}
+  const key=x.kind==='library'?'library':x.kind;
+  const vars=[PICK.q];
+  const html=rows.map(r=>card(key,r,vars)).join('');
+  if(!more) bv.innerHTML=`<h3 class="bvh">${esc(x.name)} <small>${n(x.n)} match${x.n==1?'':'es'}<button type="button" class="pk clr" onclick="clearPick()">Show all sources</button></small></h3><div id="bvrows">${html||'<div class="none">Nothing to show.</div>'}</div><div id="bvmore"></div>`;
+  else $('bvrows').insertAdjacentHTML('beforeend',html);
+  PICK.off+=rows.length;
+  $('bvmore').innerHTML=rows.length===10?`<div class="more"><a href="#" onclick="pickBook(${i},true);return false">Show more from ${esc(x.name)} →</a></div>`:'';
+  if(!more) bv.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+function clearPick(){ document.querySelectorAll('#picker .pk').forEach(b=>b.classList.remove('on')); $('bookview').innerHTML=''; PICK.cur=null; }
+
 function jump(k){ const e=$('src-'+k); if(e) e.scrollIntoView({behavior:'smooth',block:'start'}); }
 
 async function search(q){
@@ -331,7 +369,9 @@ async function search(q){
       dg={hadith:h,madhhab:m,tafsir:t};
     }catch(e){}
     let cres=[]; try{cres=await rpc('contradiction_search',{q:q,lim:6});}catch(e){}
+    let sb=[]; try{sb=await rpc('source_books',{q:q});}catch(e){}
     render(res,vars,q,dg);
+    insertPicker(sb,q);
     if(cres.length){
       const el=document.createElement('section'); el.className='src'; el.id='src-contra';
       el.innerHTML='<h2>Contradictions and tensions <small>'+cres.length+' related</small></h2><p class="what">Entries from the contradiction catalogue that touch this subject, with evidence. <a href="#" onclick="showHub();return false">Browse all categories →</a></p>'+cres.map(evCard).join('');
