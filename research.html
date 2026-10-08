@@ -137,7 +137,7 @@ const H={apikey:KEY,Authorization:'Bearer '+KEY,'Content-Type':'application/json
 // Each source: label, a plain sentence about what is in it, and where "see all" leads.
 const SRC={
  quran:{what:'The Quran itself – Arabic text, English and transliteration.',link:r=>`/?sura=${r.sura}&aya=${r.aya}`,ref:r=>`${r.sura}:${r.aya}`},
- hadith:{what:'Reports of the Prophet in the major Sunni and Shia collections, with their grades. Sahih-graded reports are shown first.',link:r=>`research.html?q=${encodeURIComponent(CUR)}&source=hadith`,ref:r=>`${r.collection} #${r.number}${r.grade?' · '+r.grade:''}${r.tradition?' · '+r.tradition:''}`},
+ hadith:{what:'Reports of the Prophet in the major Sunni and Shia collections, with their grades. Sahih-graded reports are shown first.',link:r=>`research.html?hadith=${r.id}`,ref:r=>`${r.collection} #${r.number}${r.grade?' · '+r.grade:''}${r.tradition?' · '+r.tradition:''}`},
  tafsir:{what:'Classical and modern commentary on the verses.',link:r=>`/?sura=${r.sura}&aya=${r.aya}`,ref:r=>`${r.title||'Tafsir'} on ${r.sura}:${r.aya}${r.tradition?' · '+r.tradition:''}`},
  madhhab:{what:'How the schools of law (Hanafi, Maliki, Shafi\u02bfi, Hanbali, Ja\u02bffari and others) treat the subject.',link:r=>`madhhab.html`,ref:r=>r.tradition||''},
  sira:{what:'Events from the life of the Prophet.',link:r=>`sira.html`,ref:r=>r.year?`${r.year} CE`:''},
@@ -392,6 +392,33 @@ async function searchInBook(kind,name,q){
    <div id="bvrows">${html||'<div class="empty">Nothing found for this search in this book. Try another spelling, or search all sources.</div>'}</div><div id="bvmore">${rows.length===10?`<div class="more"><a href="#" onclick="pickBook(0,true);return false">Show more →</a></div>`:''}</div><div id="bookview" style="display:none"></div></div>`;
 }
 
+
+async function showHadith(id){
+  $('out').innerHTML='<div class="empty"><span class="spin"></span>Loading the hadith…</div>';
+  let h=null,links=[];
+  try{
+    const r=await fetch(SB+'/rest/v1/hadith_corpus?id=eq.'+encodeURIComponent(id)+'&select=id,collection,hadith_number,narrator,book_chapter,tradition,grade,grade_details,isnad,text_arabic,text_english,source_url',{headers:H});
+    h=(await r.json())[0];
+  }catch(e){}
+  try{
+    const r=await fetch(SB+'/rest/v1/theme_hadith_links?hadith_id=eq.'+encodeURIComponent(id)+'&select=sura_id,aya_number,similarity_note&order=relevance_score.desc&limit=8',{headers:H});
+    links=await r.json();
+  }catch(e){}
+  if(!h){ $('out').innerHTML='<div class="empty">That hadith could not be found.</div>'; return; }
+  const vs=new Set(); (links||[]).forEach(l=>vs.add(l.sura_id+':'+l.aya_number));
+  $('out').innerHTML=`<div class="hub"><button class="back" onclick="history.length>1?history.back():location.href='research.html'">← Back to results</button>
+   <h2>${esc(h.collection)}${h.hadith_number?' #'+esc(h.hadith_number):''}</h2>
+   <div class="kicker">${[h.grade,h.tradition,h.narrator&&('Narrator: '+h.narrator),h.book_chapter].filter(Boolean).map(esc).join(' · ')}</div>
+   ${h.text_arabic?`<div class="txt" dir="rtl" lang="ar" style="font-size:1.3em;line-height:2;margin:14px 0">${esc(h.text_arabic)}</div>`:''}
+   ${h.text_english?`<div class="txt" style="margin:10px 0;white-space:pre-line">${esc(h.text_english)}</div>`:''}
+   ${h.isnad?`<div class="row"><b>Chain of narrators</b>${esc(h.isnad)}</div>`:''}
+   ${h.grade_details?`<div class="row"><b>Grading note</b>${esc(h.grade_details)}</div>`:''}
+   ${vs.size?`<div class="row"><b>Related verses</b>${[...vs].map(v=>{const [a,b]=v.split(':');return `<a href="/?sura=${a}&aya=${b}">${v}</a>`;}).join(' · ')}</div>`:''}
+   ${h.source_url?`<div class="row"><b>Source</b><a href="${esc(h.source_url)}" target="_blank" rel="noopener">${esc(h.source_url)}</a></div>`:''}
+   </div>`;
+  window.scrollTo({top:0});
+}
+
 function jump(k){ const e=$('src-'+k); if(e) e.scrollIntoView({behavior:'smooth',block:'start'}); }
 
 async function search(q){
@@ -427,9 +454,10 @@ async function search(q){
 function go(e){ e.preventDefault(); const v=$('q').value.trim(); if(/^(contradictions?|tensions?|inconsistenc(y|ies)|contradictions? in the (qur.?an|quran))$/i.test(v)){showHub();return;} search(v); }
 
 loadScope();
-(function(){const u=new URLSearchParams(location.search);if(!u.get('q')&&[...u.keys()].some(k=>k!=='from'&&k!=='source')){location.replace('research-classic.html'+location.search);}})();
+(function(){const u=new URLSearchParams(location.search);if(!u.get('q')&&!(u.get('hadith')&&!u.get('event'))&&[...u.keys()].some(k=>k!=='from'&&k!=='source'&&k!=='scope')){location.replace('research-classic.html'+location.search);}})();
 const p=new URLSearchParams(location.search).get('q');
-loadWhere().then(()=>{ if(p){ $('q').value=p; search(p); } });
+const hid=new URLSearchParams(location.search).get('hadith');
+loadWhere().then(()=>{ if(hid&&!p){ showHadith(hid); } else if(p){ $('q').value=p; search(p); } });
 </script>
 </body>
 </html>
