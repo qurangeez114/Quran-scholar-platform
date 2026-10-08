@@ -379,9 +379,11 @@ const CATEGORY_STYLE = {
   default: { icon: '📙', bg: 'linear-gradient(160deg,#B8902A,#7A5010)', label: 'Book' }
 };
 
+const VERIFIED_EDITION_COVERS = {"5":{"image":"https://www.shiabooks.com.au/cdn/shop/products/Al-Amaali-Sheikh-Al-Mufid.jpg?v=1632634566&width=600","source":"https://www.shiabooks.com.au/products/al-amaali"},"6":{"image":"https://cdn.sanity.io/images/e9t76e32/production/1d686d1360e5ca873c91d6001c352c318019cbb8-1781x2354.jpg?w=600","source":"https://www.lanternpublications.com/books/al-amali-shaykh-aduq"},"15":{"image":"https://shop.al-khoei.org/cdn/shop/products/1113_1200x1200.jpeg?v=1447096093","source":"https://shop.al-khoei.org/products/al-khisal-a-numerical-classification-of-traditions-on-characteristics"},"55":{"image":"https://www.meccabooks.com/cdn/shop/files/Jalalayn.png?v=1780401479","source":"https://www.meccabooks.com/products/tafsir-al-jalalayn"}};
 async function loadBooks(){
   const res = await fetch(SB_URL + '/rest/v1/books?select=*&order=id', { headers: HDR });
   ALL_BOOKS = await res.json();
+  ALL_BOOKS.forEach(b => { const cover = VERIFIED_EDITION_COVERS[b.id]; if (!b.cover_image_url && cover) { b.cover_image_url = cover.image; b.cover_source_url = cover.source; } });
   // The publisher hosts this free PDF; keep its card available alongside database books.
   if (!ALL_BOOKS.some(b => (b.title_en || '').toLowerCase() === 'the great secret of islam')) {
     ALL_BOOKS.push({
@@ -425,7 +427,7 @@ function renderBookGrid(){
   c.innerHTML = list.map(b => {
     const style = CATEGORY_STYLE[b.category] || CATEGORY_STYLE.default;
     const coverInner = b.cover_image_url
-      ? `<img src="${esc(b.cover_image_url)}" alt="${esc(b.title_en||'')}" style="width:100%;height:100%;object-fit:cover;" onerror="this.parentElement.style.background='${style.bg.replace(/'/g,"")}';this.remove();">`
+      ? `<img src="${esc(b.cover_image_url)}" alt="${esc(b.title_en||'')}" style="width:100%;height:100%;object-fit:contain;" loading="lazy" onerror="this.parentElement.style.background='${style.bg.replace(/'/g,"")}';this.remove();">`
       : `<span class="cover-icon">${style.icon}</span><span class="cover-title-ar">${esc(b.title_ar || '')}</span>`;
     return `
     <div class="book-card" role="button" tabindex="0" aria-label="Open ${esc(b.title_en || b.title_ar || 'collection')}" onkeydown="if(event.key==='Enter' || event.key===' '){event.preventDefault();openBook(${b.id})}" onclick="openBook(${b.id})">
@@ -436,6 +438,8 @@ function renderBookGrid(){
         <span class="cat-pill">${esc(style.label)}</span>
         <div class="book-title-en">${esc(b.title_en || '')}</div>
         <div class="book-meta">${b.author_en ? esc(b.author_en) : ''}${b.total_volumes ? ' · ' + b.total_volumes + ' vol' : ''}</div>
+        <div style="font-size:10px;color:#64756b;margin-top:8px;">${b.cover_source_url ? 'Published edition cover · edition may differ' : ''}</div>
+        ${b.cover_source_url ? `<a href="${esc(b.cover_source_url)}" target="_blank" rel="noopener" style="font-size:11px;color:#315947;margin-top:6px;" onclick="event.stopPropagation()" onkeydown="event.stopPropagation()">Cover source ↗</a>` : ''}
         <div class="book-open-label">${b.external_url ? 'Open publication ↗' : 'Explore collection →'}</div>
       </div>
     </div>`;
