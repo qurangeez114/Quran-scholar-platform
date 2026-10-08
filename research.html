@@ -231,18 +231,25 @@ async function loadScope(){
   }catch(e){ $('scope').textContent='Searches the Quran, hadith, commentary, the schools of law, the Sira, campaigns, themes and more.'; }
 }
 
+const DIA='[\u064B-\u0652\u0640\u0670]*';
 function highlight(text,vars){
   let t=esc(text||'');
-  (vars||[]).filter(v=>v&&v.length>=3).sort((a,b)=>b.length-a.length).forEach(v=>{
-    try{ t=t.replace(new RegExp('('+v.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi'),'<mark>$1</mark>'); }catch(e){}
-  });
+  const vs=(vars||[]).filter(v=>v&&v.length>=2).sort((a,b)=>b.length-a.length);
+  const lat=vs.filter(v=>!/[\u0600-\u06FF]/.test(v)&&v.length>=3), arb=vs.filter(v=>/[\u0600-\u06FF]/.test(v));
+  const E=v=>v.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  try{ if(lat.length) t=t.replace(new RegExp('('+lat.map(E).join('|')+')','gi'),'<mark>$1</mark>'); }catch(e){}
+  try{ if(arb.length) t=t.replace(new RegExp('('+arb.map(v=>[...v].map(c=>E(c)).join(DIA)).join('|')+')','g'),'<mark>$1</mark>'); }catch(e){}
   return t;
 }
-
 function snip(text,vars){
   text=text||''; if(text.length<=340) return text;
-  const low=text.toLowerCase(); let best=-1;
-  (vars||[]).filter(v=>v&&v.length>=3).forEach(v=>{const i=low.indexOf(v.toLowerCase()); if(i>=0&&(best<0||i<best)) best=i;});
+  let best=-1;
+  (vars||[]).filter(v=>v&&v.length>=2).forEach(v=>{
+    let i=-1;
+    if(/[\u0600-\u06FF]/.test(v)){ try{ const m=new RegExp([...v].map(c=>c.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join(DIA)).exec(text); if(m) i=m.index; }catch(e){} }
+    else i=text.toLowerCase().indexOf(v.toLowerCase());
+    if(i>=0&&(best<0||i<best)) best=i;
+  });
   let a=best<0?0:Math.max(0,best-130);
   if(a>0){const sp=text.indexOf(' ',a); if(sp>0&&sp<a+25) a=sp+1;}
   const out=text.slice(a,a+340);
@@ -253,7 +260,7 @@ function card(key,r,vars){
   const ref=cfg.ref(r);
   const ttl=r.title?`<div class="ttl">${highlight(r.title,vars)}</div>`:'';
   const href=cfg.link(r);
-  return `<div class="card"><div class="meta">${esc(ref)}</div>${ttl}<div class="txt">${highlight(snip(r.text,vars),vars)}</div><div class="more"><a href="${href}">Open →</a></div></div>`;
+  return `<div class="card"><div class="meta">${esc(ref)}</div>${ttl}${r.arabic?`<div class="txt" dir="rtl" lang="ar" style="font-size:1.25em;line-height:1.9">${highlight(snip(r.arabic,vars),vars)}</div>`:''}<div class="txt">${highlight(snip(r.text,vars),vars)}</div><div class="more"><a href="${href}">Open →</a></div></div>`;
 }
 
 function cut(t){ t=t||''; if(t.length<238) return t; const i=t.lastIndexOf(' '); return (i>150?t.slice(0,i):t)+'\u2026'; }
@@ -321,7 +328,7 @@ function render(results,vars,q,dg){
 /* ---- Choose where to look: per-book picker ---- */
 let PICK={sb:[],q:'',cur:null,off:0};
 function insertPicker(sb,q){
-  PICK={sb:sb||[],q:q,cur:null,off:0};
+  PICK={sb:sb||[],q:q,cur:null,off:0,vars:null};
   if(!PICK.sb.length) return;
   const grp=(kind,title)=>{
     const items=PICK.sb.map((x,i)=>[x,i]).filter(([x])=>x.kind===kind);
@@ -344,7 +351,8 @@ async function pickBook(i,more){
   if(!more) bv.innerHTML='<div class="empty"><span class="spin"></span>Loading '+esc(x.name)+'…</div>';
   let rows=[]; try{rows=await rpc('book_rows',{kind:x.kind,name:x.name,q:PICK.q,lim:10,off:PICK.off});}catch(e){}
   const key=x.kind==='library'?'library':x.kind;
-  const vars=[PICK.q];
+  if(!PICK.vars) PICK.vars=await wordVars(PICK.q);
+  const vars=PICK.vars;
   const html=rows.map(r=>card(key,r,vars)).join('');
   if(!more) bv.innerHTML=`<h3 class="bvh">${esc(x.name)} <small>${n(x.n)} match${x.n==1?'':'es'}<button type="button" class="pk clr" onclick="clearPick()">Show all sources</button></small></h3><div id="bvrows">${html||'<div class="none">Nothing to show.</div>'}</div><div id="bvmore"></div>`;
   else $('bvrows').insertAdjacentHTML('beforeend',html);
@@ -366,12 +374,20 @@ async function loadWhere(){
     +og('A single hadith book',o.hadith,'hadith')+og('A single tafsir',o.tafsir,'tafsir')+og('A single library book',o.library,'library');
   try{const sc=new URLSearchParams(location.search).get('scope'); if(sc) sel.value=sc;}catch(e){}
 }
+
+async function wordVars(q){
+  const ws=q.split(/\s+/).filter(w=>w&&!/^(the|in|of|a|an|and|or|to|for|on|at|is|are|was|by|with|from|that|this|about)$/i.test(w));
+  const out=new Set(ws);
+  try{ const rs=await Promise.all(ws.map(w=>rpc('search_variants',{q:w}))); rs.forEach(r=>(r||[]).forEach(v=>out.add(v))); }catch(e){}
+  return [...out];
+}
 async function searchInBook(kind,name,q){
   CUR=q;
   $('out').innerHTML='<div class="empty"><span class="spin"></span>Searching '+esc(name)+'…</div>';
   let rows=[]; try{rows=await rpc('book_rows',{kind:kind,name:name,q:q,lim:10,off:0});}catch(e){}
   PICK={sb:[{kind:kind,name:name,n:rows.length}],q:q,cur:0,off:rows.length};
-  const html=rows.map(r=>card(kind,r,[q])).join('');
+  PICK.vars=await wordVars(q);
+  const html=rows.map(r=>card(kind,r,PICK.vars)).join('');
   $('out').innerHTML=`<div class="hub"><h2>${esc(name)}</h2><p class="lead">Passages for “${esc(q)}” in this book only. <a href="#" onclick="$('where').value='all';search(CUR);return false">Search all sources instead →</a></p>
    <div id="bvrows">${html||'<div class="empty">Nothing found for this search in this book. Try another spelling, or search all sources.</div>'}</div><div id="bvmore">${rows.length===10?`<div class="more"><a href="#" onclick="pickBook(0,true);return false">Show more →</a></div>`:''}</div><div id="bookview" style="display:none"></div></div>`;
 }
