@@ -74,6 +74,27 @@ mark{background:#FDE68A;border-radius:2px;padding:0 1px}
 .empty{padding:30px 0;text-align:center;color:var(--ink2)}
 .spin{display:inline-block;width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--gold);border-radius:50%;animation:s 1s linear infinite;vertical-align:-2px;margin-right:6px}
 @keyframes s{to{transform:rotate(360deg)}}
+
+.ov{padding:26px 30px;border-width:1px;box-shadow:0 1px 3px rgba(60,40,10,.06)}
+.ov h2{font-size:30px;margin:2px 0 4px;font-weight:600}
+.ov p{font-size:18.5px;line-height:1.75;margin:0 0 14px;max-width:66ch}
+.ov p b{font-weight:600}
+.ov .sub{font-size:14px;color:var(--ink2);margin:0 0 18px;font-style:italic}
+.ov h3{font-size:21px;margin:26px 0 2px;padding-top:18px;border-top:1px solid var(--line);font-weight:600}
+.ov p.pos{margin:0 0 10px;padding-left:14px;border-left:3px solid var(--goldline);font-size:17.5px}
+.kicker{font-size:12.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);font-weight:600;margin:0 0 6px}
+.leg{margin-bottom:14px}
+section.src h2{font-size:25px;font-weight:600;margin-top:34px}
+.what{font-size:16px;font-style:italic;max-width:66ch;line-height:1.6}
+.card{border:0;border-left:3px solid var(--goldline);border-radius:0;background:transparent;padding:4px 0 4px 18px;margin:0 0 20px}
+.card .meta{font-size:12.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--gold);font-weight:600;margin-bottom:5px}
+.card .ttl{font-size:19px;font-weight:600;margin-bottom:3px}
+.card .txt{font-size:18.5px;line-height:1.75;max-width:66ch}
+.ev{border-radius:4px;padding:18px 22px;margin:16px 0}
+.ev h4{font-size:21px;margin:0 0 8px}
+.ev .row{font-size:18px;line-height:1.7;margin:12px 0;max-width:66ch}
+.ev .row b{font-size:12.5px;letter-spacing:.1em;color:var(--gold);margin-bottom:2px}
+@media (max-width:600px){.ov{padding:18px 16px}.ov p{font-size:17.5px}.ov h2{font-size:26px}}
 </style>
 </head>
 <body>
@@ -223,33 +244,42 @@ function card(key,r,vars){
 }
 
 function cut(t){ t=t||''; if(t.length<238) return t; const i=t.lastIndexOf(' '); return (i>150?t.slice(0,i):t)+'\u2026'; }
+function plural(k,w,ws){ return k===1? '1 '+w : n(k)+' '+(ws||w+'s'); }
 function overview(dg,results,q){
   if(!dg) return '';
-  const c=k=>(results.find(r=>r.key===k)||{}).count||0;
-  const hd=dg.hadith||{}, g=hd.grades||{}, t=hd.traditions||{};
-  const total=hd.sampled||0;
-  const pieces=[];
-  if(c('quran')) pieces.push(`<li><b>${n(c('quran'))}</b> Quran verse${c('quran')==1?' contains':'s contain'} it or a spelling of it.</li>`);
+  const R=k=>results.find(r=>r.key===k)||{count:0,rows:[]};
+  const hd=dg.hadith||{}, g=hd.grades||{}, t=hd.traditions||{}, total=hd.sampled||0;
+  const P=[];
+  const qv=R('quran');
+  if(qv.count){
+    const refs=qv.rows.slice(0,4).map(r=>`${r.sura}:${r.aya}`).join(', ');
+    P.push(`<p>In the Quran, <b>${esc(q)}</b> ${qv.count===1?'is found in one verse':'is found in '+n(qv.count)+' verses'}${refs?' ('+refs+(qv.count>4?' and others':'')+')':''}.</p>`);
+  }
   if(total){
+    const sound=g.sahih||0, share=Math.round(sound/total*100);
     const seg=(v,col)=>v?`<i style="width:${v/total*100}%;background:${col}" title="${v}"></i>`:'';
-    pieces.push(`<li><b>${n(total)}</b> hadith mention it${hd.sampled>=1500?' (counted from the first 1,500)':''}: <b>${n(t.sunni||0)}</b> in Sunni collections and <b>${n(t.shia||0)}</b> in Shia collections.
-      <div class="bar">${seg(g.sahih,'#0F766E')}${seg(g.hasan,'#65A30D')}${seg(g.weak,'#B45309')}${seg(g.other,'#CBD5E1')}</div>
-      <div class="leg"><b>${n(g.sahih||0)}</b> sound (sahih) · <b>${n(g.hasan||0)}</b> good (hasan) · <b>${n(g.weak||0)}</b> weak · <b>${n(g.other||0)}</b> not graded or graded another way</div>
-      ${(hd.collections||[]).length?`<div class="leg">Most found in: ${hd.collections.map(x=>esc(x.name)+' ('+x.n+')').join(', ')}</div>`:''}</li>`);
+    P.push(`<p>The hadith literature has <b>${plural(total,'report')}</b> on the subject${hd.sampled>=1500?' (counted from the first 1,500)':''}: ${n(t.sunni||0)} in Sunni collections and ${n(t.shia||0)} in Shia collections. About ${share}% carry a sound (<i>sahih</i>) grade, ${n(g.hasan||0)} ${(g.hasan||0)===1?'is':'are'} graded good (<i>hasan</i>) and ${n(g.weak||0)} ${(g.weak||0)===1?'is':'are'} weak; the remaining ${n(g.other||0)} have no grade recorded or use another grading system.</p>
+    <div class="bar">${seg(g.sahih,'#0F766E')}${seg(g.hasan,'#65A30D')}${seg(g.weak,'#B45309')}${seg(g.other,'#CBD5E1')}</div>
+    <div class="leg"><span style="color:#0F766E">\u25A0</span> Sound &nbsp;<span style="color:#65A30D">\u25A0</span> Good &nbsp;<span style="color:#B45309">\u25A0</span> Weak &nbsp;<span style="color:#CBD5E1">\u25A0</span> Not graded</div>
+    ${(hd.collections||[]).length?`<p>The largest concentrations are in ${hd.collections.slice(0,4).map(x=>esc(x.name)+' ('+x.n+')').join(', ')}.</p>`:''}`);
   }
   const tf=dg.tafsir||[];
-  if(tf.length) pieces.push(`<li><b>${n(tf.reduce((a,x)=>a+x.n,0))}</b> commentary entries (${tf.map(x=>n(x.n)+' '+esc(x.tradition)).join(', ')}).</li>`);
-  ['sira','campaigns'].forEach(k=>{ if(c(k)) pieces.push(`<li><b>${n(c(k))}</b> ${k==='sira'?'Sira event':'campaign'}${c(k)==1?'':'s'} mention it.</li>`); });
+  if(tf.length){
+    const tot=tf.reduce((a,x)=>a+x.n,0);
+    P.push(`<p>Classical commentary addresses it in <b>${plural(tot,'entry','entries')}</b> (${tf.map(x=>n(x.n)+' '+esc(x.tradition)).join(', ')}).</p>`);
+  }
+  const si=R('sira').count, ca=R('campaigns').count;
+  if(si||ca) P.push(`<p>It also appears in the historical record: ${[si?plural(si,'event')+' from the life of the Prophet':'',ca?plural(ca,'campaign'):''].filter(Boolean).join(' and ')}.</p>`);
   let mh='';
   (dg.madhhab||[]).forEach(m=>{
     const pos=Object.entries(m.positions||{}).filter(([k,v])=>v);
-    mh+=`<h3>${esc(m.topic)} <small style="font-weight:400;color:var(--ink2)">· ${esc(m.category||'')}</small></h3>`;
-    if(m.consensus) mh+=`<div><b>Where the schools agree:</b> ${esc(cut(m.consensus))}</div>`;
-    if(m.disagreement) mh+=`<div><b>Where they differ:</b> ${esc(cut(m.disagreement))}</div>`;
-    if(pos.length) mh+=`<div class="sch">${pos.map(([k,v])=>`<div>${esc(k)}</div><div>${esc(cut(v))}</div>`).join('')}</div>`;
+    mh+=`<h3>${esc(m.topic)}</h3><div class="kicker">${esc(m.category||'Schools of law')}</div>`;
+    if(m.consensus) mh+=`<p><b>Where the schools agree.</b> ${esc(cut(m.consensus))}</p>`;
+    if(m.disagreement) mh+=`<p><b>Where they differ.</b> ${esc(cut(m.disagreement))}</p>`;
+    pos.forEach(([k,v])=>{ mh+=`<p class="pos"><b>${esc(k)}.</b> ${esc(cut(v))}</p>`; });
   });
-  if(!pieces.length && !mh) return '';
-  return `<div class="ov"><h2>Overview</h2><p class="sub">Built directly from the site\u2019s database \u2013 counts and the schools\u2019 own recorded positions, not written by AI.</p><ul>${pieces.join('')}</ul>${mh}</div>`;
+  if(!P.length && !mh) return '';
+  return `<div class="ov"><div class="kicker">Summary</div><h2>${esc(q.charAt(0).toUpperCase()+q.slice(1))}</h2><p class="sub">Compiled directly from the site’s database, not written by AI.</p>${P.join('')}${mh}</div>`;
 }
 function render(results,vars,q,dg){
   const total=results.reduce((a,r)=>a+(r.count||0),0);
