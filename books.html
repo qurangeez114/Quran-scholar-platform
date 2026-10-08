@@ -170,6 +170,20 @@ button:focus-visible,input:focus-visible,select:focus-visible,.book-card:focus-v
 
 <main id="library">
 <section class="library-hero"><div><span class="library-eyebrow">Quran Hikma · Source library</span><h2>Explore the books.<br>Follow the evidence.</h2><p>Browse collections, read Arabic texts and available translations, and bring references into your research.</p></div><div class="library-guide"><strong>A workspace for close reading</strong><p>Choose a collection to search its entries, explore narrators and topics, and save passages for further study.</p></div></section>
+  <div id="bookSearchPanel" style="background:#fff;border:1.5px solid #244d3e;border-radius:12px;padding:16px 18px;margin-bottom:18px;">
+    <div style="font-weight:700;color:#244d3e;font-size:17px;margin-bottom:4px;">Search inside all books</div>
+    <div style="font-size:13px;color:#64746c;margin-bottom:10px;">Type a word or concept in English or Arabic. Results come from every book in the library, with your words highlighted.</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <input type="text" id="bsInput" aria-label="Search inside all books" placeholder="e.g. pictures in the Kaaba, jizya, صور الكعبة" style="flex:1 1 220px;padding:10px 14px;border-radius:20px;border:1.5px solid #cbd6cf;font-size:15px;" onkeydown="if(event.key==='Enter') bookSearch()">
+      <button class="qbtn" onclick="bookSearch()">Search</button>
+    </div>
+    <div id="bsLang" style="display:none;margin-top:10px;font-size:13px;color:#64746c;">Show: 
+      <button class="qbtn ghost" data-l="both" onclick="bsSetLang('both')">Arabic and English</button>
+      <button class="qbtn ghost" data-l="en" onclick="bsSetLang('en')">English only</button>
+      <button class="qbtn ghost" data-l="ar" onclick="bsSetLang('ar')">Arabic only</button>
+    </div>
+    <div id="bsResults" role="status" aria-live="polite"></div>
+  </div>
   <div class="cross-search-panel" style="background:#FBF6E9;border:1.5px solid #D4A830;border-radius:12px;padding:14px 16px;margin-bottom:18px;">
     <div style="font-weight:700;color:#5A3A10;margin-bottom:8px;">🔬 Compare Across All Hadith Books</div>
     <div style="font-size:12.5px;color:#8a7a5a;margin-bottom:10px;">Search a phrase or topic across every collection at once, then get one AI comparison of all versions found — contradictions, changes, omissions, and relation to the Quran.</div>
@@ -1364,6 +1378,91 @@ function toast(msg){
 }
 
 loadBooks();
+</script>
+<script>
+(function(){
+const BS_SRC=[['entries','rpc','books_search_src','Library books (chapter index)'],['catalogue','rpc','books_search_src','Contradiction catalogue'],['asbab','rpc','books_search_src','Asbab al-Nuzul'],['hadith','site','hadith','Hadith collections'],['tafsir','site','tafsir','Tafsir']];
+let BS_LANG='both',BS_STATE=null;
+const DIAC='[\\u064B-\\u0652\\u0640\\u0670]*';
+function bsRx(vs){
+  const parts=(vs||[]).filter(Boolean).map(v=>{
+    const e=v.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+    return /[؀-ۿ]/.test(v)?[...v].map(ch=>ch.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join(DIAC):e;
+  });
+  return parts.length?new RegExp('('+parts.join('|')+')','gi'):null;
+}
+function bsHl(text,rx){
+  const t=esc(text||'');
+  return rx?t.replace(rx,'<mark class="hl">$1</mark>'):t;
+}
+function bsSnip(text,rx,len){
+  text=text||''; if(text.length<=len) return text;
+  let i=0; if(rx){ rx.lastIndex=0; const m=rx.exec(text); if(m) i=Math.max(0,m.index-len/3); }
+  let out=text.slice(i,i+len);
+  return (i>0?'… ':'')+out+(i+len<text.length?' …':'');
+}
+async function bsCall(def,q){
+  const body=def[1]==='rpc'?{kind:def[0],q:q,lim:8}:{src:def[2],q:q,lim:8};
+  const fn=def[1]==='rpc'?'books_search_src':'site_search_src';
+  const r=await fetch(SB_URL+'/rest/v1/rpc/'+fn,{method:'POST',headers:{...HDR,'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(!r.ok) throw new Error(fn+' '+r.status);
+  return r.json();
+}
+window.bsSetLang=function(l){BS_LANG=l;bsRender();};
+window.bookSearch=async function(){
+  const q=document.getElementById('bsInput').value.trim();
+  const box=document.getElementById('bsResults');
+  if(q.length<2){box.innerHTML='';return;}
+  box.innerHTML='<p style="color:#64746c">Searching all books…</p>';
+  const out=await Promise.all(BS_SRC.map(d=>bsCall(d,q).then(r=>({d,r})).catch(()=>({d,r:null,failed:true}))));
+  BS_STATE={q,out};
+  document.getElementById('bsLang').style.display='block';
+  bsRender();
+};
+function bsRender(){
+  if(!BS_STATE) return;
+  document.querySelectorAll('#bsLang button').forEach(b=>b.style.fontWeight=b.dataset.l===BS_LANG?'700':'400');
+  const vs=new Set([BS_STATE.q]);
+  BS_STATE.out.forEach(o=>(o.r&&o.r.variants||[]).forEach(v=>vs.add(v)));
+  const rx=bsRx([...vs]);
+  let h='',total=0,fails=0;
+  BS_STATE.out.forEach((o,si)=>{
+    if(o.failed){fails++;return;}
+    const r=o.r; if(!r||!r.count) return;
+    total+=r.count;
+    h+='<h3 style="margin:18px 0 6px;color:#244d3e;">'+esc(o.d[3])+' <small style="color:#64746c;font-weight:400;">'+(r.capped?'1,000+':r.count)+' match'+(r.count==1?'':'es')+'</small></h3>';
+    r.rows.forEach((row,ri)=>{
+      const isRpc=o.d[1]==='rpc';
+      const title=isRpc?row.book:(row.collection?row.collection+(row.number?' #'+row.number:''):(row.title||'')+(row.sura?' '+row.sura+':'+row.aya:''));
+      const ref=isRpc?row.ref:(row.grade||row.tradition||'');
+      const ar=isRpc?row.ar:null;
+      const en=isRpc?row.en:row.text;
+      h+='<div style="border:1px solid #e1e8e3;border-radius:10px;padding:12px 14px;margin:8px 0;background:#fcfdfc;">';
+      h+='<div style="font-size:12.5px;color:#64746c;margin-bottom:6px;"><b style="color:#244d3e;">'+esc(title)+'</b>'+(ref?' · '+esc(ref):'')+'</div>';
+      if(ar&&BS_LANG!=='en') h+='<div dir="rtl" lang="ar" style="font-size:20px;line-height:1.9;margin-bottom:6px;">'+bsHl(bsSnip(ar,rx,400),rx)+'</div>';
+      if(en&&BS_LANG!=='ar') h+='<div style="line-height:1.65;">'+bsHl(bsSnip(en,rx,500),rx)+'</div>';
+      if(BS_LANG==='en'&&!en&&ar) h+='<div><button class="qbtn ghost" onclick="bsTranslate(this,'+si+','+ri+')">Translate to English</button><span class="bsTr"></span></div>';
+      if(BS_LANG==='ar'&&!ar) h+='<div style="color:#64746c;font-size:13px;">Arabic text is not stored for this entry. Switch to English to read it.</div>';
+      h+='</div>';
+    });
+  });
+  const box=document.getElementById('bsResults');
+  if(!total) h='<p style="color:#64746c">No matches in any book'+(fails?' (some sources could not be searched, try again)':'')+'. Try another spelling or the Arabic word.</p>';
+  else h='<p style="margin-top:12px;color:#64746c;">'+(total>=1000?'1,000+':total)+' matches across the library for <b>'+esc(BS_STATE.q)+'</b>. Searched with related spellings: '+esc([...vs].join(', '))+'.</p>'+h;
+  box.innerHTML=h;
+}
+window.bsTranslate=async function(btn,si,ri){
+  const row=BS_STATE.out[si].r.rows[ri], span=btn.parentElement.querySelector('.bsTr');
+  btn.disabled=true; span.textContent=' Translating…';
+  try{
+    const res=await fetch('/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({max_tokens:600,messages:[{role:'user',content:'Translate this Arabic into plain English. Output only the translation.\n\n'+(row.ar||'').slice(0,1500)}]})});
+    const d=await res.json();
+    const t=(d.content&&d.content[0]&&d.content[0].text)||'';
+    if(!res.ok||!t) throw new Error('x');
+    span.innerHTML='<div style="margin-top:6px;line-height:1.65;">'+esc(t)+'</div>';
+  }catch(e){ span.textContent=' Translation is temporarily unavailable.'; btn.disabled=false; }
+};
+})();
 </script>
 </body>
 </html>
