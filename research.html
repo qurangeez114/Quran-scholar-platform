@@ -97,6 +97,7 @@ section.src h2{font-size:25px;font-weight:600;margin-top:34px}
 @media (max-width:600px){.ov{padding:18px 16px}.ov p{font-size:17.5px}.ov h2{font-size:26px}}
 .areas{max-width:880px;margin:22px auto 0;text-align:left}.areas-h{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);margin-bottom:10px;text-align:center}.agrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px}.agrid a,.agrid button{display:block;text-align:left;background:#fff;border:1px solid #d9e0da;border-radius:12px;padding:13px 15px;text-decoration:none;color:inherit;font:inherit;cursor:pointer}.agrid a:hover,.agrid button:hover{border-color:#244d3e}.agrid b{display:block;color:#244d3e;margin-bottom:3px}.agrid span{font-size:13.5px;color:var(--ink2);line-height:1.4}
 .picker{margin:18px 0;padding:16px 18px;background:#fff;border:1px solid #d9e0da;border-radius:14px}.picker h2{margin:0 0 4px;font-size:20px}.pg{margin:10px 0}.pgt{display:block;font-size:12.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink2);margin-bottom:6px}.pk{font:inherit;font-size:14px;background:#f6f4ec;border:1px solid #e0d6b4;border-radius:18px;padding:5px 12px;margin:0 6px 6px 0;cursor:pointer;color:inherit}.pk b{color:#244d3e;margin-left:4px}.pk.on{background:#244d3e;color:#fff;border-color:#244d3e}.pk.on b{color:#fff}.bvh{margin:14px 0 6px}.bvh small{font-weight:400;color:var(--ink2);margin-left:8px}.pk.clr{margin-left:12px;font-size:12.5px}
+.where{margin:10px 0 2px;text-align:center;font-size:14.5px;color:var(--ink2)}.where select{font:inherit;font-size:15px;padding:7px 10px;border:1.5px solid #cbd6cf;border-radius:10px;background:#fff;max-width:92%;color:inherit}
 </style>
 </head>
 <body>
@@ -109,6 +110,7 @@ section.src h2{font-size:25px;font-weight:600;margin-top:34px}
     <input id="q" type="search" placeholder="e.g. jizya, apostasy, Khaybar, inheritance, جزية" autocomplete="off" autofocus>
     <button type="submit">Search</button>
   </form>
+  <div class="where"><label for="where">Search in:</label> <select id="where" aria-label="Choose where to search"><option value="all">All sources</option></select></div>
   <div class="scope" id="scope">Loading what is searched…</div>
   <div class="chips" id="chips"></div>
   <div class="areas">
@@ -354,23 +356,49 @@ async function pickBook(i,more){
 }
 function clearPick(){ document.querySelectorAll('#picker .pk').forEach(b=>b.classList.remove('on')); $('bookview').innerHTML=''; PICK.cur=null; }
 
+
+/* ---- Search in: choose the source or a single book before searching ---- */
+const WHOLE=[['quran','Quran verses only'],['hadith','Hadith (all books)'],['tafsir','Tafsir (all scholars)'],['asbab','Reasons of revelation'],['library','Library books'],['madhhab','Schools of law'],['sira','Life of the Prophet'],['campaigns','Campaigns and battles']];
+async function loadWhere(){
+  const sel=$('where'); if(!sel) return;
+  let o={hadith:[],tafsir:[],library:[]}; try{o=await rpc('scope_options',{});}catch(e){}
+  const og=(label,items,kind)=>items.length?`<optgroup label="${esc(label)}">${items.map(x=>`<option value="${kind}:${esc(x)}">${esc(x)}</option>`).join('')}</optgroup>`:'';
+  sel.innerHTML='<option value="all">All sources</option>'
+    +`<optgroup label="One kind of source">${WHOLE.map(w=>`<option value="src:${w[0]}">${esc(w[1])}</option>`).join('')}</optgroup>`
+    +og('A single hadith book',o.hadith,'hadith')+og('A single tafsir',o.tafsir,'tafsir')+og('A single library book',o.library,'library');
+  try{const sc=new URLSearchParams(location.search).get('scope'); if(sc) sel.value=sc;}catch(e){}
+}
+async function searchInBook(kind,name,q){
+  CUR=q;
+  $('out').innerHTML='<div class="empty"><span class="spin"></span>Searching '+esc(name)+'…</div>';
+  let rows=[]; try{rows=await rpc('book_rows',{kind:kind,name:name,q:q,lim:10,off:0});}catch(e){}
+  PICK={sb:[{kind:kind,name:name,n:rows.length}],q:q,cur:0,off:rows.length};
+  const html=rows.map(r=>card(kind,r,[q])).join('');
+  $('out').innerHTML=`<div class="hub"><h2>${esc(name)}</h2><p class="lead">Passages for “${esc(q)}” in this book only. <a href="#" onclick="$('where').value='all';search(CUR);return false">Search all sources instead →</a></p>
+   <div id="bvrows">${html||'<div class="empty">Nothing found for this search in this book. Try another spelling, or search all sources.</div>'}</div><div id="bvmore">${rows.length===10?`<div class="more"><a href="#" onclick="pickBook(0,true);return false">Show more →</a></div>`:''}</div><div id="bookview" style="display:none"></div></div>`;
+}
+
 function jump(k){ const e=$('src-'+k); if(e) e.scrollIntoView({behavior:'smooth',block:'start'}); }
 
 async function search(q){
   q=q.trim(); if(!q) return;
   CUR=q;
-  try{ history.replaceState(null,'','?q='+encodeURIComponent(q)); }catch(e){}
+  const SC=($('where')&&$('where').value)||'all';
+  try{ history.replaceState(null,'','?q='+encodeURIComponent(q)+(SC!=='all'?'&scope='+encodeURIComponent(SC):'')); }catch(e){}
+  const bk=SC.match(/^(hadith|tafsir|library):(.+)$/); if(bk){ return searchInBook(bk[1],bk[2],q); }
+  const only=SC.startsWith('src:')?SC.slice(4):null;
   $('out').innerHTML='<div class="empty"><span class="spin"></span>Searching every source…</div>';
   try{
-    const res=await Promise.all(ORDER.map(k=>rpc('site_search_src',{src:k,q:q,lim:6}).catch(()=>({key:k,count:0,rows:[],variants:[q],failed:true}))));
+    const res=await Promise.all((only?[only]:ORDER).map(k=>rpc('site_search_src',{src:k,q:q,lim:6}).catch(()=>({key:k,count:0,rows:[],variants:[q],failed:true}))));
     const vars=[...new Set(res.flatMap(r=>r.variants||[q]))];
     let dg=null;
-    try{
+    if(only) dg={};
+    else try{
       const [h,m,t]=await Promise.all([rpc('digest_hadith',{q}),rpc('digest_madhhab',{q}),rpc('digest_tafsir',{q})]);
       dg={hadith:h,madhhab:m,tafsir:t};
     }catch(e){}
     let cres=[]; try{cres=await rpc('contradiction_search',{q:q,lim:6});}catch(e){}
-    let sb=[]; try{sb=await rpc('source_books',{q:q});}catch(e){}
+    let sb=[]; if(!only){ try{sb=await rpc('source_books',{q:q});}catch(e){} }
     render(res,vars,q,dg);
     insertPicker(sb,q);
     if(cres.length){
@@ -388,7 +416,7 @@ $('chips').innerHTML=EXAMPLES.map(x=>`<button class="chip" type="button" onclick
 loadScope();
 (function(){const u=new URLSearchParams(location.search);if(!u.get('q')&&[...u.keys()].some(k=>k!=='from'&&k!=='source')){location.replace('research-classic.html'+location.search);}})();
 const p=new URLSearchParams(location.search).get('q');
-if(p){ $('q').value=p; search(p); }
+loadWhere().then(()=>{ if(p){ $('q').value=p; search(p); } });
 </script>
 </body>
 </html>
