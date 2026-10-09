@@ -132,6 +132,17 @@ export async function enrollInCourse(courseId) {
     }
     throw error;
   }
+
+  // Send enrollment confirmation email
+  try {
+    const { sendEnrollmentEmail } = await import('./email-notifications.js');
+    const { data: course } = await getCourseById(courseId);
+    await sendEnrollmentEmail(user.id, user.email, course.title, courseId);
+  } catch (err) {
+    // Silently fail - email is optional
+    console.error('Failed to send enrollment email:', err);
+  }
+
   return data;
 }
 
@@ -472,7 +483,27 @@ export async function updateEnrollmentProgressFromLessons(courseId) {
 
   // Check if course is completed (100%) and generate certificate
   if (progressPct === 100) {
-    await generateCertificate(courseId);
+    const certificate = await generateCertificate(courseId);
+
+    // Send completion email
+    try {
+      const { sendCompletionEmail } = await import('./email-notifications.js');
+      const { data: course } = await getCourseById(courseId);
+      await sendCompletionEmail(user.id, user.email, course.title, certificate.certificate_code);
+    } catch (err) {
+      console.error('Failed to send completion email:', err);
+    }
+  } else {
+    // Send progress milestone email (25%, 50%, 75%)
+    if ([25, 50, 75].includes(progressPct)) {
+      try {
+        const { sendProgressEmail } = await import('./email-notifications.js');
+        const { data: course } = await getCourseById(courseId);
+        await sendProgressEmail(user.id, user.email, course.title, progressPct);
+      } catch (err) {
+        console.error('Failed to send progress email:', err);
+      }
+    }
   }
 
   return { progressPct, completedCount, totalLessons: lessons.length };
