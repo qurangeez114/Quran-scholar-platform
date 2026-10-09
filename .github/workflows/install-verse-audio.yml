@@ -1,0 +1,35 @@
+name: Install shared Quran audio on all pages
+on:
+  push:
+    paths: [quran-verse-audio.js, .github/workflows/install-verse-audio.yml]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check JavaScript
+        run: node --check quran-verse-audio.js
+      - name: Include audio module on every HTML page
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          tag = '<script src="/quran-verse-audio.js" defer></script>'
+          for p in Path('.').rglob('*.html'):
+              if any(part in ('node_modules','.git') for part in p.parts): continue
+              s=p.read_text()
+              if tag in s: continue
+              if '</body>' not in s: continue
+              p.write_text(s.replace('</body>',tag+'\n</body>',1))
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add '*.html'
+          git diff --cached --quiet && exit 0
+          git commit -m "Enable shared Quran reference audio across all HTML pages"
+          git pull --rebase origin main
+          git push origin HEAD:main
