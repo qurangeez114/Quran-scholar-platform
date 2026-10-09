@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson - QuranHikma</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f5f5f5;
+      color: #333;
+    }
+
+    .header {
+      background: white;
+      padding: 1rem;
+      border-bottom: 1px solid #eee;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .header-content {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .breadcrumb { font-size: 0.9rem; color: #999; }
+    .breadcrumb a { color: #667eea; cursor: pointer; }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+
+    .two-column {
+      display: grid;
+      grid-template-columns: 3fr 1fr;
+      gap: 2rem;
+    }
+
+    @media (max-width: 1024px) {
+      .two-column {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .section {
+      background: white;
+      border-radius: 12px;
+      padding: 2rem;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      margin-bottom: 2rem;
+    }
+
+    .section h2 {
+      font-size: 1.5rem;
+      margin-bottom: 1.5rem;
+      color: #333;
+    }
+
+    .lesson-content {
+      line-height: 1.8;
+      font-size: 1.05rem;
+    }
+
+    .lesson-content img,
+    .lesson-content video {
+      max-width: 100%;
+      height: auto;
+      margin: 1.5rem 0;
+      border-radius: 8px;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 1rem;
+      border-bottom: 2px solid #eee;
+      margin-bottom: 1.5rem;
+      flex-wrap: wrap;
+    }
+
+    .tab-btn {
+      padding: 1rem;
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-weight: 600;
+      color: #999;
+      transition: all 0.3s;
+      border-bottom: 3px solid transparent;
+      margin-bottom: -2px;
+    }
+
+    .tab-btn.active {
+      color: #667eea;
+      border-bottom-color: #667eea;
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .sidebar-card {
+      background: white;
+      border-radius: 12px;
+      padding: 1.5rem;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .sidebar-card h3 {
+      margin-bottom: 1rem;
+      color: #333;
+    }
+
+    .progress-bar {
+      width: 100%;
+      height: 8px;
+      background: #eee;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 0.5rem;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #667eea, #764ba2);
+      width: 0%;
+      transition: width 0.3s;
+    }
+
+    .progress-text {
+      font-size: 0.9rem;
+      color: #666;
+    }
+
+    .btn {
+      padding: 0.75rem 1.5rem;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: background 0.3s;
+      width: 100%;
+      text-align: center;
+    }
+
+    .btn-primary { background: #667eea; color: white; }
+    .btn-primary:hover { background: #5568d3; }
+    .btn-success { background: #4CAF50; color: white; }
+
+    .discussion-thread {
+      background: #f9f9f9;
+      border-left: 4px solid #667eea;
+      padding: 1rem;
+      border-radius: 6px;
+      margin-bottom: 1rem;
+    }
+
+    .thread-title {
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 0.5rem;
+    }
+
+    .thread-meta {
+      font-size: 0.85rem;
+      color: #999;
+    }
+
+    .form-group {
+      margin-bottom: 1rem;
+    }
+
+    .form-group label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      color: #555;
+    }
+
+    .form-group input,
+    .form-group textarea {
+      width: 100%;
+      padding: 0.75rem;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-family: inherit;
+      font-size: 1rem;
+    }
+
+    .form-group textarea { min-height: 80px; }
+
+    .form-group input:focus,
+    .form-group textarea:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .alert {
+      padding: 1rem;
+      border-radius: 6px;
+      margin-bottom: 1rem;
+    }
+
+    .alert.error { background: #ffebee; color: #c62828; border-left: 4px solid #c62828; }
+    .alert.success { background: #e8f5e9; color: #2e7d32; border-left: 4px solid #2e7d32; }
+
+    .loader { text-align: center; color: #999; padding: 2rem; }
+
+    .quiz-question {
+      background: #f9f9f9;
+      padding: 1rem;
+      border-radius: 6px;
+      margin-bottom: 1.5rem;
+    }
+
+    .quiz-question h4 { margin-bottom: 1rem; }
+
+    .quiz-option {
+      margin-bottom: 0.75rem;
+    }
+
+    .quiz-option input {
+      margin-right: 0.5rem;
+    }
+
+    .quiz-option label {
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+      font-weight: normal;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="header-content">
+      <div class="breadcrumb">
+        <a href="/courses.html">Courses</a> > <a href="#" onclick="goToCourse()">Course</a> > <span id="lessonTitle">Loading...</span>
+      </div>
+      <a href="/account.html" style="color: #667eea; text-decoration: none;">My Account</a>
+    </div>
+  </div>
+
+  <div class="container">
+    <div id="alertContainer"></div>
+
+    <div class="two-column">
+      <!-- Main Content -->
+      <div>
+        <!-- Lesson Tabs -->
+        <div class="section">
+          <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('lesson')">📖 Lesson</button>
+            <button class="tab-btn" onclick="switchTab('discussion')">💬 Discussion</button>
+            <button class="tab-btn" id="quizTabBtn" style="display:none;">✅ Quiz</button>
+            <button class="tab-btn" id="assignmentTabBtn" style="display:none;">📝 Assignment</button>
+          </div>
+
+          <!-- Lesson Tab -->
+          <div class="tab-content active" id="lessonTab">
+            <div class="lesson-content" id="lessonContent">
+              <div class="loader">Loading lesson content...</div>
+            </div>
+          </div>
+
+          <!-- Discussion Tab -->
+          <div class="tab-content" id="discussionTab">
+            <h3>Join the discussion</h3>
+
+            <form id="newThreadForm" style="margin-bottom: 2rem;">
+              <div class="form-group">
+                <label>Start a new discussion</label>
+                <input type="text" id="newThreadTitle" placeholder="Question or topic..." required>
+              </div>
+              <button type="submit" class="btn btn-primary">Post</button>
+            </form>
+
+            <div id="discussionList"></div>
+          </div>
+
+          <!-- Quiz Tab -->
+          <div class="tab-content" id="quizTab">
+            <form id="quizForm" style="display:none;">
+              <div id="quizContent"></div>
+              <button type="submit" class="btn btn-primary" style="margin-top: 1rem;">Submit Quiz</button>
+            </form>
+            <div id="quizResult"></div>
+          </div>
+
+          <!-- Assignment Tab -->
+          <div class="tab-content" id="assignmentTab">
+            <form id="assignmentForm" style="display:none;">
+              <div class="form-group">
+                <label>Your Answer/Work</label>
+                <textarea id="assignmentContent" placeholder="Type your answer or paste your work..." required></textarea>
+              </div>
+              <button type="submit" class="btn btn-primary">Submit Assignment</button>
+            </form>
+            <div id="assignmentResult"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sidebar -->
+      <div class="sidebar">
+        <!-- Progress Card -->
+        <div class="sidebar-card">
+          <h3>Progress</h3>
+          <div class="progress-bar">
+            <div class="progress-fill" id="progressFill"></div>
+          </div>
+          <div class="progress-text" id="progressText">0% Complete</div>
+        </div>
+
+        <!-- Actions Card -->
+        <div class="sidebar-card">
+          <h3>Navigation</h3>
+          <button class="btn btn-primary" onclick="goToCourse()" style="margin-bottom: 0.5rem;">← Back to Course</button>
+          <button class="btn" style="background: #ddd; color: #333;" id="nextLessonBtn" onclick="goToNextLesson()" style="margin-top: 0.5rem;">Next Lesson →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { supabase } from './accounts/client.js';
+    import {
+      getCourseById,
+      getLessonsByCourse,
+      getDiscussionThreads,
+      createDiscussionThread,
+      getDiscussionPosts,
+      createDiscussionPost
+    } from './courses-api.js';
+
+    let currentUser = null;
+    let currentLesson = null;
+    let currentCourse = null;
+    let lessons = [];
+
+    async function checkAuth() {
+      const { data } = await supabase.auth.getSession();
+      currentUser = data.session?.user;
+
+      if (!currentUser) {
+        window.location.href = '/account.html';
+      }
+    }
+
+    function getLessonIdFromUrl() {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('lesson');
+    }
+
+    async function loadLesson() {
+      const lessonId = getLessonIdFromUrl();
+      if (!lessonId) {
+        showAlert('No lesson selected', 'error');
+        window.location.href = '/courses.html';
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from('qh_lessons')
+          .select('*, qh_courses(*)')
+          .eq('id', lessonId)
+          .single();
+
+        if (error) throw error;
+
+        currentLesson = data;
+        currentCourse = data.qh_courses;
+
+        document.getElementById('lessonTitle').textContent = currentLesson.title;
+        document.title = `${currentLesson.title} - QuranHikma`;
+
+        renderLesson();
+        await loadDiscussion();
+
+        // Show appropriate tabs based on lesson type
+        if (currentLesson.lesson_type === 'quiz') {
+          document.getElementById('quizTabBtn').style.display = 'block';
+        } else if (currentLesson.lesson_type === 'assignment') {
+          document.getElementById('assignmentTabBtn').style.display = 'block';
+        }
+
+      } catch (error) {
+        console.error('Error loading lesson:', error);
+        showAlert('Failed to load lesson', 'error');
+      }
+    }
+
+    function renderLesson() {
+      const content = document.getElementById('lessonContent');
+
+      if (currentLesson.lesson_type === 'text') {
+        content.innerHTML = `<div>${currentLesson.content || 'No content'}</div>`;
+      } else if (currentLesson.lesson_type === 'video') {
+        content.innerHTML = `
+          <div>
+            <p><strong>Video Lesson</strong></p>
+            <p>${currentLesson.video_url || 'No video URL'}</p>
+            <p style="color: #999; font-size: 0.9rem;">Video embedding coming soon. You can view the video at the URL above.</p>
+          </div>
+        `;
+      } else if (currentLesson.lesson_type === 'quiz') {
+        content.innerHTML = '<p>Switch to the <strong>Quiz</strong> tab above to take the quiz.</p>';
+      } else if (currentLesson.lesson_type === 'assignment') {
+        content.innerHTML = '<p>Switch to the <strong>Assignment</strong> tab above to submit your work.</p>';
+      }
+    }
+
+    async function loadDiscussion() {
+      try {
+        const threads = await getDiscussionThreads(currentLesson.id);
+        renderDiscussion(threads);
+      } catch (error) {
+        console.error('Error loading discussion:', error);
+        // Silently fail - discussion is optional
+      }
+    }
+
+    function renderDiscussion(threads) {
+      const container = document.getElementById('discussionList');
+
+      if (threads.length === 0) {
+        container.innerHTML = '<p style="color: #999;">No discussions yet. Start one above!</p>';
+        return;
+      }
+
+      container.innerHTML = threads.map(thread => `
+        <div class="discussion-thread" onclick="viewThread('${thread.id}')">
+          <div class="thread-title">${thread.title}</div>
+          <div class="thread-meta">
+            By: ${thread.created_by} | ${thread.qh_discussion_posts[0]?.count || 0} replies
+          </div>
+        </div>
+      `).join('');
+    }
+
+    window.viewThread = function(threadId) {
+      alert('Thread viewer coming soon!');
+    };
+
+    document.getElementById('newThreadForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const title = document.getElementById('newThreadTitle').value;
+
+      try {
+        await createDiscussionThread(currentLesson.id, title);
+        document.getElementById('newThreadForm').reset();
+        showAlert('Discussion started!', 'success');
+        await loadDiscussion();
+      } catch (error) {
+        console.error('Error creating thread:', error);
+        showAlert('Failed to create discussion', 'error');
+      }
+    });
+
+    window.switchTab = function(tabName) {
+      // Hide all tabs
+      document.querySelectorAll('.tab-content').forEach(tab => {
+        tab.classList.remove('active');
+      });
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+      });
+
+      // Show selected tab
+      document.getElementById(tabName + 'Tab').classList.add('active');
+      event.target.classList.add('active');
+    };
+
+    window.goToCourse = function() {
+      if (!currentCourse) return;
+      window.location.href = `/course.html?course=${currentCourse.id}`;
+    };
+
+    window.goToNextLesson = async function() {
+      if (!lessons.length) {
+        const all = await getLessonsByCourse(currentCourse.id);
+        lessons = all;
+      }
+
+      const currentIndex = lessons.findIndex(l => l.id === currentLesson.id);
+      if (currentIndex < lessons.length - 1) {
+        window.location.href = `/lesson.html?lesson=${lessons[currentIndex + 1].id}`;
+      } else {
+        alert('You have completed all lessons in this course!');
+      }
+    };
+
+    function showAlert(message, type) {
+      const container = document.getElementById('alertContainer');
+      const alert = document.createElement('div');
+      alert.className = `alert ${type}`;
+      alert.textContent = message;
+      container.appendChild(alert);
+
+      setTimeout(() => alert.remove(), 5000);
+    }
+
+    // Initialize
+    await checkAuth();
+    await loadLesson();
+  </script>
+</body>
+</html>
