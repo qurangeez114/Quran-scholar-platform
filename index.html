@@ -5298,13 +5298,24 @@ function toggleLang(lang) {
 }
 
 function applyLangState() {
+  const failedLangs = [];
   Object.keys(langState).forEach(lang => {
     const btn = document.getElementById('btn-' + lang);
     if (btn) btn.classList.toggle('active', langState[lang]);
-    document.querySelectorAll('.lang-' + lang).forEach(el => {
+
+    const divs = document.querySelectorAll('.lang-' + lang);
+    if (divs.length === 0 && langState[lang]) {
+      // Language is enabled but no divs found - this might be the issue
+      console.warn(`[ApplyLangState] No divs found for language: ${lang}`);
+      failedLangs.push(lang);
+    }
+    divs.forEach(el => {
       el.style.display = langState[lang] ? '' : 'none';
     });
   });
+  if (failedLangs.length > 0) {
+    console.log('[ApplyLangState] Languages with no visible divs:', failedLangs);
+  }
 }
 
 function closeWordModal(e) {
@@ -9234,11 +9245,26 @@ function syncChips() {
 }
 
 function toggleLangChip(lang) {
+  // Debug logging
+  const prevState = langState[lang];
   langState[lang] = !langState[lang];
-  syncChips();
-  try { localStorage.setItem('langState', JSON.stringify(langState)); } catch {}
-  applyLangState();
-  updateLangBar();
+  console.log(`[LangChip] Toggled ${lang}: ${prevState} → ${langState[lang]}`);
+
+  try {
+    syncChips();
+    try { localStorage.setItem('langState', JSON.stringify(langState)); } catch {}
+    applyLangState();
+    updateLangBar();
+
+    // Verify the change took effect
+    setTimeout(() => {
+      const divsCount = document.querySelectorAll('.lang-' + lang).length;
+      const visibleDivs = Array.from(document.querySelectorAll('.lang-' + lang)).filter(d => d.style.display !== 'none').length;
+      console.log(`[LangChip] After ${lang}: ${divsCount} total divs, ${visibleDivs} visible (expected: ${langState[lang] ? 'all' : 'none'})`);
+    }, 100);
+  } catch (e) {
+    console.error(`[LangChip] Error toggling ${lang}:`, e);
+  }
 }
 
 function setAllLangs(on) {
