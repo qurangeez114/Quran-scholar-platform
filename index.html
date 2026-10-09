@@ -151,7 +151,7 @@ body { font-family: 'EB Garamond', Georgia, serif; background: #F5EDD8; color: #
 .verse-card { background: #fff; border: 2px solid #D4C9A8; border-radius: 10px; margin-bottom: 14px; overflow: hidden; }
 .verse-card.open { border-color: #B8902A; box-shadow: 0 4px 20px rgba(184,144,42,0.15); }
 .verse-top { display: flex; align-items: flex-start; padding: 16px 18px; gap: 12px; cursor: pointer; }
-.verse-num { min-width: 118px; height: 34px; border-radius: 8px; background: #FDF5DE; border: 2px solid #D4A830; display: flex; align-items: center; justify-content: center; white-space:nowrap; font-size: 10px; letter-spacing:.01em; color: #77581A; font-weight: 800; flex-shrink: 0; margin-top: 4px; padding: 0 8px; line-height:1; }
+.verse-num { min-width: 180px; height: 70px; border-radius: 12px; background: #1a1a1a; border: 5px solid #000000; display: flex; align-items: center; justify-content: center; white-space:nowrap; font-size: 24px; letter-spacing:.03em; color: #FFEB3B; font-weight: 900; flex-shrink: 0; margin-top: 4px; padding: 0 16px; line-height:1; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5); }
 .verse-body { flex: 1; }
 .verse-arabic { font-family: 'Scheherazade New', 'Amiri', serif; font-size: 28px; color: #000000; direction: rtl; text-align: right; line-height: 2.1; margin-bottom: 12px; font-weight: 600; }
 .verse-english { font-size: 17px; color: #111111; line-height: 1.9; font-style: italic; font-weight: 500; font-family: 'EB Garamond', serif; letter-spacing: 0.1px; }
@@ -934,9 +934,9 @@ body { padding-bottom: 80px !important; }
   .verse-num {
     grid-area: num !important;
     width: auto !important;
-    min-width: 112px !important;
+    min-width: 170px !important;
     max-width: none !important;
-    height: 34px !important;
+    height: 65px !important;
     flex-shrink: 0 !important;
   }
 
@@ -1177,6 +1177,7 @@ body { padding-bottom: 80px !important; }
 
 </style>
 <link rel="stylesheet" href="activity-history.css">
+<link rel="stylesheet" href="hadith-split-pane.css">
 </head>
 <body>
 <div class="app">
@@ -6026,13 +6027,26 @@ function renderScholarEntries(entries, tradition, fallbackMsg) {
   if (!hasEntriesForTab(entries, tradition)) {
     return fallbackMsg;
   }
-  return entries.map((e, idx) => {
+
+  // Filter entries by tradition
+  const filteredEntries = entries.filter(e => traditionMatchesTab(e.tradition, tradition));
+
+  // Check if these are hadith entries (have both text and ideally arabic_text fields)
+  const isHadith = filteredEntries.some(e => e.text || e.text_english || e.arabic_text);
+
+  // If hadith entries with split-pane capable structure, use split-pane renderer
+  if (isHadith && typeof renderHadithSplitPaneList === 'function') {
+    return renderHadithSplitPaneList(filteredEntries, true);
+  }
+
+  // Fall back to original single-column rendering for tafsir and other content
+  return filteredEntries.map((e, idx) => {
     const sourceUrl = getHadithSourceUrl(e.scholar || '');
     const verifyLink = sourceUrl
       ? `<a href="${sourceUrl}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:3px;padding:2px 8px;background:#E8F4FD;border:1px solid #7FB3D3;border-radius:10px;font-size:10px;font-weight:700;color:#1A6FA8;text-decoration:none;margin-left:4px;">🔗 Verify Source</a>`
       : e.isAI ? `<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 8px;background:#FEF9E7;border:1px solid #F0B429;border-radius:10px;font-size:10px;font-weight:700;color:#8A6A00;">⚠️ AI Synthesis — no direct link</span>` : '';
     return `
-    <div class="scholar-entry" data-tradition="${e.tradition || ''}" style="${!traditionMatchesTab(e.tradition, tradition) ? 'display:none' : ''}">
+    <div class="scholar-entry" data-tradition="${e.tradition || ''}">
       <div class="scholar-name" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
         <span>${e.scholar || 'Unknown'}</span>
         <span class="source-badge ${e.isAI ? 'source-ai' : 'source-sourced'}">${e.isAI ? 'AI Synthesis' : 'Sourced'}</span>
@@ -11876,6 +11890,9 @@ window.QNAV_PAGE_ICON = '📖';
 <script>
 window.QNAV_PAGE_LABEL='Quran Reader';window.QNAV_PAGE_ICON='📖';
 </script>
+
+<!-- Hadith Split-Pane Layout Renderer -->
+<script src="hadith-split-pane.js" defer></script>
 
 <!-- Social Media Card Generator with Navigation -->
 <script src="social-card.js" defer></script>
