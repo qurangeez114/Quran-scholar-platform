@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Course Management - QuranHikma Admin</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f5f5f5;
+      color: #333;
+    }
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 1.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .header h1 { font-size: 1.8rem; }
+    .header-nav { display: flex; gap: 1rem; }
+    .header-nav a {
+      color: white;
+      text-decoration: none;
+      padding: 0.5rem 1rem;
+      background: rgba(255,255,255,0.2);
+      border-radius: 6px;
+      transition: background 0.3s;
+    }
+    .header-nav a:hover { background: rgba(255,255,255,0.3); }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+
+    .section {
+      background: white;
+      border-radius: 12px;
+      padding: 2rem;
+      margin-bottom: 2rem;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .section h2 {
+      font-size: 1.5rem;
+      margin-bottom: 1.5rem;
+      color: #333;
+      border-bottom: 2px solid #667eea;
+      padding-bottom: 0.5rem;
+    }
+
+    .form-group {
+      margin-bottom: 1.5rem;
+    }
+    .form-group label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      color: #555;
+    }
+    .form-group input,
+    .form-group textarea {
+      width: 100%;
+      padding: 0.75rem;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-family: inherit;
+      font-size: 1rem;
+    }
+    .form-group textarea { min-height: 100px; }
+    .form-group input:focus,
+    .form-group textarea:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+
+    .btn {
+      padding: 0.75rem 1.5rem;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: background 0.3s;
+    }
+    .btn-primary { background: #667eea; color: white; }
+    .btn-primary:hover { background: #5568d3; }
+    .btn-secondary { background: #ddd; color: #333; }
+    .btn-secondary:hover { background: #ccc; }
+    .btn-danger { background: #f44336; color: white; }
+    .btn-danger:hover { background: #da190b; }
+    .btn-success { background: #4CAF50; color: white; }
+
+    .courses-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1.5rem;
+    }
+
+    .course-item {
+      background: #f9f9f9;
+      border: 1px solid #eee;
+      border-radius: 8px;
+      padding: 1.5rem;
+      transition: border-color 0.3s;
+    }
+    .course-item:hover { border-color: #667eea; }
+
+    .course-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      color: #333;
+    }
+
+    .course-description {
+      color: #666;
+      font-size: 0.9rem;
+      margin-bottom: 1rem;
+      line-height: 1.4;
+    }
+
+    .course-meta {
+      font-size: 0.85rem;
+      color: #999;
+      margin-bottom: 1rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid #eee;
+    }
+
+    .course-actions {
+      display: flex;
+      gap: 0.5rem;
+    }
+    .course-actions button {
+      flex: 1;
+      padding: 0.5rem;
+      font-size: 0.85rem;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 0.25rem 0.75rem;
+      border-radius: 4px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      margin-top: 0.5rem;
+    }
+    .status-badge.published { background: #e8f5e9; color: #2e7d32; }
+    .status-badge.draft { background: #fff3e0; color: #e65100; }
+
+    .alert {
+      padding: 1rem;
+      border-radius: 6px;
+      margin-bottom: 1.5rem;
+    }
+    .alert.error { background: #ffebee; color: #c62828; border-left: 4px solid #c62828; }
+    .alert.success { background: #e8f5e9; color: #2e7d32; border-left: 4px solid #2e7d32; }
+
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal.active {
+      display: flex;
+    }
+    .modal-content {
+      background: white;
+      border-radius: 12px;
+      padding: 2rem;
+      max-width: 500px;
+      width: 90%;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+    .modal-header {
+      font-size: 1.3rem;
+      font-weight: 600;
+      margin-bottom: 1.5rem;
+    }
+    .modal-close {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      background: none;
+      border: none;
+      font-size: 1.5rem;
+      cursor: pointer;
+      color: #999;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>🎓 Course Management</h1>
+    <div class="header-nav">
+      <a href="/courses.html">View Courses</a>
+      <a href="/account.html">My Account</a>
+      <a href="/">Home</a>
+    </div>
+  </div>
+
+  <div class="container">
+    <div id="alertContainer"></div>
+
+    <!-- Create Course Section -->
+    <div class="section">
+      <h2>📝 Create New Course</h2>
+      <form id="createCourseForm">
+        <div class="form-group">
+          <label>Course Title</label>
+          <input type="text" id="courseTitle" placeholder="e.g., Islamic History 101" required>
+        </div>
+        <div class="form-group">
+          <label>Description</label>
+          <textarea id="courseDescription" placeholder="Describe what students will learn..."></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary">Create Course</button>
+      </form>
+    </div>
+
+    <!-- Courses List Section -->
+    <div class="section">
+      <h2>📚 Your Courses</h2>
+      <div class="courses-list" id="coursesList">
+        <div style="grid-column: 1/-1; text-align: center; color: #999;">Loading courses...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Course Modal -->
+  <div class="modal" id="editModal">
+    <div class="modal-content">
+      <button class="modal-close" onclick="closeEditModal()">&times;</button>
+      <div class="modal-header">Edit Course</div>
+      <form id="editCourseForm">
+        <input type="hidden" id="editCourseId">
+        <div class="form-group">
+          <label>Course Title</label>
+          <input type="text" id="editTitle" required>
+        </div>
+        <div class="form-group">
+          <label>Description</label>
+          <textarea id="editDescription"></textarea>
+        </div>
+        <div class="form-group">
+          <label>
+            <input type="checkbox" id="editPublished"> Published
+          </label>
+        </div>
+        <div style="display: flex; gap: 1rem;">
+          <button type="submit" class="btn btn-primary" style="flex: 1;">Save Changes</button>
+          <button type="button" class="btn btn-secondary" onclick="closeEditModal()" style="flex: 1;">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script type="module">
+    import { supabase } from '../accounts/client.js';
+    import { getCourses, createCourse, updateCourse, deleteCourse } from '../courses-api.js';
+
+    let currentUser = null;
+    let courses = [];
+
+    async function checkAuth() {
+      const { data } = await supabase.auth.getSession();
+      currentUser = data.session?.user;
+
+      if (!currentUser) {
+        window.location.href = '/account.html';
+      }
+    }
+
+    async function loadCourses() {
+      try {
+        const allCourses = await getCourses(false); // Include unpublished
+        courses = allCourses.filter(c => c.created_by === currentUser.id);
+        renderCourses();
+      } catch (error) {
+        console.error('Error loading courses:', error);
+        showAlert('Failed to load courses', 'error');
+      }
+    }
+
+    function renderCourses() {
+      const container = document.getElementById('coursesList');
+
+      if (courses.length === 0) {
+        container.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: #999;">No courses yet. Create your first course above!</div>';
+        return;
+      }
+
+      container.innerHTML = courses.map(course => `
+        <div class="course-item">
+          <div class="course-title">${course.title}</div>
+          <div class="course-description">${course.description || 'No description'}</div>
+          <div class="course-meta">
+            Created: ${new Date(course.created_at).toLocaleDateString()}
+          </div>
+          <div>
+            <span class="status-badge ${course.is_published ? 'published' : 'draft'}">
+              ${course.is_published ? '✓ Published' : 'Draft'}
+            </span>
+          </div>
+          <div class="course-actions">
+            <button class="btn btn-secondary" onclick="editCourse('${course.id}')">Edit</button>
+            <button class="btn btn-primary" onclick="viewLessons('${course.id}')">Lessons</button>
+            <button class="btn btn-danger" onclick="deleteCourseConfirm('${course.id}')">Delete</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    document.getElementById('createCourseForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const title = document.getElementById('courseTitle').value;
+      const description = document.getElementById('courseDescription').value;
+
+      try {
+        await createCourse(title, description);
+        showAlert('Course created successfully!', 'success');
+        document.getElementById('createCourseForm').reset();
+        await loadCourses();
+      } catch (error) {
+        console.error('Error creating course:', error);
+        showAlert('Failed to create course', 'error');
+      }
+    });
+
+    window.editCourse = async function(courseId) {
+      const course = courses.find(c => c.id === courseId);
+      if (!course) return;
+
+      document.getElementById('editCourseId').value = courseId;
+      document.getElementById('editTitle').value = course.title;
+      document.getElementById('editDescription').value = course.description || '';
+      document.getElementById('editPublished').checked = course.is_published;
+
+      document.getElementById('editModal').classList.add('active');
+    };
+
+    window.closeEditModal = function() {
+      document.getElementById('editModal').classList.remove('active');
+    };
+
+    document.getElementById('editCourseForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const courseId = document.getElementById('editCourseId').value;
+      const title = document.getElementById('editTitle').value;
+      const description = document.getElementById('editDescription').value;
+      const is_published = document.getElementById('editPublished').checked;
+
+      try {
+        await updateCourse(courseId, { title, description, is_published });
+        showAlert('Course updated successfully!', 'success');
+        closeEditModal();
+        await loadCourses();
+      } catch (error) {
+        console.error('Error updating course:', error);
+        showAlert('Failed to update course', 'error');
+      }
+    });
+
+    window.viewLessons = function(courseId) {
+      window.location.href = `/admin/lesson-manager.html?course=${courseId}`;
+    };
+
+    window.deleteCourseConfirm = async function(courseId) {
+      if (!confirm('Are you sure? This will delete all lessons and enrollments.')) return;
+
+      try {
+        await deleteCourse(courseId);
+        showAlert('Course deleted!', 'success');
+        await loadCourses();
+      } catch (error) {
+        console.error('Error deleting course:', error);
+        showAlert('Failed to delete course', 'error');
+      }
+    };
+
+    function showAlert(message, type) {
+      const container = document.getElementById('alertContainer');
+      const alert = document.createElement('div');
+      alert.className = `alert ${type}`;
+      alert.textContent = message;
+      container.appendChild(alert);
+
+      setTimeout(() => alert.remove(), 5000);
+    }
+
+    // Initialize
+    await checkAuth();
+    await loadCourses();
+  </script>
+</body>
+</html>

@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Courses - QuranHikma</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f5f5f5;
+      color: #333;
+    }
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 2rem;
+      text-align: center;
+    }
+    .header h1 { font-size: 2.5rem; margin-bottom: 0.5rem; }
+    .header p { font-size: 1.1rem; opacity: 0.9; }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+
+    .status-bar {
+      background: white;
+      padding: 1rem;
+      border-radius: 8px;
+      margin-bottom: 2rem;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .status-bar.logged-in { border-left: 4px solid #4CAF50; }
+    .status-bar.not-logged-in { border-left: 4px solid #f44336; }
+
+    .nav-buttons {
+      display: flex;
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+    .nav-buttons a {
+      padding: 0.75rem 1.5rem;
+      border-radius: 6px;
+      text-decoration: none;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-primary { background: #667eea; color: white; }
+    .btn-primary:hover { background: #5568d3; }
+    .btn-secondary { background: #ddd; color: #333; }
+    .btn-secondary:hover { background: #ccc; }
+
+    .courses-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 2rem;
+      margin: 2rem 0;
+    }
+
+    .course-card {
+      background: white;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      transition: transform 0.3s, box-shadow 0.3s;
+      cursor: pointer;
+    }
+    .course-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 12px rgba(0,0,0,0.15);
+    }
+
+    .course-thumbnail {
+      width: 100%;
+      height: 180px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 3rem;
+    }
+
+    .course-content {
+      padding: 1.5rem;
+    }
+
+    .course-title {
+      font-size: 1.3rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      color: #333;
+    }
+
+    .course-description {
+      color: #666;
+      font-size: 0.95rem;
+      margin-bottom: 1rem;
+      line-height: 1.5;
+    }
+
+    .course-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-top: 1rem;
+      border-top: 1px solid #eee;
+      font-size: 0.85rem;
+      color: #999;
+    }
+
+    .course-action {
+      padding: 0.75rem 1rem;
+      margin-top: 1rem;
+      background: #667eea;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      width: 100%;
+      transition: background 0.3s;
+    }
+    .course-action:hover { background: #5568d3; }
+    .course-action.enrolled { background: #4CAF50; }
+
+    .empty-state {
+      text-align: center;
+      padding: 3rem;
+      color: #999;
+    }
+    .empty-state h2 { margin-bottom: 1rem; color: #666; }
+
+    .loader {
+      text-align: center;
+      padding: 2rem;
+      color: #999;
+    }
+
+    .alert {
+      padding: 1rem;
+      border-radius: 6px;
+      margin-bottom: 1rem;
+    }
+    .alert.error { background: #ffebee; color: #c62828; border-left: 4px solid #c62828; }
+    .alert.success { background: #e8f5e9; color: #2e7d32; border-left: 4px solid #2e7d32; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>📚 Courses</h1>
+    <p>Expand your knowledge with our curated courses</p>
+  </div>
+
+  <div class="container">
+    <div class="status-bar" id="statusBar">
+      <span id="statusText">Loading...</span>
+      <div class="nav-buttons">
+        <a href="/account.html" class="btn-secondary">My Account</a>
+        <a href="/" class="btn-secondary">Home</a>
+        <span id="adminLink" style="display:none;">
+          <a href="/admin/courses.html" class="btn-secondary">Admin Dashboard</a>
+        </span>
+      </div>
+    </div>
+
+    <div id="alertContainer"></div>
+
+    <div id="coursesContainer" class="courses-grid">
+      <div class="loader">Loading courses...</div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { supabase } from './accounts/client.js';
+    import { getCourses, getEnrollment, enrollInCourse } from './courses-api.js';
+
+    let courses = [];
+    let currentUser = null;
+
+    async function checkAuth() {
+      const { data } = await supabase.auth.getSession();
+      currentUser = data.session?.user;
+
+      const statusBar = document.getElementById('statusBar');
+      const statusText = document.getElementById('statusText');
+
+      if (currentUser) {
+        statusBar.classList.add('logged-in');
+        statusBar.classList.remove('not-logged-in');
+        statusText.textContent = `✓ Logged in as ${currentUser.email}`;
+        document.getElementById('adminLink').style.display = 'inline-block';
+      } else {
+        statusBar.classList.add('not-logged-in');
+        statusBar.classList.remove('logged-in');
+        statusText.textContent = '⚠ Not logged in. Create an account to enroll in courses.';
+      }
+    }
+
+    async function loadCourses() {
+      try {
+        courses = await getCourses(true); // Only published courses
+        renderCourses();
+      } catch (error) {
+        console.error('Error loading courses:', error);
+        showAlert('Failed to load courses', 'error');
+      }
+    }
+
+    async function renderCourses() {
+      const container = document.getElementById('coursesContainer');
+
+      if (courses.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state" style="grid-column: 1/-1;">
+            <h2>No courses available yet</h2>
+            <p>Check back soon for new courses!</p>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = '';
+
+      for (const course of courses) {
+        const card = document.createElement('div');
+        card.className = 'course-card';
+
+        // Check if user is enrolled
+        let isEnrolled = false;
+        let enrollment = null;
+        if (currentUser) {
+          try {
+            enrollment = await getEnrollment(course.id);
+            isEnrolled = !!enrollment;
+          } catch (err) {
+            // Not enrolled
+          }
+        }
+
+        const lessonCount = Math.floor(Math.random() * 10) + 1; // Placeholder
+
+        card.innerHTML = `
+          <div class="course-thumbnail">📖</div>
+          <div class="course-content">
+            <div class="course-title">${course.title}</div>
+            <div class="course-description">${course.description || 'No description'}</div>
+            <div class="course-meta">
+              <span>${lessonCount} lessons</span>
+              <span>${isEnrolled ? '✓ Enrolled' : 'Free'}</span>
+            </div>
+            <button
+              class="course-action ${isEnrolled ? 'enrolled' : ''}"
+              data-course-id="${course.id}"
+              ${!currentUser ? 'disabled onclick="alert(\'Please log in first\')"' : ''}
+            >
+              ${isEnrolled ? '✓ Already Enrolled' : 'Enroll Now'}
+            </button>
+          </div>
+        `;
+
+        container.appendChild(card);
+      }
+
+      // Add event listeners to enroll buttons
+      document.querySelectorAll('.course-action:not(.enrolled)').forEach(btn => {
+        btn.addEventListener('click', handleEnroll);
+      });
+    }
+
+    async function handleEnroll(e) {
+      if (!currentUser) {
+        showAlert('Please log in to enroll', 'error');
+        return;
+      }
+
+      const courseId = e.target.dataset.courseId;
+      const btn = e.target;
+
+      try {
+        btn.disabled = true;
+        await enrollInCourse(courseId);
+        showAlert('Successfully enrolled in course!', 'success');
+        btn.textContent = '✓ Already Enrolled';
+        btn.classList.add('enrolled');
+      } catch (error) {
+        console.error('Error enrolling:', error);
+        showAlert('Failed to enroll in course', 'error');
+        btn.disabled = false;
+      }
+    }
+
+    function showAlert(message, type) {
+      const container = document.getElementById('alertContainer');
+      const alert = document.createElement('div');
+      alert.className = `alert ${type}`;
+      alert.textContent = message;
+      container.appendChild(alert);
+
+      setTimeout(() => alert.remove(), 5000);
+    }
+
+    // Initialize
+    await checkAuth();
+    await loadCourses();
+  </script>
+</body>
+</html>
