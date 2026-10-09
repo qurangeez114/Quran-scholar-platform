@@ -1,17 +1,23 @@
 // Run against staging with two verified test users
+// Set these environment variables before running:
+//   USER_A_EMAIL, USER_A_PASS, USER_B_EMAIL, USER_B_PASS
 import assert from 'node:assert/strict';
 
 const base = 'https://weegzqzxbqeeokkiifpt.supabase.co';
 const key = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndlZWd6cXp4YnFlZW9ra2lpZnB0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU1OTI1MDksImV4cCI6MjA4MTE2ODUwOX0.glav1HW9MEEjuae-2Ndq-V0uyyYKrLaJdGwbdxYFArA';
 
+const {USER_A_EMAIL, USER_A_PASS, USER_B_EMAIL, USER_B_PASS} = process.env;
+assert(USER_A_EMAIL && USER_A_PASS && USER_B_EMAIL && USER_B_PASS,
+  'Set USER_A_EMAIL, USER_A_PASS, USER_B_EMAIL, USER_B_PASS environment variables');
+
 const userA = {
-  email: 'testuser.a.accounts@gmail.com',
-  password: 'QuranHikmaTest2024!'
+  email: USER_A_EMAIL,
+  password: USER_A_PASS
 };
 
 const userB = {
-  email: 'testuser.b.accounts@gmail.com',
-  password: 'StagingTest2024!z'
+  email: USER_B_EMAIL,
+  password: USER_B_PASS
 };
 
 async function login(email, password) {
