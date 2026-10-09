@@ -268,6 +268,16 @@
             <div class="progress-fill" id="progressFill"></div>
           </div>
           <div class="progress-text" id="progressText">0% Complete</div>
+
+          <!-- Certificate Section (shown when completed) -->
+          <div id="certificateSection" style="display: none; margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid #eee;">
+            <div style="background: #e8f5e9; border-left: 4px solid #4CAF50; padding: 1rem; border-radius: 6px; margin-bottom: 1rem;">
+              <div style="color: #2e7d32; font-weight: 600; margin-bottom: 0.5rem;">🎓 Course Completed!</div>
+              <p style="color: #555; font-size: 0.95rem;">Congratulations! You have successfully completed this course. Download your certificate to showcase your achievement.</p>
+            </div>
+            <button class="btn btn-primary" id="downloadCertBtn" style="width: 100%; margin-bottom: 0.5rem;">📥 Download Certificate</button>
+            <button class="btn btn-secondary" id="viewCertBtn" style="width: 100%;">👁️ View Certificate</button>
+          </div>
         </div>
 
         <!-- Action Card -->
@@ -282,7 +292,7 @@
 
   <script type="module">
     import { supabase } from './accounts/client.js';
-    import { getCourseById, getLessonsByCourse, getEnrollment } from './courses-api.js';
+    import { getCourseById, getLessonsByCourse, getEnrollment, generateCertificatePDF } from './courses-api.js';
 
     let currentUser = null;
     let currentCourse = null;
@@ -387,6 +397,7 @@
       const actionBtn = document.getElementById('actionBtn');
       const enrollStatus = document.getElementById('enrollmentStatus');
       const progressCard = document.getElementById('progressCard');
+      const certificateSection = document.getElementById('certificateSection');
 
       if (enrollment) {
         actionBtn.textContent = '▶ Start Learning';
@@ -398,10 +409,25 @@
         document.getElementById('progressFill').style.width = progress + '%';
         document.getElementById('progressText').textContent = progress + '% Complete';
         progressCard.style.display = 'block';
+
+        // Show certificate section if course is completed
+        if (progress === 100) {
+          certificateSection.style.display = 'block';
+          actionBtn.textContent = '✓ Course Completed';
+          actionBtn.disabled = true;
+          actionBtn.style.opacity = '0.7';
+
+          // Set up certificate buttons
+          document.getElementById('downloadCertBtn').onclick = () => downloadCertificate(currentCourse.id);
+          document.getElementById('viewCertBtn').onclick = () => viewCertificate(currentCourse.id);
+        } else {
+          certificateSection.style.display = 'none';
+        }
       } else {
         actionBtn.textContent = '📚 Enroll in Course';
         actionBtn.onclick = enrollInCourse;
         enrollStatus.textContent = 'Not enrolled';
+        certificateSection.style.display = 'none';
       }
     }
 
@@ -433,6 +459,44 @@
     window.handleAction = function() {
       const btn = document.getElementById('actionBtn');
       btn.click();
+    };
+
+    window.viewCertificate = async function(courseId) {
+      try {
+        const certData = await generateCertificatePDF(courseId);
+
+        // Open in new window for viewing
+        const newWindow = window.open('', '_blank');
+        newWindow.document.write(certData.html);
+        newWindow.document.close();
+      } catch (error) {
+        console.error('Error generating certificate:', error);
+        showAlert('Failed to generate certificate', 'error');
+      }
+    };
+
+    window.downloadCertificate = async function(courseId) {
+      try {
+        const certData = await generateCertificatePDF(courseId);
+
+        // Create blob from HTML content
+        const blob = new Blob([certData.html], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+
+        // Create download link
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = certData.fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+        showAlert('Certificate downloaded!', 'success');
+      } catch (error) {
+        console.error('Error downloading certificate:', error);
+        showAlert('Failed to download certificate', 'error');
+      }
     };
 
     function showAlert(message, type) {

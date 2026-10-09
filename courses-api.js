@@ -597,3 +597,257 @@ export async function getStudentDashboard() {
     isCompleted: enrollment.progress_pct === 100
   }));
 }
+
+// Generate and download certificate as PDF
+export async function generateCertificatePDF(courseId) {
+  const user = (await supabase.auth.getUser()).data.user;
+  if (!user) throw new Error('Not authenticated');
+
+  // Get certificate data
+  const { data: certificate, error: certError } = await supabase
+    .from('qh_certificates')
+    .select('*')
+    .eq('course_id', courseId)
+    .eq('user_id', user.id)
+    .single();
+
+  if (certError) throw certError;
+  if (!certificate) throw new Error('Certificate not found');
+
+  // Get course data
+  const { data: course, error: courseError } = await supabase
+    .from('qh_courses')
+    .select('title, description')
+    .eq('id', courseId)
+    .single();
+
+  if (courseError) throw courseError;
+
+  // Generate SVG certificate (alternative to pdf-lib for simplicity)
+  const certificateHTML = generateCertificateHTML({
+    studentName: user.email.split('@')[0],
+    courseName: course.title,
+    completionDate: new Date(certificate.issued_at).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    }),
+    certificateCode: certificate.certificate_code
+  });
+
+  // Create downloadable content
+  return {
+    html: certificateHTML,
+    fileName: `certificate-${course.title.replace(/\s+/g, '-').toLowerCase()}.html`,
+    certificateCode: certificate.certificate_code,
+    courseName: course.title
+  };
+}
+
+function generateCertificateHTML(data) {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Certificate - ${data.courseName}</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      padding: 20px;
+    }
+    .certificate {
+      width: 100%;
+      max-width: 900px;
+      aspect-ratio: 11 / 8.5;
+      background: white;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+      border-radius: 15px;
+      padding: 60px 80px;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      print-color-adjust: exact;
+    }
+    .certificate::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      right: -50%;
+      width: 600px;
+      height: 600px;
+      background: radial-gradient(circle, rgba(102, 126, 234, 0.05) 0%, transparent 70%);
+      border-radius: 50%;
+    }
+    .certificate::after {
+      content: '';
+      position: absolute;
+      bottom: -30%;
+      left: -30%;
+      width: 400px;
+      height: 400px;
+      background: radial-gradient(circle, rgba(118, 75, 162, 0.05) 0%, transparent 70%);
+      border-radius: 50%;
+    }
+    .certificate-content {
+      position: relative;
+      z-index: 1;
+      text-align: center;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .certificate-header {
+      margin-bottom: 30px;
+    }
+    .certificate-logo {
+      font-size: 32px;
+      margin-bottom: 10px;
+    }
+    .certificate-title {
+      font-size: 28px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 5px;
+      letter-spacing: 2px;
+    }
+    .certificate-subtitle {
+      font-size: 14px;
+      color: #999;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .certificate-divider {
+      width: 80px;
+      height: 2px;
+      background: linear-gradient(90deg, #667eea, #764ba2);
+      margin: 20px auto 30px;
+    }
+    .certificate-body {
+      margin: 20px 0;
+    }
+    .certificate-text {
+      font-size: 16px;
+      color: #555;
+      margin: 10px 0;
+      line-height: 1.6;
+    }
+    .certificate-course {
+      font-size: 24px;
+      font-weight: 600;
+      color: #667eea;
+      margin: 20px 0;
+      font-style: italic;
+    }
+    .certificate-name {
+      font-size: 28px;
+      font-weight: 600;
+      color: #333;
+      margin: 20px 0;
+      border-bottom: 2px solid #667eea;
+      padding-bottom: 10px;
+    }
+    .certificate-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      margin-top: 40px;
+      position: relative;
+      z-index: 1;
+    }
+    .certificate-code {
+      text-align: left;
+      font-size: 12px;
+      color: #999;
+    }
+    .certificate-code-label {
+      display: block;
+      font-weight: 600;
+      color: #667eea;
+      margin-bottom: 3px;
+    }
+    .certificate-date {
+      text-align: center;
+      font-size: 12px;
+      color: #999;
+    }
+    .certificate-signature {
+      text-align: right;
+      font-size: 12px;
+      color: #999;
+    }
+    .certificate-seal {
+      position: absolute;
+      top: 30px;
+      right: 40px;
+      font-size: 60px;
+      opacity: 0.1;
+      z-index: 0;
+    }
+    @media print {
+      body {
+        background: white;
+        padding: 0;
+      }
+      .certificate {
+        box-shadow: none;
+        border-radius: 0;
+        page-break-after: avoid;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="certificate">
+    <div class="certificate-seal">🎓</div>
+
+    <div class="certificate-content">
+      <div class="certificate-header">
+        <div class="certificate-logo">📚</div>
+        <div class="certificate-title">Certificate of Completion</div>
+        <div class="certificate-subtitle">QuranHikma Learning Platform</div>
+      </div>
+
+      <div class="certificate-divider"></div>
+
+      <div class="certificate-body">
+        <div class="certificate-text">This certifies that</div>
+        <div class="certificate-name">${data.studentName}</div>
+        <div class="certificate-text">has successfully completed the course</div>
+        <div class="certificate-course">${data.courseName}</div>
+        <div class="certificate-text">and demonstrated proficiency in the course material</div>
+      </div>
+    </div>
+
+    <div class="certificate-footer">
+      <div class="certificate-code">
+        <span class="certificate-code-label">Certificate Code</span>
+        ${data.certificateCode}
+      </div>
+      <div class="certificate-date">
+        <strong>Date Issued</strong><br>
+        ${data.completionDate}
+      </div>
+      <div class="certificate-signature">
+        <strong>QuranHikma</strong><br>
+        Learning Platform
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Auto-print functionality (can be triggered by user)
+    // window.print();
+  </script>
+</body>
+</html>`;
+}

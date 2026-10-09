@@ -308,7 +308,7 @@
 
   <script type="module">
     import { supabase } from './accounts/client.js';
-    import { getStudentDashboard, getCertificates } from './courses-api.js';
+    import { getStudentDashboard, getCertificates, generateCertificatePDF } from './courses-api.js';
 
     let currentUser = null;
     let dashboardData = [];
@@ -412,8 +412,8 @@
           </div>
 
           <div style="margin-top: 1.5rem;">
-            <a href="#" class="btn btn-primary btn-small">📥 Download PDF</a>
-            <a href="#" class="btn btn-secondary btn-small">Share Certificate</a>
+            <button class="btn btn-primary btn-small" onclick="downloadCertificate('${cert.course_id}')">📥 Download Certificate</button>
+            <button class="btn btn-secondary btn-small" onclick="viewCertificate('${cert.course_id}')">👁️ View Certificate</button>
           </div>
         </div>
       `).join('');
@@ -458,6 +458,44 @@
 
       setTimeout(() => alert.remove(), 5000);
     }
+
+    window.viewCertificate = async function(courseId) {
+      try {
+        const certData = await generateCertificatePDF(courseId);
+
+        // Open in new window for viewing
+        const newWindow = window.open('', '_blank');
+        newWindow.document.write(certData.html);
+        newWindow.document.close();
+      } catch (error) {
+        console.error('Error generating certificate:', error);
+        showAlert('Failed to generate certificate', 'info');
+      }
+    };
+
+    window.downloadCertificate = async function(courseId) {
+      try {
+        const certData = await generateCertificatePDF(courseId);
+
+        // Create blob from HTML content
+        const blob = new Blob([certData.html], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+
+        // Create download link
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = certData.fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+        showAlert('Certificate downloaded!', 'success');
+      } catch (error) {
+        console.error('Error downloading certificate:', error);
+        showAlert('Failed to download certificate', 'info');
+      }
+    };
 
     // Initialize
     await checkAuth();
