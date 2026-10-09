@@ -1,4 +1,4 @@
-import {db,message,exportResearch} from './client.js';
+import {db,message,exportResearch} from './client-staging.js';
 let mode='login',recovering=location.hash.includes('type=recovery');
 const $=id=>document.getElementById(id);
 function choose(next){mode=next;$('password-label').hidden=next==='recover';$('password').required=next!=='recover';$('password').autocomplete=next==='signup'?'new-password':'current-password';$('submit').textContent={login:'Log in',signup:'Create account',recover:'Send recovery email'}[next];}
