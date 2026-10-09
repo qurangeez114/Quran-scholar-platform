@@ -277,3 +277,282 @@ export async function updateEnrollmentProgress(enrollmentId, progress_pct) {
   if (error) throw error;
   return data;
 }
+
+// ============================================================================
+// PHASE 3: Advanced Features
+// ============================================================================
+
+// Certificate Generation
+export async function generateCertificate(courseId) {
+  const user = (await supabase.auth.getUser()).data.user;
+  if (!user) throw new Error('Not authenticated');
+
+  // Generate unique certificate code
+  const certificateCode = `CERT-${user.id.substring(0, 8)}-${courseId.substring(0, 8)}-${Date.now()}`;
+
+  const { data, error } = await supabase
+    .from('qh_certificates')
+    .insert({
+      user_id: user.id,
+      course_id: courseId,
+      certificate_code: certificateCode,
+      completion_date: new Date().toISOString().split('T')[0]
+    })
+    .select()
+    .single();
+
+  if (error) {
+    // Certificate already exists for this course
+    if (error.code === '23505') {
+      return getCertificateForCourse(courseId);
+    }
+    throw error;
+  }
+  return data;
+}
+
+export async function getCertificateForCourse(courseId) {
+  const user = (await supabase.auth.getUser()).data.user;
+  if (!user) throw new Error('Not authenticated');
+
+  const { data, error } = await supabase
+    .from('qh_certificates')
+    .select('*')
+    .eq('course_id', courseId)
+    .eq('user_id', user.id)
+    .single();
+
+  if (error && error.code === 'PGRST116') {
+    return null; // No certificate yet
+  }
+  if (error) throw error;
+  return data;
+}
+
+export async function getCertificates() {
+  const user = (await supabase.auth.getUser()).data.user;
+  if (!user) throw new Error('Not authenticated');
+
+  const { data, error } = await supabase
+    .from('qh_certificates')
+    .select('*, qh_courses(title, description)')
+    .eq('user_id', user.id)
+    .order('issued_at', { ascending: false });
+
+  if (error) throw error;
+  return data;
+}
+
+// Student Progress Tracking
+export async function updateStudentProgress(courseId, lessonId, completed = false, quizScore = null, assignmentGrade = null) {
+  const user = (await supabase.auth.getUser()).data.user;
+  if (!user) throw new Error('Not authenticated');
+
+  const progressData = {
+    user_id: user.id,
+    course_id: courseId,
+    lesson_id: lessonId,
+    completed: completed,
+    completed_at: completed ? new Date().toISOString() : null,
+    quiz_score: quizScore,
+    assignment_grade: assignmentGrade,
+    updated_at: new Date().toISOString()
+  };
+
+  const { data, error } = await supabase
+    .from('qh_student_progress')
+    .upsert(progressData)
+    .select()
+    .single();
+
+  if (error) throw error;
+
+  // Update enrollment progress percentage
+  await updateEnrollmentProgressFromLessons(courseId);
+
+  return data;
+}
+
+export async function getStudentProgress(courseId) {
+  const user = (await supabase.auth.getUser()).data.user;
+  if (!user) throw new Error('Not authenticated');
+
+  const { data, error } = await supabase
+    .from('qh_student_progress')
+    .select('*')
+    .eq('course_id', courseId)
+    .eq('user_id', user.id);
+
+  if (error) throw error;
+  return data;
+}
+
+export async function updateEnrollmentProgressFromLessons(courseId) {
+  const user = (await supabase.auth.getUser()).data.user;
+  if (!user) throw new Error('Not authenticated');
+
+  // Get total lessons in course
+  const { data: lessons, error: lessonsError } = await supabase
+    .from('qh_lessons')
+    .select('id')
+    .eq('course_id', courseId);
+
+  if (lessonsError) throw lessonsError;
+
+  if (lessons.length === 0) {
+    return; // No lessons, nothing to calculate
+  }
+
+  // Get completed lessons
+  const { data: progress, error: progressError } = await supabase
+    .from('qh_student_progress')
+    .select('lesson_id')
+    .eq('course_id', courseId)
+    .eq('user_id', user.id)
+    .eq('completed', true);
+
+  if (progressError) throw progressError;
+
+  const completedCount = progress.length;
+  const progressPct = Math.round((completedCount / lessons.length) * 100);
+
+  // Update enrollment
+  const { error: updateError } = await supabase
+    .from('qh_enrollments')
+    .update({
+      progress_pct: progressPct,
+      completed_lessons: completedCount,
+      updated_at: new Date().toISOString()
+    })
+    .eq('course_id', courseId)
+    .eq('user_id', user.id);
+
+  if (updateError) throw updateError;
+
+  // Check if course is completed (100%) and generate certificate
+  if (progressPct === 100) {
+    await generateCertificate(courseId);
+  }
+
+  return { progressPct, completedCount, totalLessons: lessons.length };
+}
+
+// Course Analytics
+export async function getCourseAnalytics(courseId) {
+  const user = (await supabase.auth.getUser()).data.user;
+  if (!user) throw new Error('Not authenticated');
+
+  // Verify user is course creator
+  const { data: course, error: courseError } = await supabase
+    .from('qh_courses')
+    .select('created_by')
+    .eq('id', courseId)
+    .single();
+
+  if (courseError) throw courseError;
+  if (course.created_by !== user.id) throw new Error('Not authorized');
+
+  // Get enrollment statistics
+  const { data: enrollments, error: enrollError } = await supabase
+    .from('qh_enrollments')
+    .select('id, progress_pct, completed_lessons')
+    .eq('course_id', courseId);
+
+  if (enrollError) throw enrollError;
+
+  // Get quiz statistics
+  const { data: quizzes, error: quizError } = await supabase
+    .from('qh_quiz_answers')
+    .select('score')
+    .in('quiz_id',
+      await supabase
+        .from('qh_quizzes')
+        .select('id')
+        .in('lesson_id',
+          await supabase
+            .from('qh_lessons')
+            .select('id')
+            .eq('course_id', courseId)
+        )
+    );
+
+  if (quizError && quizError.code !== 'PGRST116') throw quizError;
+
+  const totalEnrollments = enrollments.length;
+  const completedEnrollments = enrollments.filter(e => e.progress_pct === 100).length;
+  const averageScore = quizzes && quizzes.length > 0
+    ? Math.round(quizzes.reduce((sum, q) => sum + q.score, 0) / quizzes.length)
+    : null;
+
+  return {
+    courseId,
+    totalEnrollments,
+    completedEnrollments,
+    completionRate: totalEnrollments > 0 ? Math.round((completedEnrollments / totalEnrollments) * 100) : 0,
+    averageScore,
+    averageProgressPct: totalEnrollments > 0
+      ? Math.round(enrollments.reduce((sum, e) => sum + e.progress_pct, 0) / totalEnrollments)
+      : 0
+  };
+}
+
+export async function getInstructorDashboard() {
+  const user = (await supabase.auth.getUser()).data.user;
+  if (!user) throw new Error('Not authenticated');
+
+  // Get all courses created by user
+  const { data: courses, error: coursesError } = await supabase
+    .from('qh_courses')
+    .select('id, title, is_published, created_at')
+    .eq('created_by', user.id)
+    .order('created_at', { ascending: false });
+
+  if (coursesError) throw coursesError;
+
+  // Get analytics for each course
+  const analytics = await Promise.all(
+    courses.map(course => getCourseAnalytics(course.id).catch(() => null))
+  );
+
+  return courses.map((course, idx) => ({
+    ...course,
+    analytics: analytics[idx]
+  }));
+}
+
+// Student Dashboard
+export async function getStudentDashboard() {
+  const user = (await supabase.auth.getUser()).data.user;
+  if (!user) throw new Error('Not authenticated');
+
+  const { data: enrollments, error } = await supabase
+    .from('qh_enrollments')
+    .select(`
+      id,
+      course_id,
+      progress_pct,
+      completed_lessons,
+      enrolled_at,
+      qh_courses(id, title, description, is_published)
+    `)
+    .eq('user_id', user.id)
+    .order('enrolled_at', { ascending: false });
+
+  if (error) throw error;
+
+  // Get certificates
+  const { data: certificates, error: certError } = await supabase
+    .from('qh_certificates')
+    .select('course_id, issued_at')
+    .eq('user_id', user.id);
+
+  if (certError) throw certError;
+
+  const certificateCourses = new Set(certificates.map(c => c.course_id));
+
+  return enrollments.map(enrollment => ({
+    ...enrollment,
+    hasCertificate: certificateCourses.has(enrollment.course_id),
+    isCompleted: enrollment.progress_pct === 100
+  }));
+}

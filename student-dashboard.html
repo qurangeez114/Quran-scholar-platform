@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Learning Dashboard - QuranHikma</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f5f5f5;
+      color: #333;
+    }
+
+    .hero {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 3rem 1rem;
+      text-align: center;
+    }
+
+    .hero h1 { font-size: 2.5rem; margin-bottom: 1rem; }
+    .hero p { font-size: 1.1rem; opacity: 0.9; }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 2rem;
+      border-bottom: 2px solid #ddd;
+    }
+
+    .tab-button {
+      padding: 1rem;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      font-size: 1rem;
+      color: #666;
+      border-bottom: 3px solid transparent;
+      transition: all 0.3s;
+    }
+
+    .tab-button.active {
+      color: #667eea;
+      border-bottom-color: #667eea;
+    }
+
+    .tab-button:hover {
+      color: #667eea;
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .stat-card {
+      background: white;
+      padding: 2rem;
+      border-radius: 12px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      text-align: center;
+    }
+
+    .stat-number {
+      font-size: 2.5rem;
+      font-weight: 600;
+      color: #667eea;
+      margin-bottom: 0.5rem;
+    }
+
+    .stat-label {
+      font-size: 0.9rem;
+      color: #999;
+    }
+
+    .course-card {
+      background: white;
+      border-radius: 12px;
+      padding: 1.5rem;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      margin-bottom: 1.5rem;
+      transition: all 0.3s;
+    }
+
+    .course-card:hover {
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      transform: translateY(-2px);
+    }
+
+    .course-title {
+      font-size: 1.3rem;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 0.5rem;
+    }
+
+    .course-description {
+      color: #666;
+      font-size: 0.95rem;
+      margin-bottom: 1rem;
+      line-height: 1.5;
+    }
+
+    .course-progress {
+      margin: 1rem 0;
+    }
+
+    .progress-bar {
+      width: 100%;
+      height: 12px;
+      background: #eee;
+      border-radius: 6px;
+      overflow: hidden;
+      margin-bottom: 0.5rem;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #667eea, #764ba2);
+      width: 0%;
+      transition: width 0.3s;
+    }
+
+    .progress-text {
+      font-size: 0.9rem;
+      color: #666;
+    }
+
+    .course-meta {
+      display: flex;
+      gap: 2rem;
+      margin: 1rem 0;
+      font-size: 0.9rem;
+    }
+
+    .course-meta span {
+      color: #999;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 0.4rem 0.8rem;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+    }
+
+    .badge.completed {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+
+    .badge.in-progress {
+      background: #e3f2fd;
+      color: #1565c0;
+    }
+
+    .badge.certificate {
+      background: #fff3e0;
+      color: #e65100;
+    }
+
+    .btn {
+      padding: 0.75rem 1.5rem;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: background 0.3s;
+      text-decoration: none;
+      display: inline-block;
+    }
+
+    .btn-primary {
+      background: #667eea;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #5568d3;
+    }
+
+    .btn-secondary {
+      background: #ddd;
+      color: #333;
+    }
+
+    .btn-secondary:hover {
+      background: #ccc;
+    }
+
+    .btn-small {
+      padding: 0.5rem 1rem;
+      font-size: 0.9rem;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 3rem;
+      color: #999;
+    }
+
+    .empty-state h2 { font-size: 1.5rem; margin-bottom: 1rem; }
+
+    .alert {
+      padding: 1rem;
+      border-radius: 6px;
+      margin-bottom: 1.5rem;
+    }
+
+    .alert.info {
+      background: #e3f2fd;
+      color: #1565c0;
+      border-left: 4px solid #1565c0;
+    }
+
+    .loader { text-align: center; padding: 2rem; color: #999; }
+
+    .nav-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2rem;
+    }
+
+    .nav-header a {
+      color: #667eea;
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    .nav-header a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="hero">
+    <h1>📚 My Learning Dashboard</h1>
+    <p>Track your progress, earn certificates, and continue learning</p>
+  </div>
+
+  <div class="container">
+    <div class="nav-header">
+      <h2>Welcome back, <span id="userName">Student</span>!</h2>
+      <a href="/courses.html">← Browse More Courses</a>
+    </div>
+
+    <div id="alertContainer"></div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab-button active" onclick="switchTab('courses')">📚 My Courses</button>
+      <button class="tab-button" onclick="switchTab('certificates')">🎓 My Certificates</button>
+    </div>
+
+    <!-- Courses Tab -->
+    <div id="courses-tab" class="tab-content active">
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-number" id="totalCourses">0</div>
+          <div class="stat-label">Enrolled Courses</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number" id="completedCourses">0</div>
+          <div class="stat-label">Courses Completed</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number" id="certificatesCount">0</div>
+          <div class="stat-label">Certificates Earned</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number" id="averageProgress">0%</div>
+          <div class="stat-label">Average Progress</div>
+        </div>
+      </div>
+
+      <div id="coursesList">
+        <div class="loader">Loading your courses...</div>
+      </div>
+    </div>
+
+    <!-- Certificates Tab -->
+    <div id="certificates-tab" class="tab-content">
+      <div id="certificatesList">
+        <div class="loader">Loading certificates...</div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { supabase } from './accounts/client.js';
+    import { getStudentDashboard, getCertificates } from './courses-api.js';
+
+    let currentUser = null;
+    let dashboardData = [];
+    let certificates = [];
+
+    async function checkAuth() {
+      const { data } = await supabase.auth.getSession();
+      currentUser = data.session?.user;
+
+      if (!currentUser) {
+        window.location.href = '/account.html';
+      }
+    }
+
+    function updateUserName() {
+      const email = currentUser?.email || 'Student';
+      const firstName = email.split('@')[0];
+      document.getElementById('userName').textContent = firstName;
+    }
+
+    async function loadDashboard() {
+      try {
+        dashboardData = await getStudentDashboard();
+        certificates = await getCertificates();
+        renderCourses();
+        updateStats();
+      } catch (error) {
+        console.error('Error loading dashboard:', error);
+        showAlert('Failed to load dashboard', 'info');
+      }
+    }
+
+    function renderCourses() {
+      const container = document.getElementById('coursesList');
+      document.getElementById('totalCourses').textContent = dashboardData.length;
+
+      if (dashboardData.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <h2>No courses yet</h2>
+            <p>Start learning by enrolling in a course</p>
+            <br>
+            <a href="/courses.html" class="btn btn-primary">Browse Courses</a>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = dashboardData.map(enrollment => `
+        <div class="course-card">
+          ${enrollment.hasCertificate ? '<div class="badge certificate">🎓 Completed</div>' : ''}
+          ${enrollment.progress_pct > 0 && !enrollment.hasCertificate ? '<div class="badge in-progress">📖 In Progress</div>' : ''}
+
+          <div class="course-title">${enrollment.qh_courses.title}</div>
+          <div class="course-description">${enrollment.qh_courses.description || 'No description'}</div>
+
+          <div class="course-progress">
+            <div class="progress-bar">
+              <div class="progress-fill" style="width: ${enrollment.progress_pct}%"></div>
+            </div>
+            <div class="progress-text">${enrollment.progress_pct}% Complete • ${enrollment.completed_lessons} lessons done</div>
+          </div>
+
+          <div class="course-meta">
+            <span>📅 Enrolled: ${new Date(enrollment.enrolled_at).toLocaleDateString()}</span>
+            <span>📝 ${enrollment.completed_lessons} of lessons completed</span>
+          </div>
+
+          <div style="margin-top: 1.5rem; display: flex; gap: 1rem;">
+            <a href="/course.html?course=${enrollment.course_id}" class="btn btn-primary btn-small">Continue Learning →</a>
+            ${enrollment.hasCertificate ? '<a href="#" class="btn btn-secondary btn-small">📥 Download Certificate</a>' : ''}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function renderCertificates() {
+      const container = document.getElementById('certificatesList');
+
+      if (certificates.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <h2>No certificates yet</h2>
+            <p>Complete your first course to earn a certificate!</p>
+            <br>
+            <a href="/courses.html" class="btn btn-primary">Browse Courses</a>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = certificates.map(cert => `
+        <div class="course-card">
+          <div class="badge certificate">🎓 Certificate Earned</div>
+          <div class="course-title">${cert.qh_courses.title}</div>
+          <div class="course-description">Congratulations on completing this course!</div>
+
+          <div class="course-meta">
+            <span>📅 Issued: ${new Date(cert.issued_at).toLocaleDateString()}</span>
+            <span>📜 Code: ${cert.certificate_code}</span>
+          </div>
+
+          <div style="margin-top: 1.5rem;">
+            <a href="#" class="btn btn-primary btn-small">📥 Download PDF</a>
+            <a href="#" class="btn btn-secondary btn-small">Share Certificate</a>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function updateStats() {
+      const completed = dashboardData.filter(e => e.isCompleted).length;
+      const avgProgress = dashboardData.length > 0
+        ? Math.round(dashboardData.reduce((sum, e) => sum + e.progress_pct, 0) / dashboardData.length)
+        : 0;
+
+      document.getElementById('completedCourses').textContent = completed;
+      document.getElementById('certificatesCount').textContent = certificates.length;
+      document.getElementById('averageProgress').textContent = avgProgress + '%';
+    }
+
+    window.switchTab = function(tabName) {
+      // Hide all tabs
+      document.querySelectorAll('.tab-content').forEach(tab => {
+        tab.classList.remove('active');
+      });
+      document.querySelectorAll('.tab-button').forEach(btn => {
+        btn.classList.remove('active');
+      });
+
+      // Show selected tab
+      document.getElementById(tabName + '-tab').classList.add('active');
+      event.target.classList.add('active');
+
+      // Load certificates on first view
+      if (tabName === 'certificates' && certificates.length >= 0) {
+        renderCertificates();
+      }
+    };
+
+    function showAlert(message, type) {
+      const container = document.getElementById('alertContainer');
+      const alert = document.createElement('div');
+      alert.className = `alert ${type}`;
+      alert.textContent = message;
+      container.appendChild(alert);
+
+      setTimeout(() => alert.remove(), 5000);
+    }
+
+    // Initialize
+    await checkAuth();
+    updateUserName();
+    await loadDashboard();
+  </script>
+</body>
+</html>
