@@ -211,14 +211,40 @@ export async function createDiscussionThread(lessonId, title) {
 }
 
 export async function getDiscussionPosts(threadId) {
+  const user = (await supabase.auth.getUser()).data.user;
+
   const { data, error } = await supabase
     .from('qh_discussion_posts')
-    .select('*, qh_profiles(first_name, last_name)')
+    .select('*, qh_profiles(first_name, last_name), qh_post_likes(count)')
     .eq('thread_id', threadId)
     .order('created_at', { ascending: true });
 
   if (error) throw error;
-  return data;
+
+  // Enrich with user's like status
+  if (user && data) {
+    const postIds = data.map(p => p.id);
+    const { data: userLikes, error: likeError } = await supabase
+      .from('qh_post_likes')
+      .select('post_id')
+      .eq('user_id', user.id)
+      .in('post_id', postIds);
+
+    if (!likeError) {
+      const likedPostIds = new Set(userLikes?.map(l => l.post_id) || []);
+      return data.map(post => ({
+        ...post,
+        likeCount: post.qh_post_likes?.[0]?.count || 0,
+        userLiked: likedPostIds.has(post.id)
+      }));
+    }
+  }
+
+  return data.map(post => ({
+    ...post,
+    likeCount: post.qh_post_likes?.[0]?.count || 0,
+    userLiked: false
+  }));
 }
 
 export async function createDiscussionPost(threadId, content) {
@@ -627,6 +653,117 @@ export async function getStudentDashboard() {
     hasCertificate: certificateCourses.has(enrollment.course_id),
     isCompleted: enrollment.progress_pct === 100
   }));
+}
+
+// Like a discussion post
+export async function likeDiscussionPost(postId) {
+  const user = (await supabase.auth.getUser()).data.user;
+  if (!user) throw new Error('Not authenticated');
+
+  const { data, error } = await supabase
+    .from('qh_post_likes')
+    .insert({
+      post_id: postId,
+      user_id: user.id
+    })
+    .select()
+    .single();
+
+  if (error && error.code !== 'PGRST116') throw error;
+  return data;
+}
+
+// Unlike a discussion post
+export async function unlikeDiscussionPost(postId) {
+  const user = (await supabase.auth.getUser()).data.user;
+  if (!user) throw new Error('Not authenticated');
+
+  const { error } = await supabase
+    .from('qh_post_likes')
+    .delete()
+    .eq('post_id', postId)
+    .eq('user_id', user.id);
+
+  if (error) throw error;
+  return true;
+}
+
+// Get like count for a post
+export async function getPostLikeCount(postId) {
+  const { data, error } = await supabase
+    .from('qh_post_likes')
+    .select('count', { count: 'exact', head: true })
+    .eq('post_id', postId);
+
+  if (error) throw error;
+  return data?.length || 0;
+}
+
+// Get likes for multiple posts
+export async function getPostLikes(postIds) {
+  if (!postIds || postIds.length === 0) return {};
+
+  const { data, error } = await supabase
+    .from('qh_post_likes')
+    .select('post_id, count', { count: 'exact' })
+    .in('post_id', postIds);
+
+  if (error) throw error;
+
+  const likeCounts = {};
+  postIds.forEach(id => likeCounts[id] = 0);
+  data?.forEach(item => {
+    likeCounts[item.post_id] = item.count;
+  });
+
+  return likeCounts;
+}
+
+// Check if user liked a post
+export async function userLikedPost(postId) {
+  const user = (await supabase.auth.getUser()).data.user;
+  if (!user) return false;
+
+  const { data, error } = await supabase
+    .from('qh_post_likes')
+    .select('id')
+    .eq('post_id', postId)
+    .eq('user_id', user.id)
+    .single();
+
+  if (error && error.code !== 'PGRST116') throw error;
+  return !!data;
+}
+
+// Get likes for a post with current user's like status
+export async function getPostLikesWithUserStatus(postId) {
+  const user = (await supabase.auth.getUser()).data.user;
+
+  // Get like count
+  const { count, error: countError } = await supabase
+    .from('qh_post_likes')
+    .select('count', { count: 'exact' })
+    .eq('post_id', postId);
+
+  if (countError) throw countError;
+
+  // Check if user liked
+  let userLiked = false;
+  if (user) {
+    const { data: likeData } = await supabase
+      .from('qh_post_likes')
+      .select('id')
+      .eq('post_id', postId)
+      .eq('user_id', user.id)
+      .single();
+
+    userLiked = !!likeData;
+  }
+
+  return {
+    likeCount: count || 0,
+    userLiked
+  };
 }
 
 // Generate and download certificate as PDF
