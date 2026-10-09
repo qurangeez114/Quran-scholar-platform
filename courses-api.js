@@ -112,6 +112,97 @@ export async function deleteLesson(id) {
   if (error) throw error;
 }
 
+// Bulk enroll multiple students in a course
+export async function bulkEnrollStudents(courseId, studentEmails) {
+  if (!studentEmails || studentEmails.length === 0) {
+    throw new Error('No students provided');
+  }
+
+  const enrollmentResults = {
+    successful: [],
+    failed: []
+  };
+
+  for (const email of studentEmails) {
+    try {
+      // Find user by email
+      const { data: users, error: searchError } = await supabase
+        .from('qh_profiles')
+        .select('user_id')
+        .eq('email', email)
+        .single();
+
+      if (searchError || !users) {
+        enrollmentResults.failed.push({
+          email,
+          reason: 'User not found'
+        });
+        continue;
+      }
+
+      const userId = users.user_id;
+
+      // Check if already enrolled
+      const { data: existing, error: checkError } = await supabase
+        .from('qh_enrollments')
+        .select('id')
+        .eq('course_id', courseId)
+        .eq('user_id', userId)
+        .single();
+
+      if (existing) {
+        enrollmentResults.failed.push({
+          email,
+          reason: 'Already enrolled'
+        });
+        continue;
+      }
+
+      // Enroll the student
+      const { data: enrollment, error: enrollError } = await supabase
+        .from('qh_enrollments')
+        .insert({
+          course_id: courseId,
+          user_id: userId,
+          enrolled_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (enrollError) throw enrollError;
+
+      // Send enrollment email
+      try {
+        const { sendEnrollmentEmail } = await import('./email-notifications.js');
+        const { data: course } = await supabase
+          .from('qh_courses')
+          .select('title')
+          .eq('id', courseId)
+          .single();
+
+        if (course) {
+          await sendEnrollmentEmail(userId, email, course.title, courseId);
+        }
+      } catch (emailError) {
+        console.error('Failed to send enrollment email:', emailError);
+        // Don't fail enrollment if email fails
+      }
+
+      enrollmentResults.successful.push({
+        email,
+        enrollmentId: enrollment.id
+      });
+    } catch (error) {
+      enrollmentResults.failed.push({
+        email,
+        reason: error.message
+      });
+    }
+  }
+
+  return enrollmentResults;
+}
+
 export async function enrollInCourse(courseId) {
   const user = (await supabase.auth.getUser()).data.user;
   if (!user) throw new Error('Not authenticated');

@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bulk Enrollment - QuranHikma Admin</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f5f5f5;
+      color: #333;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 2rem;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .header h1 { font-size: 2rem; margin-bottom: 0.5rem; }
+    .header p { opacity: 0.9; }
+
+    .container {
+      max-width: 900px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+    }
+
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 2rem;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      margin-bottom: 1.5rem;
+    }
+
+    .card h2 {
+      font-size: 1.3rem;
+      margin-bottom: 1rem;
+      color: #333;
+    }
+
+    .form-group {
+      margin-bottom: 1.5rem;
+    }
+
+    .form-group label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      color: #555;
+    }
+
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+      width: 100%;
+      padding: 0.75rem;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-family: inherit;
+      font-size: 1rem;
+    }
+
+    .form-group textarea {
+      min-height: 150px;
+      resize: vertical;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus,
+    .form-group textarea:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .form-hint {
+      font-size: 0.9rem;
+      color: #999;
+      margin-top: 0.5rem;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      padding: 0.75rem 1.5rem;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.3s;
+    }
+
+    .btn-primary {
+      background: #667eea;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #5568d3;
+    }
+
+    .btn-secondary {
+      background: #f0f0f0;
+      color: #333;
+    }
+
+    .btn-secondary:hover {
+      background: #e0e0e0;
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .alert {
+      padding: 1rem;
+      border-radius: 8px;
+      margin-bottom: 1.5rem;
+    }
+
+    .alert.info {
+      background: #e3f2fd;
+      color: #1565c0;
+      border-left: 4px solid #1565c0;
+    }
+
+    .alert.success {
+      background: #e8f5e9;
+      color: #2e7d32;
+      border-left: 4px solid #2e7d32;
+    }
+
+    .alert.error {
+      background: #ffebee;
+      color: #c62828;
+      border-left: 4px solid #c62828;
+    }
+
+    .alert.warning {
+      background: #fff3e0;
+      color: #e65100;
+      border-left: 4px solid #e65100;
+    }
+
+    .results {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1rem;
+      margin-top: 1.5rem;
+    }
+
+    @media (max-width: 768px) {
+      .results {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .result-card {
+      background: #f9f9f9;
+      border-radius: 8px;
+      padding: 1.5rem;
+      text-align: center;
+    }
+
+    .result-number {
+      font-size: 2.5rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+    }
+
+    .result-label {
+      font-size: 0.9rem;
+      color: #999;
+    }
+
+    .success-results .result-number { color: #2e7d32; }
+    .error-results .result-number { color: #c62828; }
+
+    .details {
+      margin-top: 1rem;
+      max-height: 300px;
+      overflow-y: auto;
+      background: white;
+      border-radius: 8px;
+      padding: 1rem;
+      border: 1px solid #eee;
+    }
+
+    .detail-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.5rem 0;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    .detail-item:last-child {
+      border-bottom: none;
+    }
+
+    .detail-email { font-weight: 600; }
+    .detail-status { font-size: 0.9rem; }
+    .detail-status.success { color: #2e7d32; }
+    .detail-status.error { color: #c62828; }
+
+    .loader {
+      display: none;
+      text-align: center;
+      padding: 1rem;
+    }
+
+    .loader.active {
+      display: block;
+    }
+
+    .spinner {
+      border: 3px solid #f0f0f0;
+      border-top: 3px solid #667eea;
+      border-radius: 50%;
+      width: 30px;
+      height: 30px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 0.5rem;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .sample-csv {
+      background: #f0f0f0;
+      padding: 1rem;
+      border-radius: 8px;
+      margin-top: 1rem;
+      font-family: monospace;
+      font-size: 0.85rem;
+      overflow-x: auto;
+      line-height: 1.6;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1.5rem;
+      border-bottom: 2px solid #eee;
+    }
+
+    .tab-btn {
+      padding: 1rem;
+      background: none;
+      border: none;
+      border-bottom: 3px solid transparent;
+      cursor: pointer;
+      font-weight: 600;
+      color: #999;
+      transition: all 0.3s;
+    }
+
+    .tab-btn.active {
+      color: #667eea;
+      border-bottom-color: #667eea;
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Bulk Enrollment</h1>
+    <p>Enroll multiple students in a course at once</p>
+  </div>
+
+  <div class="container">
+    <div id="alertContainer"></div>
+
+    <div class="card">
+      <h2>Select Course</h2>
+      <div class="form-group">
+        <label for="courseSelect">Course</label>
+        <select id="courseSelect" required>
+          <option value="">-- Select a course --</option>
+        </select>
+        <div class="form-hint">Choose the course you want to enroll students in</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Add Students</h2>
+
+      <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('paste')">Paste Emails</button>
+        <button class="tab-btn" onclick="switchTab('csv')">Upload CSV</button>
+      </div>
+
+      <!-- Paste Tab -->
+      <div class="tab-content active" id="pasteTab">
+        <div class="form-group">
+          <label for="emailList">Student Emails</label>
+          <textarea id="emailList" placeholder="Paste email addresses here, one per line&#10;example1@email.com&#10;example2@email.com&#10;example3@email.com"></textarea>
+          <div class="form-hint">Enter one email address per line</div>
+        </div>
+      </div>
+
+      <!-- CSV Tab -->
+      <div class="tab-content" id="csvTab">
+        <div class="form-group">
+          <label for="csvFile">CSV File</label>
+          <input type="file" id="csvFile" accept=".csv" />
+          <div class="form-hint">Upload a CSV file with email addresses. Expected format: one email per line or column header "email"</div>
+          <div class="sample-csv">
+            <strong>Sample CSV Format:</strong><br>
+            email<br>
+            student1@university.com<br>
+            student2@university.com<br>
+            student3@university.com
+          </div>
+        </div>
+      </div>
+
+      <div class="button-group">
+        <button class="btn btn-primary" onclick="startEnrollment()">Start Enrollment</button>
+        <button class="btn btn-secondary" onclick="resetForm()">Clear</button>
+      </div>
+    </div>
+
+    <!-- Results Section -->
+    <div class="card" id="resultsCard" style="display: none;">
+      <h2>Enrollment Results</h2>
+
+      <div class="loader active" id="loader">
+        <div class="spinner"></div>
+        <p>Processing enrollments...</p>
+      </div>
+
+      <div id="resultsContainer" style="display: none;">
+        <div class="results">
+          <div class="result-card success-results">
+            <div class="result-number" id="successCount">0</div>
+            <div class="result-label">Successfully Enrolled</div>
+          </div>
+          <div class="result-card error-results">
+            <div class="result-number" id="failureCount">0</div>
+            <div class="result-label">Failed Enrollments</div>
+          </div>
+        </div>
+
+        <div id="successDetails" style="display: none; margin-top: 1.5rem;">
+          <h3 style="margin-bottom: 1rem; color: #2e7d32;">✓ Successful Enrollments</h3>
+          <div class="details" id="successList"></div>
+        </div>
+
+        <div id="failureDetails" style="display: none; margin-top: 1.5rem;">
+          <h3 style="margin-bottom: 1rem; color: #c62828;">✗ Failed Enrollments</h3>
+          <div class="details" id="failureList"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { supabase } from '../accounts/client.js';
+    import { bulkEnrollStudents, getCourses } from '../courses-api.js';
+
+    let currentUser = null;
+
+    async function checkAuth() {
+      const { data } = await supabase.auth.getSession();
+      currentUser = data.session?.user;
+
+      if (!currentUser) {
+        window.location.href = '/account.html';
+        return;
+      }
+
+      // Check if user is instructor/admin
+      const { data: profile } = await supabase
+        .from('qh_profiles')
+        .select('role')
+        .eq('user_id', currentUser.id)
+        .single();
+
+      if (profile?.role !== 'instructor' && profile?.role !== 'admin') {
+        showAlert('Access denied. Only instructors can access this page.', 'error');
+        setTimeout(() => {
+          window.location.href = '/';
+        }, 2000);
+      }
+    }
+
+    async function loadCourses() {
+      try {
+        const courses = await getCourses();
+        const courseSelect = document.getElementById('courseSelect');
+
+        courses.forEach(course => {
+          const option = document.createElement('option');
+          option.value = course.id;
+          option.textContent = course.title;
+          courseSelect.appendChild(option);
+        });
+      } catch (error) {
+        console.error('Error loading courses:', error);
+        showAlert('Failed to load courses', 'error');
+      }
+    }
+
+    window.switchTab = function(tabName) {
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+
+      event.target.classList.add('active');
+      document.getElementById(tabName + 'Tab').classList.add('active');
+    };
+
+    window.resetForm = function() {
+      document.getElementById('courseSelect').value = '';
+      document.getElementById('emailList').value = '';
+      document.getElementById('csvFile').value = '';
+      document.getElementById('resultsCard').style.display = 'none';
+    };
+
+    window.startEnrollment = async function() {
+      const courseId = document.getElementById('courseSelect').value;
+      if (!courseId) {
+        showAlert('Please select a course', 'error');
+        return;
+      }
+
+      // Get emails from active tab
+      let emails = [];
+      const activeTab = document.querySelector('.tab-content.active');
+
+      if (activeTab.id === 'pasteTab') {
+        const emailText = document.getElementById('emailList').value.trim();
+        if (!emailText) {
+          showAlert('Please enter at least one email address', 'error');
+          return;
+        }
+        emails = emailText.split('\n')
+          .map(e => e.trim())
+          .filter(e => e.length > 0);
+      } else {
+        const file = document.getElementById('csvFile').files[0];
+        if (!file) {
+          showAlert('Please select a CSV file', 'error');
+          return;
+        }
+        emails = await parseCSV(file);
+      }
+
+      if (emails.length === 0) {
+        showAlert('No valid email addresses found', 'error');
+        return;
+      }
+
+      // Validate emails
+      const validEmails = emails.filter(email => isValidEmail(email));
+      if (validEmails.length !== emails.length) {
+        showAlert(`${emails.length - validEmails.length} invalid email addresses were ignored`, 'warning');
+      }
+
+      showAlert(`Starting bulk enrollment of ${validEmails.length} students...`, 'info');
+
+      // Show results card
+      document.getElementById('resultsCard').style.display = 'block';
+      document.getElementById('resultsContainer').style.display = 'none';
+      document.getElementById('loader').classList.add('active');
+
+      try {
+        const results = await bulkEnrollStudents(courseId, validEmails);
+
+        // Display results
+        displayResults(results);
+      } catch (error) {
+        console.error('Error during enrollment:', error);
+        showAlert('Error during enrollment: ' + error.message, 'error');
+        document.getElementById('loader').classList.remove('active');
+      }
+    };
+
+    async function parseCSV(file) {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const text = e.target.result;
+          const lines = text.split('\n');
+          let emails = [];
+
+          // Check if first line is a header
+          if (lines[0].toLowerCase().includes('email')) {
+            lines.shift(); // Remove header
+          }
+
+          emails = lines
+            .map(line => line.trim())
+            .filter(line => line.length > 0);
+
+          resolve(emails);
+        };
+        reader.readAsText(file);
+      });
+    }
+
+    function isValidEmail(email) {
+      const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      return re.test(email);
+    }
+
+    function displayResults(results) {
+      const successCount = results.successful.length;
+      const failureCount = results.failed.length;
+
+      document.getElementById('successCount').textContent = successCount;
+      document.getElementById('failureCount').textContent = failureCount;
+
+      // Display success details
+      if (successCount > 0) {
+        const successList = document.getElementById('successList');
+        successList.innerHTML = results.successful.map(item => `
+          <div class="detail-item">
+            <span class="detail-email">${item.email}</span>
+            <span class="detail-status success">✓ Enrolled</span>
+          </div>
+        `).join('');
+        document.getElementById('successDetails').style.display = 'block';
+      }
+
+      // Display failure details
+      if (failureCount > 0) {
+        const failureList = document.getElementById('failureList');
+        failureList.innerHTML = results.failed.map(item => `
+          <div class="detail-item">
+            <span class="detail-email">${item.email}</span>
+            <span class="detail-status error">${item.reason}</span>
+          </div>
+        `).join('');
+        document.getElementById('failureDetails').style.display = 'block';
+      }
+
+      document.getElementById('loader').classList.remove('active');
+      document.getElementById('resultsContainer').style.display = 'block';
+
+      // Show summary alert
+      if (failureCount === 0) {
+        showAlert(`Successfully enrolled ${successCount} students!`, 'success');
+      } else {
+        showAlert(`Enrolled ${successCount} students, ${failureCount} failed`, 'warning');
+      }
+    }
+
+    function showAlert(message, type) {
+      const container = document.getElementById('alertContainer');
+      const alert = document.createElement('div');
+      alert.className = `alert ${type}`;
+      alert.textContent = message;
+      container.appendChild(alert);
+
+      setTimeout(() => alert.remove(), 5000);
+    }
+
+    // Initialize
+    await checkAuth();
+    await loadCourses();
+  </script>
+</body>
+</html>
