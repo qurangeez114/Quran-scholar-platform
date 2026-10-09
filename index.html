@@ -6328,7 +6328,17 @@ async function loadTafsirPanel(sura, aya) {
   if (!panel || !panel.querySelector('.loading')) return;
   const tabBtn = document.getElementById(`tafsir-tab-${aya}`);
   const current = traditionState[tradKey(sura, aya, 'tafsir')] || 'sunni';
-  const lang = tafsirLangState[`${sura}:${aya}`] || 'both';
+  let defaultLang = tafsirLangState[`${sura}:${aya}`] || 'both';
+  // Detect available languages first
+  const availableLangs = new Set(allRows.map(r => r.language));
+  // If 'both' is requested but not all core languages available, pick the first available
+  if (defaultLang === 'both' && (!availableLangs.has('ar') || !availableLangs.has('en'))) {
+    if (availableLangs.has('en')) defaultLang = 'en';
+    else if (availableLangs.has('ar')) defaultLang = 'ar';
+    else if (availableLangs.has('ti')) defaultLang = 'ti';
+    else defaultLang = Array.from(availableLangs)[0];
+  }
+  const lang = defaultLang;
   let allRows = [];
   try {
     allRows = await sbFetch('tafsir_entries', {
@@ -6348,13 +6358,16 @@ async function loadTafsirPanel(sura, aya) {
   });
 
   function buildTafsirContent(lang) {
-    // Group by scholar_key — pair Arabic + English for same scholar
+    // Group by scholar_key — support multiple languages
     const scholars = {};
+    const langCodes = new Set();
     allRows.forEach(r => {
       const key = r.scholar_key || r.scholar_name;
-      if (!scholars[key]) scholars[key] = { name: r.source_name || r.scholar_name, tradition: r.tradition, ar: null, en: null };
+      if (!scholars[key]) scholars[key] = { name: r.source_name || r.scholar_name, tradition: r.tradition, ar: null, en: null, ti: null };
       if (r.language === 'ar') scholars[key].ar = r.content;
-      else scholars[key].en = r.content;
+      else if (r.language === 'en') scholars[key].en = r.content;
+      else if (r.language === 'ti') scholars[key].ti = r.content;
+      langCodes.add(r.language);
     });
 
     if (Object.keys(scholars).length === 0) {
@@ -6363,12 +6376,14 @@ async function loadTafsirPanel(sura, aya) {
 
     const hasAr = allRows.some(r => r.language === 'ar');
     const hasEn = allRows.some(r => r.language === 'en');
+    const hasTi = allRows.some(r => r.language === 'ti');
 
     // Lang toggle bar
     let toggleBar = `<div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;">`;
     if (hasEn) toggleBar += `<button onclick="setTafsirLang(${sura},${aya},'en')" style="padding:5px 14px;border-radius:20px;border:2px solid ${lang==='en'?'#B8902A':'#D4C9A8'};background:${lang==='en'?'#B8902A':'#fff'};color:${lang==='en'?'#fff':'#666'};font-size:12px;font-weight:700;cursor:pointer;">English</button>`;
     if (hasAr) toggleBar += `<button onclick="setTafsirLang(${sura},${aya},'ar')" style="padding:5px 14px;border-radius:20px;border:2px solid ${lang==='ar'?'#B8902A':'#D4C9A8'};background:${lang==='ar'?'#B8902A':'#fff'};color:${lang==='ar'?'#fff':'#666'};font-size:12px;font-weight:700;cursor:pointer;">عربي</button>`;
-    if (hasAr && hasEn) toggleBar += `<button onclick="setTafsirLang(${sura},${aya},'both')" style="padding:5px 14px;border-radius:20px;border:2px solid ${lang==='both'?'#B8902A':'#D4C9A8'};background:${lang==='both'?'#B8902A':'#fff'};color:${lang==='both'?'#fff':'#666'};font-size:12px;font-weight:700;cursor:pointer;">Both</button>`;
+    if (hasTi) toggleBar += `<button onclick="setTafsirLang(${sura},${aya},'ti')" style="padding:5px 14px;border-radius:20px;border:2px solid ${lang==='ti'?'#B8902A':'#D4C9A8'};background:${lang==='ti'?'#B8902A':'#fff'};color:${lang==='ti'?'#fff':'#666'};font-size:12px;font-weight:700;cursor:pointer;">ትግርኛ</button>`;
+    if ((hasAr && hasEn) || (hasTi && (hasAr || hasEn))) toggleBar += `<button onclick="setTafsirLang(${sura},${aya},'both')" style="padding:5px 14px;border-radius:20px;border:2px solid ${lang==='both'?'#B8902A':'#D4C9A8'};background:${lang==='both'?'#B8902A':'#fff'};color:${lang==='both'?'#fff':'#666'};font-size:12px;font-weight:700;cursor:pointer;">Both</button>`;
     if (hasAr && hasEn) {
       toggleBar += `<button onclick="analyzeTafsirAccuracy(${sura},${aya})" style="padding:5px 14px;border-radius:20px;border:2px solid #2E7D32;background:#E8F5E9;color:#2E7D32;font-size:12px;font-weight:700;cursor:pointer;">🔍 Accuracy</button>`;
       // Option B: auto-loading compact fidelity badge (score shown without a click; full breakdown still opens via the button above)
@@ -6386,16 +6401,19 @@ async function loadTafsirPanel(sura, aya) {
     Object.entries(scholars).forEach(([key, s]) => {
       if (current !== 'all' && !traditionMatchesTab(s.tradition, current)) return;
       const idx = speakStore.length;
-      speakStore.push({ ar: s.ar || '', en: s.en || '' });
+      speakStore.push({ ar: s.ar || '', en: s.en || '', ti: s.ti || '' });
       html += `<div class="scholar-entry">`;
       html += `<div class="scholar-name" style="display:flex;align-items:center;justify-content:space-between;gap:8px;"><span>${escapeHtml(s.name || key)}</span><button onclick="speakTafsirEntry('${sura}:${aya}',${idx})" title="Listen" style="flex-shrink:0;border:1px solid #D4C9A8;background:#FAF6EA;border-radius:50%;width:28px;height:28px;font-size:13px;cursor:pointer;">🔊</button></div>`;
       if ((lang === 'ar' || lang === 'both') && s.ar) {
-        html += `<div class="scholar-body" style="font-family:'Amiri',serif;font-size:18px;direction:rtl;text-align:right;line-height:2;color:#111;margin-bottom:${lang==='both'&&s.en?'10px':'0'}">${escapeHtml(s.ar)}</div>`;
+        html += `<div class="scholar-body" style="font-family:'Amiri',serif;font-size:18px;direction:rtl;text-align:right;line-height:2;color:#111;margin-bottom:${(lang==='both'&&(s.en||s.ti))?'10px':'0'}">${escapeHtml(s.ar)}</div>`;
       }
       if ((lang === 'en' || lang === 'both') && s.en) {
-        html += `<div class="scholar-body">${escapeHtml(s.en)}</div>`;
+        html += `<div class="scholar-body" style="margin-bottom:${(lang==='both'&&s.ti)?'10px':'0'}">${escapeHtml(s.en)}</div>`;
       }
-      if (!s.ar && !s.en) {
+      if ((lang === 'ti' || lang === 'both') && s.ti) {
+        html += `<div class="scholar-body" style="font-size:16px;line-height:1.8;color:#111;">${escapeHtml(s.ti)}</div>`;
+      }
+      if (!s.ar && !s.en && !s.ti) {
         html += `<div class="scholar-body" style="color:#aaa;font-style:italic;">No content available in selected language.</div>`;
       }
       html += `</div>`;
