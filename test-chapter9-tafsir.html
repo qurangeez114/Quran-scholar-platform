@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Debug: Chapter 9 Tigrinya Tafsir Tag Issue</title>
+  <style>
+    body { margin: 0; background: #f3efe6; font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; color: #1d1b18; }
+    .wrap { max-width: 900px; margin: auto; background: #fff; min-height: 100vh; padding: 20px; }
+    .title { font-size: 24px; font-weight: 800; color: #9a7420; margin-bottom: 20px; }
+    .section { margin: 20px 0; padding: 15px; border: 1px solid #e2d8c2; border-radius: 8px; }
+    .section-title { font-weight: 700; color: #5e4710; margin-bottom: 10px; font-size: 14px; }
+    .status { padding: 10px; border-radius: 4px; margin: 10px 0; font-size: 13px; }
+    .status.ok { background: #e8f5e9; color: #2e7d32; border-left: 4px solid #2e7d32; }
+    .status.err { background: #ffebee; color: #c62828; border-left: 4px solid #c62828; }
+    .status.warn { background: #fff3e0; color: #e65100; border-left: 4px solid #e65100; }
+    .code { background: #f5f5f5; padding: 10px; border-radius: 4px; font-family: monospace; font-size: 12px; overflow-x: auto; margin: 10px 0; }
+    .result { background: #fffdf8; padding: 10px; border-radius: 4px; border: 1px solid #e8dcc6; margin: 10px 0; max-height: 300px; overflow-y: auto; }
+    button { padding: 8px 12px; background: #9b771f; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; }
+    button:hover { background: #7a5f17; }
+    .flex { display: flex; gap: 10px; flex-wrap: wrap; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="title">🔍 Debugging: Chapter 9 Tigrinya Tafsir Tag Issue</div>
+
+    <div class="section">
+      <div class="section-title">Test 1: Check AYas Table for Chapter 9 Tigrinya2 Data</div>
+      <div class="code">SELECT tigrinya2 FROM ayas WHERE sura_id = 9 LIMIT 5</div>
+      <button onclick="testAyasTable()">Run Test 1</button>
+      <div id="test1-result" class="result" style="display:none;"></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Test 2: Check Tafsir_Entries Table for Chapter 9</div>
+      <div class="code">SELECT * FROM tafsir_entries WHERE sura = 9 LIMIT 10</div>
+      <button onclick="testTafsirEntries()">Run Test 2</button>
+      <div id="test2-result" class="result" style="display:none;"></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Test 3: Specific Verse - 9:1 Tigrinya2</div>
+      <div class="code">SELECT * FROM ayas WHERE sura_id = 9 AND aya_number = 1</div>
+      <button onclick="testSpecificVerse()">Run Test 3</button>
+      <div id="test3-result" class="result" style="display:none;"></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Test 4: Check if Tigrinya2 Column Exists in AYas</div>
+      <button onclick="testColumnExists()">Run Test 4</button>
+      <div id="test4-result" class="result" style="display:none;"></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Test 5: Compare Chapter 9 vs Chapter 19 (Reference)</div>
+      <button onclick="testComparison()">Run Test 5</button>
+      <div id="test5-result" class="result" style="display:none;"></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Test 6: Check Theme_Verses Table for Chapter 9</div>
+      <button onclick="testThemeVerses()">Run Test 6</button>
+      <div id="test6-result" class="result" style="display:none;"></div>
+    </div>
+  </div>
+
+  <script>
+    const SB_URL = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
+    const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
+    const HEADERS = { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` };
+
+    async function testAyasTable() {
+      const result = document.getElementById('test1-result');
+      result.style.display = 'block';
+      result.innerHTML = '<div class="status warn">Testing...</div>';
+
+      try {
+        const response = await fetch(
+          `${SB_URL}/rest/v1/ayas?sura_id=eq.9&select=sura_id,aya_number,tigrinya2&limit=5`,
+          { headers: HEADERS }
+        );
+        const data = await response.json();
+
+        if (data.length === 0) {
+          result.innerHTML = '<div class="status err">❌ No rows found for chapter 9</div>';
+        } else {
+          let html = `<div class="status ok">✓ Found ${data.length} verses with tigrinya2 column</div>`;
+          html += '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+          html += '<div style="font-size:12px;color:#666;margin-top:10px;">';
+          data.forEach(row => {
+            const hasData = row.tigrinya2 && row.tigrinya2.trim().length > 0;
+            html += `<div>9:${row.aya_number} - ${hasData ? '✓ Has data' : '✗ Empty/Null'}</div>`;
+          });
+          html += '</div>';
+          result.innerHTML = html;
+        }
+      } catch (e) {
+        result.innerHTML = `<div class="status err">❌ Error: ${e.message}</div>`;
+      }
+    }
+
+    async function testTafsirEntries() {
+      const result = document.getElementById('test2-result');
+      result.style.display = 'block';
+      result.innerHTML = '<div class="status warn">Testing...</div>';
+
+      try {
+        const response = await fetch(
+          `${SB_URL}/rest/v1/tafsir_entries?sura=eq.9&select=*&limit=10`,
+          { headers: HEADERS }
+        );
+        const data = await response.json();
+
+        if (data.length === 0) {
+          result.innerHTML = '<div class="status warn">⚠ No tafsir_entries rows found for chapter 9</div>';
+        } else {
+          let html = `<div class="status ok">✓ Found ${data.length} tafsir entries</div>`;
+          const langs = [...new Set(data.map(r => r.language))];
+          html += `<div style="font-size:12px;color:#666;margin:10px 0;">Languages found: ${langs.join(', ')}</div>`;
+          html += '<pre>' + JSON.stringify(data.slice(0, 3), null, 2) + '</pre>';
+          result.innerHTML = html;
+        }
+      } catch (e) {
+        result.innerHTML = `<div class="status err">❌ Error: ${e.message}</div>`;
+      }
+    }
+
+    async function testSpecificVerse() {
+      const result = document.getElementById('test3-result');
+      result.style.display = 'block';
+      result.innerHTML = '<div class="status warn">Testing...</div>';
+
+      try {
+        const response = await fetch(
+          `${SB_URL}/rest/v1/ayas?sura_id=eq.9&aya_number=eq.1`,
+          { headers: HEADERS }
+        );
+        const data = await response.json();
+
+        if (data.length === 0) {
+          result.innerHTML = '<div class="status err">❌ Verse 9:1 not found</div>';
+        } else {
+          const verse = data[0];
+          let html = '<div class="status ok">✓ Verse 9:1 found</div>';
+          html += `<div style="font-size:12px;margin:10px 0;">`;
+          html += `<div>Tigrinya: ${verse.tigrinya ? '✓ Present' : '✗ Missing'}</div>`;
+          html += `<div>Tigrinya2 (Tafsir): ${verse.tigrinya2 ? '✓ Present' : '✗ Missing'}</div>`;
+          html += `<div>Tigrinya2 Length: ${verse.tigrinya2 ? verse.tigrinya2.length : 0} chars</div>`;
+          html += `</div>`;
+          if (verse.tigrinya2) {
+            html += `<div style="font-size:11px;color:#666;margin-top:10px;">Tigrinya2 Content (first 200 chars):</div>`;
+            html += `<pre style="font-size:11px;">${verse.tigrinya2.substring(0, 200)}</pre>`;
+          }
+          result.innerHTML = html;
+        }
+      } catch (e) {
+        result.innerHTML = `<div class="status err">❌ Error: ${e.message}</div>`;
+      }
+    }
+
+    async function testColumnExists() {
+      const result = document.getElementById('test4-result');
+      result.style.display = 'block';
+      result.innerHTML = '<div class="status warn">Testing...</div>';
+
+      try {
+        const response = await fetch(
+          `${SB_URL}/rest/v1/ayas?limit=1`,
+          { headers: HEADERS }
+        );
+        const data = await response.json();
+
+        if (data.length === 0) {
+          result.innerHTML = '<div class="status err">❌ Could not fetch any verses</div>';
+        } else {
+          const columns = Object.keys(data[0]);
+          const hasTigrinya2 = columns.includes('tigrinya2');
+          let html = hasTigrinya2
+            ? '<div class="status ok">✓ tigrinya2 column EXISTS in ayas table</div>'
+            : '<div class="status err">❌ tigrinya2 column MISSING from ayas table</div>';
+          html += `<div style="font-size:12px;color:#666;margin-top:10px;">All columns: ${columns.slice(0, 10).join(', ')}...</div>`;
+          result.innerHTML = html;
+        }
+      } catch (e) {
+        result.innerHTML = `<div class="status err">❌ Error: ${e.message}</div>`;
+      }
+    }
+
+    async function testComparison() {
+      const result = document.getElementById('test5-result');
+      result.style.display = 'block';
+      result.innerHTML = '<div class="status warn">Testing...</div>';
+
+      try {
+        const [ch9, ch19] = await Promise.all([
+          fetch(`${SB_URL}/rest/v1/ayas?sura_id=eq.9&select=sura_id,aya_number,tigrinya2&limit=1`, { headers: HEADERS }).then(r => r.json()),
+          fetch(`${SB_URL}/rest/v1/ayas?sura_id=eq.19&select=sura_id,aya_number,tigrinya2&limit=1`, { headers: HEADERS }).then(r => r.json())
+        ]);
+
+        let html = '<div style="display:flex;gap:20px;margin:10px 0;">';
+        html += '<div style="flex:1;"><strong>Chapter 9 (At-Tawbah):</strong>';
+        html += ch9.length > 0 ? '<div class="status ok">✓ Verse exists</div>' : '<div class="status err">✗ No verses</div>';
+        if (ch9.length > 0) {
+          const hasData = ch9[0].tigrinya2 && ch9[0].tigrinya2.trim().length > 0;
+          html += hasData ? '<div class="status ok">✓ tigrinya2 has data</div>' : '<div class="status warn">⚠ tigrinya2 is empty</div>';
+        }
+        html += '</div>';
+
+        html += '<div style="flex:1;"><strong>Chapter 19 (Maryam):</strong>';
+        html += ch19.length > 0 ? '<div class="status ok">✓ Verse exists</div>' : '<div class="status err">✗ No verses</div>';
+        if (ch19.length > 0) {
+          const hasData = ch19[0].tigrinya2 && ch19[0].tigrinya2.trim().length > 0;
+          html += hasData ? '<div class="status ok">✓ tigrinya2 has data</div>' : '<div class="status warn">⚠ tigrinya2 is empty</div>';
+        }
+        html += '</div></div>';
+        result.innerHTML = html;
+      } catch (e) {
+        result.innerHTML = `<div class="status err">❌ Error: ${e.message}</div>`;
+      }
+    }
+
+    async function testThemeVerses() {
+      const result = document.getElementById('test6-result');
+      result.style.display = 'block';
+      result.innerHTML = '<div class="status warn">Testing...</div>';
+
+      try {
+        const response = await fetch(
+          `${SB_URL}/rest/v1/theme_verses?sura=eq.9&select=sura,aya,tigrinya&limit=5`,
+          { headers: HEADERS }
+        );
+        const data = await response.json();
+
+        let html = `<div class="status ok">✓ Found ${data.length} theme verses for chapter 9</div>`;
+        if (data.length > 0) {
+          html += '<pre>' + JSON.stringify(data.slice(0, 2), null, 2) + '</pre>';
+        } else {
+          html += '<div style="font-size:12px;color:#666;margin-top:10px;">Note: theme_verses table might not have chapter 9 data, or theme_verses may use different column names</div>';
+        }
+        result.innerHTML = html;
+      } catch (e) {
+        result.innerHTML = `<div class="status err">❌ Error: ${e.message}</div>`;
+      }
+    }
+  </script>
+</body>
+</html>
