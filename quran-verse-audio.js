@@ -11,10 +11,10 @@
  b.onclick=e=>{e.preventDefault();e.stopPropagation();if(playing===b&&!audio.paused){audio.pause();reset();return;}audio.pause();reset();if(window._simpleRecitationAudio)window._simpleRecitationAudio.pause();playing=b;audio.src='/audio/simple-recitation/'+String(s).padStart(3,'0')+'_'+String(a).padStart(3,'0')+'.mp3';b.textContent='⏸ Pause';b.setAttribute('aria-pressed','true');audio.play().catch(reset);};host.appendChild(b);}
  function scan(){
  document.querySelectorAll('[data-sura-id][data-aya-number],[data-sura][data-aya]').forEach(el=>add(el,el.dataset.suraId||el.dataset.sura,el.dataset.ayaNumber||el.dataset.aya));
- document.querySelectorAll('[onclick]').forEach(el=>{if(el.closest('button')||el.dataset.qhAudio)return;const m=el.getAttribute('onclick').match(/(?:openSocialCard|openVersePopup|showVersePopup|qhXrefCard|jumpToVerse)\s*\(\s*(\d+)\s*,\s*(\d+)/);if(m)add(el.tagName==='A'?el.parentElement:el,m[1],m[2]);});
+ document.querySelectorAll('[onclick]').forEach(el=>{if(el.closest('button')||el.dataset.qhAudio)return;const m=el.getAttribute('onclick').match(/(?:openSocialCard|openVersePopup|showVersePopup|jumpToVerse)\s*\(\s*(\d+)\s*,\s*(\d+)/);if(m)add(el.tagName==='A'?el.parentElement:el,m[1],m[2]);});
  for(const name of ['openSocialCard','openVersePopup','showVersePopup']){
  const f=window[name];if(typeof f!=='function'||f.qhWrapped)continue;
- const wrapped=function(s,a,...args){const result=f.call(this,s,a,...args);Promise.resolve(result).then(()=>{const host=document.querySelector('#scModal,#versePopupModal');if(host){host.querySelectorAll('[data-qh-audio]').forEach(b=>b.remove());add(host,s,a);}scan();}).catch(()=>{});return result;};wrapped.qhWrapped=true;window[name]=wrapped;
+ const wrapped=function(s,a,...args){const result=f.call(this,s,a,...args);Promise.resolve(result).then(()=>{const host=document.querySelector('#scCardOverlay,#scModal,#versePopupModal');if(host){host.querySelectorAll('[data-qh-audio]').forEach(b=>b.remove());add(host,s,a);}scan();}).catch(()=>{});return result;};wrapped.qhWrapped=true;window[name]=wrapped;
  }}
  let queued=false;const observer=new MutationObserver(()=>{if(queued)return;queued=true;requestAnimationFrame(()=>{queued=false;scan();});});
  function start(){scan();observer.observe(document.body,{childList:true,subtree:true});}
