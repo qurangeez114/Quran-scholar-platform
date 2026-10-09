@@ -112,6 +112,88 @@ export async function deleteLesson(id) {
   if (error) throw error;
 }
 
+// Get course materials for a course
+export async function getCourseMaterials(courseId) {
+  const { data, error } = await supabase
+    .from('qh_course_materials')
+    .select('*')
+    .eq('course_id', courseId)
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return data;
+}
+
+// Upload course material file
+export async function uploadCourseMaterial(courseId, title, file) {
+  try {
+    // Generate unique filename
+    const timestamp = Date.now();
+    const fileName = `${timestamp}-${file.name}`;
+    const filePath = `course-materials/${courseId}/${fileName}`;
+
+    // Upload to Supabase Storage
+    const { data: uploadData, error: uploadError } = await supabase
+      .storage
+      .from('course-materials')
+      .upload(filePath, file);
+
+    if (uploadError) throw uploadError;
+
+    // Get public URL
+    const { data: urlData } = supabase
+      .storage
+      .from('course-materials')
+      .getPublicUrl(filePath);
+
+    // Save material record to database
+    const { data: material, error: dbError } = await supabase
+      .from('qh_course_materials')
+      .insert({
+        course_id: courseId,
+        title,
+        file_url: urlData.publicUrl
+      })
+      .select()
+      .single();
+
+    if (dbError) throw dbError;
+    return material;
+  } catch (error) {
+    console.error('Error uploading material:', error);
+    throw error;
+  }
+}
+
+// Delete course material
+export async function deleteCourseMaterial(materialId, fileUrl) {
+  try {
+    // Extract file path from URL
+    const url = new URL(fileUrl);
+    const filePath = url.pathname.split('/object/public/course-materials/')[1];
+
+    // Delete from storage
+    if (filePath) {
+      await supabase
+        .storage
+        .from('course-materials')
+        .remove(['course-materials/' + filePath]);
+    }
+
+    // Delete from database
+    const { error: dbError } = await supabase
+      .from('qh_course_materials')
+      .delete()
+      .eq('id', materialId);
+
+    if (dbError) throw dbError;
+    return true;
+  } catch (error) {
+    console.error('Error deleting material:', error);
+    throw error;
+  }
+}
+
 // Bulk enroll multiple students in a course
 export async function bulkEnrollStudents(courseId, studentEmails) {
   if (!studentEmails || studentEmails.length === 0) {

@@ -222,6 +222,64 @@
     }
 
     .loader { text-align: center; padding: 2rem; color: #999; }
+
+    .materials-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .material-item {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 1rem;
+      background: #f9f9f9;
+      border-radius: 8px;
+      border-left: 4px solid #4CAF50;
+      transition: all 0.3s;
+      cursor: pointer;
+    }
+
+    .material-item:hover {
+      background: #f0f0f0;
+      box-shadow: 0 2px 8px rgba(76, 175, 80, 0.2);
+    }
+
+    .material-icon {
+      font-size: 1.5rem;
+      min-width: 40px;
+      text-align: center;
+    }
+
+    .material-info {
+      flex: 1;
+    }
+
+    .material-title {
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 0.25rem;
+    }
+
+    .material-meta {
+      font-size: 0.85rem;
+      color: #999;
+    }
+
+    .material-download {
+      color: #4CAF50;
+      font-weight: 600;
+      text-decoration: none;
+      padding: 0.5rem 1rem;
+      background: #e8f5e9;
+      border-radius: 6px;
+      transition: all 0.3s;
+    }
+
+    .material-download:hover {
+      background: #c8e6c9;
+    }
   </style>
 </head>
 <body>
@@ -240,6 +298,15 @@
           <h2>📚 Course Lessons</h2>
           <div class="lessons-list" id="lessonsList">
             <div class="loader">Loading lessons...</div>
+          </div>
+        </div>
+
+        <!-- Course Materials Section -->
+        <div class="section" id="materialsCard" style="display: none;">
+          <h2>📥 Course Materials</h2>
+          <p style="color: #999; margin-bottom: 1rem; font-size: 0.95rem;">Download resources, slides, and supplementary materials for this course.</p>
+          <div class="materials-list" id="materialsList">
+            <div class="loader">Loading materials...</div>
           </div>
         </div>
       </div>
@@ -292,7 +359,7 @@
 
   <script type="module">
     import { supabase } from './accounts/client.js';
-    import { getCourseById, getLessonsByCourse, getEnrollment, generateCertificatePDF } from './courses-api.js';
+    import { getCourseById, getLessonsByCourse, getEnrollment, generateCertificatePDF, getCourseMaterials } from './courses-api.js';
 
     let currentUser = null;
     let currentCourse = null;
@@ -336,6 +403,7 @@
         }
 
         await loadLessons();
+        await loadMaterials();
         updateUI();
 
       } catch (error) {
@@ -389,6 +457,55 @@
             </div>
             <div class="lesson-arrow">→</div>
           </div>
+        `;
+      }).join('');
+    }
+
+    async function loadMaterials() {
+      try {
+        const materials = await getCourseMaterials(currentCourse.id);
+        renderMaterials(materials);
+      } catch (error) {
+        console.error('Error loading materials:', error);
+        // Don't show error alert for materials as it's optional
+      }
+    }
+
+    function renderMaterials(materials) {
+      const container = document.getElementById('materialsList');
+      const card = document.getElementById('materialsCard');
+
+      if (!materials || materials.length === 0) {
+        card.style.display = 'none';
+        return;
+      }
+
+      card.style.display = 'block';
+
+      // Guess file type from URL
+      const getFileIcon = (url) => {
+        const lowerUrl = url.toLowerCase();
+        if (lowerUrl.includes('.pdf')) return '📄';
+        if (lowerUrl.includes('.doc') || lowerUrl.includes('.docx')) return '📝';
+        if (lowerUrl.includes('.xls') || lowerUrl.includes('.xlsx')) return '📊';
+        if (lowerUrl.includes('.ppt') || lowerUrl.includes('.pptx')) return '🎯';
+        if (lowerUrl.includes('.zip') || lowerUrl.includes('.rar')) return '📦';
+        if (lowerUrl.includes('.mp4') || lowerUrl.includes('.mov')) return '🎥';
+        return '📥';
+      };
+
+      container.innerHTML = materials.map(material => {
+        const fileName = material.file_url.split('/').pop();
+        const uploadDate = new Date(material.created_at).toLocaleDateString();
+        return `
+          <a href="${material.file_url}" target="_blank" class="material-item" download>
+            <div class="material-icon">${getFileIcon(material.file_url)}</div>
+            <div class="material-info">
+              <div class="material-title">${material.title}</div>
+              <div class="material-meta">Added ${uploadDate}</div>
+            </div>
+            <div class="material-download">↓ Download</div>
+          </a>
         `;
       }).join('');
     }
