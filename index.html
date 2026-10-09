@@ -6329,7 +6329,15 @@ async function loadTafsirPanel(sura, aya) {
   const tabBtn = document.getElementById(`tafsir-tab-${aya}`);
   const current = traditionState[tradKey(sura, aya, 'tafsir')] || 'sunni';
   let defaultLang = tafsirLangState[`${sura}:${aya}`] || 'both';
-  // Detect available languages first
+  let allRows = [];
+  try {
+    allRows = await sbFetch('tafsir_entries', {
+      select: 'source_name,scholar_name,tradition,content,scholar_key,language',
+      sura: `eq.${sura}`,
+      aya: `eq.${aya}`
+    });
+  } catch {}
+  // Detect available languages AFTER fetching
   const availableLangs = new Set(allRows.map(r => r.language));
   // If 'both' is requested but not all core languages available, pick the first available
   if (defaultLang === 'both' && (!availableLangs.has('ar') || !availableLangs.has('en'))) {
@@ -6339,14 +6347,6 @@ async function loadTafsirPanel(sura, aya) {
     else defaultLang = Array.from(availableLangs)[0];
   }
   const lang = defaultLang;
-  let allRows = [];
-  try {
-    allRows = await sbFetch('tafsir_entries', {
-      select: 'source_name,scholar_name,tradition,content,scholar_key,language',
-      sura: `eq.${sura}`,
-      aya: `eq.${aya}`
-    });
-  } catch {}
   if (tabBtn) tabBtn.textContent = allRows.length > 0 ? `Tafsir (${allRows.length})` : 'Tafsir';
   // Non-blocking: check for comparison-engine data in parallel with the
   // normal render below. Most verses have none; this never delays the
