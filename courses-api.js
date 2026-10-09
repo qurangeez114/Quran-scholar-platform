@@ -248,7 +248,7 @@ export async function submitQuiz(quizId, answers, score) {
   return data;
 }
 
-export async function submitAssignment(assignmentId, content) {
+export async function submitAssignment(assignmentId, content, fileUrl = null, fileName = null) {
   const user = (await supabase.auth.getUser()).data.user;
   if (!user) throw new Error('Not authenticated');
 
@@ -257,13 +257,54 @@ export async function submitAssignment(assignmentId, content) {
     .upsert({
       assignment_id: assignmentId,
       user_id: user.id,
-      submission_content: content
+      content: content,
+      file_url: fileUrl,
+      file_name: fileName
     })
     .select()
     .single();
 
   if (error) throw error;
   return data;
+}
+
+// Upload assignment file to Supabase Storage
+export async function uploadAssignmentFile(courseId, userId, file) {
+  if (!file) return null;
+
+  const user = (await supabase.auth.getUser()).data.user;
+  if (!user) throw new Error('Not authenticated');
+
+  // Create unique file path: assignments/{courseId}/{userId}/{timestamp}-{filename}
+  const timestamp = Date.now();
+  const fileExt = file.name.split('.').pop();
+  const fileName = `${timestamp}-${file.name}`;
+  const filePath = `assignments/${courseId}/${userId}/${fileName}`;
+
+  try {
+    const { data, error } = await supabase.storage
+      .from('assignment-submissions')
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: false
+      });
+
+    if (error) throw error;
+
+    // Get public URL
+    const { data: { publicUrl } } = supabase.storage
+      .from('assignment-submissions')
+      .getPublicUrl(filePath);
+
+    return {
+      url: publicUrl,
+      name: file.name,
+      path: filePath
+    };
+  } catch (error) {
+    console.error('Error uploading file:', error);
+    throw new Error('Failed to upload file: ' + error.message);
+  }
 }
 
 export async function updateEnrollmentProgress(enrollmentId, progress_pct) {

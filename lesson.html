@@ -346,7 +346,18 @@
             <form id="assignmentForm" style="display:none;">
               <div class="form-group">
                 <label>Your Answer/Work</label>
-                <textarea id="assignmentContent" placeholder="Type your answer or paste your work..." required></textarea>
+                <textarea id="assignmentContent" placeholder="Type your answer or paste your work..."></textarea>
+              </div>
+              <div class="form-group">
+                <label>Upload File (Optional)</label>
+                <input type="file" id="assignmentFile" accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.xls,.xlsx" style="padding: 0.75rem; border: 1px solid #ddd; border-radius: 6px; width: 100%; cursor: pointer;">
+                <p style="font-size: 0.85rem; color: #999; margin-top: 0.5rem;">Accepted formats: PDF, DOC, DOCX, TXT, JPG, PNG, XLS, XLSX (Max 10MB)</p>
+                <div id="fileProgress" style="display: none; margin-top: 0.5rem;">
+                  <div style="font-size: 0.9rem; color: #667eea; margin-bottom: 0.5rem;">Uploading file...</div>
+                  <div style="width: 100%; height: 8px; background: #eee; border-radius: 4px; overflow: hidden;">
+                    <div id="fileProgressBar" style="height: 100%; background: #667eea; width: 0%; transition: width 0.2s;"></div>
+                  </div>
+                </div>
               </div>
               <button type="submit" class="btn btn-primary">Submit Assignment</button>
             </form>
@@ -388,6 +399,7 @@
       createDiscussionPost,
       submitQuiz,
       submitAssignment,
+      uploadAssignmentFile,
       updateStudentProgress,
       generateCertificate
     } from './courses-api.js';
@@ -595,9 +607,36 @@
       if (!currentAssignment) return;
 
       const content = document.getElementById('assignmentContent').value;
+      const fileInput = document.getElementById('assignmentFile');
+      const file = fileInput.files[0];
+
+      // Check if content or file is provided
+      if (!content.trim() && !file) {
+        showAlert('Please provide either text content or upload a file', 'error');
+        return;
+      }
+
+      // Validate file size (max 10MB)
+      if (file && file.size > 10 * 1024 * 1024) {
+        showAlert('File size exceeds 10MB limit', 'error');
+        return;
+      }
 
       try {
-        await submitAssignment(currentAssignment.id, content);
+        let fileUrl = null;
+        let fileName = null;
+
+        // Upload file if provided
+        if (file) {
+          document.getElementById('fileProgress').style.display = 'block';
+          const uploadResult = await uploadAssignmentFile(currentCourse.id, currentUser.id, file);
+          fileUrl = uploadResult.url;
+          fileName = uploadResult.name;
+          document.getElementById('fileProgress').style.display = 'none';
+        }
+
+        // Submit assignment with optional file
+        await submitAssignment(currentAssignment.id, content, fileUrl, fileName);
 
         // Update student progress for assignment submission
         await updateStudentProgress(
@@ -610,6 +649,7 @@
           <div style="background: #e8f5e9; border-left: 4px solid #4CAF50; padding: 1rem; border-radius: 6px;">
             <h3 style="color: #2e7d32;">✓ Assignment Submitted</h3>
             <p style="margin-top: 0.5rem; color: #555;">Your work has been submitted for grading. Your instructor will review and provide feedback soon.</p>
+            ${fileName ? `<p style="margin-top: 0.5rem; color: #555; font-size: 0.9rem;">📎 File: <strong>${fileName}</strong></p>` : ''}
           </div>
         `;
 
@@ -617,7 +657,8 @@
         showAlert('Assignment submitted and progress updated!', 'success');
       } catch (error) {
         console.error('Error submitting assignment:', error);
-        showAlert('Failed to submit assignment', 'error');
+        showAlert('Failed to submit assignment: ' + error.message, 'error');
+        document.getElementById('fileProgress').style.display = 'none';
       }
     });
 
