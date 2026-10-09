@@ -1,13 +1,13 @@
 import {db,message,exportResearch} from './client-staging.js';
 let mode='login',recovering=location.hash.includes('type=recovery');
 const $=id=>document.getElementById(id);
-function choose(next){mode=next;$('password-label').hidden=next==='recover';$('password').required=next!=='recover';$('password').autocomplete=next==='signup'?'new-password':'current-password';$('submit').textContent={login:'Log in',signup:'Create account',recover:'Send recovery email'}[next];}
+function choose(next){mode=next;$('password-label').hidden=next==='recover';$('password').required=next!=='recover';$('password').autocomplete=next==='signup'?'new-password':'current-password';$('firstName-label').hidden=next!=='signup';$('lastName-label').hidden=next!=='signup';$('address-label').hidden=next!=='signup';$('firstName').required=next==='signup';$('lastName').required=next==='signup';$('submit').textContent={login:'Log in',signup:'Create account',recover:'Send recovery email'}[next];}
 document.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>choose(b.dataset.mode));
 async function render(){const {data}=await db.auth.getSession();const session=data.session;$('signed-out').hidden=!!session;$('signed-in').hidden=!session||recovering;$('reset').hidden=!session||!recovering;if(session)$('identity').textContent=session.user.email;}
 db.auth.onAuthStateChange(event=>{if(event==='PASSWORD_RECOVERY')recovering=true;setTimeout(render,0);});
 $('auth-form').onsubmit=async e=>{e.preventDefault();$('submit').disabled=true;try{
 const email=$('email').value.trim(),password=$('password').value;let result;
-if(mode==='signup')result=await db.auth.signUp({email,password,options:{emailRedirectTo:location.origin+'/account.html'}});
+if(mode==='signup'){result=await db.auth.signUp({email,password,options:{emailRedirectTo:location.origin+'/account.html'}});if(!result.error&&result.data.user){const firstName=$('firstName').value.trim(),lastName=$('lastName').value.trim(),address=$('address').value.trim();await db.from('qh_profiles').insert({user_id:result.data.user.id,display_name:`${firstName} ${lastName}`,address:address||null});}}
 else if(mode==='recover')result=await db.auth.resetPasswordForEmail(email,{redirectTo:location.origin+'/account.html'});
 else result=await db.auth.signInWithPassword({email,password});
 if(result.error)throw result.error;message(mode==='login'?'Signed in.':'Check your email for the next step.');await render();
