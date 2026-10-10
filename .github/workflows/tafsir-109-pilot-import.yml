@@ -1,0 +1,64 @@
+name: Publish verified Surah 109 pilot claim
+on:
+  push:
+    paths: ['.github/workflows/tafsir-109-pilot-import.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tafsir-109-import
+  cancel-in-progress: false
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Import source-checked claim and verify linked records
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        shell: python
+        run: |
+          import os,json,urllib.request,urllib.parse,unicodedata,re
+          key=os.environ.get("SUPABASE_SERVICE_KEY","")
+          if not key: raise SystemExit("Missing database credential")
+          base="https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/"
+          headers={"apikey":key,"Authorization":"Bearer "+key,"Content-Type":"application/json","Prefer":"return=representation"}
+          def call(table,method="GET",body=None):
+              req=urllib.request.Request(base+table,data=None if body is None else json.dumps(body).encode(),headers=headers,method=method)
+              with urllib.request.urlopen(req,timeout=30) as r:
+                  raw=r.read()
+                  return json.loads(raw) if raw else []
+          def norm(s):
+              s="".join(c for c in unicodedata.normalize("NFKC",s) if not unicodedata.combining(c) and c!="ـ")
+              return re.sub(r"\s+"," ",s).strip()
+          src=call("tafsir_entries?id=eq.48461&select=id,sura,aya,scholar_key,language,content")
+          if len(src)!=1 or (src[0]["sura"],src[0]["aya"],src[0]["scholar_key"],src[0]["language"])!=(109,2,"ibn_kathir","ar"):
+              raise SystemExit("Source mapping mismatch")
+          anchor="من الأصنام والأنداد"
+          if norm(anchor) not in norm(src[0]["content"]): raise SystemExit("Evidence no longer matches")
+          statement="Ibn Kathir explains the objects of worship rejected in verse 2 as idols and rival objects of worship."
+          tag="work-surah109-v1:source-reviewed-pilot:I02"
+          rows=call("propositions?tafsir_entry_id=eq.48461&select=id,statement_en,extracted_by&limit=1000")
+          matches=[r for r in rows if norm(r.get("statement_en") or "")==norm(statement)]
+          if matches:
+              raise SystemExit("Matching claim already exists; inspect linked records before retry")
+          pid=eid=None
+          try:
+              p=call("propositions","POST",{"claim_type_id":43,"statement_en":statement,"extracted_by":tag,"speaker_type":"unspecified","speaker_name":"Ibn Kathīr","assertion_mode":"explicit","status":"active","source_type":"tafsir_entry","tafsir_entry_id":48461,"extraction_validity":"verified","verification_state":"source_language_proposition_verified","attribution_fidelity":"accurate_paraphrase","quranic_textual_support":"not_stated","mufassir_own_position":"preferred"})[0]
+              pid=p["id"]
+              call("proposition_voice_chain","POST",{"proposition_id":pid,"reporting_work_id":2,"originating_voice_type":"exegete_own_view","originating_voice_name":None})
+              ev=call("evidence_units","POST",{"unit_type":"single_named_attribution","attributed_authority_name":"Ibn Kathīr","content_summary":statement+" Arabic source anchor: "+anchor,"independence_state":"unknown"})[0]
+              eid=ev["id"]
+              call("proposition_evidence","POST",{"proposition_id":pid,"evidence_unit_id":eid,"semantic_link_note":"Automated source-language review; exact Arabic anchor checked against tafsir entry 48461. Published English translation review remains separate.","linked_by":tag})
+              saved=call("propositions?id=eq."+str(pid)+"&select=id,tafsir_entry_id,statement_en")
+              voices=call("proposition_voice_chain?proposition_id=eq."+str(pid)+"&select=proposition_id")
+              links=call("proposition_evidence?proposition_id=eq."+str(pid)+"&select=proposition_id,evidence_unit_id")
+              if len(saved)!=1 or not voices or not links: raise RuntimeError("Linked readback failed")
+              print("SAVED_VERIFIED_PILOT",pid,"entry",48461,"voice and evidence links verified. Website visibility remains to be checked. Not a chapter completion.")
+          except Exception:
+              if pid is not None:
+                  for table in ("proposition_evidence","proposition_voice_chain"):
+                      call(table+"?proposition_id=eq."+str(pid),"DELETE")
+                  call("propositions?id=eq."+str(pid),"DELETE")
+              if eid is not None: call("evidence_units?id=eq."+str(eid),"DELETE")
+              raise
