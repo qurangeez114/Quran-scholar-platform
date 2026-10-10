@@ -1,0 +1,48 @@
+name: Publish labeled Tabari English Surah 109
+on:
+  push:
+    paths: ['.github/workflows/tabari-109-english.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tafsir-109-import
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Save labeled translation and verify readback
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        shell: python
+        run: |
+          import os,json,urllib.request
+          key=os.environ["SUPABASE_SERVICE_KEY"]
+          base="https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/"
+          headers={"apikey":key,"Authorization":"Bearer "+key,"Content-Type":"application/json","Prefer":"return=representation"}
+          def call(path,method="GET",body=None):
+              req=urllib.request.Request(base+path,data=None if body is None else json.dumps(body).encode(),headers=headers,method=method)
+              with urllib.request.urlopen(req,timeout=30) as r:
+                  raw=r.read()
+                  return json.loads(raw) if raw else []
+          blocks=json.loads("{\"shared\":\"Al-Tabari says that God addresses His prophet Muhammad. According to what has been related, the polytheists among his people offered to worship God for one year on condition that God's prophet worship their gods for one year. God therefore revealed the reply: 'Say,' Muhammad, to these polytheists who asked you to worship their gods for one year in return for their worshipping your God for one year: 'O disbelievers' in God, 'I do not worship what you worship' of gods and idols now; 'nor do you worship what I worship' now; 'nor will I be a worshipper,' in the future, 'of what you have worshipped' in the past; 'nor will you ever worship,' in your future, 'what I worship' now and in the future.\\n\\nThis wording was used because God's address to His messenger concerned particular individuals among the polytheists whom He knew would never believe. This had already been established in His prior knowledge. He instructed His prophet to make them abandon their hope and expectation of the proposed arrangement: it would never happen on either side at any time. He also removed the prophet's hope that they would believe or ever prosper. They remained so: some were killed by the sword at Badr, and others died before that as disbelievers.\\n\\nThe interpreters expressed an explanation similar to ours, and transmitted reports convey it.\\n\\nMuhammad ibn Musa al-Harashi related to me: Abu Khalaf related to us: Dawud related to us, from Ikrimah, from Ibn Abbas: Quraysh promised God's messenger money that would make him the richest man in Mecca, marriage to whichever women he wanted, and that they would follow him. They said: 'This is what we offer you, Muhammad. Stop insulting our gods and speaking ill of them. If you will not, we propose one arrangement beneficial to both you and us.' He asked: 'What is it?' They said: 'Worship our gods, al-Lat and al-Uzza, for one year, and we will worship your God for one year.' He said: 'Until I see what comes from my Lord.' Revelation then came from the Preserved Tablet: 'Say, O disbelievers,' the surah. God also revealed: 'Say: Is it other than God that you command me to worship, O ignorant ones?' through 'Worship, then, and be among the grateful.'\\n\\nYaqub related to me: Ibn Ulayyah related to us, from Muhammad ibn Ishaq, who said: Said ibn Mina, the client of al-Bakhtari, related to me: al-Walid ibn al-Mughirah, al-As ibn Wail, al-Aswad ibn al-Muttalib, and Umayyah ibn Khalaf met God's messenger and said: 'Muhammad, come: let us worship what you worship, and you worship what we worship. We will include you in our whole undertaking. If what you have brought is better than what we possess, we will have shared in it with you and received our portion of it. If what we possess is better than what you possess, you will have shared in our undertaking and received your portion of it.' God then revealed 'Say, O disbelievers' through the end of the surah.\",\"last\":\"Concerning His words, 'For you is your religion, and for me is my religion': God says: Yours is your religion, which you will never abandon, because a seal has been placed upon you and it has been decreed that you will not depart from it and will die adhering to it. Mine is the religion I follow, which I will never abandon, because it has already been established in God's prior knowledge that I will not leave it for another.\\n\\nYunus related to me: Ibn Wahb informed us: Ibn Zayd said concerning God's words, 'For you is your religion, and for me is my religion': This concerns the polytheists. He said: The Jews worship only God and do not associate partners with Him, but they disbelieve in some prophets and in what those prophets brought from God. They disbelieve in God's messenger and in what he brought from God, and they killed groups of prophets unjustly and aggressively. He continued with a statement about the group that remained until Nebuchadnezzar appeared, and their saying 'Uzayr is the son of God.' [The intervening wording in the stored Arabic is unclear and needs checking against an edition.] They did not worship him and did not act as the Christians did, who said 'The Messiah is the son of God' and worshipped him.\\n\\nSome specialists in Arabic used to say that 'I do not worship what you worship' and the following wording were repeated for emphasis, as in 'Indeed, with hardship comes ease; indeed, with hardship comes ease,' and 'You will surely see Hell; then you will surely see it with the eye of certainty.'\\n\\nEnd of the commentary on Surah al-Kafirun.\"}")
+          created=[]
+          try:
+              for aya in range(1,7):
+                  existing=call("tafsir_entries?sura=eq.109&aya=eq."+str(aya)+"&scholar_key=eq.tabari&language=eq.en&select=id,content")
+                  text="AI-assisted English translation by Quran Hikma. Translation of the stored Arabic commentary; not an independently reviewed edition. "+("Shared commentary covering 109:1–5.\n\n"+blocks["shared"] if aya<6 else "Source uncertainty is marked within the text.\n\n"+blocks["last"])
+                  if existing:
+                      if len(existing)!=1 or existing[0]["content"]!=text: raise RuntimeError("Existing English text differs; refusing overwrite")
+                      continue
+                  row={"sura":109,"aya":aya,"scholar_key":"tabari","scholar_name":"Abu Ja'far al-Tabari","tradition":"sunni","language":"en","theological_position":"classical","source_name":"Tafsir al-Tabari — Quran Hikma AI-assisted English translation","source_url":"https://github.com/qurangeez114/Quran-scholar-platform/blob/main/data/tafsir/staging/"+("tabari-109-1-5-english-draft-2026-10-10.json" if aya<6 else "tabari-109-6-english-draft-2026-10-10.json"),"content":text}
+                  saved=call("tafsir_entries","POST",row)[0]
+                  created.append(saved["id"])
+                  read=call("tafsir_entries?id=eq."+str(saved["id"])+"&select=id,content")
+                  if len(read)!=1 or read[0]["content"]!=text: raise RuntimeError("Readback mismatch")
+              print("Verified English Tabari entries for all six verses of Surah 109. IDs created:",created)
+          except Exception:
+              for ident in created: call("tafsir_entries?id=eq."+str(ident),"DELETE")
+              raise
+          
