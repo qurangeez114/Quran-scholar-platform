@@ -38,7 +38,7 @@ Evidence anchors are brief Arabic excerpts. Position labels report what the work
 | I04 | Ibn Kathir 6, shared 2–5 | He records a temporal explanation distinguishing earlier and future worship. | reported exegetical alternative | في الماضي ... في المستقبل |
 | I05 | Ibn Kathir 6, shared 2–5 | He records an explanation that the repetitions are pure emphasis. | reported alternative / not exclusive preference | تأكيد محض |
 | I06 | Ibn Kathir 6, shared 2–5 | Ibn Taymiyya distinguishes denial of the act from categorical denial of receptivity to it; Ibn Kathir evaluates this explanation positively. | Ibn Taymiyya / transmitted with approval | نفي الفعل ... نفي قبوله ... قول حسن |
-| Q01 | Qurtubi 2 | One reported explanation attributes repetition to the interlocutors repeating their proposal. | reported explanation attributed contextually to Ibn Abbas | كرروا عليه مقالهم مرة بعد مرة |
+| Q01 | Qurtubi 2 | One explanation attributes repetition to the interlocutors repeating their proposal. | Qurtubi / introduced alternative; no named transmitter | كرروا عليه مقالهم مرة بعد مرة |
 | Q02 | Qurtubi 2 | Another reported explanation makes repetition intensification. | unnamed / reported alternative | بمعنى التغليظ |
 | Q03 | Qurtubi 2 | Al-Akhfash and al-Mubarrad are named for a present/future explanation. | named earlier authorities / reported | في المستقبل ... قاله الأخفش والمبرد |
 | Q04 | Qurtubi 5 | The use of ma rather than man is explained through verbal correspondence with the clause referring to idols. | Qurtubi explanatory discussion | ليتقابل الكلام ولا يتنافى |
@@ -134,6 +134,48 @@ English alignment: the recovered translation locates futurity/pastness inside th
 
 ### Latest resumable state
 Arabic coverage: six works × six verse mappings, with shared-block handling still required. This is retrieval coverage, not extraction completion.
-Claims: 37 provisional rows, including W08; not a verified database count.
+Claims through third pass: 37 provisional rows, including W08; not a verified database count.
 Next work: Tabari's second occasion report and Ibn Zayd report; Qurtubi's opening variants; Ibn Kathir's recitation/inheritance reports; then database deduplication and evidence validation. Stay on 109.
+No database changes or deployment performed.
+
+## Fourth-pass long-source extraction — 2026-10-10
+Status: source extraction expanded; database deduplication and translation review remain open.
+
+Sources:
+- Tabari 109:1: https://quran.ksu.edu.sa/tafseer/tabary/sura109-aya1.html
+- Tabari 109:6: https://quran.ksu.edu.sa/tafseer/tabary/sura109-aya6.html
+- Qurtubi 109:1: https://quran.ksu.edu.sa/tafseer/qortobi/sura109-aya1.html
+- Ibn Kathir 109:1: https://quran.ksu.edu.sa/tafseer/katheer/sura109-aya1.html
+- Ibn Kathir 109:6: https://quran.ksu.edu.sa/tafseer/katheer/sura109-aya6.html
+
+### Added atomic claims
+
+| ID | Work / verse mapping | Statement (automated paraphrase) | Voice / position | Arabic evidence anchor |
+|---|---|---|---|---|
+| T05 | Tabari 6 | Tabari understands each side's religion as one it will not leave, grounding this permanence in prior divine knowledge. | Tabari / adopted | لكم دينكم فلا تتركونه أبدا ... ولي دين ... لا أتركه أبدا |
+| T06 | Tabari 6 | Ibn Zayd applies the address to the polytheists, then distinguishes Jews and Christians by their beliefs and conduct. | Ibn Zayd / transmitted excursus | قال ابن زيد ... قال: للمشركين |
+| T07 | Tabari 1 | A second occasion report names al-Walid, al-As, al-Aswad and Umayya as proposing reciprocal worship and shared benefit. | Said b. Mina / transmitted | هلم فلنعبد ما تعبد وتعبد ما نعبد |
+| Q08 | Qurtubi, surah opening | Qurtubi preserves both Meccan and Medinan classifications. | named competing reports | مكية ... ومدنية |
+| Q09 | Qurtubi 1 | He transmits two distinct occasion accounts: reciprocal worship, and touching an idol as a condition for acceptance. | Ibn Ishaq and others from Ibn Abbas; Abu Salih from Ibn Abbas / transmitted alternatives | هلم فلنعبد ما تعبد ... لو استلمت بعض هذه الآلهة |
+| Q10 | Qurtubi 1 | The address is general in form but particular to known individuals who would die in disbelief. | Qurtubi / adopted explanatory continuation, with similar view attributed to Mawardi | من الخصوص الذي جاء بلفظ العموم |
+| Q11 | Qurtubi 1–5 | Most specialists in meanings are reported to explain repetition as Arabic emphasis and clarification. | majority of unnamed meaning-specialists / reported | إرادة التأكيد والإفهام |
+| Q12 | Qurtubi 1–5 | Another explanation makes each repeated refusal answer a repeated alternating-year proposal. | unnamed / reported alternative | فأجيبوا عن كل ما قالوه بضده |
+| I07 | Ibn Kathir, whole surah | Ibn Kathir characterizes the surah as disavowal of polytheist practice and a command to sincerity in worship. | Ibn Kathir / adopted | سورة البراءة من العمل ... آمرة بالإخلاص |
+| I08 | Ibn Kathir 1 | He reports without naming a transmitter that Quraysh proposed alternating worship by year. | unnamed / reported occasion | وقيل ... دعوا رسول الله ... سنة |
+| I09 | Ibn Kathir 6 | Al-Bukhari glosses the two religions as disbelief and Islam. | al-Bukhari / transmitted gloss | يقال لكم دينكم الكفر ولي دين الإسلام |
+| I10 | Ibn Kathir 6 | The final possessive ya is omitted to agree with the nun-ending verse cadence. | Ibn Kathir transmitting al-Bukhari's discussion | لأن الآيات بالنون فحذف الياء |
+| I11 | Ibn Kathir 6 | Al-Shafi‘i and others infer that non-Islamic religions form one inheritance category. | al-Shafi‘i and others / legal inference reported | الكفر كله ملة واحدة تورثه اليهود من النصارى |
+| I12 | Ibn Kathir 6 | Ahmad and those agreeing reject cross-inheritance between Jews and Christians, citing the report that two religions do not inherit from each other. | Ahmad and followers / competing legal position | لا يتوارث أهل ملتين شتى |
+
+### Route preservation
+T07: Tabari → Yaqub → Ibn Ulayya → Muhammad b. Ishaq → Said b. Mina. The report names the four interlocutors; it is distinct from T03 and must not be merged into its Ibn Abbas route.
+T06: Tabari → Yunus → Ibn Wahb → Ibn Zayd.
+Q09 preserves two attributions as printed by Qurtubi; no missing intermediaries are invented.
+I11 is an inference attributed to al-Shafi‘i and others, not Ibn Kathir's unqualified ruling. I12 is a competing position, with the cited hadith route summarized by Ibn Kathir as Amr b. Shuayb → his father → his grandfather.
+
+### Verification notes
+Q01 voice corrected: Qurtubi introduces the repeated-proposal explanation without naming Ibn Abbas at that point. Earlier contextual proximity is insufficient for an attribution.
+Ibn Kathir's prayer and bedtime recitation reports were reviewed but not converted into tafsir propositions here; they are hadith/virtue material and should remain separate unless the data model intentionally includes such reports.
+Provisional research total is now 49 atomic claims. This is a document count before live-row matching, not a database count.
+Extraction is not closed: full-passage evidence validation, stable ID matching, duplicate detection and Arabic–English review remain. No D.
 No database changes or deployment performed.
