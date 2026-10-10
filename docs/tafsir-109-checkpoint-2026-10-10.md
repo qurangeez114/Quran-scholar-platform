@@ -2,7 +2,7 @@
 Status: PARTIAL AUTOMATED SOURCE REVIEW. Not a D completion. Repository research record only; no database import or website deployment performed.
 
 ## Resume instructions
-Stay on Surah 109. Next: retrieve Jalalayn and Tanwir al-Miqbas Arabic for 109:1–6, identify published English counterparts, finish extraction and verify voice/evidence links. Tanwir must retain disputed Ibn Abbas attribution. Do not move to 108 until this chapter is closed. Check this record before re-extracting the claims below.
+Stay on Surah 109. Next: finish the long-source extraction listed below, recover Tanwir's English 109:2, and verify database IDs, duplicates, voice/evidence links. Arabic for all six works is now recovered; see the latest pass, which supersedes earlier coverage statuses. Tanwir must retain disputed Ibn Abbas attribution. Do not move to 108 until this chapter is closed. Check this record before re-extracting the claims below.
 
 ## Baseline and coverage
 The September 17 closeout documents 110–114 extraction complete (492 propositions, 138 source groups), with separate alignment gaps. The current docs directory contained no newer chapter closeout.
@@ -111,3 +111,29 @@ Tanwir cannot receive an Arabic–English fidelity judgment yet because only the
 - Tanwir Arabic recovered: 0/6.
 - Database IDs, deduplication against live propositions, voice-chain insertion and evidence-link insertion: pending.
 - Chapter status remains PARTIAL. Do not report D.
+
+## Third-pass Arabic recovery — 2026-10-10
+Status: PARTIAL; awaiting database import and verification. Earlier retrieval-gap statements describe earlier passes.
+
+Tanwir Arabic 109:1–6 recovered: https://quranpedia.net/surah/1/109/book/363
+The chapter opening attributes the material to Ibn Abbas through an unspecified antecedent chain. Preserve disputed attribution; do not construct intermediaries from the website's editorial introduction. Exclude the following Nasr introduction from verse 6.
+
+### Corrections and evidence
+These supersede the English-only formulations of W02, W04 and W07 without creating duplicate claims.
+
+| ID | Arabic anchor | Corrected mapping / interpretation |
+|---|---|---|
+| W02 | وهذان فى المستقبل | The preceding pair, verses 2–3, is placed in the future. |
+| W04 | وهذان في الماضى | The second pair, verses 4–5, is placed in the past. |
+| W07 | آية القتال | The work asserts abrogation by the fighting verse, singular. |
+| W08 | من دون الله من الأوثان | Verse 2 identifies idols besides God. New Arabic-attested claim. |
+
+W01, W03, W05 and W06 now have Arabic counterparts. W05 remains an unnamed alternative introduced by “ويقال”. No author preference is inferred.
+
+English alignment: the recovered translation locates futurity/pastness inside the worship-object phrases, whereas Arabic explicitly refers to pairs. Preserve this scope difference for review. English “verses” versus Arabic singular also needs recording. Neither warrants a fabricated fidelity score. English 109:2 remains inaccessible.
+
+### Latest resumable state
+Arabic coverage: six works × six verse mappings, with shared-block handling still required. This is retrieval coverage, not extraction completion.
+Claims: 37 provisional rows, including W08; not a verified database count.
+Next work: Tabari's second occasion report and Ibn Zayd report; Qurtubi's opening variants; Ibn Kathir's recitation/inheritance reports; then database deduplication and evidence validation. Stay on 109.
+No database changes or deployment performed.
