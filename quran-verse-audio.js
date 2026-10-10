@@ -7,6 +7,7 @@
  audio.addEventListener('ended',reset);audio.addEventListener('error',()=>{if(playing)playing.title='Audio could not load. Tap to retry.';reset();});
  function add(host,s,a){s=Number(s);a=Number(a);if(!host||!lengths[s]||a<1||a>lengths[s])return;
  const key=s+':'+a;if(host.querySelector('[data-qh-audio="'+key+'"],.simple-recitation-btn'))return;
+ if(document.querySelector('.simple-recitation-btn[aria-label="Play plain audio for verse '+key+'"]'))return;
  const b=document.createElement('button');b.type='button';b.dataset.qhAudio=key;b.textContent='▶ Arabic audio';b.setAttribute('aria-label','Play Arabic audio for Qur’an '+key);b.setAttribute('aria-pressed','false');b.style.cssText='margin:6px;padding:6px 10px;border:1px solid #b8902a;border-radius:7px;background:#fdf8ee;color:#77581a;cursor:pointer;font:inherit';
  b.onclick=e=>{e.preventDefault();e.stopPropagation();if(playing===b&&!audio.paused){audio.pause();reset();return;}audio.pause();reset();if(window._simpleRecitationAudio)window._simpleRecitationAudio.pause();playing=b;audio.src='/audio/simple-recitation/'+String(s).padStart(3,'0')+'_'+String(a).padStart(3,'0')+'.mp3';b.textContent='⏸ Pause';b.setAttribute('aria-pressed','true');audio.play().catch(reset);};host.appendChild(b);}
  function scan(){
