@@ -1,0 +1,33 @@
+name: Tafsir database access diagnostic
+on:
+  push:
+    paths:
+      - '.github/workflows/tafsir-db-access-diagnostic.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check saved credential and Surah 109 access
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        shell: python
+        run: |
+          import os, json, urllib.request, urllib.error
+          key = os.environ.get("SUPABASE_SERVICE_KEY", "")
+          if not key:
+              print("BLOCKER: SUPABASE_SERVICE_KEY is not available to this workflow.")
+              raise SystemExit(1)
+          url = "https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/tafsir_entries?select=id,sura,aya,scholar_key,language&sura=eq.109&limit=1000"
+          req = urllib.request.Request(url, headers={"apikey": key, "Authorization": "Bearer " + key})
+          try:
+              with urllib.request.urlopen(req, timeout=30) as response:
+                  rows = json.load(response)
+          except urllib.error.HTTPError as exc:
+              print("BLOCKER: authenticated database read returned HTTP", exc.code)
+              raise SystemExit(1)
+          print("Authenticated read succeeded. Surah 109 entry count:", len(rows))
+          print("No database writes performed. Write privileges and credential rotation remain unverified.")
