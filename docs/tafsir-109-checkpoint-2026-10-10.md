@@ -69,3 +69,45 @@ Qurtubi preserves both abrogation and non-abrogation readings. A single “abrog
 - Compare identified published Arabic/English pairs; withhold numeric fidelity grades until alignment is established.
 - Validate every claim against its full source passage, retain origin voice, preferred/rejected/reported status and evidence link.
 - No chapter completion, live database coverage or deployment is asserted by this document.
+
+
+## Second-pass source recovery — 2026-10-10
+This pass recovered complete verse-level Arabic Jalalayn commentary from Quran.com and the identified published English translation by Feras Hamza from Altafsir for 109:1–6. It also recovered the published English Tanwir al-Miqbas translation by Mokrane Guezzou for verses 1 and 3–6. Verse 2 was inaccessible at the queried Tanwir endpoint in this pass. Arabic Tanwir commentary was not recovered; this is a source gap, not textual silence.
+
+Jalalayn Arabic: https://quran.com/109:1/tafsirs/ar-tafsir-jalalayn (change verse number through 6)
+Jalalayn English: https://www.altafsir.com/Tafasir.asp?LanguageId=2&UserProfile=0&tAyahNo=1&tDisplay=yes&tMadhNo=1&tSoraNo=109&tTafsirNo=74
+Tanwir English: https://www.altafsir.com/Tafasir.asp?LanguageId=2&UserProfile=0&tAyahNo=1&tDisplay=yes&tMadhNo=2&tSoraNo=109&tTafsirNo=73
+
+### Added atomic claims
+
+| ID | Work / verse | Statement (source-faithful paraphrase) | Voice / position | Evidence |
+|---|---|---|---|---|
+| J01 | Jalalayn 2 | The first negation applies to the present and its objects are idols. | Jalalayn / stated gloss | في الحال ... من الأصنام |
+| J02 | Jalalayn 3 | The addressees do not presently worship the one God whom the speaker worships. | Jalalayn / stated gloss | في الحال ... وهو الله تعالى وحده |
+| J03 | Jalalayn 4 | The speaker's non-worship is mapped to the future. | Jalalayn / stated gloss | في الاستقبال |
+| J04 | Jalalayn 5 | The addressees' future non-worship is tied to God's knowledge that they will not believe. | Jalalayn / stated gloss | علم الله منهم أنهم لا يؤمنون |
+| J05 | Jalalayn 5 | The use of inanimate ma for God is explained as correspondence with the preceding expression. | Jalalayn / grammatical explanation | إطلاق ما على الله على وجه المقابلة |
+| J06 | Jalalayn 6 | The two religions are glossed respectively as association and Islam. | Jalalayn / stated gloss | الشرك ... الإسلام |
+| J07 | Jalalayn 6 | The statement is placed before the command to fight. | Jalalayn / chronological claim | قبل أن يؤمر بالحرب |
+| J08 | Jalalayn 6 | The seven readers omit the possessive ya in pause and continuation, while Yaqub retains it in both. | Jalalayn / qiraat report | القراء السبعة ... وأثبتها يعقوب |
+| W01 | Tanwir-attributed 1 | The work names al-As ibn Wa'il and al-Walid ibn al-Mughira among those proposing reciprocal worship. | attributed Tanwir report; Ibn Abbas attribution disputed | published English, Mokrane Guezzou |
+| W02 | Tanwir-attributed 3 | It maps the object of the addressees' non-worship to what the speaker will worship in the future. | attributed gloss; Ibn Abbas attribution disputed | published English, Mokrane Guezzou |
+| W03 | Tanwir-attributed 4 | The speaker will not worship what the addressees worship besides God. | attributed gloss; Ibn Abbas attribution disputed | published English, Mokrane Guezzou |
+| W04 | Tanwir-attributed 5 | One reading maps the object to what the speaker worshipped in the past. | attributed gloss; Ibn Abbas attribution disputed | published English, Mokrane Guezzou |
+| W05 | Tanwir-attributed 5 | An alternative distinguishes belief in associated divinity from belief in divine oneness. | attributed alternative; Ibn Abbas attribution disputed | "it is also said" in published English |
+| W06 | Tanwir-attributed 6 | The work glosses the two religions as disbelief/association and Islam/faith. | attributed gloss; Ibn Abbas attribution disputed | published English, Mokrane Guezzou |
+| W07 | Tanwir-attributed 6 | The work claims later fighting verses abrogated the closing statement. | attributed abrogation claim; Ibn Abbas attribution disputed | published English, Mokrane Guezzou |
+
+### Arabic–English alignment review
+Jalalayn 109:2–6 is aligned at the proposition level: the English preserves the present/future distinctions, the idol gloss, the solitary-God gloss, the non-belief explanation, the ma-correspondence explanation, the religion glosses, the pre-fighting chronology, and the qiraat note. Verse 1 has no commentary beyond the verse wording in the recovered Arabic and English pages.
+No numeric fidelity score is assigned in this automated checkpoint. Punctuation in the Altafsir display is compressed, but no substantive omission was found against the short Arabic glosses.
+Tanwir cannot receive an Arabic–English fidelity judgment yet because only the published English rendering was recovered. Its propositions remain English-attested and explicitly attribution-qualified.
+
+### Current coverage
+- Six baseline works represented in the research checkpoint: yes.
+- Arabic source recovered: Tabari, Ibn Kathir, Qurtubi, Jalalayn, Saadi.
+- Published English recovered and verse-aligned: Jalalayn 6/6.
+- Tanwir published English recovered: 5/6 directly in this pass; verse 2 pending.
+- Tanwir Arabic recovered: 0/6.
+- Database IDs, deduplication against live propositions, voice-chain insertion and evidence-link insertion: pending.
+- Chapter status remains PARTIAL. Do not report D.
