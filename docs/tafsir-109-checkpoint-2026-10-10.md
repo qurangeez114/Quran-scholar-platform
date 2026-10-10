@@ -176,7 +176,7 @@ I11 is an inference attributed to al-Shafi‘i and others, not Ibn Kathir's unqu
 ### Verification notes
 Q01 voice corrected: Qurtubi introduces the repeated-proposal explanation without naming Ibn Abbas at that point. Earlier contextual proximity is insufficient for an attribution.
 Ibn Kathir's prayer and bedtime recitation reports were reviewed but not converted into tafsir propositions here; they are hadith/virtue material and should remain separate unless the data model intentionally includes such reports.
-Provisional research total is now 49 atomic claims. This is a document count before live-row matching, not a database count.
+Provisional research total is now 51 atomic claims. (A machine-readable uniqueness pass corrected the earlier arithmetic.) This is a document count before live-row matching, not a database count.
 Extraction is not closed: full-passage evidence validation, stable ID matching, duplicate detection and Arabic–English review remain. No D.
 No database changes or deployment performed.
 
@@ -194,7 +194,7 @@ The live Quranhikma 109:1 Tafsir panel was inspected after loading Surah 109. It
 
 ### Database/deduplication boundary
 Repository extraction code confirms live deduplication convention is based on tafsir_entry_id plus statement_en, with voice chains and evidence links checked separately. Stable Surah 109 entry IDs were not exposed in the presentation layer, so no safe import file or database write was attempted.
-The live panel confirms source rows exist, but does not establish that any of this checkpoint's 49 propositions already exist as structured rows.
+The live panel confirms source rows exist, but does not establish that any of this checkpoint's 51 propositions already exist as structured rows.
 No database changes or deployment performed.
 
 ### Translation-review state
@@ -205,3 +205,10 @@ No database changes or deployment performed.
 - Tanwir: Arabic recovered 6/6; English 109:2 remains inaccessible; encoding defect at 109:1.
 - Tabari: Arabic only; no identified English pair in the dataset.
 Surah 109 remains PARTIAL. No D.
+
+## Sixth-pass staging validation — 2026-10-10
+Machine-readable staging artifact: data/tafsir/staging/surah-109-propositions-2026-10-10.json
+
+Validation found 51 unique claim IDs: 7 Tabari, 12 Ibn Kathir, 12 Qurtubi, 4 Saadi, 8 Jalalayn and 8 disputed-attribution Tanwir claims. The earlier total of 49 was arithmetic error, not a duplication finding. All 51 were retained.
+Each staged record includes work, verse mapping, English analytical statement, voice/position label, Arabic evidence anchor, source locator, alignment status, disputed-attribution flag where applicable, and a deterministic dedup fingerprint.
+The staging file is explicitly marked awaiting live tafsir_entry_id resolution and deduplication. It is not an import log and does not assert database writes.
