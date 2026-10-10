@@ -179,3 +179,29 @@ Ibn Kathir's prayer and bedtime recitation reports were reviewed but not convert
 Provisional research total is now 49 atomic claims. This is a document count before live-row matching, not a database count.
 Extraction is not closed: full-passage evidence validation, stable ID matching, duplicate detection and Arabic–English review remain. No D.
 No database changes or deployment performed.
+
+## Fifth-pass live alignment audit — 2026-10-10
+Status: automated presentation-layer inspection; not human verification and no numeric fidelity score.
+
+The live Quranhikma 109:1 Tafsir panel was inspected after loading Surah 109. It displayed nine tafsir cards and explicitly reported no saved Arabic–English fidelity evaluation for 109:1.
+
+### Pair findings
+- Ibn Kathir: the Arabic card contains the full surah-level commentary, including recitation reports, the four repetition explanations, the omitted-ya explanation, and the competing inheritance positions. The paired English is expressly labelled abridged and ends after al-Bukhari's disbelief/Islam gloss. It preserves the main disavowal, universal/immediate addressee distinction, idol gloss, ma/man gloss, worship-object/mode explanation and parallel verses. It omits the later grammatical explanation, temporal/emphasis alternatives, Ibn Taymiyya's fourth view, and both inheritance positions. Treat as aligned abridgment with material omissions, not a complete translation.
+- Qurtubi: Arabic is present, but the stored English visible in the live card terminates mid-sentence at “And if what” during the first occasion report. This is a damaged or truncated pair; do not grade the remaining Arabic against it as if complete.
+- Jalalayn: the verse-1 card contains only the verse-level English gloss, consistent with the previously observed absence of added Arabic commentary at 109:1.
+- Saadi: Arabic “معلنا ومصرحًا” is paired with “openly and explicitly”; the proposition is preserved.
+- Tanwir: English is present for 109:1, but a replacement character appears before its embedded quotation. Meaning is largely recoverable; record the encoding defect. Attribution remains disputed.
+
+### Database/deduplication boundary
+Repository extraction code confirms live deduplication convention is based on tafsir_entry_id plus statement_en, with voice chains and evidence links checked separately. Stable Surah 109 entry IDs were not exposed in the presentation layer, so no safe import file or database write was attempted.
+The live panel confirms source rows exist, but does not establish that any of this checkpoint's 49 propositions already exist as structured rows.
+No database changes or deployment performed.
+
+### Translation-review state
+- Jalalayn: proposition-level review previously completed for 6/6.
+- Saadi: 109:1 pair spot-checked; full 6-verse review not closed.
+- Ibn Kathir: usable aligned abridgment identified; material omissions documented; verse-level mapping still needs formal review.
+- Qurtubi: translation review blocked by stored English truncation.
+- Tanwir: Arabic recovered 6/6; English 109:2 remains inaccessible; encoding defect at 109:1.
+- Tabari: Arabic only; no identified English pair in the dataset.
+Surah 109 remains PARTIAL. No D.
