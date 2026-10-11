@@ -129,3 +129,12 @@ At 2026-10-11 15:37 America/Los_Angeles, [GitHub Actions run 38181127893](https:
 Reporting-work `1` links preserve al-Ṭabarī's own positions, named Ibn ʿAbbās and Ibn Zayd reports, the unnamed Arabic authority, and the unattributed occasion report as different voices. These propositions bind only to Arabic al-Ṭabarī entries; none bind to AI-assisted English entries `56199–56204`.
 
 The original 51-claim staging set now has 20 database-saved/readback-verified claims; the current 52-claim manifest has 21 including al-Saʿdī S05. Proposition-specific public rendering remains unverified. Surah 109 remains partial; do not issue D.
+
+
+## October 11 al-Qurṭubī Arabic proposition import
+
+At 2026-10-11 16:37 America/Los_Angeles, [GitHub Actions run 38184944703](https://github.com/qurangeez114/Quran-scholar-platform/actions/runs/38184944703) completed successfully. Q01–Q12 were saved as source-language-verified propositions `47615–47626`, attached only to Arabic al-Qurṭubī entries `13292`, `15056`, `17630`, and `17631`. Evidence units `552–563`, reporting-work `3` voice chains, and proposition links passed postflight readback.
+
+The workflow preserves al-Akhfash/al-Mubarrad as named earlier voices; al-Qurṭubī's adopted analyses, unnamed alternatives, competing abrogation positions, occasion reports, and the unnamed “most specialists” view remain distinct. Every evidence link explicitly states that the stored English pair is truncated. Thus Arabic extraction is published and verified, but al-Qurṭubī translation review is still open.
+
+The original 51-claim staging set now has 32 database-saved/readback-verified claims; the current 52-claim manifest has 33 including al-Saʿdī S05. Proposition-specific public rendering remains unverified. Surah 109 remains partial; do not issue D.
