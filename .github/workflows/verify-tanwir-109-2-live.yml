@@ -16,7 +16,7 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         shell: python
         run: |
-          import json, os, re, urllib.parse, urllib.request
+          import json, os, re, urllib.error, urllib.parse, urllib.request
           key = os.environ.get("SUPABASE_SERVICE_KEY", "")
           if not key:
               raise SystemExit("Missing protected database credential")
@@ -24,9 +24,13 @@ jobs:
           headers = {"apikey": key, "Authorization": "Bearer " + key}
           def get(path):
               req = urllib.request.Request(base + path, headers=headers)
-              with urllib.request.urlopen(req, timeout=30) as response:
-                  return json.loads(response.read())
-          rows = get("tafsir_entries?id=eq.29984&select=id,sura,aya,scholar_key,language,content,source_id")
+              try:
+                  with urllib.request.urlopen(req, timeout=30) as response:
+                      return json.loads(response.read())
+              except urllib.error.HTTPError as error:
+                  detail = error.read().decode(errors="replace")
+                  raise SystemExit("Read failed HTTP " + str(error.code) + ": " + detail[:800]) from error
+          rows = get("tafsir_entries?id=eq.29984&select=id,sura,aya,scholar_key,language,content")
           if len(rows) != 1:
               raise SystemExit("Expected one live row 29984")
           row = rows[0]
@@ -40,7 +44,7 @@ jobs:
           low = text.casefold()
           if "idol" not in low or "allah" not in low:
               raise SystemExit("Live row lacks the expected narrow idol/Allah gloss")
-          dup = get("tafsir_entries?sura=eq.109&aya=eq.2&scholar_key=eq.ibn_abbas&language=eq.en&select=id,source_id")
+          dup = get("tafsir_entries?sura=eq.109&aya=eq.2&scholar_key=eq.ibn_abbas&language=eq.en&select=id,source_name,source_url")
           props = get("propositions?tafsir_entry_id=eq.29984&select=id,statement_en,extracted_by&limit=1000")
           exact = [p["id"] for p in props if re.sub(r"[^a-z0-9]+"," ",(p.get("statement_en") or "").casefold()).strip() == "verse 2 identifies idols besides god"]
           print("VERIFIED_TANWIR_109_2_LIVE_ROW", row["id"], "metadata_ok", "semantic_gloss_ok", "content_chars", len(text), "same_identity_rows", len(dup), "exact_W08_duplicates", len(exact))
