@@ -1,0 +1,147 @@
+name: Publish verified Saadi claims for Surah 109
+on:
+  push:
+    paths:
+      - '.github/workflows/tafsir-109-saadi-import.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tafsir-109-import
+  cancel-in-progress: false
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Resolve sources, import five claims, and verify readback
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        shell: python
+        run: |
+          import json, os, re, unicodedata, urllib.error, urllib.parse, urllib.request
+          key = os.environ.get("SUPABASE_SERVICE_KEY", "")
+          if not key:
+              raise SystemExit("Missing protected database credential")
+          base = "https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/"
+          headers = {"apikey": key, "Authorization": "Bearer " + key,
+                     "Content-Type": "application/json", "Prefer": "return=representation"}
+          def call(path, method="GET", body=None):
+              req = urllib.request.Request(base + path,
+                  data=None if body is None else json.dumps(body, ensure_ascii=False).encode(),
+                  headers=headers, method=method)
+              try:
+                  with urllib.request.urlopen(req, timeout=30) as response:
+                      raw = response.read()
+                      return json.loads(raw) if raw else []
+              except urllib.error.HTTPError as error:
+                  detail = error.read().decode(errors="replace")
+                  raise RuntimeError("HTTP " + str(error.code) + ": " + detail[:800]) from error
+          def norm_en(value):
+              return re.sub(r"[^a-z0-9]+", " ", unicodedata.normalize("NFKC", value or "").casefold()).strip()
+          def norm_ar(value):
+              value = "".join(c for c in unicodedata.normalize("NFKC", value or "")
+                              if not unicodedata.combining(c) and c != "ـ")
+              return re.sub(r"\s+", " ", value).strip()
+          rows = call("tafsir_entries?sura=eq.109&scholar_key=eq.saadi&language=eq.ar&select=id,sura,aya,scholar_key,language,content&order=aya.asc,id.asc&limit=50")
+          by_aya = {}
+          for row in rows:
+              by_aya.setdefault(row["aya"], []).append(row)
+          for aya in (1, 2, 3, 6):
+              if len(by_aya.get(aya, [])) != 1:
+                  raise SystemExit("Expected one Arabic Saadi entry for aya " + str(aya))
+          specs = [
+            ("S01", 1, "The command calls for an explicit public declaration to the addressees.",
+             ["معلنا", "مصرحا"], "Verse 109:1; exact Arabic source page independently reviewed."),
+            ("S02", 2, "The speaker disavows the addressees' objects of worship both outwardly and inwardly.",
+             ["ظاهرا", "باطنا"], "Verse 109:2; exact Arabic source page independently reviewed."),
+            ("S03", 3, "Worship combined with association is not counted as worship in his explanation.",
+             ["لا تسمي عباده"], "The Arabic explanatory block is printed at 109:3 and repeated verbatim at 109:5; stored once to avoid double counting."),
+            ("S04", 3, "The first negation concerns the act's absence; the repetition expresses an enduring characteristic.",
+             ["عدم وجود الفعل", "وصفا لازما"], "The Arabic explanatory block is printed at 109:3 and repeated verbatim at 109:5; stored once to avoid double counting."),
+            ("S05", 6, "Al-Saʿdī interprets the closing statement as distinguishing the two religious communities from each other.",
+             ["ميز بين الفريقين", "فصل بين الطائفتين"], "Verse 109:6; newly audited source-checked claim.")
+          ]
+          resolved = []
+          for code, aya, statement, anchors, scope in specs:
+              row = by_aya[aya][0]
+              text = norm_ar(row.get("content"))
+              missing = [a for a in anchors if norm_ar(a) not in text]
+              if missing:
+                  raise SystemExit(code + " Arabic anchors missing from live entry " + str(row["id"]))
+              resolved.append((code, row["id"], statement, anchors, scope))
+          entry_ids = sorted({x[1] for x in resolved})
+          existing = call("propositions?tafsir_entry_id=in.(" + ",".join(map(str, entry_ids)) + ")&select=id,tafsir_entry_id,statement_en,extracted_by&limit=1000")
+          decisions = []
+          for spec in resolved:
+              code, entry_id, statement, anchors, scope = spec
+              matches = [r for r in existing if norm_en(r.get("statement_en")) == norm_en(statement)]
+              if len(matches) > 1:
+                  raise SystemExit("Multiple exact matches for " + code + "; refusing mutation")
+              if matches:
+                  pid = matches[0]["id"]
+                  voices = call("proposition_voice_chain?proposition_id=eq." + str(pid) + "&select=proposition_id,reporting_work_id,originating_voice_type")
+                  links = call("proposition_evidence?proposition_id=eq." + str(pid) + "&select=proposition_id,evidence_unit_id")
+                  if not voices or not links:
+                      raise SystemExit("Existing " + code + " lacks required voice/evidence links; inspect before repair")
+                  decisions.append(("existing", spec, pid, links[0]["evidence_unit_id"]))
+              else:
+                  decisions.append(("insert", spec, None, None))
+          created = []
+          try:
+              results = []
+              for action, spec, old_pid, old_eid in decisions:
+                  code, entry_id, statement, anchors, scope = spec
+                  tag = "work-surah109-v1:source-reviewed:" + code
+                  if action == "existing":
+                      results.append((code, old_pid, entry_id, old_eid, "existing"))
+                      continue
+                  proposition = call("propositions", "POST", {
+                      "claim_type_id": 43, "statement_en": statement, "extracted_by": tag,
+                      "speaker_type": "exegete", "speaker_name": "al-Saʿdī",
+                      "assertion_mode": "explicit", "status": "active",
+                      "source_type": "tafsir_entry", "tafsir_entry_id": entry_id,
+                      "extraction_validity": "verified",
+                      "verification_state": "source_language_proposition_verified",
+                      "attribution_fidelity": "accurate_paraphrase",
+                      "quranic_textual_support": "not_stated",
+                      "mufassir_own_position": "preferred"
+                  })[0]
+                  pid = proposition["id"]
+                  call("proposition_voice_chain", "POST", {
+                      "proposition_id": pid, "reporting_work_id": 55,
+                      "originating_voice_type": "exegete_own_view",
+                      "originating_voice_name": None
+                  })
+                  evidence = call("evidence_units", "POST", {
+                      "unit_type": "single_named_attribution",
+                      "attributed_authority_name": "al-Saʿdī",
+                      "content_summary": statement + " Arabic anchor(s): " + " / ".join(anchors) + ". " + scope,
+                      "independence_state": "independent"
+                  })[0]
+                  eid = evidence["id"]
+                  call("proposition_evidence", "POST", {
+                      "proposition_id": pid, "evidence_unit_id": eid,
+                      "semantic_link_note": "Source checked against the King Saud University al-Saʿdī page for Surah 109. " + scope,
+                      "linked_by": tag
+                  })
+                  created.append((pid, eid))
+                  results.append((code, pid, entry_id, eid, "inserted"))
+              for code, pid, entry_id, eid, state in results:
+                  saved = call("propositions?id=eq." + str(pid) + "&select=id,tafsir_entry_id,statement_en,extracted_by")
+                  voices = call("proposition_voice_chain?proposition_id=eq." + str(pid) + "&select=proposition_id,reporting_work_id,originating_voice_type")
+                  links = call("proposition_evidence?proposition_id=eq." + str(pid) + "&select=proposition_id,evidence_unit_id")
+                  if len(saved) != 1 or saved[0]["tafsir_entry_id"] != entry_id:
+                      raise RuntimeError(code + " proposition postflight mismatch")
+                  if len(voices) != 1 or voices[0]["reporting_work_id"] != 55 or voices[0]["originating_voice_type"] != "exegete_own_view":
+                      raise RuntimeError(code + " voice postflight mismatch")
+                  if len(links) != 1 or links[0]["evidence_unit_id"] != eid:
+                      raise RuntimeError(code + " evidence postflight mismatch")
+                  print("SAADI_SAVED_VERIFIED", code, "proposition", pid, "entry", entry_id, "evidence", eid, state)
+          except Exception:
+              for pid, eid in reversed(created):
+                  call("proposition_evidence?proposition_id=eq." + str(pid), "DELETE")
+                  call("proposition_voice_chain?proposition_id=eq." + str(pid), "DELETE")
+                  call("propositions?id=eq." + str(pid), "DELETE")
+                  call("evidence_units?id=eq." + str(eid), "DELETE")
+              raise
