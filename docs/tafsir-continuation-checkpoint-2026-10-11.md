@@ -82,3 +82,18 @@ Thus Tanwīr 109:2 live-row content and public UI visibility are verified. W08 i
 The production Surah 109:2 Tafsir panel visibly renders the underlying Tanwīr source gloss. A proposition-specific public rendering of `47582` was not found in the available Tafsir, Analysis, or Research Comparison surfaces, so only the source-commentary UI—not a distinct W08 claim card—is marked publicly visible.
 
 The original 51-claim staging set now has four database-saved/readback-verified claims: I01 `47580`, I02 `47579`, I07 `47581`, and W08 `47582`. This does not complete Surah 109; remaining claims, source identities, Qurtubī truncation, Saʿdī S05, and translation review remain open. Do not issue D.
+
+
+## October 11 al-Saʿdī authenticated import
+
+At 2026-10-11 13:40 America/Los_Angeles, [GitHub Actions run 38173203445](https://github.com/qurangeez114/Quran-scholar-platform/actions/runs/38173203445) completed successfully after resolving exact live Arabic identities and checking source anchors and exact-statement duplicates. It saved:
+
+- S01: proposition `47585`, entry `36289`, evidence `524`;
+- S02: proposition `47586`, entry `36290`, evidence `525`;
+- S03: proposition `47587`, entry `36291`, evidence `526`;
+- S04: proposition `47588`, entry `36291`, evidence `527`;
+- newly audited S05: proposition `47589`, entry `36314`, evidence `528`.
+
+Postflight readback verified each proposition, reporting-work `55` exegete-own-view voice link, and evidence link. The repeated 109:3/109:5 al-Saʿdī explanatory block is represented once under the 109:3 entry; no independent 109:4 explanatory claim was invented. Source independence remains `unknown`, avoiding an unsupported stronger claim.
+
+The original 51-claim set now has eight database-saved/readback-verified claims (I01, I02, I07, W08, S01–S04); S05 is an additional ninth verified claim in the current 52-claim manifest. Proposition-specific public rendering is not yet verified. Surah 109 remains partial; do not issue D.
