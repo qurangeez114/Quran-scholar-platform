@@ -1,0 +1,119 @@
+name: Publish verified Tanwir W08 for Surah 109
+on:
+  push:
+    paths:
+      - '.github/workflows/tafsir-109-w08-import.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tafsir-109-import
+  cancel-in-progress: false
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Import W08 with disputed attribution and verify readback
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        shell: python
+        run: |
+          import json, os, re, unicodedata, urllib.error, urllib.request
+          key = os.environ.get("SUPABASE_SERVICE_KEY", "")
+          if not key:
+              raise SystemExit("Missing protected database credential")
+          base = "https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/"
+          headers = {"apikey": key, "Authorization": "Bearer " + key,
+                     "Content-Type": "application/json", "Prefer": "return=representation"}
+          def call(path, method="GET", body=None):
+              req = urllib.request.Request(base + path,
+                  data=None if body is None else json.dumps(body, ensure_ascii=False).encode(),
+                  headers=headers, method=method)
+              try:
+                  with urllib.request.urlopen(req, timeout=30) as response:
+                      raw = response.read()
+                      return json.loads(raw) if raw else []
+              except urllib.error.HTTPError as error:
+                  detail = error.read().decode(errors="replace")
+                  raise RuntimeError("HTTP " + str(error.code) + ": " + detail[:800]) from error
+          def norm(value):
+              value = "".join(c for c in unicodedata.normalize("NFKC", value or "")
+                              if not unicodedata.combining(c) and c != "ـ")
+              return re.sub(r"[^a-z0-9]+", " ", value.casefold()).strip()
+          source = call("tafsir_entries?id=eq.29984&select=id,sura,aya,scholar_key,language,content")
+          if len(source) != 1 or (source[0]["sura"], source[0]["aya"],
+                                  source[0]["scholar_key"], source[0]["language"]) != (109, 2, "ibn_abbas", "en"):
+              raise SystemExit("Source identity mismatch")
+          content = re.sub(r"\s+", " ", source[0].get("content") or "").strip()
+          if "idol" not in content.casefold() or "allah" not in content.casefold():
+              raise SystemExit("Stored English source no longer supports W08")
+          statement = "Verse 2 identifies idols besides God."
+          tag = "work-surah109-v1:source-reviewed:W08"
+          existing = call("propositions?tafsir_entry_id=eq.29984&select=id,statement_en,extracted_by&limit=1000")
+          matches = [row for row in existing if norm(row.get("statement_en")) == norm(statement)]
+          if len(matches) > 1:
+              raise SystemExit("Multiple exact W08 matches; refusing mutation")
+          if len(matches) == 1:
+              pid = matches[0]["id"]
+              voices = call("proposition_voice_chain?proposition_id=eq." + str(pid) + "&select=proposition_id,reporting_work_id,originating_voice_type,originating_voice_name")
+              links = call("proposition_evidence?proposition_id=eq." + str(pid) + "&select=proposition_id,evidence_unit_id")
+              if not voices or not links:
+                  raise SystemExit("Existing W08 lacks required voice/evidence links; inspect before repair")
+              print("W08_ALREADY_COMPLETE", pid, "entry", 29984, "voice and evidence links verified")
+              raise SystemExit(0)
+          pid = evidence_id = None
+          try:
+              proposition = call("propositions", "POST", {
+                  "claim_type_id": 43,
+                  "statement_en": statement,
+                  "extracted_by": tag,
+                  "speaker_type": "unspecified",
+                  "speaker_name": "Ibn ʿAbbās (attribution through Tanwīr al-Miqbās disputed)",
+                  "assertion_mode": "explicit",
+                  "status": "active",
+                  "source_type": "tafsir_entry",
+                  "tafsir_entry_id": 29984,
+                  "extraction_validity": "verified",
+                  "verification_state": "source_language_proposition_verified",
+                  "attribution_fidelity": "accurate_paraphrase",
+                  "quranic_textual_support": "not_stated",
+                  "mufassir_own_position": "reported_only"
+              })[0]
+              pid = proposition["id"]
+              call("proposition_voice_chain", "POST", {
+                  "proposition_id": pid,
+                  "reporting_work_id": 56,
+                  "originating_voice_type": "named_earlier_exegete",
+                  "originating_voice_name": "Ibn ʿAbbās (attribution disputed)"
+              })
+              evidence = call("evidence_units", "POST", {
+                  "unit_type": "single_named_attribution",
+                  "attributed_authority_name": "Tanwīr al-Miqbās (traditionally attributed to Ibn ʿAbbās; disputed)",
+                  "content_summary": statement + " English witness: entry 29984; Arabic anchor: من دون الله من الأوثان.",
+                  "independence_state": "unknown"
+              })[0]
+              evidence_id = evidence["id"]
+              call("proposition_evidence", "POST", {
+                  "proposition_id": pid,
+                  "evidence_unit_id": evidence_id,
+                  "semantic_link_note": "English source checked against Mokrane Guezzou, Tafsir Ibn Abbas, PDF p. 786 (printed p. 774), and Arabic Tanwīr at quranpedia.net/surah/1/109/book/363. Attribution to Ibn Abbas is disputed.",
+                  "linked_by": tag
+              })
+              saved = call("propositions?id=eq." + str(pid) + "&select=id,tafsir_entry_id,statement_en,extracted_by,speaker_name,mufassir_own_position")
+              voices = call("proposition_voice_chain?proposition_id=eq." + str(pid) + "&select=proposition_id,reporting_work_id,originating_voice_type,originating_voice_name")
+              links = call("proposition_evidence?proposition_id=eq." + str(pid) + "&select=proposition_id,evidence_unit_id")
+              if len(saved) != 1 or len(voices) != 1 or len(links) != 1:
+                  raise RuntimeError("Linked postflight readback failed")
+              if saved[0]["tafsir_entry_id"] != 29984 or voices[0]["reporting_work_id"] != 56:
+                  raise RuntimeError("Postflight identity mismatch")
+              print("W08_SAVED_VERIFIED", pid, "entry", 29984, "voice", voices[0]["originating_voice_type"],
+                    "evidence", links[0]["evidence_unit_id"], "disputed attribution preserved")
+          except Exception:
+              if pid is not None:
+                  call("proposition_evidence?proposition_id=eq." + str(pid), "DELETE")
+                  call("proposition_voice_chain?proposition_id=eq." + str(pid), "DELETE")
+                  call("propositions?id=eq." + str(pid), "DELETE")
+              if evidence_id is not None:
+                  call("evidence_units?id=eq." + str(evidence_id), "DELETE")
+              raise
