@@ -66,3 +66,10 @@ Verified facts:
 - Zero exact W08 proposition duplicates were found under entry 29984.
 
 This resolves the live-content comparison and duplicate preflight for W08, but does not by itself import W08 or establish public UI rendering. Tanwīr's disputed Ibn ʿAbbās attribution remains explicit. Surah 109 remains partial; do not issue D.
+
+
+### Production UI verification
+
+At 2026-10-11 11:34 America/Los_Angeles, the public production site was opened at Surah 109:2 and its Study → Tafsir panel. It visibly rendered `Tanwir al-Miqbas (Ibn Abbas)` with the stored English gloss “of idols beside Allah,” matching live entry 29984. The same panel separately displayed Jalālayn, al-Saʿdī, al-Ṭabarī, Ibn Kathīr, and al-Qurṭubī materials; this observation does not resolve their remaining source-identity or translation-review tasks.
+
+Thus Tanwīr 109:2 live-row content and public UI visibility are verified. W08 itself remains unpublished because the read-only preflight found zero exact W08 propositions; import must still use the authorized repeat-safe path with evidence and disputed-attribution voice metadata.
