@@ -52,3 +52,17 @@ This is research-only; no new authenticated database insertion or website deploy
 Source comparison and cautions: [tafsir-109-tanwir-english-109-2-source-2026-10-11.md](https://github.com/qurangeez114/Quran-scholar-platform/blob/main/docs/tafsir-109-tanwir-english-109-2-source-2026-10-11.md), original commit `b655308896c8316a71e403ee48d52d27283a492b`. Staged 51-claim JSON metadata and W08 are updated at `4af0cf731b7f30fd7d4f9fd0b3ff6f656f311ace`, without changing claim count, dedup fingerprints, or disputed-attribution state.
 
 **Remaining verification:** the last-known Supabase English Tanwīr row `29984` must be read back and compared with this published witness and edition identity. No new live claim insertion is asserted. Arabic Tanwīr/Jalālayn rows still require proper source identity; Qurtubī stored English truncation remains open. Preserve `W02` and `W04` shared temporal scope and do not infer a direct authenticated Ibn ʿAbbās chain. **Surah 109 remains partial; do not issue D.**
+
+
+## October 11 live readback: Tanwīr English 109:2
+
+A protected, read-only database verification completed successfully in [GitHub Actions run 38164211007](https://github.com/qurangeez114/Quran-scholar-platform/actions/runs/38164211007) from workflow-fix commit `08f6ea442e30b8ea9e9c8ea8c9ee94a888fb6ea8`. It made no database writes.
+
+Verified facts:
+
+- `tafsir_entries.id=29984` is exactly Surah 109:2, `scholar_key=ibn_abbas`, language `en`.
+- Its 60-character stored commentary contains the narrow idol/Allah gloss aligned with Guezzou's published witness and the Arabic Tanwīr anchor already documented above.
+- Exactly one live English entry has that same scholar/verse/language identity.
+- Zero exact W08 proposition duplicates were found under entry 29984.
+
+This resolves the live-content comparison and duplicate preflight for W08, but does not by itself import W08 or establish public UI rendering. Tanwīr's disputed Ibn ʿAbbās attribution remains explicit. Surah 109 remains partial; do not issue D.
