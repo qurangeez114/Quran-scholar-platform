@@ -38,3 +38,9 @@ On 2026-10-10 a successful [Tabari English workflow](https://github.com/qurangee
 Surahs 110–114: 492 structured propositions across 138 scholar–verse groups were closed for extraction on September 17. Translation gaps are separate; see `docs/final-five-tafsir-closeout-2026-09-17.md`.
 
 This checkpoint records only verifiable results and does not claim full Surah 109 completion or website presentation verification.
+
+## October 11 follow-up: al-Saʿdī 109:1–6 Arabic audit
+
+[Saved Arabic source review](https://github.com/qurangeez114/Quran-scholar-platform/blob/main/docs/tafsir-109-saadi-source-audit-2026-10-11.md), commit `3081c80a365eb10f576720a24b848c18b02021e8`. All six King Saud University al-Saʿdī verse pages inspected. Staged S01–S04 have matching Arabic evidence, subject to live deduplication/import. Verse 109:4 edition page has no separate comment. Pages 109:3 and 109:5 repeat the **same** block and must not be counted as independent witness. A new not-yet-imported candidate S05 at 109:6 records al-Saʿdī's separation of the two groups, with Qurʾānic cross-references 17:84 and 10:41.
+
+This is research-only; no new authenticated database insertion or website deployment is claimed from this follow-up. Continue reviewing and importing the verified al-Saʿdī candidates through the project's existing authorized workflow with source/duplicate/voice/evidence checks. The recovered general Qurʾān translations of 109:2 do **not** resolve the missing independently attributed English `Tanwīr al-Miqbās` tafsīr for that verse; keep that gap open.
