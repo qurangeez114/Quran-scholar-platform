@@ -83,8 +83,14 @@ jobs:
                   voices = call("proposition_voice_chain?proposition_id=eq." + str(pid) + "&select=proposition_id,reporting_work_id,originating_voice_type")
                   links = call("proposition_evidence?proposition_id=eq." + str(pid) + "&select=proposition_id,evidence_unit_id")
                   if not voices or not links:
-                      raise SystemExit("Existing " + code + " lacks required voice/evidence links; inspect before repair")
-                  decisions.append(("existing", spec, pid, links[0]["evidence_unit_id"]))
+                      if matches[0].get("extracted_by") != "work-surah109-v1:source-reviewed:" + code:
+                          raise SystemExit("Existing " + code + " lacks links and is not owned by this workflow")
+                      call("proposition_evidence?proposition_id=eq." + str(pid), "DELETE")
+                      call("proposition_voice_chain?proposition_id=eq." + str(pid), "DELETE")
+                      call("propositions?id=eq." + str(pid), "DELETE")
+                      decisions.append(("insert", spec, None, None))
+                  else:
+                      decisions.append(("existing", spec, pid, links[0]["evidence_unit_id"]))
               else:
                   decisions.append(("insert", spec, None, None))
           created = []
