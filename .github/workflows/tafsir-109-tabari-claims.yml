@@ -1,0 +1,109 @@
+name: Publish verified Tabari claims for Surah 109
+on:
+  push:
+    paths:
+      - '.github/workflows/tafsir-109-tabari-claims.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tafsir-109-import
+  cancel-in-progress: false
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Import Arabic-source claims with preserved voices
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        shell: python
+        run: |
+          import json,os,re,unicodedata,urllib.error,urllib.request
+          key=os.environ.get("SUPABASE_SERVICE_KEY","")
+          if not key: raise SystemExit("Missing protected database credential")
+          base="https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/"
+          headers={"apikey":key,"Authorization":"Bearer "+key,"Content-Type":"application/json","Prefer":"return=representation"}
+          def call(path,method="GET",body=None):
+              req=urllib.request.Request(base+path,data=None if body is None else json.dumps(body,ensure_ascii=False).encode(),headers=headers,method=method)
+              try:
+                  with urllib.request.urlopen(req,timeout=30) as r:
+                      raw=r.read(); return json.loads(raw) if raw else []
+              except urllib.error.HTTPError as e:
+                  raise RuntimeError("HTTP "+str(e.code)+": "+e.read().decode(errors="replace")[:800]) from e
+          def nar(s):
+              s="".join(c for c in unicodedata.normalize("NFKC",s or "") if not unicodedata.combining(c) and c!="ـ")
+              return re.sub(r"\s+"," ",re.sub(r"[\u060C\u061B\u061F:،؛؟()\[\]{}]+"," ",s)).strip()
+          def nen(s): return re.sub(r"[^a-z0-9]+"," ",unicodedata.normalize("NFKC",s or "").casefold()).strip()
+          rows=call("tafsir_entries?sura=eq.109&scholar_key=eq.tabari&language=eq.ar&select=id,sura,aya,scholar_key,language,content&order=aya.asc,id.asc&limit=50")
+          by={}
+          for r in rows: by.setdefault(r["aya"],[]).append(r)
+          for aya in (1,2,6):
+              if len(by.get(aya,[]))!=1: raise SystemExit("Expected one Arabic Tabari entry for aya "+str(aya))
+          specs=[
+            ("T01",1,"The address concerns specified polytheists whom the author understands as never becoming believers.",["في أشخاص بأعيانهم من المشركين"],"exegete_own_view",None,"preferred"),
+            ("T02",2,"He distinguishes present non-worship from future non-worship in explaining the repeated clauses.",["الآن","فيما أستقبل"],"exegete_own_view",None,"preferred"),
+            ("T03",1,"A report attributed to Ibn Abbas describes a proposal to alternate worship for a year.",["تعبد آلهتنا سنة","ونعبد إلهك سنة"],"named_earlier_exegete","Ibn ʿAbbās","reported_only"),
+            ("T04",6,"An unnamed Arabic-language authority explains the repetitions as emphasis.",["على وجه التوكيد"],"unattributed_group",None,"reported_only"),
+            ("T05",6,"Tabari understands each side's religion as one it will not leave, grounding this permanence in prior divine knowledge.",["لكم دينكم فلا تتركونه أبدا","ولي دين","لا أتركه أبدا"],"exegete_own_view",None,"preferred"),
+            ("T06",6,"Ibn Zayd applies the address to the polytheists, then distinguishes Jews and Christians by their beliefs and conduct.",["قال ابن زيد","للمشركين"],"named_earlier_exegete","Ibn Zayd","reported_only"),
+            ("T07",1,"A second occasion report names al-Walid, al-As, al-Aswad and Umayya as proposing reciprocal worship and shared benefit.",["هلم فلنعبد ما تعبد","وتعبد ما نعبد"],"unattributed_group",None,"reported_only")
+          ]
+          resolved=[]
+          for code,aya,statement,anchors,vtype,vname,pos in specs:
+              row=by[aya][0]; txt=nar(row.get("content"))
+              miss=[a for a in anchors if nar(a) not in txt]
+              if miss: raise SystemExit(code+" anchor mismatch in live Arabic entry "+str(row["id"]))
+              resolved.append((code,row["id"],statement,anchors,vtype,vname,pos))
+          ids=sorted({x[1] for x in resolved})
+          existing=call("propositions?tafsir_entry_id=in.("+",".join(map(str,ids))+")&select=id,tafsir_entry_id,statement_en,extracted_by&limit=1000")
+          plan=[]
+          for spec in resolved:
+              code,entry,statement,*_=spec
+              matches=[r for r in existing if nen(r.get("statement_en"))==nen(statement)]
+              if len(matches)>1: raise SystemExit("Multiple exact matches for "+code)
+              if matches:
+                  pid=matches[0]["id"]
+                  v=call("proposition_voice_chain?proposition_id=eq."+str(pid)+"&select=proposition_id,reporting_work_id,originating_voice_type,originating_voice_name")
+                  e=call("proposition_evidence?proposition_id=eq."+str(pid)+"&select=proposition_id,evidence_unit_id")
+                  if not v or not e: raise SystemExit("Existing "+code+" lacks complete links")
+                  plan.append(("existing",spec,pid,e[0]["evidence_unit_id"]))
+              else: plan.append(("insert",spec,None,None))
+          created=[]
+          try:
+              results=[]
+              for action,spec,oldpid,oldeid in plan:
+                  code,entry,statement,anchors,vtype,vname,pos=spec; tag="work-surah109-v1:source-reviewed:"+code
+                  if action=="existing": results.append((code,oldpid,entry,oldeid,"existing")); continue
+                  p=call("propositions","POST",{"claim_type_id":43,"statement_en":statement,"extracted_by":tag,
+                    "speaker_type":"unspecified","speaker_name":"al-Ṭabarī","assertion_mode":"explicit","status":"active",
+                    "source_type":"tafsir_entry","tafsir_entry_id":entry,"extraction_validity":"verified",
+                    "verification_state":"source_language_proposition_verified","attribution_fidelity":"accurate_paraphrase",
+                    "quranic_textual_support":"not_stated","mufassir_own_position":pos})[0]
+                  item={"pid":p["id"],"eid":None}; created.append(item)
+                  call("proposition_voice_chain","POST",{"proposition_id":p["id"],"reporting_work_id":1,
+                    "originating_voice_type":vtype,"originating_voice_name":vname})
+                  authority=vname or ("al-Ṭabarī" if vtype=="exegete_own_view" else "Unnamed Arabic-language authority/report")
+                  ev=call("evidence_units","POST",{"unit_type":"single_named_attribution","attributed_authority_name":authority,
+                    "content_summary":statement+" Arabic anchor(s): "+" / ".join(anchors)+".","independence_state":"unknown"})[0]
+                  item["eid"]=ev["id"]
+                  call("proposition_evidence","POST",{"proposition_id":p["id"],"evidence_unit_id":ev["id"],
+                    "semantic_link_note":"Source checked against the King Saud University Arabic al-Ṭabarī page for Surah 109; voice status preserved.",
+                    "linked_by":tag})
+                  results.append((code,p["id"],entry,ev["id"],"inserted"))
+              for code,pid,entry,eid,state in results:
+                  p=call("propositions?id=eq."+str(pid)+"&select=id,tafsir_entry_id,statement_en,extracted_by")
+                  v=call("proposition_voice_chain?proposition_id=eq."+str(pid)+"&select=proposition_id,reporting_work_id,originating_voice_type,originating_voice_name")
+                  e=call("proposition_evidence?proposition_id=eq."+str(pid)+"&select=proposition_id,evidence_unit_id")
+                  if len(p)!=1 or p[0]["tafsir_entry_id"]!=entry: raise RuntimeError(code+" proposition mismatch")
+                  if len(v)!=1 or v[0]["reporting_work_id"]!=1: raise RuntimeError(code+" voice mismatch")
+                  if len(e)!=1 or e[0]["evidence_unit_id"]!=eid: raise RuntimeError(code+" evidence mismatch")
+                  print("TABARI_SAVED_VERIFIED",code,"proposition",pid,"entry",entry,"evidence",eid,state,"voice",v[0]["originating_voice_type"])
+          except Exception:
+              for x in reversed(created):
+                  pid=x["pid"]; eid=x["eid"]
+                  call("proposition_evidence?proposition_id=eq."+str(pid),"DELETE")
+                  call("proposition_voice_chain?proposition_id=eq."+str(pid),"DELETE")
+                  call("propositions?id=eq."+str(pid),"DELETE")
+                  if eid is not None: call("evidence_units?id=eq."+str(eid),"DELETE")
+              raise
