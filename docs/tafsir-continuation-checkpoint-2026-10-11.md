@@ -97,3 +97,18 @@ At 2026-10-11 13:40 America/Los_Angeles, [GitHub Actions run 38173203445](https:
 Postflight readback verified each proposition, reporting-work `55` exegete-own-view voice link, and evidence link. The repeated 109:3/109:5 al-Saʿdī explanatory block is represented once under the 109:3 entry; no independent 109:4 explanatory claim was invented. Source independence remains `unknown`, avoiding an unsupported stronger claim.
 
 The original 51-claim set now has eight database-saved/readback-verified claims (I01, I02, I07, W08, S01–S04); S05 is an additional ninth verified claim in the current 52-claim manifest. Proposition-specific public rendering is not yet verified. Surah 109 remains partial; do not issue D.
+
+
+## October 11 Ibn Kathīr remainder batch
+
+At 2026-10-11 14:38 America/Los_Angeles, [GitHub Actions run 38177163721](https://github.com/qurangeez114/Quran-scholar-platform/actions/runs/38177163721) completed successfully. Exact live Arabic anchor, identity, and duplicate checks preceded every write. Postflight readback verified:
+
+- I03: proposition `47592`, entry `48463`, evidence `530`, unattributed reported explanation;
+- I04: proposition `47593`, entry `48465`, evidence `531`, unattributed reported explanation;
+- I05: proposition `47594`, entry `48465`, evidence `532`, unattributed reported explanation;
+- I06: proposition `47595`, entry `48465`, evidence `533`, named Ibn Taymiyya voice with Ibn Kathīr's favorable evaluation preserved;
+- I08: proposition `47596`, entry `48460`, evidence `534`, unattributed occasion report.
+
+I09–I12 were not written. The live 109:6 Arabic row failed the exact staged I09 anchor check, so the batch was narrowed rather than weakening evidence validation. These four claims require source-row/edition reconciliation.
+
+The original 51-claim staging set now has 13 database-saved/readback-verified claims; the current 52-claim manifest has 14 including new al-Saʿdī S05. Proposition-specific public rendering remains unverified. Surah 109 remains partial; do not issue D.
