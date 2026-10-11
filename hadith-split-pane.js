@@ -26,7 +26,7 @@ function renderHadithSplitPane(entry, idx = 0, showButtons = true) {
     hasan: 'Hasan',
     daif: 'Daif',
     ungraded: 'Ungraded'
-  }[grade] || 'Ungraded';
+  }[grade] || (entry.grade ? String(entry.grade) : 'Ungraded');
 
   // Build metadata section
   let metadataHtml = '';
