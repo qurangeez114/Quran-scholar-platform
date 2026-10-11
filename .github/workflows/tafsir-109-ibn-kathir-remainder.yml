@@ -1,0 +1,114 @@
+name: Publish verified Ibn Kathir remainder for Surah 109
+on:
+  push:
+    paths:
+      - '.github/workflows/tafsir-109-ibn-kathir-remainder.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tafsir-109-import
+  cancel-in-progress: false
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Import source-checked remainder with attributed voices
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        shell: python
+        run: |
+          import json, os, re, unicodedata, urllib.error, urllib.request
+          key=os.environ.get("SUPABASE_SERVICE_KEY","")
+          if not key: raise SystemExit("Missing protected database credential")
+          base="https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/"
+          headers={"apikey":key,"Authorization":"Bearer "+key,"Content-Type":"application/json","Prefer":"return=representation"}
+          def call(path,method="GET",body=None):
+              req=urllib.request.Request(base+path,data=None if body is None else json.dumps(body,ensure_ascii=False).encode(),headers=headers,method=method)
+              try:
+                  with urllib.request.urlopen(req,timeout=30) as r:
+                      raw=r.read(); return json.loads(raw) if raw else []
+              except urllib.error.HTTPError as e:
+                  detail=e.read().decode(errors="replace")
+                  raise RuntimeError("HTTP "+str(e.code)+": "+detail[:800]) from e
+          def nar(s):
+              s="".join(c for c in unicodedata.normalize("NFKC",s or "") if not unicodedata.combining(c) and c!="ـ")
+              return re.sub(r"\s+"," ",s).strip()
+          def nen(s): return re.sub(r"[^a-z0-9]+"," ",unicodedata.normalize("NFKC",s or "").casefold()).strip()
+          rows=call("tafsir_entries?sura=eq.109&scholar_key=eq.ibn_kathir&language=eq.ar&select=id,sura,aya,scholar_key,language,content&order=aya.asc,id.asc&limit=50")
+          by={}
+          for r in rows: by.setdefault(r["aya"],[]).append(r)
+          for aya in (1,4,6):
+              if len(by.get(aya,[]))!=1: raise SystemExit("Expected one Arabic Ibn Kathir entry for aya "+str(aya))
+          specs=[
+            ("I03",4,"His principal explanation distinguishes the object worshipped and the mode of worship followed.",["معبود يعبده","وعبادة يسلكها إليه"],"unnamed_report",None,"reported_only"),
+            ("I04",6,"He records a temporal explanation distinguishing earlier and future worship.",["في الماضي","في المستقبل"],"unnamed_report",None,"reported_only"),
+            ("I05",6,"He records an explanation that the repetitions are pure emphasis.",["تأكيد محض"],"unnamed_report",None,"reported_only"),
+            ("I06",6,"Ibn Taymiyya distinguishes denial of the act from categorical denial of receptivity to it; Ibn Kathir evaluates this explanation positively.",["نفي الفعل","نفي قبوله","قول حسن"],"named_earlier_exegete","Ibn Taymiyya","preferred"),
+            ("I08",1,"He reports without naming a transmitter that Quraysh proposed alternating worship by year.",["وقيل","سنة"],"unnamed_report",None,"reported_only"),
+            ("I09",6,"Al-Bukhari glosses the two religions as disbelief and Islam.",["لكم دينكم الكفر","ولي دين الإسلام"],"named_earlier_exegete","al-Bukhārī","reported_only"),
+            ("I10",6,"The final possessive ya is omitted to agree with the nun-ending verse cadence.",["لأن الآيات بالنون","فحذف الياء"],"named_earlier_exegete","al-Bukhārī","reported_only"),
+            ("I11",6,"Al-Shafi‘i and others infer that non-Islamic religions form one inheritance category.",["الكفر كله ملة واحدة","تورثه اليهود من النصارى"],"named_earlier_exegete","al-Shāfiʿī and others","reported_only"),
+            ("I12",6,"Ahmad and those agreeing reject cross-inheritance between Jews and Christians, citing the report that two religions do not inherit from each other.",["لا يتوارث أهل ملتين شتى"],"named_earlier_exegete","Aḥmad and those agreeing","reported_only")
+          ]
+          resolved=[]
+          for code,aya,statement,anchors,vtype,vname,position in specs:
+              row=by[aya][0]; text=nar(row.get("content"))
+              missing=[a for a in anchors if nar(a) not in text]
+              if missing: raise SystemExit(code+" anchor mismatch in live entry "+str(row["id"]))
+              resolved.append((code,row["id"],statement,anchors,vtype,vname,position))
+          ids=sorted({x[1] for x in resolved})
+          existing=call("propositions?tafsir_entry_id=in.("+",".join(map(str,ids))+")&select=id,tafsir_entry_id,statement_en,extracted_by&limit=1000")
+          plan=[]
+          for spec in resolved:
+              code,entry,statement,*_=spec
+              matches=[r for r in existing if nen(r.get("statement_en"))==nen(statement)]
+              if len(matches)>1: raise SystemExit("Multiple exact matches for "+code)
+              if matches:
+                  pid=matches[0]["id"]
+                  vc=call("proposition_voice_chain?proposition_id=eq."+str(pid)+"&select=proposition_id,reporting_work_id,originating_voice_type,originating_voice_name")
+                  pe=call("proposition_evidence?proposition_id=eq."+str(pid)+"&select=proposition_id,evidence_unit_id")
+                  if not vc or not pe: raise SystemExit("Existing "+code+" lacks complete links; refusing repair")
+                  plan.append(("existing",spec,pid,pe[0]["evidence_unit_id"]))
+              else: plan.append(("insert",spec,None,None))
+          created=[]
+          try:
+              results=[]
+              for action,spec,oldpid,oldeid in plan:
+                  code,entry,statement,anchors,vtype,vname,position=spec
+                  tag="work-surah109-v1:source-reviewed:"+code
+                  if action=="existing":
+                      results.append((code,oldpid,entry,oldeid,"existing")); continue
+                  p=call("propositions","POST",{"claim_type_id":43,"statement_en":statement,"extracted_by":tag,
+                     "speaker_type":"unspecified","speaker_name":"Ibn Kathīr","assertion_mode":"explicit","status":"active",
+                     "source_type":"tafsir_entry","tafsir_entry_id":entry,"extraction_validity":"verified",
+                     "verification_state":"source_language_proposition_verified","attribution_fidelity":"accurate_paraphrase",
+                     "quranic_textual_support":"not_stated","mufassir_own_position":position})[0]
+                  item={"pid":p["id"],"eid":None}; created.append(item)
+                  call("proposition_voice_chain","POST",{"proposition_id":p["id"],"reporting_work_id":2,
+                       "originating_voice_type":vtype,"originating_voice_name":vname})
+                  ev=call("evidence_units","POST",{"unit_type":"single_named_attribution" if vname else "unnamed_report",
+                       "attributed_authority_name":vname,"content_summary":statement+" Arabic anchor(s): "+" / ".join(anchors)+".",
+                       "independence_state":"unknown"})[0]
+                  item["eid"]=ev["id"]
+                  call("proposition_evidence","POST",{"proposition_id":p["id"],"evidence_unit_id":ev["id"],
+                       "semantic_link_note":"Source checked against the King Saud University Arabic Ibn Kathīr page for Surah 109; attribution position preserved.",
+                       "linked_by":tag})
+                  results.append((code,p["id"],entry,ev["id"],"inserted"))
+              for code,pid,entry,eid,state in results:
+                  p=call("propositions?id=eq."+str(pid)+"&select=id,tafsir_entry_id,statement_en,extracted_by")
+                  v=call("proposition_voice_chain?proposition_id=eq."+str(pid)+"&select=proposition_id,reporting_work_id,originating_voice_type,originating_voice_name")
+                  e=call("proposition_evidence?proposition_id=eq."+str(pid)+"&select=proposition_id,evidence_unit_id")
+                  if len(p)!=1 or p[0]["tafsir_entry_id"]!=entry: raise RuntimeError(code+" proposition mismatch")
+                  if len(v)!=1 or v[0]["reporting_work_id"]!=2: raise RuntimeError(code+" voice mismatch")
+                  if len(e)!=1 or e[0]["evidence_unit_id"]!=eid: raise RuntimeError(code+" evidence mismatch")
+                  print("IBN_KATHIR_SAVED_VERIFIED",code,"proposition",pid,"entry",entry,"evidence",eid,state,"voice",v[0]["originating_voice_type"])
+          except Exception:
+              for x in reversed(created):
+                  pid=x["pid"]; eid=x["eid"]
+                  call("proposition_evidence?proposition_id=eq."+str(pid),"DELETE")
+                  call("proposition_voice_chain?proposition_id=eq."+str(pid),"DELETE")
+                  call("propositions?id=eq."+str(pid),"DELETE")
+                  if eid is not None: call("evidence_units?id=eq."+str(eid),"DELETE")
+              raise
