@@ -112,3 +112,20 @@ At 2026-10-11 14:38 America/Los_Angeles, [GitHub Actions run 38177163721](https:
 I09–I12 were not written. The live 109:6 Arabic row failed the exact staged I09 anchor check, so the batch was narrowed rather than weakening evidence validation. These four claims require source-row/edition reconciliation.
 
 The original 51-claim staging set now has 13 database-saved/readback-verified claims; the current 52-claim manifest has 14 including new al-Saʿdī S05. Proposition-specific public rendering remains unverified. Surah 109 remains partial; do not issue D.
+
+
+## October 11 al-Ṭabarī authenticated import
+
+At 2026-10-11 15:37 America/Los_Angeles, [GitHub Actions run 38181127893](https://github.com/qurangeez114/Quran-scholar-platform/actions/runs/38181127893) completed successfully. Exact Arabic identities, anchors, and statement duplicates were checked before mutation. Postflight readback verified:
+
+- T01 `47597` / entry `5264` / evidence `535`;
+- T02 `47598` / entry `5265` / evidence `536`;
+- T03 `47599` / entry `5264` / evidence `537`;
+- T04 `47600` / entry `5274` / evidence `538`;
+- T05 `47601` / entry `5274` / evidence `539`;
+- T06 `47602` / entry `5274` / evidence `540`;
+- T07 `47603` / entry `5264` / evidence `541`.
+
+Reporting-work `1` links preserve al-Ṭabarī's own positions, named Ibn ʿAbbās and Ibn Zayd reports, the unnamed Arabic authority, and the unattributed occasion report as different voices. These propositions bind only to Arabic al-Ṭabarī entries; none bind to AI-assisted English entries `56199–56204`.
+
+The original 51-claim staging set now has 20 database-saved/readback-verified claims; the current 52-claim manifest has 21 including al-Saʿdī S05. Proposition-specific public rendering remains unverified. Surah 109 remains partial; do not issue D.
