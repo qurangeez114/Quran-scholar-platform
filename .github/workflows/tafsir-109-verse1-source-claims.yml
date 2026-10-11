@@ -1,0 +1,78 @@
+name: Tafsir Surah 109 verse 1 source-checked claims
+on:
+  push:
+    paths:
+      - '.github/workflows/tafsir-109-verse1-source-claims.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tafsir-109-source-import
+  cancel-in-progress: false
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Publish two source-checked Ibn Kathir claims for 109:1
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        shell: python
+        run: |
+          import os,json,re,unicodedata,urllib.request
+          key=os.environ.get("SUPABASE_SERVICE_KEY","")
+          if not key: raise SystemExit("Missing database credential")
+          base="https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/"
+          headers={"apikey":key,"Authorization":"Bearer "+key,"Content-Type":"application/json","Prefer":"return=representation"}
+          def call(table,method="GET",body=None):
+              req=urllib.request.Request(base+table,data=None if body is None else json.dumps(body).encode("utf-8"),headers=headers,method=method)
+              with urllib.request.urlopen(req,timeout=30) as r:
+                  b=r.read()
+                  return json.loads(b) if b else []
+          def norm(s):
+              s="".join(c for c in unicodedata.normalize("NFKC",s or "") if not unicodedata.combining(c) and c!="ـ")
+              return re.sub(r"\\s+"," ",s).strip()
+          entry=call("tafsir_entries?id=eq.48460&select=id,sura,aya,scholar_key,language,content")
+          if len(entry)!=1 or (entry[0]["sura"],entry[0]["aya"],entry[0]["scholar_key"],entry[0]["language"])!=(109,1,"ibn_kathir","ar"):
+              raise SystemExit("Source entry mapping changed; no writes")
+          claims=[
+           {"id":"I01","statement":"The wording encompasses all disbelievers, while the immediate addressees are the disbelievers of Quraysh.","anchors":["شمل كل كافر","كفار قريش"]},
+           {"id":"I07","statement":"Ibn Kathir characterizes the surah as disavowal of polytheist practice and a command to sincerity in worship.","anchors":["سورة البراءة من العمل","آمرة بالإخلاص"]}
+          ]
+          source=norm(entry[0]["content"])
+          for claim in claims:
+              if any(norm(anchor) not in source for anchor in claim["anchors"]):
+                  raise SystemExit("Arabic anchor mismatch for "+claim["id"]+"; no writes")
+          existing=call("propositions?tafsir_entry_id=eq.48460&select=id,statement_en,extracted_by&limit=1000")
+          for claim in claims:
+              tag="work-surah109-v1:source-reviewed:"+claim["id"]
+              if any(norm(r.get("statement_en"))==norm(claim["statement"]) or r.get("extracted_by")==tag for r in existing):
+                  raise SystemExit("Potential duplicate "+claim["id"]+"; no writes")
+          created=[]
+          try:
+              for claim in claims:
+                  tag="work-surah109-v1:source-reviewed:"+claim["id"]
+                  rec={"claim_type_id":43,"statement_en":claim["statement"],"extracted_by":tag,"speaker_type":"unspecified","speaker_name":"Ibn Kathīr","assertion_mode":"explicit","status":"active","source_type":"tafsir_entry","tafsir_entry_id":48460,"extraction_validity":"verified","verification_state":"source_language_proposition_verified","attribution_fidelity":"accurate_paraphrase","quranic_textual_support":"not_stated","mufassir_own_position":"preferred"}
+                  p=call("propositions","POST",rec)[0]
+                  obj={"id":claim["id"],"pid":p["id"],"eid":None}
+                  created.append(obj)
+                  call("proposition_voice_chain","POST",{"proposition_id":obj["pid"],"reporting_work_id":2,"originating_voice_type":"exegete_own_view","originating_voice_name":None})
+                  ev=call("evidence_units","POST",{"unit_type":"single_named_attribution","attributed_authority_name":"Ibn Kathīr","content_summary":claim["statement"]+" Arabic source anchors: "+" | ".join(claim["anchors"]),"independence_state":"unknown"})[0]
+                  obj["eid"]=ev["id"]
+                  call("proposition_evidence","POST",{"proposition_id":obj["pid"],"evidence_unit_id":obj["eid"],"semantic_link_note":"Arabic source anchors verified against tafsir_entries 48460, source: quran.ksu.edu.sa/tafseer/katheer/sura109-aya1.html. English translation fidelity remains a separate check.","linked_by":tag})
+                  rows=call("propositions?id=eq."+str(obj["pid"])+"&select=id,tafsir_entry_id,statement_en")
+                  voices=call("proposition_voice_chain?proposition_id=eq."+str(obj["pid"])+"&select=proposition_id")
+                  evlinks=call("proposition_evidence?proposition_id=eq."+str(obj["pid"])+"&select=proposition_id,evidence_unit_id")
+                  if len(rows)!=1 or rows[0]["tafsir_entry_id"]!=48460 or norm(rows[0]["statement_en"])!=norm(claim["statement"]) or not voices or not evlinks:
+                      raise RuntimeError("Postflight mismatch for "+claim["id"])
+                  print("SAVED_VERIFIED_SURAH109_VERSE1",claim["id"],obj["pid"],"linked_voice_and_evidence_verified")
+          except Exception:
+              for obj in reversed(created):
+                  if obj["pid"] is not None:
+                      for table in ("proposition_evidence","proposition_voice_chain"):
+                          call(table+"?proposition_id=eq."+str(obj["pid"]),"DELETE")
+                      call("propositions?id=eq."+str(obj["pid"]),"DELETE")
+                  if obj["eid"] is not None:
+                      call("evidence_units?id=eq."+str(obj["eid"]),"DELETE")
+              raise
+          print("SURAH109_STILL_PARTIAL: two new source-checked claims saved; chapter D not issued.")
