@@ -73,3 +73,12 @@ This resolves the live-content comparison and duplicate preflight for W08, but d
 At 2026-10-11 11:34 America/Los_Angeles, the public production site was opened at Surah 109:2 and its Study → Tafsir panel. It visibly rendered `Tanwir al-Miqbas (Ibn Abbas)` with the stored English gloss “of idols beside Allah,” matching live entry 29984. The same panel separately displayed Jalālayn, al-Saʿdī, al-Ṭabarī, Ibn Kathīr, and al-Qurṭubī materials; this observation does not resolve their remaining source-identity or translation-review tasks.
 
 Thus Tanwīr 109:2 live-row content and public UI visibility are verified. W08 itself remains unpublished because the read-only preflight found zero exact W08 propositions; import must still use the authorized repeat-safe path with evidence and disputed-attribution voice metadata.
+
+
+## October 11 W08 authenticated import
+
+[GitHub Actions run 38168807015](https://github.com/qurangeez114/Quran-scholar-platform/actions/runs/38168807015) completed successfully and saved staged claim W08 as proposition `47582` under Tanwīr English entry `29984`. Postflight readback verified reporting-work id `56`, a single named-earlier-exegete voice preserving “Ibn ʿAbbās (attribution disputed),” and evidence unit `522`. The importer is repeat-safe and rolls back newly created linked rows on failure.
+
+The production Surah 109:2 Tafsir panel visibly renders the underlying Tanwīr source gloss. A proposition-specific public rendering of `47582` was not found in the available Tafsir, Analysis, or Research Comparison surfaces, so only the source-commentary UI—not a distinct W08 claim card—is marked publicly visible.
+
+The original 51-claim staging set now has four database-saved/readback-verified claims: I01 `47580`, I02 `47579`, I07 `47581`, and W08 `47582`. This does not complete Surah 109; remaining claims, source identities, Qurtubī truncation, Saʿdī S05, and translation review remain open. Do not issue D.
