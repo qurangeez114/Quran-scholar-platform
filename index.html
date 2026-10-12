@@ -2884,7 +2884,7 @@ async function loadSura(id) {
   document.getElementById('verseArea').innerHTML = `<div class="loading"><span class="spinner"></span>Loading verses...</div>`;
 
   try {
-    const [ayas, translitData, arabicData] = await Promise.all([
+    const [ayas, translitData, arabicData, fallbackEnglishData] = await Promise.all([
       sbFetch('ayas', {
         select: 'sura_id,aya_number,arabic,aya_text,arabic_transliteration,arabic_warsh,arabic_qalun,arabic_duri,arabic_shubah,arabic_soosi,arabic_bazzi,arabic_qumbul,english,tigrinya,tigrinya2,amharic,oromo,somali,german,urdu',
         sura_id: `eq.${id}`,
@@ -2895,6 +2895,10 @@ async function loadSura(id) {
         .then(d => d.data?.ayahs || [])
         .catch(() => []),
       fetch(`https://api.alquran.cloud/v1/surah/${id}/quran-uthmani`)
+        .then(r => r.json())
+        .then(d => d.data?.ayahs || [])
+        .catch(() => []),
+      fetch(`https://api.alquran.cloud/v1/surah/${id}/en.sahih`)
         .then(r => r.json())
         .then(d => d.data?.ayahs || [])
         .catch(() => [])
@@ -2928,8 +2932,32 @@ async function loadSura(id) {
     // Important: never use English/Tigrinya translation as Arabic text.
     const translitMap = {};
     const arabicMap = {};
+    const fallbackEnglishMap = {};
     translitData.forEach(a => { translitMap[a.numberInSurah] = a.text || ''; });
     arabicData.forEach(a => { arabicMap[a.numberInSurah] = a.text || ''; });
+    fallbackEnglishData.forEach(a => { fallbackEnglishMap[a.numberInSurah] = a.text || ''; });
+
+    // Defensive completeness repair: the metadata and canonical API agree on
+    // each sura's verse count, but an incomplete public `ayas` table must not
+    // silently hide a verse (observed for 109:6 on 2026-10-12). Fill only
+    // genuinely missing verse numbers from the already fetched canonical
+    // Arabic and Saheeh International fallback; never overwrite a stored row.
+    const expectedAyaCount = Number(info?.number_of_ayas || 0);
+    const storedAyaNumbers = new Set(ayas.map(a => Number(a.aya_number)));
+    if (expectedAyaCount && ayas.length < expectedAyaCount) {
+      for (let n = 1; n <= expectedAyaCount; n++) {
+        if (storedAyaNumbers.has(n) || !arabicMap[n]) continue;
+        ayas.push({
+          sura_id: id,
+          aya_number: n,
+          arabic: arabicMap[n],
+          aya_text: '',
+          english: fallbackEnglishMap[n] || ''
+        });
+      }
+      ayas.sort((a, b) => Number(a.aya_number) - Number(b.aya_number));
+    }
+
     ayas.forEach(a => {
       a.arabic_transliteration = translitMap[a.aya_number] || '';
       a.verified_arabic = arabicMap[a.aya_number] || '';
