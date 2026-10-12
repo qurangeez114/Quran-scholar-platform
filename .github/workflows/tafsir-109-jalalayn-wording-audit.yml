@@ -1,0 +1,52 @@
+name: Audit withheld Jalalayn claim wording for Surah 109
+on:
+  push:
+    paths:
+      - '.github/workflows/tafsir-109-jalalayn-wording-audit.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tafsir-109-readonly
+  cancel-in-progress: false
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Print bounded claim-focused contexts without writes
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        shell: python
+        run: |
+          import json,os,re,urllib.error,urllib.request
+          key=os.environ.get("SUPABASE_SERVICE_KEY","")
+          if not key: raise SystemExit("Missing protected database credential")
+          base="https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/"
+          req=urllib.request.Request(base+"tafsir_entries?id=in.(23676,23678,23679)&select=id,aya,content&order=id.asc",
+             headers={"apikey":key,"Authorization":"Bearer "+key})
+          try:
+              with urllib.request.urlopen(req,timeout=30) as r: rows=json.loads(r.read())
+          except urllib.error.HTTPError as e:
+              raise RuntimeError("HTTP "+str(e.code)+": "+e.read().decode(errors="replace")[:500]) from e
+          by={r["id"]:r for r in rows}
+          if set(by)!={23676,23678,23679}: raise SystemExit("Expected three exact live entries")
+          def bounded(eid,label,patterns):
+              words=re.findall(r"\S+",by[eid]["content"] or "")
+              low=[re.sub(r"[^a-z0-9]+","",w.casefold()) for w in words]
+              hits=[]
+              for p in patterns:
+                  p=p.casefold()
+                  hits += [i for i,w in enumerate(low) if p in w]
+              if not hits:
+                  print("BOUNDED_CONTEXT",label,"ENTRY",eid,"NO_TRIGGER"); return
+              i=min(hits); lo=max(0,i-7); hi=min(len(words),i+10)
+              excerpt=" ".join(words[lo:hi])
+              print("BOUNDED_CONTEXT",label,"ENTRY",eid,"WORDS",hi-lo,"TEXT",excerpt)
+          bounded(23676,"J02",["present","alone","god","allah"])
+          bounded(23678,"J04",["believ","know","future"])
+          bounded(23678,"J05",["correspond","counter","what","ma"])
+          bounded(23679,"J06",["islam","idolat","polythe","association"])
+          bounded(23679,"J07",["before","war","fight"])
+          bounded(23679,"J08",["seven","yaqub","retain","omit"])
+          print("READ_ONLY_WORDING_AUDIT_COMPLETE")
