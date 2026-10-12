@@ -15,5 +15,7 @@ if(result.error)throw result.error;message(mode==='login'?'Signed in.':'Check yo
 $('reset-form').onsubmit=async e=>{e.preventDefault();const {error}=await db.auth.updateUser({password:$('new-password').value});if(error)return message(error.message);recovering=false;history.replaceState(null,'',location.pathname);message('Password updated.');await render();};
 $('logout').onclick=async()=>{const {error}=await db.auth.signOut();if(error)return message(error.message);recovering=false;message('Logged out.');render();};
 $('export').onclick=()=>exportResearch().catch(e=>message(e.message));
+$('show-password').onchange=e=>{$('password').type=e.target.checked?'text':'password';};
+$('show-new-password').onchange=e=>{$('new-password').type=e.target.checked?'text':'password';};
 $('delete-account').onclick=async()=>{if($('delete-confirm').value!=='DELETE')return message('Type DELETE to confirm permanent deletion.');const {error}=await db.rpc('qh_delete_account');if(error)return message(error.message);await db.auth.signOut();message('Account deleted.');render();};
 render();
