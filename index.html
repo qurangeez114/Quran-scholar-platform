@@ -6392,8 +6392,17 @@ function formatTafsirEnglish(text) {
   return String(text).split(/\n\s*\n|\n(?=#{1,6}\s)/).filter(Boolean).map(block => {
     const heading=block.match(/^#{1,6}\s+(.+)$/);
     if(heading)return '<h4>'+escapeHtml(heading[1])+'</h4>';
-    const safe=escapeHtml(block.trim()).replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>');
-    return '<p>'+safe.replace(/\n/g,'<br>')+'</p>';
+    let chunks=[block.trim()];
+    if(block.length>850 && typeof Intl.Segmenter==='function'){
+      const sentences=Array.from(new Intl.Segmenter('en',{granularity:'sentence'}).segment(block),x=>x.segment);
+      chunks=[];let group='';
+      sentences.forEach(sentence=>{group+=sentence;if(group.length>=450){chunks.push(group);group='';}});
+      if(group)chunks.push(group);
+    }
+    return chunks.map(part=>{
+      const safe=escapeHtml(part.trim()).replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>');
+      return '<p>'+safe.replace(/\n/g,'<br>')+'</p>';
+    }).join('');
   }).join('');
 }
 
