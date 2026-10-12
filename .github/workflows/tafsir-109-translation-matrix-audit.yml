@@ -1,0 +1,93 @@
+name: Audit Surah 109 chapter translation matrix
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/tafsir-109-translation-matrix-audit.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+    steps:
+      - name: Read-only six-source translation inventory
+        shell: python
+        run: |
+          import collections, hashlib, json, os, re, urllib.parse, urllib.request
+          key=os.environ.get("SUPABASE_SERVICE_KEY","")
+          if not key:
+              raise SystemExit("Missing protected database credential")
+          base="https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/tafsir_entries"
+          scholars=["tabari","ibn_kathir","qurtubi","jalalayn","saadi","ibn_abbas"]
+          params={
+              "sura":"eq.109",
+              "scholar_key":"in.("+",".join(scholars)+")",
+              "language":"in.(ar,en)",
+              "select":"id,aya,scholar_key,language,content,source_name,source_url",
+              "order":"scholar_key.asc,aya.asc,language.asc,id.asc",
+              "limit":"500"
+          }
+          req=urllib.request.Request(base+"?"+urllib.parse.urlencode(params),headers={
+              "apikey":key,"Authorization":"Bearer "+key,"Accept":"application/json"
+          })
+          with urllib.request.urlopen(req,timeout=30) as r:
+              rows=json.load(r)
+          print("AUDIT_MODE read-only; no database writes")
+          print("TOTAL_ROWS",len(rows))
+          grouped=collections.defaultdict(list)
+          for row in rows:
+              grouped[(row["scholar_key"],row["language"])].append(row)
+          missing=[]
+          for scholar in scholars:
+              for lang in ("ar","en"):
+                  subset=grouped.get((scholar,lang),[])
+                  verses=sorted({int(x["aya"]) for x in subset})
+                  ids=[int(x["id"]) for x in subset]
+                  if verses!=[1,2,3,4,5,6]:
+                      missing.append({"scholar":scholar,"language":lang,"verses":verses})
+                  print("COVERAGE",json.dumps({
+                      "scholar":scholar,"language":lang,"row_count":len(subset),
+                      "verses":verses,"ids":ids,
+                      "unique_content_hashes":len({hashlib.sha256((x.get("content") or "").encode()).hexdigest() for x in subset}),
+                      "chars_by_verse":{str(v):sum(len(x.get("content") or "") for x in subset if int(x["aya"])==v) for v in verses},
+                      "sources":sorted({(x.get("source_name") or "").strip() for x in subset})
+                  },ensure_ascii=False))
+          if missing:
+              raise SystemExit("Incomplete Arabic/English verse coverage: "+json.dumps(missing))
+
+          byid={int(x["id"]):x for x in rows}
+          def require(i):
+              if i not in byid:
+                  raise SystemExit("Missing expected live entry "+str(i))
+              return byid[i]
+          q=require(38089); qc=q.get("content") or ""
+          if re.search(r"And if what\s*$",qc,re.I):
+              raise SystemExit("Qurtubi 38089 remains truncated")
+          qlabel="AI-assisted English translation by Quran Hikma"
+          if qlabel not in qc or len(qc)!=7827:
+              raise SystemExit("Qurtubi 38089 repair identity/label/length mismatch")
+          print("QURTUBI_REPAIR_PASS",38089,len(qc),hashlib.sha256(qc.encode()).hexdigest())
+
+          tab_ids=[56199,56200,56201,56202,56203,56204]
+          tab=[require(i) for i in tab_ids]
+          label="AI-assisted English translation by Quran Hikma. Translation of the stored Arabic commentary; not an independently reviewed edition."
+          if any(not (x.get("content") or "").startswith(label) for x in tab):
+              raise SystemExit("Tabari AI-assisted label mismatch")
+          if len({hashlib.sha256((x.get("content") or "").encode()).hexdigest() for x in tab[:5]})!=1:
+              raise SystemExit("Tabari 109:1-5 shared-scope mismatch")
+          if "unclear and needs checking against an edition" not in (tab[5].get("content") or ""):
+              raise SystemExit("Tabari 109:6 uncertainty marker missing")
+          print("TABARI_LABEL_SCOPE_PASS",",".join(map(str,tab_ids)))
+
+          tan=require(29984); tc=tan.get("content") or ""
+          if not re.search(r"idol",tc,re.I) or not re.search(r"Allah",tc,re.I):
+              raise SystemExit("Tanwir 109:2 published-witness semantic marker mismatch")
+          print("TANWIR_109_2_PASS",29984,len(tc),hashlib.sha256(tc.encode()).hexdigest())
+          print("TRANSLATION_MATRIX_INVENTORY_PASS")
+          print("LIMITATION inventory and bounded semantic checks do not convert AI-assisted rows into independently human-reviewed editions")
