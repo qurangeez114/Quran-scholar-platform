@@ -1,0 +1,80 @@
+name: Preflight Jalalayn English claims for Surah 109
+on:
+  push:
+    paths:
+      - '.github/workflows/tafsir-109-jalalayn-preflight.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tafsir-109-readonly
+  cancel-in-progress: false
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Resolve live entries and test claim support without writes
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        shell: python
+        run: |
+          import hashlib,json,os,re,unicodedata,urllib.error,urllib.parse,urllib.request
+          key=os.environ.get("SUPABASE_SERVICE_KEY","")
+          if not key: raise SystemExit("Missing protected database credential")
+          base="https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/"
+          headers={"apikey":key,"Authorization":"Bearer "+key}
+          def get(path):
+              req=urllib.request.Request(base+path,headers=headers)
+              try:
+                  with urllib.request.urlopen(req,timeout=30) as r:
+                      raw=r.read(); return json.loads(raw) if raw else []
+              except urllib.error.HTTPError as e:
+                  raise RuntimeError("HTTP "+str(e.code)+": "+e.read().decode(errors="replace")[:800]) from e
+          def norm(s):
+              return re.sub(r"[^a-z0-9]+"," ",unicodedata.normalize("NFKD",s or "").encode("ascii","ignore").decode().casefold()).strip()
+          rows=get("tafsir_entries?sura=eq.109&scholar_key=eq.jalalayn&language=eq.en&select=id,sura,aya,scholar_key,language,content&order=aya.asc,id.asc&limit=50")
+          by={}
+          for row in rows: by.setdefault(row["aya"],[]).append(row)
+          print("JALALAYN_LIVE_ROW_COUNT",len(rows))
+          for aya in range(1,7):
+              found=by.get(aya,[])
+              print("JALALAYN_AYA",aya,"COUNT",len(found),"IDS",",".join(str(x["id"]) for x in found))
+              for row in found:
+                  text=norm(row.get("content"))
+                  vocab=["present","idol","allah","alone","future","knowledge","believe","ma","correspond","association","islam","before","war","fight","seven","yaqub","retain","omit","pause","continuation"]
+                  present=[v for v in vocab if v in text]
+                  print("ROW_PROFILE",row["id"],"AYA",aya,"LEN",len(row.get("content") or ""),"SHA256",hashlib.sha256((row.get("content") or "").encode()).hexdigest(),"TERMS",",".join(present))
+          specs=[
+            ("J01",2,["present"],[["idol"]]),
+            ("J02",3,["present"],[["allah"],["god"],["alone"]]),
+            ("J03",4,["future"],[]),
+            ("J04",5,["knowledge","believe"],[["future"]]),
+            ("J05",5,["ma"],[["correspond"],["counterpart"]]),
+            ("J06",6,["islam"],[["association"],["idolatry"],["polytheism"]]),
+            ("J07",6,["before"],[["war"],["fight"]]),
+            ("J08",6,["seven","yaqub"],[["retain"],["keep"],["establish"]])
+          ]
+          supported=[]
+          for code,aya,required,alternatives in specs:
+              found=by.get(aya,[])
+              if len(found)!=1:
+                  print("CLAIM_PREFLIGHT",code,"UNRESOLVED","row_count",len(found)); continue
+              row=found[0]; text=norm(row.get("content"))
+              missing=[x for x in required if x not in text]
+              alt_ok=all(any(term in text for term in group) for group in alternatives)
+              exact=get("propositions?tafsir_entry_id=eq."+str(row["id"])+"&statement_en=eq."+urllib.parse.quote({
+                "J01":"The first negation applies to the present and its objects are idols.",
+                "J02":"The addressees do not presently worship the one God whom the speaker worships.",
+                "J03":"The speaker's non-worship is mapped to the future.",
+                "J04":"The addressees' future non-worship is tied to God's knowledge that they will not believe.",
+                "J05":"The use of inanimate ma for God is explained as correspondence with the preceding expression.",
+                "J06":"The two religions are glossed respectively as association and Islam.",
+                "J07":"The statement is placed before the command to fight.",
+                "J08":"The seven readers omit the possessive ya in pause and continuation, while Yaqub retains it in both."
+              }[code],safe="")+"&select=id&limit=5")
+              status="SUPPORTED" if not missing and alt_ok else "NEEDS_REVIEW"
+              print("CLAIM_PREFLIGHT",code,status,"ENTRY",row["id"],"MISSING",",".join(missing),"ALT_OK",alt_ok,"EXACT_DUPLICATES",len(exact))
+              if status=="SUPPORTED": supported.append(code)
+          print("JALALAYN_SUPPORTED_COUNT",len(supported),"CLAIMS",",".join(supported))
+          print("READ_ONLY_COMPLETE")
