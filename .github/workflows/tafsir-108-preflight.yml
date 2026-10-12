@@ -1,0 +1,69 @@
+name: Preflight Surah 108 staged claims
+on:
+  push:
+    paths:
+      - '.github/workflows/tafsir-108-preflight.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tafsir-108-preflight
+  cancel-in-progress: false
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate manifest and check live duplicates
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        shell: python
+        run: |
+          import glob,json,os,re,unicodedata,urllib.parse,urllib.request
+          key=os.environ.get('SUPABASE_SERVICE_KEY','')
+          if not key: raise SystemExit('Missing protected database credential')
+          paths=[
+            'data/tafsir/staging/tabari-108-1-research-2026-10-10.json',
+            'data/tafsir/staging/ibn-kathir-108-research-2026-10-12.json',
+            'data/tafsir/staging/qurtubi-108-research-2026-10-12.json',
+            'data/tafsir/staging/jalalayn-108-research-2026-10-12.json',
+            'data/tafsir/staging/saadi-108-research-2026-10-12.json',
+            'data/tafsir/staging/tanwir-108-research-2026-10-12.json']
+          docs=[json.load(open(p,encoding='utf-8')) for p in paths]
+          claims=[]
+          for p,d in zip(paths,docs):
+              if d.get('surah')!=108 or d.get('database_written') is not False: raise SystemExit('Unsafe staging metadata '+p)
+              for c in d['claims']:
+                  x=dict(c); x['_path']=p; x['_scholar']=d['scholar_key']; claims.append(x)
+          ids=[c['id'] for c in claims]
+          if len(ids)!=45 or len(set(ids))!=45: raise SystemExit('Expected 45 unique claims, got '+str(len(ids))+'/'+str(len(set(ids))))
+          expected_counts={'tabari':11,'ibn_kathir':7,'qurtubi':9,'jalalayn':5,'saadi':6,'ibn_abbas':7}
+          actual={k:sum(1 for c in claims if c['_scholar']==k) for k in expected_counts}
+          if actual!=expected_counts: raise SystemExit('Scholar counts mismatch '+json.dumps(actual))
+          entries=[5261,5262,5263,48457,48458,48459,13239,13240,13241,38030,38031,38032,23671,23672,23673,36286,36287,36288,48103,48104,48105,29980,29981,29982]
+          base='https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/'
+          headers={'apikey':key,'Authorization':'Bearer '+key}
+          def get(path):
+              req=urllib.request.Request(base+path,headers=headers)
+              with urllib.request.urlopen(req,timeout=30) as r: return json.load(r)
+          live=get('propositions?tafsir_entry_id=in.('+','.join(map(str,entries))+')&select=id,tafsir_entry_id,statement_en,status&limit=5000')
+          def n(s): return re.sub(r'[^a-z0-9]+',' ',unicodedata.normalize('NFKD',s or '').encode('ascii','ignore').decode().lower()).strip()
+          exact=[]; likely=[]
+          for c in claims:
+              a=n(c.get('statement_en','')); aset=set(a.split())
+              if not a: raise SystemExit('Missing statement '+c['id'])
+              for row in live:
+                  b=n(row.get('statement_en','')); bset=set(b.split())
+                  if a==b: exact.append({'claim':c['id'],'proposition':row['id'],'entry':row['tafsir_entry_id']})
+                  elif aset and bset:
+                      score=len(aset & bset)/len(aset | bset)
+                      if score>=0.72: likely.append({'claim':c['id'],'proposition':row['id'],'entry':row['tafsir_entry_id'],'jaccard':round(score,3)})
+          print('AUDIT_MODE read-only; no writes')
+          print('STAGED_COUNTS',json.dumps(actual,sort_keys=True))
+          print('STAGED_TOTAL',len(claims))
+          print('LIVE_PROPOSITIONS_ON_SOURCE_ENTRIES',len(live))
+          print('EXACT_DUPLICATES',json.dumps(exact,sort_keys=True))
+          print('LIKELY_DUPLICATES',json.dumps(likely,sort_keys=True))
+          print('CLAIM_IDS',json.dumps(ids))
+          print('SURAH_108_PREFLIGHT_PASS')
