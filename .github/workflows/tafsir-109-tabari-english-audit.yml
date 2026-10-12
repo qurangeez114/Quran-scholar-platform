@@ -1,0 +1,71 @@
+name: Audit Tabari English fidelity and scope for Surah 109
+on:
+  push:
+    paths:
+      - '.github/workflows/tafsir-109-tabari-english-audit.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Verify labels scope source rows and semantic coverage
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        shell: python
+        run: |
+          import hashlib,json,os,re,unicodedata,urllib.error,urllib.request
+          key=os.environ.get("SUPABASE_SERVICE_KEY","")
+          if not key: raise SystemExit("Missing protected database credential")
+          base="https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/"
+          h={"apikey":key,"Authorization":"Bearer "+key}
+          def get(path):
+              req=urllib.request.Request(base+path,headers=h)
+              try:
+                  with urllib.request.urlopen(req,timeout=30) as r: return json.loads(r.read())
+              except urllib.error.HTTPError as e: raise RuntimeError("HTTP "+str(e.code)+": "+e.read().decode(errors="replace")[:600]) from e
+          def ne(s): return re.sub(r"[^a-z0-9]+"," ",unicodedata.normalize("NFKD",s or "").encode("ascii","ignore").decode().casefold()).strip()
+          def na(s):
+              s="".join(c for c in unicodedata.normalize("NFKD",s or "") if not unicodedata.combining(c) and c!="ـ")
+              return re.sub(r"\s+"," ",re.sub(r"[،؛؟:،؛؟()\[\]{}﴿﴾]+"," ",s)).strip()
+          ar=get("tafsir_entries?sura=eq.109&scholar_key=eq.tabari&language=eq.ar&select=id,aya,content&order=aya.asc,id.asc&limit=50")
+          en=get("tafsir_entries?sura=eq.109&scholar_key=eq.tabari&language=eq.en&select=id,aya,content,source_name,source_url&order=aya.asc,id.asc&limit=50")
+          if len(en)!=6 or [x["id"] for x in en]!=[56199,56200,56201,56202,56203,56204]: raise SystemExit("Unexpected English identity set")
+          label="AI-assisted English translation by Quran Hikma. Translation of the stored Arabic commentary; not an independently reviewed edition."
+          for row in en:
+              if not row["content"].startswith(label): raise SystemExit("Missing AI-assisted label entry "+str(row["id"]))
+              if "Quran Hikma AI-assisted English translation" not in (row["source_name"] or ""): raise SystemExit("Source label mismatch "+str(row["id"]))
+          shared=[x["content"] for x in en if x["aya"]<=5]
+          print("TABARI_EN_SHARED_1_5_IDENTICAL",len(set(shared))==1,"COUNT",len(shared))
+          if len(set(shared))!=1 or "Shared commentary covering 109:1–5." not in shared[0]: raise SystemExit("Shared scope mismatch")
+          last=[x for x in en if x["aya"]==6][0]
+          if "Source uncertainty is marked within the text." not in last["content"] or "unclear and needs checking against an edition" not in last["content"]: raise SystemExit("109:6 uncertainty label missing")
+          print("TABARI_EN_LABELS_SCOPE_OK",",".join(str(x["id"]) for x in en))
+          groups={}
+          for r in ar: groups.setdefault(hashlib.sha256((r["content"] or "").encode()).hexdigest(),[]).append((r["id"],r["aya"]))
+          print("TABARI_AR_ROWS",len(ar),"CONTENT_GROUPS",len(groups))
+          for sha,items in groups.items(): print("AR_GROUP",sha,"MEMBERS",",".join(str(i)+":"+str(a) for i,a in items))
+          # Verify the Arabic sources supporting each English block are present and scoped.
+          byid={r["id"]:r for r in ar}
+          for eid in (5264,5265,5266,5272,5273,5274):
+              if eid not in byid: raise SystemExit("Missing declared Arabic source "+str(eid))
+          ashared=na(byid[5264]["content"]); alast=na(byid[5274]["content"])
+          ar_shared=["اعبد الهتكم سنة وتعبدوا الهنا سنة","في الحال","في المستقبل","فيما مضى","علم الله منهم","ببدر","محمد بن موسى الحرشي","عن عكرمة عن ابن عباس","سعيد بن مينا","الوليد بن المغيرة"]
+          ar_last=["لكم دينكم","لا تتركونه أبدا","قال ابن زيد","للمشركين","عزير ابن الله","المسيح ابن الله","على وجه التوكيد"]
+          miss1=[x for x in ar_shared if na(x) not in ashared]; miss6=[x for x in ar_last if na(x) not in alast]
+          print("TABARI_AR_SHARED_ANCHORS",len(ar_shared)-len(miss1),"OF",len(ar_shared),"MISSING","|".join(miss1))
+          print("TABARI_AR_LAST_ANCHORS",len(ar_last)-len(miss6),"OF",len(ar_last),"MISSING","|".join(miss6))
+          if miss1 or miss6: raise SystemExit("Arabic anchor coverage incomplete")
+          es=ne(shared[0]); e6=ne(last["content"])
+          en_shared=[["one year","one year"],["now","future","past"],["prior knowledge"],["badr"],["muhammad ibn musa al harashi","abu khalaf","dawud","ikrimah","ibn abbas"],["said ibn mina","walid ibn al mughirah","as ibn wail","umayyah ibn khalaf"]]
+          en_last=[["never abandon","prior knowledge"],["ibn zayd","polytheists"],["jews","christians"],["uzayr","messiah"],["repeated for emphasis"],["unclear","checking against an edition"]]
+          for idx,markers in enumerate(en_shared,1):
+              miss=[m for m in markers if ne(m) not in es]; print("EN_SHARED_CHECK",idx,"PASS",not miss,"MISSING","|".join(miss))
+              if miss: raise SystemExit("Shared English semantic gap "+str(idx))
+          for idx,markers in enumerate(en_last,1):
+              miss=[m for m in markers if ne(m) not in e6]; print("EN_LAST_CHECK",idx,"PASS",not miss,"MISSING","|".join(miss))
+              if miss: raise SystemExit("109:6 English semantic gap "+str(idx))
+          print("TABARI_ENGLISH_SCOPE_AND_SEMANTIC_AUDIT_PASS")
+          print("LIMITATION full line-by-line independent human review not performed")
