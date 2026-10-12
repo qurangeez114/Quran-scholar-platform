@@ -13,49 +13,24 @@ jobs:
   audit:
     runs-on: ubuntu-latest
     env:
-      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
     steps:
       - name: Read-only bounded audit
         shell: python
         run: |
           import os, json, hashlib, urllib.parse, urllib.request, re
-          base=os.environ["SUPABASE_URL"].rstrip("/")+"/rest/v1/tafsir_entries"
-          params={
-            "sura":"eq.109",
-            "scholar_key":"eq.qurtubi",
-            "select":"id,aya,language,content,source_name,source_url",
-            "order":"language.asc,aya.asc,id.asc"
-          }
-          url=base+"?"+urllib.parse.urlencode(params)
-          req=urllib.request.Request(url,headers={
-            "apikey":os.environ["SUPABASE_SERVICE_KEY"],
-            "Authorization":"Bearer "+os.environ["SUPABASE_SERVICE_KEY"],
-            "Accept":"application/json"
-          })
-          with urllib.request.urlopen(req,timeout=30) as r:
-            rows=json.load(r)
+          key=os.environ.get("SUPABASE_SERVICE_KEY","")
+          if not key: raise SystemExit("Missing protected database credential")
+          base="https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/tafsir_entries"
+          params={"sura":"eq.109","scholar_key":"eq.qurtubi","select":"id,aya,language,content,source_name,source_url","order":"language.asc,aya.asc,id.asc"}
+          req=urllib.request.Request(base+"?"+urllib.parse.urlencode(params),headers={"apikey":key,"Authorization":"Bearer "+key,"Accept":"application/json"})
+          with urllib.request.urlopen(req,timeout=30) as r: rows=json.load(r)
           def words(s): return re.findall(r"\S+",s or "")
-          def bounded(ws,n=18):
-            return " ".join(ws[:n]), " ".join(ws[-n:])
           print("ROW_COUNT",len(rows))
           for x in rows:
-            c=x.get("content") or ""; ws=words(c); first,last=bounded(ws)
-            flags={
-              "ends_and_if_what": bool(re.search(r"And if what\s*$",c,re.I)),
-              "has_abrog": bool(re.search(r"abrog",c,re.I)),
-              "has_threat": bool(re.search(r"threat|warning",c,re.I)),
-              "has_meccan": bool(re.search(r"Mecc|Medin",c,re.I)),
-              "has_religion": bool(re.search(r"religion",c,re.I)),
-              "has_idol": bool(re.search(r"idol",c,re.I))
-            }
-            print(json.dumps({
-              "id":x["id"],"aya":x["aya"],"language":x["language"],
-              "chars":len(c),"words":len(ws),
-              "sha256":hashlib.sha256(c.encode()).hexdigest(),
-              "source_name":x.get("source_name"),"source_url":x.get("source_url"),
-              "first_18_words":first,"last_18_words":last,"flags":flags
-            },ensure_ascii=False))
+            c=x.get("content") or ""; ws=words(c)
+            flags={"ends_and_if_what":bool(re.search(r"And if what\s*$",c,re.I)),"has_abrog":bool(re.search(r"abrog",c,re.I)),"has_threat":bool(re.search(r"threat|warning",c,re.I)),"has_meccan":bool(re.search(r"Mecc|Medin",c,re.I)),"has_religion":bool(re.search(r"religion",c,re.I)),"has_idol":bool(re.search(r"idol",c,re.I))}
+            print(json.dumps({"id":x["id"],"aya":x["aya"],"language":x["language"],"chars":len(c),"words":len(ws),"sha256":hashlib.sha256(c.encode()).hexdigest(),"source_name":x.get("source_name"),"source_url":x.get("source_url"),"first_18_words":" ".join(ws[:18]),"last_18_words":" ".join(ws[-18:]),"flags":flags},ensure_ascii=False))
           en=[x for x in rows if str(x.get("language","")).lower().startswith("en")]
           print("ENGLISH_UNIQUE_HASHES",len({hashlib.sha256((x.get("content") or "").encode()).hexdigest() for x in en}))
           print("AUDIT_MODE read-only; no database writes")
