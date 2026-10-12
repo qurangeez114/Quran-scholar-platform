@@ -228,3 +228,12 @@ Guarded [repair run 38230907673](https://github.com/qurangeez114/Quran-scholar-p
 The production Sūrah 109:1 Study → Tafsir panel was then opened directly and visibly rendered the repaired al-Qurṭubī English through the final repetition explanation, including all five poetic examples. The old mid-sentence cutoff is no longer displayed. This resolves the Qurṭubī 109:1 storage-truncation blocker while preserving its AI-assisted review status.
 
 Sūrah 109 still lacks proposition-specific public rendering and a final chapter-wide translation-review closeout, so **no D — Sura 109** is issued.
+
+
+## October 12 proposition UI verification and missing-ayah display repair
+
+At 2026-10-12 03:36 America/Los_Angeles, the production Sūrah 109 Study → Tafsir → Research Comparison surface was checked directly for every verse. The live controls and rendered claim cards were verified for 109:1–6; each displayed source-verified propositions together with linked evidence, and the saved attribution distinctions were visible. This resolves the prior blocker “proposition-specific public rendering unverified.”
+
+During that check, production exposed a separate display defect: the chapter metadata said six verses, but only cards 109:1–5 were rendered because the public `ayas` query returned an incomplete row set. Commit [`b94816437f79f00e878d3d34378d6e6786a008ec`](https://github.com/qurangeez114/Quran-scholar-platform/commit/b94816437f79f00e878d3d34378d6e6786a008ec) adds a guarded presentation fallback. It fills only missing verse numbers from the canonical Arabic and Saheeh International responses already fetched by the page, never overwriting stored rows. After deployment, production readback showed six verse cards, including 109:6, and its Research Comparison rendered 6,496 characters with source-verification and evidence sections.
+
+Structured extraction/import remains 52/52 saved and database-readback verified, and proposition display is now publicly verified across the complete chapter. The remaining closeout item is a chapter-wide translation-review matrix that records the review state of every Arabic/English scholar pair without converting clearly labeled AI-assisted rows into independently reviewed editions. Until that matrix is completed and checked, **no D — Sura 109**.
