@@ -1,0 +1,48 @@
+name: Audit Tanwir Surah 108 source alignment
+on:
+  push:
+    paths:
+      - '.github/workflows/tafsir-108-tanwir-source-audit.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Read-only live English and external Arabic audit
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        shell: python
+        run: |
+          import hashlib,html,json,os,re,unicodedata,urllib.parse,urllib.request
+          key=os.environ.get('SUPABASE_SERVICE_KEY','')
+          if not key: raise SystemExit('Missing protected database credential')
+          def norm(s):
+              s=html.unescape(re.sub(r'<[^>]+>',' ',s or ''))
+              s=''.join(c for c in unicodedata.normalize('NFKD',s) if not unicodedata.combining(c) and c!='ـ')
+              return re.sub(r'\s+',' ',s).strip()
+          base='https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/tafsir_entries'
+          params={'sura':'eq.108','scholar_key':'eq.ibn_abbas','language':'in.(ar,en)','select':'id,aya,language,content,source_name,source_url','order':'language.asc,aya.asc,id.asc','limit':'50'}
+          req=urllib.request.Request(base+'?'+urllib.parse.urlencode(params),headers={'apikey':key,'Authorization':'Bearer '+key})
+          with urllib.request.urlopen(req,timeout=30) as r: rows=json.load(r)
+          print('AUDIT_MODE read-only; no writes')
+          print('LIVE_ROW_COUNT',len(rows))
+          for x in rows:
+              c=x.get('content') or ''
+              print('LIVE_IDENTITY',json.dumps({'id':x['id'],'aya':x['aya'],'language':x['language'],'chars':len(c),'sha256':hashlib.sha256(c.encode()).hexdigest(),'source_name':x.get('source_name'),'source_url':x.get('source_url')},ensure_ascii=False))
+              print('LIVE_TEXT',x['language'],x['aya'],re.sub(r'\s+',' ',c))
+          url='https://quranpedia.net/surah/1/108/book/363'
+          req=urllib.request.Request(url,headers={'User-Agent':'Mozilla/5.0 QuranHikma-source-audit/1.0'})
+          with urllib.request.urlopen(req,timeout=30) as r: raw=r.read().decode('utf-8','replace')
+          n=norm(raw)
+          expected={1:['الخير الكثير','والقرآن منه','نهر فى الجنة'],2:['استقبل بنحرك إلى القبلة','ضع يمينك على شمالك','صلاة يوم النحر','وانحر البدن'],3:['مبغضك','أبتر عن أهله وولده وماله','العاص بن وائل السهمي','مات ابنه عبد الله']}
+          for aya,anchors in expected.items():
+              checks={a:(norm(a) in n) for a in anchors}
+              print('EXTERNAL_ARABIC',json.dumps({'aya':aya,'url':url,'anchors':checks},ensure_ascii=False))
+              if not all(checks.values()): raise SystemExit(f'Tanwir Arabic anchors incomplete at 108:{aya}')
+          enayas=sorted({int(x['aya']) for x in rows if x['language']=='en'})
+          print('EN_COVERAGE',json.dumps(enayas))
+          if enayas != [1,2,3]: raise SystemExit('Live English coverage incomplete')
+          print('TANWIR_108_SOURCE_ALIGNMENT_PASS')
