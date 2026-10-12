@@ -1,0 +1,46 @@
+name: Audit Ibn Kathir Surah 108 source coverage
+on:
+  push:
+    paths:
+      - '.github/workflows/tafsir-108-ibn-kathir-source-audit.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Read-only Ibn Kathir 108 inventory and anchors
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        shell: python
+        run: |
+          import hashlib,json,os,re,unicodedata,urllib.parse,urllib.request
+          key=os.environ.get("SUPABASE_SERVICE_KEY","")
+          if not key: raise SystemExit("Missing protected database credential")
+          base="https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/tafsir_entries"
+          params={"sura":"eq.108","scholar_key":"eq.ibn_kathir","language":"in.(ar,en)","select":"id,aya,language,content,source_name,source_url","order":"language.asc,aya.asc,id.asc","limit":"100"}
+          req=urllib.request.Request(base+"?"+urllib.parse.urlencode(params),headers={"apikey":key,"Authorization":"Bearer "+key})
+          with urllib.request.urlopen(req,timeout=30) as r: rows=json.load(r)
+          def na(s):
+              s="".join(c for c in unicodedata.normalize("NFKD",s or "") if not unicodedata.combining(c) and c!="ـ")
+              return re.sub(r"\s+"," ",re.sub(r"[،؛؟:()\[\]{}﴿﴾]+"," ",s)).strip()
+          print("AUDIT_MODE read-only; no writes")
+          print("ROW_COUNT",len(rows))
+          for x in rows:
+              c=x.get("content") or ""
+              print("IDENTITY",json.dumps({"id":x["id"],"aya":x["aya"],"language":x["language"],"chars":len(c),"sha256":hashlib.sha256(c.encode()).hexdigest(),"source_name":x.get("source_name"),"source_url":x.get("source_url")},ensure_ascii=False))
+          for lang in ("ar","en"):
+              hashes={}
+              for x in rows:
+                  if x["language"]==lang: hashes.setdefault(hashlib.sha256((x.get("content") or "").encode()).hexdigest(),[]).append(int(x["aya"]))
+              print("CONTENT_GROUPS",lang,json.dumps(hashes,sort_keys=True))
+          ar=" ".join(na(x["content"]) for x in rows if x["language"]=="ar")
+          anchors=["نهر في الجنة","الخير الكثير","حوض","القرآن","النبوة","فصل لربك وانحر","الصلاة المكتوبة","نحر البدن","العاص بن وائل","الأبتر","لا ولد له","لا ذكر له"]
+          for a in anchors: print("ANCHOR",json.dumps({"text":a,"present":na(a) in ar},ensure_ascii=False))
+          for term in ("الكوثر","وانحر","شانئك"):
+              p=ar.find(na(term))
+              if p>=0: print("BOUNDED_CONTEXT",term,ar[max(0,p-160):p+480])
+          if sorted({int(x["aya"]) for x in rows if x["language"]=="ar"}) != [1,2,3]: raise SystemExit("Arabic coverage incomplete")
+          print("IBN_KATHIR_108_SOURCE_INVENTORY_PASS")
