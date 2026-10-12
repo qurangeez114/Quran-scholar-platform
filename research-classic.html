@@ -1810,6 +1810,30 @@ async function fetchAllSources(q, tradFilter, tafsirTradFilter, collection, scho
       aRows.forEach(r => { if(!seen.has(r.id)){seen.add(r.id);results.push({type:'asbab',...r});} });
     }
 
+    if (currentSource === 'all' || currentSource === 'verse') {
+      const vSel = 'sura_id,aya_number,arabic,english,tigrinya,tigrinya2';
+      const vRows = await sbFetch('ayas', vSel, {sura_id:'eq.'+suraNum, aya_number:'eq.'+ayaNum});
+      const seen = new Set();
+      vRows.forEach(r => {
+        const key = r.sura_id + ':' + r.aya_number;
+        if (!seen.has(key)) {
+          seen.add(key);
+          results.push({
+            type: 'verse',
+            id: key,
+            sura: r.sura_id,
+            sura_id: r.sura_id,
+            aya: r.aya_number,
+            aya_number: r.aya_number,
+            arabic: r.arabic,
+            english: r.english,
+            tigrinya: r.tigrinya,
+            tigrinya2: r.tigrinya2
+          });
+        }
+      });
+    }
+
     return results;
   }
 
