@@ -138,3 +138,12 @@ At 2026-10-11 16:37 America/Los_Angeles, [GitHub Actions run 38184944703](https:
 The workflow preserves al-Akhfash/al-Mubarrad as named earlier voices; al-Qurṭubī's adopted analyses, unnamed alternatives, competing abrogation positions, occasion reports, and the unnamed “most specialists” view remain distinct. Every evidence link explicitly states that the stored English pair is truncated. Thus Arabic extraction is published and verified, but al-Qurṭubī translation review is still open.
 
 The original 51-claim staging set now has 32 database-saved/readback-verified claims; the current 52-claim manifest has 33 including al-Saʿdī S05. Proposition-specific public rendering remains unverified. Surah 109 remains partial; do not issue D.
+
+
+## October 11 Tanwīr authenticated English import
+
+At 2026-10-11 17:36 America/Los_Angeles, [GitHub Actions run 38188612087](https://github.com/qurangeez114/Quran-scholar-platform/actions/runs/38188612087) completed successfully. W01–W07 were saved as propositions `47627–47633` under live English entries `29983` and `29985–29988`, with evidence units `564–570`. Each live row passed edition-aligned semantic checks against Mokrane Guezzou's published witness and the Arabic Tanwīr source before mutation.
+
+All reporting-work `56` voice chains and evidence links passed postflight readback. Proposition speakers, originating voices, and evidence authorities explicitly retain “Ibn ʿAbbās attribution disputed.” Together with W08 `47582`, all eight staged Tanwīr claims are now database-saved and readback verified.
+
+The original 51-claim staging set now has 39 database-saved/readback-verified claims; the current 52-claim manifest has 40 including al-Saʿdī S05. Remaining original claims are Jalālayn J01–J08 and Ibn Kathīr I09–I12. Proposition-specific public rendering remains unverified. Surah 109 remains partial; do not issue D.
