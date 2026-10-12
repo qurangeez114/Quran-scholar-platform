@@ -199,3 +199,12 @@ Verified: all AI-assisted/not-independently-reviewed labels; one identical share
 Full findings: [tafsir-109-tabari-english-audit-2026-10-11.md](https://github.com/qurangeez114/Quran-scholar-platform/blob/main/docs/tafsir-109-tabari-english-audit-2026-10-11.md). This does not convert the entries into an independently human-reviewed edition and does not clear the marked 109:6 source uncertainty.
 
 Surah 109 structured extraction remains fully saved at 52/52 current claims. Al-Qurṭubī's English truncation, the remaining full translation-review boundary, and proposition-specific public rendering still prevent **D — Sura 109**.
+
+
+## October 11 al-Qurṭubī English truncation boundary audit
+
+At 2026-10-11 22:35 America/Los_Angeles, protected read-only [run 38208623196](https://github.com/qurangeez114/Quran-scholar-platform/actions/runs/38208623196) enumerated all six Arabic and six English al-Qurṭubī Sūrah 109 entries, recording identities, lengths, hashes, bounded endpoints, and source metadata without database mutation.
+
+The defect is isolated to English entry `38089` (109:1): it ends syntactically incomplete at “And if what” after 3,338 characters / 600 words, while paired Arabic entry `13292` continues substantially. English entries `39697–39699` and `48339–48340` are distinct verse-scoped rows with complete sentence endings and do not share this cutoff. Their broader fidelity review remains separate.
+
+Full audit: [tafsir-109-qurtubi-english-truncation-audit-2026-10-11.md](https://github.com/qurangeez114/Quran-scholar-platform/blob/main/docs/tafsir-109-qurtubi-english-truncation-audit-2026-10-11.md). Do not overwrite `38089` with an assumed continuation; repair requires a complete source-checked replacement or separately labeled AI-assisted rendering, followed by database readback and public UI verification. The 52/52 Arabic-backed proposition extraction remains valid, but translation review remains open. **No D — Sura 109.**
