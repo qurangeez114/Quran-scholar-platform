@@ -1,0 +1,48 @@
+name: Audit Tabari Surah 108 source coverage
+on:
+  push:
+    paths:
+      - '.github/workflows/tafsir-108-tabari-source-audit.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Read-only Tabari 108 Arabic and English inventory
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        shell: python
+        run: |
+          import hashlib,json,os,re,unicodedata,urllib.parse,urllib.request
+          key=os.environ.get("SUPABASE_SERVICE_KEY","")
+          if not key: raise SystemExit("Missing protected database credential")
+          base="https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/tafsir_entries"
+          def get(params):
+              req=urllib.request.Request(base+"?"+urllib.parse.urlencode(params),headers={"apikey":key,"Authorization":"Bearer "+key})
+              with urllib.request.urlopen(req,timeout=30) as r: return json.load(r)
+          def na(s):
+              s="".join(c for c in unicodedata.normalize("NFKD",s or "") if not unicodedata.combining(c) and c!="ـ")
+              return re.sub(r"\s+"," ",re.sub(r"[،؛؟:()\[\]{}﴿﴾]+"," ",s)).strip()
+          rows=get({"sura":"eq.108","scholar_key":"eq.tabari","language":"in.(ar,en)","select":"id,aya,language,content,source_name,source_url","order":"language.asc,aya.asc,id.asc","limit":"100"})
+          print("AUDIT_MODE read-only; no writes")
+          print("ROW_COUNT",len(rows))
+          for x in rows:
+              c=x.get("content") or ""
+              print("IDENTITY",json.dumps({"id":x["id"],"aya":x["aya"],"language":x["language"],"chars":len(c),"sha256":hashlib.sha256(c.encode()).hexdigest(),"source_name":x.get("source_name"),"source_url":x.get("source_url")},ensure_ascii=False))
+          ar=" ".join(na(x["content"]) for x in rows if x["language"]=="ar")
+          anchors=[
+            "فصل لربك وانحر","أخلص لربك صلاتك وذبحك","الصلاة المكتوبة","وانحر البدن",
+            "ارفع يديك إلى النحر","استقبل القبلة بنحرك","شانئك","هو الأبتر",
+            "العاص بن وائل","عقبة بن أبي معيط","كعب بن الأشرف","الأقل والأذل المنقطع دابره"
+          ]
+          for a in anchors: print("ANCHOR",json.dumps({"text":a,"present":na(a) in ar},ensure_ascii=False))
+          # Print only bounded contexts around target words, never full commentary.
+          for term in ("وانحر","شانئك","الأبتر"):
+              p=ar.find(na(term))
+              if p>=0: print("BOUNDED_CONTEXT",term,ar[max(0,p-180):p+420])
+          if not any(x["language"]=="ar" and int(x["aya"])==2 for x in rows): raise SystemExit("Missing Tabari Arabic 108:2")
+          if not any(x["language"]=="ar" and int(x["aya"])==3 for x in rows): raise SystemExit("Missing Tabari Arabic 108:3")
+          print("TABARI_108_SOURCE_INVENTORY_PASS")
