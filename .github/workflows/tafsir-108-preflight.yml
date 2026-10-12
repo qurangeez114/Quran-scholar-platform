@@ -33,7 +33,7 @@ jobs:
           docs=[json.load(open(p,encoding='utf-8')) for p in paths]
           claims=[]
           for p,d in zip(paths,docs):
-              if d.get('surah')!=108 or d.get('database_written') is not False: raise SystemExit('Unsafe staging metadata '+p)
+              if (d.get('surah',d.get('sura'))!=108 or (d.get('database_written') not in (False,None)) or 'not_published' not in d.get('status','')): raise SystemExit('Unsafe staging metadata '+p)
               for c in d['claims']:
                   x=dict(c); x['_path']=p; x['_scholar']=d['scholar_key']; claims.append(x)
           ids=[c['id'] for c in claims]
@@ -51,7 +51,7 @@ jobs:
           def n(s): return re.sub(r'[^a-z0-9]+',' ',unicodedata.normalize('NFKD',s or '').encode('ascii','ignore').decode().lower()).strip()
           exact=[]; likely=[]
           for c in claims:
-              a=n(c.get('statement_en','')); aset=set(a.split())
+              a=n(c.get('statement_en') or c.get('claim','')); aset=set(a.split())
               if not a: raise SystemExit('Missing statement '+c['id'])
               for row in live:
                   b=n(row.get('statement_en','')); bset=set(b.split())
