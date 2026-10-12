@@ -31,18 +31,22 @@ jobs:
               c=x.get('content') or ''
               print('LIVE_IDENTITY',json.dumps({'id':x['id'],'aya':x['aya'],'language':x['language'],'chars':len(c),'sha256':hashlib.sha256(c.encode()).hexdigest(),'source_name':x.get('source_name'),'source_url':x.get('source_url')},ensure_ascii=False))
               print('LIVE_TEXT',x['aya'],re.sub(r'\s+',' ',c))
-          resources=get('https://api.quran.com/api/v4/resources/tafsirs')
-          print('RESOURCE_SUMMARY',json.dumps([{'id':x.get('id'),'name':x.get('name'),'author_name':x.get('author_name'),'translated_name':x.get('translated_name')} for x in resources.get('tafsirs',[])],ensure_ascii=False))
-          matches=[x for x in resources.get('tafsirs',[]) if ('jalal' in json.dumps(x,ensure_ascii=False).lower() or 'الجلالين' in json.dumps(x,ensure_ascii=False))]
-          print('QURANCOM_MATCHES',json.dumps(matches,ensure_ascii=False))
-          if not matches: raise SystemExit('No Arabic Jalalayn resource found')
-          tid=matches[0]['id']
+          import html,unicodedata
+          def norm(s):
+              s=html.unescape(re.sub(r'<[^>]+>',' ',s))
+              s=''.join(ch for ch in unicodedata.normalize('NFKD',s) if not unicodedata.combining(ch) and ch!='ـ')
+              return re.sub(r'\s+',' ',s).strip()
+          expected={
+            1:['هو نهر في الجنة','الخير الكثير من النبوة والقرآن والشفاعة'],
+            2:['صلاة عيد النحر','نسكك'],
+            3:['أي مبغضك','المنقطع عن كل خير','العاصي بن وائل','موت ابنه القاسم']}
           for aya in (1,2,3):
-              d=get(f'https://api.quran.com/api/v4/tafsirs/{tid}/by_ayah/108:{aya}')
-              item=d.get('tafsir') or d
-              text=re.sub(r'<[^>]+>',' ',item.get('text',''))
-              text=re.sub(r'\s+',' ',text).strip()
-              print('ARABIC_SOURCE',json.dumps({'aya':aya,'tafsir_id':tid,'chars':len(text),'sha256':hashlib.sha256(text.encode()).hexdigest(),'resource_name':matches[0].get('name'),'url':f'https://quran.com/108:{aya}/tafsirs/ar-tafsir-jalalayn'},ensure_ascii=False))
-              print('ARABIC_TEXT',aya,text)
+              url=f'https://quran.com/108:{aya}/tafsirs/ar-tafsir-jalalayn'
+              req=urllib.request.Request(url,headers={'User-Agent':'Mozilla/5.0 QuranHikma-source-audit/1.0'})
+              with urllib.request.urlopen(req,timeout=30) as r: raw=r.read().decode('utf-8','replace')
+              n=norm(raw)
+              checks={a:(norm(a) in n) for a in expected[aya]}
+              print('EXTERNAL_ARABIC',json.dumps({'aya':aya,'url':url,'http_chars':len(raw),'sha256':hashlib.sha256(raw.encode()).hexdigest(),'anchors':checks},ensure_ascii=False))
+              if not all(checks.values()): raise SystemExit(f'Arabic Jalalayn anchors incomplete at 108:{aya}')
           if sorted({int(x['aya']) for x in rows if x['language']=='en'}) != [1,2,3]: raise SystemExit('Live English coverage incomplete')
           print('JALALAYN_108_SOURCE_ALIGNMENT_PASS')
