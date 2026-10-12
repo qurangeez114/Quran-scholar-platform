@@ -73,14 +73,13 @@ jobs:
                   all_ar=json.load(rr)
               for x in all_ar:
                   name=" ".join([x.get("scholar_key") or "",x.get("scholar_name") or "",x.get("source_name") or ""]).casefold()
-                  if any(token in name for token in ("jalal","محلي","suyuti","سيوطي","tanwir","miqbas","abbas","عباس")):
-                      cc=x.get("content") or ""
-                      print("AR_IDENTITY_CANDIDATE",json.dumps({
+                  cc=x.get("content") or ""
+                  print("AR_IDENTITY_CANDIDATE",json.dumps({
                           "id":x["id"],"aya":x["aya"],"scholar_key":x.get("scholar_key"),
                           "scholar_name":x.get("scholar_name"),"source_name":x.get("source_name"),
                           "source_url":x.get("source_url"),"chars":len(cc),
                           "sha256":hashlib.sha256(cc.encode()).hexdigest()
-                      },ensure_ascii=False))
+                  },ensure_ascii=False))
 
           byid={int(x["id"]):x for x in rows}
           def require(i):
@@ -90,9 +89,8 @@ jobs:
           q=require(38089); qc=q.get("content") or ""
           if re.search(r"And if what\s*$",qc,re.I):
               raise SystemExit("Qurtubi 38089 remains truncated")
-          qlabel="AI-assisted English translation by Quran Hikma"
-          if qlabel not in qc or len(qc)!=7827:
-              raise SystemExit("Qurtubi 38089 repair identity/label/length mismatch")
+          if len(qc)!=7827 or "Quran Hikma AI-assisted English repair" not in (q.get("source_name") or ""):
+              raise SystemExit("Qurtubi 38089 repair identity/source/length mismatch")
           print("QURTUBI_REPAIR_PASS",38089,len(qc),hashlib.sha256(qc.encode()).hexdigest())
 
           tab_ids=[56199,56200,56201,56202,56203,56204]
