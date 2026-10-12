@@ -1,0 +1,103 @@
+name: Publish verified Jalalayn J01 and J03 for Surah 109
+on:
+  push:
+    paths:
+      - '.github/workflows/tafsir-109-jalalayn-j01-j03.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tafsir-109-import
+  cancel-in-progress: false
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Import only claims supported by live English and checked Arabic
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        shell: python
+        run: |
+          import json,os,re,unicodedata,urllib.error,urllib.request
+          key=os.environ.get("SUPABASE_SERVICE_KEY","")
+          if not key: raise SystemExit("Missing protected database credential")
+          base="https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/"
+          headers={"apikey":key,"Authorization":"Bearer "+key,"Content-Type":"application/json","Prefer":"return=representation"}
+          def call(path,method="GET",body=None):
+              req=urllib.request.Request(base+path,data=None if body is None else json.dumps(body,ensure_ascii=False).encode(),headers=headers,method=method)
+              try:
+                  with urllib.request.urlopen(req,timeout=30) as r:
+                      raw=r.read(); return json.loads(raw) if raw else []
+              except urllib.error.HTTPError as e:
+                  raise RuntimeError("HTTP "+str(e.code)+": "+e.read().decode(errors="replace")[:800]) from e
+          def norm(s):
+              return re.sub(r"[^a-z0-9]+"," ",unicodedata.normalize("NFKD",s or "").encode("ascii","ignore").decode().casefold()).strip()
+          work=call("tafsir_reporting_works?id=eq.4&select=id,canonical_name,scholar_key&limit=2")
+          if len(work)!=1 or "jalal" not in norm(" ".join(str(v) for v in work[0].values())):
+              raise SystemExit("Reporting-work 4 is not uniquely Jalalayn")
+          rows=call("tafsir_entries?id=in.(23675,23677)&select=id,sura,aya,scholar_key,language,content&order=id.asc")
+          by={r["id"]:r for r in rows}
+          specs=[
+            ("J01",23675,2,"The first negation applies to the present and its objects are idols.",["present","idol"],"في الحال ... من الأصنام"),
+            ("J03",23677,4,"The speaker's non-worship is mapped to the future.",["future"],"في الاستقبال")
+          ]
+          for code,eid,aya,statement,markers,arabic in specs:
+              row=by.get(eid)
+              if not row or row["sura"]!=109 or row["aya"]!=aya or row["scholar_key"]!="jalalayn" or row["language"]!="en":
+                  raise SystemExit(code+" live identity mismatch")
+              text=norm(row.get("content"))
+              if any(norm(m) not in text for m in markers): raise SystemExit(code+" semantic markers missing")
+          existing=call("propositions?tafsir_entry_id=in.(23675,23677)&select=id,tafsir_entry_id,statement_en&limit=1000")
+          plan=[]
+          for spec in specs:
+              code,eid,aya,statement,markers,arabic=spec
+              matches=[r for r in existing if norm(r.get("statement_en"))==norm(statement)]
+              if len(matches)>1: raise SystemExit("Multiple exact matches for "+code)
+              if matches:
+                  pid=matches[0]["id"]
+                  v=call("proposition_voice_chain?proposition_id=eq."+str(pid)+"&select=proposition_id,reporting_work_id")
+                  e=call("proposition_evidence?proposition_id=eq."+str(pid)+"&select=proposition_id,evidence_unit_id")
+                  if not v or not e: raise SystemExit("Existing "+code+" lacks complete links")
+                  plan.append(("existing",spec,pid,e[0]["evidence_unit_id"]))
+              else: plan.append(("insert",spec,None,None))
+          created=[]
+          try:
+              results=[]
+              for action,spec,oldpid,oldeid in plan:
+                  code,eid,aya,statement,markers,arabic=spec
+                  tag="work-surah109-v1:source-reviewed:"+code
+                  if action=="existing":
+                      results.append((code,oldpid,eid,oldeid,"existing")); continue
+                  p=call("propositions","POST",{"claim_type_id":43,"statement_en":statement,"extracted_by":tag,
+                    "speaker_type":"unspecified","speaker_name":"al-Jalālayn","assertion_mode":"explicit","status":"active",
+                    "source_type":"tafsir_entry","tafsir_entry_id":eid,"extraction_validity":"verified",
+                    "verification_state":"source_language_proposition_verified","attribution_fidelity":"accurate_paraphrase",
+                    "quranic_textual_support":"not_stated","mufassir_own_position":"adopted"})[0]
+                  item={"pid":p["id"],"evid":None}; created.append(item)
+                  call("proposition_voice_chain","POST",{"proposition_id":p["id"],"reporting_work_id":4,
+                    "originating_voice_type":"exegete_own_view","originating_voice_name":None})
+                  ev=call("evidence_units","POST",{"unit_type":"single_named_attribution",
+                    "attributed_authority_name":"al-Jalālayn","content_summary":statement+" Arabic anchor: "+arabic+".",
+                    "independence_state":"unknown"})[0]
+                  item["evid"]=ev["id"]
+                  call("proposition_evidence","POST",{"proposition_id":p["id"],"evidence_unit_id":ev["id"],
+                    "semantic_link_note":"Arabic checked at quran.com/109:"+str(aya)+"/tafsirs/ar-tafsir-jalalayn; live English entry independently passed semantic-marker and source-identity checks.",
+                    "linked_by":tag})
+                  results.append((code,p["id"],eid,ev["id"],"inserted"))
+              for code,pid,eid,evid,state in results:
+                  p=call("propositions?id=eq."+str(pid)+"&select=id,tafsir_entry_id,statement_en")
+                  v=call("proposition_voice_chain?proposition_id=eq."+str(pid)+"&select=proposition_id,reporting_work_id,originating_voice_type")
+                  e=call("proposition_evidence?proposition_id=eq."+str(pid)+"&select=proposition_id,evidence_unit_id")
+                  if len(p)!=1 or p[0]["tafsir_entry_id"]!=eid: raise RuntimeError(code+" proposition mismatch")
+                  if len(v)!=1 or v[0]["reporting_work_id"]!=4 or v[0]["originating_voice_type"]!="exegete_own_view": raise RuntimeError(code+" voice mismatch")
+                  if len(e)!=1 or e[0]["evidence_unit_id"]!=evid: raise RuntimeError(code+" evidence mismatch")
+                  print("JALALAYN_SAVED_VERIFIED",code,"proposition",pid,"entry",eid,"evidence",evid,state)
+          except Exception:
+              for item in reversed(created):
+                  pid=item["pid"]; evid=item["evid"]
+                  call("proposition_evidence?proposition_id=eq."+str(pid),"DELETE")
+                  call("proposition_voice_chain?proposition_id=eq."+str(pid),"DELETE")
+                  call("propositions?id=eq."+str(pid),"DELETE")
+                  if evid is not None: call("evidence_units?id=eq."+str(evid),"DELETE")
+              raise
