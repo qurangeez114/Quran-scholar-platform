@@ -1,0 +1,46 @@
+name: Audit Ibn Kathir I09 I12 live Arabic for Surah 109
+on:
+  push:
+    paths:
+      - '.github/workflows/tafsir-109-ibn-kathir-i09-i12-audit.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Search all live Arabic rows without writes
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        shell: python
+        run: |
+          import json,os,re,unicodedata,urllib.request
+          key=os.environ.get("SUPABASE_SERVICE_KEY","")
+          if not key: raise SystemExit("Missing protected database credential")
+          req=urllib.request.Request("https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/tafsir_entries?sura=eq.109&scholar_key=eq.ibn_kathir&language=eq.ar&select=id,aya,content&order=aya.asc,id.asc&limit=50",
+             headers={"apikey":key,"Authorization":"Bearer "+key})
+          with urllib.request.urlopen(req,timeout=30) as r: rows=json.loads(r.read())
+          def nar(s):
+              s="".join(c for c in unicodedata.normalize("NFKC",s or "") if not unicodedata.combining(c) and c!="ـ")
+              return re.sub(r"\s+"," ",re.sub(r"[،؛؟:،؛؟()\[\]{}]+"," ",s)).strip()
+          tests={
+            "I09":["البخاري","دينكم الكفر","ديني الإسلام"],
+            "I10":["الآيات بالنون","حذف الياء"],
+            "I11":["الشافعي","ملة واحدة","اليهود","النصارى"],
+            "I12":["أحمد","لا يتوارث","ملتين"]
+          }
+          print("IBN_KATHIR_AR_ROWS",len(rows))
+          for row in rows:
+              t=nar(row["content"])
+              print("ROW",row["id"],"AYA",row["aya"],"LEN",len(row["content"] or ""))
+              for code,anchors in tests.items():
+                  found=[a for a in anchors if nar(a) in t]
+                  print("ANCHOR_PROFILE",code,"ENTRY",row["id"],"FOUND","|".join(found),"COUNT",len(found))
+                  if found:
+                      raw=row["content"] or ""; words=re.findall(r"\S+",raw)
+                      idx=next((i for i,w in enumerate(words) if any(nar(a) in nar(w) for a in found)),0)
+                      lo=max(0,idx-6); hi=min(len(words),idx+11)
+                      print("BOUNDED_AR",code,"ENTRY",row["id"],"WORDS",hi-lo,"TEXT"," ".join(words[lo:hi]))
+          print("READ_ONLY_I09_I12_AUDIT_COMPLETE")
