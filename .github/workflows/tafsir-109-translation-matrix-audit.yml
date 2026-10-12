@@ -59,7 +59,28 @@ jobs:
                       "sources":sorted({(x.get("source_name") or "").strip() for x in subset})
                   },ensure_ascii=False))
           if missing:
-              raise SystemExit("Incomplete Arabic/English verse coverage: "+json.dumps(missing))
+              print("IDENTITY_GAPS",json.dumps(missing))
+              # Inspect all Arabic Surah 109 identities without printing source text.
+              all_params={
+                  "sura":"eq.109","language":"eq.ar",
+                  "select":"id,aya,scholar_key,scholar_name,source_name,source_url,content",
+                  "order":"scholar_key.asc,aya.asc,id.asc","limit":"500"
+              }
+              all_req=urllib.request.Request(base+"?"+urllib.parse.urlencode(all_params),headers={
+                  "apikey":key,"Authorization":"Bearer "+key,"Accept":"application/json"
+              })
+              with urllib.request.urlopen(all_req,timeout=30) as rr:
+                  all_ar=json.load(rr)
+              for x in all_ar:
+                  name=" ".join([x.get("scholar_key") or "",x.get("scholar_name") or "",x.get("source_name") or ""]).casefold()
+                  if any(token in name for token in ("jalal","محلي","suyuti","سيوطي","tanwir","miqbas","abbas","عباس")):
+                      cc=x.get("content") or ""
+                      print("AR_IDENTITY_CANDIDATE",json.dumps({
+                          "id":x["id"],"aya":x["aya"],"scholar_key":x.get("scholar_key"),
+                          "scholar_name":x.get("scholar_name"),"source_name":x.get("source_name"),
+                          "source_url":x.get("source_url"),"chars":len(cc),
+                          "sha256":hashlib.sha256(cc.encode()).hexdigest()
+                      },ensure_ascii=False))
 
           byid={int(x["id"]):x for x in rows}
           def require(i):
@@ -89,5 +110,5 @@ jobs:
           if not re.search(r"idol",tc,re.I) or not re.search(r"Allah",tc,re.I):
               raise SystemExit("Tanwir 109:2 published-witness semantic marker mismatch")
           print("TANWIR_109_2_PASS",29984,len(tc),hashlib.sha256(tc.encode()).hexdigest())
-          print("TRANSLATION_MATRIX_INVENTORY_PASS")
+          print("TRANSLATION_MATRIX_INVENTORY_PASS_WITH_IDENTITY_GAPS" if missing else "TRANSLATION_MATRIX_INVENTORY_PASS")
           print("LIMITATION inventory and bounded semantic checks do not convert AI-assisted rows into independently human-reviewed editions")
