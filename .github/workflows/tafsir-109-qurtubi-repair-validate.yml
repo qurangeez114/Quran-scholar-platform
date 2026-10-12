@@ -1,0 +1,45 @@
+name: Validate Qurtubi 109-1 English repair draft
+on:
+  push:
+    paths:
+      - 'data/tafsir/staging/qurtubi-109-1-english-repair-draft-2026-10-12.json'
+      - '.github/workflows/tafsir-109-qurtubi-repair-validate.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate identities hashes anchors and draft semantics
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        shell: python
+        run: |
+          import os,json,urllib.request,hashlib,re
+          p="data/tafsir/staging/qurtubi-109-1-english-repair-draft-2026-10-12.json"
+          d=json.load(open(p,encoding="utf-8"))
+          key=os.environ.get("SUPABASE_SERVICE_KEY","")
+          if not key: raise SystemExit("Missing protected database credential")
+          url="https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/tafsir_entries?id=in.(13292,38089)&select=id,content&order=id.asc"
+          req=urllib.request.Request(url,headers={"apikey":key,"Authorization":"Bearer "+key})
+          with urllib.request.urlopen(req,timeout=30) as r: rows=json.load(r)
+          by={x["id"]:x["content"] for x in rows}
+          for i,k in [(13292,"arabic_sha256"),(38089,"damaged_english_sha256")]:
+            got=hashlib.sha256(by[i].encode()).hexdigest()
+            if got!=d[k]: raise SystemExit("Live hash divergence "+str(i))
+          if not by[38089].endswith(d["cutoff_exact"]): raise SystemExit("Cutoff changed")
+          ar=by[13292]; en=d["continuation_en"].casefold()
+          anchors=["وإن كان الذي بأيدينا خيرا مما بيدك","وقال أبو صالح عن ابن عباس","ونحوه عن الماوردي","قال أبو بكر بن الأنباري","وأما وجه التكرار","قال أكثر أهل المعاني","وقيل : هذا على مطابقة قولهم"]
+          missing=[a for a in anchors if a not in ar]
+          if missing: raise SystemExit("Missing Arabic anchors: "+" | ".join(missing))
+          groups=[["abu salih","ibn"],["al mawardi","particular"],["abu bakr ibn al anbari","received reading"],["repetition","emphasis"],["most specialists","language of the arabs"],["one year","another"],["never occur"]]
+          for g in groups:
+            miss=[m for m in g if m not in en]
+            if miss: raise SystemExit("Missing English semantic group: "+" | ".join(miss))
+          print("LIVE_IDENTITIES_HASHES_OK 13292 38089")
+          print("ARABIC_ANCHORS_OK",len(anchors))
+          print("ENGLISH_SEMANTIC_GROUPS_OK",len(groups))
+          print("KNOWN_LIMITATION poetic examples summarized pending final line review")
+          print("DRAFT_VALIDATED_READ_ONLY no database writes")
