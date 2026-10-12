@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Read-only Ibn Kathir 108 inventory and anchors
+      - name: Read-only Ibn Kathir 108 inventory, context, and canonical mapping
         env:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         shell: python
@@ -27,20 +27,46 @@ jobs:
               s="".join(c for c in unicodedata.normalize("NFKD",s or "") if not unicodedata.combining(c) and c!="ـ")
               return re.sub(r"\s+"," ",re.sub(r"[،؛؟:()\[\]{}﴿﴾]+"," ",s)).strip()
           print("AUDIT_MODE read-only; no writes")
-          print("ROW_COUNT",len(rows))
-          for x in rows:
-              c=x.get("content") or ""
-              print("IDENTITY",json.dumps({"id":x["id"],"aya":x["aya"],"language":x["language"],"chars":len(c),"sha256":hashlib.sha256(c.encode()).hexdigest(),"source_name":x.get("source_name"),"source_url":x.get("source_url")},ensure_ascii=False))
-          for lang in ("ar","en"):
-              hashes={}
-              for x in rows:
-                  if x["language"]==lang: hashes.setdefault(hashlib.sha256((x.get("content") or "").encode()).hexdigest(),[]).append(int(x["aya"]))
-              print("CONTENT_GROUPS",lang,json.dumps(hashes,sort_keys=True))
-          ar=" ".join(na(x["content"]) for x in rows if x["language"]=="ar")
-          anchors=["نهر في الجنة","الخير الكثير","حوض","القرآن","النبوة","فصل لربك وانحر","الصلاة المكتوبة","نحر البدن","العاص بن وائل","الأبتر","لا ولد له","لا ذكر له"]
-          for a in anchors: print("ANCHOR",json.dumps({"text":a,"present":na(a) in ar},ensure_ascii=False))
-          for term in ("الكوثر","وانحر","شانئك"):
+          ar_rows=[x for x in rows if x["language"]=="ar"]
+          en_rows=[x for x in rows if x["language"]=="en"]
+          if len(ar_rows)!=3 or len(en_rows)!=3: raise SystemExit("Expected exactly three Arabic and three English rows")
+          if len({hashlib.sha256(x["content"].encode()).hexdigest() for x in ar_rows})!=1: raise SystemExit("Arabic chapter block is not identical")
+          if len({hashlib.sha256(x["content"].encode()).hexdigest() for x in en_rows})!=1: raise SystemExit("English chapter block is not identical")
+          ar=na(ar_rows[0]["content"]); en=na(en_rows[0]["content"]).lower()
+          checks={
+            "I05_prayer_and_sacrifice":["فصل لربك وانحر","نحر البدن"],
+            "I06_al_as":["العاص بن وائل"],
+            "I07_lexical_and_competing":["شانئك","الأبتر"]
+          }
+          for cid,anchors in checks.items():
+              print("CLAIM_ANCHORS",cid,json.dumps({a:(na(a) in ar) for a in anchors},ensure_ascii=False))
+          for label,term in (("I05","فصل لربك وانحر"),("I06","العاص بن وائل"),("I07","إن شانئك هو الأبتر")):
               p=ar.find(na(term))
-              if p>=0: print("BOUNDED_CONTEXT",term,ar[max(0,p-160):p+480])
-          if sorted({int(x["aya"]) for x in rows if x["language"]=="ar"}) != [1,2,3]: raise SystemExit("Arabic coverage incomplete")
-          print("IBN_KATHIR_108_SOURCE_INVENTORY_PASS")
+              if p<0: p=ar.find(na(term.split()[0]))
+              if p<0: raise SystemExit("Missing context anchor "+label)
+              print("CLAIM_CONTEXT",label,ar[max(0,p-300):p+1800])
+          english_markers={
+            "I05":["pray","sacrifice"],
+            "I06":["as bin wa'il","al-as"],
+            "I07":["enemy","cut off"]
+          }
+          for cid,alts in english_markers.items():
+              print("ENGLISH_COVERAGE",cid,json.dumps({a:(a in en) for a in alts}))
+          canonical={
+            "108-I01":48457,
+            "108-I02":48457,
+            "108-I03":48457,
+            "108-I04":48457,
+            "108-I05":48458,
+            "108-I06":48459,
+            "108-I07":48459
+          }
+          # The source text is a single duplicated chapter witness, but verse-specific
+          # claims attach to the matching verse row; introduction and 108:1 attach to 108:1.
+          byid={x["id"]:x for x in ar_rows}
+          expected={"108-I01":1,"108-I02":1,"108-I03":1,"108-I04":1,"108-I05":2,"108-I06":3,"108-I07":3}
+          for cid,eid in canonical.items():
+              if int(byid[eid]["aya"])!=expected[cid]: raise SystemExit("Canonical mapping mismatch "+cid)
+          print("CANONICAL_MAP",json.dumps(canonical,sort_keys=True))
+          print("CANONICAL_POLICY one duplicated chapter witness; attach each atomic claim to its verse row; chapter introduction attaches to verse 1; never count duplicate rows as independent witnesses")
+          print("IBN_KATHIR_108_CONTEXT_AUDIT_PASS")
