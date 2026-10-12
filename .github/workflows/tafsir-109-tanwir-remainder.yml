@@ -1,0 +1,108 @@
+name: Publish verified Tanwir English claims for Surah 109
+on:
+  push:
+    paths:
+      - '.github/workflows/tafsir-109-tanwir-remainder.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tafsir-109-import
+  cancel-in-progress: false
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Import Guezzou-aligned claims with disputed attribution
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        shell: python
+        run: |
+          import json,os,re,unicodedata,urllib.error,urllib.request
+          key=os.environ.get("SUPABASE_SERVICE_KEY","")
+          if not key: raise SystemExit("Missing protected database credential")
+          base="https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/"
+          headers={"apikey":key,"Authorization":"Bearer "+key,"Content-Type":"application/json","Prefer":"return=representation"}
+          def call(path,method="GET",body=None):
+              req=urllib.request.Request(base+path,data=None if body is None else json.dumps(body,ensure_ascii=False).encode(),headers=headers,method=method)
+              try:
+                  with urllib.request.urlopen(req,timeout=30) as r:
+                      raw=r.read(); return json.loads(raw) if raw else []
+              except urllib.error.HTTPError as e:
+                  raise RuntimeError("HTTP "+str(e.code)+": "+e.read().decode(errors="replace")[:800]) from e
+          def ne(s): return re.sub(r"[^a-z0-9]+"," ",unicodedata.normalize("NFKD",s or "").encode("ascii","ignore").decode().casefold()).strip()
+          rows=call("tafsir_entries?sura=eq.109&scholar_key=eq.ibn_abbas&language=eq.en&select=id,sura,aya,scholar_key,language,content&order=aya.asc,id.asc&limit=50")
+          by={}
+          for r in rows: by.setdefault(r["aya"],[]).append(r)
+          for aya in (1,3,4,5,6):
+              if len(by.get(aya,[]))!=1: raise SystemExit("Expected one Tanwir English entry for aya "+str(aya))
+          specs=[
+            ("W01",1,"The work names al-As ibn Wa'il and al-Walid ibn al-Mughira among those proposing reciprocal worship.",["al as","walid"],"named occasion figures"),
+            ("W02",3,"The preceding pair, verses 2–3, is placed in the future.",["future"],"future-time gloss"),
+            ("W03",4,"The speaker will not worship what the addressees worship besides God.",["worship","besides allah"],"worship-besides-God gloss"),
+            ("W04",5,"The second pair, verses 4–5, is placed in the past.",["past"],"past-time gloss"),
+            ("W05",5,"An alternative distinguishes belief in associated divinity from belief in divine oneness.",["also said","oneness"],"explicit alternative gloss"),
+            ("W06",6,"The work glosses the two religions as disbelief/association and Islam/faith.",["disbelief","islam","faith"],"two-religion gloss"),
+            ("W07",6,"The work asserts that the closing statement was abrogated by the fighting verse.",["abrogated","fighting"],"abrogation gloss")
+          ]
+          resolved=[]
+          for code,aya,statement,markers,label in specs:
+              row=by[aya][0]; txt=ne(row.get("content"))
+              miss=[m for m in markers if ne(m) not in txt]
+              if miss: raise SystemExit(code+" published-English markers absent in live entry "+str(row["id"]))
+              resolved.append((code,row["id"],statement,markers,label))
+          ids=sorted({x[1] for x in resolved})
+          existing=call("propositions?tafsir_entry_id=in.("+",".join(map(str,ids))+")&select=id,tafsir_entry_id,statement_en,extracted_by&limit=1000")
+          plan=[]
+          for spec in resolved:
+              code,entry,statement,*_=spec
+              matches=[r for r in existing if ne(r.get("statement_en"))==ne(statement)]
+              if len(matches)>1: raise SystemExit("Multiple exact matches for "+code)
+              if matches:
+                  pid=matches[0]["id"]
+                  v=call("proposition_voice_chain?proposition_id=eq."+str(pid)+"&select=proposition_id,reporting_work_id,originating_voice_type,originating_voice_name")
+                  e=call("proposition_evidence?proposition_id=eq."+str(pid)+"&select=proposition_id,evidence_unit_id")
+                  if not v or not e: raise SystemExit("Existing "+code+" lacks complete links")
+                  plan.append(("existing",spec,pid,e[0]["evidence_unit_id"]))
+              else: plan.append(("insert",spec,None,None))
+          created=[]
+          try:
+              results=[]
+              for action,spec,oldpid,oldeid in plan:
+                  code,entry,statement,markers,label=spec; tag="work-surah109-v1:source-reviewed:"+code
+                  if action=="existing": results.append((code,oldpid,entry,oldeid,"existing")); continue
+                  p=call("propositions","POST",{"claim_type_id":43,"statement_en":statement,"extracted_by":tag,
+                    "speaker_type":"unspecified","speaker_name":"Ibn ʿAbbās (attribution through Tanwīr al-Miqbās disputed)",
+                    "assertion_mode":"explicit","status":"active","source_type":"tafsir_entry","tafsir_entry_id":entry,
+                    "extraction_validity":"verified","verification_state":"source_language_proposition_verified",
+                    "attribution_fidelity":"accurate_paraphrase","quranic_textual_support":"not_stated",
+                    "mufassir_own_position":"reported_only"})[0]
+                  item={"pid":p["id"],"eid":None}; created.append(item)
+                  call("proposition_voice_chain","POST",{"proposition_id":p["id"],"reporting_work_id":56,
+                    "originating_voice_type":"named_earlier_exegete","originating_voice_name":"Ibn ʿAbbās (attribution disputed)"})
+                  ev=call("evidence_units","POST",{"unit_type":"single_named_attribution",
+                    "attributed_authority_name":"Tanwīr al-Miqbās (traditionally attributed to Ibn ʿAbbās; disputed)",
+                    "content_summary":statement+" Live English entry aligns with Guezzou published witness: "+label+".",
+                    "independence_state":"unknown"})[0]
+                  item["eid"]=ev["id"]
+                  call("proposition_evidence","POST",{"proposition_id":p["id"],"evidence_unit_id":ev["id"],
+                    "semantic_link_note":"Checked against Mokrane Guezzou, Tafsir Ibn Abbas, altafsir.com/Books/IbnAbbas.pdf, PDF p. 786 (printed p. 774), and Arabic Tanwīr at quranpedia.net/surah/1/109/book/363. Attribution to Ibn Abbas is disputed.",
+                    "linked_by":tag})
+                  results.append((code,p["id"],entry,ev["id"],"inserted"))
+              for code,pid,entry,eid,state in results:
+                  p=call("propositions?id=eq."+str(pid)+"&select=id,tafsir_entry_id,statement_en,speaker_name")
+                  v=call("proposition_voice_chain?proposition_id=eq."+str(pid)+"&select=proposition_id,reporting_work_id,originating_voice_type,originating_voice_name")
+                  e=call("proposition_evidence?proposition_id=eq."+str(pid)+"&select=proposition_id,evidence_unit_id")
+                  if len(p)!=1 or p[0]["tafsir_entry_id"]!=entry or "disputed" not in p[0]["speaker_name"]: raise RuntimeError(code+" proposition mismatch")
+                  if len(v)!=1 or v[0]["reporting_work_id"]!=56 or "disputed" not in (v[0]["originating_voice_name"] or ""): raise RuntimeError(code+" voice mismatch")
+                  if len(e)!=1 or e[0]["evidence_unit_id"]!=eid: raise RuntimeError(code+" evidence mismatch")
+                  print("TANWIR_SAVED_VERIFIED",code,"proposition",pid,"entry",entry,"evidence",eid,state,"disputed_attribution_preserved")
+          except Exception:
+              for x in reversed(created):
+                  pid=x["pid"]; eid=x["eid"]
+                  call("proposition_evidence?proposition_id=eq."+str(pid),"DELETE")
+                  call("proposition_voice_chain?proposition_id=eq."+str(pid),"DELETE")
+                  call("propositions?id=eq."+str(pid),"DELETE")
+                  if eid is not None: call("evidence_units?id=eq."+str(eid),"DELETE")
+              raise
