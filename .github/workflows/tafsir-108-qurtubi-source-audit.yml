@@ -38,13 +38,21 @@ jobs:
               print('CONTENT_GROUPS',lang,json.dumps(groups,sort_keys=True))
           ar=' '.join(na(x['content']) for x in rows if x['language']=='ar')
           en=' '.join((x.get('content') or '').lower() for x in rows if x['language']=='en')
+          byaya={int(x['aya']):na(x['content']) for x in rows if x['language']=='ar'}
           anchors=['الكوثر','نهر في الجنة','الخير الكثير','الحوض','فصل لربك وانحر','الصلاة','النحر','شانئك','الأبتر','العاص بن وائل','عقبة بن أبي معيط','كعب بن الأشرف']
           for a in anchors: print('AR_ANCHOR',json.dumps({'text':a,'present':na(a) in ar},ensure_ascii=False))
           markers=['river','paradise','abundant good','prayer','sacrifice','enemy','cut off','posterity']
           for m in markers: print('EN_MARKER',json.dumps({'text':m,'present':m in en}))
-          for term in ('الكوثر','وانحر','شانئك'):
-              p=ar.find(na(term))
-              if p>=0: print('BOUNDED_CONTEXT',term,ar[max(0,p-180):p+700])
+          probes={1:['نهر في الجنة','الخير الكثير','قال ابن عباس','قال مجاهد','قال عكرمة','قال الحسن'],2:['الصلاة','النحر','قال علي','قال ابن عباس','قال عطاء','رفع يديه'],3:['العاص بن وائل','عقبة بن أبي معيط','كعب بن الأشرف','قال ابن عباس','قال عكرمة','الأبتر']}
+          for aya,terms in probes.items():
+              s=byaya.get(aya,'')
+              for term in terms:
+                  start=0; seen=0
+                  while True:
+                      p=s.find(na(term),start)
+                      if p<0 or seen>=3: break
+                      print('VERSE_CONTEXT',aya,term,seen+1,s[max(0,p-180):p+620])
+                      start=p+len(na(term)); seen+=1
           arayas=sorted({int(x['aya']) for x in rows if x['language']=='ar'})
           enayas=sorted({int(x['aya']) for x in rows if x['language']=='en'})
           print('AYA_COVERAGE',json.dumps({'ar':arayas,'en':enayas}))
