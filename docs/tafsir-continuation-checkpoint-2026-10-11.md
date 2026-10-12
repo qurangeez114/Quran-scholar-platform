@@ -217,3 +217,14 @@ At 2026-10-12 01:44 America/Los_Angeles, protected read-only [input export run 3
 Read-only [validation run 38225265008](https://github.com/qurangeez114/Quran-scholar-platform/actions/runs/38225265008) passed the live identity/hash guards, exact cutoff check, seven Arabic source anchors, and seven English semantic groups. The draft preserves Ibn Isḥāq/others from Ibn ʿAbbās, Abū Ṣāliḥ from Ibn ʿAbbās, al-Māwardī, Abū Bakr ibn al-Anbārī, the majority-of-meaning-specialists explanation, and the competing correspondence explanation as separate attributions.
 
 No database write occurred. The poetic illustrations are explicitly summarized pending final line-level review; therefore entry `38089` has not been overwritten and al-Qurṭubī translation review remains open. **No D — Sura 109.**
+
+
+## October 12 al-Qurṭubī 109:1 repair published and publicly verified
+
+At 2026-10-12 02:36 America/Los_Angeles, the five anonymous poetic repetition examples were translated individually and passed the expanded source audit in [run 38230779100](https://github.com/qurangeez114/Quran-scholar-platform/actions/runs/38230779100). The finalized staged repair is commit `44b20dc8cd5eda84cd3a15875cfc8e6ddb3bd10a`.
+
+Guarded [repair run 38230907673](https://github.com/qurangeez114/Quran-scholar-platform/actions/runs/38230907673) updated English entry `38089` only after matching its audited identity and old SHA-256. Postflight readback verified the explicit “AI-assisted … not independently human-reviewed” label, complete replacement text, and new SHA-256 `68b4705593e602bff414bdcbc5d382b6f6e4414728183617942a7434c75847dc` (7,827 characters). The workflow had automatic rollback and readback guards; rollback was not needed.
+
+The production Sūrah 109:1 Study → Tafsir panel was then opened directly and visibly rendered the repaired al-Qurṭubī English through the final repetition explanation, including all five poetic examples. The old mid-sentence cutoff is no longer displayed. This resolves the Qurṭubī 109:1 storage-truncation blocker while preserving its AI-assisted review status.
+
+Sūrah 109 still lacks proposition-specific public rendering and a final chapter-wide translation-review closeout, so **no D — Sura 109** is issued.
