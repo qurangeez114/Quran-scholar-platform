@@ -147,3 +147,17 @@ At 2026-10-11 17:36 America/Los_Angeles, [GitHub Actions run 38188612087](https:
 All reporting-work `56` voice chains and evidence links passed postflight readback. Proposition speakers, originating voices, and evidence authorities explicitly retain “Ibn ʿAbbās attribution disputed.” Together with W08 `47582`, all eight staged Tanwīr claims are now database-saved and readback verified.
 
 The original 51-claim staging set now has 39 database-saved/readback-verified claims; the current 52-claim manifest has 40 including al-Saʿdī S05. Remaining original claims are Jalālayn J01–J08 and Ibn Kathīr I09–I12. Proposition-specific public rendering remains unverified. Surah 109 remains partial; do not issue D.
+
+
+## October 11 Jalālayn live reconciliation and bounded import
+
+At 2026-10-11 18:37 America/Los_Angeles, read-only [preflight run 38192494789](https://github.com/qurangeez114/Quran-scholar-platform/actions/runs/38192494789) resolved exactly one live English Jalālayn row for each verse, entries `23674–23679`, and found zero exact duplicates for J01–J08. Guarded semantic checks supported only J01 and J03. J02 and J04–J08 remain withheld because their live English rows did not satisfy all required markers; no weaker evidence test was substituted.
+
+Authenticated [import run 38192621329](https://github.com/qurangeez114/Quran-scholar-platform/actions/runs/38192621329) saved and read back:
+
+- J01: proposition `47635`, entry `23675`, evidence `571`;
+- J03: proposition `47636`, entry `23677`, evidence `572`.
+
+Both use reporting-work `4`, exegete-own-view voice links, and evidence notes tying the checked Arabic Jalālayn anchor to the semantically aligned live English entry. The first two failed attempts ([38192556211](https://github.com/qurangeez114/Quran-scholar-platform/actions/runs/38192556211), [38192588224](https://github.com/qurangeez114/Quran-scholar-platform/actions/runs/38192588224)) stopped before insertion because of a nonexistent metadata table and then an invalid position enum; no partial rows survived. The corrected workflow uses the established `preferred` classification and passed full postflight readback.
+
+The original staging set now has **41/51** database-saved/readback-verified claims; the current 52-claim manifest has **42/52**, including al-Saʿdī S05. Remaining original claims are Jalālayn J02 and J04–J08 plus Ibn Kathīr I09–I12. Translation reconciliation, al-Qurṭubī English truncation, and proposition-specific public rendering remain open. Surah 109 remains partial; do not issue D.
