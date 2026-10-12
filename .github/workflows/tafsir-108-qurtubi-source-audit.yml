@@ -57,4 +57,27 @@ jobs:
           enayas=sorted({int(x['aya']) for x in rows if x['language']=='en'})
           print('AYA_COVERAGE',json.dumps({'ar':arayas,'en':enayas}))
           if arayas != [1,2,3]: raise SystemExit('Arabic coverage incomplete')
-          print('QURTUBI_108_SOURCE_INVENTORY_PASS')
+          # Claim-level English coverage matrix. A positive marker matrix is evidence of
+          # stored wording coverage, not proof that every Arabic chain was translated.
+          en_byaya={int(x['aya']):(x.get('content') or '').lower() for x in rows if x['language']=='en'}
+          claim_markers={
+            '108-Q01':(1,[['abundance','abundant'],['number'],['measure','amount','quantity'],['importance','great']]),
+            '108-Q02':(1,[['river'],['paradise'],['gold'],['pearl'],['ruby'],['sweeter'],['whiter']]),
+            '108-Q03':(1,[['pool','cistern','basin'],['gathering','resurrection'],['community','nation']]),
+            '108-Q04':(1,[['prophethood'],['book'],['quran'],['islam'],['intercession'],['testimony'],['five prayers','five prayer']]),
+            '108-Q05':(2,[['obligatory prayer','prescribed prayer'],['festival','feast'],['sacrifice'],['dawn','morning'],['muzdalifah','muzdalifa'],['mina']]),
+            '108-Q06':(2,[['malik'],['heard nothing','not heard'],['day of sacrifice'],['after']]),
+            '108-Q07':(2,[['right hand'],['left'],['chest','breast'],['raise'],['qibla','qiblah']]),
+            '108-Q08':(3,[['hate','hater'],['as ibn','as bin','al-as'],['cut off'],['world'],['hereafter']]),
+            '108-Q09':(3,[['abu jahl'],['uqba'],['kab ibn','kab bin','ka b ibn'],['quraysh'],['cut off']])
+          }
+          for cid,(aya,groups) in claim_markers.items():
+              s=en_byaya[aya]
+              result=[{'alternatives':g,'present':any(term in s for term in g)} for g in groups]
+              print('CLAIM_ENGLISH_MATRIX',cid,json.dumps(result,sort_keys=True))
+          for aya,terms in {1:['abundance','prophethood','intercession'],2:['malik','right hand','qibla'],3:['abu jahl','uqba','quraysh']}.items():
+              s=en_byaya[aya]
+              for term in terms:
+                  p=s.find(term)
+                  if p>=0: print('ENGLISH_CONTEXT',aya,term,s[max(0,p-180):p+620].replace('\\n',' '))
+          print('QURTUBI_108_CLAIM_TRANSLATION_AUDIT_PASS')
