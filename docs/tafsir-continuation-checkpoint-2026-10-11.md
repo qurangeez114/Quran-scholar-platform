@@ -170,3 +170,21 @@ At 2026-10-11 19:38 America/Los_Angeles, bounded read-only [wording audit 381964
 A narrower [final wording audit 38196498967](https://github.com/qurangeez114/Quran-scholar-platform/actions/runs/38196498967) verified J05's inanimate-`mā` correspondence explanation and J08's seven-readers/Yaʿqūb reading report. Authenticated [import run 38196545055](https://github.com/qurangeez114/Quran-scholar-platform/actions/runs/38196545055) saved J05/J08 as propositions `47641–47642`, evidence `577–578`, with the same complete readback checks.
 
 Together with J01/J03, **all eight staged Jalālayn claims are now database-saved and readback verified**. The original staging set now has **47/51** verified claims; the current 52-claim manifest has **48/52**, including al-Saʿdī S05. Remaining original claims are Ibn Kathīr I09–I12. Translation reconciliation, al-Qurṭubī English truncation, and proposition-specific public rendering remain open. Surah 109 remains partial; do not issue D.
+
+
+## October 11 completion of Surah 109 structured extraction import
+
+At 2026-10-11 20:37 America/Los_Angeles, read-only [audit run 38200374303](https://github.com/qurangeez114/Quran-scholar-platform/actions/runs/38200374303) established that the complete Ibn Kathīr chapter commentary is duplicated under all six live Arabic verse rows. The earlier I09 failure resulted from an overly literal anchor, not absent source text. The audit verified all four remaining passages and their named attributions.
+
+Authenticated [import run 38200424558](https://github.com/qurangeez114/Quran-scholar-platform/actions/runs/38200424558) saved and read back:
+
+- I09: proposition `47643`, evidence `579`, al-Bukhārī voice;
+- I10: proposition `47644`, evidence `580`, al-Bukhārī voice;
+- I11: proposition `47645`, evidence `581`, al-Shāfiʿī-and-others voice;
+- I12: proposition `47646`, evidence `582`, Aḥmad-and-followers competing legal voice.
+
+All four attach only to verse-6 entry `48465`; exact duplicates, reporting-work `2` voice links, and evidence links passed postflight readback. No unsupported transmission chain was created.
+
+**Structured extraction/import status:** all original **51/51** staged claims, plus new al-Saʿdī S05 (**52/52 current manifest**), are database-saved and readback verified.
+
+This is not yet **D — Sura 109**. Al-Qurṭubī's stored English truncation, independent review of the six AI-assisted al-Ṭabarī English entries, full Arabic-English chapter comparison, and proposition-specific public rendering remain open.
