@@ -188,3 +188,14 @@ All four attach only to verse-6 entry `48465`; exact duplicates, reporting-work 
 **Structured extraction/import status:** all original **51/51** staged claims, plus new al-Saʿdī S05 (**52/52 current manifest**), are database-saved and readback verified.
 
 This is not yet **D — Sura 109**. Al-Qurṭubī's stored English truncation, independent review of the six AI-assisted al-Ṭabarī English entries, full Arabic-English chapter comparison, and proposition-specific public rendering remain open.
+
+
+## October 11 al-Ṭabarī English bounded alignment audit
+
+At 2026-10-11 21:37 America/Los_Angeles, protected read-only [run 38204501701](https://github.com/qurangeez114/Quran-scholar-platform/actions/runs/38204501701) passed a bounded source-alignment audit of English entries `56199–56204`.
+
+Verified: all AI-assisted/not-independently-reviewed labels; one identical shared block across 109:1–5; correct separation of the verse-6 block; three live Arabic content groups; all 18 selected Arabic anchors; named report paths; major English semantic coverage; and the explicit unresolved-edition warning inside 109:6. No database write occurred.
+
+Full findings: [tafsir-109-tabari-english-audit-2026-10-11.md](https://github.com/qurangeez114/Quran-scholar-platform/blob/main/docs/tafsir-109-tabari-english-audit-2026-10-11.md). This does not convert the entries into an independently human-reviewed edition and does not clear the marked 109:6 source uncertainty.
+
+Surah 109 structured extraction remains fully saved at 52/52 current claims. Al-Qurṭubī's English truncation, the remaining full translation-review boundary, and proposition-specific public rendering still prevent **D — Sura 109**.
