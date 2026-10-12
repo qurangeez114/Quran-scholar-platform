@@ -1,0 +1,59 @@
+name: Repair Qurtubi 109-1 English truncation
+on:
+  push:
+    paths:
+      - '.github/workflows/tafsir-109-qurtubi-english-repair.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Guarded repair and postflight readback
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        shell: python
+        run: |
+          import os,json,urllib.request,urllib.error,hashlib
+          d=json.load(open("data/tafsir/staging/qurtubi-109-1-english-repair-draft-2026-10-12.json",encoding="utf-8"))
+          key=os.environ.get("SUPABASE_SERVICE_KEY","")
+          if not key: raise SystemExit("Missing protected database credential")
+          base="https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/tafsir_entries"
+          headers={"apikey":key,"Authorization":"Bearer "+key,"Content-Type":"application/json"}
+          def get():
+            req=urllib.request.Request(base+"?id=eq.38089&select=id,sura,aya,scholar_key,language,content,source_name,source_url",headers=headers)
+            with urllib.request.urlopen(req,timeout=30) as r: return json.load(r)[0]
+          def patch(payload):
+            req=urllib.request.Request(base+"?id=eq.38089",data=json.dumps(payload,ensure_ascii=False).encode(),headers={**headers,"Prefer":"return=representation"},method="PATCH")
+            with urllib.request.urlopen(req,timeout=30) as r: return json.load(r)
+          old=get()
+          identity=(old["id"],old["sura"],old["aya"],old["scholar_key"],old["language"])
+          if identity!=(38089,109,1,"qurtubi","en"): raise SystemExit("Identity mismatch")
+          oldhash=hashlib.sha256(old["content"].encode()).hexdigest()
+          if oldhash!=d["damaged_english_sha256"]: raise SystemExit("Divergent live content; refusing overwrite")
+          cutoff=d["cutoff_exact"]
+          if not old["content"].endswith(cutoff): raise SystemExit("Audited cutoff absent")
+          prefix=old["content"][:-len(cutoff)].rstrip()
+          new=d["label"]+"\n\n"+prefix+"\n\n"+d["continuation_en"].strip()
+          newname="Tafsir al-Qurtubi — Quran Hikma AI-assisted English repair"
+          rollback={"content":old["content"],"source_name":old["source_name"],"source_url":old["source_url"]}
+          try:
+            wrote=patch({"content":new,"source_name":newname,"source_url":old["source_url"]})
+            if len(wrote)!=1: raise RuntimeError("Unexpected update count")
+            rb=get()
+            if rb["content"]!=new or rb["source_name"]!=newname: raise RuntimeError("Postflight mismatch")
+            if rb["content"].endswith(cutoff): raise RuntimeError("Truncation survived")
+            if not rb["content"].startswith(d["label"]): raise RuntimeError("AI-assisted label absent")
+            print("QURTUBI_109_1_REPAIR_SAVED_VERIFIED",rb["id"])
+            print("OLD_SHA256",oldhash)
+            print("NEW_SHA256",hashlib.sha256(new.encode()).hexdigest())
+            print("NEW_CHARS",len(new))
+            print("PUBLIC_UI_VERIFICATION_PENDING")
+          except Exception:
+            patch(rollback)
+            rr=get()
+            if rr["content"]!=old["content"]: raise RuntimeError("Rollback verification failed")
+            print("ROLLBACK_VERIFIED")
+            raise
