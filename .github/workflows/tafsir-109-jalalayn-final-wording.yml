@@ -1,0 +1,35 @@
+name: Resolve final Jalalayn wording for Surah 109
+on:
+  push:
+    paths:
+      - '.github/workflows/tafsir-109-jalalayn-final-wording.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Bounded contexts for J05 and J08
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        shell: python
+        run: |
+          import json,os,re,urllib.request
+          key=os.environ.get("SUPABASE_SERVICE_KEY","")
+          if not key: raise SystemExit("Missing protected database credential")
+          req=urllib.request.Request("https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/tafsir_entries?id=in.(23678,23679)&select=id,content",
+            headers={"apikey":key,"Authorization":"Bearer "+key})
+          with urllib.request.urlopen(req,timeout=30) as r: rows=json.loads(r.read())
+          by={r["id"]:r["content"] for r in rows}
+          def contexts(eid,label,needles):
+              words=re.findall(r"\S+",by[eid] or ""); low=[re.sub(r"[^a-z0-9]+","",w.casefold()) for w in words]
+              hits=sorted(set(i for i,w in enumerate(low) for n in needles if n in w))
+              print("FINAL_CONTEXT_HITS",label,len(hits))
+              for k,i in enumerate(hits[:4]):
+                  lo=max(0,i-7); hi=min(len(words),i+10)
+                  print("FINAL_CONTEXT",label,k,"WORDS",hi-lo,"TEXT"," ".join(words[lo:hi]))
+          contexts(23678,"J05",["counter","correspond","inanimate"])
+          contexts(23679,"J08",["yaqub","retain","continuation","pause"])
+          print("FINAL_WORDING_READ_ONLY_COMPLETE")
