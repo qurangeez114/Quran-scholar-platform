@@ -1339,6 +1339,136 @@ body { padding-bottom: 80px !important; }
       function openDonateModal(){ document.getElementById('donateModal').style.display='flex'; }
       document.getElementById('donateModal')?.addEventListener('click', function(e){ if(e.target===this) this.style.display='none'; });
     </script>
+
+    <!-- Registration Countdown Modals -->
+    <div id="registrationSoftModal" style="display:none;position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.5);align-items:center;justify-content:center;">
+      <div style="background:#fff;border-radius:16px;padding:32px 28px;max-width:420px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,.3);text-align:center;">
+        <div style="font-size:24px;font-weight:700;color:#1a1a1a;margin-bottom:12px;">Create an Account</div>
+        <div style="font-size:15px;color:#666;margin-bottom:20px;line-height:1.6;">
+          Continue learning with a free account. Keep your bookmarks and progress across devices.
+        </div>
+        <div style="font-size:13px;color:#B8902A;font-weight:600;margin-bottom:20px;" id="registrationCountdownText">Free trial: 3 days remaining</div>
+        <div style="display:flex;gap:12px;margin-bottom:0;">
+          <button onclick="openRegistrationModal()" style="flex:1;padding:12px 16px;background:#B8902A;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">Sign Up Free</button>
+          <button onclick="dismissRegistrationPrompt()" style="flex:1;padding:12px 16px;background:#f0f0f0;color:#666;border:none;border-radius:10px;font-size:14px;cursor:pointer;">Maybe Later</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Hard Modal (Forced Registration) -->
+    <div id="registrationHardModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.7);align-items:center;justify-content:center;">
+      <div style="background:#fff;border-radius:16px;padding:32px 28px;max-width:420px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,.3);text-align:center;">
+        <div style="font-size:24px;font-weight:700;color:#1a1a1a;margin-bottom:12px;">Create Account to Continue</div>
+        <div style="font-size:15px;color:#666;margin-bottom:24px;line-height:1.6;">
+          Your 3-day trial has ended. Sign up now to continue using Quran Hikma.
+        </div>
+        <button onclick="openRegistrationModal()" style="width:100%;padding:14px 16px;background:#B8902A;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:12px;">Create Free Account</button>
+        <div style="font-size:12px;color:#999;">Sign up with username • No email required</div>
+      </div>
+    </div>
+
+    <!-- Actual Registration Page Iframe -->
+    <div id="registrationPageModal" style="display:none;position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.8);align-items:center;justify-content:center;padding:20px;">
+      <div style="background:#fff;border-radius:16px;width:100%;max-width:500px;height:90vh;overflow:auto;position:relative;box-shadow:0 20px 60px rgba(0,0,0,.4);">
+        <button onclick="closeRegistrationModal()" style="position:sticky;top:10px;right:10px;z-index:10001;background:#f0f0f0;border:none;border-radius:50%;width:36px;height:36px;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;margin-left:auto;">✕</button>
+        <div id="registrationPageContent" style="padding:24px 20px;"></div>
+      </div>
+    </div>
+
+    <script>
+    // Registration countdown tracking
+    function getRegistrationState() {
+      const stored = localStorage.getItem('qh_registration_state');
+      if (stored) return JSON.parse(stored);
+      const now = new Date();
+      const state = {
+        firstVisitTime: now.getTime(),
+        dismissalCount: 0,
+        lastDismissal: null,
+        hasSeenHardModal: false
+      };
+      localStorage.setItem('qh_registration_state', JSON.stringify(state));
+      return state;
+    }
+
+    function saveRegistrationState(state) {
+      localStorage.setItem('qh_registration_state', JSON.stringify(state));
+    }
+
+    function dismissRegistrationPrompt() {
+      const state = getRegistrationState();
+      state.dismissalCount += 1;
+      state.lastDismissal = new Date().getTime();
+      saveRegistrationState(state);
+      document.getElementById('registrationSoftModal').style.display = 'none';
+      checkRegistrationStatus();
+    }
+
+    function openRegistrationModal() {
+      document.getElementById('registrationPageModal').style.display = 'flex';
+      // Load registration form content
+      // This would typically be a form or iframe
+      const content = document.getElementById('registrationPageContent');
+      content.innerHTML = '<div style="padding:20px;text-align:center;"><strong>Registration Form</strong><p>Create an account with a username to continue.</p><form onsubmit="submitRegistration(event)" style="text-align:left;"><label style="display:block;margin:16px 0 6px;font-weight:600;">Username</label><input type="text" id="regUsername" placeholder="Choose your username" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;box-sizing:border-box;margin-bottom:16px;"><button type="submit" style="width:100%;padding:12px;background:#B8902A;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer;">Create Account</button></form></div>';
+    }
+
+    function closeRegistrationModal() {
+      document.getElementById('registrationPageModal').style.display = 'none';
+    }
+
+    function submitRegistration(event) {
+      event.preventDefault();
+      const username = document.getElementById('regUsername')?.value;
+      if (username) {
+        const state = getRegistrationState();
+        state.registeredUsername = username;
+        state.registeredAt = new Date().getTime();
+        saveRegistrationState(state);
+        closeRegistrationModal();
+        document.getElementById('registrationSoftModal').style.display = 'none';
+        document.getElementById('registrationHardModal').style.display = 'none';
+        // Could show a success message
+      }
+    }
+
+    function checkRegistrationStatus() {
+      const state = getRegistrationState();
+      if (state.registeredUsername) return; // User already registered
+
+      const now = new Date().getTime();
+      const daysDiff = Math.floor((now - state.firstVisitTime) / (1000 * 60 * 60 * 24));
+      const daysRemaining = Math.max(0, 3 - daysDiff);
+
+      // Update countdown text
+      const countdownText = document.getElementById('registrationCountdownText');
+      if (countdownText) {
+        if (daysRemaining > 0) {
+          countdownText.textContent = `Free trial: ${daysRemaining} day${daysRemaining !== 1 ? 's' : ''} remaining`;
+        } else {
+          countdownText.textContent = 'Free trial expired';
+        }
+      }
+
+      // Show hard modal if trial expired
+      if (daysRemaining === 0 && !state.hasSeenHardModal) {
+        state.hasSeenHardModal = true;
+        saveRegistrationState(state);
+        document.getElementById('registrationHardModal').style.display = 'flex';
+        return;
+      }
+
+      // Show soft modal if dismissals < 5 and not hard modal time
+      if (state.dismissalCount < 5 && daysRemaining > 0) {
+        document.getElementById('registrationSoftModal').style.display = 'flex';
+      }
+    }
+
+    // Check registration status on page load
+    document.addEventListener('DOMContentLoaded', function() {
+      setTimeout(checkRegistrationStatus, 500);
+    });
+    </script>
+
     <div style="background:#F8F6F0;border-bottom:1px solid #E8E4DC;padding:8px 24px;display:flex;gap:8px;align-items:center;flex-shrink:0;">
       <input id="globalSearch" placeholder="🔍 Search any word in all verses..." oninput="onSearchInput(this.value)"
         style="flex:1;padding:7px 12px;border:1px solid #E8C97B;border-radius:20px;font-size:13px;background:#fff;outline:none;color:#1a1a1a;">
@@ -1622,7 +1752,7 @@ async function loadDepthBadge(sura, aya) {
     const [xrefs, hadith, tafsirR, siraMap, lexR] = await Promise.all([
       sbFetch('cross_references',{select:'id',source_surah:`eq.${sura}`,source_ayah:`eq.${aya}`,limit:1}),
       sbFetch('hadith_connections',{select:'id',sura_id:`eq.${sura}`,aya_number:`eq.${aya}`,limit:1}),
-      sbFetch('tafsir',{select:'id',sura_id:`eq.${sura}`,aya_number:`eq.${aya}`,limit:1}),
+      sbFetch('tafsir_entries',{select:'id',sura:`eq.${sura}`,aya:`eq.${aya}`,limit:1}),
       sbFetch('sira_verse_map',{select:'sira_id',sura:`eq.${sura}`,aya:`eq.${aya}`,limit:1}),
       sbFetch('word_analysis',{select:'id',sura_id:`eq.${sura}`,aya_number:`eq.${aya}`,limit:1})
     ]);
@@ -6411,7 +6541,7 @@ async function loadTafsirPanel(sura, aya) {
   if (!panel || !panel.querySelector('.loading')) return;
   const tabBtn = document.getElementById(`tafsir-tab-${aya}`);
   const current = traditionState[tradKey(sura, aya, 'tafsir')] || 'sunni';
-  const lang = tafsirLangState[`${sura}:${aya}`] || 'both';
+  let defaultLang = tafsirLangState[`${sura}:${aya}`] || 'both';
   let allRows = [];
   try {
     allRows = await sbFetch('tafsir_entries', {
@@ -6420,6 +6550,16 @@ async function loadTafsirPanel(sura, aya) {
       aya: `eq.${aya}`
     });
   } catch {}
+  // Detect available languages AFTER fetching
+  const availableLangs = new Set(allRows.map(r => r.language));
+  // If 'both' is requested but not all core languages available, pick the first available
+  if (defaultLang === 'both' && (!availableLangs.has('ar') || !availableLangs.has('en'))) {
+    if (availableLangs.has('en')) defaultLang = 'en';
+    else if (availableLangs.has('ar')) defaultLang = 'ar';
+    else if (availableLangs.has('ti')) defaultLang = 'ti';
+    else defaultLang = Array.from(availableLangs)[0];
+  }
+  const lang = defaultLang;
   if (tabBtn) tabBtn.textContent = allRows.length > 0 ? `Tafsir (${allRows.length})` : 'Tafsir';
   // Non-blocking: check for comparison-engine data in parallel with the
   // normal render below. Most verses have none; this never delays the
@@ -6431,13 +6571,16 @@ async function loadTafsirPanel(sura, aya) {
   });
 
   function buildTafsirContent(lang) {
-    // Group by scholar_key — pair Arabic + English for same scholar
+    // Group by scholar_key — support multiple languages
     const scholars = {};
+    const langCodes = new Set();
     allRows.forEach(r => {
       const key = r.scholar_key || r.scholar_name;
-      if (!scholars[key]) scholars[key] = { name: r.source_name || r.scholar_name, tradition: r.tradition, ar: null, en: null };
+      if (!scholars[key]) scholars[key] = { name: r.source_name || r.scholar_name, tradition: r.tradition, ar: null, en: null, ti: null };
       if (r.language === 'ar') scholars[key].ar = r.content;
-      else scholars[key].en = r.content;
+      else if (r.language === 'en') scholars[key].en = r.content;
+      else if (r.language === 'ti') scholars[key].ti = r.content;
+      langCodes.add(r.language);
     });
 
     if (Object.keys(scholars).length === 0) {
@@ -6446,12 +6589,14 @@ async function loadTafsirPanel(sura, aya) {
 
     const hasAr = allRows.some(r => r.language === 'ar');
     const hasEn = allRows.some(r => r.language === 'en');
+    const hasTi = allRows.some(r => r.language === 'ti');
 
     // Lang toggle bar
     let toggleBar = `<div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;">`;
     if (hasEn) toggleBar += `<button onclick="setTafsirLang(${sura},${aya},'en')" style="padding:5px 14px;border-radius:20px;border:2px solid ${lang==='en'?'#B8902A':'#D4C9A8'};background:${lang==='en'?'#B8902A':'#fff'};color:${lang==='en'?'#fff':'#666'};font-size:12px;font-weight:700;cursor:pointer;">English</button>`;
     if (hasAr) toggleBar += `<button onclick="setTafsirLang(${sura},${aya},'ar')" style="padding:5px 14px;border-radius:20px;border:2px solid ${lang==='ar'?'#B8902A':'#D4C9A8'};background:${lang==='ar'?'#B8902A':'#fff'};color:${lang==='ar'?'#fff':'#666'};font-size:12px;font-weight:700;cursor:pointer;">عربي</button>`;
-    if (hasAr && hasEn) toggleBar += `<button onclick="setTafsirLang(${sura},${aya},'both')" style="padding:5px 14px;border-radius:20px;border:2px solid ${lang==='both'?'#B8902A':'#D4C9A8'};background:${lang==='both'?'#B8902A':'#fff'};color:${lang==='both'?'#fff':'#666'};font-size:12px;font-weight:700;cursor:pointer;">Both</button>`;
+    if (hasTi) toggleBar += `<button onclick="setTafsirLang(${sura},${aya},'ti')" style="padding:5px 14px;border-radius:20px;border:2px solid ${lang==='ti'?'#B8902A':'#D4C9A8'};background:${lang==='ti'?'#B8902A':'#fff'};color:${lang==='ti'?'#fff':'#666'};font-size:12px;font-weight:700;cursor:pointer;">ትግርኛ</button>`;
+    if ((hasAr && hasEn) || (hasTi && (hasAr || hasEn))) toggleBar += `<button onclick="setTafsirLang(${sura},${aya},'both')" style="padding:5px 14px;border-radius:20px;border:2px solid ${lang==='both'?'#B8902A':'#D4C9A8'};background:${lang==='both'?'#B8902A':'#fff'};color:${lang==='both'?'#fff':'#666'};font-size:12px;font-weight:700;cursor:pointer;">Both</button>`;
     if (hasAr && hasEn) {
       toggleBar += `<button onclick="analyzeTafsirAccuracy(${sura},${aya})" style="padding:5px 14px;border-radius:20px;border:2px solid #2E7D32;background:#E8F5E9;color:#2E7D32;font-size:12px;font-weight:700;cursor:pointer;">🔍 Accuracy</button>`;
       // Option B: auto-loading compact fidelity badge (score shown without a click; full breakdown still opens via the button above)
@@ -6469,7 +6614,7 @@ async function loadTafsirPanel(sura, aya) {
     Object.entries(scholars).forEach(([key, s]) => {
       if (current !== 'all' && !traditionMatchesTab(s.tradition, current)) return;
       const idx = speakStore.length;
-      speakStore.push({ ar: s.ar || '', en: s.en || '' });
+      speakStore.push({ ar: s.ar || '', en: s.en || '', ti: s.ti || '' });
       html += `<div class="scholar-entry">`;
       html += `<div class="scholar-name" style="display:flex;align-items:center;justify-content:space-between;gap:8px;"><span>${escapeHtml(s.name || key)}</span><button onclick="speakTafsirEntry('${sura}:${aya}',${idx})" title="Listen" style="flex-shrink:0;border:1px solid #D4C9A8;background:#FAF6EA;border-radius:50%;width:28px;height:28px;font-size:13px;cursor:pointer;">🔊</button></div>`;
       html += '<div class="tafsir-language-pair' + (lang === 'both' ? ' bilingual' : '') + '">';
@@ -11383,6 +11528,7 @@ document.addEventListener('keydown', function(e) {
   <button class="bnav-btn" onclick="location.href='narrations.html'"><span class="bni">🧵</span><span>Narrations</span></button>
 
   <button class="bnav-btn" onclick="location.href='marketplace.html'"><span class="bni">🛒</span><span>Market</span></button>
+  <button class="bnav-btn" onclick="location.href='courses.html'"><span class="bni">🎓</span><span>Courses</span></button>
 
   <button class="bnav-btn" onclick="location.href='muhammad.html'"><span class="bni">☪️</span><span>Muhammad</span></button>
   <button class="bnav-btn" onclick="location.href='contradiction.html'"><span class="bni">⚡</span><span>Tensions</span></button>

@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Course Seeder - Create Sample Courses</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f5f5f5;
+      color: #333;
+      padding: 20px;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 2rem;
+      border-radius: 12px;
+      margin-bottom: 2rem;
+    }
+    .header h1 { font-size: 1.8rem; margin-bottom: 0.5rem; }
+    .header p { font-size: 0.95rem; opacity: 0.9; }
+
+    .section {
+      background: white;
+      border-radius: 12px;
+      padding: 2rem;
+      margin-bottom: 2rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    .section h2 {
+      font-size: 1.3rem;
+      margin-bottom: 1.5rem;
+      border-bottom: 2px solid #667eea;
+      padding-bottom: 0.5rem;
+    }
+
+    .btn {
+      padding: 0.75rem 1.5rem;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.3s;
+      font-size: 1rem;
+    }
+
+    .btn-primary { background: #667eea; color: white; }
+    .btn-primary:hover { background: #5568d3; }
+
+    .btn-success { background: #4CAF50; color: white; margin-right: 10px; }
+    .btn-success:hover { background: #45a049; }
+
+    .status {
+      padding: 1rem;
+      border-radius: 6px;
+      margin: 1rem 0;
+    }
+
+    .status.success {
+      background: #e8f5e9;
+      color: #2e7d32;
+      border-left: 4px solid #4CAF50;
+    }
+
+    .status.error {
+      background: #ffebee;
+      color: #c62828;
+      border-left: 4px solid #f44336;
+    }
+
+    .status.info {
+      background: #e3f2fd;
+      color: #1565c0;
+      border-left: 4px solid #2196f3;
+    }
+
+    .course-list {
+      margin-top: 1.5rem;
+    }
+
+    .course-item {
+      background: #f9f9f9;
+      padding: 1rem;
+      border-radius: 6px;
+      margin-bottom: 1rem;
+      border-left: 4px solid #667eea;
+    }
+
+    .course-item h3 { color: #333; margin-bottom: 0.5rem; }
+    .course-item p { color: #666; font-size: 0.9rem; margin-bottom: 0.3rem; }
+
+    .loading { display: inline-block; margin-left: 10px; }
+    .spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid #667eea;
+      border-top: 2px solid transparent;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🌱 Course Seeder</h1>
+      <p>Create sample courses with lessons, quizzes, and assignments</p>
+    </div>
+
+    <div class="section">
+      <h2>Create Sample Courses</h2>
+      <p style="margin-bottom: 1.5rem; color: #666;">Click the button below to create a complete sample course with lessons, quiz, and assignment.</p>
+
+      <button class="btn btn-success" onclick="createSampleCourse()">
+        ✨ Create Sample Course: "Islamic Civilization Essentials"
+      </button>
+      <span id="loading" class="loading" style="display: none;"><div class="spinner"></div></span>
+
+      <div id="status"></div>
+      <div id="courseList" class="course-list"></div>
+    </div>
+
+    <div class="section">
+      <h2>How It Works</h2>
+      <p style="margin-bottom: 1rem; color: #666;">
+        This seeder creates a complete sample course including:
+      </p>
+      <ul style="margin-left: 2rem; color: #666;">
+        <li><strong>Lesson 1: Introduction</strong> - Text-based lesson with course overview</li>
+        <li><strong>Lesson 2: Quiz</strong> - Auto-graded quiz with 3 questions</li>
+        <li><strong>Lesson 3: Assignment</strong> - Assignment for students to submit</li>
+      </ul>
+      <p style="margin-top: 1.5rem; color: #666;">
+        The course will be created in draft mode. You can edit it in the <a href="/admin/courses.html" style="color: #667eea;">Course Management page</a> to customize content and publish it.
+      </p>
+    </div>
+  </div>
+
+  <script type="module">
+    import { supabase } from './accounts/client.js';
+    import { createCourse, createLesson } from './courses-api.js';
+
+    window.createSampleCourse = async function() {
+      const btn = event.target;
+      const loading = document.getElementById('loading');
+      const status = document.getElementById('status');
+
+      btn.disabled = true;
+      loading.style.display = 'inline-block';
+      status.innerHTML = '';
+
+      try {
+        // Check authentication
+        const { data: authData } = await supabase.auth.getSession();
+        if (!authData.session?.user) {
+          throw new Error('You must be logged in to create courses');
+        }
+
+        showStatus('Creating course...', 'info');
+
+        // Create course
+        const course = await createCourse(
+          'Islamic Civilization Essentials',
+          'A foundational course exploring the key periods, figures, and concepts in Islamic history and civilization.'
+        );
+
+        showStatus(`✓ Course created: ${course.title}`, 'success');
+
+        // Create lessons
+        showStatus('Creating lessons...', 'info');
+
+        // Lesson 1: Introduction
+        const lesson1 = await createLesson(course.id, 'Introduction to Islamic Civilization', 1);
+        await updateLessonContent(lesson1.id, 'text', {
+          content: '<h2>Welcome to Islamic Civilization Essentials</h2><p>This course provides a comprehensive introduction to Islamic civilization, covering its historical development, cultural achievements, and significant contributions to world knowledge.</p><h3>What You\'ll Learn:</h3><ul><li>The rise and expansion of Islamic civilization</li><li>Major dynasties and their contributions</li><li>Scientific and cultural achievements</li><li>Islamic legal and philosophical traditions</li></ul>'
+        });
+
+        showStatus('✓ Lesson 1 created: Introduction', 'success');
+
+        // Lesson 2: Quiz
+        const lesson2 = await createLesson(course.id, 'Knowledge Check Quiz', 2);
+        const quizQuestions = [
+          {
+            question: 'In what year was the Islamic civilization founded?',
+            options: ['610 CE', '622 CE', '632 CE', '650 CE'],
+            correct_answer: 1
+          },
+          {
+            question: 'Which of the following is NOT a pillar of Islam?',
+            options: ['Shahada', 'Salah', 'Zakat', 'Ijtihad'],
+            correct_answer: 3
+          },
+          {
+            question: 'The House of Wisdom was located in which city?',
+            options: ['Cairo', 'Damascus', 'Baghdad', 'Cordoba'],
+            correct_answer: 2
+          }
+        ];
+
+        await createQuizForLesson(lesson2.id, course.id, quizQuestions);
+        showStatus('✓ Lesson 2 created: Quiz with 3 questions', 'success');
+
+        // Lesson 3: Assignment
+        const lesson3 = await createLesson(course.id, 'Reflection Essay Assignment', 3);
+        await createAssignmentForLesson(lesson3.id, course.id);
+        showStatus('✓ Lesson 3 created: Assignment', 'success');
+
+        // Show completion message
+        showStatus(`✅ Sample course created successfully! Course ID: ${course.id}`, 'success');
+
+        // Load and display courses
+        await loadCourses();
+
+      } catch (error) {
+        console.error('Error:', error);
+        showStatus(`❌ Error: ${error.message}`, 'error');
+      } finally {
+        btn.disabled = false;
+        loading.style.display = 'none';
+      }
+    };
+
+    function showStatus(message, type = 'info') {
+      const status = document.getElementById('status');
+      const div = document.createElement('div');
+      div.className = `status ${type}`;
+      div.textContent = message;
+      status.appendChild(div);
+
+      // Auto-scroll
+      setTimeout(() => {
+        div.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }, 100);
+    }
+
+    async function updateLessonContent(lessonId, type, data) {
+      const { error } = await supabase
+        .from('qh_lessons')
+        .update({
+          lesson_type: type,
+          lesson_content: data.content
+        })
+        .eq('id', lessonId);
+
+      if (error) throw error;
+    }
+
+    async function createQuizForLesson(lessonId, courseId, questions) {
+      // Create quiz
+      const { data: quiz, error: quizError } = await supabase
+        .from('qh_quizzes')
+        .insert({
+          lesson_id: lessonId,
+          course_id: courseId,
+          title: 'Lesson Quiz',
+          questions: questions,
+          passing_score: 70
+        })
+        .select()
+        .single();
+
+      if (quizError) throw quizError;
+
+      // Update lesson type
+      await supabase
+        .from('qh_lessons')
+        .update({ lesson_type: 'quiz' })
+        .eq('id', lessonId);
+
+      return quiz;
+    }
+
+    async function createAssignmentForLesson(lessonId, courseId) {
+      // Create assignment
+      const { data: assignment, error: assignError } = await supabase
+        .from('qh_assignments')
+        .insert({
+          lesson_id: lessonId,
+          course_id: courseId,
+          title: 'Reflection Essay',
+          instructions: 'Write a 300-500 word reflection on one key figure or achievement in Islamic civilization that interests you. Consider: Why is this significant? How does it relate to modern knowledge? Submit your essay for grading.',
+          due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+        })
+        .select()
+        .single();
+
+      if (assignError) throw assignError;
+
+      // Update lesson type
+      await supabase
+        .from('qh_lessons')
+        .update({ lesson_type: 'assignment' })
+        .eq('id', lessonId);
+
+      return assignment;
+    }
+
+    async function loadCourses() {
+      try {
+        const { data: authData } = await supabase.auth.getSession();
+        if (!authData.session?.user) return;
+
+        const { data: courses, error } = await supabase
+          .from('qh_courses')
+          .select('*')
+          .eq('created_by', authData.session.user.id)
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        const courseList = document.getElementById('courseList');
+        if (courses && courses.length > 0) {
+          courseList.innerHTML = '<h3 style="margin-bottom: 1rem; color: #333;">Your Courses:</h3>' +
+            courses.map(course => `
+              <div class="course-item">
+                <h3>${course.title}</h3>
+                <p><strong>Status:</strong> ${course.is_published ? '✓ Published' : 'Draft'}</p>
+                <p><strong>Created:</strong> ${new Date(course.created_at).toLocaleDateString()}</p>
+                <p><strong>ID:</strong> <code style="background: #f0f0f0; padding: 2px 6px; border-radius: 3px;">${course.id}</code></p>
+                <a href="/admin/courses.html" style="color: #667eea; text-decoration: none; margin-top: 0.5rem; display: inline-block;">→ Manage this course</a>
+              </div>
+            `).join('');
+        }
+      } catch (error) {
+        console.error('Error loading courses:', error);
+      }
+    }
+
+    // Load courses on page load
+    loadCourses();
+  </script>
+</body>
+</html>

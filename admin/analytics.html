@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Analytics Dashboard - QuranHikma Admin</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f5f5f5;
+      color: #333;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 1.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .header h1 { font-size: 1.8rem; }
+    .header-nav { display: flex; gap: 1rem; }
+    .header-nav a {
+      color: white;
+      text-decoration: none;
+      padding: 0.5rem 1rem;
+      background: rgba(255,255,255,0.2);
+      border-radius: 6px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+
+    .breadcrumb {
+      background: white;
+      padding: 1rem;
+      border-radius: 6px;
+      margin-bottom: 2rem;
+      font-size: 0.9rem;
+    }
+
+    .breadcrumb a { color: #667eea; cursor: pointer; }
+    .breadcrumb a:hover { text-decoration: underline; }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .stat-card {
+      background: white;
+      padding: 2rem;
+      border-radius: 12px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .stat-label {
+      font-size: 0.9rem;
+      color: #999;
+      margin-bottom: 0.5rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .stat-number {
+      font-size: 2rem;
+      font-weight: 600;
+      color: #667eea;
+      margin-bottom: 0.5rem;
+    }
+
+    .stat-sub {
+      font-size: 0.85rem;
+      color: #666;
+    }
+
+    .courses-section {
+      background: white;
+      border-radius: 12px;
+      padding: 2rem;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .courses-section h2 {
+      font-size: 1.3rem;
+      margin-bottom: 1.5rem;
+      color: #333;
+      border-bottom: 2px solid #667eea;
+      padding-bottom: 0.5rem;
+    }
+
+    .course-item {
+      border: 1px solid #eee;
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+      transition: all 0.3s;
+    }
+
+    .course-item:hover {
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+
+    .course-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 0.5rem;
+    }
+
+    .course-status {
+      display: inline-block;
+      padding: 0.3rem 0.8rem;
+      border-radius: 12px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+    }
+
+    .course-status.published {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+
+    .course-status.draft {
+      background: #f3e5f5;
+      color: #6a1b9a;
+    }
+
+    .course-metrics {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 1rem;
+      margin: 1rem 0;
+    }
+
+    .metric {
+      background: #f9f9f9;
+      padding: 1rem;
+      border-radius: 6px;
+      text-align: center;
+    }
+
+    .metric-number {
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: #667eea;
+      margin-bottom: 0.25rem;
+    }
+
+    .metric-label {
+      font-size: 0.85rem;
+      color: #999;
+    }
+
+    .progress-bar {
+      width: 100%;
+      height: 8px;
+      background: #eee;
+      border-radius: 4px;
+      overflow: hidden;
+      margin: 0.5rem 0;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #667eea, #764ba2);
+      width: 0%;
+      transition: width 0.3s;
+    }
+
+    .course-actions {
+      display: flex;
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+
+    .btn {
+      padding: 0.5rem 1rem;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.9rem;
+      transition: background 0.3s;
+      text-decoration: none;
+      display: inline-block;
+    }
+
+    .btn-primary {
+      background: #667eea;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #5568d3;
+    }
+
+    .btn-secondary {
+      background: #ddd;
+      color: #333;
+    }
+
+    .btn-secondary:hover {
+      background: #ccc;
+    }
+
+    .loader { text-align: center; padding: 2rem; color: #999; }
+
+    .empty-state {
+      text-align: center;
+      color: #999;
+      padding: 2rem;
+    }
+
+    .alert {
+      padding: 1rem;
+      border-radius: 6px;
+      margin-bottom: 1.5rem;
+    }
+
+    .alert.error {
+      background: #ffebee;
+      color: #c62828;
+      border-left: 4px solid #c62828;
+    }
+
+    .alert.success {
+      background: #e8f5e9;
+      color: #2e7d32;
+      border-left: 4px solid #2e7d32;
+    }
+
+    .alert.info {
+      background: #e3f2fd;
+      color: #1565c0;
+      border-left: 4px solid #1565c0;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>📊 Analytics Dashboard</h1>
+    <div class="header-nav">
+      <a href="courses.html">← Back to Courses</a>
+      <a href="/account.html">My Account</a>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="breadcrumb">
+      <a href="courses.html">📚 My Courses</a> > <span>Analytics</span>
+    </div>
+
+    <div id="alertContainer"></div>
+
+    <!-- Overall Stats -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Total Courses</div>
+        <div class="stat-number" id="totalCoursesCount">0</div>
+        <div class="stat-sub" id="publishedCount">0 published</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Total Enrollments</div>
+        <div class="stat-number" id="totalEnrollments">0</div>
+        <div class="stat-sub" id="completionStatsText">0 completed</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Overall Completion Rate</div>
+        <div class="stat-number" id="overallCompletion">0%</div>
+        <div class="stat-sub">Average across all courses</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Average Quiz Score</div>
+        <div class="stat-number" id="avgQuizScore">—</div>
+        <div class="stat-sub">Across all quizzes</div>
+      </div>
+    </div>
+
+    <!-- Course Details -->
+    <div class="courses-section">
+      <h2>📚 Course Performance</h2>
+      <div id="coursesList">
+        <div class="loader">Loading course analytics...</div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { supabase } from '../accounts/client.js';
+    import { getInstructorDashboard } from '../courses-api.js';
+
+    let currentUser = null;
+    let dashboardData = [];
+
+    async function checkAuth() {
+      const { data } = await supabase.auth.getSession();
+      currentUser = data.session?.user;
+
+      if (!currentUser) {
+        window.location.href = '/account.html';
+      }
+    }
+
+    async function loadAnalytics() {
+      try {
+        dashboardData = await getInstructorDashboard();
+        renderAnalytics();
+        calculateOverallStats();
+      } catch (error) {
+        console.error('Error loading analytics:', error);
+        showAlert('Failed to load analytics', 'error');
+      }
+    }
+
+    function calculateOverallStats() {
+      const totalCourses = dashboardData.length;
+      const publishedCourses = dashboardData.filter(c => c.is_published).length;
+
+      let totalEnrollments = 0;
+      let totalCompleted = 0;
+      let totalAvgScore = 0;
+      let courseCount = 0;
+
+      dashboardData.forEach(course => {
+        if (course.analytics) {
+          totalEnrollments += course.analytics.totalEnrollments || 0;
+          totalCompleted += course.analytics.completedEnrollments || 0;
+          if (course.analytics.averageScore) {
+            totalAvgScore += course.analytics.averageScore;
+            courseCount++;
+          }
+        }
+      });
+
+      const overallCompletion = totalEnrollments > 0
+        ? Math.round((totalCompleted / totalEnrollments) * 100)
+        : 0;
+      const overallAvgScore = courseCount > 0
+        ? Math.round(totalAvgScore / courseCount)
+        : null;
+
+      document.getElementById('totalCoursesCount').textContent = totalCourses;
+      document.getElementById('publishedCount').textContent = `${publishedCourses} published`;
+      document.getElementById('totalEnrollments').textContent = totalEnrollments;
+      document.getElementById('completionStatsText').textContent = `${totalCompleted} completed`;
+      document.getElementById('overallCompletion').textContent = overallCompletion + '%';
+      document.getElementById('avgQuizScore').textContent = overallAvgScore ? overallAvgScore + '%' : '—';
+    }
+
+    function renderAnalytics() {
+      const container = document.getElementById('coursesList');
+
+      if (dashboardData.length === 0) {
+        container.innerHTML = '<div class="empty-state">No courses yet. Create your first course to see analytics.</div>';
+        return;
+      }
+
+      container.innerHTML = dashboardData.map(course => {
+        const analytics = course.analytics;
+        const completionRate = analytics.totalEnrollments > 0
+          ? analytics.completionRate
+          : 0;
+
+        return `
+          <div class="course-item">
+            <div style="display: flex; justify-content: space-between; align-items: start;">
+              <div style="flex: 1;">
+                <div class="course-title">${course.title}</div>
+                <span class="course-status ${course.is_published ? 'published' : 'draft'}">
+                  ${course.is_published ? '✓ Published' : '⚠️ Draft'}
+                </span>
+              </div>
+              <div style="text-align: right; color: #999; font-size: 0.85rem;">
+                Created: ${new Date(course.created_at).toLocaleDateString()}
+              </div>
+            </div>
+
+            <div class="course-metrics">
+              <div class="metric">
+                <div class="metric-number">${analytics.totalEnrollments}</div>
+                <div class="metric-label">Students Enrolled</div>
+              </div>
+              <div class="metric">
+                <div class="metric-number">${analytics.completedEnrollments}</div>
+                <div class="metric-label">Completed</div>
+              </div>
+              <div class="metric">
+                <div class="metric-number">${completionRate}%</div>
+                <div class="metric-label">Completion Rate</div>
+              </div>
+              <div class="metric">
+                <div class="metric-number">${analytics.averageScore ? analytics.averageScore + '%' : '—'}</div>
+                <div class="metric-label">Avg Quiz Score</div>
+              </div>
+              <div class="metric">
+                <div class="metric-number">${analytics.averageProgressPct}%</div>
+                <div class="metric-label">Avg Progress</div>
+              </div>
+            </div>
+
+            <div style="margin: 1rem 0;">
+              <div style="font-size: 0.85rem; color: #999; margin-bottom: 0.5rem;">Completion Rate</div>
+              <div class="progress-bar">
+                <div class="progress-fill" style="width: ${completionRate}%"></div>
+              </div>
+            </div>
+
+            <div class="course-actions">
+              <a href="lesson-manager.html?course=${course.id}" class="btn btn-primary">Edit Lessons</a>
+              <a href="/course.html?course=${course.id}" class="btn btn-secondary">View Course</a>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function showAlert(message, type) {
+      const container = document.getElementById('alertContainer');
+      const alert = document.createElement('div');
+      alert.className = `alert ${type}`;
+      alert.textContent = message;
+      container.appendChild(alert);
+
+      setTimeout(() => alert.remove(), 5000);
+    }
+
+    // Initialize
+    await checkAuth();
+    await loadAnalytics();
+  </script>
+</body>
+</html>

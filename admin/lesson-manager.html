@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson Manager - QuranHikma Admin</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f5f5f5;
+      color: #333;
+    }
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 1.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .header h1 { font-size: 1.8rem; }
+    .header-nav { display: flex; gap: 1rem; }
+    .header-nav a {
+      color: white;
+      text-decoration: none;
+      padding: 0.5rem 1rem;
+      background: rgba(255,255,255,0.2);
+      border-radius: 6px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+
+    .breadcrumb {
+      background: white;
+      padding: 1rem;
+      border-radius: 6px;
+      margin-bottom: 2rem;
+      font-size: 0.9rem;
+    }
+    .breadcrumb a { color: #667eea; cursor: pointer; }
+    .breadcrumb a:hover { text-decoration: underline; }
+
+    .two-column {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 2rem;
+    }
+
+    .section {
+      background: white;
+      border-radius: 12px;
+      padding: 2rem;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .section h2 {
+      font-size: 1.3rem;
+      margin-bottom: 1.5rem;
+      color: #333;
+      border-bottom: 2px solid #667eea;
+      padding-bottom: 0.5rem;
+    }
+
+    .form-group {
+      margin-bottom: 1.5rem;
+    }
+    .form-group label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      color: #555;
+    }
+    .form-group input,
+    .form-group textarea,
+    .form-group select {
+      width: 100%;
+      padding: 0.75rem;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-family: inherit;
+      font-size: 1rem;
+    }
+    .form-group textarea { min-height: 120px; }
+    .form-group input:focus,
+    .form-group textarea:focus,
+    .form-group select:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .btn {
+      padding: 0.75rem 1.5rem;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: background 0.3s;
+    }
+    .btn-primary { background: #667eea; color: white; }
+    .btn-primary:hover { background: #5568d3; }
+    .btn-danger { background: #f44336; color: white; }
+    .btn-danger:hover { background: #da190b; }
+    .btn-small { padding: 0.5rem 1rem; font-size: 0.9rem; }
+
+    .lessons-list {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .lesson-item {
+      background: #f9f9f9;
+      border-left: 4px solid #667eea;
+      padding: 1rem;
+      border-radius: 6px;
+      transition: background 0.3s;
+      cursor: pointer;
+    }
+    .lesson-item:hover { background: #f0f0f0; }
+    .lesson-item.active {
+      background: #e8eaf6;
+      border-left-color: #667eea;
+    }
+
+    .lesson-item-title {
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 0.25rem;
+    }
+
+    .lesson-item-meta {
+      font-size: 0.85rem;
+      color: #999;
+    }
+
+    .lesson-item-actions {
+      margin-top: 0.5rem;
+      display: flex;
+      gap: 0.5rem;
+    }
+    .lesson-item-actions button {
+      padding: 0.4rem 0.8rem;
+      font-size: 0.8rem;
+      margin: 0;
+    }
+
+    .alert {
+      padding: 1rem;
+      border-radius: 6px;
+      margin-bottom: 1.5rem;
+    }
+    .alert.error { background: #ffebee; color: #c62828; border-left: 4px solid #c62828; }
+    .alert.success { background: #e8f5e9; color: #2e7d32; border-left: 4px solid #2e7d32; }
+
+    .loader { text-align: center; color: #999; padding: 2rem; }
+
+    .empty-state {
+      text-align: center;
+      color: #999;
+      padding: 2rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>📖 Lesson Manager</h1>
+    <div class="header-nav">
+      <a href="courses.html">Back to Courses</a>
+      <a href="/account.html">My Account</a>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="breadcrumb">
+      <a href="courses.html">📚 My Courses</a> > <span id="courseBreadcrumb">Loading...</span>
+    </div>
+
+    <div id="alertContainer"></div>
+
+    <div class="two-column">
+      <!-- Add/Edit Lesson Form -->
+      <div class="section">
+        <h2 id="formTitle">📝 Create New Lesson</h2>
+        <form id="lessonForm">
+          <div class="form-group">
+            <label>Lesson Title</label>
+            <input type="text" id="lessonTitle" placeholder="e.g., Introduction to Islam" required>
+          </div>
+
+          <div class="form-group">
+            <label>Lesson Type</label>
+            <select id="lessonType" required>
+              <option value="text">Text Content</option>
+              <option value="video">Video Lesson</option>
+              <option value="quiz">Quiz</option>
+              <option value="assignment">Assignment</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>Content / Video URL</label>
+            <textarea id="lessonContent" placeholder="Enter lesson content or paste video URL..."></textarea>
+          </div>
+
+          <div style="display: flex; gap: 1rem;">
+            <button type="submit" class="btn btn-primary" style="flex: 1;">Save Lesson</button>
+            <button type="button" class="btn" style="flex: 1; background: #ddd; color: #333;" id="cancelBtn">Cancel</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Lessons List -->
+      <div class="section">
+        <h2>📚 Lessons (<span id="lessonCount">0</span>)</h2>
+        <div class="lessons-list" id="lessonsList">
+          <div class="loader">Loading lessons...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { supabase } from '../accounts/client.js';
+    import { getCourseById, getLessonsByCourse, createLesson, updateLesson, deleteLesson } from '../courses-api.js';
+
+    let currentUser = null;
+    let currentCourse = null;
+    let lessons = [];
+    let selectedLessonId = null;
+
+    async function checkAuth() {
+      const { data } = await supabase.auth.getSession();
+      currentUser = data.session?.user;
+
+      if (!currentUser) {
+        window.location.href = '/account.html';
+      }
+    }
+
+    function getCourseIdFromUrl() {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('course');
+    }
+
+    async function loadCourse() {
+      const courseId = getCourseIdFromUrl();
+      if (!courseId) {
+        showAlert('No course selected', 'error');
+        window.location.href = 'courses.html';
+        return;
+      }
+
+      try {
+        currentCourse = await getCourseById(courseId);
+
+        if (currentCourse.created_by !== currentUser.id) {
+          showAlert('You do not have permission to edit this course', 'error');
+          window.location.href = 'courses.html';
+          return;
+        }
+
+        document.getElementById('courseBreadcrumb').textContent = currentCourse.title;
+        await loadLessons();
+      } catch (error) {
+        console.error('Error loading course:', error);
+        showAlert('Failed to load course', 'error');
+      }
+    }
+
+    async function loadLessons() {
+      try {
+        lessons = await getLessonsByCourse(currentCourse.id);
+        renderLessons();
+      } catch (error) {
+        console.error('Error loading lessons:', error);
+        showAlert('Failed to load lessons', 'error');
+      }
+    }
+
+    function renderLessons() {
+      const container = document.getElementById('lessonsList');
+      document.getElementById('lessonCount').textContent = lessons.length;
+
+      if (lessons.length === 0) {
+        container.innerHTML = '<div class="empty-state">No lessons yet. Create your first lesson above!</div>';
+        return;
+      }
+
+      container.innerHTML = lessons.map(lesson => `
+        <div class="lesson-item ${selectedLessonId === lesson.id ? 'active' : ''}" onclick="selectLesson('${lesson.id}')">
+          <div class="lesson-item-title">${lesson.lesson_order}. ${lesson.title}</div>
+          <div class="lesson-item-meta">Type: ${lesson.lesson_type}</div>
+          <div class="lesson-item-actions">
+            <button class="btn btn-small" onclick="editLesson('${lesson.id}', event)">Edit</button>
+            <button class="btn btn-small btn-danger" onclick="deleteConfirm('${lesson.id}', event)">Delete</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    window.selectLesson = function(lessonId) {
+      selectedLessonId = lessonId;
+      renderLessons();
+    };
+
+    window.editLesson = async function(lessonId, e) {
+      if (e) e.stopPropagation();
+
+      const lesson = lessons.find(l => l.id === lessonId);
+      if (!lesson) return;
+
+      document.getElementById('formTitle').textContent = '✏️ Edit Lesson';
+      document.getElementById('lessonTitle').value = lesson.title;
+      document.getElementById('lessonType').value = lesson.lesson_type;
+      document.getElementById('lessonContent').value = lesson.content || lesson.video_url || '';
+      document.getElementById('lessonForm').dataset.editId = lessonId;
+      document.getElementById('cancelBtn').style.display = 'block';
+
+      selectedLessonId = lessonId;
+      renderLessons();
+    };
+
+    document.getElementById('cancelBtn').addEventListener('click', () => {
+      document.getElementById('lessonForm').reset();
+      document.getElementById('formTitle').textContent = '📝 Create New Lesson';
+      document.getElementById('lessonForm').dataset.editId = '';
+      selectedLessonId = null;
+      renderLessons();
+    });
+
+    document.getElementById('lessonForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const title = document.getElementById('lessonTitle').value;
+      const type = document.getElementById('lessonType').value;
+      const content = document.getElementById('lessonContent').value;
+      const editId = document.getElementById('lessonForm').dataset.editId;
+
+      try {
+        if (editId) {
+          await updateLesson(editId, {
+            title,
+            lesson_type: type,
+            content: type === 'text' ? content : null,
+            video_url: type === 'video' ? content : null
+          });
+          showAlert('Lesson updated!', 'success');
+        } else {
+          const nextOrder = lessons.length + 1;
+          await createLesson(currentCourse.id, title, nextOrder);
+          showAlert('Lesson created!', 'success');
+        }
+
+        document.getElementById('lessonForm').reset();
+        document.getElementById('formTitle').textContent = '📝 Create New Lesson';
+        document.getElementById('lessonForm').dataset.editId = '';
+        selectedLessonId = null;
+
+        await loadLessons();
+      } catch (error) {
+        console.error('Error saving lesson:', error);
+        showAlert('Failed to save lesson', 'error');
+      }
+    });
+
+    window.deleteConfirm = async function(lessonId, e) {
+      if (e) e.stopPropagation();
+
+      if (!confirm('Delete this lesson? This cannot be undone.')) return;
+
+      try {
+        await deleteLesson(lessonId);
+        showAlert('Lesson deleted!', 'success');
+        await loadLessons();
+      } catch (error) {
+        console.error('Error deleting lesson:', error);
+        showAlert('Failed to delete lesson', 'error');
+      }
+    };
+
+    function showAlert(message, type) {
+      const container = document.getElementById('alertContainer');
+      const alert = document.createElement('div');
+      alert.className = `alert ${type}`;
+      alert.textContent = message;
+      container.appendChild(alert);
+
+      setTimeout(() => alert.remove(), 5000);
+    }
+
+    // Initialize
+    await checkAuth();
+    await loadCourse();
+  </script>
+</body>
+</html>

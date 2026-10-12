@@ -1810,6 +1810,30 @@ async function fetchAllSources(q, tradFilter, tafsirTradFilter, collection, scho
       aRows.forEach(r => { if(!seen.has(r.id)){seen.add(r.id);results.push({type:'asbab',...r});} });
     }
 
+    if (currentSource === 'all' || currentSource === 'verse') {
+      const vSel = 'sura_id,aya_number,arabic,english,tigrinya,tigrinya2';
+      const vRows = await sbFetch('ayas', vSel, {sura_id:'eq.'+suraNum, aya_number:'eq.'+ayaNum});
+      const seen = new Set();
+      vRows.forEach(r => {
+        const key = r.sura_id + ':' + r.aya_number;
+        if (!seen.has(key)) {
+          seen.add(key);
+          results.push({
+            type: 'verse',
+            id: key,
+            sura: r.sura_id,
+            sura_id: r.sura_id,
+            aya: r.aya_number,
+            aya_number: r.aya_number,
+            arabic: r.arabic,
+            english: r.english,
+            tigrinya: r.tigrinya,
+            tigrinya2: r.tigrinya2
+          });
+        }
+      });
+    }
+
     return results;
   }
 
@@ -1856,6 +1880,30 @@ async function fetchAllSources(q, tradFilter, tafsirTradFilter, collection, scho
     const aRows  = await sbSearch('asbab_al_nuzul', aSel, 'reason_text', q, aExtra);
     const seen = new Set();
     aRows.forEach(r => { if(!seen.has(r.id)){seen.add(r.id);results.push({type:'asbab',...r});} });
+  }
+
+  if (currentSource === 'all' || currentSource === 'verse') {
+    const vSel = 'sura_id,aya_number,arabic,english,tigrinya,tigrinya2';
+    const vRows = await sbSearch('ayas', vSel, 'english', q, {});
+    const seen = new Set();
+    vRows.forEach(r => {
+      const key = r.sura_id + ':' + r.aya_number;
+      if (!seen.has(key)) {
+        seen.add(key);
+        results.push({
+          type: 'verse',
+          id: key,
+          sura: r.sura_id,
+          sura_id: r.sura_id,
+          aya: r.aya_number,
+          aya_number: r.aya_number,
+          arabic: r.arabic,
+          english: r.english,
+          tigrinya: r.tigrinya,
+          tigrinya2: r.tigrinya2
+        });
+      }
+    });
   }
 
   return results;
@@ -2082,6 +2130,14 @@ function buildCard(r, q, isRelated) {
     if (r.source) asbabMeta.push(esc(r.source));
     if (suraRef) asbabMeta.push(`<a href="${asbabVerseUrl}" style="color:var(--bronze);text-decoration:none;" title="Open verse ${suraRef}:${ayaRef}" onclick="event.preventDefault();qnavGoVerse('${asbabVerseUrl}','${suraRef}:${ayaRef}')">🔗 Verse ${suraRef}:${ayaRef} ↗</a>`);
     metaLine = asbabMeta.length ? `<div class="card-meta">${asbabMeta.join(' · ')}</div>` : '';
+  } else if (r.type === 'verse') {
+    typePill = `<span class="source-pill pill-verse" style="background:#1B5E20;color:#fff;padding:2px 8px;border-radius:10px;font-size:10px;">📖 Verse</span>`;
+    scholarLine = '';
+    if (r.arabic) arabicBlock = `<div class="card-arabic">${esc(r.arabic)}</div>`;
+    const englishText = r.english || '';
+    textBlock = `<div class="card-text" id="text-${id}">${highlight(englishText, q)}</div>`;
+    const verseUrl = suraRef ? `index.html?sura=${suraRef}&aya=${ayaRef}&from=research&q=${encodeURIComponent(currentQ)}` : 'index.html';
+    metaLine = suraRef ? `<div class="card-meta"><a href="${verseUrl}" style="color:var(--bronze);text-decoration:none;" title="Open verse ${suraRef}:${ayaRef}" onclick="event.preventDefault();qnavGoVerse('${verseUrl}','${suraRef}:${ayaRef}')">🔗 Verse ${suraRef}:${ayaRef} ↗</a></div>` : '';
   }
 
   const tradPill = r.tradition ? `<span class="trad-pill pill-${r.tradition}">${r.tradition}</span>` : '';
@@ -2331,10 +2387,11 @@ function copyCard(id, btn) {
   const text = [
     `[${r.type.toUpperCase()}] Quran ${r.sura_id}:${r.aya_number}`,
     r.type === 'hadith' ? `${r.collection||''} — ${r.reference||''}` :
-    r.type === 'tafsir' ? `${r.source_name||r.author||''}` : `Asbāb — ${r.scholar||''}`,
+    r.type === 'tafsir' ? `${r.source_name||r.author||''}` :
+    r.type === 'verse' ? '' : `Asbāb — ${r.scholar||''}`,
     '',
-    r.arabic_text ? r.arabic_text + '\n' : '',
-    r.hadith_text || r.content || r.tafsir_text || r.reason_text || r.title || '',
+    r.arabic || r.arabic_text ? (r.arabic || r.arabic_text) + '\n' : '',
+    r.hadith_text || r.content || r.tafsir_text || r.reason_text || r.english || r.title || '',
     getNote(id) ? '\nNote: ' + getNote(id) : ''
   ].filter(Boolean).join('\n').trim();
 
@@ -2370,9 +2427,10 @@ function shareCard(id) {
   if (!r) return;
   const text = [
     `Quran ${r.sura_id}:${r.aya_number}`,
-    r.type === 'hadith' ? `Hadith — ${r.collection||''}` : r.type === 'tafsir' ? `Tafsir — ${r.source_name||''}` : 'Asbāb al-Nuzūl',
+    r.type === 'hadith' ? `Hadith — ${r.collection||''}` : r.type === 'tafsir' ? `Tafsir — ${r.source_name||''}` : r.type === 'verse' ? 'Verse' : 'Asbāb al-Nuzūl',
     '',
-    r.hadith_text || r.content || r.tafsir_text || r.reason_text || r.title || '',
+    r.arabic || r.arabic_text || '',
+    r.hadith_text || r.content || r.tafsir_text || r.reason_text || r.english || r.title || '',
     r.reference ? `📖 ${r.reference}` : '',
     '',
     'https://quranhikma.com'
@@ -2387,10 +2445,12 @@ function exportResults() {
   const lines = allResults.map(r => [
     `[${r.type.toUpperCase()}] ${r.sura_id}:${r.aya_number}`,
     r.type === 'hadith' ? `Collection: ${r.collection||''} | Ref: ${r.reference||''} | Narrator: ${r.narrator||''}` :
-    r.type === 'tafsir' ? `Scholar: ${r.source_name||r.author||''}` : `Scholar: ${r.scholar||''}`,
-    r.hadith_text || r.content || r.tafsir_text || r.reason_text || r.title || '',
+    r.type === 'tafsir' ? `Scholar: ${r.source_name||r.author||''}` :
+    r.type === 'verse' ? '' : `Scholar: ${r.scholar||''}`,
+    r.arabic || r.arabic_text || '',
+    r.hadith_text || r.content || r.tafsir_text || r.reason_text || r.english || r.title || '',
     '---'
-  ].join('\n'));
+  ].filter(Boolean).join('\n'));
   const blob = new Blob([lines.join('\n\n')], { type: 'text/plain' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);

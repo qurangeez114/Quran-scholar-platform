@@ -56,6 +56,17 @@
     else { b.style.cssText += 'position:fixed;top:10px;right:10px;z-index:9998;background:#FDFAF4;'; document.body.appendChild(b); }
   }
 
-  function init() { loadModal(); addNav(); setTimeout(addClock, 400); }
+  function addAccount() {
+    if (document.getElementById('qh-account-btn')) return;
+    var a = document.createElement('a');
+    a.id = 'qh-account-btn'; a.href = '/account.html'; a.title = 'Log in / My account';
+    a.textContent = '👤'; a.setAttribute('aria-label', 'Log in or open your account');
+    a.style.cssText = 'text-decoration:none;border:1px solid #E8C97B;border-radius:50%;width:36px;height:36px;font-size:18px;color:#C9A84C;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:none;';
+    var h = document.querySelector('header');
+    if (h) { h.appendChild(a); }
+    else { a.style.cssText += 'position:fixed;top:10px;right:56px;z-index:9998;background:#FDFAF4;'; document.body.appendChild(a); }
+  }
+
+  function init() { loadModal(); addNav(); setTimeout(addClock, 400); setTimeout(addAccount, 400); }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();
