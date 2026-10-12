@@ -208,3 +208,12 @@ At 2026-10-11 22:35 America/Los_Angeles, protected read-only [run 38208623196](h
 The defect is isolated to English entry `38089` (109:1): it ends syntactically incomplete at “And if what” after 3,338 characters / 600 words, while paired Arabic entry `13292` continues substantially. English entries `39697–39699` and `48339–48340` are distinct verse-scoped rows with complete sentence endings and do not share this cutoff. Their broader fidelity review remains separate.
 
 Full audit: [tafsir-109-qurtubi-english-truncation-audit-2026-10-11.md](https://github.com/qurangeez114/Quran-scholar-platform/blob/main/docs/tafsir-109-qurtubi-english-truncation-audit-2026-10-11.md). Do not overwrite `38089` with an assumed continuation; repair requires a complete source-checked replacement or separately labeled AI-assisted rendering, followed by database readback and public UI verification. The 52/52 Arabic-backed proposition extraction remains valid, but translation review remains open. **No D — Sura 109.**
+
+
+## October 12 al-Qurṭubī 109:1 repair draft
+
+At 2026-10-12 01:44 America/Los_Angeles, protected read-only [input export run 38215446618](https://github.com/qurangeez114/Quran-scholar-platform/actions/runs/38215446618) retrieved the exact live Arabic entry `13292` and damaged English entry `38089`, with identities and SHA-256 hashes fixed before drafting. A source-aligned AI-assisted continuation draft is now staged at [qurtubi-109-1-english-repair-draft-2026-10-12.json](https://github.com/qurangeez114/Quran-scholar-platform/blob/main/data/tafsir/staging/qurtubi-109-1-english-repair-draft-2026-10-12.json), commit `4b7a0f1c6b33a062d15e89a2e94bd5891976bd84`.
+
+Read-only [validation run 38225265008](https://github.com/qurangeez114/Quran-scholar-platform/actions/runs/38225265008) passed the live identity/hash guards, exact cutoff check, seven Arabic source anchors, and seven English semantic groups. The draft preserves Ibn Isḥāq/others from Ibn ʿAbbās, Abū Ṣāliḥ from Ibn ʿAbbās, al-Māwardī, Abū Bakr ibn al-Anbārī, the majority-of-meaning-specialists explanation, and the competing correspondence explanation as separate attributions.
+
+No database write occurred. The poetic illustrations are explicitly summarized pending final line-level review; therefore entry `38089` has not been overwritten and al-Qurṭubī translation review remains open. **No D — Sura 109.**
