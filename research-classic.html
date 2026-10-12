@@ -2363,10 +2363,11 @@ function copyCard(id, btn) {
   const text = [
     `[${r.type.toUpperCase()}] Quran ${r.sura_id}:${r.aya_number}`,
     r.type === 'hadith' ? `${r.collection||''} — ${r.reference||''}` :
-    r.type === 'tafsir' ? `${r.source_name||r.author||''}` : `Asbāb — ${r.scholar||''}`,
+    r.type === 'tafsir' ? `${r.source_name||r.author||''}` :
+    r.type === 'verse' ? '' : `Asbāb — ${r.scholar||''}`,
     '',
-    r.arabic_text ? r.arabic_text + '\n' : '',
-    r.hadith_text || r.content || r.tafsir_text || r.reason_text || r.title || '',
+    r.arabic || r.arabic_text ? (r.arabic || r.arabic_text) + '\n' : '',
+    r.hadith_text || r.content || r.tafsir_text || r.reason_text || r.english || r.title || '',
     getNote(id) ? '\nNote: ' + getNote(id) : ''
   ].filter(Boolean).join('\n').trim();
 
@@ -2402,9 +2403,10 @@ function shareCard(id) {
   if (!r) return;
   const text = [
     `Quran ${r.sura_id}:${r.aya_number}`,
-    r.type === 'hadith' ? `Hadith — ${r.collection||''}` : r.type === 'tafsir' ? `Tafsir — ${r.source_name||''}` : 'Asbāb al-Nuzūl',
+    r.type === 'hadith' ? `Hadith — ${r.collection||''}` : r.type === 'tafsir' ? `Tafsir — ${r.source_name||''}` : r.type === 'verse' ? 'Verse' : 'Asbāb al-Nuzūl',
     '',
-    r.hadith_text || r.content || r.tafsir_text || r.reason_text || r.title || '',
+    r.arabic || r.arabic_text || '',
+    r.hadith_text || r.content || r.tafsir_text || r.reason_text || r.english || r.title || '',
     r.reference ? `📖 ${r.reference}` : '',
     '',
     'https://quranhikma.com'
@@ -2419,10 +2421,12 @@ function exportResults() {
   const lines = allResults.map(r => [
     `[${r.type.toUpperCase()}] ${r.sura_id}:${r.aya_number}`,
     r.type === 'hadith' ? `Collection: ${r.collection||''} | Ref: ${r.reference||''} | Narrator: ${r.narrator||''}` :
-    r.type === 'tafsir' ? `Scholar: ${r.source_name||r.author||''}` : `Scholar: ${r.scholar||''}`,
-    r.hadith_text || r.content || r.tafsir_text || r.reason_text || r.title || '',
+    r.type === 'tafsir' ? `Scholar: ${r.source_name||r.author||''}` :
+    r.type === 'verse' ? '' : `Scholar: ${r.scholar||''}`,
+    r.arabic || r.arabic_text || '',
+    r.hadith_text || r.content || r.tafsir_text || r.reason_text || r.english || r.title || '',
     '---'
-  ].join('\n'));
+  ].filter(Boolean).join('\n'));
   const blob = new Blob([lines.join('\n\n')], { type: 'text/plain' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
