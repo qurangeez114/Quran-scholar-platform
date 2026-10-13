@@ -1,0 +1,101 @@
+name: Preflight Surah 108 I04 replacement candidates
+on:
+  push:
+    paths:
+      - '.github/workflows/tafsir-108-i04-replacement-preflight.yml'
+      - 'data/tafsir/staging/ibn-kathir-108-i04-replacement-candidates-2026-10-12.json'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tafsir-108-i04-replacement-preflight
+  cancel-in-progress: false
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate atomic replacements and check duplicates read-only
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        shell: python
+        run: |
+          import json,os,re,unicodedata,urllib.parse,urllib.request
+          key=os.environ.get("SUPABASE_SERVICE_KEY","")
+          if not key: raise SystemExit("Missing protected database credential")
+          paths=[
+            "data/tafsir/staging/tabari-108-1-research-2026-10-10.json",
+            "data/tafsir/staging/ibn-kathir-108-research-2026-10-12.json",
+            "data/tafsir/staging/qurtubi-108-research-2026-10-12.json",
+            "data/tafsir/staging/jalalayn-108-research-2026-10-12.json",
+            "data/tafsir/staging/saadi-108-research-2026-10-12.json",
+            "data/tafsir/staging/tanwir-108-research-2026-10-12.json"]
+          docs=[json.load(open(p,encoding="utf-8")) for p in paths]
+          original=[]
+          for p,d in zip(paths,docs):
+              if d.get("surah",d.get("sura"))!=108 or d.get("database_written") not in (False,None):
+                  raise SystemExit("Unsafe source staging metadata "+p)
+              for c in d["claims"]:
+                  x=dict(c); x["_path"]=p; x["_scholar"]=d["scholar_key"]; original.append(x)
+          if len(original)!=49: raise SystemExit("Expected authoritative 49-claim input")
+          parent=[c for c in original if c["id"]=="108-I04"]
+          if len(parent)!=1: raise SystemExit("Expected exactly one 108-I04 parent")
+          candidate_path="data/tafsir/staging/ibn-kathir-108-i04-replacement-candidates-2026-10-12.json"
+          candidate_doc=json.load(open(candidate_path,encoding="utf-8"))
+          if candidate_doc.get("database_written") is not False or candidate_doc.get("publication_ready") is not False:
+              raise SystemExit("Replacement candidate safety flags invalid")
+          candidates=candidate_doc.get("candidates",[])
+          if len(candidates)!=4: raise SystemExit("Expected four atomic replacement candidates")
+          expected_ids=["108-I04A","108-I04B","108-I04C","108-I04D"]
+          if [c.get("id") for c in candidates]!=expected_ids: raise SystemExit("Replacement candidate IDs/order mismatch")
+          for c in candidates:
+              if c.get("verse_mapping")!="1" or c.get("arabic_entry_id")!=48457:
+                  raise SystemExit("Replacement canonical mapping mismatch "+c.get("id","?"))
+              if not c.get("statement_en") or not c.get("evidence_anchor_ar") or not c.get("voice_position"):
+                  raise SystemExit("Incomplete replacement evidence "+c.get("id","?"))
+          combined=[c for c in original if c["id"]!="108-I04"]+[dict(c,_path=candidate_path,_scholar="ibn_kathir") for c in candidates]
+          ids=[c["id"] for c in combined]
+          if len(ids)!=52 or len(set(ids))!=52: raise SystemExit("Expected 52 unique replacement claims")
+          counts={}
+          for c in combined: counts[c["_scholar"]]=counts.get(c["_scholar"],0)+1
+          expected_counts={"tabari":11,"ibn_kathir":14,"qurtubi":9,"jalalayn":5,"saadi":6,"ibn_abbas":7}
+          if counts!=expected_counts: raise SystemExit("Replacement counts mismatch "+json.dumps(counts,sort_keys=True))
+          def n(s):
+              return re.sub(r"[^a-z0-9]+"," ",unicodedata.normalize("NFKD",s or "").encode("ascii","ignore").decode().lower()).strip()
+          local_exact=[]; local_likely=[]
+          for i,a in enumerate(combined):
+              aa=n(a.get("statement_en") or a.get("claim","")); aset=set(aa.split())
+              if not aa: raise SystemExit("Missing statement "+a["id"])
+              for b in combined[i+1:]:
+                  bb=n(b.get("statement_en") or b.get("claim","")); bset=set(bb.split())
+                  if aa==bb: local_exact.append([a["id"],b["id"]])
+                  elif aset and bset:
+                      score=len(aset & bset)/len(aset | bset)
+                      if score>=0.72: local_likely.append({"a":a["id"],"b":b["id"],"jaccard":round(score,3)})
+          entries=[5261,5262,5263,48457,48458,48459,13239,13240,13241,38030,38031,38032,23671,23672,23673,36286,36287,36288,48103,48104,48105,29980,29981,29982]
+          base="https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/"
+          params="propositions?tafsir_entry_id=in.("+",".join(map(str,entries))+")&select=id,tafsir_entry_id,statement_en,status&limit=5000"
+          req=urllib.request.Request(base+params,headers={"apikey":key,"Authorization":"Bearer "+key})
+          with urllib.request.urlopen(req,timeout=30) as r: live=json.load(r)
+          live_exact=[];live_likely=[]
+          for c in candidates:
+              aa=n(c["statement_en"]); aset=set(aa.split())
+              for row in live:
+                  bb=n(row.get("statement_en","")); bset=set(bb.split())
+                  if aa==bb: live_exact.append({"claim":c["id"],"proposition":row["id"],"entry":row["tafsir_entry_id"]})
+                  elif aset and bset:
+                      score=len(aset & bset)/len(aset | bset)
+                      if score>=0.72: live_likely.append({"claim":c["id"],"proposition":row["id"],"entry":row["tafsir_entry_id"],"jaccard":round(score,3)})
+          if local_exact or local_likely or live_exact or live_likely:
+              raise SystemExit("Duplicate gate failed "+json.dumps({"local_exact":local_exact,"local_likely":local_likely,"live_exact":live_exact,"live_likely":live_likely},sort_keys=True))
+          print("AUDIT_MODE read-only; no writes")
+          print("PARENT_REMOVED 108-I04")
+          print("REPLACEMENTS",json.dumps(expected_ids))
+          print("COMBINED_COUNTS",json.dumps(counts,sort_keys=True))
+          print("COMBINED_TOTAL",len(combined))
+          print("LOCAL_EXACT_DUPLICATES",json.dumps(local_exact))
+          print("LOCAL_LIKELY_DUPLICATES",json.dumps(local_likely))
+          print("LIVE_EXACT_DUPLICATES",json.dumps(live_exact))
+          print("LIVE_LIKELY_DUPLICATES",json.dumps(live_likely))
+          print("SURAH_108_I04_REPLACEMENT_PREFLIGHT_PASS")
