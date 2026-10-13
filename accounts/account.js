@@ -12,8 +12,9 @@ if(mode==='signup'){if(password.length<12)return message('Password must be at le
 if(mode==='signup'){const firstName=$('firstName').value.trim(),lastName=$('lastName').value.trim(),address=$('address').value.trim();result=await db.auth.signUp({email,password,options:{emailRedirectTo:location.origin+'/account.html',data:{display_name:`${firstName} ${lastName}`,address:address||null}}});}
 else if(mode==='recover')result=await db.auth.resetPasswordForEmail(email,{redirectTo:location.origin+'/account.html'});
 else result=await db.auth.signInWithPassword({email,password});
+if(mode==='signup'&&!result.error&&result.data.user&&result.data.user.identities?.length===0)return message('This email is already taken.');
 if(result.error)throw result.error;message(mode==='login'?'Signed in.':'Check your email for the next step.');await render();
-}catch(e){message(e.message);}finally{$('submit').disabled=false;}};
+}catch(e){message(/already (registered|been registered)/i.test(e.message)?'This email is already taken.':e.message);}finally{$('submit').disabled=false;}};
 $('reset-form').onsubmit=async e=>{e.preventDefault();const pw=$('new-password').value;if(pw.length<12)return message('Password must be at least 12 characters.');if(pw!==$('new-password-confirm').value)return message('Passwords do not match.');const {error}=await db.auth.updateUser({password:$('new-password').value});if(error)return message(error.message);recovering=false;history.replaceState(null,'',location.pathname);message('Password updated.');await render();};
 $('logout').onclick=async()=>{const {error}=await db.auth.signOut();if(error)return message(error.message);recovering=false;message('Logged out.');render();};
 $('export').onclick=()=>exportResearch().catch(e=>message(e.message));
