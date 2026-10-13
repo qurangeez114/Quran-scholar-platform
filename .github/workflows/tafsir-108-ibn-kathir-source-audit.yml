@@ -76,6 +76,24 @@ jobs:
           for rid,groups in route_english_markers.items():
               found=[any(term in en for term in group) for group in groups]
               print("ROUTE_ENGLISH",rid,json.dumps({"groups":groups,"found":found,"all":all(found)}))
+          def bounded_english_context(label,terms,radius=650):
+              positions=[]
+              for term in terms:
+                  start=0
+                  while True:
+                      p=en.find(term,start)
+                      if p<0: break
+                      positions.append((p,term))
+                      start=p+len(term)
+              positions=sorted(set(positions))
+              print("EN_CONTEXT_COUNT",label,len(positions),json.dumps([t for _,t in positions]))
+              for n,(p,term) in enumerate(positions[:6],1):
+                  print("EN_CONTEXT",label,n,term,en[max(0,p-radius):p+radius])
+              return positions
+          said_positions=bounded_english_context("I02_R06_SAID_QATADA",["sa'id","saeed"])
+          lahab_positions=bounded_english_context("I10_ABU_LAHAB",["abu lahab"])
+          if not said_positions: print("EN_CONTEXT_ABSENCE I02_R06 no unambiguous Sa'id spelling found")
+          if not lahab_positions: print("EN_CONTEXT_ABSENCE I10 no Abu Lahab marker found")
           english_markers={
             "I05":["pray","sacrifice"],
             "I06":["as bin wa'il","al-as"],
