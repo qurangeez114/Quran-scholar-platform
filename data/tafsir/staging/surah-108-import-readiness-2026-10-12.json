@@ -1,0 +1,142 @@
+{
+  "schema_version": "quranhikma-tafsir-import-readiness-v1",
+  "generated_at": "2026-10-12T23:54:34-07:00",
+  "surah": 108,
+  "status": "design_only_database_write_disabled",
+  "authoritative_manifest": "data/tafsir/staging/surah-108-chapter-manifest-2026-10-12.json",
+  "authoritative_claim_total": 52,
+  "precedent_workflows": [
+    ".github/workflows/tafsir-109-pilot-import.yml",
+    ".github/workflows/tafsir-109-w08-import.yml"
+  ],
+  "database_written": false,
+  "design_contract": {
+    "pre_mutation": [
+      "Require protected SUPABASE_SERVICE_KEY; never place the credential in repository content or logs.",
+      "Re-fetch each mapped tafsir_entries row and require exact id, sura=108, aya, scholar_key, and language.",
+      "Normalize and verify a claim-specific Arabic or English evidence anchor against the mapped source row.",
+      "Search propositions on the mapped tafsir_entry_id using normalized statement_en.",
+      "Refuse mutation on multiple matches; treat a single match as complete only after its voice and evidence links pass readback.",
+      "Require the authoritative 52-claim set and per-scholar counts 11/14/9/5/6/7 before enabling writes."
+    ],
+    "mutation_order": [
+      "propositions",
+      "proposition_voice_chain",
+      "evidence_units",
+      "proposition_evidence"
+    ],
+    "required_proposition_fields": [
+      "claim_type_id",
+      "statement_en",
+      "extracted_by",
+      "speaker_type",
+      "speaker_name",
+      "assertion_mode",
+      "status",
+      "source_type",
+      "tafsir_entry_id",
+      "extraction_validity",
+      "verification_state",
+      "attribution_fidelity",
+      "quranic_textual_support",
+      "mufassir_own_position"
+    ],
+    "required_voice_fields": [
+      "proposition_id",
+      "reporting_work_id",
+      "originating_voice_type",
+      "originating_voice_name"
+    ],
+    "required_evidence_fields": [
+      "unit_type",
+      "attributed_authority_name",
+      "content_summary",
+      "independence_state"
+    ],
+    "required_link_fields": [
+      "proposition_id",
+      "evidence_unit_id",
+      "semantic_link_note",
+      "linked_by"
+    ],
+    "postflight": [
+      "Read back the proposition, exactly one intended voice row, and exactly one intended evidence link.",
+      "Verify tafsir_entry_id, reporting_work_id, statement, disputed-attribution language where applicable, and stored evidence id.",
+      "Do not mark chapter complete until the public website display is separately verified."
+    ],
+    "rollback": [
+      "Delete proposition_evidence for the new proposition id.",
+      "Delete proposition_voice_chain for the new proposition id.",
+      "Delete the new proposition.",
+      "Delete the new evidence unit.",
+      "Never delete or repair a pre-existing matching row automatically."
+    ]
+  },
+  "scholar_readiness": {
+    "tabari": {
+      "count": 11,
+      "reporting_work_id": 1,
+      "state": "blocked",
+      "blockers": [
+        "Complete isnad/voice-chain extraction for every claim.",
+        "Complete translation review; current analytical paraphrases are not a full English translation."
+      ]
+    },
+    "ibn_kathir": {
+      "count": 14,
+      "reporting_work_id": 2,
+      "state": "partially_designed",
+      "guards": [
+        "Treat duplicated chapter text across verse rows as one witness, never independent evidence.",
+        "Attach each atomic claim to its deterministic verse witness.",
+        "Preserve separate originating voices for I04A-I04D and competing occasion reports."
+      ],
+      "blockers": [
+        "Add exact external edition locators for all 14 claims.",
+        "Encode English omissions explicitly in evidence metadata, including the atomic I04 claims."
+      ]
+    },
+    "qurtubi": {
+      "count": 9,
+      "reporting_work_id": 3,
+      "state": "blocked_on_metadata",
+      "blockers": [
+        "Carry Q04 partial-English coverage and additional Arabic alternatives explicitly into semantic_link_note."
+      ]
+    },
+    "jalalayn": {
+      "count": 5,
+      "reporting_work_id": 4,
+      "state": "source_pair_aligned_pending_row_generation"
+    },
+    "saadi": {
+      "count": 6,
+      "reporting_work_id": 55,
+      "state": "source_pair_aligned_pending_row_generation"
+    },
+    "ibn_abbas_tanwir": {
+      "count": 7,
+      "reporting_work_id": 56,
+      "state": "blocked",
+      "guards": [
+        "Label the work as Tanwir al-Miqbas, traditionally attributed to Ibn Abbas, attribution disputed.",
+        "Do not create a direct authenticated Ibn Abbas transmission chain."
+      ],
+      "blockers": [
+        "Resolve entry 29982 replacement-character handling without reproducing corrupted punctuation."
+      ]
+    }
+  },
+  "next_safe_step": "Generate and validate a non-mutating 52-row import manifest only after each claim has a claim-specific source anchor, voice row, evidence row, link metadata, and all listed blockers are closed.",
+  "completion_gate": {
+    "ready": false,
+    "verified_surah_complete": false,
+    "reasons": [
+      "Evidence and voice rows are not yet deterministic for all 52 claims.",
+      "Tabari chain and translation work remains open.",
+      "Qurtubi Q04 limitation metadata remains open.",
+      "Tanwir entry 29982 encoding decision remains open.",
+      "Public display has not been verified."
+    ]
+  }
+}
