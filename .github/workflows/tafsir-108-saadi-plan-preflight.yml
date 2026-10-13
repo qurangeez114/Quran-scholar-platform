@@ -1,0 +1,123 @@
+name: Preflight Surah 108 Saadi evidence voice plan
+on:
+  push:
+    paths:
+      - '.github/workflows/tafsir-108-saadi-plan-preflight.yml'
+      - 'data/tafsir/staging/saadi-108-evidence-voice-plan-2026-10-13.json'
+      - 'data/tafsir/staging/saadi-108-research-2026-10-12.json'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tafsir-108-saadi-plan-preflight
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate six Saadi rows without writes
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        shell: python
+        run: |
+          import hashlib, json, os, re, unicodedata, urllib.request
+          key=os.environ.get("SUPABASE_SERVICE_KEY","")
+          if not key:
+              raise SystemExit("Missing protected database credential")
+          plan=json.load(open("data/tafsir/staging/saadi-108-evidence-voice-plan-2026-10-13.json",encoding="utf-8"))
+          stage=json.load(open("data/tafsir/staging/saadi-108-research-2026-10-12.json",encoding="utf-8"))
+          rows=plan.get("rows",[])
+          ids=[row.get("claim_id") for row in rows]
+          expected_ids=["108-S01","108-S02","108-S03","108-S04","108-S05","108-S06"]
+          if ids!=expected_ids or len(set(ids))!=6:
+              raise SystemExit("Saadi claim set/order mismatch: "+repr(ids))
+          if plan.get("claim_count")!=6 or plan.get("database_written") is not False or plan.get("ready_for_database_import") is not False:
+              raise SystemExit("Unsafe plan state")
+          if stage.get("database_written") is not False:
+              raise SystemExit("Unsafe staging state")
+          def norm_ar(value):
+              value="".join(c for c in unicodedata.normalize("NFKD",value or "") if not unicodedata.combining(c) and c!="ـ")
+              return re.sub(r"\s+"," ",re.sub(r"[،؛؟:()\[\]{}﴿﴾]+"," ",value)).strip()
+          for row in rows:
+              p,v,e,s=row["proposition"],row["voice"],row["evidence"],row["source"]
+              if p.get("speaker_name")!="al-Saʿdī" or p.get("claim_type_id")!=43:
+                  raise SystemExit("Unexpected proposition attribution "+row["claim_id"])
+              if p.get("verification_state")!="source_language_proposition_verified" or p.get("mufassir_own_position")!="preferred":
+                  raise SystemExit("Unexpected verification/position "+row["claim_id"])
+              if v.get("reporting_work_id")!=55 or v.get("originating_voice_type")!="exegete_own_view":
+                  raise SystemExit("Unexpected Saadi voice "+row["claim_id"])
+              if v.get("originating_voice_name") is not None or v.get("transmission_route_action")!="none":
+                  raise SystemExit("Unsafe voice/route plan "+row["claim_id"])
+              if e.get("unit_type")!="single_named_attribution" or e.get("attributed_authority_name")!="al-Saʿdī":
+                  raise SystemExit("Unexpected evidence attribution "+row["claim_id"])
+              if not s.get("evidence_anchor_ar") or not s.get("translation_witness_entry_id"):
+                  raise SystemExit("Missing paired evidence locator "+row["claim_id"])
+          if plan["validation"].get("transmission_routes_planned")!=0:
+              raise SystemExit("Transmission route creation is forbidden")
+          base="https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/"
+          headers={"apikey":key,"Authorization":"Bearer "+key}
+          def get(path):
+              req=urllib.request.Request(base+path,headers=headers)
+              with urllib.request.urlopen(req,timeout=30) as response:
+                  return json.load(response)
+          ids_all=[36286,36287,36288,48103,48104,48105]
+          live=get("tafsir_entries?id=in.("+",".join(map(str,ids_all))+")&select=id,sura,aya,scholar_key,language,content,source_name,source_url&order=id")
+          by_id={row["id"]:row for row in live}
+          expected_identity={
+              36286:(108,1,"saadi","ar"),36287:(108,2,"saadi","ar"),36288:(108,3,"saadi","ar"),
+              48103:(108,1,"saadi","en"),48104:(108,2,"saadi","en"),48105:(108,3,"saadi","en")}
+          expected_hash={
+              36286:"36210cd035e92d8e4213fa2a6cb4cbd8f51ad5fe93cba93590e141a453d279db",
+              36287:"94b52b9fc5d2c9345998c69b4eeb7e3a9c98fe308440c91e162a7f48a691a368",
+              36288:"b351d82179de0e097132df2b07940bb2c2af77bace9836b449ce772b6b0794cc",
+              48103:"6bed6b833bf0002498f317866b9bb15277495f540c1313b0ff0bb2c8d54223a5",
+              48104:"b592916ce3c51178cc313e96a714c70b23f8a136917c7620f2e5bd279e333696",
+              48105:"dec0d77ea35a7debd407e43c7c7a97fdfffbc82f14c8365bddb8c4c6540951c7"}
+          if set(by_id)!=set(expected_identity):
+              raise SystemExit("Saadi source row inventory mismatch")
+          for entry_id,identity in expected_identity.items():
+              saved=by_id[entry_id]
+              actual=(saved["sura"],saved["aya"],saved["scholar_key"],saved["language"])
+              if actual!=identity:
+                  raise SystemExit("Source identity mismatch "+str(entry_id)+" "+repr(actual))
+              if saved.get("source_name")!="Tafsir al-Sa'di" or saved.get("source_url")!="1376":
+                  raise SystemExit("Source locator drift "+str(entry_id))
+              digest=hashlib.sha256((saved.get("content") or "").encode("utf-8")).hexdigest()
+              if digest!=expected_hash[entry_id]:
+                  raise SystemExit("Source hash drift "+str(entry_id)+" "+digest)
+          for row in rows:
+              text=norm_ar(by_id[row["source"]["tafsir_entry_id"]]["content"])
+              fragments=[norm_ar(x) for x in re.split(r"\s*\.\.\.\s*",row["source"]["evidence_anchor_ar"]) if norm_ar(x)]
+              missing=[x for x in fragments if x not in text]
+              if missing:
+                  raise SystemExit("Arabic anchor fragment missing "+row["claim_id"]+" "+repr(missing))
+              witness=by_id[row["source"]["translation_witness_entry_id"]]
+              if witness["aya"]!=row["source"]["verse"] or witness["language"]!="en":
+                  raise SystemExit("Translation witness mismatch "+row["claim_id"])
+          def norm_en(value):
+              value=unicodedata.normalize("NFKD",value or "").encode("ascii","ignore").decode().casefold()
+              return re.sub(r"[^a-z0-9]+"," ",value).strip()
+          existing=get("propositions?tafsir_entry_id=in.(36286,36287,36288)&select=id,tafsir_entry_id,statement_en,status&limit=1000")
+          exact=[]; likely=[]
+          for planned in rows:
+              a=norm_en(planned["proposition"]["statement_en"]); aset=set(a.split())
+              for saved in existing:
+                  b=norm_en(saved.get("statement_en")); bset=set(b.split())
+                  if a==b:
+                      exact.append({"claim":planned["claim_id"],"proposition":saved["id"]})
+                  elif aset and bset:
+                      score=len(aset & bset)/len(aset | bset)
+                      if score>=0.72:
+                          likely.append({"claim":planned["claim_id"],"proposition":saved["id"],"jaccard":round(score,3)})
+          if exact or likely:
+              raise SystemExit("Duplicate review required exact="+json.dumps(exact)+" likely="+json.dumps(likely))
+          print("AUDIT_MODE read-only; no writes")
+          print("SAADI_PLAN_ROWS",len(rows))
+          print("ARABIC_AND_ENGLISH_IDENTITIES_HASHES_VERIFIED",sorted(by_id))
+          print("ARABIC_ANCHORS_AND_TRANSLATION_WITNESSES_VERIFIED",len(rows))
+          print("TRANSMISSION_ROUTES_PLANNED",0)
+          print("LIVE_EXACT_DUPLICATES",json.dumps(exact))
+          print("LIVE_LIKELY_DUPLICATES",json.dumps(likely))
+          print("SAADI_108_PLAN_PREFLIGHT_PASS")
