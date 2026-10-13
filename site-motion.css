@@ -1,45 +1,93 @@
-/* Site-wide motion layer. Loaded by site-motion.js (via site-chrome.js).
-   Everything here is decorative; all animations are skipped under
-   prefers-reduced-motion. Uses animation fill-mode "backwards" only, so no
-   transform is left behind after an entrance (keeps fixed modals working). */
+/* Site-wide motion layer. Driven by site-motion.js (loaded from every page's <head>).
+   Decorative only; everything is disabled under prefers-reduced-motion.
+   Entrance animations use fill-mode "backwards" so no transform persists afterwards
+   (keeps fixed-position modals working). */
 
-@keyframes qh-fade { from { opacity: 0 } to { opacity: 1 } }
-@keyframes qh-rise {
-  from { opacity: 0; transform: translateY(10px) }
-  to   { opacity: 1; transform: none }
+@keyframes qh-fade   { from { opacity: 0 } to { opacity: 1 } }
+@keyframes qh-rise   { from { opacity: 0; transform: translateY(12px) } to { opacity: 1; transform: none } }
+@keyframes qh-pop    { from { opacity: 0; transform: scale(.96) } to { opacity: 1; transform: none } }
+@keyframes qh-slide  { from { opacity: 0; transform: translateX(-10px) } to { opacity: 1; transform: none } }
+@keyframes qh-sheen  {
+  0%   { background-position: -200% 50% }
+  100% { background-position: 200% 50% }
 }
-@keyframes qh-pop {
-  from { opacity: 0; transform: scale(.97) }
-  to   { opacity: 1; transform: none }
-}
+@keyframes qh-float  { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-3px) } }
 
-body.qh-motion { animation: qh-fade .45s ease-out backwards; }
+/* Page */
+body.qh-motion { animation: qh-fade .5s ease-out backwards; }
 
+/* Staggered entrance for cards / blocks */
 .qh-in {
-  animation: qh-rise .5s cubic-bezier(.2,.7,.2,1) backwards;
-  animation-delay: calc(var(--qh-i, 0) * 45ms);
+  animation: qh-rise .55s cubic-bezier(.2,.7,.2,1) backwards;
+  animation-delay: calc(var(--qh-i, 0) * 50ms);
 }
 
-/* Cards: gentle lift via shadow + border (no transform, so no containing-block side effects) */
+/* Headings: slide in and carry a soft gradient sheen on the first load */
+.qh-head { animation: qh-slide .6s cubic-bezier(.2,.7,.2,1) backwards; }
+
+/* Section scroll reveals (hidden only while JS is active) */
+.qh-js .qh-reveal {
+  opacity: 0;
+  transform: translateY(18px);
+  transition: opacity .7s ease, transform .7s cubic-bezier(.2,.7,.2,1);
+}
+.qh-js .qh-reveal.qh-visible { opacity: 1; transform: none; }
+
+/* Cards: lift with shadow + accent border on hover, keyboard focus too */
 .card, .verse-card, .hadith-card, .book-card, .stat-card, .rw-card,
 .xref-card, .ref-card, .src-card {
-  transition: box-shadow .25s ease, border-color .25s ease, background-color .25s ease;
+  transition: box-shadow .3s ease, border-color .3s ease, background-color .3s ease, transform .3s ease;
 }
 .card:hover, .verse-card:hover, .hadith-card:hover, .book-card:hover,
 .stat-card:hover, .rw-card:hover, .xref-card:hover, .ref-card:hover, .src-card:hover {
-  box-shadow: 0 8px 22px rgba(0,0,0,.12);
+  box-shadow: 0 10px 26px rgba(0,0,0,.14), 0 0 0 1px rgba(212,175,55,.25);
+  border-color: rgba(212,175,55,.45);
+}
+.card:hover, .book-card:hover, .stat-card:hover { transform: translateY(-2px); }
+.card:active, .book-card:active, .stat-card:active { transform: translateY(0) scale(.99); }
+
+/* Stat values: subtle breathing on hover */
+.stat-card:hover .stat-value, .stat-card:hover .stat-number { animation: qh-float 1.6s ease-in-out infinite; }
+
+/* Buttons & pills: press feedback and smooth colour/shadow changes */
+button, .btn, [role="button"], .tab, .pill, .chip {
+  transition: background-color .2s ease, color .2s ease, box-shadow .25s ease, transform .15s ease, opacity .2s ease;
+}
+button:hover, .btn:hover, [role="button"]:hover, .tab:hover, .pill:hover, .chip:hover {
+  box-shadow: 0 4px 14px rgba(212,175,55,.22);
+}
+button:active, .btn:active, [role="button"]:active, .tab:active, .pill:active, .chip:active {
+  transform: scale(.96);
 }
 
-/* Buttons: responsive press feedback and smooth colour changes */
-button, .btn, [role="button"] {
-  transition: background-color .2s ease, color .2s ease, box-shadow .2s ease, opacity .2s ease;
+/* Links: animated underline that grows from the left */
+main a:not(.btn):not([role="button"]), .content a:not(.btn) {
+  background-image: linear-gradient(currentColor, currentColor);
+  background-size: 0% 1px;
+  background-repeat: no-repeat;
+  background-position: 0 100%;
+  transition: background-size .3s ease, color .2s ease;
+  text-decoration: none;
 }
-button:active, .btn:active, [role="button"]:active { opacity: .8; }
+main a:not(.btn):not([role="button"]):hover, .content a:not(.btn):hover { background-size: 100% 1px; }
 
-/* Links: soft underline on hover */
-main a, .content a { transition: color .2s ease; }
+/* Bottom/quick nav icons: small bounce on hover */
+.bottom-nav a:hover span, .bottom-nav button:hover span,
+.qh-nav-icon:hover { display: inline-block; animation: qh-float .8s ease-in-out; }
+
+/* Gold sheen on the homepage / page titles (subtle, non-distracting) */
+.qh-head.qh-sheen, h1.qh-sheen {
+  background-image: linear-gradient(100deg, currentColor 40%, #d4af37 50%, currentColor 60%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: qh-sheen 6s linear infinite;
+}
 
 @media (prefers-reduced-motion: reduce) {
-  body.qh-motion, .qh-in { animation: none !important; }
+  body.qh-motion, .qh-in, .qh-head, .stat-card:hover .stat-value, .stat-card:hover .stat-number,
+  .bottom-nav a:hover span, .qh-nav-icon:hover, h1.qh-sheen { animation: none !important; }
+  .qh-js .qh-reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
   *, *::before, *::after { transition-duration: 0s !important; }
 }
