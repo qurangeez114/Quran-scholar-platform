@@ -1,0 +1,75 @@
+name: Audit Surah 108 Qurtubi Q04 atomic alternatives
+on:
+  push:
+    paths:
+      - '.github/workflows/tafsir-108-qurtubi-q04-atomic-audit.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tafsir-108-qurtubi-q04-atomic-audit
+  cancel-in-progress: false
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Extract exact Arabic alternative block without writes
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        shell: python
+        run: |
+          import hashlib, json, os, urllib.request
+          key=os.environ.get("SUPABASE_SERVICE_KEY","")
+          if not key:
+              raise SystemExit("Missing protected database credential")
+          base="https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/"
+          headers={"apikey":key,"Authorization":"Bearer "+key}
+          def get(path):
+              req=urllib.request.Request(base+path,headers=headers)
+              with urllib.request.urlopen(req,timeout=30) as response:
+                  return json.load(response)
+          ar=get("tafsir_entries?id=eq.13239&select=id,sura,aya,scholar_key,language,content,source_name,source_url")
+          en=get("tafsir_entries?id=eq.38030&select=id,sura,aya,scholar_key,language,content,source_name,source_url")
+          if len(ar)!=1 or len(en)!=1:
+              raise SystemExit("Expected one Arabic and one English row")
+          ar,en=ar[0],en[0]
+          if (ar["sura"],ar["aya"],ar["scholar_key"],ar["language"])!=(108,1,"qurtubi","ar"):
+              raise SystemExit("Arabic identity mismatch")
+          if (en["sura"],en["aya"],en["scholar_key"],en["language"])!=(108,1,"qurtubi","en"):
+              raise SystemExit("English identity mismatch")
+          ar_hash=hashlib.sha256((ar["content"] or "").encode()).hexdigest()
+          en_hash=hashlib.sha256((en["content"] or "").encode()).hexdigest()
+          if ar_hash!="e1c72b12ee5bf92aae47d85847ccd2daaf144a215235afbdcf882a075955ecc9":
+              raise SystemExit("Arabic source drift "+ar_hash)
+          if en_hash!="60fa566a5a6b2f311d99e467d6c8569b3ad2c4c398f8a792642d4e7822760520":
+              raise SystemExit("English source drift "+en_hash)
+          text=ar["content"] or ""
+          start=text.find("الثالث أن الكوثر")
+          if start<0:
+              raise SystemExit("Q04 starting anchor absent")
+          candidates=[text.find(marker,start+1) for marker in ("قوله تعالى فصل لربك","قوله تعالى : فصل لربك","فصل لربك وانحر") if text.find(marker,start+1)>=0]
+          end=min(candidates) if candidates else len(text)
+          block=text[start:end].strip()
+          required=["قاله عكرمة","قاله الحسن","الإسلام","الشفاعة","لا إله إلا الله","الصلوات الخمس"]
+          missing=[x for x in required if x not in block]
+          if missing:
+              raise SystemExit("Q04 required markers absent "+repr(missing))
+          en_fold=(en["content"] or "").casefold()
+          coverage={
+            "book":"book" in en_fold,
+            "prophethood":"prophethood" in en_fold or "prophecy" in en_fold,
+            "quran":"quran" in en_fold or "qur'an" in en_fold,
+            "islam":"islam" in en_fold,
+            "intercession":"intercession" in en_fold,
+            "testimony":"testimony" in en_fold or "there is no god" in en_fold,
+            "five_prayers":"five prayers" in en_fold
+          }
+          print("AUDIT_MODE read-only; no writes")
+          print("Q04_ARABIC_ENTRY",ar["id"],ar_hash)
+          print("Q04_ENGLISH_ENTRY",en["id"],en_hash)
+          print("Q04_ENGLISH_COVERAGE",json.dumps(coverage,sort_keys=True))
+          print("Q04_ARABIC_BLOCK_BEGIN")
+          print(block)
+          print("Q04_ARABIC_BLOCK_END")
+          print("Q04_ATOMIC_EXTRACTION_AUDIT_PASS")
