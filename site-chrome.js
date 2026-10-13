@@ -3,6 +3,11 @@
    page didn't. Safe to include on every page (idempotent). */
 (function () {
   'use strict';
+  // Site-wide motion layer (site-motion.js). Idempotent; respects reduced motion.
+  if (!document.querySelector('script[src="site-motion.js"]') && !window.__qhMotion) {
+    var __m = document.createElement('script'); __m.src = 'site-motion.js'; __m.defer = true;
+    document.head.appendChild(__m);
+  }
   var NAV = [
     ['index.html','📖','Quran'],['campaigns.html','⚔️','Campaigns'],['research.html','🔬','Research'],
     ['themes.html','🗂️','Themes'],['madhhab.html','⚖️','Madhhab'],['sira.html','🕌','Sīra'],
