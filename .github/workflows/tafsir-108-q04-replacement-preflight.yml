@@ -1,0 +1,151 @@
+name: Preflight Surah 108 Qurtubi Q04 replacements
+on:
+  push:
+    paths:
+      - '.github/workflows/tafsir-108-q04-replacement-preflight.yml'
+      - 'data/tafsir/staging/qurtubi-108-q04-replacement-candidates-2026-10-13.json'
+      - 'data/tafsir/staging/qurtubi-108-q04-atomic-extraction-2026-10-13.json'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tafsir-108-q04-replacement-preflight
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate fourteen atomic replacements without writes
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        shell: python
+        run: |
+          import hashlib,json,os,re,unicodedata,urllib.request
+          key=os.environ.get("SUPABASE_SERVICE_KEY","")
+          if not key:
+              raise SystemExit("Missing protected database credential")
+          repl=json.load(open("data/tafsir/staging/qurtubi-108-q04-replacement-candidates-2026-10-13.json",encoding="utf-8"))
+          extraction=json.load(open("data/tafsir/staging/qurtubi-108-q04-atomic-extraction-2026-10-13.json",encoding="utf-8"))
+          qdoc=json.load(open("data/tafsir/staging/qurtubi-108-research-2026-10-12.json",encoding="utf-8"))
+          candidates=repl.get("candidates",[])
+          expected_ids=["108-Q04"+x for x in "ABCDEFGHIJKLMN"]
+          ids=[x.get("id") for x in candidates]
+          if ids!=expected_ids or len(set(ids))!=14:
+              raise SystemExit("Replacement ID set/order mismatch "+repr(ids))
+          if repl.get("database_written") is not False or repl.get("publication_ready") is not False:
+              raise SystemExit("Unsafe replacement state")
+          if extraction.get("database_written") is not False or qdoc.get("database_written") is not False:
+              raise SystemExit("Unsafe source staging state")
+          counts=repl.get("expected_counts_after_replacement",{})
+          if counts!={"current_total":52,"remove_parent":1,"add_atomic_candidates":14,"expected_total":65,"current_qurtubi":9,"expected_qurtubi":22}:
+              raise SystemExit("Replacement count contract mismatch "+repr(counts))
+          if repl.get("qurtubi_preference_guard",{}).get("preferred_existing_claims")!=["108-Q02","108-Q03"]:
+              raise SystemExit("Qurtubi preference guard mismatch")
+          expected_states={
+              "108-Q04E":"two_named_attributions_one_shared_interpretation",
+              "108-Q04H":"unnamed_report_do_not_infer",
+              "108-Q04I":"pronoun_reference_ambiguous_do_not_resolve",
+              "108-Q04L":"unnamed_report_do_not_infer",
+              "108-Q04M":"unnamed_report_do_not_infer"}
+          for c in candidates:
+              if c.get("arabic_entry_id")!=13239 or c.get("english_entry_id")!=38030 or c.get("verse_mapping")!="1":
+                  raise SystemExit("Source attachment mismatch "+c["id"])
+              if c.get("mufassir_own_position")!="reported_only" or c.get("status")!="canonical_replacement_candidate":
+                  raise SystemExit("Position/status mismatch "+c["id"])
+              required=expected_states.get(c["id"],"named_attribution")
+              if c.get("voice_state")!=required and not (c["id"]=="108-Q04N" and c.get("voice_state")=="named_post_numbered_alternative"):
+                  raise SystemExit("Voice boundary mismatch "+c["id"]+" "+repr(c.get("voice_state")))
+              if not c.get("evidence_anchor_ar") or not c.get("statement_en"):
+                  raise SystemExit("Missing evidence or statement "+c["id"])
+          base="https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/"
+          headers={"apikey":key,"Authorization":"Bearer "+key}
+          def get(path):
+              req=urllib.request.Request(base+path,headers=headers)
+              with urllib.request.urlopen(req,timeout=30) as response:
+                  return json.load(response)
+          live_entries=get("tafsir_entries?id=in.(13239,38030)&select=id,sura,aya,scholar_key,language,content,source_name,source_url&order=id")
+          by_id={x["id"]:x for x in live_entries}
+          if set(by_id)!={13239,38030}:
+              raise SystemExit("Qurtubi source inventory mismatch")
+          expected={
+              13239:((108,1,"qurtubi","ar"),"e1c72b12ee5bf92aae47d85847ccd2daaf144a215235afbdcf882a075955ecc9"),
+              38030:((108,1,"qurtubi","en"),"60fa566a5a6b2f311d99e467d6c8569b3ad2c4c398f8a792642d4e7822760520")}
+          for entry_id,(identity,digest_expected) in expected.items():
+              row=by_id[entry_id]
+              actual=(row["sura"],row["aya"],row["scholar_key"],row["language"])
+              if actual!=identity or row.get("source_name")!="Tafsir al-Qurtubi" or row.get("source_url")!="671":
+                  raise SystemExit("Source identity/locator drift "+str(entry_id))
+              digest=hashlib.sha256((row.get("content") or "").encode()).hexdigest()
+              if digest!=digest_expected:
+                  raise SystemExit("Source hash drift "+str(entry_id)+" "+digest)
+          ar=by_id[13239]["content"]
+          for c in candidates:
+              if c["evidence_anchor_ar"] not in ar:
+                  raise SystemExit("Exact Arabic anchor absent "+c["id"])
+          if extraction.get("qurtubi_adjudication",{}).get("evidence_anchor_ar") not in ar:
+              raise SystemExit("Qurtubi preference anchor absent")
+          boundary=extraction.get("translation_boundary",{})
+          if boundary.get("coverage")!="partial" or "prophethood" not in boundary.get("english_not_established",[]):
+              raise SystemExit("Translation boundary was weakened")
+          paths=[
+            "data/tafsir/staging/tabari-108-1-research-2026-10-10.json",
+            "data/tafsir/staging/ibn-kathir-108-research-2026-10-12.json",
+            "data/tafsir/staging/qurtubi-108-research-2026-10-12.json",
+            "data/tafsir/staging/jalalayn-108-research-2026-10-12.json",
+            "data/tafsir/staging/saadi-108-research-2026-10-12.json",
+            "data/tafsir/staging/tanwir-108-research-2026-10-12.json"]
+          docs=[json.load(open(p,encoding="utf-8")) for p in paths]
+          combined=[]
+          counts_actual={}
+          for doc in docs:
+              claims=doc["claims"]
+              if doc["scholar_key"]=="qurtubi":
+                  claims=[x for x in claims if x["id"]!="108-Q04"]+candidates
+              counts_actual[doc["scholar_key"]]=len(claims)
+              combined.extend((doc["scholar_key"],x["id"],x.get("statement_en") or x.get("claim","")) for x in claims)
+          expected_counts={"tabari":11,"ibn_kathir":14,"qurtubi":22,"jalalayn":5,"saadi":6,"ibn_abbas":7}
+          if counts_actual!=expected_counts or len(combined)!=65 or len({x[1] for x in combined})!=65:
+              raise SystemExit("Combined count mismatch "+json.dumps(counts_actual))
+          def norm(value):
+              value=unicodedata.normalize("NFKD",value or "").encode("ascii","ignore").decode().casefold()
+              return re.sub(r"[^a-z0-9]+"," ",value).strip()
+          local_exact=[]; local_likely=[]
+          for i,a in enumerate(combined):
+              an=norm(a[2]); aset=set(an.split())
+              if not an:
+                  raise SystemExit("Missing statement "+a[1])
+              for b in combined[i+1:]:
+                  bn=norm(b[2]); bset=set(bn.split())
+                  if an==bn:
+                      local_exact.append([a[1],b[1]])
+                  elif a[1].startswith("108-Q04") or b[1].startswith("108-Q04"):
+                      score=len(aset & bset)/len(aset | bset) if aset and bset else 0
+                      if score>=0.72:
+                          local_likely.append([a[1],b[1],round(score,3)])
+          live=get("propositions?tafsir_entry_id=eq.13239&select=id,tafsir_entry_id,statement_en,status&limit=1000")
+          live_exact=[];live_likely=[]
+          for c in candidates:
+              a=norm(c["statement_en"]); aset=set(a.split())
+              for saved in live:
+                  b=norm(saved.get("statement_en")); bset=set(b.split())
+                  if a==b:
+                      live_exact.append({"claim":c["id"],"proposition":saved["id"]})
+                  elif aset and bset:
+                      score=len(aset & bset)/len(aset | bset)
+                      if score>=0.72:
+                          live_likely.append({"claim":c["id"],"proposition":saved["id"],"jaccard":round(score,3)})
+          if local_exact or local_likely or live_exact or live_likely:
+              raise SystemExit("Duplicate review required local_exact="+json.dumps(local_exact)+" local_likely="+json.dumps(local_likely)+" live_exact="+json.dumps(live_exact)+" live_likely="+json.dumps(live_likely))
+          print("AUDIT_MODE read-only; no writes")
+          print("QURTUBI_REPLACEMENT_ROWS",len(candidates))
+          print("COMBINED_COUNTS",json.dumps(counts_actual,sort_keys=True))
+          print("COMBINED_TOTAL",len(combined))
+          print("SOURCE_HASHES_AND_EXACT_ARABIC_ANCHORS_VERIFIED",len(candidates))
+          print("VOICE_BOUNDARIES_AND_PREFERENCE_GUARD_VERIFIED")
+          print("LOCAL_EXACT_DUPLICATES",json.dumps(local_exact))
+          print("LOCAL_LIKELY_DUPLICATES",json.dumps(local_likely))
+          print("LIVE_EXACT_DUPLICATES",json.dumps(live_exact))
+          print("LIVE_LIKELY_DUPLICATES",json.dumps(live_likely))
+          print("QURTUBI_108_Q04_REPLACEMENT_PREFLIGHT_PASS")
