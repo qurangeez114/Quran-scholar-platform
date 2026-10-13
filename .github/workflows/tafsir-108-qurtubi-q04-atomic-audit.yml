@@ -19,7 +19,7 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         shell: python
         run: |
-          import hashlib, json, os, urllib.request
+          import hashlib, json, os, re, urllib.request
           key=os.environ.get("SUPABASE_SERVICE_KEY","")
           if not key:
               raise SystemExit("Missing protected database credential")
@@ -45,11 +45,14 @@ jobs:
           if en_hash!="60fa566a5a6b2f311d99e467d6c8569b3ad2c4c398f8a792642d4e7822760520":
               raise SystemExit("English source drift "+en_hash)
           text=ar["content"] or ""
-          start=text.find("الثالث أن الكوثر")
-          if start<0:
+          opening=re.search(r"الثالث\\s*[:：]?\\s*أن الكوثر",text)
+          if not opening:
               raise SystemExit("Q04 starting anchor absent")
-          candidates=[text.find(marker,start+1) for marker in ("قوله تعالى فصل لربك","قوله تعالى : فصل لربك","فصل لربك وانحر") if text.find(marker,start+1)>=0]
-          end=min(candidates) if candidates else len(text)
+          start=opening.start()
+          closings=[re.search(pattern,text[opening.end():]) for pattern in
+                    (r"قوله تعالى\\s*[:：]?\\s*فصل لربك",r"فصل لربك وانحر")]
+          offsets=[opening.end()+m.start() for m in closings if m]
+          end=min(offsets) if offsets else len(text)
           block=text[start:end].strip()
           required=["قاله عكرمة","قاله الحسن","الإسلام","الشفاعة","لا إله إلا الله","الصلوات الخمس"]
           missing=[x for x in required if x not in block]
