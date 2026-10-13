@@ -99,7 +99,6 @@
     collect(root, HEAD).forEach(function (el) {
       if (el.classList.contains('qh-head')) return;
       el.classList.add('qh-head');
-      if (el.tagName === 'H1') el.classList.add('qh-sheen');
     });
   }
 
@@ -116,8 +115,19 @@
     pending = requestAnimationFrame(function () { pending = null; refresh(document.body); });
   }
 
+  function addArchStrip() {
+    if (document.querySelector('.qh-arch-strip')) return;
+    var page = location.pathname.split('/').pop() || 'index.html';
+    if (page !== 'index.html') return;
+    var strip = document.createElement('div');
+    strip.className = 'qh-arch-strip';
+    strip.setAttribute('aria-hidden', 'true');
+    document.body.insertBefore(strip, document.body.firstChild);
+  }
+
   function init() {
     injectCss();
+    addArchStrip();
     document.documentElement.classList.add('qh-js');
     document.body.classList.add('qh-motion');
     refresh(document.body);
