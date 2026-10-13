@@ -1,0 +1,102 @@
+name: Preflight Surah 108 Qurtubi Q08 split
+on:
+  push:
+    paths:
+      - '.github/workflows/tafsir-108-qurtubi-q08-preflight.yml'
+      - 'data/tafsir/staging/qurtubi-108-q08-boundary-2026-10-13.json'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tafsir-108-qurtubi-q08-preflight
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Q08 atomic voice split without writes
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        shell: python
+        run: |
+          import hashlib,json,os,re,unicodedata,urllib.request
+          key=os.environ.get("SUPABASE_SERVICE_KEY","")
+          if not key: raise SystemExit("Missing protected database credential")
+          boundary=json.load(open("data/tafsir/staging/qurtubi-108-q08-boundary-2026-10-13.json",encoding="utf-8"))
+          stage=json.load(open("data/tafsir/staging/qurtubi-108-research-2026-10-12.json",encoding="utf-8"))
+          candidates=boundary.get("candidates",[])
+          if boundary.get("parent_claim_id")!="108-Q08" or [x.get("id") for x in candidates]!=["108-Q08A","108-Q08B"]:
+              raise SystemExit("Q08 replacement identity mismatch")
+          if boundary.get("database_written") is not False or boundary.get("publication_ready") is not False:
+              raise SystemExit("Unsafe boundary state")
+          if [x.get("id") for x in stage.get("claims",[])].count("108-Q08")!=1 or any(x.get("id") in {"108-Q08A","108-Q08B"} for x in stage.get("claims",[])):
+              raise SystemExit("Authoritative staging is not at unsplit Q08 checkpoint")
+          counts=boundary.get("expected_counts_after_replacement",{})
+          if counts!={"current_chapter_total":65,"remove_parent":1,"add_atomic_candidates":2,"expected_chapter_total":66,"current_qurtubi":22,"expected_qurtubi":23}:
+              raise SystemExit("Expected-count contract mismatch")
+          a,b=candidates
+          if a.get("voice_state")!="commentator_own_gloss" or a.get("mufassir_own_position")!="preferred":
+              raise SystemExit("Q08A commentator boundary lost")
+          if b.get("voice_state")!="unnamed_report_do_not_infer" or b.get("mufassir_own_position")!="reported_only":
+              raise SystemExit("Q08B unnamed-report boundary lost")
+          if boundary.get("voice_guard",{}).get("transmission_routes_planned")!=0:
+              raise SystemExit("Transmission route creation forbidden")
+          if any(x.get("arabic_entry_id")!=13241 or x.get("english_entry_id")!=38032 or x.get("verse_mapping")!="3" for x in candidates):
+              raise SystemExit("Q08 source mapping mismatch")
+          base="https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/"
+          headers={"apikey":key,"Authorization":"Bearer "+key}
+          def get(path):
+              req=urllib.request.Request(base+path,headers=headers)
+              with urllib.request.urlopen(req,timeout=30) as response: return json.load(response)
+          rows=get("tafsir_entries?id=in.(13241,38032)&select=id,sura,aya,scholar_key,language,content,source_name,source_url&order=id")
+          by_id={x["id"]:x for x in rows}
+          expected_identity={13241:(108,3,"qurtubi","ar"),38032:(108,3,"qurtubi","en")}
+          expected_hash={13241:"296826ec28cd8b240a23ad8d55401e858d2c8a295f98baa7181307df63e344f2",38032:"1d749b4e63e92b9af87288d55de656e21b16e2efbd30930d53308945fd13cf91"}
+          if set(by_id)!=set(expected_identity): raise SystemExit("Q08 source inventory mismatch")
+          for entry_id,identity in expected_identity.items():
+              x=by_id[entry_id]
+              if (x["sura"],x["aya"],x["scholar_key"],x["language"])!=identity: raise SystemExit("Source identity drift "+str(entry_id))
+              if x.get("source_name")!="Tafsir al-Qurtubi" or x.get("source_url")!="671": raise SystemExit("Source locator drift "+str(entry_id))
+              if hashlib.sha256((x.get("content") or "").encode()).hexdigest()!=expected_hash[entry_id]: raise SystemExit("Source hash drift "+str(entry_id))
+          def norm_ar(value):
+              value="".join(c for c in unicodedata.normalize("NFKD",value or "") if not unicodedata.combining(c) and c!="ـ")
+              return re.sub(r"\s+"," ",re.sub(r"[^\u0600-\u06ff0-9]+"," ",value)).strip()
+          arabic=norm_ar(by_id[13241]["content"])
+          for candidate in candidates:
+              fragments=[norm_ar(x) for x in re.split(r"\s*\.\.\.\s*",candidate["evidence_anchor_ar"]) if norm_ar(x)]
+              missing=[x for x in fragments if x not in arabic]
+              if missing: raise SystemExit("Arabic boundary missing "+candidate["id"]+" "+repr(missing))
+          def norm_en(value):
+              value=unicodedata.normalize("NFKD",value or "").encode("ascii","ignore").decode().casefold()
+              return re.sub(r"[^a-z0-9]+"," ",value).strip()
+          english=norm_en(by_id[38032]["content"])
+          probes={
+              "108-Q08A":[["hate","hater"],["cut off"],["world"],["hereafter"]],
+              "108-Q08B":[["as ibn","as bin","al as"],["abdullah"],["abtar","cut off"]]}
+          for cid,groups in probes.items():
+              missing=[group for group in groups if not any(term in english for term in group)]
+              if missing: raise SystemExit("English witness boundary missing "+cid+" "+repr(missing))
+          existing=get("propositions?tafsir_entry_id=eq.13241&select=id,statement_en,status&limit=1000")
+          exact=[]; likely=[]
+          for candidate in candidates:
+              atext=norm_en(candidate["statement_en"]); aset=set(atext.split())
+              for saved in existing:
+                  btext=norm_en(saved.get("statement_en")); bset=set(btext.split())
+                  if atext==btext: exact.append({"claim":candidate["id"],"proposition":saved["id"]})
+                  elif aset and bset:
+                      score=len(aset & bset)/len(aset | bset)
+                      if score>=0.72: likely.append({"claim":candidate["id"],"proposition":saved["id"],"jaccard":round(score,3)})
+          if exact or likely: raise SystemExit("Duplicate review required exact="+json.dumps(exact)+" likely="+json.dumps(likely))
+          print("AUDIT_MODE read-only; no writes")
+          print("Q08_REPLACEMENTS",len(candidates))
+          print("Q08_SOURCE_IDENTITIES_HASHES_VERIFIED",[13241,38032])
+          print("Q08_ARABIC_BOUNDARIES_VERIFIED",2)
+          print("Q08_ENGLISH_WITNESS_BOUNDARIES_VERIFIED",2)
+          print("Q08_VOICE_BOUNDARIES","commentator_own_gloss","unnamed_report")
+          print("PROPOSED_COUNTS",66,23)
+          print("TRANSMISSION_ROUTES_PLANNED",0)
+          print("LIVE_EXACT_DUPLICATES",json.dumps(exact))
+          print("LIVE_LIKELY_DUPLICATES",json.dumps(likely))
+          print("QURTUBI_108_Q08_PREFLIGHT_PASS")
