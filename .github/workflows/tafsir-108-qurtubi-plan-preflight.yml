@@ -1,0 +1,120 @@
+name: Preflight Surah 108 Qurtubi evidence voice plan
+on:
+  push:
+    paths:
+      - '.github/workflows/tafsir-108-qurtubi-plan-preflight.yml'
+      - 'data/tafsir/staging/qurtubi-108-evidence-voice-plan-2026-10-13.json'
+      - 'data/tafsir/staging/qurtubi-108-research-2026-10-12.json'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tafsir-108-qurtubi-plan-preflight
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate twenty-two Qurtubi rows without writes
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        shell: python
+        run: |
+          import hashlib,json,os,re,unicodedata,urllib.request
+          key=os.environ.get("SUPABASE_SERVICE_KEY","")
+          if not key: raise SystemExit("Missing protected database credential")
+          plan=json.load(open("data/tafsir/staging/qurtubi-108-evidence-voice-plan-2026-10-13.json",encoding="utf-8"))
+          stage=json.load(open("data/tafsir/staging/qurtubi-108-research-2026-10-12.json",encoding="utf-8"))
+          rows=plan.get("rows",[])
+          expected_ids=["108-Q01","108-Q02","108-Q03"]+[f"108-Q04{c}" for c in "ABCDEFGHIJKLMN"]+["108-Q05","108-Q06","108-Q07","108-Q08","108-Q09"]
+          ids=[row.get("claim_id") for row in rows]
+          if ids!=expected_ids or len(set(ids))!=22: raise SystemExit("Qurtubi claim set/order mismatch: "+repr(ids))
+          if plan.get("claim_count")!=22 or plan.get("reporting_work_id")!=3 or plan.get("database_written") is not False or plan.get("ready_for_database_import") is not False:
+              raise SystemExit("Unsafe plan state")
+          if stage.get("database_written") is not False: raise SystemExit("Unsafe staging state")
+          partial={"108-Q04A"}; absent={"108-Q04"+c for c in "BCDEFGHIJKLMN"}
+          unresolved={"108-Q04H","108-Q04I","108-Q04L","108-Q04M"}
+          for row in rows:
+              cid=row["claim_id"]; p,v,e,s=row["proposition"],row["voice"],row["evidence"],row["source"]
+              if p.get("speaker_name")!="al-Qurṭubī" or p.get("claim_type_id")!=43 or v.get("reporting_work_id")!=3:
+                  raise SystemExit("Unexpected proposition/work attribution "+cid)
+              expected_position="preferred" if cid in {"108-Q01","108-Q02","108-Q03"} else "reported_only"
+              if p.get("mufassir_own_position")!=expected_position: raise SystemExit("Qurtubi position guard failed "+cid)
+              coverage=s.get("translation_coverage")
+              if cid in partial and coverage!="partial_book_wording_only": raise SystemExit("Partial-English label missing "+cid)
+              if cid in absent and coverage!="corresponding_english_meaning_not_established": raise SystemExit("English-absence label missing "+cid)
+              if cid not in partial|absent and coverage!="aligned_at_retained_proposition_scope": raise SystemExit("Aligned label mismatch "+cid)
+              if not s.get("evidence_anchor_ar") or not s.get("translation_witness_entry_id"): raise SystemExit("Missing evidence locator "+cid)
+              if v.get("transmission_route_action")!="none_until_explicit_route_extracted": raise SystemExit("Unsafe route action "+cid)
+          by_claim={row["claim_id"]:row for row in rows}
+          if by_claim["108-Q04H"]["voice"]["originating_voice_type"]!="unnamed_report" or by_claim["108-Q04H"]["voice"]["originating_voice_name"] is not None:
+              raise SystemExit("Q04H unnamed boundary lost")
+          if by_claim["108-Q04I"]["voice"]["originating_voice_type"]!="ambiguous_reported_voice" or by_claim["108-Q04I"]["voice"]["originating_voice_name"] is not None:
+              raise SystemExit("Q04I ambiguity boundary lost")
+          for cid in ("108-Q04L","108-Q04M"):
+              if by_claim[cid]["voice"]["originating_voice_type"]!="unnamed_report" or by_claim[cid]["voice"]["originating_voice_name"] is not None:
+                  raise SystemExit("Unnamed boundary lost "+cid)
+          if plan["validation"].get("transmission_routes_planned")!=0 or set(plan["validation"].get("unresolved_voice_claims",[]))!=unresolved:
+              raise SystemExit("Transmission/unresolved validation drift")
+          base="https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/"
+          headers={"apikey":key,"Authorization":"Bearer "+key}
+          def get(path):
+              req=urllib.request.Request(base+path,headers=headers)
+              with urllib.request.urlopen(req,timeout=30) as response: return json.load(response)
+          ids_all=[13239,13240,13241,38030,38031,38032]
+          live=get("tafsir_entries?id=in.("+",".join(map(str,ids_all))+")&select=id,sura,aya,scholar_key,language,content,source_name,source_url&order=id")
+          by_id={row["id"]:row for row in live}
+          expected_identity={
+              13239:(108,1,"qurtubi","ar"),13240:(108,2,"qurtubi","ar"),13241:(108,3,"qurtubi","ar"),
+              38030:(108,1,"qurtubi","en"),38031:(108,2,"qurtubi","en"),38032:(108,3,"qurtubi","en")}
+          expected_hash={
+              13239:"e1c72b12ee5bf92aae47d85847ccd2daaf144a215235afbdcf882a075955ecc9",
+              13240:"0c5c2323d19824e53fcf8821838df214033284a8ea65d94a3ff5e1aecea45857",
+              13241:"296826ec28cd8b240a23ad8d55401e858d2c8a295f98baa7181307df63e344f2",
+              38030:"60fa566a5a6b2f311d99e467d6c8569b3ad2c4c398f8a792642d4e7822760520",
+              38031:"a96d7aed0bccc235c2ab86c0eed60651d677ce70d41b89b26f196dbaeda59894",
+              38032:"1d749b4e63e92b9af87288d55de656e21b16e2efbd30930d53308945fd13cf91"}
+          if set(by_id)!=set(expected_identity): raise SystemExit("Qurtubi source row inventory mismatch")
+          for entry_id,identity in expected_identity.items():
+              saved=by_id[entry_id]; actual=(saved["sura"],saved["aya"],saved["scholar_key"],saved["language"])
+              if actual!=identity: raise SystemExit("Source identity mismatch "+str(entry_id)+" "+repr(actual))
+              if saved.get("source_name")!="Tafsir al-Qurtubi" or saved.get("source_url")!="671": raise SystemExit("Source locator drift "+str(entry_id))
+              digest=hashlib.sha256((saved.get("content") or "").encode("utf-8")).hexdigest()
+              if digest!=expected_hash[entry_id]: raise SystemExit("Source hash drift "+str(entry_id)+" "+digest)
+          def norm_ar(value):
+              value="".join(c for c in unicodedata.normalize("NFKD",value or "") if not unicodedata.combining(c) and c!="ـ")
+              return re.sub(r"\s+"," ",re.sub(r"[^\u0600-\u06ff0-9]+"," ",value)).strip()
+          for row in rows:
+              text=norm_ar(by_id[row["source"]["tafsir_entry_id"]]["content"])
+              fragments=[norm_ar(x) for x in re.split(r"\s*\.\.\.\s*",row["source"]["evidence_anchor_ar"]) if norm_ar(x)]
+              missing=[x for x in fragments if x not in text]
+              if missing: raise SystemExit("Arabic anchor fragment missing "+row["claim_id"]+" "+repr(missing))
+              witness=by_id[row["source"]["translation_witness_entry_id"]]
+              if witness["aya"]!=row["source"]["verse"] or witness["language"]!="en": raise SystemExit("Translation witness mismatch "+row["claim_id"])
+          def norm_en(value):
+              value=unicodedata.normalize("NFKD",value or "").encode("ascii","ignore").decode().casefold()
+              return re.sub(r"[^a-z0-9]+"," ",value).strip()
+          existing=get("propositions?tafsir_entry_id=in.(13239,13240,13241)&select=id,tafsir_entry_id,statement_en,status&limit=1000")
+          exact=[]; likely=[]
+          for planned in rows:
+              a=norm_en(planned["proposition"]["statement_en"]); aset=set(a.split())
+              for saved in existing:
+                  b=norm_en(saved.get("statement_en")); bset=set(b.split())
+                  if a==b: exact.append({"claim":planned["claim_id"],"proposition":saved["id"]})
+                  elif aset and bset:
+                      score=len(aset & bset)/len(aset | bset)
+                      if score>=0.72: likely.append({"claim":planned["claim_id"],"proposition":saved["id"],"jaccard":round(score,3)})
+          if exact or likely: raise SystemExit("Duplicate review required exact="+json.dumps(exact)+" likely="+json.dumps(likely))
+          print("AUDIT_MODE read-only; no writes")
+          print("QURTUBI_PLAN_ROWS",len(rows))
+          print("SOURCE_IDENTITIES_HASHES_VERIFIED",sorted(by_id))
+          print("ARABIC_ANCHORS_AND_TRANSLATION_LABELS_VERIFIED",len(rows))
+          print("PREFERRED_REPORTED_COUNTS",3,19)
+          print("ENGLISH_PARTIAL_ABSENT_COUNTS",len(partial),len(absent))
+          print("UNRESOLVED_VOICE_CLAIMS",sorted(unresolved))
+          print("TRANSMISSION_ROUTES_PLANNED",0)
+          print("LIVE_EXACT_DUPLICATES",json.dumps(exact))
+          print("LIVE_LIKELY_DUPLICATES",json.dumps(likely))
+          print("QURTUBI_108_PLAN_PREFLIGHT_PASS")
