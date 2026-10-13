@@ -19,5 +19,6 @@ $('reset-form').onsubmit=async e=>{e.preventDefault();const pw=$('new-password')
 $('logout').onclick=async()=>{const {error}=await db.auth.signOut();if(error)return message(error.message);recovering=false;message('Logged out.');render();};
 $('export').onclick=()=>exportResearch().catch(e=>message(e.message));
 document.querySelectorAll('.pw-toggle').forEach(b=>b.onclick=()=>{const input=$(b.dataset.target);const show=input.type==='password';input.type=show?'text':'password';b.setAttribute('aria-pressed',String(show));b.setAttribute('aria-label',show?'Hide password':'Show password');});
+if(new URLSearchParams(location.search).get('mode')==='signup')choose('signup');
 $('delete-account').onclick=async()=>{if($('delete-confirm').value!=='DELETE')return message('Type DELETE to confirm permanent deletion.');const {error}=await db.rpc('qh_delete_account');if(error)return message(error.message);await db.auth.signOut();message('Account deleted.');render();};
 render();
