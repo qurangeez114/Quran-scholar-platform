@@ -177,8 +177,9 @@
   </div>
 
   <script type="module">
+    import {escapeHTML} from './accounts/text.js';
     import { supabase } from './accounts/client.js';
-    import { getCourses, getEnrollment, enrollInCourse } from './courses-api.js';
+    import { getCourses, getEnrollment, enrollInCourse, isStaff } from './courses-api.js';
 
     let courses = [];
     let currentUser = null;
@@ -194,7 +195,7 @@
         statusBar.classList.add('logged-in');
         statusBar.classList.remove('not-logged-in');
         statusText.textContent = `✓ Logged in as ${currentUser.email}`;
-        document.getElementById('adminLink').style.display = 'inline-block';
+        document.getElementById('adminLink').style.display = await isStaff().catch(()=>false) ? 'inline-block' : 'none';
       } else {
         statusBar.classList.add('not-logged-in');
         statusBar.classList.remove('logged-in');
@@ -248,8 +249,8 @@
         card.innerHTML = `
           <div class="course-thumbnail">📖</div>
           <div class="course-content">
-            <div class="course-title">${course.title}</div>
-            <div class="course-description">${course.description || 'No description'}</div>
+            <div class="course-title">${escapeHTML(course.title)}</div>
+            <div class="course-description">${escapeHTML(course.description || 'No description')}</div>
             <div class="course-meta">
               <span>${lessonCount} lessons</span>
               <span>${isEnrolled ? '✓ Enrolled' : 'Free'}</span>

@@ -298,6 +298,7 @@
   </div>
 
   <script type="module">
+    import {escapeHTML} from '../accounts/text.js';
     import { supabase } from '../accounts/client.js';
 
     let currentUser = null;
@@ -471,22 +472,7 @@
         if (courseError) throw courseError;
         if (!courses.length) return;
 
-        const { data: quizData, error: quizError } = await supabase
-          .from('qh_quiz_answers')
-          .select(`
-            *,
-            qh_quizzes(
-              title,
-              questions,
-              passing_score,
-              qh_lessons(
-                title,
-                course_id
-              )
-            ),
-            qh_profiles(first_name, last_name)
-          `)
-          .in('qh_quizzes.qh_lessons.course_id', courses.map(c => c.id));
+        const { data: quizData, error: quizError } = await supabase.rpc('qh_instructor_quiz_results');
 
         if (quizError) throw quizError;
 
@@ -509,31 +495,31 @@
       container.innerHTML = quizzes.map(q => {
         const quiz = q.qh_quizzes;
         const passed = q.passed;
-        const percentage = Math.round((q.score / (quiz.questions?.length || 1)) * 100);
+        const percentage = q.score;
 
         return `
           <div class="submission-item">
-            <div class="submission-title">${quiz.title}</div>
+            <div class="submission-title">${escapeHTML(quiz.title)}</div>
             <div class="submission-meta">
-              Student: ${q.qh_profiles?.first_name || 'Unknown'} ${q.qh_profiles?.last_name || ''} |
+              Student: ${escapeHTML(q.qh_profiles?.display_name || 'Student')} |
               Submitted: ${new Date(q.submitted_at).toLocaleDateString()}
             </div>
             <div style="margin-top: 0.5rem;">
               <span class="submission-status ${passed ? 'status-passed' : 'status-failed'}">
-                ${passed ? '✓ Passed' : '✗ Failed'} - ${q.score}/${quiz.questions?.length || 0} (${percentage}%)
+                ${passed ? '✓ Passed' : '✗ Failed'} - ${percentage}%
               </span>
             </div>
             <div style="margin-top: 0.75rem; padding: 1rem; background: white; border-radius: 6px;">
-              ${quiz.questions?.map((q, idx) => {
+              ${quiz.questions?.map((question, idx) => {
                 const studentAns = q.answers?.[idx];
-                const correct = studentAns === q.correct_answer;
+                const correct = studentAns === question.correct_answer;
                 return `
                   <div class="quiz-question-review">
-                    <div class="quiz-q">${idx + 1}. ${q.question}</div>
+                    <div class="quiz-q">${idx + 1}. ${escapeHTML(question.question)}</div>
                     <div class="quiz-student-ans ${correct ? 'correct' : 'wrong'}">
-                      Student: ${studentAns || 'No answer'} ${correct ? '✓' : '✗'}
+                      Student: ${escapeHTML(studentAns || 'No answer')} ${correct ? '✓' : '✗'}
                     </div>
-                    <div class="quiz-correct-ans">Correct: ${q.correct_answer}</div>
+                    <div class="quiz-correct-ans">Correct: ${escapeHTML(question.correct_answer)}</div>
                   </div>
                 `;
               }).join('')}

@@ -390,6 +390,7 @@
   </div>
 
   <script type="module">
+    import {escapeHTML} from './accounts/text.js';
     import { supabase } from './accounts/client.js';
     import {
       getCourseById,
@@ -401,6 +402,7 @@
       likeDiscussionPost,
       unlikeDiscussionPost,
       submitQuiz,
+      getQuiz,
       submitAssignment,
       uploadAssignmentFile,
       updateStudentProgress,
@@ -474,14 +476,14 @@
       const completeBtn = document.getElementById('completeBtn');
 
       if (currentLesson.lesson_type === 'text') {
-        content.innerHTML = `<div>${currentLesson.content || 'No content'}</div>`;
+        content.innerHTML = `<div>${escapeHTML(currentLesson.content || 'No content')}</div>`;
         completeBtn.style.display = 'block';
       } else if (currentLesson.lesson_type === 'video') {
         content.innerHTML = `
           <div>
             <p><strong>Video Lesson</strong></p>
-            <p>${currentLesson.video_url || 'No video URL'}</p>
-            <p style="color: #999; font-size: 0.9rem;">Video URL: ${currentLesson.video_url}</p>
+            <p>${escapeHTML(currentLesson.video_url || 'No video URL')}</p>
+            <p style="color: #999; font-size: 0.9rem;">Video URL: ${escapeHTML(currentLesson.video_url)}</p>
           </div>
         `;
         completeBtn.style.display = 'block';
@@ -496,15 +498,7 @@
 
     async function loadQuiz() {
       try {
-        const { data, error } = await supabase
-          .from('qh_quizzes')
-          .select('*')
-          .eq('lesson_id', currentLesson.id)
-          .single();
-
-        if (error) throw error;
-
-        currentQuiz = data;
+        currentQuiz = await getQuiz(currentLesson.id);
         renderQuiz();
       } catch (error) {
         console.error('Error loading quiz:', error);
@@ -521,13 +515,13 @@
 
       container.innerHTML = currentQuiz.questions.map((q, idx) => `
         <div class="quiz-question">
-          <h4>${idx + 1}. ${q.question}</h4>
+          <h4>${idx + 1}. ${escapeHTML(q.question)}</h4>
           <div class="quiz-option">
             ${q.options ? q.options.map((opt, optIdx) => `
               <div style="margin-bottom: 0.5rem;">
                 <label>
-                  <input type="radio" name="q${idx}" value="${opt}" required>
-                  ${opt}
+                  <input type="radio" name="q${idx}" value="${escapeHTML(opt)}" required>
+                  ${escapeHTML(opt)}
                 </label>
               </div>
             `).join('') : ''}
@@ -549,23 +543,17 @@
         answers.push(selected ? selected.value : '');
       }
 
-      // Calculate score
-      let score = 0;
-      answers.forEach((ans, idx) => {
-        if (ans === currentQuiz.questions[idx].correct_answer) score++;
-      });
-
       try {
-        await submitQuiz(currentQuiz.id, answers, score);
-
-        const passed = score >= currentQuiz.passing_score;
-        const percentage = Math.round((score / currentQuiz.questions.length) * 100);
+        const result = await submitQuiz(currentQuiz.id, answers);
+        const score = result.correct_count;
+        const passed = result.passed;
+        const percentage = result.score;
 
         // Update student progress
         await updateStudentProgress(
           currentCourse.id,
           currentLesson.id,
-          true, // marked as completed
+          passed, // only a passing quiz counts as completed
           percentage
         );
 
@@ -684,7 +672,7 @@
 
       container.innerHTML = threads.map(thread => `
         <div class="discussion-thread" onclick="viewThread('${thread.id}')">
-          <div class="thread-title">${thread.title}</div>
+          <div class="thread-title">${escapeHTML(thread.title)}</div>
           <div class="thread-meta">
             Started: ${new Date(thread.created_at).toLocaleDateString()} |
             Replies: ${thread.qh_discussion_posts?.[0]?.count || 0}
@@ -716,8 +704,8 @@
     async function loadThreadPosts() {
       try {
         const posts = await getDiscussionPosts(currentThreadId);
-        renderThreadPosts(posts);
         showThreadViewer();
+        renderThreadPosts(posts);
       } catch (error) {
         console.error('Error loading posts:', error);
         showAlert('Failed to load posts', 'error');
@@ -732,14 +720,14 @@
         <div class="discussion-post" style="margin-bottom: 1.5rem; padding: 1rem; background: #f9f9f9; border-radius: 8px; border-left: 4px solid #667eea;">
           <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.5rem;">
             <div style="font-weight: 600; color: #333;">
-              ${post.qh_profiles?.first_name || 'Anonymous'} ${post.qh_profiles?.last_name || ''}
+              ${escapeHTML(post.qh_profiles?.first_name || 'Anonymous')} ${escapeHTML(post.qh_profiles?.last_name || '')}
             </div>
             <div style="font-size: 0.85rem; color: #999;">
               ${new Date(post.created_at).toLocaleString()}
             </div>
           </div>
           <div style="margin-bottom: 1rem; color: #555; line-height: 1.6;">
-            ${post.content}
+            ${escapeHTML(post.content)}
           </div>
           <div style="display: flex; gap: 1rem; align-items: center;">
             <button onclick="toggleLikePost('${post.id}')"
@@ -795,7 +783,7 @@
         <div style="background: white; border-radius: 12px; max-width: 600px; max-height: 80vh; overflow-y: auto; padding: 2rem; position: relative;">
           <button onclick="closeThreadViewer()" style="position: absolute; top: 1rem; right: 1rem; background: none; border: none; font-size: 1.5rem; cursor: pointer;">✕</button>
 
-          <h2 style="margin-bottom: 1.5rem; color: #333;">${currentThreadTitle}</h2>
+          <h2 style="margin-bottom: 1.5rem; color: #333;">${escapeHTML(currentThreadTitle)}</h2>
 
           <div id="threadPostsContainer"></div>
 
@@ -813,7 +801,6 @@
 
       // Reload posts
       const postsContainer = document.getElementById('threadPostsContainer');
-      loadThreadPosts();
     }
 
     window.closeThreadViewer = function() {

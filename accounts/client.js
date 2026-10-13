@@ -3,3 +3,6 @@ export const db=createClient('https://ylosytbxpzxzwfzjpaej.supabase.co',"eyJhbGc
 export async function user(){const {data,error}=await db.auth.getUser();if(error||!data.user)throw Error('Please log in to continue.');return data.user;}
 export function message(text){document.getElementById('status').textContent=text;}
 export async function exportResearch(){await user();const {data,error}=await db.from('qh_research').select('*');if(error)throw error;const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));a.download='quranhikma-research.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
+
+// Shared alias used by the learning pages. Both names refer to the same client.
+export const supabase = db;

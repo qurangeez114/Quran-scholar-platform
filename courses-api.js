@@ -438,24 +438,26 @@ export async function createDiscussionPost(threadId, content) {
   return data;
 }
 
-export async function submitQuiz(quizId, answers, score) {
-  const user = (await supabase.auth.getUser()).data.user;
-  if (!user) throw new Error('Not authenticated');
-
-  const { data, error } = await supabase
-    .from('qh_quiz_answers')
-    .upsert({
-      quiz_id: quizId,
-      user_id: user.id,
-      answers,
-      score,
-      passed: score >= 70
-    })
-    .select()
-    .single();
-
-  if (error) throw error;
+export async function submitQuiz(quizId, answers) {
+  const {data,error} = await supabase.rpc('qh_submit_quiz', {p_quiz_id:quizId,p_answers:answers});
+  if(error) throw error;
   return data;
+}
+
+export async function getQuiz(lessonId) {
+  const {data,error} = await supabase.rpc('qh_get_quiz',{p_lesson_id:lessonId});
+  if(error) throw error;
+  return data;
+}
+export async function saveQuiz(lessonId, questions, passingScore) {
+  const {data,error} = await supabase.rpc('qh_save_quiz',{p_lesson_id:lessonId,p_questions:questions,p_passing_score:passingScore});
+  if(error) throw error;
+  return data;
+}
+export async function isStaff() {
+  const {data,error} = await supabase.rpc('qh_is_staff');
+  if(error) throw Error('Class administration is not configured yet.');
+  return data === true;
 }
 
 export async function submitAssignment(assignmentId, content, fileUrl = null, fileName = null) {
@@ -612,7 +614,7 @@ export async function updateStudentProgress(courseId, lessonId, completed = fals
 
   const { data, error } = await supabase
     .from('qh_student_progress')
-    .upsert(progressData)
+    .upsert(progressData, {onConflict:'user_id,lesson_id'})
     .select()
     .single();
 
