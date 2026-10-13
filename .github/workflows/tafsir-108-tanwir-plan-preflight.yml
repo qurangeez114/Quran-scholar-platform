@@ -1,0 +1,108 @@
+name: Preflight Surah 108 Tanwir evidence voice plan
+on:
+  push:
+    paths:
+      - '.github/workflows/tafsir-108-tanwir-plan-preflight.yml'
+      - 'data/tafsir/staging/tanwir-108-evidence-voice-plan-2026-10-13.json'
+      - 'data/tafsir/staging/tanwir-108-research-2026-10-12.json'
+      - 'data/tafsir/staging/tanwir-108-entry-29982-encoding-decision-2026-10-13.json'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tafsir-108-tanwir-plan-preflight
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate seven disputed-attribution rows without writes
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        shell: python
+        run: |
+          import hashlib, json, os, re, unicodedata, urllib.parse, urllib.request
+          key=os.environ.get("SUPABASE_SERVICE_KEY","")
+          if not key:
+              raise SystemExit("Missing protected database credential")
+          plan=json.load(open("data/tafsir/staging/tanwir-108-evidence-voice-plan-2026-10-13.json",encoding="utf-8"))
+          stage=json.load(open("data/tafsir/staging/tanwir-108-research-2026-10-12.json",encoding="utf-8"))
+          decision=json.load(open("data/tafsir/staging/tanwir-108-entry-29982-encoding-decision-2026-10-13.json",encoding="utf-8"))
+          rows=plan.get("rows",[])
+          ids=[row.get("claim_id") for row in rows]
+          expected_ids=["108-W01","108-W02","108-W03","108-W04","108-W05","108-W06","108-W07"]
+          if ids!=expected_ids or len(set(ids))!=7:
+              raise SystemExit("Tanwir claim set/order mismatch: "+repr(ids))
+          if plan.get("claim_count")!=7 or plan.get("database_written") is not False or plan.get("ready_for_database_import") is not False:
+              raise SystemExit("Unsafe plan state")
+          if stage.get("database_written") is not False or decision.get("database_written") is not False:
+              raise SystemExit("Unsafe staging/decision state")
+          for row in rows:
+              p,v,e=row["proposition"],row["voice"],row["evidence"]
+              if "disputed" not in p.get("speaker_name","").casefold():
+                  raise SystemExit("Missing proposition dispute label "+row["claim_id"])
+              if "disputed" not in v.get("originating_voice_name","").casefold():
+                  raise SystemExit("Missing voice dispute label "+row["claim_id"])
+              if "disputed" not in e.get("attributed_authority_name","").casefold():
+                  raise SystemExit("Missing evidence dispute label "+row["claim_id"])
+              if v.get("reporting_work_id")!=56 or v.get("transmission_route_action")!="none":
+                  raise SystemExit("Unsafe voice/route plan "+row["claim_id"])
+              if not row["source"].get("evidence_anchor_ar"):
+                  raise SystemExit("Missing Arabic anchor "+row["claim_id"])
+          if plan["validation"].get("transmission_routes_planned")!=0:
+              raise SystemExit("Transmission route creation is forbidden")
+          if decision["decision"].get("database_repair_authorized") is not False:
+              raise SystemExit("Entry 29982 repair must remain unauthorized")
+          base="https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/"
+          headers={"apikey":key,"Authorization":"Bearer "+key}
+          def get(path):
+              req=urllib.request.Request(base+path,headers=headers)
+              with urllib.request.urlopen(req,timeout=30) as response:
+                  return json.load(response)
+          live_entries=get("tafsir_entries?id=in.(29980,29981,29982)&select=id,sura,aya,scholar_key,language,content&order=id")
+          by_id={row["id"]:row for row in live_entries}
+          expected_identity={
+              29980:(108,1,"ibn_abbas","en"),
+              29981:(108,2,"ibn_abbas","en"),
+              29982:(108,3,"ibn_abbas","en")}
+          expected_hash={
+              29980:"212a378f1bdffbbd016c42205a39c8ec1e572b8ab976c321b34f39806c60335e",
+              29981:"9c2e89421a4567bbe4b0c40b018a2826a8712988fcaf82e74926f656854ebd47",
+              29982:"6122617e7838708a2b33368485668b9f3ec7e6aca695fb552c62196978f59e42"}
+          if set(by_id)!=set(expected_identity):
+              raise SystemExit("Tanwir source row inventory mismatch")
+          for entry_id,identity in expected_identity.items():
+              row=by_id[entry_id]
+              actual=(row["sura"],row["aya"],row["scholar_key"],row["language"])
+              if actual!=identity:
+                  raise SystemExit("Source identity mismatch "+str(entry_id)+" "+repr(actual))
+              digest=hashlib.sha256((row.get("content") or "").encode("utf-8")).hexdigest()
+              if digest!=expected_hash[entry_id]:
+                  raise SystemExit("Source hash drift "+str(entry_id)+" "+digest)
+          def norm(value):
+              value=unicodedata.normalize("NFKD",value or "").encode("ascii","ignore").decode().casefold()
+              return re.sub(r"[^a-z0-9]+"," ",value).strip()
+          existing=get("propositions?tafsir_entry_id=in.(29980,29981,29982)&select=id,tafsir_entry_id,statement_en,status&limit=1000")
+          exact=[]; likely=[]
+          for planned in rows:
+              a=norm(planned["proposition"]["statement_en"]); aset=set(a.split())
+              for saved in existing:
+                  b=norm(saved.get("statement_en")); bset=set(b.split())
+                  if a==b:
+                      exact.append({"claim":planned["claim_id"],"proposition":saved["id"]})
+                  elif aset and bset:
+                      score=len(aset & bset)/len(aset | bset)
+                      if score>=0.72:
+                          likely.append({"claim":planned["claim_id"],"proposition":saved["id"],"jaccard":round(score,3)})
+          if exact or likely:
+              raise SystemExit("Duplicate review required exact="+json.dumps(exact)+" likely="+json.dumps(likely))
+          print("AUDIT_MODE read-only; no writes")
+          print("TANWIR_PLAN_ROWS",len(rows))
+          print("SOURCE_IDENTITIES_AND_HASHES_VERIFIED",sorted(by_id))
+          print("DISPUTED_ATTRIBUTION_LABELS_VERIFIED",len(rows))
+          print("TRANSMISSION_ROUTES_PLANNED",0)
+          print("LIVE_EXACT_DUPLICATES",json.dumps(exact))
+          print("LIVE_LIKELY_DUPLICATES",json.dumps(likely))
+          print("TANWIR_108_PLAN_PREFLIGHT_PASS")
