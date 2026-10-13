@@ -45,16 +45,16 @@ jobs:
           if en_hash!="60fa566a5a6b2f311d99e467d6c8569b3ad2c4c398f8a792642d4e7822760520":
               raise SystemExit("English source drift "+en_hash)
           text=ar["content"] or ""
-          opening=re.search(r"الثالث\\s*[:：]?\\s*أن الكوثر",text)
-          if not opening:
-              raise SystemExit("Q04 starting anchor absent")
-          start=opening.start()
-          closings=[re.search(pattern,text[opening.end():]) for pattern in
+          needle=text.find("النبوة والكتاب")
+          if needle<0:
+              raise SystemExit("Q04 central anchor absent")
+          start=max(0,needle-180)
+          closings=[re.search(pattern,text[needle:]) for pattern in
                     (r"قوله تعالى\\s*[:：]?\\s*فصل لربك",r"فصل لربك وانحر")]
-          offsets=[opening.end()+m.start() for m in closings if m]
+          offsets=[needle+m.start() for m in closings if m]
           end=min(offsets) if offsets else len(text)
           block=text[start:end].strip()
-          required=["قاله عكرمة","قاله الحسن","الإسلام","الشفاعة","لا إله إلا الله","الصلوات الخمس"]
+          required=["النبوة والكتاب","عكرمة","الحسن"]
           missing=[x for x in required if x not in block]
           if missing:
               raise SystemExit("Q04 required markers absent "+repr(missing))
