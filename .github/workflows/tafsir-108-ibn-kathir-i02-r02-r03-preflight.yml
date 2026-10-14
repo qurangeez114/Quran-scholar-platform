@@ -1,0 +1,74 @@
+name: Validate Surah 108 Ibn Kathir I02 R02 R03 printed source
+on:
+  push:
+    paths:
+      - '.github/workflows/tafsir-108-ibn-kathir-i02-r02-r03-preflight.yml'
+      - 'data/tafsir/staging/ibn-kathir-108-i02-r02-r03-printed-source-review-2026-10-14.json'
+      - 'data/tafsir/staging/ibn-kathir-108-route-extraction-2026-10-12.json'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tafsir-108-ibn-kathir-i02-r02-r03-preflight
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate printed locators and live Arabic route parts
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        shell: python
+        run: |
+          import json,os,re,unicodedata,urllib.parse,urllib.request
+          p='data/tafsir/staging/ibn-kathir-108-i02-r02-r03-printed-source-review-2026-10-14.json'
+          r='data/tafsir/staging/ibn-kathir-108-route-extraction-2026-10-12.json'
+          review=json.load(open(p,encoding='utf-8'))
+          extraction=json.load(open(r,encoding='utf-8'))
+          if review['schema_version']!='quranhikma-printed-route-source-review-v1': raise SystemExit('Schema mismatch')
+          if (review['surah'],review['verse'],review['scholar_key'],review['claim_id'])!=(108,1,'ibn_kathir','108-I02'): raise SystemExit('Identity mismatch')
+          if review.get('database_written') is not False or review.get('publication_ready') is not False: raise SystemExit('Unsafe publication metadata')
+          rows=review['route_reviews']
+          if [x['route_id'] for x in rows]!=['108-I02-R02','108-I02-R03']: raise SystemExit('Route identity/order mismatch')
+          byid={x['route_id']:x for x in rows}
+          if byid['108-I02-R02']['editor_footnote_locator']!='al-Musnad (2/247)': raise SystemExit('R02 printed locator mismatch')
+          if byid['108-I02-R03']['editor_footnote_locator']!='al-Musnad (3/103)': raise SystemExit('R03 printed locator mismatch')
+          for rid in byid:
+              x=byid[rid]
+              if x['source_locator_state']!='verified_in_printed_ibn_kathir_footnote_not_independently_reconciled_to_a_musnad_edition': raise SystemExit('External-source guard mismatch '+rid)
+              if x['topology_decision']!='distinct_lower_chain_converging_at_anas' or x['convergence_point']!='Anas ibn Malik only': raise SystemExit('Topology mismatch '+rid)
+              if x.get('publication_ready') is not False: raise SystemExit('Unsafe route publication flag '+rid)
+          src=review['source']
+          if (src['volume'],src['pages'],src['page_498_url'],src['page_499_url'])!=(8,[498,499],'https://shamela.ws/book/8473/4544','https://shamela.ws/book/8473/4545'): raise SystemExit('Printed source identity mismatch')
+          b=review['bounded_result']
+          if (b['routes_reviewed'],b['printed_chain_locators_verified'],b['printed_editor_source_locators_verified'],b['directly_reconciled_external_collection_records'],b['independent_propositions_added'],b['safe_claim_count_change'],b['database_writes'])!=(2,2,2,0,0,0,0): raise SystemExit('Bounded result mismatch')
+          group=next(x for x in extraction['route_groups'] if x['claim_id']=='108-I02')
+          initial={x['route_id']:x for x in group['routes']}
+          for rid in byid:
+              if initial[rid]['arabic_locator']!=byid[rid]['chain_locator_ar']: raise SystemExit('Route extraction mismatch '+rid)
+          key=os.environ.get('SUPABASE_SERVICE_KEY','')
+          if not key: raise SystemExit('Missing protected database credential')
+          base='https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/tafsir_entries'
+          params={'id':'eq.48457','select':'id,sura,aya,language,content,scholar_key'}
+          req=urllib.request.Request(base+'?'+urllib.parse.urlencode(params),headers={'apikey':key,'Authorization':'Bearer '+key})
+          with urllib.request.urlopen(req,timeout=30) as response: live=json.load(response)
+          if len(live)!=1 or (live[0]['id'],live[0]['sura'],live[0]['aya'],live[0]['language'],live[0]['scholar_key'])!=(48457,108,1,'ar','ibn_kathir'): raise SystemExit('Live source identity mismatch')
+          def norm(s):
+              s=re.sub(r'<[^>]+>',' ',s or '')
+              s=''.join(ch for ch in unicodedata.normalize('NFKD',s) if not unicodedata.combining(ch) and ch!='ـ')
+              return ' '.join(re.sub(r'[،؛؟:()\[\]{}﴿﴾]+',' ',s).split())
+          hay=norm(live[0]['content'])
+          parts={'108-I02-R02':['عفان','حماد','ثابت'],'108-I02-R03':['محمد بن أبي عدي','حميد']}
+          missing={rid:[x for x in vals if norm(x) not in hay] for rid,vals in parts.items()}
+          missing={rid:vals for rid,vals in missing.items() if vals}
+          if missing: raise SystemExit('Live Arabic route-part failure '+json.dumps(missing,ensure_ascii=False))
+          print('AUDIT_MODE read-only; no writes')
+          print('R02_PRINT','vol 8 pp 498-499; editor footnote al-Musnad 2/247')
+          print('R03_PRINT','vol 8 p 499; editor footnote al-Musnad 3/103')
+          print('EXTERNAL_RECONCILIATION',0,'direct Musnad records; remains pending')
+          print('CLAIM_COUNT_CHANGE',0)
+          print('IBN_KATHIR_108_I02_R02_R03_PRINTED_SOURCE_PASS')
+
+# Printed-source verification does not authenticate a route or authorize publication.
