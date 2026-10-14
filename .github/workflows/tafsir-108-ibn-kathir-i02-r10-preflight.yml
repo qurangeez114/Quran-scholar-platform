@@ -1,0 +1,77 @@
+name: Preflight Surah 108 Ibn Kathir I02 R10 primary review
+on:
+  push:
+    paths:
+      - '.github/workflows/tafsir-108-ibn-kathir-i02-r10-preflight.yml'
+      - 'data/tafsir/staging/ibn-kathir-108-i02-r10-primary-review-2026-10-14.json'
+      - 'data/tafsir/staging/ibn-kathir-108-route-extraction-2026-10-12.json'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tafsir-108-ibn-kathir-i02-r10-preflight
+  cancel-in-progress: false
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate R10 comparison and live Arabic witness
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        shell: python
+        run: |
+          import json,os,re,urllib.request,unicodedata
+          rp='data/tafsir/staging/ibn-kathir-108-i02-r10-primary-review-2026-10-14.json'
+          ep='data/tafsir/staging/ibn-kathir-108-route-extraction-2026-10-12.json'
+          review=json.load(open(rp,encoding='utf-8')); routes=json.load(open(ep,encoding='utf-8'))
+          required={'schema_version':'quranhikma-tafsir-route-source-review-v1','surah':108,
+            'scholar_key':'ibn_kathir','claim_id':'108-I02','route_id':'108-I02-R10',
+            'status':'bounded_primary_comparison_complete_not_publication_ready',
+            'database_written':False,'publication_ready':False}
+          for k,v in required.items():
+              if review.get(k)!=v: raise SystemExit(f'Unsafe or mismatched {k}: {review.get(k)!r}')
+          cmp=review.get('comparison',{})
+          if cmp.get('decision')!='direct_tabari_match_same_report_cluster_with_two_branch_segmentation':
+              raise SystemExit('R10 comparison decision missing')
+          if cmp.get('exact_single_chain_match') is not False or len(cmp.get('textual_or_topological_variants',[]))!=2:
+              raise SystemExit('R10 topology guard failed')
+          if cmp.get('authentication_state')!='not_assessed' or cmp.get('proposition_count_effect')!=0:
+              raise SystemExit('R10 scope or proposition count changed')
+          direct=review.get('direct_tabari_witness',{})
+          if direct.get('work')!='Jami al-bayan (Tafsir al-Tabari)' or direct.get('interface_locator')!='public text lines 30-32':
+              raise SystemExit('R10 direct source locator missing')
+          branches=direct.get('branches',[])
+          if [b.get('branch') for b in branches]!=['Sufyan',"Isra'il"]:
+              raise SystemExit('R10 direct branches changed')
+          route_list=list(routes.get('follow_on_routes_recovered_from_bounded_context',[]))
+          for group in routes.get('route_groups',[]): route_list.extend(group.get('routes',[]))
+          r10=next((r for r in route_list if r.get('route_id')=='108-I02-R10'),None)
+          if not r10: raise SystemExit('R10 missing from route extraction')
+          route_anchor=r10.get('arabic_locator') or r10.get('arabic_anchor') or r10.get('chain_arabic') or r10.get('source_anchor')
+          if route_anchor!=review['ibn_kathir_witness']['arabic_anchor']:
+              raise SystemExit('R10 route extraction and staged witness differ')
+          key=os.environ.get('SUPABASE_SERVICE_KEY','')
+          if not key: raise SystemExit('Missing protected database credential')
+          headers={'apikey':key,'Authorization':'Bearer '+key}
+          req=urllib.request.Request('https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/tafsir_entries?id=eq.48457&select=id,sura,aya,language,scholar_key,content&limit=1',headers=headers)
+          with urllib.request.urlopen(req,timeout=30) as resp: rows=json.load(resp)
+          if len(rows)!=1: raise SystemExit('Expected live tafsir entry 48457')
+          row=rows[0]
+          if (row.get('id'),row.get('sura'),row.get('aya'),row.get('language'),row.get('scholar_key'))!=(48457,108,1,'ar','ibn_kathir'):
+              raise SystemExit('Live identity mismatch')
+          def norm(s):
+              s=unicodedata.normalize('NFKC',s or '')
+              s=re.sub(r'[\u064b-\u065f\u0670\u06d6-\u06ed]','',s)
+              s=re.sub(r'[،؛:,.!?؟\"“”()\[\]]',' ',s)
+              return re.sub(r'\s+',' ',s).strip()
+          live=norm(row.get('content',''))
+          missing=[a for a in review['validation']['required_live_anchors'] if norm(a) not in live]
+          if missing: raise SystemExit('Missing live Arabic anchors: '+json.dumps(missing,ensure_ascii=False))
+          print('AUDIT_MODE read-only; no writes')
+          print('R10_DECISION',cmp['decision'])
+          print('R10_VARIANTS',json.dumps(cmp['textual_or_topological_variants'],ensure_ascii=False))
+          print('R10_AUTHENTICATION',cmp['authentication_state'])
+          print('R10_PROPOSITION_COUNT_EFFECT',cmp['proposition_count_effect'])
+          print('TAFSIR_108_IBN_KATHIR_I02_R10_PREFLIGHT_PASS')
