@@ -79,6 +79,13 @@ jobs:
                   if not (0<=a<b<=len(text)): raise SystemExit("Invalid raw range "+cid)
                   if norm_ar(ev["normalized_arabic_anchor"]) not in norm_ar(text[a:b]):
                       raise SystemExit("Normalized range anchor absent "+cid)
+              elif ev["locator_kind"]=="exact_outer_report_range":
+                  a,b=int(ev["raw_start"]),int(ev["raw_end"]); unit=text[a:b].strip()
+                  if not (0<=a<b<=len(text)): raise SystemExit("Invalid outer range "+cid)
+                  if len(ev.get("evidence_unit_hashes",[]))!=1 or hashlib.sha256(unit.encode()).hexdigest()!=ev["evidence_unit_hashes"][0]:
+                      raise SystemExit("Outer unit hash mismatch "+cid)
+                  for anchor in ev.get("arabic_anchors",[]):
+                      if anchor not in unit: raise SystemExit("Outer Arabic anchor absent "+cid)
               else: raise SystemExit("Unknown locator kind "+cid)
           live=get("propositions",{"tafsir_entry_id":"in.(5261,5262,5263)","select":"id,tafsir_entry_id,statement_en,status","limit":"1000"})
           def norm_en(v):
