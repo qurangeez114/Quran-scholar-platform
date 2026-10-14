@@ -1,0 +1,90 @@
+name: Audit Tabari Surah 108 chain boundaries
+on:
+  push:
+    paths:
+      - '.github/workflows/tafsir-108-tabari-chain-audit.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Verify claim anchors and emit bounded chain contexts
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        shell: python
+        run: |
+          import hashlib,json,os,re,unicodedata,urllib.parse,urllib.request
+          key=os.environ.get("SUPABASE_SERVICE_KEY","")
+          if not key: raise SystemExit("Missing protected database credential")
+          base="https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/tafsir_entries"
+          def get(params):
+              req=urllib.request.Request(base+"?"+urllib.parse.urlencode(params),headers={"apikey":key,"Authorization":"Bearer "+key})
+              with urllib.request.urlopen(req,timeout=30) as r: return json.load(r)
+          def norm_with_map(s):
+              out=[]; pos=[]
+              for i,c in enumerate(s or ""):
+                  if c=="ـ": continue
+                  for d in unicodedata.normalize("NFKD",c):
+                      if unicodedata.combining(d): continue
+                      if d in "،؛؟:()[]{}﴿﴾": d=" "
+                      out.append(d); pos.append(i)
+              text="".join(out)
+              return text,pos
+          def find_raw(text,anchor):
+              nt,pos=norm_with_map(text); na,_=norm_with_map(anchor)
+              na=re.sub(r"\s+"," ",na).strip()
+              # Flexible whitespace, exact Arabic words.
+              pattern=r"\s+".join(re.escape(x) for x in na.split())
+              m=re.search(pattern,nt)
+              if not m: return None
+              a=pos[m.start()]; b=pos[min(m.end()-1,len(pos)-1)]+1
+              return a,b
+          rows=get({"id":"in.(5261,5262,5263)","select":"id,aya,language,content,source_name,source_url","order":"id.asc"})
+          if len(rows)!=3 or any(x.get("language")!="ar" for x in rows):
+              raise SystemExit("Expected exactly three Arabic Tabari rows")
+          expected={
+            5261:"2eae44dd583cc8562eeda7d40aafeeecddd22b3b73055dcfec1363b6c27c87f4",
+            5262:"55143e1930f2511d2af04570d8e8e1091490c769829840a0ea03b92178992314",
+            5263:"dd11e99471301b8b2044d0dddb518a375a69b4c4e8d654ac966ecc1ee46da988"
+          }
+          specs=[
+            ("108-T01",5261,"هو نهر في الجنة"),
+            ("108-T02",5261,"عني بالكوثر الخير الكثير"),
+            ("108-T03",5261,"النهر الذي في الجنة من الخير الذي أعطاه الله إياه"),
+            ("108-T04",5261,"والقرآن والحكمة"),
+            ("108-T05",5261,"حوض أعطيه رسول الله"),
+            ("108-T06",5261,"وأولى هذه الأقوال بالصواب عندي"),
+            ("108-T07",5262,"فأخلص لربك العبادة"),
+            ("108-T08",5262,"الصلاة المكتوبة"),
+            ("108-T09",5262,"استقبل القبلة بنحرك"),
+            ("108-T10",5263,"الأقل والأذل المنقطع دابره"),
+            ("108-T11",5263,"العاص بن وائل")
+          ]
+          byid={int(x["id"]):x for x in rows}
+          print("AUDIT_MODE read-only; no writes")
+          for rid,row in byid.items():
+              c=row.get("content") or ""
+              h=hashlib.sha256(c.encode()).hexdigest()
+              if h!=expected[rid]: raise SystemExit(f"Source drift for {rid}: {h}")
+              print("SOURCE",json.dumps({"id":rid,"aya":row["aya"],"chars":len(c),"sha256":h,"source_name":row.get("source_name"),"source_url":row.get("source_url")},ensure_ascii=False))
+          chain_re=re.compile(r"(?:حدثنا|حدثني|ثنا|قال|عن|أخبرنا|ذكر من قال ذلك)")
+          for claim,rid,anchor in specs:
+              text=byid[rid]["content"]
+              loc=find_raw(text,anchor)
+              if not loc: raise SystemExit(f"Missing exact anchor for {claim}: {anchor}")
+              a,b=loc
+              # Context is intentionally bounded. It is evidence for later manual chain parsing,
+              # not an automatically asserted transmission route.
+              start=max(0,a-700); end=min(len(text),b+220)
+              ctx=text[start:end].replace("\n"," ")
+              signals=chain_re.findall(ctx)
+              print("CLAIM_CONTEXT",json.dumps({
+                "claim_id":claim,"entry_id":rid,"anchor":anchor,
+                "raw_start":a,"raw_end":b,"context_start":start,"context_end":end,
+                "chain_signal_count":len(signals),"chain_signals":signals,
+                "bounded_context":ctx
+              },ensure_ascii=False))
+          print("TABARI_108_CHAIN_BOUNDARY_AUDIT_PASS",json.dumps({"claims":len(specs),"entries":len(rows),"writes":0}))
