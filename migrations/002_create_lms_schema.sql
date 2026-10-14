@@ -196,21 +196,12 @@ CREATE POLICY qh_courses_delete ON qh_courses
 
 -- qh_lessons RLS: Only creators and enrolled users can view
 CREATE POLICY qh_lessons_select ON qh_lessons
-  FOR SELECT USING (
-    EXISTS (
-      SELECT 1 FROM qh_courses
-      WHERE qh_courses.id = qh_lessons.course_id
-      AND (qh_courses.created_by = auth.uid() OR qh_courses.is_published = TRUE)
-    )
-    AND (
-      qh_courses.is_published = TRUE OR
-      EXISTS (
-        SELECT 1 FROM qh_enrollments
-        WHERE qh_enrollments.course_id = qh_lessons.course_id
-        AND qh_enrollments.user_id = auth.uid()
-      )
-    )
-  );
+  FOR SELECT USING (EXISTS (
+    SELECT 1 FROM qh_courses c WHERE c.id = qh_lessons.course_id AND
+    (c.created_by = auth.uid() OR (c.is_published = TRUE AND EXISTS (
+      SELECT 1 FROM qh_enrollments e WHERE e.course_id = c.id AND e.user_id = auth.uid()
+    )))
+  ));
 
 CREATE POLICY qh_lessons_insert ON qh_lessons
   FOR INSERT WITH CHECK (

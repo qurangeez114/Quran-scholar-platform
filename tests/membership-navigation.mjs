@@ -1,0 +1,23 @@
+// Uses linkedom only; no production network or real accounts.
+import {createRequire} from 'node:module';import {readFile} from 'node:fs/promises';import vm from 'node:vm';import assert from 'node:assert/strict';
+const require=createRequire(import.meta.url);const {parseHTML}=require(process.env.QH_TEST_DEPENDENCIES?process.env.QH_TEST_DEPENDENCIES+'/linkedom':'linkedom');
+const guestSource=await readFile(new URL('../accounts/guest-days.js',import.meta.url),'utf8');
+const guest=await import('data:text/javascript;base64,'+Buffer.from(guestSource).toString('base64'));
+const source=(await readFile(new URL('../account-gate.js',import.meta.url),'utf8')).replace("await import('/accounts/guest-days.js')",'guestModule').replace("await import('/accounts/client.js')",'clientModule');
+const {document}=parseHTML('<!doctype html><html><head></head><body><main>Public reading</main></body></html>');
+let listener;const memory=new Map();const localStorage={getItem:k=>memory.get(k),setItem:(k,v)=>memory.set(k,v)};
+const db={auth:{getSession:async()=>({data:{session:null}}),onAuthStateChange:fn=>{listener=fn;}}};
+const context=vm.createContext({document,location:{pathname:'/'},localStorage,guestModule:guest,clientModule:{db}});
+await vm.runInContext(source,context);
+assert.equal(document.querySelectorAll('#qh-membership').length,1);
+assert.ok(document.getElementById('qh-membership').textContent.includes('Log in'));
+listener('SIGNED_IN',{user:{id:'test'}});
+assert.ok(document.getElementById('qh-membership').textContent.includes('My Research'));
+assert.equal(document.querySelector('#qh-membership a[href="/account.html?mode=signup"]'),null);
+listener('SIGNED_OUT',null);
+assert.ok(document.getElementById('qh-membership').textContent.includes('Log in'));
+assert.ok(document.querySelector('#qh-membership a[href="/account.html?mode=signup"]'));
+await vm.runInContext(source,context);
+assert.equal(document.querySelectorAll('#qh-membership').length,1);
+assert.ok(document.querySelector('main').textContent.includes('Public reading'));
+console.log('PASS: guest links, signed-in navigation, logout restoration, duplicate injection protection, public reading retained.');

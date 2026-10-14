@@ -165,6 +165,7 @@
       color: #999;
       padding: 2rem;
     }
+    [hidden]{display:none!important}fieldset{border:1px solid #ccd9d2;padding:16px;margin:16px 0;border-radius:8px}fieldset label{display:block;margin:12px 0}fieldset input,fieldset textarea{width:100%;padding:10px} @media(max-width:700px){.two-column{grid-template-columns:1fr}.container,.section{padding:16px}.header{flex-wrap:wrap;gap:12px}}
   </style>
 </head>
 <body>
@@ -208,6 +209,7 @@
             <textarea id="lessonContent" placeholder="Enter lesson content or paste video URL..."></textarea>
           </div>
 
+          <fieldset id="quizEditor" hidden><legend>Automatically graded quiz</legend><p>Add a question, enter one answer option per line, and choose the correct answer.</p><label>Passing percentage <input id="passingScore" type="number" min="1" max="100" value="70"></label><div id="questionRows"></div><button type="button" id="addQuestion" class="btn">Add question</button></fieldset>
           <div style="display: flex; gap: 1rem;">
             <button type="submit" class="btn btn-primary" style="flex: 1;">Save Lesson</button>
             <button type="button" class="btn" style="flex: 1; background: #ddd; color: #333;" id="cancelBtn">Cancel</button>
@@ -226,13 +228,32 @@
   </div>
 
   <script type="module">
+    import {escapeHTML} from '../accounts/text.js';
     import { supabase } from '../accounts/client.js';
-    import { getCourseById, getLessonsByCourse, createLesson, updateLesson, deleteLesson } from '../courses-api.js';
+    import { getCourseById, getLessonsByCourse, createLesson, updateLesson, deleteLesson, getQuiz, saveQuiz, isStaff } from '../courses-api.js';
 
     let currentUser = null;
     let currentCourse = null;
     let lessons = [];
     let selectedLessonId = null;
+    const editor=document.getElementById('quizEditor');
+    const rows=document.getElementById('questionRows');
+    function addQuestion(q={}) {
+      const row=document.createElement('fieldset');
+      for(const [labelText,tag,cls,value] of [['Question','input','question',q.question||''],['Options (one per line)','textarea','options',(q.options||[]).join('\n')],['Correct answer (exact option text)','input','correct',q.correct_answer||'']]) {
+        const label=document.createElement('label'); label.textContent=labelText;
+        const input=document.createElement(tag); input.className=cls; input.value=value; label.append(input);row.append(label);
+      }
+      const remove=document.createElement('button'); remove.type='button';remove.textContent='Remove question';remove.onclick=()=>row.remove();row.append(remove);rows.append(row);
+    }
+    function toggleEditor() { editor.hidden=document.getElementById('lessonType').value!=='quiz';if(!editor.hidden&&!rows.children.length)addQuestion(); }
+    document.getElementById('lessonType').onchange=toggleEditor;
+    document.getElementById('addQuestion').onclick=()=>addQuestion();
+    function readQuestions() {
+      const questions=[...rows.children].map(row=>({question:row.querySelector('.question').value.trim(),options:row.querySelector('.options').value.split('\n').map(v=>v.trim()).filter(Boolean),correct_answer:row.querySelector('.correct').value.trim()}));
+      if(!questions.length||questions.some(q=>!q.question||q.options.length<2||!q.options.includes(q.correct_answer)))throw Error('Each question needs text, at least two options, and a matching correct answer.');
+      return questions;
+    }
 
     async function checkAuth() {
       const { data } = await supabase.auth.getSession();
@@ -240,7 +261,9 @@
 
       if (!currentUser) {
         window.location.href = '/account.html';
+        throw Error('Please log in.');
       }
+      if(!await isStaff()) { document.getElementById('lessonForm').hidden=true; throw Error('Class management is available to owners and admins.'); }
     }
 
     function getCourseIdFromUrl() {
@@ -294,8 +317,8 @@
 
       container.innerHTML = lessons.map(lesson => `
         <div class="lesson-item ${selectedLessonId === lesson.id ? 'active' : ''}" onclick="selectLesson('${lesson.id}')">
-          <div class="lesson-item-title">${lesson.lesson_order}. ${lesson.title}</div>
-          <div class="lesson-item-meta">Type: ${lesson.lesson_type}</div>
+          <div class="lesson-item-title">${lesson.lesson_order}. ${escapeHTML(lesson.title)}</div>
+          <div class="lesson-item-meta">Type: ${escapeHTML(lesson.lesson_type)}</div>
           <div class="lesson-item-actions">
             <button class="btn btn-small" onclick="editLesson('${lesson.id}', event)">Edit</button>
             <button class="btn btn-small btn-danger" onclick="deleteConfirm('${lesson.id}', event)">Delete</button>
@@ -322,12 +345,14 @@
       document.getElementById('lessonForm').dataset.editId = lessonId;
       document.getElementById('cancelBtn').style.display = 'block';
 
+      rows.replaceChildren();toggleEditor();
+      if(lesson.lesson_type==='quiz'){try{const quiz=await getQuiz(lessonId);rows.replaceChildren();quiz.questions.forEach(addQuestion);document.getElementById('passingScore').value=quiz.passing_score;}catch(error){showAlert(error.message,'error');}}
       selectedLessonId = lessonId;
       renderLessons();
     };
 
     document.getElementById('cancelBtn').addEventListener('click', () => {
-      document.getElementById('lessonForm').reset();
+      document.getElementById('lessonForm').reset();rows.replaceChildren();toggleEditor();
       document.getElementById('formTitle').textContent = '📝 Create New Lesson';
       document.getElementById('lessonForm').dataset.editId = '';
       selectedLessonId = null;
@@ -343,21 +368,20 @@
       const editId = document.getElementById('lessonForm').dataset.editId;
 
       try {
-        if (editId) {
-          await updateLesson(editId, {
-            title,
-            lesson_type: type,
-            content: type === 'text' ? content : null,
-            video_url: type === 'video' ? content : null
-          });
-          showAlert('Lesson updated!', 'success');
-        } else {
-          const nextOrder = lessons.length + 1;
-          await createLesson(currentCourse.id, title, nextOrder);
-          showAlert('Lesson created!', 'success');
+        const questions=type==='quiz'?readQuestions():null;
+        const threshold=Number(document.getElementById('passingScore').value);
+        if(type==='quiz'&&(!Number.isInteger(threshold)||threshold<1||threshold>100))throw Error('Passing percentage must be 1 to 100.');
+        let lessonId=editId;
+        if(!lessonId) {
+          const lesson=await createLesson(currentCourse.id,title,Math.max(0,...lessons.map(l=>l.lesson_order))+1);
+          lessonId=lesson.id;
+          document.getElementById('lessonForm').dataset.editId=lessonId;
         }
+        await updateLesson(lessonId,{title,lesson_type:type,content:type==='text'?content:null,video_url:type==='video'?content:null});
+        if(type==='quiz')await saveQuiz(lessonId,questions,threshold);
+        showAlert('Lesson and quiz saved.','success');
 
-        document.getElementById('lessonForm').reset();
+        document.getElementById('lessonForm').reset();rows.replaceChildren();toggleEditor();
         document.getElementById('formTitle').textContent = '📝 Create New Lesson';
         document.getElementById('lessonForm').dataset.editId = '';
         selectedLessonId = null;
@@ -365,7 +389,7 @@
         await loadLessons();
       } catch (error) {
         console.error('Error saving lesson:', error);
-        showAlert('Failed to save lesson', 'error');
+        showAlert(error.message, 'error');
       }
     });
 
@@ -395,8 +419,7 @@
     }
 
     // Initialize
-    await checkAuth();
-    await loadCourse();
+    try{await checkAuth();await loadCourse();}catch(error){showAlert(error.message,'error');}
   </script>
 </body>
 </html>

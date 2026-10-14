@@ -1,0 +1,44 @@
+name: Membership and quiz validation
+on:
+  pull_request:
+    paths:
+      - 'accounts/**'
+      - 'account*.js'
+      - 'account.html'
+      - 'courses-api.js'
+      - 'courses.html'
+      - 'lesson.html'
+      - 'admin/**'
+      - 'migrations/**'
+      - 'tests/membership-*.mjs'
+      - 'tests/lms-repair-staging.mjs'
+      - '.github/workflows/membership-validation.yml'
+  push:
+    branches: ['codex/optional-membership-2026-10-13']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install isolated test dependencies
+        run: npm install --prefix "$RUNNER_TEMP/qh-validation" @electric-sql/pglite@0.5.9 linkedom@0.18.13 --no-audit --no-fund
+      - name: Verify membership and PostgreSQL grading
+        env:
+          QH_TEST_DEPENDENCIES: ${{ runner.temp }}/qh-validation/node_modules
+        run: |
+          node tests/membership-guest-days.mjs
+          node tests/membership-account-ui.mjs
+          node tests/membership-navigation.mjs
+          node tests/lms-repair-staging.mjs
+      - name: Check JavaScript syntax
+        run: |
+          node --check account-gate.js
+          node --input-type=module --check < accounts/account.js
+          node --input-type=module --check < courses-api.js

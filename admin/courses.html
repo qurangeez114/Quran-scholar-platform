@@ -277,8 +277,9 @@
   </div>
 
   <script type="module">
+    import {escapeHTML} from '../accounts/text.js';
     import { supabase } from '../accounts/client.js';
-    import { getCourses, createCourse, updateCourse, deleteCourse } from '../courses-api.js';
+    import { getCourses, createCourse, updateCourse, deleteCourse, isStaff } from '../courses-api.js';
 
     let currentUser = null;
     let courses = [];
@@ -289,7 +290,9 @@
 
       if (!currentUser) {
         window.location.href = '/account.html';
+        throw Error('Please log in.');
       }
+      if(!await isStaff()){document.getElementById('createCourseForm').hidden=true;throw Error('Class creation is available to owners and admins.');}
     }
 
     async function loadCourses() {
@@ -313,8 +316,8 @@
 
       container.innerHTML = courses.map(course => `
         <div class="course-item">
-          <div class="course-title">${course.title}</div>
-          <div class="course-description">${course.description || 'No description'}</div>
+          <div class="course-title">${escapeHTML(course.title)}</div>
+          <div class="course-description">${escapeHTML(course.description || 'No description')}</div>
           <div class="course-meta">
             Created: ${new Date(course.created_at).toLocaleDateString()}
           </div>
@@ -412,8 +415,7 @@
     }
 
     // Initialize
-    await checkAuth();
-    await loadCourses();
+    try{await checkAuth();await loadCourses();}catch(error){showAlert(error.message,'error');}
   </script>
 </body>
 </html>
