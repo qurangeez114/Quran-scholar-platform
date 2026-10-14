@@ -1,0 +1,72 @@
+name: Validate Surah 108 Ibn Kathir atomic evidence plan
+on:
+  push:
+    paths:
+      - '.github/workflows/tafsir-108-ibn-kathir-plan-preflight.yml'
+      - 'data/tafsir/staging/ibn-kathir-108-evidence-voice-plan-2026-10-12.json'
+      - 'data/tafsir/staging/ibn-kathir-108-research-2026-10-12.json'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tafsir-108-ibn-kathir-plan-preflight
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate atomic plan and live Arabic anchors
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        shell: python
+        run: |
+          import hashlib,json,os,re,subprocess,unicodedata,urllib.parse,urllib.request
+          research_path='data/tafsir/staging/ibn-kathir-108-research-2026-10-12.json'
+          plan_path='data/tafsir/staging/ibn-kathir-108-evidence-voice-plan-2026-10-12.json'
+          research=json.load(open(research_path,encoding='utf-8'))
+          plan=json.load(open(plan_path,encoding='utf-8'))
+          if plan.get('database_written') is not False or plan.get('publication_ready') is not False: raise SystemExit('Unsafe plan state')
+          rclaims=research['claims']; pclaims=plan['claims']
+          rids=[c['id'] for c in rclaims]; pids=[c['claim_id'] for c in pclaims]
+          expected=['108-I01','108-I02','108-I03','108-I04A','108-I04B','108-I04C','108-I04D','108-I05','108-I06','108-I07','108-I08','108-I09','108-I10','108-I11']
+          if rids!=expected or pids!=expected: raise SystemExit('Atomic claim order/identity mismatch')
+          if '108-I04' in pids or len(set(pids))!=14 or plan.get('expected_claim_count')!=14: raise SystemExit('Retired parent or count defect')
+          blob=subprocess.check_output(['git','hash-object',research_path],text=True).strip()
+          if plan.get('source_blob_sha')!=blob: raise SystemExit('Plan source blob is stale')
+          rmap={c['id']:c for c in rclaims}
+          for c in pclaims:
+              r=rmap[c['claim_id']]
+              for k in ('arabic_entry_id','english_entry_id','evidence_anchor_ar','statement_en'):
+                  if c.get(k)!=r.get(k): raise SystemExit('Plan/research mismatch '+c['claim_id']+' '+k)
+              if c.get('publication_ready') is not False: raise SystemExit('Publication flag unsafe '+c['claim_id'])
+              if c.get('external_locator_state')!='live_entry_locator_verified; printed_edition_volume_page_not_established': raise SystemExit('External-locator boundary missing '+c['claim_id'])
+          key=os.environ.get('SUPABASE_SERVICE_KEY','')
+          if not key: raise SystemExit('Missing protected database credential')
+          ids=sorted({c['arabic_entry_id'] for c in pclaims})
+          base='https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/tafsir_entries'
+          params={'id':'in.('+','.join(map(str,ids))+')','select':'id,sura,aya,language,content,scholar_key','order':'id.asc'}
+          req=urllib.request.Request(base+'?'+urllib.parse.urlencode(params),headers={'apikey':key,'Authorization':'Bearer '+key})
+          with urllib.request.urlopen(req,timeout=30) as response: rows=json.load(response)
+          if [x['id'] for x in rows]!=ids: raise SystemExit('Missing canonical live Arabic entry')
+          if any(x['sura']!=108 or x['language']!='ar' or x['scholar_key']!='ibn_kathir' for x in rows): raise SystemExit('Live source identity mismatch')
+          byid={x['id']:x for x in rows}
+          def norm(s):
+              s=''.join(ch for ch in unicodedata.normalize('NFKD',s or '') if not unicodedata.combining(ch) and ch!='ـ')
+              return re.sub(r'\s+',' ',re.sub(r'[،؛؟:()\[\]{}﴿﴾]+',' ',s)).strip()
+          failures=[]
+          for c in pclaims:
+              hay=norm(byid[c['arabic_entry_id']]['content'])
+              segments=[norm(x) for x in c['evidence_anchor_ar'].split('...') if norm(x)]
+              missing=[x for x in segments if x not in hay]
+              if missing: failures.append({'claim':c['claim_id'],'missing':missing})
+          if failures: raise SystemExit('Arabic anchor failures '+json.dumps(failures,ensure_ascii=False))
+          hashes={x['id']:hashlib.sha256(x['content'].encode()).hexdigest() for x in rows}
+          print('AUDIT_MODE read-only; no writes')
+          print('ATOMIC_CLAIMS',len(pclaims),json.dumps(pids))
+          print('LIVE_ENTRY_HASHES',json.dumps(hashes,sort_keys=True))
+          print('EXTERNAL_LOCATORS','14/14 printed edition volume/page unresolved')
+          print('IBN_KATHIR_108_ATOMIC_PLAN_PASS')
+
+# Read-only validator; no database mutation is present.
