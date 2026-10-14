@@ -5,6 +5,7 @@
   if (document.getElementById('qh-membership')) return;
   try {
     const guest = await import('/accounts/guest-days.js');
+    if (document.getElementById('qh-membership')) return;
     let storage;try{storage=localStorage;}catch{storage={getItem:()=>null,setItem:()=>{}};}
     const style = document.createElement('style');
     style.textContent = '#qh-membership{box-sizing:border-box;background:#f5f3ea;color:#193c32;padding:12px 20px;border-bottom:1px solid #ccd9d2;font:15px/1.5 system-ui;display:flex;flex-wrap:wrap;align-items:center;gap:12px}#qh-membership a{color:#245d4b;text-decoration:underline}#qh-membership button{background:transparent;color:#193c32;border:1px solid #245d4b;border-radius:6px;padding:6px 10px;cursor:pointer}#qh-membership p{margin:0;flex:1 1 240px}';
