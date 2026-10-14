@@ -1,0 +1,92 @@
+name: Preflight Surah 108 Tabari T08 split
+on:
+  push:
+    paths:
+      - '.github/workflows/tafsir-108-tabari-t08-preflight.yml'
+      - 'data/tafsir/staging/tabari-108-t08-boundary-2026-10-14.json'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tafsir-108-tabari-t08-preflight
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate T08 voice split without writes
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        shell: python
+        run: |
+          import hashlib,json,os,re,unicodedata,urllib.parse,urllib.request
+          key=os.environ.get("SUPABASE_SERVICE_KEY","")
+          if not key: raise SystemExit("Missing protected database credential")
+          proposal=json.load(open("data/tafsir/staging/tabari-108-t08-boundary-2026-10-14.json",encoding="utf-8"))
+          stage=json.load(open("data/tafsir/staging/tabari-108-1-research-2026-10-10.json",encoding="utf-8"))
+          if proposal.get("database_written") is not False or proposal.get("authoritative_staging_unchanged") is not True:
+              raise SystemExit("Unsafe proposal state")
+          if proposal.get("current_state")!={"chapter_claims":72,"tabari_claims":17}: raise SystemExit("Current count mismatch")
+          if proposal.get("proposed_state")!={"chapter_claims":73,"tabari_claims":18,"replacement_claims":2,"net_change":1}: raise SystemExit("Proposed count mismatch")
+          candidates=proposal.get("candidates",[])
+          if [x.get("id") for x in candidates]!=["108-T08A","108-T08B"]: raise SystemExit("Candidate IDs mismatch")
+          staged={x["id"]:x for x in stage["claims"]}
+          if "108-T08" not in staged or {"108-T08A","108-T08B"} & set(staged): raise SystemExit("Authoritative staging state mismatch")
+          base="https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/"
+          headers={"apikey":key,"Authorization":"Bearer "+key}
+          def get(path,params):
+              req=urllib.request.Request(base+path+"?"+urllib.parse.urlencode(params),headers=headers)
+              with urllib.request.urlopen(req,timeout=30) as r: return json.load(r)
+          rows=get("tafsir_entries",{"id":"eq.5262","select":"id,sura,aya,scholar_key,language,content"})
+          if len(rows)!=1: raise SystemExit("Entry 5262 missing")
+          row=rows[0]; text=row["content"]
+          if (row["sura"],row["aya"],row["scholar_key"],row["language"])!=(108,2,"tabari","ar"): raise SystemExit("Source identity drift")
+          if hashlib.sha256(text.encode()).hexdigest()!="55143e1930f2511d2af04570d8e8e1091490c769829840a0ea03b92178992314": raise SystemExit("Source hash drift")
+          for c in candidates:
+              a,b=int(c["raw_start"]),int(c["raw_end"]); unit=text[a:b].strip()
+              if hashlib.sha256(unit.encode()).hexdigest()!=c["evidence_unit_sha256"]: raise SystemExit("Unit hash mismatch "+c["id"])
+              if c["arabic_anchor"] not in unit: raise SystemExit("Arabic anchor absent "+c["id"])
+              if c["position"]!="reported_only" or c["translation_status"]!="controlled_research_translation_from_arabic":
+                  raise SystemExit("Position or translation label weakened "+c["id"])
+          if candidates[0]["originating_voice"]!="Mujahid" or candidates[1]["originating_voice"]!="Ibn Abbas":
+              raise SystemExit("Originating voices mismatch")
+          if "must not be guessed" not in candidates[1].get("route_note",""): raise SystemExit("Kinship-chain guard absent")
+          all_paths=[
+            "data/tafsir/staging/tabari-108-1-research-2026-10-10.json",
+            "data/tafsir/staging/ibn-kathir-108-research-2026-10-12.json",
+            "data/tafsir/staging/qurtubi-108-research-2026-10-12.json",
+            "data/tafsir/staging/jalalayn-108-research-2026-10-12.json",
+            "data/tafsir/staging/saadi-108-research-2026-10-12.json",
+            "data/tafsir/staging/tanwir-108-research-2026-10-12.json"]
+          docs=[json.load(open(p,encoding="utf-8")) for p in all_paths]
+          ids=[]; counts={}
+          for d in docs:
+              claims=d["claims"]
+              if d["scholar_key"]=="tabari": claims=[x for x in claims if x["id"]!="108-T08"]+candidates
+              counts[d["scholar_key"]]=len(claims); ids += [x["id"] for x in claims]
+          expected={"tabari":18,"ibn_kathir":14,"qurtubi":23,"jalalayn":5,"saadi":6,"ibn_abbas":7}
+          if counts!=expected or len(ids)!=73 or len(set(ids))!=73: raise SystemExit("Combined inventory mismatch "+json.dumps(counts))
+          def norm(v):
+              v=unicodedata.normalize("NFKD",v or "").encode("ascii","ignore").decode().casefold()
+              return re.sub(r"[^a-z0-9]+"," ",v).strip()
+          live=get("propositions",{"tafsir_entry_id":"eq.5262","select":"id,statement_en,status","limit":"1000"})
+          exact=[]; likely=[]
+          for c in candidates:
+              a=norm(c["proposition"]); aset=set(a.split())
+              for x in live:
+                  b=norm(x.get("statement_en")); bset=set(b.split())
+                  if a==b: exact.append([c["id"],x["id"]])
+                  elif aset and bset:
+                      score=len(aset&bset)/len(aset|bset)
+                      if score>=0.72: likely.append([c["id"],x["id"],round(score,3)])
+          if exact or likely: raise SystemExit("Live duplicate review required "+json.dumps({"exact":exact,"likely":likely}))
+          print("AUDIT_MODE read-only; no writes")
+          print("T08_REPLACEMENT_ROWS",len(candidates))
+          print("PROPOSED_COUNTS",json.dumps(counts,sort_keys=True))
+          print("PROPOSED_TOTAL",len(ids))
+          print("SOURCE_HASH_UNIT_HASHES_ANCHORS_AND_VOICES_VERIFIED")
+          print("ENGLISH_COVERAGE absent")
+          print("LIVE_DUPLICATES",json.dumps({"exact":[],"likely":[]}))
+          print("TABARI_108_T08_SPLIT_PREFLIGHT_PASS")
