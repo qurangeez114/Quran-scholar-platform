@@ -30,9 +30,9 @@ jobs:
           if plan.get("database_written") is not False or plan.get("publication_ready") is not False:
               raise SystemExit("Unsafe plan state")
           rows=plan.get("rows",[]); claims=stage.get("claims",[])
-          if len(rows)!=17 or len(claims)!=17: raise SystemExit("Expected 17 plan and staging rows")
+          if len(rows)!=18 or len(claims)!=18: raise SystemExit("Expected 18 plan and staging rows")
           byclaim={x["id"]:x for x in claims}; byrow={x["claim_id"]:x for x in rows}
-          if len(byrow)!=17 or set(byrow)!=set(byclaim): raise SystemExit("Claim inventory mismatch")
+          if len(byrow)!=18 or set(byrow)!=set(byclaim): raise SystemExit("Claim inventory mismatch")
           for cid,row in byrow.items():
               if row.get("statement_en")!=byclaim[cid].get("claim"): raise SystemExit("Statement drift "+cid)
               if row.get("english_coverage")!="absent" or row.get("translation_status")!="controlled_research_translation_from_arabic":
@@ -96,6 +96,7 @@ jobs:
           if exact or likely: raise SystemExit("Live duplicate review required "+json.dumps({"exact":exact,"likely":likely}))
           print("AUDIT_MODE read-only; no writes")
           print("TABARI_EVIDENCE_VOICE_ROWS",len(rows))
+          if byrow["108-T08A"]["originating_voice"]!="Mujahid" or byrow["108-T08B"]["originating_voice"]!="Ibn Abbas": raise SystemExit("T08 voice split weakened")
           print("SOURCE_HASHES_AND_LOCATORS_VERIFIED")
           print("DIRECT_VOICE_GUARDS",json.dumps(["108-T06","108-T07","108-T09","108-T10","108-T11D"]))
           print("ENGLISH_COVERAGE absent")
