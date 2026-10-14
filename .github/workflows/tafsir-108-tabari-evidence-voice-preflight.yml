@@ -1,0 +1,103 @@
+name: Preflight Surah 108 Tabari evidence voice plan
+on:
+  push:
+    paths:
+      - '.github/workflows/tafsir-108-tabari-evidence-voice-preflight.yml'
+      - 'data/tafsir/staging/tabari-108-evidence-voice-plan-2026-10-14.json'
+      - 'data/tafsir/staging/tabari-108-1-research-2026-10-10.json'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tafsir-108-tabari-evidence-voice-preflight
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate 17 evidence and voice rows without writes
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        shell: python
+        run: |
+          import hashlib,json,os,re,unicodedata,urllib.parse,urllib.request
+          key=os.environ.get("SUPABASE_SERVICE_KEY","")
+          if not key: raise SystemExit("Missing protected database credential")
+          plan=json.load(open("data/tafsir/staging/tabari-108-evidence-voice-plan-2026-10-14.json",encoding="utf-8"))
+          stage=json.load(open("data/tafsir/staging/tabari-108-1-research-2026-10-10.json",encoding="utf-8"))
+          if plan.get("database_written") is not False or plan.get("publication_ready") is not False:
+              raise SystemExit("Unsafe plan state")
+          rows=plan.get("rows",[]); claims=stage.get("claims",[])
+          if len(rows)!=17 or len(claims)!=17: raise SystemExit("Expected 17 plan and staging rows")
+          byclaim={x["id"]:x for x in claims}; byrow={x["claim_id"]:x for x in rows}
+          if len(byrow)!=17 or set(byrow)!=set(byclaim): raise SystemExit("Claim inventory mismatch")
+          for cid,row in byrow.items():
+              if row.get("statement_en")!=byclaim[cid].get("claim"): raise SystemExit("Statement drift "+cid)
+              if row.get("english_coverage")!="absent" or row.get("translation_status")!="controlled_research_translation_from_arabic":
+                  raise SystemExit("English absence weakened "+cid)
+              if not row.get("originating_voice") or not row.get("voice_mode") or not row.get("position"):
+                  raise SystemExit("Voice metadata missing "+cid)
+          if byrow["108-T11D"]["voice_mode"]!="direct_commentator" or byrow["108-T11D"]["originating_voice"]!="al-Tabari":
+              raise SystemExit("T11D commentator boundary weakened")
+          if byrow["108-T09"]["voice_mode"]!="direct_analytical_no_transmission":
+              raise SystemExit("T09 incorrectly made transmitted")
+          if byrow["108-T06"]["voice_mode"]!="direct_commentator":
+              raise SystemExit("T06 preference voice weakened")
+          if "not simply Ka'b himself" not in byrow["108-T11C"]["statement_en"]:
+              raise SystemExit("T11C Ka'b boundary weakened")
+          base="https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/"
+          headers={"apikey":key,"Authorization":"Bearer "+key}
+          def get(path,params):
+              req=urllib.request.Request(base+path+"?"+urllib.parse.urlencode(params),headers=headers)
+              with urllib.request.urlopen(req,timeout=30) as r: return json.load(r)
+          entries=get("tafsir_entries",{"id":"in.(5261,5262,5263)","select":"id,sura,aya,scholar_key,language,content","order":"id.asc"})
+          src={int(x["id"]):x for x in entries}
+          expected={
+            5261:((108,1,"tabari","ar"),"2eae44dd583cc8562eeda7d40aafeeecddd22b3b73055dcfec1363b6c27c87f4"),
+            5262:((108,2,"tabari","ar"),"55143e1930f2511d2af04570d8e8e1091490c769829840a0ea03b92178992314"),
+            5263:((108,3,"tabari","ar"),"dd11e99471301b8b2044d0dddb518a375a69b4c4e8d654ac966ecc1ee46da988")}
+          if set(src)!=set(expected): raise SystemExit("Source inventory mismatch")
+          for rid,(identity,digest) in expected.items():
+              row=src[rid]
+              if (row["sura"],row["aya"],row["scholar_key"],row["language"])!=identity: raise SystemExit("Source identity drift")
+              if hashlib.sha256((row.get("content") or "").encode()).hexdigest()!=digest: raise SystemExit("Source hash drift "+str(rid))
+          def norm_ar(v):
+              v=unicodedata.normalize("NFKD",v or "")
+              v="".join(ch for ch in v if not unicodedata.combining(ch))
+              return re.sub(r"[^\u0600-\u06ffa-zA-Z0-9]+","",v)
+          for cid,row in byrow.items():
+              ev=row["evidence"]; text=src[int(ev["entry_id"])]["content"]
+              if ev["source_sha256"]!=expected[int(ev["entry_id"])][1]: raise SystemExit("Row source hash mismatch "+cid)
+              if ev["locator_kind"]=="exact_arabic_substrings":
+                  if not ev.get("arabic_anchors"): raise SystemExit("No exact anchors "+cid)
+                  for a in ev["arabic_anchors"]:
+                      if a not in text: raise SystemExit("Exact Arabic anchor absent "+cid+" "+a)
+              elif ev["locator_kind"]=="verified_raw_range_with_normalized_anchor":
+                  a,b=int(ev["raw_start"]),int(ev["raw_end"])
+                  if not (0<=a<b<=len(text)): raise SystemExit("Invalid raw range "+cid)
+                  if norm_ar(ev["normalized_arabic_anchor"]) not in norm_ar(text[a:b]):
+                      raise SystemExit("Normalized range anchor absent "+cid)
+              else: raise SystemExit("Unknown locator kind "+cid)
+          live=get("propositions",{"tafsir_entry_id":"in.(5261,5262,5263)","select":"id,tafsir_entry_id,statement_en,status","limit":"1000"})
+          def norm_en(v):
+              v=unicodedata.normalize("NFKD",v or "").encode("ascii","ignore").decode().casefold()
+              return re.sub(r"[^a-z0-9]+"," ",v).strip()
+          exact=[]; likely=[]
+          for cid,row in byrow.items():
+              a=norm_en(row["statement_en"]); aset=set(a.split())
+              for saved in live:
+                  b=norm_en(saved.get("statement_en")); bset=set(b.split())
+                  if a==b: exact.append([cid,saved["id"]])
+                  elif aset and bset:
+                      score=len(aset&bset)/len(aset|bset)
+                      if score>=0.72: likely.append([cid,saved["id"],round(score,3)])
+          if exact or likely: raise SystemExit("Live duplicate review required "+json.dumps({"exact":exact,"likely":likely}))
+          print("AUDIT_MODE read-only; no writes")
+          print("TABARI_EVIDENCE_VOICE_ROWS",len(rows))
+          print("SOURCE_HASHES_AND_LOCATORS_VERIFIED")
+          print("DIRECT_VOICE_GUARDS",json.dumps(["108-T06","108-T07","108-T09","108-T10","108-T11D"]))
+          print("ENGLISH_COVERAGE absent")
+          print("LIVE_DUPLICATES",json.dumps({"exact":[],"likely":[]}))
+          print("TABARI_108_EVIDENCE_VOICE_PREFLIGHT_PASS")
