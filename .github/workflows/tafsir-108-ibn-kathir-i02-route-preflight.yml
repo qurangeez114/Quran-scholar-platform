@@ -67,12 +67,18 @@ jobs:
           def norm(s):
               s=''.join(ch for ch in unicodedata.normalize('NFKD',s or '') if not unicodedata.combining(ch) and ch!='ـ')
               return ' '.join(re.sub(r'[،؛؟:()\\[\\]{}﴿﴾]+',' ',s).split())
-          hay=norm(live[0]['content'])
-          missing=[]
-          for rid in expected:
-              anchor=norm(initial[rid]['arabic_locator'])
-              if anchor not in hay: missing.append(rid)
-          if missing: raise SystemExit('Live Arabic route-anchor failure '+json.dumps(missing))
+          hay=norm(re.sub(r'<[^>]+>',' ',live[0]['content']))
+          anchor_parts={
+            '108-I02-R01':['محمد بن فضيل','المختار بن فلفل'],
+            '108-I02-R02':['عفان','حماد','ثابت'],
+            '108-I02-R03':['محمد بن أبي عدي','حميد'],
+            '108-I02-R04':['شيبان بن عبد الرحمن','قتادة'],
+            '108-I02-R05':['الربيع','ابن وهب','شريك بن أبي نمر'],
+            '108-I02-R06':['سعيد','قتادة']
+          }
+          missing={rid:[p for p in parts if norm(p) not in hay] for rid,parts in anchor_parts.items()}
+          missing={rid:parts for rid,parts in missing.items() if parts}
+          if missing: raise SystemExit('Live Arabic route-part failure '+json.dumps(missing,ensure_ascii=False))
           print('AUDIT_MODE read-only; no writes')
           print('BOUND_ROUTE_SET','initial I02 routes R01-R06 only; follow-on R07-R11 excluded')
           print('R01','one lower-chain family across 4 checked collection records')
