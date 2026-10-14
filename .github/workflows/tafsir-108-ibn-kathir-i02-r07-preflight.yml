@@ -41,7 +41,7 @@ jobs:
           if cmp.get('authentication_state')!='not_assessed' or cmp.get('proposition_count_effect')!=0:
               raise SystemExit('R07 scope guard failed')
           variants={(v.get('position'),v.get('ibn_kathir'),v.get('direct_tabari')) for v in cmp.get('textual_variants',[])}
-          expected={('Abu Ayyub','al-Abbasi','al-Abbas'),('Ibrahim',"ibn Sa'd","ibn Mas'ada")}
+          expected={('Abu Ayyub','al-Abbasi','al-Abbas'),('Ibrahim',"ibn Sa'd","ibn Mas'ada"),('Muhammad','Muhammad ibn Abd Allah, nephew of Ibn Shihab','Muhammad ibn Abd Allah ibn Muslim, nephew of Ibn Shihab')}
           if variants!=expected: raise SystemExit('Narrator variants changed: '+repr(variants))
           route_list=list(routes.get('follow_on_routes_recovered_from_bounded_context',[]))
           for group in routes.get('route_groups',[]): route_list.extend(group.get('routes',[]))
@@ -49,11 +49,10 @@ jobs:
           if not r07: raise SystemExit('R07 missing from route extraction')
           staged_anchor=review['ibn_kathir_witness']['arabic_anchor']
           route_anchor=r07.get('arabic_locator') or r07.get('arabic_anchor') or r07.get('chain_arabic') or r07.get('source_anchor')
-          stale_anchor='حدثنا أحمد بن أبي سريج حدثنا أبو أيوب العباسي حدثنا إبراهيم بن سعد حدثني محمد بن عبد الله ابن أخي ابن شهاب عن أبيه عن أنس'
-          if route_anchor not in (staged_anchor,stale_anchor):
+          expected_route_anchor='حدثنا أحمد بن أبي سريج حدثنا أبو أيوب العباسي حدثنا إبراهيم بن سعد حدثني محمد بن عبد الله ابن أخي ابن شهاب عن أبيه عن أنس'
+          if route_anchor!=expected_route_anchor:
               raise SystemExit('Unexpected R07 route-extraction anchor')
-          if route_anchor==stale_anchor:
-              print("ROUTE_EXTRACTION_CORRECTION_PENDING omitted 'ibn Muslim'")
+          print("ROUTE_EXTRACTION_MATCHES_LIVE_NAME_FORM")
           key=os.environ.get('SUPABASE_SERVICE_KEY','')
           if not key: raise SystemExit('Missing protected database credential')
           base='https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/'
