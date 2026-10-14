@@ -1,0 +1,73 @@
+name: Validate Surah 108 Ibn Kathir I02 R05 R06 primary review
+on:
+  push:
+    paths:
+      - '.github/workflows/tafsir-108-ibn-kathir-i02-r05-r06-preflight.yml'
+      - 'data/tafsir/staging/ibn-kathir-108-i02-r05-r06-primary-review-2026-10-14.json'
+      - 'data/tafsir/staging/ibn-kathir-108-route-extraction-2026-10-12.json'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tafsir-108-ibn-kathir-i02-r05-r06-preflight
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate primary comparison and live Arabic route parts
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        shell: python
+        run: |
+          import json,os,re,unicodedata,urllib.parse,urllib.request
+          p='data/tafsir/staging/ibn-kathir-108-i02-r05-r06-primary-review-2026-10-14.json'
+          r='data/tafsir/staging/ibn-kathir-108-route-extraction-2026-10-12.json'
+          review=json.load(open(p,encoding='utf-8'))
+          extraction=json.load(open(r,encoding='utf-8'))
+          if review['schema_version']!='quranhikma-tafsir-route-source-review-v1': raise SystemExit('Schema mismatch')
+          if (review['surah'],review['scholar_key'],review['claim_id'])!=(108,'ibn_kathir','108-I02'): raise SystemExit('Identity mismatch')
+          if review.get('database_written') is not False: raise SystemExit('Unsafe database metadata')
+          rows=review['route_reviews']
+          if [x['route_id'] for x in rows]!=['108-I02-R05','108-I02-R06']: raise SystemExit('Route identity/order mismatch')
+          byid={x['route_id']:x for x in rows}
+          if byid['108-I02-R05']['direct_tabari_reconciliation']['state']!='unresolved': raise SystemExit('R05 guard mismatch')
+          r06=byid['108-I02-R06']
+          if r06['direct_tabari_reconciliation']['state']!='primary_text_route_matched': raise SystemExit('R06 state mismatch')
+          if r06['direct_tabari_reconciliation']['arabic_chain_anchor']!='حدثنا بشر قال ثنا يزيد قال ثنا سعيد عن قتادة عن أنس': raise SystemExit('R06 Tabari chain mismatch')
+          if r06['topology_decision']!='direct_tabari_witness_confirmed_distinct_lower_chain_converging_at_anas': raise SystemExit('R06 topology mismatch')
+          if r06['authentication_state']!='not_assessed' or r06['proposition_count_effect']!=0: raise SystemExit('R06 safety mismatch')
+          if 'does not expand him' not in r06['direct_tabari_reconciliation']['identity_guard']: raise SystemExit('R06 identity guard missing')
+          for row in rows:
+              if row.get('publication_ready') is not False: raise SystemExit('Unsafe publication flag '+row['route_id'])
+          group=next(x for x in extraction['route_groups'] if x['claim_id']=='108-I02')
+          initial={x['route_id']:x for x in group['routes']}
+          if initial['108-I02-R05']['arabic_locator']!=byid['108-I02-R05']['ibn_kathir_arabic_anchor']: raise SystemExit('R05 extraction mismatch')
+          if initial['108-I02-R06']['arabic_locator']!=byid['108-I02-R06']['ibn_kathir_arabic_anchor']: raise SystemExit('R06 extraction mismatch')
+          key=os.environ.get('SUPABASE_SERVICE_KEY','')
+          if not key: raise SystemExit('Missing protected database credential')
+          base='https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/tafsir_entries'
+          params={'id':'eq.48457','select':'id,sura,aya,language,content,scholar_key'}
+          req=urllib.request.Request(base+'?'+urllib.parse.urlencode(params),headers={'apikey':key,'Authorization':'Bearer '+key})
+          with urllib.request.urlopen(req,timeout=30) as response: live=json.load(response)
+          if len(live)!=1 or (live[0]['id'],live[0]['sura'],live[0]['aya'],live[0]['language'],live[0]['scholar_key'])!=(48457,108,1,'ar','ibn_kathir'): raise SystemExit('Live source identity mismatch')
+          def norm(s):
+              s=re.sub(r'<[^>]+>',' ',s or '')
+              s=''.join(ch for ch in unicodedata.normalize('NFKD',s) if not unicodedata.combining(ch) and ch!='ـ')
+              return ' '.join(re.sub(r'[،؛؟:()\[\]{}﴿﴾]+',' ',s).split())
+          hay=norm(live[0]['content'])
+          parts=review['validation']['required_live_anchors']
+          missing={rid:[x for x in vals if norm(x) not in hay] for rid,vals in parts.items()}
+          missing={rid:vals for rid,vals in missing.items() if vals}
+          if missing: raise SystemExit('Live Arabic route-part failure '+json.dumps(missing,ensure_ascii=False))
+          print('AUDIT_MODE read-only; no writes')
+          print('R05_TABARI_RECONCILIATION unresolved; absence not inferred')
+          print('R06_TABARI_CHAIN_MATCHED Bishr -> Yazid -> Said -> Qatada -> Anas')
+          print('R06_SAID_FULL_IDENTITY unresolved; no expansion')
+          print('AUTHENTICATION not assessed')
+          print('CLAIM_COUNT_CHANGE',0)
+          print('IBN_KATHIR_108_I02_R05_R06_PRIMARY_REVIEW_PASS')
+
+# Source comparison does not authenticate a route or authorize publication.
