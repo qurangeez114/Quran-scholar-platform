@@ -48,24 +48,24 @@ jobs:
           r07=next((r for r in route_list if r.get('route_id')=='108-I02-R07'),None)
           if not r07: raise SystemExit('R07 missing from route extraction')
           staged_anchor=review['ibn_kathir_witness']['arabic_anchor']
-          route_anchor=r07.get('arabic_anchor') or r07.get('chain_arabic') or r07.get('source_anchor')
+          route_anchor=r07.get('arabic_locator') or r07.get('arabic_anchor') or r07.get('chain_arabic') or r07.get('source_anchor')
           if route_anchor and route_anchor!=staged_anchor:
               raise SystemExit('R07 staged anchor differs from route extraction')
           key=os.environ.get('SUPABASE_SERVICE_KEY','')
           if not key: raise SystemExit('Missing protected database credential')
           base='https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/'
           headers={'apikey':key,'Authorization':'Bearer '+key}
-          req=urllib.request.Request(base+'tafsir_entries?id=eq.48457&select=id,surah_number,verse_number,language,scholar_key,text&limit=1',headers=headers)
+          req=urllib.request.Request(base+'tafsir_entries?id=eq.48457&select=id,sura,aya,language,scholar_key,content&limit=1',headers=headers)
           with urllib.request.urlopen(req,timeout=30) as resp: rows=json.load(resp)
           if len(rows)!=1: raise SystemExit('Expected live tafsir entry 48457')
           row=rows[0]
-          identity=(row.get('id'),row.get('surah_number'),row.get('verse_number'),row.get('language'),row.get('scholar_key'))
+          identity=(row.get('id'),row.get('sura'),row.get('aya'),row.get('language'),row.get('scholar_key'))
           if identity!=(48457,108,1,'ar','ibn_kathir'): raise SystemExit('Live identity mismatch '+repr(identity))
           def norm(s):
               s=unicodedata.normalize('NFKC',s or '')
               s=re.sub(r'[\u064b-\u065f\u0670\u06d6-\u06ed]','',s)
               return re.sub(r'\s+',' ',s).strip()
-          live=norm(row.get('text',''))
+          live=norm(row.get('content',''))
           for anchor in review['validation']['required_live_anchors']:
               if norm(anchor) not in live: raise SystemExit('Missing live Arabic anchor: '+anchor)
           print('AUDIT_MODE read-only; no writes')
