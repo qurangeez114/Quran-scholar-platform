@@ -1,0 +1,79 @@
+name: Extract Tabari Surah 108 atomic report units
+on:
+  push:
+    paths:
+      - '.github/workflows/tafsir-108-tabari-report-unit-audit.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Emit exact source-defined report units
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        shell: python
+        run: |
+          import hashlib,json,os,re,urllib.parse,urllib.request
+          key=os.environ.get("SUPABASE_SERVICE_KEY","")
+          if not key: raise SystemExit("Missing protected database credential")
+          base="https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/tafsir_entries"
+          def get(params):
+              req=urllib.request.Request(base+"?"+urllib.parse.urlencode(params),headers={"apikey":key,"Authorization":"Bearer "+key})
+              with urllib.request.urlopen(req,timeout=30) as r: return json.load(r)
+          rows=get({"id":"in.(5261,5262,5263)","select":"id,aya,language,content","order":"id.asc"})
+          byid={int(x["id"]):x["content"] for x in rows}
+          expected={
+            5261:"2eae44dd583cc8562eeda7d40aafeeecddd22b3b73055dcfec1363b6c27c87f4",
+            5262:"55143e1930f2511d2af04570d8e8e1091490c769829840a0ea03b92178992314",
+            5263:"dd11e99471301b8b2044d0dddb518a375a69b4c4e8d654ac966ecc1ee46da988"
+          }
+          for rid,text in byid.items():
+              if hashlib.sha256(text.encode()).hexdigest()!=expected[rid]:
+                  raise SystemExit(f"Source drift: {rid}")
+          def units(text):
+              starts=[m.start() for m in re.finditer(r"(?=(?:حدثنا|حدثني|قال: ثنا)\s)",text)]
+              out=[]
+              for i,a in enumerate(starts):
+                  b=starts[i+1] if i+1<len(starts) else len(text)
+                  piece=text[a:b].strip()
+                  if piece: out.append((a,b,piece))
+              return out
+          def emit(group,rid,predicate):
+              found=[]
+              for a,b,piece in units(byid[rid]):
+                  if predicate(piece):
+                      item={
+                        "group":group,"entry_id":rid,"raw_start":a,"raw_end":b,
+                        "chars":len(piece),"sha256":hashlib.sha256(piece.encode()).hexdigest(),
+                        "text":piece
+                      }
+                      found.append(item)
+                      print("REPORT_UNIT",json.dumps(item,ensure_ascii=False))
+              print("GROUP_COUNT",json.dumps({"group":group,"count":len(found)},ensure_ascii=False))
+              return found
+          t04=emit("T04_IKRIMA_VARIANTS",5261,lambda s:
+              "عكرمة" in s and any(x in s for x in ("النبوّة","النبوة","القرآن","الحكمة","الإسلام")))
+          t06_start=byid[5261].find("وأولى هذه الأقوال بالصواب عندي")
+          if t06_start<0: raise SystemExit("Missing T06 preference")
+          t06=emit("T06_SUPPORTING_PROPHETIC_REPORTS",5261,lambda s:
+              byid[5261].find(s)>=t06_start and
+              ("رسول الله" in s or "النبي" in s) and
+              ("الكوثر" in s or "نهر" in s))
+          t08=emit("T08_PRESCRIBED_PRAYER_REPORTS",5262,lambda s:
+              "الصلاة المكتوبة" in s or ("عقبة بن ظهير" in s and "وانحر" in s))
+          t11=emit("T11_COMPETING_IDENTIFICATIONS",5263,lambda s:
+              any(x in s for x in ("العاص بن وائل","عقبة بن أبي معيط","كعب بن الأشرف")))
+          if len(t04)<2: raise SystemExit(f"Expected multiple T04 variants, got {len(t04)}")
+          if len(t06)<1: raise SystemExit("Expected T06 supporting reports")
+          if len(t08)<1: raise SystemExit("Expected T08 report")
+          names={"العاص بن وائل":False,"عقبة بن أبي معيط":False,"كعب بن الأشرف":False}
+          for x in t11:
+              for n in names: names[n]=names[n] or n in x["text"]
+          if not all(names.values()): raise SystemExit("Not all T11 alternatives were captured: "+json.dumps(names,ensure_ascii=False))
+          print("TABARI_108_ATOMIC_REPORT_UNIT_AUDIT_PASS",json.dumps({
+            "t04_units":len(t04),"t06_units":len(t06),"t08_units":len(t08),
+            "t11_units":len(t11),"t11_names":names,"writes":0
+          },ensure_ascii=False))
