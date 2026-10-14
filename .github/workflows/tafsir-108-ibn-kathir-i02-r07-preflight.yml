@@ -69,8 +69,13 @@ jobs:
               s=re.sub(r'[\u064b-\u065f\u0670\u06d6-\u06ed]','',s)
               return re.sub(r'\s+',' ',s).strip()
           live=norm(row.get('content',''))
+          missing=[]
           for anchor in review['validation']['required_live_anchors']:
-              if norm(anchor) not in live: raise SystemExit('Missing live Arabic anchor: '+anchor)
+              if norm(anchor) not in live: missing.append(anchor)
+          if missing:
+              p=live.find(norm('أحمد بن أبي سريج'))
+              print('R07_BOUNDED_LIVE_CONTEXT',live[max(0,p-80):p+520] if p>=0 else 'anchor-not-found')
+              raise SystemExit('Missing live Arabic anchors: '+json.dumps(missing,ensure_ascii=False))
           print('AUDIT_MODE read-only; no writes')
           print('R07_DECISION',cmp['decision'])
           print('R07_VARIANTS',json.dumps(cmp['textual_variants'],ensure_ascii=False,sort_keys=True))
