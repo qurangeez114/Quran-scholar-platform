@@ -4,6 +4,7 @@ on:
     paths:
       - '.github/workflows/tafsir-108-tabari-replacement-preflight.yml'
       - 'data/tafsir/staging/tabari-108-atomic-replacement-candidates-2026-10-13.json'
+      - 'data/tafsir/staging/tabari-108-1-research-2026-10-10.json'
   workflow_dispatch:
 permissions:
   contents: read
@@ -26,8 +27,15 @@ jobs:
           if not key: raise SystemExit("Missing protected database credential")
           path="data/tafsir/staging/tabari-108-atomic-replacement-candidates-2026-10-13.json"
           repl=json.load(open(path,encoding="utf-8"))
-          if repl.get("database_written") is not False or repl.get("authoritative_staging_unchanged") is not True:
+          if repl.get("database_written") is not False:
               raise SystemExit("Unsafe replacement state")
+          integrated=repl.get("authoritative_staging_unchanged") is False
+          if integrated:
+              meta=repl.get("integration",{})
+              if meta.get("verified_chapter_claims")!=72 or meta.get("verified_tabari_claims")!=17 or meta.get("database_written") is not False:
+                  raise SystemExit("Integrated replacement metadata mismatch")
+          elif repl.get("authoritative_staging_unchanged") is not True:
+              raise SystemExit("Unknown replacement lifecycle state")
           if repl.get("current_state")!={"chapter_claims":66,"tabari_claims":11,"replaced_ids":["108-T04","108-T11"]}:
               raise SystemExit("Current count contract mismatch")
           if repl.get("proposed_state")!={"chapter_claims":72,"tabari_claims":17,"replacement_claims":8,"net_change":6}:
@@ -87,7 +95,14 @@ jobs:
           for doc in docs:
               claims=doc["claims"]
               if doc["scholar_key"]=="tabari":
-                  claims=[x for x in claims if x["id"] not in ("108-T04","108-T11")]+candidates
+                  staged_ids={x["id"] for x in claims}
+                  if {"108-T04","108-T11"} & staged_ids:
+                      if integrated: raise SystemExit("Integrated state still contains compressed Tabari IDs")
+                      claims=[x for x in claims if x["id"] not in ("108-T04","108-T11")]+candidates
+                  elif set(expected).issubset(staged_ids):
+                      if not integrated: raise SystemExit("Atomic Tabari IDs present but lifecycle not integrated")
+                  else:
+                      raise SystemExit("Tabari replacement inventory mismatch")
               counts[doc["scholar_key"]]=len(claims)
               combined.extend((doc["scholar_key"],x["id"],x.get("proposition") or x.get("statement_en") or x.get("claim","")) for x in claims)
           expected_counts={"tabari":17,"ibn_kathir":14,"qurtubi":23,"jalalayn":5,"saadi":6,"ibn_abbas":7}
@@ -143,4 +158,5 @@ jobs:
           print("SOURCE_HASHES_AND_ARABIC_ANCHORS_VERIFIED")
           print("VOICE_BOUNDARIES_AND_ENGLISH_ABSENCE_VERIFIED")
           print("DUPLICATES",json.dumps({"local_exact":[],"local_likely":[],"live_exact":[],"live_likely":[]}))
+          print("REPLACEMENT_LIFECYCLE","integrated" if integrated else "proposal")
           print("TABARI_108_ATOMIC_REPLACEMENT_PREFLIGHT_PASS")
