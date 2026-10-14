@@ -96,7 +96,18 @@ jobs:
           def norm(v):
               v=unicodedata.normalize("NFKD",v or "").encode("ascii","ignore").decode().casefold()
               return re.sub(r"[^a-z0-9]+"," ",v).strip()
-          local_exact=[]; local_likely=[]
+          adjudication=repl.get("duplicate_adjudication",{})
+          allowed={tuple(sorted(x["pair"])) for x in adjudication.get("allowed_high_text_overlap",[])}
+          expected_allowed={
+              tuple(sorted(("108-T04A","108-T04B"))),
+              tuple(sorted(("108-T04A","108-T04D"))),
+              tuple(sorted(("108-T04B","108-T04D"))),
+              tuple(sorted(("108-T11B","108-I08")))}
+          if allowed!=expected_allowed or adjudication.get("exact_duplicates")!=[] or adjudication.get("live_duplicates")!=[]:
+              raise SystemExit("Duplicate adjudication contract mismatch")
+          if len({c.get("semantic_key") for c in candidates})!=8:
+              raise SystemExit("Semantic keys missing or repeated")
+          local_exact=[]; local_likely=[]; allowed_parallel=[]
           for i,a in enumerate(combined):
               an=norm(a[2]); aset=set(an.split())
               if not an: raise SystemExit("Missing statement "+a[1])
@@ -105,7 +116,10 @@ jobs:
                   if an==bn: local_exact.append([a[1],b[1]])
                   elif a[1] in expected or b[1] in expected:
                       score=len(aset&bset)/len(aset|bset) if aset and bset else 0
-                      if score>=0.80: local_likely.append([a[1],b[1],round(score,3)])
+                      if score>=0.80:
+                          pair=tuple(sorted((a[1],b[1])))
+                          if pair in allowed: allowed_parallel.append([a[1],b[1],round(score,3)])
+                          else: local_likely.append([a[1],b[1],round(score,3)])
           live=get("propositions",{"tafsir_entry_id":"in.(5261,5263)","select":"id,tafsir_entry_id,statement_en,status","limit":"1000"})
           live_exact=[]; live_likely=[]
           for c in candidates:
@@ -116,8 +130,12 @@ jobs:
                   elif aset and bset:
                       score=len(aset&bset)/len(aset|bset)
                       if score>=0.80: live_likely.append({"claim":c["id"],"proposition":saved["id"],"jaccard":round(score,3)})
+          seen_allowed={tuple(sorted((x[0],x[1]))) for x in allowed_parallel}
+          if seen_allowed!=allowed:
+              raise SystemExit("Enumerated parallel was not reproduced "+json.dumps(allowed_parallel))
           if local_exact or local_likely or live_exact or live_likely:
               raise SystemExit("Duplicate review required "+json.dumps({"local_exact":local_exact,"local_likely":local_likely,"live_exact":live_exact,"live_likely":live_likely}))
+          print("ALLOWED_REVIEWED_PARALLELS",json.dumps(allowed_parallel))
           print("AUDIT_MODE read-only; no writes")
           print("TABARI_REPLACEMENT_ROWS",len(candidates))
           print("COMBINED_COUNTS",json.dumps(counts,sort_keys=True))
