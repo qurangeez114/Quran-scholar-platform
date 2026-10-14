@@ -28,19 +28,19 @@ jobs:
           plan=json.load(open("data/tafsir/staging/qurtubi-108-evidence-voice-plan-2026-10-13.json",encoding="utf-8"))
           stage=json.load(open("data/tafsir/staging/qurtubi-108-research-2026-10-12.json",encoding="utf-8"))
           rows=plan.get("rows",[])
-          expected_ids=["108-Q01","108-Q02","108-Q03"]+[f"108-Q04{c}" for c in "ABCDEFGHIJKLMN"]+["108-Q05","108-Q06","108-Q07","108-Q08","108-Q09"]
+          expected_ids=["108-Q01","108-Q02","108-Q03"]+[f"108-Q04{c}" for c in "ABCDEFGHIJKLMN"]+["108-Q05","108-Q06","108-Q07","108-Q08A","108-Q08B","108-Q09"]
           ids=[row.get("claim_id") for row in rows]
-          if ids!=expected_ids or len(set(ids))!=22: raise SystemExit("Qurtubi claim set/order mismatch: "+repr(ids))
-          if plan.get("claim_count")!=22 or plan.get("reporting_work_id")!=3 or plan.get("database_written") is not False or plan.get("ready_for_database_import") is not False:
+          if ids!=expected_ids or len(set(ids))!=23: raise SystemExit("Qurtubi claim set/order mismatch: "+repr(ids))
+          if plan.get("claim_count")!=23 or plan.get("reporting_work_id")!=3 or plan.get("database_written") is not False or plan.get("ready_for_database_import") is not False:
               raise SystemExit("Unsafe plan state")
           if stage.get("database_written") is not False: raise SystemExit("Unsafe staging state")
           partial={"108-Q04A"}; absent={"108-Q04"+c for c in "BCDEFGHIJKLMN"}
-          unresolved={"108-Q04H","108-Q04I","108-Q04L","108-Q04M"}
+          unresolved={"108-Q04H","108-Q04I","108-Q04L","108-Q04M","108-Q08B"}
           for row in rows:
               cid=row["claim_id"]; p,v,e,s=row["proposition"],row["voice"],row["evidence"],row["source"]
               if p.get("speaker_name")!="al-Qurṭubī" or p.get("claim_type_id")!=43 or v.get("reporting_work_id")!=3:
                   raise SystemExit("Unexpected proposition/work attribution "+cid)
-              expected_position="preferred" if cid in {"108-Q01","108-Q02","108-Q03"} else "reported_only"
+              expected_position="preferred" if cid in {"108-Q01","108-Q02","108-Q03","108-Q08A"} else "reported_only"
               if p.get("mufassir_own_position")!=expected_position: raise SystemExit("Qurtubi position guard failed "+cid)
               coverage=s.get("translation_coverage")
               if cid in partial and coverage!="partial_book_wording_only": raise SystemExit("Partial-English label missing "+cid)
@@ -56,7 +56,7 @@ jobs:
           for cid in ("108-Q04L","108-Q04M"):
               if by_claim[cid]["voice"]["originating_voice_type"]!="unnamed_report" or by_claim[cid]["voice"]["originating_voice_name"] is not None:
                   raise SystemExit("Unnamed boundary lost "+cid)
-          if plan["validation"].get("transmission_routes_planned")!=0 or set(plan["validation"].get("unresolved_voice_claims",[]))!=unresolved:
+          if by_claim["108-Q08A"]["voice"]["originating_voice_type"]!="exegete_own_view" or by_claim["108-Q08A"]["voice"]["originating_voice_name"] is not None:\n              raise SystemExit("Q08A commentator boundary lost")\n          if by_claim["108-Q08B"]["voice"]["originating_voice_type"]!="unnamed_report" or by_claim["108-Q08B"]["voice"]["originating_voice_name"] is not None:\n              raise SystemExit("Q08B unnamed boundary lost")\n          if plan["validation"].get("transmission_routes_planned")!=0 or set(plan["validation"].get("unresolved_voice_claims",[]))!=unresolved:
               raise SystemExit("Transmission/unresolved validation drift")
           base="https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/"
           headers={"apikey":key,"Authorization":"Bearer "+key}
@@ -111,7 +111,7 @@ jobs:
           print("QURTUBI_PLAN_ROWS",len(rows))
           print("SOURCE_IDENTITIES_HASHES_VERIFIED",sorted(by_id))
           print("ARABIC_ANCHORS_AND_TRANSLATION_LABELS_VERIFIED",len(rows))
-          print("PREFERRED_REPORTED_COUNTS",3,19)
+          print("PREFERRED_REPORTED_COUNTS",4,19)
           print("ENGLISH_PARTIAL_ABSENT_COUNTS",len(partial),len(absent))
           print("UNRESOLVED_VOICE_CLAIMS",sorted(unresolved))
           print("TRANSMISSION_ROUTES_PLANNED",0)
