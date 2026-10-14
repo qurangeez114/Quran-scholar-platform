@@ -1,0 +1,128 @@
+name: Preflight Surah 108 Tabari atomic replacements
+on:
+  push:
+    paths:
+      - '.github/workflows/tafsir-108-tabari-replacement-preflight.yml'
+      - 'data/tafsir/staging/tabari-108-atomic-replacement-candidates-2026-10-13.json'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tafsir-108-tabari-replacement-preflight
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate eight atomic replacements without writes
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        shell: python
+        run: |
+          import hashlib,json,os,re,unicodedata,urllib.parse,urllib.request
+          key=os.environ.get("SUPABASE_SERVICE_KEY","")
+          if not key: raise SystemExit("Missing protected database credential")
+          path="data/tafsir/staging/tabari-108-atomic-replacement-candidates-2026-10-13.json"
+          repl=json.load(open(path,encoding="utf-8"))
+          if repl.get("database_written") is not False or repl.get("authoritative_staging_unchanged") is not True:
+              raise SystemExit("Unsafe replacement state")
+          if repl.get("current_state")!={"chapter_claims":66,"tabari_claims":11,"replaced_ids":["108-T04","108-T11"]}:
+              raise SystemExit("Current count contract mismatch")
+          if repl.get("proposed_state")!={"chapter_claims":72,"tabari_claims":17,"replacement_claims":8,"net_change":6}:
+              raise SystemExit("Proposed count contract mismatch")
+          candidates=[c for group in repl.get("replacements",[]) for c in group.get("candidates",[])]
+          expected=["108-T04A","108-T04B","108-T04C","108-T04D","108-T11A","108-T11B","108-T11C","108-T11D"]
+          ids=[c.get("id") for c in candidates]
+          if ids!=expected or len(set(ids))!=8: raise SystemExit("Candidate ID mismatch "+repr(ids))
+          for c in candidates:
+              if c.get("position") not in ("reported_only","preferred_interpretation"):
+                  raise SystemExit("Position missing "+c["id"])
+              if not c.get("originating_voice") or not c.get("proposition") or not c.get("arabic_anchors"):
+                  raise SystemExit("Evidence/voice missing "+c["id"])
+          if next(c for c in candidates if c["id"]=="108-T11D").get("originating_voice")!="al-Tabari":
+              raise SystemExit("T11D commentator voice weakened")
+          c11=next(c for c in candidates if c["id"]=="108-T11C")
+          if "do not simply identify Ka'b" not in c11.get("proposition",""):
+              raise SystemExit("T11C Ka'b correction absent")
+          if repl.get("source",{}).get("english_coverage")!="absent" or repl["source"].get("english_entry_ids")!=[]:
+              raise SystemExit("English absence was weakened")
+          base="https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/"
+          headers={"apikey":key,"Authorization":"Bearer "+key}
+          def get(path,params):
+              req=urllib.request.Request(base+path+"?"+urllib.parse.urlencode(params),headers=headers)
+              with urllib.request.urlopen(req,timeout=30) as r: return json.load(r)
+          entries=get("tafsir_entries",{"id":"in.(5261,5263)","select":"id,sura,aya,scholar_key,language,content,source_name,source_url","order":"id.asc"})
+          byid={int(x["id"]):x for x in entries}
+          expected_sources={
+            5261:((108,1,"tabari","ar"),"2eae44dd583cc8562eeda7d40aafeeecddd22b3b73055dcfec1363b6c27c87f4"),
+            5263:((108,3,"tabari","ar"),"dd11e99471301b8b2044d0dddb518a375a69b4c4e8d654ac966ecc1ee46da988")}
+          if set(byid)!=set(expected_sources): raise SystemExit("Source inventory mismatch")
+          for rid,(identity,digest) in expected_sources.items():
+              row=byid[rid]
+              if (row["sura"],row["aya"],row["scholar_key"],row["language"])!=identity:
+                  raise SystemExit("Source identity drift "+str(rid))
+              if hashlib.sha256((row.get("content") or "").encode()).hexdigest()!=digest:
+                  raise SystemExit("Source hash drift "+str(rid))
+          for c in candidates:
+              text=byid[int(c["arabic_entry_id"])]["content"]
+              for anchor in c["arabic_anchors"]:
+                  if anchor not in text: raise SystemExit("Exact Arabic anchor absent "+c["id"]+" "+anchor)
+          # Guard the direct commentator boundary after the last transmitted report.
+          ar3=byid[5263]["content"]
+          final_report=ar3.find("حدثنا ابن بشار",2500)
+          t11d=ar3.find("وأولى الأقوال في ذلك عندي بالصواب")
+          if final_report<0 or t11d<0 or t11d<=final_report:
+              raise SystemExit("T11D direct-commentator boundary not established")
+          paths=[
+            "data/tafsir/staging/tabari-108-1-research-2026-10-10.json",
+            "data/tafsir/staging/ibn-kathir-108-research-2026-10-12.json",
+            "data/tafsir/staging/qurtubi-108-research-2026-10-12.json",
+            "data/tafsir/staging/jalalayn-108-research-2026-10-12.json",
+            "data/tafsir/staging/saadi-108-research-2026-10-12.json",
+            "data/tafsir/staging/tanwir-108-research-2026-10-12.json"]
+          docs=[json.load(open(p,encoding="utf-8")) for p in paths]
+          combined=[]; counts={}
+          for doc in docs:
+              claims=doc["claims"]
+              if doc["scholar_key"]=="tabari":
+                  claims=[x for x in claims if x["id"] not in ("108-T04","108-T11")]+candidates
+              counts[doc["scholar_key"]]=len(claims)
+              combined.extend((doc["scholar_key"],x["id"],x.get("proposition") or x.get("statement_en") or x.get("claim","")) for x in claims)
+          expected_counts={"tabari":17,"ibn_kathir":14,"qurtubi":23,"jalalayn":5,"saadi":6,"ibn_abbas":7}
+          if counts!=expected_counts or len(combined)!=72 or len({x[1] for x in combined})!=72:
+              raise SystemExit("Combined count mismatch "+json.dumps(counts))
+          def norm(v):
+              v=unicodedata.normalize("NFKD",v or "").encode("ascii","ignore").decode().casefold()
+              return re.sub(r"[^a-z0-9]+"," ",v).strip()
+          local_exact=[]; local_likely=[]
+          for i,a in enumerate(combined):
+              an=norm(a[2]); aset=set(an.split())
+              if not an: raise SystemExit("Missing statement "+a[1])
+              for b in combined[i+1:]:
+                  bn=norm(b[2]); bset=set(bn.split())
+                  if an==bn: local_exact.append([a[1],b[1]])
+                  elif a[1] in expected or b[1] in expected:
+                      score=len(aset&bset)/len(aset|bset) if aset and bset else 0
+                      if score>=0.80: local_likely.append([a[1],b[1],round(score,3)])
+          live=get("propositions",{"tafsir_entry_id":"in.(5261,5263)","select":"id,tafsir_entry_id,statement_en,status","limit":"1000"})
+          live_exact=[]; live_likely=[]
+          for c in candidates:
+              a=norm(c["proposition"]); aset=set(a.split())
+              for saved in live:
+                  b=norm(saved.get("statement_en")); bset=set(b.split())
+                  if a==b: live_exact.append({"claim":c["id"],"proposition":saved["id"]})
+                  elif aset and bset:
+                      score=len(aset&bset)/len(aset|bset)
+                      if score>=0.80: live_likely.append({"claim":c["id"],"proposition":saved["id"],"jaccard":round(score,3)})
+          if local_exact or local_likely or live_exact or live_likely:
+              raise SystemExit("Duplicate review required "+json.dumps({"local_exact":local_exact,"local_likely":local_likely,"live_exact":live_exact,"live_likely":live_likely}))
+          print("AUDIT_MODE read-only; no writes")
+          print("TABARI_REPLACEMENT_ROWS",len(candidates))
+          print("COMBINED_COUNTS",json.dumps(counts,sort_keys=True))
+          print("COMBINED_TOTAL",len(combined))
+          print("SOURCE_HASHES_AND_ARABIC_ANCHORS_VERIFIED")
+          print("VOICE_BOUNDARIES_AND_ENGLISH_ABSENCE_VERIFIED")
+          print("DUPLICATES",json.dumps({"local_exact":[],"local_likely":[],"live_exact":[],"live_likely":[]}))
+          print("TABARI_108_ATOMIC_REPLACEMENT_PREFLIGHT_PASS")
