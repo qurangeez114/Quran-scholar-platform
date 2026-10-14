@@ -3,6 +3,7 @@ on:
   push:
     paths:
       - '.github/workflows/tafsir-108-preflight.yml'
+      - 'data/tafsir/staging/tabari-108-1-research-2026-10-10.json'
   workflow_dispatch:
 permissions:
   contents: read
@@ -37,8 +38,11 @@ jobs:
               for c in d['claims']:
                   x=dict(c); x['_path']=p; x['_scholar']=d['scholar_key']; claims.append(x)
           ids=[c['id'] for c in claims]
-          if len(ids)!=66 or len(set(ids))!=66: raise SystemExit('Expected 66 unique claims, got '+str(len(ids))+'/'+str(len(set(ids))))
-          expected_counts={'tabari':11,'ibn_kathir':14,'qurtubi':23,'jalalayn':5,'saadi':6,'ibn_abbas':7}
+          if len(ids)!=72 or len(set(ids))!=72: raise SystemExit('Expected 72 unique claims, got '+str(len(ids))+'/'+str(len(set(ids))))
+          required_tabari={'108-T04A','108-T04B','108-T04C','108-T04D','108-T11A','108-T11B','108-T11C','108-T11D'}
+          if not required_tabari.issubset(set(ids)): raise SystemExit('Missing atomic Tabari IDs '+json.dumps(sorted(required_tabari-set(ids))))
+          if {'108-T04','108-T11'} & set(ids): raise SystemExit('Compressed Tabari IDs remain after atomic replacement')
+          expected_counts={'tabari':17,'ibn_kathir':14,'qurtubi':23,'jalalayn':5,'saadi':6,'ibn_abbas':7}
           actual={k:sum(1 for c in claims if c['_scholar']==k) for k in expected_counts}
           if actual!=expected_counts: raise SystemExit('Scholar counts mismatch '+json.dumps(actual))
           entries=[5261,5262,5263,48457,48458,48459,13239,13240,13241,38030,38031,38032,23671,23672,23673,36286,36287,36288,48103,48104,48105,29980,29981,29982]
@@ -66,6 +70,7 @@ jobs:
           print('EXACT_DUPLICATES',json.dumps(exact,sort_keys=True))
           print('LIKELY_DUPLICATES',json.dumps(likely,sort_keys=True))
           print('CLAIM_IDS',json.dumps(ids))
+          if exact or likely: raise SystemExit('Blocking live duplicates exact='+json.dumps(exact,sort_keys=True)+' likely='+json.dumps(likely,sort_keys=True))
           print('SURAH_108_PREFLIGHT_PASS')
 
-# Resume checkpoint: 2026-10-13; includes atomic Qurtubi Q04 and Q08 voice replacements (66 claims total); read-only verification before import.
+# Resume checkpoint: 2026-10-14; includes atomic Tabari T04 and T11 replacements (72 claims total); read-only verification before import.
