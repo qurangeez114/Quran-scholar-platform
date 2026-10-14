@@ -1,0 +1,74 @@
+name: Verify Tabari Surah 108 outer transmission prefixes
+on:
+  push:
+    paths:
+      - '.github/workflows/tafsir-108-tabari-outer-prefix-audit.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Extract complete outer report boundaries
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        shell: python
+        run: |
+          import hashlib,json,os,re,urllib.parse,urllib.request
+          key=os.environ.get("SUPABASE_SERVICE_KEY","")
+          if not key: raise SystemExit("Missing protected database credential")
+          base="https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/tafsir_entries"
+          def get(params):
+              req=urllib.request.Request(base+"?"+urllib.parse.urlencode(params),headers={"apikey":key,"Authorization":"Bearer "+key})
+              with urllib.request.urlopen(req,timeout=30) as r: return json.load(r)
+          rows=get({"id":"in.(5261,5262,5263)","select":"id,content","order":"id.asc"})
+          byid={int(x["id"]):x["content"] for x in rows}
+          expected={
+            5261:"2eae44dd583cc8562eeda7d40aafeeecddd22b3b73055dcfec1363b6c27c87f4",
+            5262:"55143e1930f2511d2af04570d8e8e1091490c769829840a0ea03b92178992314",
+            5263:"dd11e99471301b8b2044d0dddb518a375a69b4c4e8d654ac966ecc1ee46da988"
+          }
+          for rid,text in byid.items():
+              if hashlib.sha256(text.encode()).hexdigest()!=expected[rid]: raise SystemExit(f"Source drift {rid}")
+          def outer_units(text):
+              # Only explicit top-level report openers. Inner "قال: ثنا" stays inside its outer unit.
+              starts=[m.start() for m in re.finditer(r"(?<![\u0600-\u06FF])(?:حدثنا|حدثني)\s",text)]
+              result=[]
+              for i,a in enumerate(starts):
+                  b=starts[i+1] if i+1<len(starts) else len(text)
+                  unit=text[a:b].strip()
+                  result.append((a,b,unit))
+              return result
+          def emit(group,rid,predicate):
+              selected=[]
+              for a,b,unit in outer_units(byid[rid]):
+                  if predicate(unit):
+                      first=re.split(r"[،,:]",unit,maxsplit=1)[0]
+                      row={"group":group,"entry_id":rid,"raw_start":a,"raw_end":b,"chars":len(unit),
+                           "sha256":hashlib.sha256(unit.encode()).hexdigest(),"outer_opener":first,"text":unit}
+                      selected.append(row); print("OUTER_UNIT",json.dumps(row,ensure_ascii=False))
+              print("OUTER_GROUP_COUNT",json.dumps({"group":group,"count":len(selected)},ensure_ascii=False))
+              return selected
+          t04=emit("T04_IKRIMA",5261,lambda s:
+              "عكرمة" in s and any(x in s for x in ("النبوّة","النبوة","القرآن","الحكمة","الإسلام")))
+          preference=byid[5261].find("وأولى هذه الأقوال بالصواب عندي")
+          t06=emit("T06_PROPHETIC_SUPPORT",5261,lambda s:
+              byid[5261].find(s)>=preference and ("رسول الله" in s or "النبي" in s)
+              and ("الكوثر" in s or "نهر" in s))
+          t08=emit("T08_PRESCRIBED_PRAYER",5262,lambda s:
+              "الصلاة المكتوبة" in s and any(x in s for x in ("نحر البُدن","النسك والذبح","وانحر البدن")))
+          t11=emit("T11_IDENTIFICATIONS",5263,lambda s:
+              any(x in s for x in ("العاص بن وائل","عقبة بن أبي معيط","كعب بن الأشرف")))
+          if len(t04)<4: raise SystemExit(f"Incomplete T04 outer units: {len(t04)}")
+          if len(t06)<5: raise SystemExit(f"Incomplete T06 outer units: {len(t06)}")
+          if len(t08)<2: raise SystemExit(f"Incomplete T08 outer units: {len(t08)}")
+          names={n:any(n in x["text"] for x in t11) for n in ("العاص بن وائل","عقبة بن أبي معيط","كعب بن الأشرف")}
+          if not all(names.values()): raise SystemExit("Incomplete T11 names "+json.dumps(names,ensure_ascii=False))
+          for group in (t04,t06,t08,t11):
+              if any(not (x["text"].startswith("حدثنا") or x["text"].startswith("حدثني")) for x in group):
+                  raise SystemExit("Non-outer boundary detected")
+          print("TABARI_108_OUTER_PREFIX_AUDIT_PASS",json.dumps({
+            "t04":len(t04),"t06":len(t06),"t08":len(t08),"t11":len(t11),"names":names,"writes":0
+          },ensure_ascii=False))
