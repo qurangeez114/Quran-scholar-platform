@@ -1,0 +1,84 @@
+name: Validate Surah 108 Ibn Kathir I02 route independence
+on:
+  push:
+    paths:
+      - '.github/workflows/tafsir-108-ibn-kathir-i02-route-preflight.yml'
+      - 'data/tafsir/staging/ibn-kathir-108-i02-route-independence-2026-10-14.json'
+      - 'data/tafsir/staging/ibn-kathir-108-route-extraction-2026-10-12.json'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tafsir-108-ibn-kathir-i02-route-preflight
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate bounded topology decisions and live Arabic anchors
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        shell: python
+        run: |
+          import json,os,re,unicodedata,urllib.parse,urllib.request
+          p='data/tafsir/staging/ibn-kathir-108-i02-route-independence-2026-10-14.json'
+          r='data/tafsir/staging/ibn-kathir-108-route-extraction-2026-10-12.json'
+          review=json.load(open(p,encoding='utf-8'))
+          extraction=json.load(open(r,encoding='utf-8'))
+          if review['schema_version']!='quranhikma-route-independence-review-v1': raise SystemExit('Schema mismatch')
+          if (review['surah'],review['verse'],review['scholar_key'],review['claim_id'])!=(108,1,'ibn_kathir','108-I02'): raise SystemExit('Review identity mismatch')
+          if review.get('database_written') is not False or review.get('publication_ready') is not False: raise SystemExit('Unsafe publication metadata')
+          rows=review['route_reviews']
+          expected=['108-I02-R01','108-I02-R04','108-I02-R02','108-I02-R03','108-I02-R05','108-I02-R06']
+          if [x['route_id'] for x in rows]!=expected: raise SystemExit('Bounded route identity/order mismatch')
+          byid={x['route_id']:x for x in rows}
+          r01=byid['108-I02-R01']; r04=byid['108-I02-R04']; r06=byid['108-I02-R06']
+          if r01['topology_decision']!='corroborated_collection_records_but_one_lower_chain_family': raise SystemExit('R01 topology mismatch')
+          if r01['convergence_point']!='al-Mukhtar ibn Fulful -> Anas ibn Malik': raise SystemExit('R01 convergence mismatch')
+          if len(r01['externally_verified_records'])!=4: raise SystemExit('R01 record count mismatch')
+          r01loc={(x['collection'],x['locator'],x['url']) for x in r01['externally_verified_records']}
+          required={
+            ('Sahih Muslim','400a; Book 4, Hadith 56','https://sunnah.com/muslim:400a'),
+            ('Sahih Muslim','400b; Book 4, Hadith 57','https://sunnah.com/muslim:400b'),
+            ('Sunan Abi Dawud','4747; Book 42, Hadith 152','https://sunnah.com/abudawud:4747'),
+            ('Musnad Ahmad','11996; al-Risala ed., 19:54','https://dorar.net/h/i0wpJGj1?osoul=1')}
+          if r01loc!=required: raise SystemExit('R01 source-locator mismatch')
+          if not any('al-Nasa' in x for x in r01['unresolved']): raise SystemExit('Missing al-Nasai non-verification guard')
+          if r04['topology_decision']!='distinct_lower_chain_and_distinct_narrative_context' or r04['convergence_point']!='Anas ibn Malik only': raise SystemExit('R04 topology mismatch')
+          if len(r04['externally_verified_records'])!=1 or r04['externally_verified_records'][0]['locator']!='4964; Book 65, Hadith 486': raise SystemExit('R04 source mismatch')
+          if 'not the doze/revelation report' not in r04['externally_verified_records'][0]['scope_match']: raise SystemExit('R04 scope guard missing')
+          if r06.get('identity_guard')!="Do not identify Sa'id without a source-level witness.": raise SystemExit('R06 identity guard missing')
+          b=review['bounded_result']
+          expected_counts=(6,2,4,5,0,0,0)
+          got=(b['routes_in_ibn_kathir_group'],b['externally_checked_routes'],b['externally_unchecked_routes'],b['verified_external_records'],b['independent_propositions_added'],b['safe_claim_count_change'],b['database_writes'])
+          if got!=expected_counts: raise SystemExit('Bounded count mismatch '+repr(got))
+          group=next(x for x in extraction['route_groups'] if x['claim_id']=='108-I02')
+          initial={x['route_id']:x for x in group['routes']}
+          if set(initial)!=set(expected): raise SystemExit('Initial six-route set mismatch')
+          key=os.environ.get('SUPABASE_SERVICE_KEY','')
+          if not key: raise SystemExit('Missing protected database credential')
+          base='https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/tafsir_entries'
+          params={'id':'eq.48457','select':'id,sura,aya,language,content,scholar_key'}
+          req=urllib.request.Request(base+'?'+urllib.parse.urlencode(params),headers={'apikey':key,'Authorization':'Bearer '+key})
+          with urllib.request.urlopen(req,timeout=30) as response: live=json.load(response)
+          if len(live)!=1 or (live[0]['id'],live[0]['sura'],live[0]['aya'],live[0]['language'],live[0]['scholar_key'])!=(48457,108,1,'ar','ibn_kathir'): raise SystemExit('Live source identity mismatch')
+          def norm(s):
+              s=''.join(ch for ch in unicodedata.normalize('NFKD',s or '') if not unicodedata.combining(ch) and ch!='ـ')
+              return re.sub(r'\\s+',' ',re.sub(r'[،؛؟:()\\[\\]{}﴿﴾]+',' ',s)).strip()
+          hay=norm(live[0]['content'])
+          missing=[]
+          for rid in expected:
+              anchor=norm(initial[rid]['arabic_locator'])
+              if anchor not in hay: missing.append(rid)
+          if missing: raise SystemExit('Live Arabic route-anchor failure '+json.dumps(missing))
+          print('AUDIT_MODE read-only; no writes')
+          print('BOUND_ROUTE_SET','initial I02 routes R01-R06 only; follow-on R07-R11 excluded')
+          print('R01','one lower-chain family across 4 checked collection records')
+          print('R04','distinct lower chain; different narrative scope')
+          print('UNRESOLVED','R02 R03 R05 R06; al-Nasai direct chain; R04 Muslim locator')
+          print('CLAIM_COUNT_CHANGE',0)
+          print('IBN_KATHIR_108_I02_ROUTE_PREFLIGHT_PASS')
+
+# Read-only validator; topology findings do not authenticate routes or authorize publication.
