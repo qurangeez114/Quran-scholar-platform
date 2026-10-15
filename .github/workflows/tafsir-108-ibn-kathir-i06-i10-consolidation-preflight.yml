@@ -45,9 +45,11 @@ jobs:
           if extracted!=expected_routes: raise SystemExit('Extraction and consolidation route inventories differ')
           for r in c['routes']:
               a=json.load(open(r['artifact'],encoding='utf-8'))
-              if a.get('route_id')!=r['route_id'] or a.get('publication_ready') is not False or a.get('database_written') is not False:
+              if a.get('route_id')!=r['route_id'] or a.get('publication_ready') is not False:
                   raise SystemExit('Unsafe route artifact '+r['route_id'])
-              effect=a.get('proposition_count_effect',a.get('comparison',{}).get('proposition_count_effect'))
+              if a.get('database_written') is True or a.get('database_write_authorized') is True or a.get('database_write_count',0)!=0:
+                  raise SystemExit('Route database boundary changed '+r['route_id'])
+              effect=a.get('proposition_count_effect',a.get('proposition_count_delta',a.get('comparison',{}).get('proposition_count_effect')))
               if effect!=0: raise SystemExit('Route proposition count changed '+r['route_id'])
               if a.get('validation',{}).get('conclusion')!='success' and a.get('validation',{}).get('state')!='protected_read_only_preflight_passed':
                   raise SystemExit('Route lacks successful protected validation '+r['route_id'])
