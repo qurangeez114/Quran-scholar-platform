@@ -4,7 +4,34 @@ const $=id=>document.getElementById(id);
 function choose(next){mode=next;$('password').minLength=next==='signup'?12:1;$('auth-help').textContent={login:'Log in with your email and password.',signup:'Use at least 12 characters. Check your email to confirm your account.',recover:'We will email you a link to reset your password.'}[next];document.querySelectorAll('[data-mode]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.mode===next)));$('password-label').hidden=next==='recover';$('password').required=next!=='recover';$('password').autocomplete=next==='signup'?'new-password':'current-password';$('firstName-label').hidden=next!=='signup';$('lastName-label').hidden=next!=='signup';$('firstName').required=false;$('lastName').required=false;$('password-confirm-label').hidden=next!=='signup';$('password-confirm').required=next==='signup';$('submit').textContent={login:'Log in',signup:'Create account',recover:'Send recovery email'}[next];}
 document.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>choose(b.dataset.mode));
 async function ensureProfile(user){const {data:existing}=await db.from('qh_profiles').select('user_id').eq('user_id',user.id).maybeSingle();if(existing)return;const m=user.user_metadata||{};const {error}=await db.from('qh_profiles').insert({user_id:user.id,display_name:m.display_name||''});if(error)console.error('Profile create failed:',error.message);}
-async function render(){const {data}=await db.auth.getSession();const session=data.session;if(session&&!recovering)await ensureProfile(session.user);$('signed-out').hidden=!!session;$('signed-in').hidden=!session||recovering;$('reset').hidden=!session||!recovering;if(session)$('identity').textContent=session.user.email;$('guest-choice').hidden=!!session;$('staff-dashboard').hidden=true;if(session&&!recovering){try{const {data:staff,error}=await db.rpc('qh_is_staff');$('staff-dashboard').hidden=!!error||staff!==true;}catch{}}}
+async function render(){
+ const {data}=await db.auth.getSession();const session=data.session;
+ $('signed-out').hidden=!!session;$('signed-in').hidden=true;$('reset').hidden=!session||!recovering;
+ $('account-recovery').hidden=true;$('guest-choice').hidden=!!session;
+ $('staff-dashboard').hidden=true;$('account-archive-link').hidden=true;
+ if(!session)return;
+ $('identity').textContent=session.user.email;
+ // Do not show a usable dashboard before checking the server lifecycle state.
+ const {data:state,error}=await db.rpc('qh_account_status');
+ if(error){
+  $('signed-in').hidden=recovering;$('delete-account').disabled=true;
+  $('deletion-availability').textContent='Account recovery is not available yet. Deletion is disabled to protect your data.';
+  return;
+ }
+ if(recovering)return;
+ if(state.state!=='active'){
+  $('account-recovery').hidden=false;
+  $('restore-account').hidden=state.state!=='recoverable';
+  $('recovery-description').textContent=state.state==='recoverable'
+   ?'Restore your account before '+new Date(state.recover_until).toLocaleString()+' (72 hours after deletion).'
+   :'The 72-hour self-recovery period has ended. Contact the site administrator and provide the email address for this account. Only an authorized administrator can restore it.';
+  return;
+ }
+ await ensureProfile(session.user);$('signed-in').hidden=false;$('delete-account').disabled=false;
+ $('deletion-availability').textContent='72-hour recovery is available.';
+ const [{data:staff},{data:archiveAdmin}]=await Promise.all([db.rpc('qh_is_staff'),db.rpc('qh_can_manage_account_archive')]);
+ $('staff-dashboard').hidden=staff!==true;$('account-archive-link').hidden=archiveAdmin!==true;
+}
 db.auth.onAuthStateChange(event=>{if(event==='PASSWORD_RECOVERY')recovering=true;setTimeout(render,0);});
 $('auth-form').onsubmit=async e=>{e.preventDefault();$('submit').disabled=true;try{
 const email=$('email').value.trim(),password=$('password').value;let result;
@@ -20,5 +47,22 @@ $('logout').onclick=async()=>{const {error}=await db.auth.signOut();if(error)ret
 $('export').onclick=()=>exportResearch().catch(e=>message(e.message));
 document.querySelectorAll('.pw-toggle').forEach(b=>b.onclick=()=>{const input=$(b.dataset.target);const show=input.type==='password';input.type=show?'text':'password';b.setAttribute('aria-pressed',String(show));b.setAttribute('aria-label',show?'Hide password':'Show password');});
 choose(new URLSearchParams(location.search).get('mode')==='signup'?'signup':'login');
-$('delete-account').onclick=async()=>{if($('delete-confirm').value!=='DELETE')return message('Type DELETE to confirm permanent deletion.');const {error}=await db.rpc('qh_delete_account');if(error)return message(error.message);await db.auth.signOut();message('Account deleted.');render();};
-render();
+$('delete-account').onclick=()=>{$('delete-error').textContent='';$('delete-dialog').showModal();};
+$('cancel-delete').onclick=()=>$('delete-dialog').close();
+$('confirm-delete').onclick=async()=>{
+ $('confirm-delete').disabled=true;
+ try{
+  const {error}=await db.rpc('qh_request_account_deletion');if(error)throw error;
+  $('delete-dialog').close();await db.auth.signOut({scope:'global'});
+  message('Account deactivated. Sign in within 72 hours to restore it. After that, contact an administrator.');await render();
+ }catch(e){$('delete-error').textContent=e.message;}
+ finally{$('confirm-delete').disabled=false;}
+};
+$('restore-account').onclick=async()=>{
+ $('restore-account').disabled=true;
+ try{const {error}=await db.rpc('qh_restore_my_account');if(error)throw error;message('Account restored. Your saved work is available again.');await render();}
+ catch(e){message(e.message);await render();}
+ finally{$('restore-account').disabled=false;}
+};
+$('keep-deleted').onclick=async()=>{await db.auth.signOut();message('Your account remains deactivated.');await render();};
+render().catch(e=>message(e.message));

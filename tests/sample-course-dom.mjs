@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+const {JSDOM}=await import(process.env.JSDOM_MODULE||'jsdom');
+const html=await readFile(new URL('../sample-course.html',import.meta.url),'utf8');
+const dom=new JSDOM(html,{url:'https://quranhikma.com/sample-course.html',runScripts:'dangerously',beforeParse(w){w.confirm=()=>true;w.HTMLElement.prototype.scrollIntoView=()=>{};w.HTMLDialogElement.prototype.showModal=function(){this.open=true};w.HTMLDialogElement.prototype.close=function(){this.open=false};}});
+const d=dom.window.document;const click=id=>{assert(d.getElementById(id),id);d.getElementById(id).click();};
+const submit=id=>d.getElementById(id).dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true}));
+d.getElementById('name').value='Practice Student';submit('enroll');assert.match(d.getElementById('learner').textContent,/Practice Student/);
+click('complete');click('save-excerpt');assert.match(d.getElementById('page-body').value,/Fictional Town Record/);
+d.getElementById('page-title').value='Evidence and Interpretation';submit('page-form');assert.match(d.getElementById('notice').textContent,/Page saved/);
+click('make-deck');assert.equal(d.querySelectorAll('[data-title]').length,3);click('present');assert.equal(d.getElementById('present-dialog').open,true);click('next-slide');assert.match(d.getElementById('slide-counter').textContent,/2 \/ 3/);click('close-slides');
+d.querySelector('[data-view="quiz"]').click();submit('quiz-form');assert.equal(d.querySelector('#quiz-form').hidden,false,'incomplete quiz not graded');
+[1,2,0,1,0].forEach((v,i)=>{d.querySelector('input[name="q'+i+'"][value="'+v+'"]').checked=true;});submit('quiz-form');assert.match(d.getElementById('quiz-result').textContent,/80%/);assert.match(d.getElementById('quiz-result').textContent,/Passed/);
+click('results');assert.match(d.getElementById('content').textContent,/80%/);assert.match(d.getElementById('content').textContent,/Passed/);
+d.querySelector('[data-view="quiz"]').click();[0,0,1,0,0].forEach((v,i)=>{d.querySelector('input[name="q'+i+'"][value="'+v+'"]').checked=true;});submit('quiz-form');assert.match(d.getElementById('quiz-result').textContent,/0%/);assert.match(d.getElementById('quiz-result').textContent,/Not passed/);click('results');assert.match(d.getElementById('content').textContent,/Best score: 80%/);
+const saved=JSON.parse(dom.window.localStorage.getItem('qh-sample-course-v1'));assert.equal(saved.attempts.length,2);assert.equal(saved.slides.length,3);assert.equal(saved.page.title,'Evidence and Interpretation');assert.equal(d.getElementById('progress').value,4);
+console.log('PASS: enrollment, lesson, titled page, source import, slides, presentation navigation, incomplete quiz, 80% pass, 0% fail, retry history and saved progress.');dom.window.close();

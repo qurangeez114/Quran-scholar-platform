@@ -1,0 +1,68 @@
+// PostgreSQL tests in PGlite; install @electric-sql/pglite outside the checkout.
+// Run: PGLITE_MODULE=/tmp/qh-recovery-tests/node_modules/@electric-sql/pglite/dist/index.js node tests/account-recovery-db.mjs
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+const {PGlite}=await import(process.env.PGLITE_MODULE||'@electric-sql/pglite');
+const db=new PGlite();
+const a='00000000-0000-0000-0000-000000000001',b='00000000-0000-0000-0000-000000000002',admin='00000000-0000-0000-0000-000000000003';
+await db.exec(`create role anon; create role authenticated;
+ create schema auth; create schema storage;
+ create table auth.users(id uuid primary key,email text,raw_user_meta_data jsonb default '{}');
+ create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
+ grant usage on schema auth,public to anon,authenticated;
+ grant execute on function auth.uid() to anon,authenticated;
+ create table storage.objects(id uuid primary key,owner_id text);
+ alter table storage.objects enable row level security;
+ create table public.qh_research(id int primary key,user_id uuid references auth.users(id) on delete cascade,body text);
+ alter table public.qh_research enable row level security;
+ grant select,insert,update,delete on public.qh_research to authenticated;
+ create policy own on public.qh_research to authenticated using(user_id=auth.uid()) with check(user_id=auth.uid());
+ create table public.qh_public_posts(id int primary key,user_id uuid references auth.users(id) on delete cascade,body text);
+ alter table public.qh_public_posts enable row level security;
+ grant select on public.qh_public_posts to anon,authenticated;
+ create policy published on public.qh_public_posts for select to anon,authenticated using(true);
+ create table public.content_without_rls(id int primary key);
+ grant select on public.content_without_rls to anon,authenticated;
+ insert into public.content_without_rls values(1);
+ insert into auth.users(id,email,raw_user_meta_data) values('${a}','one@example.test','{"display_name":"One"}'),('${b}','two@example.test','{}'),('${admin}','admin@example.test','{}');
+ insert into public.qh_research values(1,'${a}','private-a'),(2,'${b}','private-b');
+ insert into public.qh_public_posts values(1,'${a}','public-a'),(2,'${b}','public-b');`);
+await db.exec(await readFile(new URL('../supabase/accounts/002_account_recovery.sql',import.meta.url),'utf8'));
+async function as(id,role='authenticated'){await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[id||'']);await db.exec('set role '+role);}
+async function sql(s,args=[]){return (await db.query(s,args)).rows;}
+async function rejects(s,args=[]){await assert.rejects(()=>db.query(s,args));}
+await as(a);
+assert.equal((await sql('select public.qh_account_status() s'))[0].s.state,'active');
+assert.equal((await sql('select * from public.qh_research')).length,1);
+await rejects('select public.qh_search_deleted_accounts()');
+await rejects(`insert into public.qh_account_recovery_admins values('${a}')`);
+const d=(await sql('select public.qh_request_account_deletion() s'))[0].s;
+assert.equal(d.state,'recoverable');
+assert.equal(Date.parse(d.recover_until)-Date.parse(d.deleted_at),72*60*60*1000);
+assert.equal((await sql('select public.qh_request_account_deletion() s'))[0].s.recover_until,d.recover_until,'retry must not extend deadline');
+assert.equal((await sql('select * from public.qh_research')).length,0,'old token blocked');
+await rejects(`insert into public.qh_research values(3,'${a}','blocked')`);
+await rejects(`update public.qh_account_deletions set recover_until=now()`);
+await as(null,'anon');assert.equal((await sql('select * from public.qh_public_posts')).length,1,'archived public owner hidden');
+assert.equal((await sql('select * from public.content_without_rls')).length,1,'public corpus untouched');
+await rejects('select public.qh_request_account_deletion()');
+await as(b);assert.equal((await sql('select * from public.qh_research'))[0].body,'private-b');
+await rejects('select public.qh_admin_restore_account($1)',[a]);
+await as(a);assert.equal((await sql('select public.qh_restore_my_account() s'))[0].s.state,'active');
+assert.equal((await sql('select * from public.qh_research'))[0].body,'private-a');
+await sql('select public.qh_delete_account()');assert.equal((await sql('select public.qh_account_status() s'))[0].s.state,'recoverable','legacy RPC is non-destructive');
+await db.exec('reset role');
+await db.query("update public.qh_account_deletions set deleted_at=t.v,recover_until=t.v+interval '72 hours' from(select clock_timestamp()-interval '73 hours' v)t where user_id=$1",[a]);
+await db.query('insert into public.qh_account_recovery_admins values($1)',[admin]);
+await as(a);assert.equal((await sql('select public.qh_account_status() s'))[0].s.state,'archived');await rejects('select public.qh_restore_my_account()');
+await as(admin);assert.equal((await sql("select * from public.qh_search_deleted_accounts('ONE@EXAMPLE')")).length,1);assert.equal((await sql('select * from public.qh_search_deleted_accounts($1)',[a])).length,1);
+assert.equal((await sql('select * from public.qh_research')).length,0,'archive admin cannot read private research');
+await sql('select public.qh_admin_restore_account($1)',[a]);
+await as(a);await sql('select public.qh_request_account_deletion()');
+await db.exec('reset role');await db.query('insert into storage.objects values($1,$2)',[b,a]);
+await as(admin);await rejects("select public.qh_admin_permanently_delete_account($1,'wrong')",[a]);await rejects("select public.qh_admin_permanently_delete_account($1,'PERMANENTLY DELETE')",[b]);await rejects("select public.qh_admin_permanently_delete_account($1,'PERMANENTLY DELETE')",[a]);
+await db.exec('reset role');await db.exec('delete from storage.objects');await as(admin);await sql("select public.qh_admin_permanently_delete_account($1,'PERMANENTLY DELETE')",[a]);
+await db.exec('reset role');assert.equal((await sql('select * from auth.users where id=$1',[a])).length,0);assert.equal((await sql('select * from public.qh_research where user_id=$1',[a])).length,0);assert.equal((await sql("select * from public.qh_account_recovery_audit where subject_id=$1 and action='permanent_delete'",[a])).length,1);
+await as(admin);await sql('select public.qh_request_account_deletion()');await rejects('select public.qh_search_deleted_accounts()');
+console.log('PASS: recovery deadline, retry safety, legacy deletion, stale-token RLS, privacy, admin permissions, search, restore, storage guard, atomic purge and audit.');
+await db.close();
