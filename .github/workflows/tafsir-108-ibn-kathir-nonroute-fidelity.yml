@@ -18,19 +18,20 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         shell: python
         run: |
-          import json,os,urllib.request,urllib.parse,hashlib,re
+          import json,os,urllib.request,urllib.parse,hashlib,re,unicodedata
           key=os.environ['SUPABASE_SERVICE_KEY']
           q=urllib.parse.urlencode({'id':'in.(48457,11079)','select':'id,sura,aya,language,scholar_key,content'})
           req=urllib.request.Request('https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/tafsir_entries?'+q,headers={'apikey':key,'Authorization':'Bearer '+key})
           with urllib.request.urlopen(req,timeout=30) as res: rows=json.load(res)
           assert {(r['id'],r['sura'],r['aya'],r['language'],r['scholar_key']) for r in rows}=={(48457,108,1,'ar','ibn_kathir'),(11079,108,1,'en','ibn_kathir')}
           for r in rows:
-              s=re.sub(r'\s+',' ',r['content'])
+              s=''.join(ch for ch in unicodedata.normalize('NFKD',r['content']) if not unicodedata.combining(ch) and ch!='ـ')
+              s=re.sub(r'\s+',' ',s)
               print('SOURCE_HASH',r['id'],hashlib.sha256(r['content'].encode()).hexdigest())
-              terms=['وهي مدنية','استدل','نحر البدن','إن مبغضك','وهذا يعم'] if r['language']=='ar' else ['revealed','Madin','Makk','Bism','prayer','sacrifice','enemy','cut off']
+              terms=['وهي مدنية','استدل','نحر البدن','ان مبغضك','وهذا يعم','وقال شمر','وقال ابن عباس ايضا','وعن عطاء','ابي جهل'] if r['language']=='ar' else ['Madin','jurist','basmal','Budn','meanest','Shamir','Al-Bazzar','tonight','Abu Jahl','everyone']
               for term in terms:
                   positions=[m.start() for m in re.finditer(re.escape(term),s,re.I)]
                   print('MATCH_COUNT',r['id'],term,len(positions))
-                  for p in positions[:4]:
+                  for p in positions[:2]:
                       print('BOUNDED_CONTEXT',r['id'],term,json.dumps(s[max(0,p-200):p+900],ensure_ascii=False))
           print('READ_ONLY_CONTEXT_AUDIT_PASS')
