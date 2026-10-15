@@ -1,0 +1,67 @@
+name: Preflight Surah 108 Ibn Kathir I04 integration normalization
+on:
+  push:
+    paths:
+      - '.github/workflows/tafsir-108-ibn-kathir-i04-integration-preflight.yml'
+      - 'data/tafsir/staging/ibn-kathir-108-i04-integration-normalization-2026-10-15.json'
+      - 'data/tafsir/staging/ibn-kathir-108-research-2026-10-12.json'
+      - 'data/tafsir/staging/ibn-kathir-108-i04-replacement-candidates-2026-10-12.json'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tafsir-108-ibn-kathir-i04-integration-preflight
+  cancel-in-progress: false
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate normalized I04 integration and live identities
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        shell: python
+        run: |
+          import json,os,urllib.parse,urllib.request
+          base='data/tafsir/staging/'
+          n=json.load(open(base+'ibn-kathir-108-i04-integration-normalization-2026-10-15.json',encoding='utf-8'))
+          c=json.load(open(base+'ibn-kathir-108-research-2026-10-12.json',encoding='utf-8'))
+          r=json.load(open(base+'ibn-kathir-108-i04-replacement-candidates-2026-10-12.json',encoding='utf-8'))
+          expected={'schema_version':'quranhikma-tafsir-staging-normalization-v1','surah':108,'scholar_key':'ibn_kathir','status':'authoritative_i04_integration_metadata_normalized_not_publication_ready','human_verified':True,'database_written':False,'database_write_count':0,'publication_ready':False,'scholar_complete':False,'staged_claim_count':73,'ibn_kathir_claim_count':14}
+          for k,v in expected.items():
+              if n.get(k)!=v: raise SystemExit(f'Unsafe or mismatched {k}: {n.get(k)!r}')
+          ids=[x['id'] for x in c['claims']]
+          wanted=['108-I04A','108-I04B','108-I04C','108-I04D']
+          if len(ids)!=14 or len(set(ids))!=14 or any(x not in ids for x in wanted) or '108-I04' in ids:
+              raise SystemExit('Authoritative atomic claim inventory changed')
+          found=[x for x in c['claims'] if x['id'] in wanted]
+          if [x['id'] for x in found]!=wanted or any(x.get('status')!='atomic_replacement_integrated_after_protected_preflight' for x in found):
+              raise SystemExit('I04 integration labels are not normalized')
+          if r.get('status')!='replacement_integrated_after_protected_preflight_not_publication_ready' or r.get('human_verified') is not True:
+              raise SystemExit('Replacement artifact integration state mismatch')
+          integ=r.get('integration',{})
+          if integ.get('integrated_claim_ids')!=wanted or integ.get('removed_parent_id')!='108-I04' or integ.get('authoritative_ibn_kathir_claim_count')!=14:
+              raise SystemExit('Replacement integration inventory mismatch')
+          if integ.get('database_written') is not False or integ.get('publication_ready') is not False:
+              raise SystemExit('Replacement integration safety boundary changed')
+          p=r.get('preflight',{})
+          if p.get('combined_counts',{}).get('ibn_kathir')!=14 or p.get('local_exact_duplicates') or p.get('local_likely_duplicates') or p.get('live_exact_duplicates') or p.get('live_likely_duplicates'):
+              raise SystemExit('Replacement duplicate guard changed')
+          if c.get('database_written') is not False or r.get('database_written') is not False:
+              raise SystemExit('Database boundary changed')
+          key=os.environ.get('SUPABASE_SERVICE_KEY','')
+          if not key: raise SystemExit('Missing protected database credential')
+          params=urllib.parse.urlencode({'id':'in.(48457,11079)','select':'id,sura,aya,language,scholar_key','order':'id.asc'})
+          req=urllib.request.Request('https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/tafsir_entries?'+params,headers={'apikey':key,'Authorization':'Bearer '+key})
+          with urllib.request.urlopen(req,timeout=30) as resp: rows=json.load(resp)
+          got={(x['id'],x['sura'],x['aya'],x['language'],x['scholar_key']) for x in rows}
+          want={(48457,108,1,'ar','ibn_kathir'),(11079,108,1,'en','ibn_kathir')}
+          if got!=want: raise SystemExit('Live verse-1 bilingual identities changed')
+          print('AUDIT_MODE read-only; no writes')
+          print('NORMALIZED_I04_IDS',json.dumps(wanted))
+          print('IBN_KATHIR_CLAIMS',len(ids))
+          print('STAGED_CLAIMS',n['staged_claim_count'])
+          print('DATABASE_WRITES',n['database_write_count'])
+          print('PUBLICATION_READY',n['publication_ready'])
+          print('TAFSIR_108_IBN_KATHIR_I04_INTEGRATION_PASS')
