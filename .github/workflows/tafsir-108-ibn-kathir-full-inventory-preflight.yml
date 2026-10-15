@@ -1,0 +1,91 @@
+name: Preflight Surah 108 Ibn Kathir full inventory audit
+on:
+  push:
+    paths:
+      - '.github/workflows/tafsir-108-ibn-kathir-full-inventory-preflight.yml'
+      - 'data/tafsir/staging/ibn-kathir-108-full-inventory-audit-2026-10-15.json'
+      - 'data/tafsir/staging/ibn-kathir-108-research-2026-10-12.json'
+      - 'data/tafsir/staging/ibn-kathir-108-route-extraction-2026-10-12.json'
+      - 'data/tafsir/staging/ibn-kathir-108-i02-r01-r11-coverage-checkpoint-2026-10-15.json'
+      - 'data/tafsir/staging/ibn-kathir-108-i06-i10-consolidation-2026-10-15.json'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tafsir-108-ibn-kathir-full-inventory-preflight
+  cancel-in-progress: false
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate complete claim and route inventory
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        shell: python
+        run: |
+          import json,os,re,urllib.parse,urllib.request
+          base='data/tafsir/staging/'
+          a=json.load(open(base+'ibn-kathir-108-full-inventory-audit-2026-10-15.json',encoding='utf-8'))
+          c=json.load(open(base+'ibn-kathir-108-research-2026-10-12.json',encoding='utf-8'))
+          e=json.load(open(base+'ibn-kathir-108-route-extraction-2026-10-12.json',encoding='utf-8'))
+          i02=json.load(open(base+'ibn-kathir-108-i02-r01-r11-coverage-checkpoint-2026-10-15.json',encoding='utf-8'))
+          tail=json.load(open(base+'ibn-kathir-108-i06-i10-consolidation-2026-10-15.json',encoding='utf-8'))
+          expected={'schema_version':'quranhikma-tafsir-scholar-inventory-audit-v1','surah':108,'scholar_key':'ibn_kathir','status':'route_inventory_complete_non_route_boundaries_open_scholar_not_complete','human_verified':True,'database_written':False,'database_write_count':0,'publication_ready':False,'scholar_complete':False,'staged_claim_count':73,'ibn_kathir_claim_count':14}
+          for k,v in expected.items():
+              if a.get(k)!=v: raise SystemExit(f'Unsafe or mismatched {k}: {a.get(k)!r}')
+          claim_ids=[x['id'] for x in c['claims']]
+          if claim_ids!=a['claim_inventory']['expected_ids'] or len(set(claim_ids))!=14:
+              raise SystemExit('Ibn Kathir claim inventory changed')
+          extracted=[]
+          for g in e['route_groups']:
+              extracted.extend(r['route_id'] for r in g.get('routes',[]))
+          def collect_routes(v):
+              out=[]
+              if isinstance(v,dict):
+                  for k,x in v.items():
+                      if k=='route_id' and isinstance(x,str) and re.fullmatch(r'108-I\d\d-R\d\d',x): out.append(x)
+                      else: out.extend(collect_routes(x))
+              elif isinstance(v,list):
+                  for x in v: out.extend(collect_routes(x))
+              return out
+          recovered=[x for x in collect_routes(e.get('follow_on_routes_recovered_from_bounded_context',{})) if x not in extracted]
+          extracted_all=extracted+recovered
+          expected_routes=a['route_inventory']['expected_route_ids']
+          if set(extracted_all)!=set(expected_routes) or len(set(extracted_all))!=18:
+              raise SystemExit('Extraction inventory differs from audit')
+          reviewed=[r['route_id'] for r in i02['routes']]+[r['route_id'] for r in tail['routes']]
+          if reviewed!=expected_routes:
+              raise SystemExit('Consolidation inventory differs from audit')
+          if i02['route_count']['reviewed']!=11 or i02['route_count']['unreviewed']!=0:
+              raise SystemExit('I02 review coverage changed')
+          if len(tail['routes'])!=7:
+              raise SystemExit('I06-I10 consolidation coverage changed')
+          boundaries=a['non_route_boundary_audit']
+          if [x['claim_id'] for x in boundaries]!=a['claim_inventory']['non_route_claims']:
+              raise SystemExit('Non-route boundary inventory changed')
+          if any(x['state'] not in ('open','open_metadata_normalization') for x in boundaries):
+              raise SystemExit('An open boundary was silently closed')
+          if len(boundaries)!=9:
+              raise SystemExit('Expected nine open non-route boundaries')
+          if c.get('database_written') is not False or i02.get('database_written') is not False or tail.get('database_written') is not False:
+              raise SystemExit('Database boundary changed')
+          key=os.environ.get('SUPABASE_SERVICE_KEY','')
+          if not key: raise SystemExit('Missing protected database credential')
+          ids=[48457,48458,48459,11079,11080,11081]
+          params=urllib.parse.urlencode({'id':'in.('+','.join(map(str,ids))+')','select':'id,sura,aya,language,scholar_key','order':'id.asc'})
+          req=urllib.request.Request('https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/tafsir_entries?'+params,headers={'apikey':key,'Authorization':'Bearer '+key})
+          with urllib.request.urlopen(req,timeout=30) as resp: rows=json.load(resp)
+          got={(r['id'],r['sura'],r['aya'],r['language'],r['scholar_key']) for r in rows}
+          want={(48457,108,1,'ar','ibn_kathir'),(48458,108,2,'ar','ibn_kathir'),(48459,108,3,'ar','ibn_kathir'),(11079,108,1,'en','ibn_kathir'),(11080,108,2,'en','ibn_kathir'),(11081,108,3,'en','ibn_kathir')}
+          if got!=want: raise SystemExit('Live bilingual identities changed')
+          print('AUDIT_MODE read-only; no writes')
+          print('IBN_KATHIR_CLAIMS',len(claim_ids))
+          print('EXTRACTED_ROUTES',len(set(extracted_all)))
+          print('REVIEWED_ROUTES',len(reviewed))
+          print('OPEN_NON_ROUTE_BOUNDARIES',len(boundaries))
+          print('STAGED_CLAIMS',a['staged_claim_count'])
+          print('DATABASE_WRITES',a['database_write_count'])
+          print('SCHOLAR_COMPLETE',a['scholar_complete'])
+          print('TAFSIR_108_IBN_KATHIR_FULL_INVENTORY_PASS')
