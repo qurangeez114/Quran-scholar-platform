@@ -20,7 +20,7 @@ on conflict do nothing;
 No account is automatically purged after 72 hours. The email remains reserved while its login is retained. Browser-local guest material is not erased by cloud account deletion.
 
 ## Sample course
-`/sample-course.html` is independent of the backend and real accounts. It demonstrates enrollment, a short research-methods lesson, source capture into a titled page, an editable slideshow, a five-question quiz, percentage scoring at a 70% pass mark, retry history and a teacher gradebook. All sample data stays in the browser. Quiz answers and grades in this practice app are intentionally client-side; do not use them as real course results.
+`/sample-course.html` is independent of the backend and real accounts. It demonstrates enrollment, a short research-methods lesson, source capture into a titled page, an editable slideshow, a guided five-question quiz with immediate explanations for wrong or unanswered questions, reworded final checks at a 90% pass mark, retry history and a teacher gradebook. All sample data stays in the browser. Quiz answers and grades in this practice app are intentionally client-side; do not use them as real course results.
 
 ## Local validation
 Install `@electric-sql/pglite` and `jsdom` outside the checkout, then run:
