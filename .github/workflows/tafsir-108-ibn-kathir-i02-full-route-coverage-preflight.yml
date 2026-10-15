@@ -1,0 +1,81 @@
+name: Preflight Surah 108 Ibn Kathir I02 full route coverage
+on:
+  push:
+    paths:
+      - '.github/workflows/tafsir-108-ibn-kathir-i02-full-route-coverage-preflight.yml'
+      - 'data/tafsir/staging/ibn-kathir-108-i02-r01-r11-coverage-checkpoint-2026-10-15.json'
+      - 'data/tafsir/staging/ibn-kathir-108-i02-*-review-2026-10-14.json'
+      - 'data/tafsir/staging/ibn-kathir-108-route-extraction-2026-10-12.json'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tafsir-108-ibn-kathir-i02-full-route-coverage-preflight
+  cancel-in-progress: false
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate complete reviewed route set and live witness
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        shell: python
+        run: |
+          import json, os, re, urllib.request, unicodedata
+          cp_path='data/tafsir/staging/ibn-kathir-108-i02-r01-r11-coverage-checkpoint-2026-10-15.json'
+          routes_path='data/tafsir/staging/ibn-kathir-108-route-extraction-2026-10-12.json'
+          cp=json.load(open(cp_path,encoding='utf-8'))
+          extraction=json.load(open(routes_path,encoding='utf-8'))
+          required={'schema_version':'quranhikma-tafsir-route-coverage-checkpoint-v1','surah':108,'verse':1,'scholar_key':'ibn_kathir','claim_id':'108-I02','status':'all_extracted_routes_reviewed_with_explicit_open_gaps_not_publication_ready','human_verified':True,'database_written':False,'publication_ready':False}
+          for k,v in required.items():
+              if cp.get(k)!=v: raise SystemExit(f'Unsafe or mismatched {k}: {cp.get(k)!r}')
+          expected_ids=[f'108-I02-R{i:02d}' for i in range(1,12)]
+          route_list=list(extraction.get('follow_on_routes_recovered_from_bounded_context',[]))
+          for group in extraction.get('route_groups',[]): route_list.extend(group.get('routes',[]))
+          extracted=sorted(r['route_id'] for r in route_list if str(r.get('route_id','')).startswith('108-I02-R'))
+          if extracted!=expected_ids: raise SystemExit('Extracted route set changed: '+repr(extracted))
+          if cp.get('route_count')!={'extracted':11,'reviewed':11,'unreviewed':0,'publication_ready':0}: raise SystemExit('Route counts changed')
+          rows=cp.get('routes',[])
+          if [r.get('route_id') for r in rows]!=expected_ids: raise SystemExit('Checkpoint route order/set changed')
+          for r in rows:
+              if r.get('review_state')!='protected_source_review_passed' or r.get('proposition_count_effect')!=0 or r.get('publication_ready') is not False: raise SystemExit('Unsafe route state '+r.get('route_id','?'))
+              src=json.load(open(r['artifact'],encoding='utf-8'))
+              if src.get('route_id')!=r['route_id'] or src.get('database_written') is not False or src.get('publication_ready') is not False: raise SystemExit('Source artifact mismatch '+r['route_id'])
+              cmp=src.get('comparison',{})
+              if cmp.get('decision')!=r['decision'] or cmp.get('proposition_count_effect')!=0: raise SystemExit('Decision mismatch '+r['route_id'])
+              if cmp.get('authentication_state')!=r['authentication_state']: raise SystemExit('Authentication state mismatch '+r['route_id'])
+              vstate=str(src.get('validation',{}).get('state',''))+' '+str(src.get('validation',{}).get('protected_preflight',''))
+              if 'pass' not in vstate.lower(): raise SystemExit('Source preflight not passed '+r['route_id']+' '+vstate)
+          cats=cp.get('unresolved_categories',{})
+          expected_cats={
+            'exact_or_edition_locator_gaps':['108-I02-R02','108-I02-R03','108-I02-R04','108-I02-R06','108-I02-R09'],
+            'material_name_or_text_variants':['108-I02-R05','108-I02-R07'],
+            'chain_or_branch_segmentation_variants':['108-I02-R08','108-I02-R10'],
+            'unresolved_narrator_alternative':['108-I02-R11'],
+            'fully_bounded_without_open_gap':['108-I02-R01']}
+          if cats!=expected_cats: raise SystemExit('Unresolved-category map changed')
+          check=cp.get('checkpoint',{})
+          if check!={'staged_claim_count':73,'independent_tafsir_propositions_added':0,'database_writes':0,'surah_complete':False}: raise SystemExit('Checkpoint guard changed')
+          key=os.environ.get('SUPABASE_SERVICE_KEY','')
+          if not key: raise SystemExit('Missing protected database credential')
+          base='https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/'
+          headers={'apikey':key,'Authorization':'Bearer '+key}
+          req=urllib.request.Request(base+'tafsir_entries?id=eq.48457&select=id,sura,aya,language,scholar_key,content&limit=1',headers=headers)
+          with urllib.request.urlopen(req,timeout=30) as resp: live_rows=json.load(resp)
+          if len(live_rows)!=1: raise SystemExit('Expected live tafsir entry 48457')
+          row=live_rows[0]
+          if (row.get('id'),row.get('sura'),row.get('aya'),row.get('language'),row.get('scholar_key'))!=(48457,108,1,'ar','ibn_kathir'): raise SystemExit('Live identity mismatch')
+          def norm(s):
+              s=unicodedata.normalize('NFKC',s or '')
+              s=re.sub(r'[\u064b-\u065f\u0670\u06d6-\u06ed]','',s)
+              return re.sub(r'\s+',' ',s).strip()
+          live=norm(row.get('content',''))
+          anchors=['علي بن مسهر','حدثنا عفان','محمد بن أبي عدي','شيبان بن عبد الرحمن','سليمان بن هلال','وقال سعيد','أحمد بن أبي سريج','أبو سلمة الخزاعي','خالد بن يزيد الكاهلي','وكيع عن سفيان وإسرائيل','شقيق أو مسروق']
+          missing=[a for a in anchors if norm(a) not in live]
+          if missing: raise SystemExit('Missing representative live anchors: '+json.dumps(missing,ensure_ascii=False))
+          print('AUDIT_MODE read-only; no writes')
+          print('ROUTES_REVIEWED',len(rows))
+          print('UNRESOLVED_CATEGORIES',json.dumps(cats,ensure_ascii=False,sort_keys=True))
+          print('TAFSIR_108_IBN_KATHIR_I02_FULL_ROUTE_COVERAGE_PREFLIGHT_PASS')
