@@ -15,8 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
     steps:
       - uses: actions/checkout@v4
       - name: Verify saved review and protected live witnesses
@@ -39,8 +38,10 @@ jobs:
           assert review['proposition_count_delta'] == 0
           assert any(x['result'] == 'not_located_in_bounded_search' for x in review['source_comparison'])
 
-          base = os.environ['SUPABASE_URL'].rstrip('/')
-          key = os.environ['SUPABASE_SERVICE_ROLE_KEY']
+          base = 'https://ylosytbxpzxzwfzjpaej.supabase.co'
+          key = os.environ.get('SUPABASE_SERVICE_KEY', '')
+          if not key:
+              raise RuntimeError('missing protected database credential')
           headers = {'apikey': key, 'Authorization': 'Bearer ' + key}
 
           def get_entry(entry_id):
