@@ -1,0 +1,61 @@
+name: Preflight Surah 108 al-Nasai 11702 route
+on:
+  push:
+    paths:
+      - '.github/workflows/tafsir-108-nasai-11702-preflight.yml'
+      - 'data/tafsir/staging/ibn-kathir-108-i02-nasai-11702-primary-review-2026-10-14.json'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tafsir-108-nasai-11702-preflight
+  cancel-in-progress: false
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate staged route review against live source entry
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        shell: python
+        run: |
+          import json,os,urllib.request,urllib.parse
+          p='data/tafsir/staging/ibn-kathir-108-i02-nasai-11702-primary-review-2026-10-14.json'
+          d=json.load(open(p,encoding='utf-8'))
+          if d.get('schema_version')!='quranhikma-primary-route-review-v1': raise SystemExit('Unexpected schema')
+          if (d.get('surah'),d.get('verse'),d.get('claim_id'),d.get('route_id'))!=(108,1,'108-I02','108-I02-R01'): raise SystemExit('Route identity mismatch')
+          if d.get('database_written') is not False or d.get('publication_ready') is not False: raise SystemExit('Unsafe publication metadata')
+          w=d['direct_source_witness']
+          if w.get('locator')!='11702': raise SystemExit('al-Kubra locator mismatch')
+          expected=['Ali ibn Hujr','Ali ibn Mushir','al-Mukhtar ibn Fulful','Anas ibn Malik']
+          if w.get('normalized_chain')!=expected: raise SystemExit('Direct chain mismatch')
+          corr=d.get('numbering_correspondence',[])
+          if [(x['collection_form'],x['locator']) for x in corr] != [
+            ('al-Sunan al-Kubra','11702'),
+            ('Sunan al-Nasa\'i (al-Mujtaba)','904; vol. 2, p. 133 in the displayed edition'),
+            ('Tafsir al-Nasa\'i extraction','722')]: raise SystemExit('Numbering correspondence mismatch')
+          if d['comparison'].get('topology_decision')!='same_lower_chain_family_as_muslim_400a': raise SystemExit('Topology decision mismatch')
+          b=d['bounded_result']
+          if any(b.get(k)!=0 for k in ('independent_propositions_added','safe_claim_count_change','database_writes')): raise SystemExit('Unexpected count/write change')
+          key=os.environ.get('SUPABASE_SERVICE_KEY','')
+          if not key: raise SystemExit('Missing protected database credential')
+          base='https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/'
+          q='tafsir_entries?id=eq.48457&select=id,surah_number,ayah_number,scholar_key,arabic_text&limit=1'
+          req=urllib.request.Request(base+q,headers={'apikey':key,'Authorization':'Bearer '+key})
+          with urllib.request.urlopen(req,timeout=30) as r: rows=json.load(r)
+          if len(rows)!=1: raise SystemExit('Expected one live Ibn Kathir entry')
+          row=rows[0]
+          if (row.get('surah_number'),row.get('ayah_number'),row.get('scholar_key'))!=(108,1,'ibn_kathir'): raise SystemExit('Live entry identity mismatch')
+          text=row.get('arabic_text') or ''
+          for anchor in ['النسائي','المختار بن فلفل','علي بن مسهر']:
+              if anchor not in text: raise SystemExit('Missing live Arabic anchor '+anchor)
+          print('AUDIT_MODE read-only; no writes')
+          print('LIVE_ENTRY',row['id'])
+          print('DIRECT_LOCATOR',w['locator'])
+          print('CHAIN',' -> '.join(expected))
+          print('TOPOLOGY',d['comparison']['topology_decision'])
+          print('CLAIM_COUNT_CHANGE',b['safe_claim_count_change'])
+          print('DATABASE_WRITES',b['database_writes'])
+          print('SURAH_108_NASAI_11702_PREFLIGHT_PASS')
