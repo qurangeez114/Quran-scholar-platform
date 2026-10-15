@@ -26,7 +26,7 @@ jobs:
           rp='data/tafsir/staging/ibn-kathir-108-i08-r01-source-review-2026-10-15.json'
           ep='data/tafsir/staging/ibn-kathir-108-route-extraction-2026-10-12.json'
           review=json.load(open(rp,encoding='utf-8')); extraction=json.load(open(ep,encoding='utf-8'))
-          expected={'schema_version':'quranhikma-tafsir-route-source-review-v1','surah':108,'verse':3,'scholar_key':'ibn_kathir','claim_id':'108-I08','route_id':'108-I08-R01','status':'bounded_direct_tabari_comparison_complete_not_publication_ready','human_verified':True,'database_written':False,'publication_ready':False,'proposition_count_effect':0}
+          expected={'schema_version':'quranhikma-tafsir-route-source-review-v1','surah':108,'verse':3,'scholar_key':'ibn_kathir','claim_id':'108-I08','route_id':'108-I08-R01','status':'bounded_direct_tabari_comparison_complete_not_publication_ready','human_verified':False,'database_written':False,'publication_ready':False,'proposition_count_effect':0}
           for k,v in expected.items():
               if review.get(k)!=v: raise SystemExit(f'Unsafe or mismatched {k}: {review.get(k)!r}')
           cmp=review['comparison']
@@ -66,10 +66,18 @@ jobs:
           ar=norm(byid[48459].get('content',''))
           if norm(review['ibn_kathir_witness']['arabic_anchor']) not in ar: raise SystemExit('Live Arabic I08 anchor missing')
           en=norm(byid[11081].get('content','')).lower()
+          en=re.sub(r"['`‘’ʿʾ]",'',en)
+          en=re.sub(r'[^a-z0-9]+',' ',en)
+          en=re.sub(r'\s+',' ',en).strip()
           markers={
-            'shamir':any(x in en for x in ['shamir ibn atiyya','shamir bin atiyya','shamir ibn atiya','shamir bin atiya']),
-            'uqba':any(x in en for x in ['uqba ibn abi muayt','uqba bin abi muayt','uqbah ibn abi muayt','uqbah bin abi muayt']),
-            'no_surviving_child':any(x in en for x in ['no child','no son','no offspring','no children'])}
+            'shamir':bool(re.search(r'shamir (?:ibn|bin) atiy+ah?',en)),
+            'uqba':bool(re.search(r'uqbah? (?:ibn|bin) abi muayt',en))}
+          if not all(markers.values()): raise SystemExit('Required English named attribution missing')
+          fidelity=review['english_fidelity']
+          if fidelity.get('state_after_live_preflight')!='named_attribution_present_in_bounded_english_entry':
+              raise SystemExit('Stale English-absence conclusion')
+          if fidelity.get('observed_markers')!={'shamir_ibn_atiyya':True,'uqba_ibn_abi_muayt':True}:
+              raise SystemExit('Stale English fidelity markers')
           print('AUDIT_MODE read-only; no writes')
           print('DIRECT_TABARI_CHAIN',json.dumps(review['direct_tabari_witness']['reported_chain']))
           print('ENGLISH_BOUNDED_MARKERS',json.dumps(markers,sort_keys=True))
