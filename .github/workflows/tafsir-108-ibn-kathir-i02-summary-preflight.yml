@@ -1,0 +1,79 @@
+name: Validate Surah 108 Ibn Kathir R01-R06 reconciled summary
+on:
+  push:
+    paths:
+      - '.github/workflows/tafsir-108-ibn-kathir-i02-summary-preflight.yml'
+      - 'data/tafsir/staging/ibn-kathir-108-i02-route-independence-2026-10-14.json'
+      - 'data/tafsir/staging/ibn-kathir-108-i02-nasai-11702-primary-review-2026-10-14.json'
+      - 'data/tafsir/staging/ibn-kathir-108-i02-r0*-2026-10-14.json'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tafsir-108-ibn-kathir-i02-summary-preflight
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify six-route summary against saved reviews and live Arabic
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        shell: python
+        run: |
+          import json,os,re,urllib.request,unicodedata
+          base='data/tafsir/staging/'
+          summary=json.load(open(base+'ibn-kathir-108-i02-route-independence-2026-10-14.json',encoding='utf-8'))
+          if summary.get('status')!='bounded_external_route_review_complete_with_explicit_source_gaps_not_import_ready': raise SystemExit('Summary status mismatch')
+          if summary.get('database_written') is not False or summary.get('publication_ready') is not False: raise SystemExit('Unsafe summary state')
+          reviews={r['route_id']:r for r in summary.get('route_reviews',[])}
+          expected={f'108-I02-R0{i}' for i in range(1,7)}
+          if set(reviews)!=expected: raise SystemExit('R01-R06 inventory mismatch: '+repr(set(reviews)))
+          expected_decisions={
+            '108-I02-R01':'corroborated_collection_records_but_one_lower_chain_family_with_nasai_11702_directly_verified',
+            '108-I02-R02':'same_report_same_route_with_edition_numbering_and_pagination_variants',
+            '108-I02-R03':'same_report_same_lower_chain_with_collection_wrapper_and_edition_pagination_variants',
+            '108-I02-R04':'bukhari_exact_match_distinct_lower_chain_and_narrative_context_muslim_exact_locator_unresolved',
+            '108-I02-R05':'direct_tabari_match_with_material_live_transcription_divergence_repair_required',
+            '108-I02-R06':'same_report_route_with_said_identified_by_explicit_parallel_yazid_chain'
+          }
+          for rid,decision in expected_decisions.items():
+              r=reviews[rid]
+              if r.get('topology_decision')!=decision: raise SystemExit(rid+' decision mismatch')
+              artifact=r.get('review_artifact')
+              if not artifact or not os.path.isfile(artifact): raise SystemExit(rid+' artifact missing')
+              a=json.load(open(artifact,encoding='utf-8'))
+              if a.get('route_id')!=rid or a.get('database_written') is not False or a.get('publication_ready') is not False: raise SystemExit(rid+' artifact scope mismatch')
+          if reviews['108-I02-R01'].get('unresolved')!=[]: raise SystemExit('R01 stale unresolved marker remains')
+          if reviews['108-I02-R04'].get('checked_muslim_candidate',{}).get('locator')!='Sahih Muslim 164a': raise SystemExit('R04 Muslim candidate guard missing')
+          v=reviews['108-I02-R05'].get('material_variant',{})
+          if (v.get('live_staged'),v.get('public_ibn_kathir_and_tabari'))!=('سليمان بن هلال','سليمان بن بلال'): raise SystemExit('R05 divergence missing')
+          if reviews['108-I02-R06'].get('resolved_identity')!="Sa'id ibn Abi 'Arubah": raise SystemExit('R06 identity mismatch')
+          br=summary.get('bounded_result',{})
+          if (br.get('routes_with_protected_source_level_reviews'),br.get('routes_without_source_level_review'),br.get('staged_claim_count'),br.get('database_writes'))!=(6,0,73,0): raise SystemExit('Checkpoint count mismatch')
+          for r in reviews.values():
+              if r.get('proposition_count_effect',0)!=0: raise SystemExit(r['route_id']+' changed proposition count')
+              if r.get('authentication_state','not_assessed')!='not_assessed': raise SystemExit(r['route_id']+' adopted authentication')
+          key=os.environ.get('SUPABASE_SERVICE_KEY','')
+          if not key: raise SystemExit('Missing protected database credential')
+          headers={'apikey':key,'Authorization':'Bearer '+key}
+          req=urllib.request.Request('https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/tafsir_entries?id=eq.48457&select=id,sura,aya,language,scholar_key,content&limit=1',headers=headers)
+          with urllib.request.urlopen(req,timeout=30) as resp: rows=json.load(resp)
+          if len(rows)!=1: raise SystemExit('Expected live entry 48457')
+          row=rows[0]
+          if (row.get('id'),row.get('sura'),row.get('aya'),row.get('language'),row.get('scholar_key'))!=(48457,108,1,'ar','ibn_kathir'): raise SystemExit('Live identity mismatch')
+          def norm(s):
+              s=unicodedata.normalize('NFKC',s or '')
+              s=re.sub(r'[\u064b-\u065f\u0670\u06d6-\u06ed]','',s)
+              return re.sub(r'\s+',' ',s).strip()
+          live=norm(row.get('content',''))
+          anchors=['علي بن مسهر','حدثنا عفان','محمد بن أبي عدي','شيبان بن عبد الرحمن','سليمان بن هلال','وقال سعيد']
+          missing=[a for a in anchors if norm(a) not in live]
+          if missing: raise SystemExit('Live R01-R06 anchors missing: '+json.dumps(missing,ensure_ascii=False))
+          print('AUDIT_MODE read-only; no writes')
+          print('ROUTES_REVIEWED',len(reviews))
+          print('STAGED_CLAIMS',br['staged_claim_count'])
+          print('DATABASE_WRITES',br['database_writes'])
+          print('TAFSIR_108_IBN_KATHIR_R01_R06_SUMMARY_PASS')
