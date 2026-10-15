@@ -1,0 +1,81 @@
+name: Preflight Surah 108 Ibn Kathir I09 R01 voice review
+on:
+  push:
+    paths:
+      - '.github/workflows/tafsir-108-ibn-kathir-i09-r01-preflight.yml'
+      - 'data/tafsir/staging/ibn-kathir-108-i09-r01-source-review-2026-10-15.json'
+      - 'data/tafsir/staging/ibn-kathir-108-route-extraction-2026-10-12.json'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tafsir-108-ibn-kathir-i09-r01-preflight
+  cancel-in-progress: false
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate direct Tabari voice separation and live bilingual boundary
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        shell: python
+        run: |
+          import html,json,os,re,unicodedata,urllib.parse,urllib.request
+          rp='data/tafsir/staging/ibn-kathir-108-i09-r01-source-review-2026-10-15.json'
+          ep='data/tafsir/staging/ibn-kathir-108-route-extraction-2026-10-12.json'
+          review=json.load(open(rp,encoding='utf-8')); extraction=json.load(open(ep,encoding='utf-8'))
+          expected={'schema_version':'quranhikma-tafsir-route-source-review-v1','surah':108,'verse':3,'scholar_key':'ibn_kathir','claim_id':'108-I09','route_id':'108-I09-R01','status':'bounded_direct_tabari_voice_separation_complete_not_publication_ready','human_verified':True,'database_written':False,'publication_ready':False,'proposition_count_effect':0}
+          for k,v in expected.items():
+              if review.get(k)!=v: raise SystemExit(f'Unsafe or mismatched {k}: {review.get(k)!r}')
+          cmp=review['comparison']
+          if cmp['decision']!='direct_tabari_supports_two_separate_named_voice_routes' or cmp['single_combined_chain'] is not False:
+              raise SystemExit('Voice separation boundary changed')
+          if cmp['merge_with_108_I09_R02'] is not False or cmp['authentication_state']!='not_assessed':
+              raise SystemExit('Route merge or authentication scope changed')
+          group=next((x for x in extraction['route_groups'] if x.get('claim_id')=='108-I09'),None)
+          route=next((x for x in group.get('routes',[]) if x.get('route_id')=='108-I09-R01'),None) if group else None
+          if not route or route.get('attributed_voices')!=['Ibn Abbas','Ikrima']:
+              raise SystemExit('Extracted I09 R01 voices changed')
+
+          def norm(s):
+              s=unicodedata.normalize('NFKC',html.unescape(s or ''))
+              s=re.sub(r'[\u064b-\u065f\u0670\u06d6-\u06ed]','',s)
+              s=re.sub(r'[،؛:,.!?؟\"“”()\[\]{}<>/=_-]',' ',s)
+              return re.sub(r'\s+',' ',s).strip()
+
+          req=urllib.request.Request(review['direct_tabari_witness']['public_source_url'],headers={'User-Agent':'Mozilla/5.0 QuranHikma read-only source audit'})
+          with urllib.request.urlopen(req,timeout=30) as resp: page=resp.read().decode('utf-8','replace')
+          page=norm(re.sub(r'<[^>]+>',' ',page))
+          missing=[]
+          for r in review['direct_tabari_witness']['voice_routes']:
+              if norm(r['route_anchor']) not in page: missing.append(r['voice'])
+          if missing: raise SystemExit('Direct Tabari route anchors missing: '+json.dumps(missing))
+
+          key=os.environ.get('SUPABASE_SERVICE_KEY','')
+          if not key: raise SystemExit('Missing protected database credential')
+          params=urllib.parse.urlencode({'id':'in.(48459,11081)','select':'id,sura,aya,language,scholar_key,content','order':'id.asc'})
+          req=urllib.request.Request('https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/tafsir_entries?'+params,headers={'apikey':key,'Authorization':'Bearer '+key})
+          with urllib.request.urlopen(req,timeout=30) as resp: rows=json.load(resp)
+          byid={r['id']:r for r in rows}
+          if set(byid)!={11081,48459}: raise SystemExit('Expected live entries 48459 and 11081')
+          for eid,lang in ((48459,'ar'),(11081,'en')):
+              row=byid[eid]
+              if (row.get('sura'),row.get('aya'),row.get('language'),row.get('scholar_key'))!=(108,3,lang,'ibn_kathir'):
+                  raise SystemExit('Live identity mismatch '+str(eid))
+          ar=norm(byid[48459].get('content',''))
+          if norm(review['ibn_kathir_witness']['arabic_anchor']) not in ar: raise SystemExit('Live Arabic I09 R01 anchor missing')
+          en=norm(byid[11081].get('content','')).lower()
+          markers={
+            'ibn_abbas':any(x in en for x in ['ibn abbas','ibn abbaas']),
+            'ikrima':any(x in en for x in ['ikrima','ikrimah']),
+            'kab_ibn_al_ashraf':any(x in en for x in ["ka b ibn al ashraf","ka b bin al ashraf","kab ibn al ashraf","kab bin al ashraf"]),
+            'quraysh':any(x in en for x in ['quraysh','quraish'])}
+          print('AUDIT_MODE read-only; no writes')
+          print('DIRECT_TABARI_VOICE_ROUTES',json.dumps([r['voice'] for r in review['direct_tabari_witness']['voice_routes']]))
+          print('ENGLISH_BOUNDED_MARKERS',json.dumps(markers,sort_keys=True))
+          print('I09_R01_SINGLE_COMBINED_CHAIN',cmp['single_combined_chain'])
+          print('I09_R01_AUTHENTICATION',cmp['authentication_state'])
+          print('I09_R01_PROPOSITION_COUNT_EFFECT',review['proposition_count_effect'])
+          print('TAFSIR_108_IBN_KATHIR_I09_R01_PREFLIGHT_PASS')
