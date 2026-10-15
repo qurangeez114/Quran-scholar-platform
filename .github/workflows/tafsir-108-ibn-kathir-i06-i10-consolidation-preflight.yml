@@ -1,0 +1,71 @@
+name: Preflight Surah 108 Ibn Kathir I06-I10 consolidation
+on:
+  push:
+    paths:
+      - '.github/workflows/tafsir-108-ibn-kathir-i06-i10-consolidation-preflight.yml'
+      - 'data/tafsir/staging/ibn-kathir-108-i06-i10-consolidation-2026-10-15.json'
+      - 'data/tafsir/staging/ibn-kathir-108-i06-r01-primary-review-2026-10-15.json'
+      - 'data/tafsir/staging/ibn-kathir-108-i06-r02-source-review-2026-10-15.json'
+      - 'data/tafsir/staging/ibn-kathir-108-i08-r01-source-review-2026-10-15.json'
+      - 'data/tafsir/staging/ibn-kathir-108-i09-r01-source-review-2026-10-15.json'
+      - 'data/tafsir/staging/ibn-kathir-108-i09-r02-source-review-2026-10-15.json'
+      - 'data/tafsir/staging/ibn-kathir-108-i10-r01-source-review-2026-10-15.json'
+      - 'data/tafsir/staging/ibn-kathir-108-i10-r02-source-review-2026-10-15.json'
+      - 'data/tafsir/staging/ibn-kathir-108-route-extraction-2026-10-12.json'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tafsir-108-ibn-kathir-i06-i10-consolidation-preflight
+  cancel-in-progress: false
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate seven-route consolidation and live identities
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        shell: python
+        run: |
+          import json,os,urllib.parse,urllib.request
+          cp='data/tafsir/staging/ibn-kathir-108-i06-i10-consolidation-2026-10-15.json'
+          ep='data/tafsir/staging/ibn-kathir-108-route-extraction-2026-10-12.json'
+          c=json.load(open(cp,encoding='utf-8')); e=json.load(open(ep,encoding='utf-8'))
+          expected={'schema_version':'quranhikma-tafsir-route-consolidation-v1','surah':108,'scholar_key':'ibn_kathir','status':'seven_routes_consolidated_with_unresolved_boundaries_not_publication_ready','human_verified':True,'database_written':False,'database_write_count':0,'publication_ready':False,'staged_claim_count':73,'proposition_count_effect':0}
+          for k,v in expected.items():
+              if c.get(k)!=v: raise SystemExit(f'Unsafe or mismatched {k}: {c.get(k)!r}')
+          expected_routes=['108-I06-R01','108-I06-R02','108-I08-R01','108-I09-R01','108-I09-R02','108-I10-R01','108-I10-R02']
+          if [r['route_id'] for r in c['routes']]!=expected_routes: raise SystemExit('Consolidated route inventory changed')
+          extracted=[]
+          for g in e['route_groups']:
+              if g.get('claim_id') in c['scope']:
+                  extracted.extend(r['route_id'] for r in g.get('routes',[]))
+          if extracted!=expected_routes: raise SystemExit('Extraction and consolidation route inventories differ')
+          for r in c['routes']:
+              a=json.load(open(r['artifact'],encoding='utf-8'))
+              if a.get('route_id')!=r['route_id'] or a.get('publication_ready') is not False or a.get('database_written') is not False:
+                  raise SystemExit('Unsafe route artifact '+r['route_id'])
+              if a.get('proposition_count_effect')!=0: raise SystemExit('Route proposition count changed '+r['route_id'])
+              if a.get('validation',{}).get('conclusion')!='success' and a.get('validation',{}).get('state')!='protected_read_only_preflight_passed':
+                  raise SystemExit('Route lacks successful protected validation '+r['route_id'])
+          decisions=' '.join(c['cross_route_decisions'])
+          for marker in ('seven extracted routes remain separate','does not replace unresolved direct source locators','not independently adopted','Arabic remains controlling'):
+              if marker not in decisions: raise SystemExit('Required boundary absent: '+marker)
+          key=os.environ.get('SUPABASE_SERVICE_KEY','')
+          if not key: raise SystemExit('Missing protected database credential')
+          params=urllib.parse.urlencode({'id':'in.(48459,11081)','select':'id,sura,aya,language,scholar_key','order':'id.asc'})
+          req=urllib.request.Request('https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/tafsir_entries?'+params,headers={'apikey':key,'Authorization':'Bearer '+key})
+          with urllib.request.urlopen(req,timeout=30) as resp: rows=json.load(resp)
+          got={(r['id'],r['sura'],r['aya'],r['language'],r['scholar_key']) for r in rows}
+          want={(48459,108,3,'ar','ibn_kathir'),(11081,108,3,'en','ibn_kathir')}
+          if got!=want: raise SystemExit('Live bilingual identities changed')
+          print('AUDIT_MODE read-only; no writes')
+          print('CONSOLIDATED_ROUTES',json.dumps(expected_routes))
+          print('FINAL_ROUTE_WORKFLOW_RUNS',json.dumps([r['final_workflow_run_id'] for r in c['routes']]))
+          print('UNRESOLVED_BOUNDARY_COUNT',sum(len(r['unresolved']) for r in c['routes']))
+          print('STAGED_CLAIMS',c['staged_claim_count'])
+          print('DATABASE_WRITES',c['database_write_count'])
+          print('PUBLICATION_READY',c['publication_ready'])
+          print('TAFSIR_108_IBN_KATHIR_I06_I10_CONSOLIDATION_PASS')
