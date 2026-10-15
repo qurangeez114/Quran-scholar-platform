@@ -45,11 +45,13 @@ jobs:
               s=re.sub(r'[،؛:,.!?؟\"“”()\[\]{}<>/=_-]',' ',s)
               return re.sub(r'\s+',' ',s).strip()
 
-          for section,anchor in ((review['external_trace'],'عن عطاء إن شانئك قال أبو لهب'),(review['later_comparison'],'وعن عطاء أنها نزلت في أبي لهب')):
+          checks=((review['external_trace'],('عن عطاء','أبو لهب','ابن أبي حاتم')),(review['later_comparison'],('عن عطاء','نزلت في أبي لهب','الجمهور على نزولها في العاص بن وائل')))
+          for section,anchors in checks:
               req=urllib.request.Request(section['public_source_url'],headers={'User-Agent':'Mozilla/5.0 QuranHikma read-only source audit'})
               with urllib.request.urlopen(req,timeout=30) as resp: page=resp.read().decode('utf-8','replace')
               page=norm(re.sub(r'<[^>]+>',' ',page))
-              if norm(anchor) not in page: raise SystemExit('Public attribution anchor missing: '+section['public_source_url'])
+              missing=[anchor for anchor in anchors if norm(anchor) not in page]
+              if missing: raise SystemExit('Public attribution markers missing: '+json.dumps(missing,ensure_ascii=False)+' '+section['public_source_url'])
 
           key=os.environ.get('SUPABASE_SERVICE_KEY','')
           if not key: raise SystemExit('Missing protected database credential')
