@@ -23,7 +23,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 - <<'PY'
-          import json, os, re, urllib.parse, urllib.request
+          import json, os, re, unicodedata, urllib.parse, urllib.request
 
           path = 'data/tafsir/staging/ibn-kathir-108-i06-r02-source-review-2026-10-15.json'
           with open(path, encoding='utf-8') as f:
@@ -65,12 +65,18 @@ jobs:
                   if isinstance(v, str): vals.append(v)
               return '\n'.join(vals)
 
+          def norm_ar(value):
+              value = unicodedata.normalize('NFKC', value or '')
+              value = re.sub(r'[\u064b-\u065f\u0670\u06d6-\u06ed]', '', value)
+              value = re.sub(r'[،؛:,.!?؟\"“”()\[\]{}<>/=_-]', ' ', value)
+              return re.sub(r'\s+', ' ', value).strip()
+
           ar_row, ar_table = get_entry(48459)
           en_row, en_table = get_entry(11081)
-          ar = text_of(ar_row)
+          ar = norm_ar(text_of(ar_row))
           en = text_of(en_row)
           for frag in review['arabic_witness']['required_fragments']:
-              assert frag in ar, f'missing Arabic fragment: {frag}'
+              assert norm_ar(frag) in ar, f'missing Arabic fragment: {frag}'
 
           en_low = en.lower()
           referent = ('al-as' in en_low or 'al-`as' in en_low or 'al-as bin wa' in en_low or 'al-as ibn wa' in en_low)
