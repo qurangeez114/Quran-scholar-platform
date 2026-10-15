@@ -1,0 +1,92 @@
+name: Tafsir 108 Ibn Kathir I06 R02 preflight
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - data/tafsir/staging/ibn-kathir-108-i06-r02-source-review-2026-10-15.json
+      - .github/workflows/tafsir-108-ibn-kathir-i06-r02-preflight.yml
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify saved review and protected live witnesses
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, re, urllib.parse, urllib.request
+
+          path = 'data/tafsir/staging/ibn-kathir-108-i06-r02-source-review-2026-10-15.json'
+          with open(path, encoding='utf-8') as f:
+              review = json.load(f)
+          assert review['route_id'] == '108-I06-R02'
+          assert review['route']['reported_chain'] == ['Muhammad ibn Ishaq', 'Yazid ibn Ruman']
+          assert review['route']['independence'] == 'unresolved'
+          assert review['route']['authentication'] == 'not_assessed'
+          assert review['publication_ready'] is False
+          assert review['database_write_authorized'] is False
+          assert review['database_write_count'] == 0
+          assert review['proposition_count_delta'] == 0
+          assert any(x['result'] == 'not_located_in_bounded_search' for x in review['source_comparison'])
+
+          base = os.environ['SUPABASE_URL'].rstrip('/')
+          key = os.environ['SUPABASE_SERVICE_ROLE_KEY']
+          headers = {'apikey': key, 'Authorization': 'Bearer ' + key}
+
+          def get_entry(entry_id):
+              candidates = ['tafsir_entries', 'tafsir']
+              last = None
+              for table in candidates:
+                  url = f"{base}/rest/v1/{table}?id=eq.{entry_id}&select=*"
+                  try:
+                      req = urllib.request.Request(url, headers=headers)
+                      with urllib.request.urlopen(req, timeout=30) as r:
+                          rows = json.load(r)
+                      if rows:
+                          return rows[0], table
+                  except Exception as exc:
+                      last = exc
+              raise RuntimeError(f'entry {entry_id} not found: {last}')
+
+          def text_of(row):
+              vals = []
+              for k, v in row.items():
+                  if isinstance(v, str): vals.append(v)
+              return '\n'.join(vals)
+
+          ar_row, ar_table = get_entry(48459)
+          en_row, en_table = get_entry(11081)
+          ar = text_of(ar_row)
+          en = text_of(en_row)
+          for frag in review['arabic_witness']['required_fragments']:
+              assert frag in ar, f'missing Arabic fragment: {frag}'
+
+          en_low = en.lower()
+          referent = ('al-as' in en_low or 'al-`as' in en_low or 'al-as bin wa' in en_low or 'al-as ibn wa' in en_low)
+          markers = {m: (m in en_low) for m in review['english_witness']['narrative_markers']}
+          assert referent, 'English bounded entry lacks al-As referent'
+
+          route_names = {
+              'ibn_ishaq': ('ibn ishaq' in en_low or 'ibn ishaq' in en_low),
+              'yazid_ibn_ruman': ('yazid bin ruman' in en_low or 'yazid ibn ruman' in en_low)
+          }
+          print('arabic_table=' + ar_table)
+          print('english_table=' + en_table)
+          print('arabic_route_and_narrative=true')
+          print('english_referent=true')
+          print('english_route_names=' + json.dumps(route_names, sort_keys=True))
+          print('english_narrative_markers=' + json.dumps(markers, sort_keys=True))
+          print('route_independence=unresolved')
+          print('authentication=not_assessed')
+          print('database_writes=0')
+          PY
