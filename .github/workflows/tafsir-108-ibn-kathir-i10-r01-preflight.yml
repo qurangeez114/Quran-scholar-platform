@@ -26,7 +26,7 @@ jobs:
           rp='data/tafsir/staging/ibn-kathir-108-i10-r01-source-review-2026-10-15.json'
           ep='data/tafsir/staging/ibn-kathir-108-route-extraction-2026-10-12.json'
           review=json.load(open(rp,encoding='utf-8')); extraction=json.load(open(ep,encoding='utf-8'))
-          expected={'schema_version':'quranhikma-tafsir-route-source-review-v1','surah':108,'verse':3,'scholar_key':'ibn_kathir','claim_id':'108-I10','route_id':'108-I10-R01','status':'bounded_attribution_trace_complete_chain_and_direct_edition_unresolved_not_publication_ready','human_verified':True,'database_written':False,'publication_ready':False,'proposition_count_effect':0}
+          expected={'schema_version':'quranhikma-tafsir-route-source-review-v1','surah':108,'verse':3,'scholar_key':'ibn_kathir','claim_id':'108-I10','route_id':'108-I10-R01','status':'bounded_attribution_trace_complete_chain_and_direct_edition_unresolved_not_publication_ready','human_verified':False,'database_written':False,'publication_ready':False,'proposition_count_effect':0}
           for k,v in expected.items():
               if review.get(k)!=v: raise SystemExit(f'Unsafe or mismatched {k}: {review.get(k)!r}')
           cmp=review['comparison']
@@ -67,11 +67,22 @@ jobs:
           ar=norm(byid[48459].get('content',''))
           if norm(review['ibn_kathir_witness']['arabic_anchor']) not in ar: raise SystemExit('Live Arabic I10 R01 anchor missing')
           en=norm(byid[11081].get('content','')).lower()
+          en=re.sub(r"['`‘’ʿʾ]",'',en)
+          en=re.sub(r'[^a-z0-9]+',' ',en)
+          en=re.sub(r'\s+',' ',en).strip()
+          m=re.search(r'it has been reported that ata said',en)
+          if not m: raise SystemExit('Local Ata attribution missing')
+          window=en[m.start():m.start()+650]
           markers={
-            'ata':any(x in en for x in ['ata','ataa']),
-            'abu_lahab':'abu lahab' in en,
-            'son_of_messenger':any(x in en for x in ['son of the messenger','son of allah s messenger','son of the messenger of allah']),
-            'cut_off_tonight':any(x in en for x in ['muhammad was cut off tonight','muhammad has been cut off tonight','disconnected tonight'])}
+            'ata':True,
+            'abu_lahab':'abu lahab' in window,
+            'son_of_messenger':'a son of the messenger of allah' in window,
+            'cut_off_tonight':bool(re.search(r'muhammad has been cut off(?: i e from progeny)? tonight',window))}
+          if not all(markers.values()): raise SystemExit('Required local Abu Lahab narrative marker missing')
+          if review['english_fidelity'].get('live_entry_11081_bounded_markers')!=markers:
+              raise SystemExit('Stale English marker finding')
+          if review['english_fidelity'].get('state_after_live_preflight')!='ata_abu_lahab_narrative_and_tonight_present':
+              raise SystemExit('Stale English omission conclusion')
           print('AUDIT_MODE read-only; no writes')
           print('EXTERNAL_TRACE_STATE',review['external_trace']['trace_state'])
           print('ENGLISH_BOUNDED_MARKERS',json.dumps(markers,sort_keys=True))
