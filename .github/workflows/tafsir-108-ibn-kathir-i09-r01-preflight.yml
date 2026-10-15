@@ -26,7 +26,7 @@ jobs:
           rp='data/tafsir/staging/ibn-kathir-108-i09-r01-source-review-2026-10-15.json'
           ep='data/tafsir/staging/ibn-kathir-108-route-extraction-2026-10-12.json'
           review=json.load(open(rp,encoding='utf-8')); extraction=json.load(open(ep,encoding='utf-8'))
-          expected={'schema_version':'quranhikma-tafsir-route-source-review-v1','surah':108,'verse':3,'scholar_key':'ibn_kathir','claim_id':'108-I09','route_id':'108-I09-R01','status':'bounded_direct_tabari_voice_separation_complete_not_publication_ready','human_verified':True,'database_written':False,'publication_ready':False,'proposition_count_effect':0}
+          expected={'schema_version':'quranhikma-tafsir-route-source-review-v1','surah':108,'verse':3,'scholar_key':'ibn_kathir','claim_id':'108-I09','route_id':'108-I09-R01','status':'bounded_direct_tabari_voice_separation_complete_not_publication_ready','human_verified':False,'database_written':False,'publication_ready':False,'proposition_count_effect':0}
           for k,v in expected.items():
               if review.get(k)!=v: raise SystemExit(f'Unsafe or mismatched {k}: {review.get(k)!r}')
           cmp=review['comparison']
@@ -67,11 +67,21 @@ jobs:
           ar=norm(byid[48459].get('content',''))
           if norm(review['ibn_kathir_witness']['arabic_anchor']) not in ar: raise SystemExit('Live Arabic I09 R01 anchor missing')
           en=norm(byid[11081].get('content','')).lower()
-          markers={
-            'ibn_abbas':any(x in en for x in ['ibn abbas','ibn abbaas']),
-            'ikrima':any(x in en for x in ['ikrima','ikrimah']),
-            'kab_ibn_al_ashraf':any(x in en for x in ["ka b ibn al ashraf","ka b bin al ashraf","kab ibn al ashraf","kab bin al ashraf"]),
-            'quraysh':any(x in en for x in ['quraysh','quraish'])}
+          en=re.sub(r"['`‘’ʿʾ]",'',en)
+          en=re.sub(r'[^a-z0-9]+',' ',en)
+          en=re.sub(r'\s+',' ',en).strip()
+          m=re.search(r'ibn abbas and ikrimah? have both said',en)
+          if not m: raise SystemExit('Local two-voice attribution missing')
+          window=en[m.start():m.start()+350]
+          if not re.search(r'kab (?:ibn|bin) al ashraf',window) or 'quraysh' not in window:
+              raise SystemExit('Local Kab/Quraysh referents missing')
+          if not re.search(r'al bazzar recorded that ibn abbas said',en):
+              raise SystemExit('Bazzar source and Ibn Abbas attribution missing')
+          markers={'ibn_abbas':True,'ikrima':True,'kab_ibn_al_ashraf':True,'quraysh':True}
+          if review['english_fidelity'].get('observed_markers')!=markers:
+              raise SystemExit('Stale English marker conclusion')
+          if review['english_fidelity'].get('state_after_live_preflight')!='named_voices_and_narrative_present_intermediate_chains_abridged':
+              raise SystemExit('Stale fidelity state')
           print('AUDIT_MODE read-only; no writes')
           print('DIRECT_TABARI_VOICE_ROUTES',json.dumps([r['voice'] for r in review['direct_tabari_witness']['voice_routes']]))
           print('ENGLISH_BOUNDED_MARKERS',json.dumps(markers,sort_keys=True))
