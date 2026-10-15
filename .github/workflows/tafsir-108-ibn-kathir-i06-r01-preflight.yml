@@ -69,17 +69,21 @@ jobs:
           ar=norm(byid[48459].get('content',''))
           if norm(review['ibn_kathir_witness']['arabic_anchor']) not in ar: raise SystemExit('Live Arabic I06 anchor missing')
           en=norm(byid[11081].get('content','')).lower()
-          referent=any(x in en for x in ["al as bin wa il","as bin wa il","al as ibn wa il","al as"])
+          terms=["al as bin wa il","as bin wa il","al as ibn wa il","al as"]
+          hits=[(en.find(x),x) for x in terms if en.find(x)>=0]
+          if not hits: raise SystemExit('Abridged English lacks an unambiguous al-As marker')
+          pos,matched=min(hits)
+          window=en[max(0,pos-500):pos+700]
+          referent=True
           voices={
-            'Ibn Abbas':any(x in en for x in ['ibn abbas','ibn abbaas']),
-            'Mujahid':any(x in en for x in ['mujahid','mujaahid']),
-            "Sa'id ibn Jubayr":any(x in en for x in ["sa id bin jubayr","sa id ibn jubayr","saeed bin jubayr"]),
-            'Qatada':any(x in en for x in ['qatada','qatadah'])}
-          if not referent: raise SystemExit('Abridged English lacks an unambiguous al-As marker')
+            'Ibn Abbas':any(x in window for x in ['ibn abbas','ibn abbaas']),
+            'Mujahid':any(x in window for x in ['mujahid','mujaahid']),
+            "Sa'id ibn Jubayr":any(x in window for x in ["sa id bin jubayr","sa id ibn jubayr","saeed bin jubayr"]),
+            'Qatada':any(x in window for x in ['qatada','qatadah'])}
           print('AUDIT_MODE read-only; no writes')
           print('DIRECT_TABARI_VOICES',json.dumps([x['voice'] for x in review['direct_tabari_witness']['voice_routes']]))
-          print('ENGLISH_REFERENT_MARKER',referent)
-          print('ENGLISH_VOICE_MARKERS',json.dumps(voices,sort_keys=True))
+          print('ENGLISH_REFERENT_MARKER',referent,matched)
+          print('ENGLISH_BOUNDED_VOICE_MARKERS',json.dumps(voices,sort_keys=True))
           print('I06_R01_AUTHENTICATION',cmp['authentication_state'])
           print('I06_R01_PROPOSITION_COUNT_EFFECT',cmp['proposition_count_effect'])
           print('TAFSIR_108_IBN_KATHIR_I06_R01_PREFLIGHT_PASS')
