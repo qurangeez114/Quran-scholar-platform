@@ -26,7 +26,7 @@ jobs:
           rp='data/tafsir/staging/ibn-kathir-108-i06-r01-primary-review-2026-10-15.json'
           ep='data/tafsir/staging/ibn-kathir-108-route-extraction-2026-10-12.json'
           review=json.load(open(rp,encoding='utf-8')); extraction=json.load(open(ep,encoding='utf-8'))
-          required={'schema_version':'quranhikma-tafsir-route-source-review-v1','surah':108,'verse':3,'scholar_key':'ibn_kathir','claim_id':'108-I06','route_id':'108-I06-R01','status':'bounded_primary_comparison_complete_not_publication_ready','human_verified':True,'database_written':False,'publication_ready':False}
+          required={'schema_version':'quranhikma-tafsir-route-source-review-v1','surah':108,'verse':3,'scholar_key':'ibn_kathir','claim_id':'108-I06','route_id':'108-I06-R01','status':'bounded_primary_comparison_complete_not_publication_ready','human_verified':False,'database_written':False,'publication_ready':False}
           for k,v in required.items():
               if review.get(k)!=v: raise SystemExit(f'Unsafe or mismatched {k}: {review.get(k)!r}')
           cmp=review.get('comparison',{})
@@ -69,17 +69,18 @@ jobs:
           ar=norm(byid[48459].get('content',''))
           if norm(review['ibn_kathir_witness']['arabic_anchor']) not in ar: raise SystemExit('Live Arabic I06 anchor missing')
           en=norm(byid[11081].get('content','')).lower()
-          terms=["al as bin wa il","as bin wa il","al as ibn wa il","al as"]
-          hits=[(en.find(x),x) for x in terms if en.find(x)>=0]
-          if not hits: raise SystemExit('Abridged English lacks an unambiguous al-As marker')
-          pos,matched=min(hits)
-          window=en[max(0,pos-500):pos+700]
-          referent=True
-          voices={
-            'Ibn Abbas':any(x in window for x in ['ibn abbas','ibn abbaas']),
-            'Mujahid':any(x in window for x in ['mujahid','mujaahid']),
-            "Sa'id ibn Jubayr":any(x in window for x in ["sa id bin jubayr","sa id ibn jubayr","saeed bin jubayr"]),
-            'Qatada':any(x in window for x in ['qatada','qatadah'])}
+          en=re.sub(r"['`‘’ʿʾ]",'',en)
+          en=re.sub(r'[^a-z0-9]+',' ',en)
+          en=re.sub(r'\s+',' ',en).strip()
+          m=re.search(r'ibn abbas mujahid said bin jubayr and qatadah? all said',en)
+          if not m: raise SystemExit('Four-name English attribution cluster missing')
+          window=en[m.start():m.start()+300]
+          if not re.search(r'al as (?:bin|ibn) wa ?il',window): raise SystemExit('Local al-As referent missing')
+          matched='four-name cluster followed by al-As'; referent=True
+          voices={name:True for name in ['Ibn Abbas','Mujahid',"Sa'id ibn Jubayr",'Qatada']}
+          f=review['arabic_english_fidelity']
+          if f.get('bounded_voice_markers_present')!=list(voices) or f.get('bounded_voice_markers_absent')!=[]:
+              raise SystemExit('Stale English voice conclusion')
           print('AUDIT_MODE read-only; no writes')
           print('DIRECT_TABARI_VOICES',json.dumps([x['voice'] for x in review['direct_tabari_witness']['voice_routes']]))
           print('ENGLISH_REFERENT_MARKER',referent,matched)
