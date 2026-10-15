@@ -1,0 +1,66 @@
+name: Preflight Surah 108 Ibn Kathir I02 R06 identity review
+on:
+  push:
+    paths:
+      - '.github/workflows/tafsir-108-ibn-kathir-i02-r06-preflight.yml'
+      - 'data/tafsir/staging/ibn-kathir-108-i02-r06-identity-review-2026-10-14.json'
+      - 'data/tafsir/staging/ibn-kathir-108-route-extraction-2026-10-12.json'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tafsir-108-ibn-kathir-i02-r06-preflight
+  cancel-in-progress: false
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate R06 identity comparison and live Arabic witness
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        shell: python
+        run: |
+          import json,os,re,urllib.request,unicodedata
+          p='data/tafsir/staging/ibn-kathir-108-i02-r06-identity-review-2026-10-14.json'
+          review=json.load(open(p,encoding='utf-8'))
+          routes=json.load(open('data/tafsir/staging/ibn-kathir-108-route-extraction-2026-10-12.json',encoding='utf-8'))
+          required={'schema_version':'quranhikma-tafsir-route-source-review-v1','surah':108,'scholar_key':'ibn_kathir','claim_id':'108-I02','route_id':'108-I02-R06','status':'bounded_primary_comparison_complete_not_publication_ready','database_written':False,'publication_ready':False}
+          for k,v in required.items():
+              if review.get(k)!=v: raise SystemExit(f'Unsafe or mismatched {k}: {review.get(k)!r}')
+          cmp=review.get('comparison',{})
+          if cmp.get('decision')!='same_report_route_with_said_identified_by_explicit_parallel_yazid_chain': raise SystemExit('R06 comparison decision missing')
+          if cmp.get('resolved_identity')!="Sa'id ibn Abi 'Arubah": raise SystemExit('R06 identity mismatch')
+          if cmp.get('authentication_state')!='not_assessed' or cmp.get('proposition_count_effect')!=0: raise SystemExit('R06 scope guard failed')
+          explicit=review.get('identity_witness',{}).get('explicit_chain')
+          if explicit != ["Yazid ibn Zuray'","Sa'id ibn Abi 'Arubah",'Qatada','Anas']: raise SystemExit('Explicit identity chain changed')
+          if review.get('identity_witness',{}).get('report_number')!=934: raise SystemExit('al-Ajurri locator changed')
+          if review.get('supporting_witness',{}).get('hadith_number')!=13425: raise SystemExit('Ahmad locator changed')
+          route_list=list(routes.get('follow_on_routes_recovered_from_bounded_context',[]))
+          for group in routes.get('route_groups',[]): route_list.extend(group.get('routes',[]))
+          r06=next((r for r in route_list if r.get('route_id')=='108-I02-R06'),None)
+          if not r06: raise SystemExit('R06 missing from route extraction')
+          anchor=r06.get('arabic_locator') or r06.get('arabic_anchor') or r06.get('chain_arabic') or r06.get('source_anchor')
+          if anchor!='وقال سعيد عن قتادة عن أنس': raise SystemExit('Unexpected R06 route anchor: '+repr(anchor))
+          key=os.environ.get('SUPABASE_SERVICE_KEY','')
+          if not key: raise SystemExit('Missing protected database credential')
+          headers={'apikey':key,'Authorization':'Bearer '+key}
+          req=urllib.request.Request('https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/tafsir_entries?id=eq.48457&select=id,sura,aya,language,scholar_key,content&limit=1',headers=headers)
+          with urllib.request.urlopen(req,timeout=30) as resp: rows=json.load(resp)
+          if len(rows)!=1: raise SystemExit('Expected live tafsir entry 48457')
+          row=rows[0]
+          if (row.get('id'),row.get('sura'),row.get('aya'),row.get('language'),row.get('scholar_key'))!=(48457,108,1,'ar','ibn_kathir'): raise SystemExit('Live identity mismatch')
+          def norm(s):
+              s=unicodedata.normalize('NFKC',s or '')
+              s=re.sub(r'[\u064b-\u065f\u0670\u06d6-\u06ed]','',s)
+              return re.sub(r'\s+',' ',s).strip()
+          live=norm(row.get('content',''))
+          missing=[a for a in review['validation']['required_live_anchors'] if norm(a) not in live]
+          if missing: raise SystemExit('Missing live Arabic anchors: '+json.dumps(missing,ensure_ascii=False))
+          print('AUDIT_MODE read-only; no writes')
+          print('R06_DECISION',cmp['decision'])
+          print('R06_RESOLVED_IDENTITY',cmp['resolved_identity'])
+          print('R06_AUTHENTICATION',cmp['authentication_state'])
+          print('R06_PROPOSITION_COUNT_EFFECT',cmp['proposition_count_effect'])
+          print('TAFSIR_108_IBN_KATHIR_I02_R06_PREFLIGHT_PASS')
