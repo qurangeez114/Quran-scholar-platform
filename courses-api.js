@@ -355,88 +355,56 @@ export async function getEnrollment(courseId) {
   return data;
 }
 
+
 export async function getDiscussionThreads(lessonId) {
-  const { data, error } = await supabase
-    .from('qh_discussion_threads')
-    .select('*, qh_discussion_posts(count)')
-    .eq('lesson_id', lessonId)
-    .order('is_pinned', { ascending: false })
-    .order('updated_at', { ascending: false });
-
-  if (error) throw error;
+  const {data,error}=await supabase.from('qh_discussion_threads').select('id,lesson_id,title,created_at,updated_at,user_id').eq('lesson_id',lessonId).order('created_at',{ascending:false}).limit(100);
+  if(error)throw error;
+  const threads=data||[];
+  if(!threads.length)return [];
+  const {data:posts,error:postError}=await supabase.from('qh_discussion_posts').select('thread_id').in('thread_id',threads.map(t=>t.id));
+  if(postError)throw postError;
+  const counts=new Map();
+  for(const p of posts||[])counts.set(p.thread_id,(counts.get(p.thread_id)||0)+1);
+  return threads.map(t=>({...t,replyCount:counts.get(t.id)||0}));
+}
+export async function createDiscussionThread(lessonId,title) {
+  const {data:auth,error:authError}=await supabase.auth.getUser();
+  if(authError||!auth.user)throw Error('Please sign in.');
+  const {data,error}=await supabase.from('qh_discussion_threads')
+    .insert({lesson_id:lessonId,title,user_id:auth.user.id}).select().single();
+  if(error)throw error;
   return data;
 }
-
-export async function createDiscussionThread(lessonId, title) {
-  const user = (await supabase.auth.getUser()).data.user;
-  if (!user) throw new Error('Not authenticated');
-
-  const { data, error } = await supabase
-    .from('qh_discussion_threads')
-    .insert({
-      lesson_id: lessonId,
-      title,
-      created_by: user.id
-    })
-    .select()
-    .single();
-
-  if (error) throw error;
-  return data;
-}
-
 export async function getDiscussionPosts(threadId) {
-  const user = (await supabase.auth.getUser()).data.user;
-
-  const { data, error } = await supabase
-    .from('qh_discussion_posts')
-    .select('*, qh_profiles(first_name, last_name), qh_post_likes(count)')
-    .eq('thread_id', threadId)
-    .order('created_at', { ascending: true });
-
-  if (error) throw error;
-
-  // Enrich with user's like status
-  if (user && data) {
-    const postIds = data.map(p => p.id);
-    const { data: userLikes, error: likeError } = await supabase
-      .from('qh_post_likes')
-      .select('post_id')
-      .eq('user_id', user.id)
-      .in('post_id', postIds);
-
-    if (!likeError) {
-      const likedPostIds = new Set(userLikes?.map(l => l.post_id) || []);
-      return data.map(post => ({
-        ...post,
-        likeCount: post.qh_post_likes?.[0]?.count || 0,
-        userLiked: likedPostIds.has(post.id)
-      }));
-    }
-  }
-
-  return data.map(post => ({
-    ...post,
-    likeCount: post.qh_post_likes?.[0]?.count || 0,
-    userLiked: false
-  }));
+  const {data:auth}=await supabase.auth.getUser();
+  const {data,error}=await supabase.from('qh_discussion_posts')
+    .select('id,thread_id,user_id,content,created_at')
+    .eq('thread_id',threadId).order('created_at',{ascending:true}).limit(200);
+  if(error)throw error;
+  if(!data?.length)return [];
+  const ids=data.map(p=>p.id),userIds=[...new Set(data.map(p=>p.user_id))];
+  const [likes,profiles,media]=await Promise.all([
+    supabase.from('qh_post_likes').select('post_id,user_id').in('post_id',ids),
+    supabase.from('qh_profiles').select('user_id,display_name').in('user_id',userIds),
+    supabase.from('qh_discussion_attachments').select('post_id,object_path,file_name,media_type').in('post_id',ids)
+  ]);
+  if(likes.error)throw likes.error;
+  if(media.error)throw media.error;
+  // Profile lookup is optional: private-profile RLS may hide other users.
+  const names=new Map((profiles.data||[]).map(p=>[p.user_id,p]));
+  return data.map(post=>{
+    const postLikes=(likes.data||[]).filter(l=>l.post_id===post.id);
+    return {...post,qh_profiles:names.get(post.user_id)||null,
+      attachments:(media.data||[]).filter(m=>m.post_id===post.id),
+      likeCount:postLikes.length,userLiked:postLikes.some(l=>l.user_id===auth.user?.id)};
+  });
 }
-
-export async function createDiscussionPost(threadId, content) {
-  const user = (await supabase.auth.getUser()).data.user;
-  if (!user) throw new Error('Not authenticated');
-
-  const { data, error } = await supabase
-    .from('qh_discussion_posts')
-    .insert({
-      thread_id: threadId,
-      user_id: user.id,
-      content
-    })
-    .select()
-    .single();
-
-  if (error) throw error;
+export async function createDiscussionPost(threadId,content) {
+  const {data:auth,error:authError}=await supabase.auth.getUser();
+  if(authError||!auth.user)throw Error('Please sign in.');
+  const {data,error}=await supabase.from('qh_discussion_posts')
+    .insert({thread_id:threadId,user_id:auth.user.id,content}).select().single();
+  if(error)throw error;
   return data;
 }
 
