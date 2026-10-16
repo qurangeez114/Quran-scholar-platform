@@ -38,7 +38,7 @@ function render(){
  options($('city-filter'),[...new Set(eligible.map(i=>i.city).filter(Boolean))].sort(),v=>v,v=>v,'All cities');
  const term=$('search').value.toLowerCase();
  const visible=instructors.filter(i=>(`${i.display_name} ${i.email}`).toLowerCase().includes(term)&&(!$('country-filter').value||i.country===$('country-filter').value)&&(!$('city-filter').value||i.city===$('city-filter').value)).sort((a,b)=>String(a[$('sort').value]).localeCompare(String(b[$('sort').value])));
- $('instructors').innerHTML=visible.map(i=>`<article class="card"><h3>${esc(i.display_name)}</h3><p>${esc(i.email)}</p><p>${esc(i.city||'City not set')}, ${esc(i.country||'Country not set')}</p><p>${i.active?'Active':'Suspended'} · ${i.must_change_password?'Password change pending':'Account ready'}</p><button type="button" data-view="${i.user_id}">View classes and students</button> <button type="button" data-toggle="${i.user_id}" data-active="${i.active}">${i.active?'Suspend access':'Restore access'}</button></article>`).join('')||'<p>No matching instructors.</p>';
+ $('instructors').innerHTML=visible.map(i=>`<article class="card"><h3>${esc(i.display_name)}</h3><p>${esc(i.email)}</p><p>${esc(i.city||'City not set')}, ${esc(i.country||'Country not set')}</p><p>${i.active?'Active':'Suspended'} · ${i.must_change_password?'Password change pending':'Account ready'}</p><button type="button" data-view="${i.user_id}">View classes and students</button> <button type="button" data-invite="${i.user_id}" ${i.active?'':'disabled title="Restore the account before inviting"'}>Resend invitation email</button> <button type="button" data-toggle="${i.user_id}" data-active="${i.active}">${i.active?'Suspend access':'Restore access'}</button></article>`).join('')||'<p>No matching instructors.</p>';
  const courses=filteredCourses(),ids=new Set(courses.map(c=>c.id));
  $('classes').innerHTML=courses.map(c=>`<article class="card"><h3>${esc(c.title)}</h3><p>${esc(name(c.created_by))} · ${c.is_published?'Published':'Draft'}</p><p>${snapshot.enrollments.filter(e=>e.course_id===c.id).length} enrolled students</p><a href="/admin/lesson-manager.html?course=${c.id}">Lessons</a><a href="/admin/grading.html?tab=quizzes&course=${c.id}">Results</a></article>`).join('')||'<p>No matching classes.</p>';
  const studentTerm=$('student-search').value.toLowerCase();
@@ -74,6 +74,13 @@ for(const id of ['search','country-filter','city-filter','sort','instructor-filt
 $('refresh').onclick=()=>refresh().catch(e=>status(e.message));
 $('instructors').onclick=async e=>{
  const view=e.target.closest('[data-view]');if(view){$('instructor-filter').value=view.dataset.view;$('class-filter').value='';render();$('classes').scrollIntoView({behavior:'smooth'});return;}
+ const invite=e.target.closest('[data-invite]');if(invite){
+  invite.disabled=true;status('Requesting instructor email…');
+  try{const result=await lmsRequest('resend_instructor_invite',{user_id:invite.dataset.invite});status(result.message||'Invitation email requested.');}
+  catch(error){status('Could not send invitation: '+error.message);}
+  finally{invite.disabled=false;}
+  return;
+ }
  const toggle=e.target.closest('[data-toggle]');if(!toggle)return;
  toggle.disabled=true;try{await lmsRequest('set_instructor_active',{user_id:toggle.dataset.toggle,active:toggle.dataset.active!=='true'});await refresh();}catch(error){status(error.message);toggle.disabled=false;}
 };
