@@ -33,7 +33,7 @@ jobs:
           cp='data/tafsir/staging/ibn-kathir-108-i06-i10-consolidation-2026-10-15.json'
           ep='data/tafsir/staging/ibn-kathir-108-route-extraction-2026-10-12.json'
           c=json.load(open(cp,encoding='utf-8')); e=json.load(open(ep,encoding='utf-8'))
-          expected={'schema_version':'quranhikma-tafsir-route-consolidation-v1','surah':108,'scholar_key':'ibn_kathir','status':'seven_routes_consolidated_with_unresolved_boundaries_not_publication_ready','human_verified':True,'database_written':False,'database_write_count':0,'publication_ready':False,'staged_claim_count':73,'proposition_count_effect':0}
+          expected={'schema_version':'quranhikma-tafsir-route-consolidation-v1','surah':108,'scholar_key':'ibn_kathir','status':'seven_routes_consolidated_with_unresolved_boundaries_not_publication_ready','human_verified':False,'database_written':False,'database_write_count':0,'publication_ready':False,'staged_claim_count':73,'proposition_count_effect':0}
           for k,v in expected.items():
               if c.get(k)!=v: raise SystemExit(f'Unsafe or mismatched {k}: {c.get(k)!r}')
           expected_routes=['108-I06-R01','108-I06-R02','108-I08-R01','108-I09-R01','108-I09-R02','108-I10-R01','108-I10-R02']
@@ -53,6 +53,25 @@ jobs:
               if effect!=0: raise SystemExit('Route proposition count changed '+r['route_id'])
               if a.get('validation',{}).get('conclusion')!='success' and a.get('validation',{}).get('state')!='protected_read_only_preflight_passed':
                   raise SystemExit('Route lacks successful protected validation '+r['route_id'])
+          corrected={
+              '108-I06-R01':(38806662471,'arabic_english_fidelity','bounded_four_voice_cluster_aligned'),
+              '108-I08-R01':(38797954872,'english_fidelity','named_attribution_present_in_bounded_english_entry'),
+              '108-I09-R01':(38814065052,'english_fidelity','named_voices_and_narrative_present_intermediate_chains_abridged'),
+              '108-I09-R02':(38814066951,'english_fidelity','named_voices_and_narrative_present_intermediate_chains_abridged'),
+              '108-I10-R01':(38821034076,'english_fidelity','ata_abu_lahab_narrative_and_tonight_present')}
+          for row in c['routes']:
+              if row['route_id'] not in corrected: continue
+              run_id,field,state=corrected[row['route_id']]
+              a=json.load(open(row['artifact'],encoding='utf-8'))
+              f=a[field]
+              actual=f.get('state_after_live_preflight',f.get('state'))
+              if actual!=state or row['final_workflow_run_id']!=run_id:
+                  raise SystemExit('Corrected fidelity mismatch '+row['route_id'])
+              if not row.get('english_fidelity') or not a.get('fidelity_correction'):
+                  raise SystemExit('Missing correction provenance '+row['route_id'])
+          count=sum(len(row['unresolved']) for row in c['routes'])
+          if count!=16 or c['validation']['unresolved_boundary_count']!=count:
+              raise SystemExit('Unresolved boundary count mismatch')
           decisions=' '.join(c['cross_route_decisions'])
           for marker in ('seven extracted routes remain separate','do not replace unresolved direct source locators','not independently adopted','Arabic remains controlling'):
               if marker not in decisions: raise SystemExit('Required boundary absent: '+marker)
