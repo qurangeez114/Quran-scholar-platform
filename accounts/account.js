@@ -27,8 +27,8 @@ async function render(){
    :'The 72-hour self-recovery period has ended. Contact the site administrator and provide the email address for this account. Only an authorized administrator can restore it.';
   return;
  }
- await ensureProfile(session.user);$('signed-in').hidden=false;$('delete-account').disabled=false;
- $('deletion-availability').textContent='72-hour recovery is available.';
+ await ensureProfile(session.user);$('signed-in').hidden=false;$('delete-account').disabled=true;
+ $('deletion-availability').textContent='Account deletion is not available yet.';
  const [{data:staff},{data:archiveAdmin}]=await Promise.all([db.rpc('qh_is_staff'),db.rpc('qh_can_manage_account_archive')]);
  $('staff-dashboard').hidden=staff!==true;$('account-archive-link').hidden=archiveAdmin!==true;
 }
