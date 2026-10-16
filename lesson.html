@@ -305,10 +305,10 @@
         <!-- Lesson Tabs -->
         <div class="section">
           <div class="tabs">
-            <button class="tab-btn active" onclick="switchTab('lesson')">📖 Lesson</button>
-            <button class="tab-btn" onclick="switchTab('discussion')">💬 Discussion</button>
-            <button class="tab-btn" id="quizTabBtn" style="display:none;">✅ Quiz</button>
-            <button class="tab-btn" id="assignmentTabBtn" style="display:none;">📝 Assignment</button>
+            <button class="tab-btn active" onclick="switchTab('lesson', this)">📖 Lesson</button>
+            <button class="tab-btn" onclick="switchTab('discussion', this)">💬 Discussion</button>
+            <button class="tab-btn" id="quizTabBtn" onclick="switchTab('quiz', this)" style="display:none;">✅ Quiz</button>
+            <button class="tab-btn" id="assignmentTabBtn" onclick="switchTab('assignment', this)" style="display:none;">📝 Assignment</button>
           </div>
 
           <!-- Lesson Tab -->
@@ -460,6 +460,7 @@
         if (currentLesson.lesson_type === 'quiz') {
           document.getElementById('quizTabBtn').style.display = 'block';
           await loadQuiz();
+          window.switchTab('quiz', document.getElementById('quizTabBtn'));
         } else if (currentLesson.lesson_type === 'assignment') {
           document.getElementById('assignmentTabBtn').style.display = 'block';
           await loadAssignment();
@@ -533,11 +534,15 @@
         renderQuiz();
       } catch (error) {
         console.error('Error loading quiz:', error);
+        const result=document.getElementById('quizResult');
+        result.textContent='Could not load quiz questions: '+(error.message || 'Please reload and try again.');
+        result.setAttribute('role','alert');
       }
     }
 
     function renderQuiz() {
-      if (!currentQuiz || !currentQuiz.questions) {
+      if (!currentQuiz || !Array.isArray(currentQuiz.questions) || currentQuiz.questions.length === 0) {
+        document.getElementById('quizResult').textContent='No questions have been added to this quiz yet.';
         document.getElementById('quizForm').style.display = 'none';
         return;
       }
@@ -899,7 +904,7 @@
       }
     });
 
-    window.switchTab = function(tabName) {
+    window.switchTab = function(tabName, button) {
       document.querySelectorAll('.tab-content').forEach(tab => {
         tab.classList.remove('active');
       });
@@ -908,7 +913,8 @@
       });
 
       document.getElementById(tabName + 'Tab').classList.add('active');
-      event.target.classList.add('active');
+      const activeButton = button || document.getElementById(tabName + 'TabBtn');
+      if (activeButton) activeButton.classList.add('active');
     };
 
     window.goToCourse = function() {
