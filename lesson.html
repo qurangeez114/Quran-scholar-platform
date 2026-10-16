@@ -320,17 +320,30 @@
 
           <!-- Discussion Tab -->
           <div class="tab-content" id="discussionTab">
-            <h3>Join the discussion</h3>
-
-            <form id="newThreadForm" style="margin-bottom: 2rem;">
-              <div class="form-group">
-                <label>Start a new discussion</label>
-                <input type="text" id="newThreadTitle" placeholder="Question or topic..." required>
-              </div>
-              <button type="submit" class="btn btn-primary">Post</button>
+            <h3>Course Discussion</h3>
+            <p>Ask a question, exchange evidence, and reply with text, images, audio, or video.</p>
+            <p id="discussionNotice" role="status" aria-live="polite"></p>
+            <form id="newThreadForm">
+              <label for="newThreadTitle">Discussion topic</label>
+              <input id="newThreadTitle" required minlength="3" maxlength="180" placeholder="What question should the class investigate?">
+              <button type="submit" class="btn btn-primary">Start discussion</button>
             </form>
-
             <div id="discussionList"></div>
+            <dialog id="discussionDialog" style="width:min(690px,96vw);max-height:88vh;border:0;border-radius:12px;padding:20px">
+              <div style="display:flex;justify-content:space-between;gap:15px">
+                <h3 id="threadTitle">Discussion</h3>
+                <button type="button" id="closeDiscussion" class="btn">Close ×</button>
+              </div>
+              <div id="threadPostsContainer"></div>
+              <form id="replyForm">
+                <label for="replyContent">Reply</label>
+                <textarea id="replyContent" maxlength="8000" placeholder="Share your reasoning or evidence…" style="width:100%;min-height:95px"></textarea>
+                <label for="replyFile" style="display:block;margin:10px 0">📎 Attach image, audio, or video (up to 25 MB)</label>
+                <input id="replyFile" type="file" accept="image/jpeg,image/png,image/webp,image/gif,audio/mpeg,audio/mp4,audio/x-m4a,audio/wav,audio/x-wav,audio/ogg,audio/webm,video/mp4,video/webm,video/quicktime">
+                <p id="uploadStatus" role="status" aria-live="polite"></p>
+                <button type="submit" class="btn btn-primary">Post reply</button>
+              </form>
+            </dialog>
           </div>
 
           <!-- Quiz Tab -->
@@ -860,197 +873,105 @@
       }
     });
 
-    async function loadDiscussion() {
-      try {
-        const threads = await getDiscussionThreads(currentLesson.id);
-        renderDiscussion(threads);
-      } catch (error) {
-        console.error('Error loading discussion:', error);
-      }
-    }
 
-    function renderDiscussion(threads) {
-      const container = document.getElementById('discussionList');
-
-      if (threads.length === 0) {
-        container.innerHTML = '<p style="color: #999;">No discussions yet. Start one above!</p>';
-        return;
-      }
-
-      container.innerHTML = threads.map(thread => `
-        <div class="discussion-thread" onclick="viewThread('${thread.id}')">
-          <div class="thread-title">${thread.title}</div>
-          <div class="thread-meta">
-            Started: ${new Date(thread.created_at).toLocaleDateString()} |
-            Replies: ${thread.qh_discussion_posts?.[0]?.count || 0}
-          </div>
-        </div>
-      `).join('');
-    }
-
-    let currentThreadId = null;
-    let currentThreadTitle = null;
-
-    window.viewThread = async function(threadId) {
-      try {
-        currentThreadId = threadId;
-
-        // Find the thread title
-        const threads = await getDiscussionThreads(currentLesson.id);
-        const thread = threads.find(t => t.id === threadId);
-        currentThreadTitle = thread?.title || 'Discussion Thread';
-
-        // Load and display posts
-        await loadThreadPosts();
-      } catch (error) {
-        console.error('Error loading thread:', error);
-        showAlert('Failed to load thread', 'error');
-      }
-    };
-
-    async function loadThreadPosts() {
-      try {
-        const posts = await getDiscussionPosts(currentThreadId);
-        renderThreadPosts(posts);
-        showThreadViewer();
-      } catch (error) {
-        console.error('Error loading posts:', error);
-        showAlert('Failed to load posts', 'error');
-      }
-    }
-
-    function renderThreadPosts(posts) {
-      const container = document.getElementById('threadPostsContainer');
-      if (!container) return;
-
-      container.innerHTML = posts.map(post => `
-        <div class="discussion-post" style="margin-bottom: 1.5rem; padding: 1rem; background: #f9f9f9; border-radius: 8px; border-left: 4px solid #667eea;">
-          <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.5rem;">
-            <div style="font-weight: 600; color: #333;">
-              ${post.qh_profiles?.first_name || 'Anonymous'} ${post.qh_profiles?.last_name || ''}
-            </div>
-            <div style="font-size: 0.85rem; color: #999;">
-              ${new Date(post.created_at).toLocaleString()}
-            </div>
-          </div>
-          <div style="margin-bottom: 1rem; color: #555; line-height: 1.6;">
-            ${post.content}
-          </div>
-          <div style="display: flex; gap: 1rem; align-items: center;">
-            <button onclick="toggleLikePost('${post.id}')"
-              style="background: ${post.userLiked ? '#667eea' : '#e0e0e0'}; color: ${post.userLiked ? 'white' : '#333'}; border: none; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.3s;">
-              👍 ${post.likeCount || 0} Like${post.likeCount !== 1 ? 's' : ''}
-            </button>
-          </div>
-        </div>
-      `).join('');
-    }
-
-    window.toggleLikePost = async function(postId) {
-      try {
-        const posts = await getDiscussionPosts(currentThreadId);
-        const post = posts.find(p => p.id === postId);
-
-        if (post.userLiked) {
-          await unlikeDiscussionPost(postId);
-        } else {
-          await likeDiscussionPost(postId);
+    const mediaBucket='qh-discussion-media';
+    let currentThreadId=null,currentThreadTitle='',threadCache=[];
+    const discussionList=document.getElementById('discussionList');
+    const discussionText=s=>String(s??'');
+    const discussionNotice=message=>{const e=document.getElementById('discussionNotice');e.textContent=message;};
+    function el(tag,text,cls){const n=document.createElement(tag);if(text!==undefined)n.textContent=discussionText(text);if(cls)n.className=cls;return n;}
+    async function loadDiscussion(){
+      try{
+        discussionNotice('Loading discussions…');
+        threadCache=await getDiscussionThreads(currentLesson.id);
+        discussionList.replaceChildren();
+        if(!threadCache.length)discussionList.append(el('p','No discussions yet. Start one above!'));
+        for(const thread of threadCache){
+          const button=el('button',thread.title+' · '+(thread.replyCount||0)+' replies');
+          button.type='button';button.className='btn';button.style.cssText='display:block;width:100%;text-align:left;margin:8px 0;';
+          button.addEventListener('click',()=>openThread(thread));discussionList.append(button);
         }
-
-        // Reload posts
-        await loadThreadPosts();
-      } catch (error) {
-        console.error('Error toggling like:', error);
-        showAlert('Failed to update like', 'error');
-      }
-    };
-
-    function showThreadViewer() {
-      // Create modal for thread viewer
-      let modal = document.getElementById('threadModal');
-      if (!modal) {
-        modal = document.createElement('div');
-        modal.id = 'threadModal';
-        modal.style.cssText = `
-          position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background: rgba(0,0,0,0.7);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          z-index: 1000;
-        `;
-        document.body.appendChild(modal);
-      }
-
-      modal.innerHTML = `
-        <div style="background: white; border-radius: 12px; max-width: 600px; max-height: 80vh; overflow-y: auto; padding: 2rem; position: relative;">
-          <button onclick="closeThreadViewer()" style="position: absolute; top: 1rem; right: 1rem; background: none; border: none; font-size: 1.5rem; cursor: pointer;">✕</button>
-
-          <h2 style="margin-bottom: 1.5rem; color: #333;">${currentThreadTitle}</h2>
-
-          <div id="threadPostsContainer"></div>
-
-          <div style="border-top: 1px solid #eee; padding-top: 1.5rem; margin-top: 1.5rem;">
-            <h4 style="margin-bottom: 1rem; color: #333;">Add a reply</h4>
-            <form id="replyForm" onsubmit="submitReply(event)" style="display: flex; flex-direction: column; gap: 1rem;">
-              <textarea id="replyContent" placeholder="Share your thoughts..." required style="padding: 1rem; border: 1px solid #ddd; border-radius: 8px; font-family: inherit; min-height: 100px; resize: vertical;"></textarea>
-              <button type="submit" style="background: #667eea; color: white; border: none; padding: 1rem; border-radius: 8px; font-weight: 600; cursor: pointer;">Post Reply</button>
-            </form>
-          </div>
-        </div>
-      `;
-
-      modal.style.display = 'flex';
-
-      // Reload posts
-      const postsContainer = document.getElementById('threadPostsContainer');
-      loadThreadPosts();
+        discussionNotice('');
+      }catch(err){discussionNotice('Unable to load discussions: '+(err.message||err));}
     }
-
-    window.closeThreadViewer = function() {
-      const modal = document.getElementById('threadModal');
-      if (modal) modal.style.display = 'none';
-      currentThreadId = null;
-    };
-
-    window.submitReply = async function(event) {
-      event.preventDefault();
-
-      const content = document.getElementById('replyContent').value;
-      if (!content.trim()) {
-        showAlert('Reply cannot be empty', 'error');
-        return;
-      }
-
-      try {
-        await createDiscussionPost(currentThreadId, content);
-        document.getElementById('replyForm').reset();
-        showAlert('Reply posted!', 'success');
-        await loadThreadPosts();
-      } catch (error) {
-        console.error('Error posting reply:', error);
-        showAlert('Failed to post reply', 'error');
-      }
-    };
-
-    document.getElementById('newThreadForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-
-      const title = document.getElementById('newThreadTitle').value;
-
-      try {
-        await createDiscussionThread(currentLesson.id, title);
-        document.getElementById('newThreadForm').reset();
-        showAlert('Discussion started!', 'success');
-        await loadDiscussion();
-      } catch (error) {
-        console.error('Error creating thread:', error);
-        showAlert('Failed to create discussion', 'error');
-      }
+    async function openThread(thread){
+      currentThreadId=thread.id;currentThreadTitle=thread.title;
+      document.getElementById('threadTitle').textContent=thread.title;
+      const dialog=document.getElementById('discussionDialog');
+      if(!dialog.open)dialog.showModal();
+      await loadThreadPosts();
+    }
+    async function loadThreadPosts(){
+      const box=document.getElementById('threadPostsContainer');box.replaceChildren(el('p','Loading replies…'));
+      try{
+        const posts=await getDiscussionPosts(currentThreadId);
+        box.replaceChildren();
+        if(!posts.length)box.append(el('p','No replies yet. Be the first to respond.'));
+        for(const post of posts){
+          const card=el('article',undefined,'discussion-post');card.style.cssText='padding:15px;margin:12px 0;border:1px solid #dae4e0;border-radius:9px;overflow-wrap:anywhere';
+          const display=post.qh_profiles?.display_name || 'Participant';
+          const header=el('strong',display+' · '+new Date(post.created_at).toLocaleString());card.append(header);
+          const body=el('p',post.content||'');body.style.whiteSpace='pre-wrap';card.append(body);
+          for(const media of post.attachments||[]){
+            const {data,error}=await supabase.storage.from(mediaBucket).createSignedUrl(media.object_path,600);
+            if(error){card.append(el('p','Attachment currently unavailable'));continue;}
+            let node;
+            if(media.media_type==='image'){node=document.createElement('img');node.alt=media.file_name;node.style.cssText='width:auto;max-width:100%;max-height:320px;border-radius:8px;';}
+            else if(media.media_type==='audio'){node=document.createElement('audio');node.controls=true;node.style.maxWidth='100%';}
+            else {node=document.createElement('video');node.controls=true;node.preload='metadata';node.style.cssText='max-width:100%;max-height:360px;border-radius:8px';}
+            node.src=data.signedUrl;card.append(node);
+          }
+          const like=el('button','👍 '+(post.likeCount||0)+(post.userLiked?' · Liked':''));like.className='btn';
+          like.type='button';like.addEventListener('click',async()=>{like.disabled=true;try{await (post.userLiked?unlikeDiscussionPost(post.id):likeDiscussionPost(post.id));await loadThreadPosts();}catch(e){discussionNotice('Like failed: '+(e.message||e));like.disabled=false;}});
+          card.append(like);box.append(card);
+        }
+      }catch(err){box.replaceChildren(el('p','Could not load replies: '+(err.message||err)));}
+    }
+    document.getElementById('closeDiscussion').addEventListener('click',()=>document.getElementById('discussionDialog').close());
+    document.getElementById('discussionDialog').addEventListener('close',()=>{currentThreadId=null;});
+    document.getElementById('newThreadForm').addEventListener('submit',async e=>{
+      e.preventDefault();const button=e.submitter;button.disabled=true;
+      try{
+        const title=document.getElementById('newThreadTitle').value.trim();
+        if(title.length<3||title.length>180)throw Error('Use a title between 3 and 180 characters.');
+        await createDiscussionThread(currentLesson.id,title);
+        e.target.reset();await loadDiscussion();discussionNotice('Discussion created.');
+      }catch(err){discussionNotice('Could not create discussion: '+(err.message||err));}finally{button.disabled=false;}
+    });
+    document.getElementById('replyForm').addEventListener('submit',async e=>{
+      e.preventDefault();const button=e.submitter;button.disabled=true;
+      const file=document.getElementById('replyFile').files[0];
+      let objectPath=null;
+      try{
+        const text=document.getElementById('replyContent').value.trim();
+        if(!text&&!file)throw Error('Write a reply or attach an image, audio, or video.');
+        if(text.length>8000)throw Error('Replies are limited to 8,000 characters.');
+        let mediaType;
+        if(file){
+          mediaType=file.type.startsWith('image/')?'image':file.type.startsWith('audio/')?'audio':file.type.startsWith('video/')?'video':null;
+          const allowed=new Set(['image/jpeg','image/png','image/webp','image/gif','audio/mpeg','audio/mp4','audio/x-m4a','audio/wav','audio/x-wav','audio/ogg','audio/webm','video/mp4','video/webm','video/quicktime']);
+          if(!mediaType||!allowed.has(file.type))throw Error('Unsupported file type.');
+          if(!file.size||file.size>25*1024*1024)throw Error('Maximum upload size is 25 MB.');
+          const ext=({ 'image/jpeg':'jpg','image/png':'png','image/webp':'webp','image/gif':'gif','audio/mpeg':'mp3','audio/mp4':'m4a','audio/x-m4a':'m4a','audio/wav':'wav','audio/x-wav':'wav','audio/ogg':'ogg','audio/webm':'webm','video/mp4':'mp4','video/webm':'webm','video/quicktime':'mov'})[file.type]||'bin';
+          const {data:auth,error:authErr}=await supabase.auth.getUser();
+          if(authErr||!auth.user)throw Error('Sign in to upload media.');
+          objectPath=[currentCourse.id,currentLesson.id,currentThreadId,auth.user.id,crypto.randomUUID()+'.'+ext].join('/');
+          const {error:uploadError}=await supabase.storage.from(mediaBucket).upload(objectPath,file,{contentType:file.type,upsert:false});
+          if(uploadError)throw uploadError;
+        }
+        const post=await createDiscussionPost(currentThreadId,text||'📎 Shared an attachment');
+        if(file){
+          const {error:metadataError}=await supabase.from('qh_discussion_attachments').insert({
+            post_id:post.id,user_id:post.user_id,object_path:objectPath,
+            file_name:file.name.slice(0,180),media_type:mediaType,mime_type:file.type,file_size:file.size
+          });
+          if(metadataError)throw Error('Reply saved but attachment metadata failed: '+metadataError.message);
+        }
+        e.target.reset();document.getElementById('uploadStatus').textContent='Reply posted.';await loadThreadPosts();await loadDiscussion();
+      }catch(err){
+        document.getElementById('uploadStatus').textContent='Could not post: '+(err.message||err);
+        if(objectPath){await supabase.storage.from(mediaBucket).remove([objectPath]);}
+      }finally{button.disabled=false;}
     });
 
     window.switchTab = function(tabName, button) {
