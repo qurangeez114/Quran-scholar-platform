@@ -121,11 +121,30 @@ Deno.serve(async req=>{
     const {data,error}=await service.auth.admin.inviteUserByEmail(email,{
      data:{display_name:displayName,learning_role:requested},redirectTo:destination
     });
-    if(error)fail('Registration email was not accepted. Check Auth email/SMTP settings before retrying.',503);
-    if(!data.user)fail('Invitation returned no user record. Contact the owner.');
-    target=data.user;created=true;emailAccepted=true;
-    const updated=await service.auth.admin.updateUserById(target.id,{password:body.temporaryPassword});
-    if(updated.error)fail('Email request accepted, but temporary-password setup failed. Contact the owner.',503);
+    // If outgoing SMTP is unavailable, preserve registration instead of losing
+    // the student's enrollment or the instructor's authorization. The response
+    // must prominently say email failed and expose a resend control.
+    if(error){
+     target=await findEmail(email);
+     if(!target){
+      const fallback=await service.auth.admin.createUser({
+       email,password:body.temporaryPassword,email_confirm:true,
+       user_metadata:{display_name:displayName,learning_role:requested}
+      });
+      if(fallback.error)fail('Account creation failed. Email service is unavailable; contact the owner.',503);
+      target=fallback.data.user;
+     }
+     emailAccepted=false;
+    }else{
+     if(!data.user)fail('Invitation returned no user record. Contact the owner.');
+     target=data.user;emailAccepted=true;
+    }
+    if(!target)fail('Could not create account');
+    created=true;
+    if(emailAccepted){
+     const updated=await service.auth.admin.updateUserById(target.id,{password:body.temporaryPassword});
+     if(updated.error)fail('Email request accepted, but temporary-password setup failed. Contact the owner.',503);
+    }
    }
    if(!target)fail('Could not create account');
    const existing=await checked(service.from('qh_lms_accounts').select('*').eq('user_id',target!.id).maybeSingle());
@@ -152,7 +171,7 @@ Deno.serve(async req=>{
     ?(requested==='instructor'?'Instructor is already authorized. No duplicate email sent.':'Student is already enrolled. No duplicate email sent.')
     :emailAccepted
      ?(created?'Account registered; invitation email requested immediately. Share the temporary password separately or let the recipient reset it.':'Existing user assigned; sign-in email requested immediately. Existing password retained.')
-     :'Registration saved, but the invitation email request failed. Check Supabase Auth email settings and resend.';
+     :'Registration saved, but no email was sent successfully. Check Supabase Auth SMTP settings and use the resend control.';
    result={ok:true,created,emailAccepted,duplicate,must_change_password:created,message};
   }else fail('Unknown action');
   return new Response(JSON.stringify(result),{headers});
