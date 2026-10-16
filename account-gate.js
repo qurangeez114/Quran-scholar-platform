@@ -32,6 +32,19 @@
       function signedIn(session) {
         if(!session) { renderGuest(); return; }
         bar.replaceChildren(link('My Research','/my-research.html'),link('My Learning','/student-dashboard.html'),link('My Account','/account.html'));
+        const logout=document.createElement('button');logout.type='button';logout.textContent='Log out';
+        logout.onclick=async()=>{
+          logout.disabled=true;logout.textContent='Logging out…';
+          try {
+            const {error}=await db.auth.signOut();
+            if(error)throw error;
+            renderGuest();
+          } catch {
+            logout.disabled=false;logout.textContent='Try logging out again';
+            logout.setAttribute('aria-label','Logout failed. Try logging out again.');
+          }
+        };
+        bar.append(logout);
       }
       signedIn((await db.auth.getSession()).data.session);
       db.auth.onAuthStateChange((_event,session)=>signedIn(session));
