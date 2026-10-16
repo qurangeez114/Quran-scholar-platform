@@ -50,3 +50,15 @@ test('YouTube playback is tracked separately from earned completion',()=>{
  assert.match(p,/Skipping ahead does not count/);
  assert.match(p,/Course progress is saved when you press/);
 });
+
+test('Multimedia discussions use real schema and safe rendering',()=>{
+ const lesson=html('lesson.html'),api=html('courses-api.js');
+ assert.match(lesson,/id="discussionDialog"/);
+ assert.match(lesson,/id="replyFile"/);
+ assert.match(lesson,/createSignedUrl/);
+ assert.match(lesson,/max-width:100%/);
+ assert.doesNotMatch(lesson,/modal\.innerHTML/);
+ assert.match(api,/user_id:auth\.user\.id/);
+ assert.match(api,/qh_discussion_attachments/);
+ assert.doesNotMatch(api,/qh_profiles\(first_name, last_name\)/);
+});
