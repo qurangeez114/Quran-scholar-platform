@@ -404,6 +404,7 @@
       submitAssignment,
       uploadAssignmentFile,
       updateStudentProgress,
+      getStudentProgress,
       generateCertificate
     } from './courses-api.js';
 
@@ -452,6 +453,7 @@
         document.title = `${currentLesson.title} - QuranHikma`;
 
         renderLesson();
+        await refreshLessonProgress();
         await loadDiscussion();
 
         // Load quiz or assignment if needed
@@ -472,9 +474,14 @@
     function renderLesson() {
       const content = document.getElementById('lessonContent');
       const completeBtn = document.getElementById('completeBtn');
+      const guide=document.createElement('div');guide.className='quiz-result';
+      guide.textContent=currentLesson.lesson_type==='video' ? 'Step 1: Watch the video. For this sample, focus on 2:16–4:25. Then mark this lesson complete and choose Next Lesson.' : currentLesson.lesson_type==='quiz' ? 'Step 3: Open the Quiz tab. Answer five questions, submit, then read the explanations. The pass mark is 90%, so you need 5/5 correct.' : 'Step 2: Read the toolkit. Open the interactive challenge link for guided practice, then return and mark this reading lesson complete. Practice scores stay separate from the course quiz.';
+      if(currentCourse.id==='c9c5bd84-0e8b-45ba-9597-7112cf5089b1') content.before(guide);
 
       if (currentLesson.lesson_type === 'text') {
-        content.innerHTML = `<div>${currentLesson.content || 'No content'}</div>`;
+        content.replaceChildren();
+        const text=document.createElement('p');text.style.whiteSpace='pre-wrap';text.textContent=currentLesson.content || 'No content';content.append(text);
+        if(currentCourse.id==='c9c5bd84-0e8b-45ba-9597-7112cf5089b1') {const link=document.createElement('a');link.href='/sample-video-class.html';link.textContent='Open guided practice and reworded final check';content.append(link);}
         completeBtn.style.display = 'block';
       } else if (currentLesson.lesson_type === 'video') {
         content.replaceChildren();
@@ -613,7 +620,8 @@
         });
         document.getElementById('quizResult').append(feedback);
         document.getElementById('quizForm').style.display = 'none';
-        showAlert('Quiz submitted and progress updated!', 'success');
+        await refreshLessonProgress();
+        showAlert('Quiz result saved.', 'success');
       } catch (error) {
         console.error('Error submitting quiz:', error);
         showAlert('Failed to submit quiz', 'error');
@@ -922,25 +930,35 @@
       }
     };
 
-    window.markLessonComplete = async function() {
+    async function refreshLessonProgress() {
       try {
-        await updateStudentProgress(
-          currentCourse.id,
-          currentLesson.id,
-          true
-        );
-
-        showAlert('Lesson marked as complete!', 'success');
-        document.getElementById('completeBtn').style.display = 'none';
-        document.getElementById('completeBtn').textContent = '✓ Completed';
-
-        // Auto-navigate to next lesson after 2 seconds
-        setTimeout(() => {
-          window.goToNextLesson();
-        }, 2000);
+        const [lessons, progress] = await Promise.all([getLessonsByCourse(currentCourse.id),getStudentProgress(currentCourse.id)]);
+        const ids = new Set(lessons.map(l => l.id));
+        const complete = new Set(progress.filter(p => p.completed && ids.has(p.lesson_id)).map(p => p.lesson_id));
+        const percent = lessons.length ? Math.round(complete.size / lessons.length * 100) : 0;
+        document.getElementById('progressFill').style.width = percent + '%';
+        document.getElementById('progressText').textContent = complete.size + ' of ' + lessons.length + ' lessons complete (' + percent + '%). Each lesson counts equally; quizzes require a passing score.';
+        const button = document.getElementById('completeBtn');
+        if (complete.has(currentLesson.id)) {button.style.display='block';button.disabled=true;button.textContent='✓ Completed and saved';}
+        return true;
       } catch (error) {
-        console.error('Error marking lesson complete:', error);
-        showAlert('Failed to mark lesson complete', 'error');
+        document.getElementById('progressText').textContent = 'Progress unavailable: ' + (error.message || 'Could not read saved progress');
+        return false;
+      }
+    }
+
+    window.markLessonComplete = async function() {
+      const button = document.getElementById('completeBtn');
+      if (button.disabled) return;
+      button.disabled=true;button.textContent='Saving completion…';
+      try {
+        const result = await updateStudentProgress(currentCourse.id,currentLesson.id,true);
+        button.textContent='✓ Completed and saved';
+        showAlert(result.enrollmentWarning ? 'Lesson saved. Dashboard sync needs attention: '+result.enrollmentWarning : 'Lesson completed and saved. Use Next Lesson when you are ready.',result.enrollmentWarning?'error':'success');
+        await refreshLessonProgress();
+      } catch (error) {
+        button.disabled=false;button.textContent='Retry saving completion';
+        showAlert('Completion was not saved: '+(error.message || 'Please try again.'),'error');
       }
     };
 
