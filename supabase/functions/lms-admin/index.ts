@@ -101,6 +101,7 @@ Deno.serve(async req=>{
       data:{display_name:displayName},redirectTo:instructorWelcome
      });
      if(error)fail('Could not send instructor invitation. Check Auth email settings and try again.');
+     if(!data.user)fail('Invitation returned no user record. Retry with the owner.');
      target=data.user;created=true;emailAccepted=true;
      // Provision the separate temporary password. The recipient must change it.
      const updated=await service.auth.admin.updateUserById(target.id,{password:body.temporaryPassword});
