@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>My Quiz Results — QuranHikma</title>
+<style>body{font:18px system-ui;background:#f5f6fa;color:#202939;margin:0}main{max-width:900px;margin:auto;padding:24px}a{color:#4359b7}article{background:white;border:1px solid #dce1eb;border-radius:14px;padding:20px;margin:16px 0}small{color:#526174}.pass{color:#216938}.fail{color:#9c3434}button{padding:10px 18px;font:inherit}pre{white-space:pre-wrap;overflow-wrap:anywhere}summary{cursor:pointer}</style>
+<main><nav><a href="/student-dashboard.html">← My Learning</a> · <a href="/courses.html">Courses</a></nav><h1>My Quiz Results</h1><p>Saved attempts, newest first. A later practice attempt does not erase an earlier passing result.</p><button id="refresh">Refresh results</button><p id="status" role="status"></p><section id="results"></section></main>
+<script type="module">
+import {supabase} from '/accounts/client.js';
+const el=id=>document.getElementById(id);
+function node(tag,text){const n=document.createElement(tag);n.textContent=text;return n;}
+async function load(){
+ el('refresh').disabled=true;el('status').textContent='Loading saved results…';el('results').replaceChildren();
+ try{
+ const {data:{user},error:authError}=await supabase.auth.getUser();if(authError)throw authError;
+ if(!user){el('status').replaceChildren(node('span','Sign in to see your results. '));const a=node('a','Sign in');a.href='/account.html';el('status').append(a);return;}
+ const {data,error}=await supabase.from('qh_quiz_answers').select('id,quiz_id,score,passed,submitted_at,answers').eq('user_id',user.id).order('submitted_at',{ascending:false});
+ if(error)throw error;
+ const groups=new Map();for(const row of data||[]){if(!groups.has(row.quiz_id))groups.set(row.quiz_id,[]);groups.get(row.quiz_id).push(row);}
+ el('status').textContent=data.length?data.length+' saved attempts.':'No saved quiz attempts yet.';
+ let number=0;
+ for(const rows of groups.values()){
+ number++;const box=node('article','');const best=Math.max(...rows.map(r=>r.score));box.append(node('h2','Quiz '+number+' — Best score: '+best+'%'));
+ box.append(node('p',rows.some(r=>r.passed)?'Passed in a saved attempt':'Not passed yet'));
+ for(const row of rows){const details=node('details','');const summary=node('summary',row.score+'% — '+(row.passed?'Passed':'Not passed')+' — '+new Date(row.submitted_at).toLocaleString());summary.className=row.passed?'pass':'fail';details.append(summary,node('pre','Submitted answers: '+JSON.stringify(row.answers,null,2)));box.append(details);}
+ el('results').append(box);
+ }
+ }catch(error){el('status').textContent='Could not load results: '+error.message;}
+ finally{el('refresh').disabled=false;}
+}
+el('refresh').onclick=load;await load();
+</script></html>
