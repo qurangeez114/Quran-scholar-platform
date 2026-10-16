@@ -29,7 +29,8 @@ function mockPage(story=true) {
     story_comparison:[{story_slug:'creation_adam',sura:2},{story_slug:'creation_adam',sura:7},
       {story_slug:'nuh',sura:11}],
     concepts:[{slug:'people_of_book',name:'People of the Book',question:'How are these groups described?'},
-      {slug:'women_law',name:'Women and Marriage',question:'Which passages address marriage?'}]
+      {slug:'women_law',name:'Women and Marriage',question:'Which passages address marriage?'},
+      {slug:'afterlife',name:'Paradise',question:'What does the Qur’an say about the afterlife?'}]
   };
   const fetch=async url=>{
     let key=Object.keys(names).find(x=>url.includes('/'+x+'?')); 
@@ -52,7 +53,7 @@ assert.ok(stories.innerHTML.includes('Complete description about Adam and Iblis.
 assert.ok(stories.innerHTML.includes('Complete description about Noah and the flood.'));
 assert.ok(stories.innerHTML.includes('compare.html?story=creation_adam'));
 assert.ok(stories.innerHTML.includes('2 suras'));
-assert.equal((concepts.innerHTML.match(/class="concept-compact-card"/g)||[]).length,4,
+assert.equal((concepts.innerHTML.match(/class="concept-compact-card"/g)||[]).length,5,
   'Concepts and both existing special research links are retained');
 assert.ok(concepts.innerHTML.includes('How are these groups described?'));
 assert.ok(concepts.innerHTML.includes('Which passages address marriage?'));
