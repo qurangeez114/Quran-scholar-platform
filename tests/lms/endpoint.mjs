@@ -18,7 +18,7 @@ class Query{
  return Promise.resolve({data:this.singleRow?rows[0]||null:rows,error:null}).then(resolve,reject);
  }catch(e){return Promise.reject(e).then(resolve,reject);}}
 }
-const client={from:table=>new Query(table),auth:{getUser:async token=>({data:{user:users.find(u=>u.id===token)||null},error:null}),signInWithPassword:async()=>({error:null}),signOut:async()=>({error:null}),signInWithOtp:async params=>{magicLinks.push(params);return {error:null};},admin:{inviteUserByEmail:async(email,options)=>{invites.push({email,options});created++;const user={id:crypto.randomUUID(),email};users.push(user);return {data:{user},error:null};},listUsers:async()=>({data:{users},error:null}),createUser:async values=>{created++;const user={id:crypto.randomUUID(),email:values.email};users.push(user);return {data:{user},error:null};},updateUserById:async()=>{passwordUpdates++;return {error:null};},getUserById:async id=>({data:{user:users.find(u=>u.id===id)},error:null})}}};
+const client={from:table=>new Query(table),auth:{getUser:async token=>({data:{user:users.find(u=>u.id===token)||null},error:null}),signInWithPassword:async()=>({error:null}),signOut:async()=>({error:null}),signInWithOtp:async params=>{magicLinks.push(params);return {error:null};},admin:{inviteUserByEmail:async(email,options)=>{if(email==='smtp-error@example.invalid')return {data:{user:null},error:{message:'SMTP unavailable'}};invites.push({email,options});created++;const user={id:crypto.randomUUID(),email};users.push(user);return {data:{user},error:null};},listUsers:async()=>({data:{users},error:null}),createUser:async values=>{created++;const user={id:crypto.randomUUID(),email:values.email};users.push(user);return {data:{user},error:null};},updateUserById:async()=>{passwordUpdates++;return {error:null};},getUserById:async id=>({data:{user:users.find(u=>u.id===id)},error:null})}}};
 let handler;
 let source=(await transform(await readFile(new URL('../../supabase/functions/lms-admin/index.ts',import.meta.url),'utf8'),{loader:'ts',format:'esm'})).code;source=source.replace(/^import .*\n/,'');
 runInNewContext(source,{createClient:()=>client,Deno:{env:{get:()=>''},serve:fn=>handler=fn},Response,Request,console});
@@ -61,6 +61,15 @@ const duplicateStudent=await call(teacher,{
 assert.equal(duplicateStudent.status,200);assert.equal(duplicateStudent.data.duplicate,true);
 assert.equal(invites.length,2);
 assert.equal(magicLinks.length,3);
+const fallback=await call(teacher,{
+ action:'provision',role:'student',course_id:a,email:'smtp-error@example.invalid',
+ display_name:'Email outage test',temporaryPassword:'Temporary-fallback-123'
+});
+assert.equal(fallback.status,200,'registration must continue on mail failure');
+assert.equal(fallback.data.created,true);
+assert.equal(fallback.data.emailAccepted,false,'do not claim failed SMTP sent the email');
+assert.match(fallback.data.message,/no email was sent successfully/);
+assert.equal(tables.qh_lms_accounts.at(-1).must_change_password,true);
 assert.equal((await call(pending,{action:'change_password',currentPassword:'same-password-123',newPassword:'same-password-123'})).status,400);
 const change=await call(pending,{action:'change_password',currentPassword:'temp-password-123',newPassword:'new-password-123'});assert.equal(change.status,200);assert.equal(tables.qh_lms_accounts.find(a=>a.user_id===pending).must_change_password,false);
 const existingInstructor=await call(owner,{action:'provision',role:'instructor',email:users[1].email,display_name:'Existing teacher'});
