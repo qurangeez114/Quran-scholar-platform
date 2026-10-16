@@ -204,10 +204,16 @@
           </div>
 
           <div class="form-group">
-            <label>Content / Video URL</label>
-            <textarea id="lessonContent" placeholder="Enter lesson content or paste video URL..."></textarea>
+            <label id="contentLabel" for="lessonContent">Lesson content / instructions</label>
+            <textarea id="lessonContent" placeholder="Enter lesson text or a short video summary..."></textarea>
+            <p id="quizHelp" style="display:none;color:#41594b;font-size:14px;">After saving a Quiz lesson, the Question Builder opens so you can create and explain its questions.</p>
           </div>
 
+          <div class="form-group" id="videoUrlGroup" style="display:none;">
+            <label for="lessonVideoUrl">YouTube video URL</label>
+            <input type="url" id="lessonVideoUrl" placeholder="https://www.youtube.com/watch?v=..." autocomplete="off">
+            <p class="muted" style="font-size:14px;">Paste the video address here; use the content field above for viewing instructions.</p>
+          </div>
           <div style="display: flex; gap: 1rem;">
             <button id="saveLessonBtn" type="submit" class="btn btn-primary" style="flex: 1;">Save Lesson</button>
             <button type="button" class="btn" style="flex: 1; background: #ddd; color: #333;" id="cancelBtn">Cancel</button>
@@ -234,6 +240,15 @@
     let currentCourse = null;
     let lessons = [];
     let selectedLessonId = null;
+    const htmlEscape = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    function updateQuizHint() {
+      const type=document.getElementById('lessonType').value;
+      document.getElementById('quizHelp').style.display=type==='quiz'?'block':'none';
+      document.getElementById('videoUrlGroup').style.display=type==='video'?'block':'none';
+      document.getElementById('lessonVideoUrl').required=type==='video';
+      document.getElementById('contentLabel').textContent=type==='video'?'Video summary and viewing instructions':'Lesson content / instructions';
+    }
+    document.getElementById('lessonType').addEventListener('change',updateQuizHint);
 
     async function checkAuth() {
       await requireTeachingAccess();
@@ -269,6 +284,10 @@
 
         document.getElementById('courseBreadcrumb').textContent = currentCourse.title;
         await loadLessons();
+        if (type === 'quiz' && savedLesson?.id) {
+          window.location.href = '/admin/quiz-builder.html?lesson=' + encodeURIComponent(savedLesson.id);
+          return;
+        }
       } catch (error) {
         console.error('Error loading course:', error);
         showAlert('Failed to load course', 'error');
@@ -296,10 +315,11 @@
 
       container.innerHTML = lessons.map(lesson => `
         <div class="lesson-item ${selectedLessonId === lesson.id ? 'active' : ''}" onclick="selectLesson('${lesson.id}')">
-          <div class="lesson-item-title">${lesson.lesson_order}. ${lesson.title}</div>
+          <div class="lesson-item-title">${lesson.lesson_order}. ${htmlEscape(lesson.title)}</div>
           <div class="lesson-item-meta">Type: ${lesson.lesson_type}</div>
           <div class="lesson-item-actions">
             <a class="btn btn-small btn-primary" href="/lesson.html?lesson=${encodeURIComponent(lesson.id)}" onclick="event.stopPropagation()" style="text-decoration:none;display:inline-block;">Open lesson</a>
+            ${lesson.lesson_type === 'quiz' ? '<a class="btn btn-small btn-primary" href="/admin/quiz-builder.html?lesson='+encodeURIComponent(lesson.id)+'" onclick="event.stopPropagation()" style="text-decoration:none;display:inline-block;">Edit questions</a>' : ''}
             <button class="btn btn-small" onclick="editLesson('${lesson.id}', event)">Edit</button>
             <button class="btn btn-small btn-danger" onclick="deleteConfirm('${lesson.id}', event)">Delete</button>
           </div>
@@ -320,7 +340,9 @@
       document.getElementById('formTitle').textContent = '✏️ Edit Lesson';
       document.getElementById('lessonTitle').value = lesson.title;
       document.getElementById('lessonType').value = lesson.lesson_type;
-      document.getElementById('lessonContent').value = lesson.content || lesson.video_url || '';
+      updateQuizHint();
+      document.getElementById('lessonContent').value = lesson.content || '';
+      document.getElementById('lessonVideoUrl').value = lesson.video_url || '';
       document.getElementById('lessonForm').dataset.editId = lessonId;
       document.getElementById('cancelBtn').style.display = 'block';
       document.getElementById('saveLessonBtn').textContent = 'Save Changes';
@@ -333,6 +355,7 @@
 
     document.getElementById('cancelBtn').addEventListener('click', () => {
       document.getElementById('lessonForm').reset();
+         updateQuizHint();
       document.getElementById('formTitle').textContent = '📝 Create New Lesson';
       document.getElementById('saveLessonBtn').textContent = 'Save Lesson';
       document.getElementById('lessonForm').dataset.editId = '';
@@ -346,6 +369,7 @@
       const title = document.getElementById('lessonTitle').value;
       const type = document.getElementById('lessonType').value;
       const content = document.getElementById('lessonContent').value;
+      const videoUrl = document.getElementById('lessonVideoUrl').value.trim();
       const editId = document.getElementById('lessonForm').dataset.editId;
       const saveButton = document.getElementById('saveLessonBtn');
       if (saveButton.disabled) return;
@@ -353,25 +377,27 @@
       saveButton.textContent = 'Saving…';
 
       try {
+        let savedLesson;
         if (editId) {
-          await updateLesson(editId, {
+          savedLesson = await updateLesson(editId, {
             title,
             lesson_type: type,
-            content: type !== 'video' ? content : null,
-            video_url: type === 'video' ? content : null
+            content,
+            video_url: type === 'video' ? videoUrl : null
           });
           showAlert('Lesson updated!', 'success');
         } else {
           const nextOrder = Math.max(0, ...lessons.map(l => Number(l.lesson_order) || 0)) + 1;
-          await createLesson(currentCourse.id, title, nextOrder, {
+          savedLesson = await createLesson(currentCourse.id, title, nextOrder, {
             lesson_type: type,
-            content: type !== 'video' ? content : null,
-            video_url: type === 'video' ? content : null
+            content,
+            video_url: type === 'video' ? videoUrl : null
           });
           showAlert('Lesson created!', 'success');
         }
 
         document.getElementById('lessonForm').reset();
+        updateQuizHint();
         document.getElementById('formTitle').textContent = '📝 Create New Lesson';
       document.getElementById('saveLessonBtn').textContent = 'Save Lesson';
         document.getElementById('lessonForm').dataset.editId = '';

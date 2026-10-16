@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Quiz Builder — QuranHikma</title>
+<style>
+:root{--ink:#173d35;--green:#225e4c;--line:#d9e1dc;--bg:#f4f6f3}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:#263b34;font:16px/1.55 system-ui,sans-serif}
+header{background:var(--ink);color:white;padding:20px max(16px,calc((100vw - 960px)/2))}
+header a{color:white}main{max-width:960px;margin:24px auto;padding:0 16px 48px}
+.card{background:white;border:1px solid var(--line);border-radius:14px;padding:22px;margin:18px 0;box-shadow:0 2px 10px #173d3510}
+h1,h2{line-height:1.25}h1{font-size:28px;margin:0 0 6px}h2{font-size:20px}
+label{display:block;margin:12px 0;font-weight:600}
+input,textarea,select{font:inherit;width:100%;padding:10px 12px;border-radius:7px;border:1px solid #a5b7ae;background:white;color:#203d32}
+textarea{min-height:70px;resize:vertical}input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-visible{outline:3px solid #c69d50;outline-offset:2px}
+button,.button{display:inline-block;cursor:pointer;font:600 15px system-ui;padding:11px 16px;border:0;border-radius:8px;background:var(--green);color:white;text-decoration:none;margin:4px}
+button.secondary,.button.secondary{background:#e8f0ea;color:var(--ink)}
+button.danger{background:#fff0ec;color:#9b2e22}
+button:disabled{opacity:.6;cursor:wait}.row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.column{flex:1;min-width:170px}.muted{color:#62746b;font-size:14px}
+#status{min-height:22px}#status.error{color:#9b2e22}#status.success{color:#216846}
+.options{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.option{padding:12px;border:1px solid var(--line);border-radius:8px}
+.option label{font-size:14px;margin:6px 0}
+details{border-top:1px solid var(--line);margin-top:16px;padding-top:12px}
+summary{cursor:pointer;font-weight:700}#quizForm[hidden],#editor[hidden]{display:none}
+@media(max-width:700px){.options{grid-template-columns:1fr}.card{padding:16px}}
+</style>
+</head>
+<body>
+<header><a href="/admin/courses.html">← Courses</a> <span aria-hidden="true">·</span> <a id="backLessons" href="/admin/courses.html">Lessons</a></header>
+<main>
+<h1>🎮 Quiz Builder</h1>
+<p class="muted">Add explanations for every answer. An optional reworded final check confirms understanding after the first round.</p>
+<p id="status" role="status" aria-live="polite">Checking your teaching access…</p>
+<div id="editor" hidden>
+<section class="card">
+<h2 id="lessonName">Quiz</h2>
+<div class="row">
+<label class="column">Pass mark (%)<input id="passMark" type="number" value="90" min="1" max="100" required></label>
+<div class="column muted">With five equally weighted questions, a 90% threshold requires five correct answers. Draft edits are not published until you save.</div>
+</div>
+</section>
+<form id="quizForm" hidden>
+<div id="questions"></div>
+<div class="row">
+<button id="addQuestion" type="button" class="secondary">＋ Add question</button>
+<button id="saveQuiz" type="submit">Save quiz questions</button>
+<a id="openLesson" class="button secondary" href="#">Open lesson</a>
+</div>
+</form>
+</div>
+</main>
+<script type="module">
+import {supabase} from '/accounts/client.js';
+import {requireTeachingAccess} from '/accounts/lms-access.js';
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const lessonId=new URLSearchParams(location.search).get('lesson');
+let courseId,existingId=null;
+const empty=()=>({id:crypto.randomUUID(),question:'',options:['','',''],correct_answer:'',explanation:'',option_explanations:['','',''],variant:null});
+let questions=[];
+function status(message,type=''){ $('status').textContent=message;$('status').className=type; }
+function normalized(q){return {id:q?.id||crypto.randomUUID(),question:q?.question||'',options:[0,1,2].map(i=>q?.options?.[i]||''),correct_answer:q?.correct_answer||'',explanation:q?.explanation||'',option_explanations:[0,1,2].map(i=>q?.option_explanations?.[i]||''),variant:q?.variant||null};}
+function collect(strict=false){
+ const cards=[...document.querySelectorAll('.question-card')];
+ return cards.map((card,index)=>{
+  const read=key=>card.querySelector('[data-field="'+key+'"]')?.value?.trim()||'';
+  const id=card.dataset.id;
+  const opts=[0,1,2].map(i=>read('option'+i));
+  const answerIndex=Number(read('correct'));
+  const option_explanations=[0,1,2].map(i=>read('reason'+i));
+  const variantQuestion=read('variant-question'), variantOptions=[0,1,2].map(i=>read('variant-option'+i));
+  const variantIndex=Number(read('variant-correct'));
+  const wantsVariant=!!(variantQuestion || variantOptions.some(Boolean));
+  if(strict){
+   if(!read('question')||opts.some(x=>!x))throw Error('Question '+(index+1)+': enter the question and all three choices.');
+   if(new Set(opts.map(x=>x.toLocaleLowerCase())).size!==3)throw Error('Question '+(index+1)+': answer choices must be different.');
+   if(!read('explanation'))throw Error('Question '+(index+1)+': explain the correct answer.');
+   if(wantsVariant && (!variantQuestion||variantOptions.some(x=>!x)))throw Error('Question '+(index+1)+': finish the reworded question and its choices, or leave that section empty.');
+  }
+  return {id,question:read('question'),options:opts,correct_answer:opts[answerIndex],explanation:read('explanation'),option_explanations,variant:wantsVariant?{q:variantQuestion,options:variantOptions,answer:variantIndex,rationale:[0,1,2].map(i=>read('variant-reason'+i))}:undefined};
+ });
+}
+function draw(){
+ $('questions').innerHTML=questions.map((q,index)=>{
+  const correct=Math.max(0,q.options.indexOf(q.correct_answer));
+  const v=q.variant||{q:'',options:['','',''],answer:0,rationale:['','','']};
+  const optionRows=[0,1,2].map(i=>'<div class="option"><label>Choice '+String.fromCharCode(65+i)+'<input data-field="option'+i+'" value="'+esc(q.options[i])+'" required></label><label class="muted">Why this choice is wrong (if applicable)<textarea data-field="reason'+i+'">'+esc(q.option_explanations[i])+'</textarea></label></div>').join('');
+  const variantRows=[0,1,2].map(i=>'<div class="option"><label>Reworded choice '+String.fromCharCode(65+i)+'<input data-field="variant-option'+i+'" value="'+esc(v.options?.[i]||'')+'"></label><label class="muted">Feedback for this choice<textarea data-field="variant-reason'+i+'">'+esc(v.rationale?.[i]||'')+'</textarea></label></div>').join('');
+  return '<section class="card question-card" data-id="'+esc(q.id)+'"><div class="row"><h2 class="column">Question '+(index+1)+'</h2><button class="danger remove-question" type="button">Remove</button></div><label>Question text<input data-field="question" value="'+esc(q.question)+'" required></label><div class="options">'+optionRows+'</div><label>Correct answer<select data-field="correct">'+[0,1,2].map(i=>'<option value="'+i+'"'+(correct===i?' selected':'')+'>Choice '+String.fromCharCode(65+i)+'</option>').join('')+'</select></label><label>Explanation of the correct answer<textarea data-field="explanation" required>'+esc(q.explanation)+'</textarea></label><details '+(q.variant?'open':'')+'><summary>Optional reworded final check</summary><p class="muted">Students answer this after reviewing the original question. Enter all fields to activate it.</p><label>Reworded question<input data-field="variant-question" value="'+esc(v.q)+'"></label><div class="options">'+variantRows+'</div><label>Correct reworded choice<select data-field="variant-correct">'+[0,1,2].map(i=>'<option value="'+i+'"'+(Number(v.answer)===i?' selected':'')+'>Choice '+String.fromCharCode(65+i)+'</option>').join('')+'</select></label></details></section>';
+ }).join('');
+}
+$('addQuestion').addEventListener('click',()=>{questions=collect().map(normalized);questions.push(empty());draw();document.querySelector('.question-card:last-child input[data-field="question"]')?.focus();});
+$('questions').addEventListener('click',e=>{if(!e.target.closest('.remove-question'))return;if(!confirm('Remove this question from the draft?'))return;const id=e.target.closest('.question-card').dataset.id;questions=collect().filter(q=>q.id!==id).map(normalized);draw();});
+$('quizForm').addEventListener('submit',async e=>{
+ e.preventDefault();const button=$('saveQuiz');button.disabled=true;status('Saving quiz…');
+ try{
+  const items=collect(true);
+  if(!items.length)throw Error('Add at least one question.');
+  const passing=Number($('passMark').value);
+  if(!Number.isInteger(passing)||passing<1||passing>100)throw Error('Pass mark must be between 1 and 100.');
+  const payload={lesson_id:lessonId,passing_score:passing,questions:items};
+  const result=existingId?await supabase.from('qh_quizzes').update(payload).eq('id',existingId).select('id').single():await supabase.from('qh_quizzes').insert(payload).select('id').single();
+  if(result.error)throw result.error;
+  existingId=result.data.id;
+  questions=items.map(normalized);
+  status('✓ Quiz saved: '+items.length+' questions, '+passing+'% passing grade.','success');
+ }catch(err){status('Could not save quiz: '+(err.message||err),'error');}
+ finally{button.disabled=false;}
+});
+async function init(){
+ try{
+  if(!lessonId)throw Error('Missing lesson ID. Open this page from the course lesson manager.');
+  await requireTeachingAccess();
+  const {data:auth,error:authError}=await supabase.auth.getUser();
+  if(authError||!auth.user)throw Error('Sign in as the course instructor.');
+  const {data:lesson,error:lessonError}=await supabase.from('qh_lessons').select('id,course_id,title,lesson_type').eq('id',lessonId).single();
+  if(lessonError)throw lessonError;
+  courseId=lesson.course_id;
+  const {data:course,error:courseError}=await supabase.from('qh_courses').select('id,created_by').eq('id',courseId).single();
+  if(courseError)throw courseError;
+  if(course.created_by!==auth.user.id)throw Error('Only the course creator may edit this quiz.');
+  if(lesson.lesson_type!=='quiz')throw Error('This lesson is not a quiz. Change its type to Quiz in Lesson Manager first.');
+  $('lessonName').textContent=lesson.title;
+  $('backLessons').href='/admin/lesson-manager.html?course='+encodeURIComponent(courseId);
+  $('openLesson').href='/lesson.html?lesson='+encodeURIComponent(lessonId);
+  const {data:quiz,error:quizError}=await supabase.from('qh_quizzes').select('id,passing_score,questions').eq('lesson_id',lessonId).maybeSingle();
+  if(quizError)throw quizError;
+  if(quiz){existingId=quiz.id;$('passMark').value=quiz.passing_score??90;questions=Array.isArray(quiz.questions)?quiz.questions.map(normalized):[];}
+  if(!questions.length)questions=[empty()];
+  draw();$('editor').hidden=false;$('quizForm').hidden=false;
+  status(existingId?'Loaded saved quiz. Changes will only apply after Save.':'New quiz draft. Add questions and save.','success');
+ }catch(err){status('Quiz Builder unavailable: '+(err.message||err),'error');}
+}
+init();
+</script>
+</body></html>
