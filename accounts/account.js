@@ -1,4 +1,5 @@
 import {db,message,exportResearch} from './client.js';
+import {lmsRequest} from './lms-access.js';
 let mode='login',recovering=location.hash.includes('type=recovery');
 const $=id=>document.getElementById(id);
 function choose(next){mode=next;$('password').minLength=next==='signup'?12:1;$('auth-help').textContent={login:'Log in with your email and password.',signup:'Use at least 12 characters. Check your email to confirm your account.',recover:'We will email you a link to reset your password.'}[next];document.querySelectorAll('[data-mode]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.mode===next)));$('password-label').hidden=next==='recover';$('password').required=next!=='recover';$('password').autocomplete=next==='signup'?'new-password':'current-password';$('firstName-label').hidden=next!=='signup';$('lastName-label').hidden=next!=='signup';$('firstName').required=false;$('lastName').required=false;$('password-confirm-label').hidden=next!=='signup';$('password-confirm').required=next==='signup';$('submit').textContent={login:'Log in',signup:'Create account',recover:'Send recovery email'}[next];}
@@ -11,6 +12,14 @@ async function render(){
  $('staff-dashboard').hidden=true;$('account-archive-link').hidden=true;
  if(!session)return;
  $('identity').textContent=session.user.email;
+ try {
+  const access=await lmsRequest('session');
+  if(access.account?.must_change_password){location.replace('/instructor-dashboard.html');return;}
+  $('staff-dashboard').hidden=!['owner','instructor'].includes(access.role);
+  $('staff-dashboard').href=access.role==='owner'?'/admin/lms.html':'/instructor-dashboard.html';
+  $('staff-dashboard').textContent=access.role==='owner'?'Admin Page':'Instructor Dashboard';
+ } catch(error){console.error('Learning access:',error.message);}
+
  // Do not show a usable dashboard before checking the server lifecycle state.
  const {data:state,error}=await db.rpc('qh_account_status');
  if(error){
@@ -30,7 +39,7 @@ async function render(){
  await ensureProfile(session.user);$('signed-in').hidden=false;$('delete-account').disabled=false;
  $('deletion-availability').textContent='72-hour recovery is available.';
  const [{data:staff},{data:archiveAdmin}]=await Promise.all([db.rpc('qh_is_staff'),db.rpc('qh_can_manage_account_archive')]);
- $('staff-dashboard').hidden=staff!==true;$('account-archive-link').hidden=archiveAdmin!==true;
+ $('account-archive-link').hidden=archiveAdmin!==true;
 }
 db.auth.onAuthStateChange(event=>{if(event==='PASSWORD_RECOVERY')recovering=true;setTimeout(render,0);});
 $('auth-form').onsubmit=async e=>{e.preventDefault();$('submit').disabled=true;try{
@@ -66,3 +75,4 @@ $('restore-account').onclick=async()=>{
 };
 $('keep-deleted').onclick=async()=>{await db.auth.signOut();message('Your account remains deactivated.');await render();};
 render().catch(e=>message(e.message));
+
