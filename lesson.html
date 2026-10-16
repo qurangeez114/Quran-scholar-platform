@@ -453,14 +453,16 @@
         document.title = `${currentLesson.title} - QuranHikma`;
 
         renderLesson();
-        await refreshLessonProgress();
-        await loadDiscussion();
+        // Secondary panels must not block the quiz or assignment.
+        void refreshLessonProgress();
+        void loadDiscussion();
 
         // Load quiz or assignment if needed
         if (currentLesson.lesson_type === 'quiz') {
           document.getElementById('quizTabBtn').style.display = 'block';
-          await loadQuiz();
           window.switchTab('quiz', document.getElementById('quizTabBtn'));
+          document.getElementById('quizResult').textContent = 'Loading quiz questions…';
+          await loadQuiz();
         } else if (currentLesson.lesson_type === 'assignment') {
           document.getElementById('assignmentTabBtn').style.display = 'block';
           await loadAssignment();
@@ -531,6 +533,7 @@
         if (error) throw error;
 
         currentQuiz = data;
+        document.getElementById('quizResult').textContent = '';
         renderQuiz();
       } catch (error) {
         console.error('Error loading quiz:', error);
@@ -572,6 +575,11 @@
       e.preventDefault();
 
       if (!currentQuiz) return;
+      const submitButton = e.submitter || document.querySelector('#quizForm button[type="submit"]');
+      if (submitButton.disabled) return;
+      submitButton.disabled = true;
+      submitButton.textContent = 'Saving quiz…';
+      let resultSaved = false;
 
       const answers = [];
       for (let i = 0; i < currentQuiz.questions.length; i++) {
@@ -589,9 +597,10 @@
         const percentage = Math.round((score / currentQuiz.questions.length) * 100);
         const passed = percentage >= currentQuiz.passing_score;
         await submitQuiz(currentQuiz.id, answers, percentage, currentQuiz.passing_score);
+        resultSaved = true;
 
         // Update student progress
-        await updateStudentProgress(
+        const progressResult = await updateStudentProgress(
           currentCourse.id,
           currentLesson.id,
           passed, // complete only after meeting the quiz pass mark
@@ -626,10 +635,13 @@
         document.getElementById('quizResult').append(feedback);
         document.getElementById('quizForm').style.display = 'none';
         await refreshLessonProgress();
-        showAlert('Quiz result saved.', 'success');
+        showAlert(progressResult.enrollmentWarning ? 'Quiz and lesson progress saved. Dashboard sync needs attention: ' + progressResult.enrollmentWarning : 'Quiz result and lesson progress saved.', progressResult.enrollmentWarning ? 'error' : 'success');
       } catch (error) {
         console.error('Error submitting quiz:', error);
-        showAlert('Failed to submit quiz', 'error');
+        showAlert((resultSaved ? 'Quiz result saved, but lesson progress was not saved: ' : 'Quiz was not saved: ') + (error.message || 'Please try again.'), 'error');
+      } finally {
+        submitButton.disabled = false;
+        submitButton.textContent = 'Submit Quiz';
       }
     });
 

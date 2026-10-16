@@ -446,7 +446,7 @@ export async function submitQuiz(quizId, answers, score, passingScore = 90) {
 
   const { data, error } = await supabase
     .from('qh_quiz_answers')
-    .upsert({
+    .insert({
       quiz_id: quizId,
       user_id: user.id,
       answers,
