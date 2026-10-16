@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Instructor Invitation — QuranHikma</title>
+<style>
+:root{--ink:#173c34;--accent:#27644e;--paper:#f5f6f2;--border:#dae4dc}
+*{box-sizing:border-box}body{background:var(--paper);color:var(--ink);font:16px/1.65 system-ui,sans-serif;margin:0}
+header{background:var(--ink);color:white;padding:20px 6vw}header a{color:white;text-decoration:none;font-size:20px;font-weight:700}
+main{max-width:720px;margin:48px auto;padding:0 18px}
+article{background:white;border:1px solid var(--border);border-radius:16px;padding:36px;box-shadow:0 8px 28px #15392b18}
+h1{font-size:32px;line-height:1.2}h2{font-size:22px}p{margin:14px 0}
+a.button{display:inline-block;background:var(--accent);color:white;border-radius:8px;text-decoration:none;font-weight:700;padding:12px 18px;margin:5px 8px 5px 0}
+a.secondary{background:#e9f0ec;color:var(--ink)}
+ol{padding-left:24px}li{padding:8px 0}
+#status{background:#edf4ed;padding:12px;border-radius:8px}
+aside{margin-top:22px;border-left:4px solid #bb9450;padding:8px 16px;background:#fdf9ef}
+@media(max-width:580px){article{padding:22px}main{margin:20px auto}}
+</style>
+</head>
+<body>
+<header><a href="/">QuranHikma · Learning</a></header>
+<main><article>
+<p aria-label="Invitation">📚 INSTRUCTOR ACCESS</p>
+<h1>Welcome to QuranHikma</h1>
+<p>You have been invited to teach on the QuranHikma learning platform.</p>
+<p id="status" role="status" aria-live="polite">Checking your invitation…</p>
+<h2>How to activate your instructor account</h2>
+<ol>
+<li>Open the invitation link from your registered email. This confirms your address and opens your instructor setup.</li>
+<li>If the administrator gave you a <strong>temporary password</strong>, use it to sign in. The password is delivered <strong>separately</strong> from your invitation email.</li>
+<li>Open your Instructor Dashboard and choose a <strong>new password</strong> of at least 12 characters before creating classes.</li>
+<li>You can also use <strong>Forgot password</strong> to receive a secure password-reset email and set a new password instead.</li>
+</ol>
+<p><a class="button" href="/instructor-dashboard.html">Continue to Instructor Dashboard</a>
+<a class="button secondary" href="/account.html">Log in</a>
+<a class="button secondary" href="/account.html?mode=recover">Reset password</a></p>
+<aside><strong>Security:</strong> Never share your login password with another instructor. If you did not request this invitation, do not sign in; contact the QuranHikma administrator.</aside>
+</article></main>
+<script type="module">
+import {db} from '/accounts/client.js';
+const el=document.getElementById('status');
+try{
+ const {data,error}=await db.auth.getSession();
+ if(error)throw error;
+ if(!data.session){
+  el.textContent='Open the link from your invitation email, or sign in with the temporary password provided separately. If your link expired, ask the administrator to resend it.';
+ }else{
+  const {data:check,error:checkError}=await db.functions.invoke('lms-admin',{body:{action:'session'}});
+  if(checkError)throw checkError;
+  el.textContent=check.role==='instructor'
+   ? check.account?.must_change_password
+    ? 'Invitation recognized. Your first password change is required before teaching.'
+    : 'Instructor account recognized. You can open your dashboard.'
+   : 'Signed in. If you were just invited, ask the owner to confirm your instructor authorization.';
+ }
+}catch{
+ el.textContent='You can still use Log in or Reset password below. Contact the administrator if your invitation link does not work.';
+}
+</script>
+</body>
+</html>
