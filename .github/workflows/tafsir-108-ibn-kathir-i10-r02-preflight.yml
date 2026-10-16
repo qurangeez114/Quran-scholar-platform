@@ -26,7 +26,7 @@ jobs:
           rp='data/tafsir/staging/ibn-kathir-108-i10-r02-source-review-2026-10-15.json'
           ep='data/tafsir/staging/ibn-kathir-108-route-extraction-2026-10-12.json'
           review=json.load(open(rp,encoding='utf-8')); extraction=json.load(open(ep,encoding='utf-8'))
-          expected={'schema_version':'quranhikma-tafsir-route-source-review-v1','surah':108,'verse':3,'scholar_key':'ibn_kathir','claim_id':'108-I10','route_id':'108-I10-R02','status':'bounded_suyuti_source_cluster_trace_complete_chains_unresolved_not_publication_ready','human_verified':True,'database_written':False,'publication_ready':False,'proposition_count_effect':0}
+          expected={'schema_version':'quranhikma-tafsir-route-source-review-v1','surah':108,'verse':3,'scholar_key':'ibn_kathir','claim_id':'108-I10','route_id':'108-I10-R02','status':'bounded_suyuti_source_cluster_trace_complete_chains_unresolved_not_publication_ready','human_verified':False,'database_written':False,'publication_ready':False,'proposition_count_effect':0}
           for k,v in expected.items():
               if review.get(k)!=v: raise SystemExit(f'Unsafe or mismatched {k}: {review.get(k)!r}')
           cmp=review['comparison']
@@ -69,10 +69,23 @@ jobs:
           ar=norm(byid[48459].get('content',''))
           if norm(review['ibn_kathir_witness']['arabic_anchor']) not in ar: raise SystemExit('Live Arabic I10 R02 anchor missing')
           en=norm(byid[11081].get('content','')).lower()
-          markers={
-            'ibn_abbas':any(x in en for x in ['ibn abbas','ibn abbaas']),
-            'abu_jahl':any(x in en for x in ['abu jahl','abu jahil']),
-            'your_enemy':any(x in en for x in ['your enemy','means your enemy'])}
+          en=re.sub(r"['`‘’ʿʾ]",'',en)
+          en=re.sub(r'[^a-z0-9]+',' ',en)
+          en=re.sub(r'\s+',' ',en).strip()
+          start=en.find('it has been reported that ata said')
+          end=en.find('as suddi said',start)
+          if start<0 or end<=start: raise SystemExit('English transition anchors missing')
+          window=en[start:end]
+          if 'abu lahab' not in window or 'tonight' not in window:
+              raise SystemExit('Preceding report boundary missing')
+          markers={'ibn_abbas':bool(re.search(r'ibn abbas',window)),
+                   'abu_jahl':bool(re.search(r'abu jah(?:l|il)',window)),
+                   'your_enemy':'your enemy' in window}
+          if any(markers.values()): raise SystemExit('Bounded omission finding changed; review context')
+          if review['english_fidelity'].get('state')!='abu_jahl_attribution_absent_at_corresponding_bounded_transition':
+              raise SystemExit('Contextual fidelity state missing')
+          if not review.get('fidelity_correction',{}).get('evidence_run'):
+              raise SystemExit('Missing contextual review provenance')
           print('AUDIT_MODE read-only; no writes')
           print('SUYUTI_SOURCE_CLUSTER',json.dumps(review['direct_suyuti_trace']['source_cluster']))
           print('ENGLISH_BOUNDED_MARKERS',json.dumps(markers,sort_keys=True))
