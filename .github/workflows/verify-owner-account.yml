@@ -1,0 +1,60 @@
+name: Verify owner account permissions
+on:
+  push:
+    paths:
+      - '.github/workflows/verify-owner-account.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Read owner permissions without changing accounts
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        shell: python
+        run: |
+          import os, json, hashlib, urllib.request, urllib.error
+          key = os.environ.get("SUPABASE_SERVICE_KEY", "")
+          if not key:
+              print("BLOCKED: saved database credential is unavailable.")
+              raise SystemExit(1)
+          base = "https://ylosytbxpzxzwfzjpaej.supabase.co"
+          headers = {"apikey":key, "Content-Type":"application/json"}
+          if not key.startswith("sb_"): headers["Authorization"]="Bearer "+key
+          def get(path):
+              try:
+                  with urllib.request.urlopen(urllib.request.Request(base+path,headers=headers),timeout=30) as r:
+                      return json.load(r), None
+              except urllib.error.HTTPError as e:
+                  return None, e.code
+          target = "58554a69ceb26f064a1440f2eac50ffb6f558228d3a8158b3106db4c46b6e504"
+          owner = None
+          for page in range(1,101):
+              result,error = get("/auth/v1/admin/users?page="+str(page)+"&per_page=100")
+              if error:
+                  print("BLOCKED: account directory read HTTP",error)
+                  raise SystemExit(1)
+              users = result.get("users",[])
+              owner = next((u for u in users if hashlib.sha256(u.get("email","").strip().lower().encode()).hexdigest()==target),None)
+              if owner or len(users)<100: break
+          if not owner:
+              print("OWNER_ACCOUNT_FOUND: false")
+              raise SystemExit(1)
+          print("OWNER_ACCOUNT_FOUND: true")
+          uid=owner["id"]
+          for table,column in [("qh_profiles","user_id"),("profiles","id"),("qh_account_recovery_admins","user_id")]:
+              rows,error=get("/rest/v1/"+table+"?"+column+"=eq."+uid+"&select=*")
+              if error:
+                  print(table+": unavailable; HTTP",error)
+                  continue
+              print(table+": matching rows",len(rows))
+              for row in rows:
+                  for field in ("role","is_admin","is_staff","account_role"):
+                      if field in row:
+                          value=row[field]
+                          if isinstance(value,bool) or value in ("admin","owner","staff","instructor","teacher","student","user","member"):
+                              print(table+"."+field+":",value)
+          print("Read-only verification complete. No accounts or permissions changed.")
