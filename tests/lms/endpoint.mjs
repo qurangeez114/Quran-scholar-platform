@@ -64,7 +64,7 @@ assert.equal(magicLinks.length,3);
 assert.equal((await call(pending,{action:'change_password',currentPassword:'same-password-123',newPassword:'same-password-123'})).status,400);
 const change=await call(pending,{action:'change_password',currentPassword:'temp-password-123',newPassword:'new-password-123'});assert.equal(change.status,200);assert.equal(tables.qh_lms_accounts.find(a=>a.user_id===pending).must_change_password,false);
 const existingInstructor=await call(owner,{action:'provision',role:'instructor',email:users[1].email,display_name:'Existing teacher'});
-assert.equal(existingInstructor.status,200);assert.equal(existingInstructor.data.created,false);assert.equal(magicLinks.length,4);
+assert.equal(existingInstructor.status,200);assert.equal(existingInstructor.data.created,false);assert.equal(existingInstructor.data.duplicate,true);assert.equal(magicLinks.length,3);
 assert.equal((await call(owner,{action:'set_instructor_active',user_id:teacher,active:false})).status,200);
 assert.equal((await call(teacher,{action:'dashboard'})).status,403);
 console.log('PASS: immediate instructor and student invitations, role-specific links, owner/course-scoped resends, duplicate suppression, password preservation and authorization.');
