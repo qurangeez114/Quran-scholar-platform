@@ -75,14 +75,16 @@ export async function getLessonsByCourse(courseId) {
   return data;
 }
 
-export async function createLesson(courseId, title, lesson_order = 1) {
+export async function createLesson(courseId, title, lesson_order = 1, options = {}) {
   const { data, error } = await supabase
     .from('qh_lessons')
     .insert({
       course_id: courseId,
       title,
       lesson_order,
-      lesson_type: 'text'
+      lesson_type: options.lesson_type || 'text',
+      content: options.content ?? null,
+      video_url: options.video_url ?? null
     })
     .select()
     .single();
