@@ -526,7 +526,7 @@
             ${q.options ? q.options.map((opt, optIdx) => `
               <div style="margin-bottom: 0.5rem;">
                 <label>
-                  <input type="radio" name="q${idx}" value="${opt}" required>
+                  <input type="radio" name="q${idx}" value="${opt}">
                   ${opt}
                 </label>
               </div>
@@ -556,16 +556,15 @@
       });
 
       try {
-        await submitQuiz(currentQuiz.id, answers, score);
-
-        const passed = score >= currentQuiz.passing_score;
         const percentage = Math.round((score / currentQuiz.questions.length) * 100);
+        const passed = percentage >= currentQuiz.passing_score;
+        await submitQuiz(currentQuiz.id, answers, percentage, currentQuiz.passing_score);
 
         // Update student progress
         await updateStudentProgress(
           currentCourse.id,
           currentLesson.id,
-          true, // marked as completed
+          passed, // complete only after meeting the quiz pass mark
           percentage
         );
 
@@ -579,6 +578,22 @@
           </div>
         `;
 
+        const feedback = document.createElement('div');
+        feedback.setAttribute('aria-label', 'Answer explanations');
+        currentQuiz.questions.forEach((q, i) => {
+          const box = document.createElement('section');
+          box.className = 'quiz-question';
+          const heading = document.createElement('h4');
+          heading.textContent = (i + 1) + '. ' + (answers[i] === q.correct_answer ? '✓ Correct' : answers[i] ? 'Keep investigating' : 'Not answered');
+          const response = document.createElement('p');
+          response.textContent = 'Your answer: ' + (answers[i] || 'No answer') + '. Correct answer: ' + q.correct_answer;
+          const explanation = document.createElement('p');
+          const selectedIndex = q.options.indexOf(answers[i]);
+          const reason = answers[i] !== q.correct_answer && selectedIndex >= 0 ? q.option_explanations?.[selectedIndex] : '';
+          explanation.textContent = [reason, q.explanation || 'Review the lesson and the correct answer.'].filter(Boolean).join(' ');
+          box.append(heading, response, explanation);feedback.append(box);
+        });
+        document.getElementById('quizResult').append(feedback);
         document.getElementById('quizForm').style.display = 'none';
         showAlert('Quiz submitted and progress updated!', 'success');
       } catch (error) {
