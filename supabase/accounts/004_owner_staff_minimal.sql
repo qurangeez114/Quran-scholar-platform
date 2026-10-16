@@ -7,6 +7,26 @@
 -- when recovery is enabled.
 begin;
 
+-- Refuse to run over account recovery. 002 defines the real qh_account_status and
+-- qh_can_manage_account_archive; these stubs would silently replace them.
+do $$
+begin
+  if to_regclass('public.qh_account_deletions') is not null
+     or to_regclass('public.qh_account_recovery_admins') is not null then
+    raise exception 'Account recovery is installed. Do not apply 004; it would replace the recovery functions.';
+  end if;
+end $$;
+
+-- Stop unless the owner account exists exactly once.
+do $$
+declare n integer;
+begin
+  select count(*) into n from auth.users where lower(email) = 'magicallife19@gmail.com';
+  if n <> 1 then
+    raise exception 'Expected exactly one owner account for magicallife19@gmail.com, found %', n;
+  end if;
+end $$;
+
 create table if not exists public.qh_staff_members (
   user_id uuid primary key references auth.users(id) on delete cascade
 );
@@ -39,7 +59,7 @@ $$;
 revoke all on function public.qh_can_manage_account_archive() from public, anon;
 grant execute on function public.qh_can_manage_account_archive() to authenticated;
 
--- Owner staff access only.
+-- Owner staff access only (existence and uniqueness checked above).
 insert into public.qh_staff_members(user_id)
 select id from auth.users where lower(email) = 'magicallife19@gmail.com'
 on conflict do nothing;
@@ -55,6 +75,14 @@ begin
     execute format('drop policy if exists qh_staff_manage on public.%I', t);
     execute format('create policy qh_staff_manage on public.%I for all to authenticated using (public.qh_is_staff()) with check (public.qh_is_staff())', t);
   end loop;
+end $$;
+
+-- Migration 001 defines a legacy hard-delete RPC. Keep it unreachable from clients.
+do $$
+begin
+  if to_regprocedure('public.qh_delete_account()') is not null then
+    revoke all on function public.qh_delete_account() from public, anon, authenticated;
+  end if;
 end $$;
 
 notify pgrst, 'reload schema';
