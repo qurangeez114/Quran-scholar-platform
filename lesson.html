@@ -533,6 +533,7 @@
         if (error) throw error;
 
         currentQuiz = data;
+        quizStage = 'practice';
         document.getElementById('quizResult').textContent = '';
         renderQuiz();
       } catch (error) {
@@ -543,105 +544,156 @@
       }
     }
 
+
+    let quizStage = 'practice';
+    const quizButton = () => document.querySelector('#quizForm button[type="submit"]');
+
+    function currentRoundQuestions() {
+      if (quizStage !== 'final') return currentQuiz.questions;
+      return currentQuiz.questions.map(q => {
+        const v = q.variant;
+        if (!v || !v.q || !Array.isArray(v.options) || v.options.length < 2) return q;
+        return {
+          question: v.q,
+          options: v.options,
+          correct_answer: v.options[Number(v.answer) || 0],
+          explanation: q.explanation,
+          option_explanations: Array.isArray(v.rationale) ? v.rationale : []
+        };
+      });
+    }
+
     function renderQuiz() {
-      if (!currentQuiz || !Array.isArray(currentQuiz.questions) || currentQuiz.questions.length === 0) {
-        document.getElementById('quizResult').textContent='No questions have been added to this quiz yet.';
+      if (!currentQuiz || !Array.isArray(currentQuiz.questions) || !currentQuiz.questions.length) {
+        document.getElementById('quizResult').textContent = 'No questions have been added to this quiz yet. Ask the instructor to open the Question Builder.';
         document.getElementById('quizForm').style.display = 'none';
         return;
       }
-
+      const questions = currentRoundQuestions();
       const container = document.getElementById('quizContent');
-
-      container.innerHTML = currentQuiz.questions.map((q, idx) => `
-        <div class="quiz-question">
-          <h4>${idx + 1}. ${q.question}</h4>
-          <div class="quiz-option">
-            ${q.options ? q.options.map((opt, optIdx) => `
-              <div style="margin-bottom: 0.5rem;">
-                <label>
-                  <input type="radio" name="q${idx}" value="${opt}">
-                  ${opt}
-                </label>
-              </div>
-            `).join('') : ''}
-          </div>
-        </div>
-      `).join('');
-
+      container.replaceChildren();
+      const intro = document.createElement('p');
+      intro.textContent = quizStage === 'final'
+        ? '🕵️ Final Detective Check: apply what you learned to the reworded questions. This round determines your recorded grade.'
+        : '🎯 Practice round: answer the questions. Explanations appear before the final reworded check when one is available.';
+      container.append(intro);
+      questions.forEach((q, idx) => {
+        const section = document.createElement('section');
+        section.className = 'quiz-question';
+        const heading = document.createElement('h4');
+        heading.textContent = (idx + 1) + '. ' + (q.question || '');
+        section.append(heading);
+        (Array.isArray(q.options) ? q.options : []).forEach((option, optIdx) => {
+          const label = document.createElement('label');
+          label.style.cssText = 'display:block;margin:8px 0;cursor:pointer';
+          const input = document.createElement('input');
+          input.type = 'radio';
+          input.name = 'q' + idx;
+          input.value = String(optIdx);
+          input.style.marginRight = '10px';
+          label.append(input,document.createTextNode(String(option)));
+          section.append(label);
+        });
+        container.append(section);
+      });
+      quizButton().textContent = quizStage === 'final' ? 'Submit Final Check' : 'Check My Answers';
       document.getElementById('quizForm').style.display = 'block';
     }
 
-    document.getElementById('quizForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-
-      if (!currentQuiz) return;
-      const submitButton = e.submitter || document.querySelector('#quizForm button[type="submit"]');
-      if (submitButton.disabled) return;
-      submitButton.disabled = true;
-      submitButton.textContent = 'Saving quiz…';
-      let resultSaved = false;
-
-      const answers = [];
-      for (let i = 0; i < currentQuiz.questions.length; i++) {
-        const selected = document.querySelector(`input[name="q${i}"]:checked`);
-        answers.push(selected ? selected.value : '');
-      }
-
-      // Calculate score
-      let score = 0;
-      answers.forEach((ans, idx) => {
-        if (ans === currentQuiz.questions[idx].correct_answer) score++;
+    function addExplanations(questions, answers, title) {
+      const wrapper = document.createElement('section');
+      wrapper.className = 'quiz-result';
+      const titleEl = document.createElement('h3');
+      titleEl.textContent = title;
+      wrapper.append(titleEl);
+      questions.forEach((q, i) => {
+        const box = document.createElement('div');
+        box.className = 'quiz-question';
+        const correct = answers[i] === q.correct_answer;
+        const h = document.createElement('h4');
+        h.textContent = (i + 1) + '. ' + (correct ? '✓ Correct' : answers[i] ? '🔎 Review this answer' : '⚠ Not answered');
+        const p = document.createElement('p');
+        p.textContent = 'Your answer: ' + (answers[i] || 'No answer') + '. Correct answer: ' + (q.correct_answer || 'Not configured');
+        const explanation = document.createElement('p');
+        const index = (q.options || []).indexOf(answers[i]);
+        const reason = !correct && index >= 0 ? q.option_explanations?.[index] : '';
+        explanation.textContent = [reason, q.explanation || 'Review the source and explanation.'].filter(Boolean).join(' ');
+        box.append(h,p,explanation);wrapper.append(box);
       });
+      document.getElementById('quizResult').append(wrapper);
+    }
 
+    document.getElementById('quizForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      if (!currentQuiz) return;
+      const button = quizButton();
+      if (button.disabled) return;
+      button.disabled = true;
+      button.textContent = 'Checking…';
+      const questions = currentRoundQuestions();
+      const answers = questions.map((q,i) => {
+        const checked = document.querySelector('input[name="q'+i+'"]:checked');
+        return checked && Array.isArray(q.options) ? q.options[Number(checked.value)] || '' : '';
+      });
+      const score = answers.filter((ans,i)=>ans === questions[i].correct_answer).length;
+      const percentage = Math.round(score / questions.length * 100);
+      const result = document.getElementById('quizResult');
       try {
-        const percentage = Math.round((score / currentQuiz.questions.length) * 100);
-        const passed = percentage >= currentQuiz.passing_score;
-        await submitQuiz(currentQuiz.id, answers, percentage, currentQuiz.passing_score);
-        resultSaved = true;
+        const hasReworded = currentQuiz.questions.some(q=>q.variant?.q && Array.isArray(q.variant.options));
+        if (quizStage === 'practice' && hasReworded) {
+          result.replaceChildren();
+          const info=document.createElement('p');
+          info.textContent='Practice: '+score+'/'+questions.length+' ('+percentage+'%). Review every answer below; your grade is not yet recorded. Then complete the final reworded check.';
+          result.append(info);
+          addExplanations(questions,answers,'Practice feedback — learn from every answer');
+          quizStage='final';
+          renderQuiz();
+          result.scrollIntoView({behavior:'smooth',block:'start'});
+          return;
+        }
 
-        // Update student progress
+        const passed = percentage >= Number(currentQuiz.passing_score || 90);
+        button.textContent='Saving results…';
+        await submitQuiz(currentQuiz.id, answers, percentage, currentQuiz.passing_score);
+        // A later failed retry must not erase an earlier passing lesson completion.
+        const existing = (await getStudentProgress(currentCourse.id))
+          .find(p=>p.lesson_id===currentLesson.id);
         const progressResult = await updateStudentProgress(
-          currentCourse.id,
-          currentLesson.id,
-          passed, // complete only after meeting the quiz pass mark
-          percentage
+          currentCourse.id,currentLesson.id,passed || Boolean(existing?.completed),
+          Math.max(percentage,Number(existing?.quiz_score)||0)
         );
 
-        document.getElementById('quizResult').innerHTML = `
-          <div class="quiz-result ${passed ? 'quiz-result-passed' : 'quiz-result-failed'}">
-            <h3>Quiz Complete!</h3>
-            <div class="quiz-result-score">${score}/${currentQuiz.questions.length} (${percentage}%)</div>
-            <p style="margin-top: 0.5rem;">
-              ${passed ? `✓ Passed! (Passing score: ${currentQuiz.passing_score}%)` : `✗ Did not pass (Required: ${currentQuiz.passing_score}%)`}
-            </p>
-          </div>
-        `;
-
-        const feedback = document.createElement('div');
-        feedback.setAttribute('aria-label', 'Answer explanations');
-        currentQuiz.questions.forEach((q, i) => {
-          const box = document.createElement('section');
-          box.className = 'quiz-question';
-          const heading = document.createElement('h4');
-          heading.textContent = (i + 1) + '. ' + (answers[i] === q.correct_answer ? '✓ Correct' : answers[i] ? 'Keep investigating' : 'Not answered');
-          const response = document.createElement('p');
-          response.textContent = 'Your answer: ' + (answers[i] || 'No answer') + '. Correct answer: ' + q.correct_answer;
-          const explanation = document.createElement('p');
-          const selectedIndex = q.options.indexOf(answers[i]);
-          const reason = answers[i] !== q.correct_answer && selectedIndex >= 0 ? q.option_explanations?.[selectedIndex] : '';
-          explanation.textContent = [reason, q.explanation || 'Review the lesson and the correct answer.'].filter(Boolean).join(' ');
-          box.append(heading, response, explanation);feedback.append(box);
-        });
-        document.getElementById('quizResult').append(feedback);
-        document.getElementById('quizForm').style.display = 'none';
+        result.replaceChildren();
+        const notice=document.createElement('div');
+        notice.className='quiz-result '+(passed?'quiz-result-passed':'quiz-result-failed');
+        const heading=document.createElement('h3');
+        heading.textContent=passed?'🏆 Detective mission passed!':'🔍 Keep investigating — you can retry';
+        const detail=document.createElement('p');
+        detail.textContent=score+'/'+questions.length+' correct ('+percentage+'%). Required: '+currentQuiz.passing_score+'%.';
+        notice.append(heading,detail);result.append(notice);
+        addExplanations(questions,answers,'Answer explanations');
+        document.getElementById('quizForm').style.display='none';
+        if (!passed) {
+          const again=document.createElement('button');
+          again.className='btn btn-primary';
+          again.type='button';
+          again.textContent='↻ Retry the quiz';
+          again.addEventListener('click',()=>{
+            quizStage='practice';result.replaceChildren();renderQuiz();
+            document.getElementById('quizForm').scrollIntoView({behavior:'smooth'});
+          });
+          result.append(again);
+        }
         await refreshLessonProgress();
-        showAlert(progressResult.enrollmentWarning ? 'Quiz and lesson progress saved. Dashboard sync needs attention: ' + progressResult.enrollmentWarning : 'Quiz result and lesson progress saved.', progressResult.enrollmentWarning ? 'error' : 'success');
+        showAlert(progressResult.enrollmentWarning
+          ? 'Score saved, but dashboard sync needs attention: '+progressResult.enrollmentWarning
+          : 'Quiz grade and lesson progress saved.',progressResult.enrollmentWarning?'error':'success');
       } catch (error) {
-        console.error('Error submitting quiz:', error);
-        showAlert((resultSaved ? 'Quiz result saved, but lesson progress was not saved: ' : 'Quiz was not saved: ') + (error.message || 'Please try again.'), 'error');
+        console.error('Error submitting quiz:',error);
+        showAlert('Quiz result or progress could not be saved: '+(error.message||'Please retry.'),'error');
       } finally {
-        submitButton.disabled = false;
-        submitButton.textContent = 'Submit Quiz';
+        button.disabled=false;
+        button.textContent=quizStage==='final'?'Submit Final Check':'Check My Answers';
       }
     });
 
