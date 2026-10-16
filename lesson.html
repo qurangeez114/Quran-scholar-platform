@@ -477,13 +477,31 @@
         content.innerHTML = `<div>${currentLesson.content || 'No content'}</div>`;
         completeBtn.style.display = 'block';
       } else if (currentLesson.lesson_type === 'video') {
-        content.innerHTML = `
-          <div>
-            <p><strong>Video Lesson</strong></p>
-            <p>${currentLesson.video_url || 'No video URL'}</p>
-            <p style="color: #999; font-size: 0.9rem;">Video URL: ${currentLesson.video_url}</p>
-          </div>
-        `;
+        content.replaceChildren();
+        const description = document.createElement('p');
+        description.textContent = currentLesson.content || 'Watch the video, then continue to the next lesson.';
+        content.append(description);
+        try {
+          const url = new URL(currentLesson.video_url);
+          if (!['https:', 'http:'].includes(url.protocol)) throw Error('Invalid video URL');
+          const host = url.hostname.toLowerCase();
+          let videoId = '';
+          if (['youtube.com','www.youtube.com','m.youtube.com'].includes(host)) videoId = url.searchParams.get('v') || url.pathname.match(/^\/(?:embed|shorts)\/([^/]+)/)?.[1] || '';
+          if (host === 'youtu.be') videoId = url.pathname.slice(1);
+          if (/^[a-zA-Z0-9_-]{11}$/.test(videoId)) {
+            const iframe = document.createElement('iframe');
+            iframe.src = 'https://www.youtube-nocookie.com/embed/' + videoId;
+            iframe.title = currentLesson.title;
+            iframe.style.cssText = 'width:100%;aspect-ratio:16/9;border:0;border-radius:8px';
+            iframe.allow = 'encrypted-media; picture-in-picture';iframe.allowFullscreen = true;
+            content.append(iframe);
+          }
+          const link = document.createElement('a');
+          link.href = url.href;link.target = '_blank';link.rel = 'noopener';
+          link.textContent = 'Open video in a new tab';content.append(link);
+        } catch {
+          const error = document.createElement('p');error.textContent = 'Video link is missing or invalid.';content.append(error);
+        }
         completeBtn.style.display = 'block';
       } else if (currentLesson.lesson_type === 'quiz') {
         content.innerHTML = '<p>Switch to the <strong>Quiz</strong> tab above to take the quiz.</p>';
