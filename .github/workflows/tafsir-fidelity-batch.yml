@@ -18,6 +18,11 @@ on:
         required: true
         default: "claude-sonnet-4-5-20250929"
         type: string
+      max_source_chars:
+        description: "Maximum combined Arabic+English characters per full-source evaluation"
+        required: true
+        default: "20000"
+        type: string
   push:
     paths:
       - ".github/tafsir-fidelity-run-trigger.txt"
@@ -76,10 +81,11 @@ jobs:
           BATCH_LIMIT: ${{ inputs.limit || '12' }}
           BATCH_START: ${{ inputs.start || '' }}
           BATCH_MODEL: ${{ inputs.model || 'claude-sonnet-4-5-20250929' }}
+          BATCH_MAX_SOURCE_CHARS: ${{ inputs.max_source_chars || '20000' }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: |
           set -uo pipefail
-          args=(--limit "$BATCH_LIMIT" --model "$BATCH_MODEL")
+          args=(--limit "$BATCH_LIMIT" --model "$BATCH_MODEL" --max-source-chars "$BATCH_MAX_SOURCE_CHARS")
           if [[ -n "$BATCH_START" ]]; then args+=(--start "$BATCH_START"); fi
           set +e
           python batch_tafsir_accuracy.py "${args[@]}" 2>&1 | tee /tmp/evaluator_output.txt
