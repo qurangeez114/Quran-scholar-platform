@@ -32,7 +32,7 @@ jobs:
           e=json.load(open(base+'ibn-kathir-108-route-extraction-2026-10-12.json',encoding='utf-8'))
           i02=json.load(open(base+'ibn-kathir-108-i02-r01-r11-coverage-checkpoint-2026-10-15.json',encoding='utf-8'))
           tail=json.load(open(base+'ibn-kathir-108-i06-i10-consolidation-2026-10-15.json',encoding='utf-8'))
-          expected={'schema_version':'quranhikma-tafsir-scholar-inventory-audit-v1','surah':108,'scholar_key':'ibn_kathir','status':'route_inventory_complete_non_route_boundaries_open_scholar_not_complete','human_verified':True,'database_written':False,'database_write_count':0,'publication_ready':False,'scholar_complete':False,'staged_claim_count':73,'ibn_kathir_claim_count':14}
+          expected={'schema_version':'quranhikma-tafsir-scholar-inventory-audit-v1','surah':108,'scholar_key':'ibn_kathir','status':'route_inventory_complete_non_route_boundaries_open_scholar_not_complete','human_verified':False,'database_written':False,'database_write_count':0,'publication_ready':False,'scholar_complete':False,'staged_claim_count':73,'ibn_kathir_claim_count':14}
           for k,v in expected.items():
               if a.get(k)!=v: raise SystemExit(f'Unsafe or mismatched {k}: {a.get(k)!r}')
           claim_ids=[x['id'] for x in c['claims']]
@@ -65,10 +65,14 @@ jobs:
           boundaries=a['non_route_boundary_audit']
           if [x['claim_id'] for x in boundaries]!=a['claim_inventory']['non_route_claims']:
               raise SystemExit('Non-route boundary inventory changed')
-          if any(x['state'] not in ('open','open_metadata_normalization') for x in boundaries):
-              raise SystemExit('An open boundary was silently closed')
+          if any(x['state']!='bounded_review_recorded_not_publication_ready' for x in boundaries):
+              raise SystemExit('Unexpected non-route review state')
+          for x in boundaries:
+              d=json.load(open(x['evidence_artifact'],encoding='utf-8'))
+              if d.get('surah')!=108 or d.get('database_written') is not False:
+                  raise SystemExit('Invalid non-route review provenance '+x['claim_id'])
           if len(boundaries)!=9:
-              raise SystemExit('Expected nine open non-route boundaries')
+              raise SystemExit('Expected nine bounded non-route review records')
           if c.get('database_written') is not False or i02.get('database_written') is not False or tail.get('database_written') is not False:
               raise SystemExit('Database boundary changed')
           key=os.environ.get('SUPABASE_SERVICE_KEY','')
@@ -84,7 +88,7 @@ jobs:
           print('IBN_KATHIR_CLAIMS',len(claim_ids))
           print('EXTRACTED_ROUTES',len(set(extracted_all)))
           print('REVIEWED_ROUTES',len(reviewed))
-          print('OPEN_NON_ROUTE_BOUNDARIES',len(boundaries))
+          print('BOUNDED_NON_ROUTE_REVIEWS',len(boundaries))
           print('STAGED_CLAIMS',a['staged_claim_count'])
           print('DATABASE_WRITES',a['database_write_count'])
           print('SCHOLAR_COMPLETE',a['scholar_complete'])
