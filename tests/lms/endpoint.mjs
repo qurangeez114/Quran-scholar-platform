@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 const owner='10000000-0000-4000-8000-000000000001',teacher='10000000-0000-4000-8000-000000000002',student='10000000-0000-4000-8000-000000000003',pending='10000000-0000-4000-8000-000000000004';
 const a='20000000-0000-4000-8000-000000000001',b='20000000-0000-4000-8000-000000000002';
 const tables={qh_staff_members:[{user_id:owner}],qh_lms_accounts:[{user_id:teacher,role:'instructor',active:true,must_change_password:false},{user_id:pending,role:'instructor',active:true,must_change_password:true}],qh_courses:[{id:a,created_by:teacher,title:'A'},{id:b,created_by:owner,title:'B'}],qh_enrollments:[],qh_lessons:[],qh_quizzes:[],qh_quiz_answers:[],qh_student_progress:[],qh_assignments:[],qh_assignment_submissions:[]};
-let created=0,passwordUpdates=0;
+let created=0,passwordUpdates=0,invites=[],magicLinks=[];
 const users=[owner,teacher,student,pending].map(id=>({id,email:id+'@example.invalid'}));
 class Query{
  constructor(table){this.table=table;this.filters=[];this.operation='select';this.singleRow=false;}
@@ -18,7 +18,7 @@ class Query{
  return Promise.resolve({data:this.singleRow?rows[0]||null:rows,error:null}).then(resolve,reject);
  }catch(e){return Promise.reject(e).then(resolve,reject);}}
 }
-const client={from:table=>new Query(table),auth:{getUser:async token=>({data:{user:users.find(u=>u.id===token)||null},error:null}),signInWithPassword:async()=>({error:null}),signOut:async()=>({error:null}),admin:{listUsers:async()=>({data:{users},error:null}),createUser:async values=>{created++;const user={id:crypto.randomUUID(),email:values.email};users.push(user);return {data:{user},error:null};},updateUserById:async()=>{passwordUpdates++;return {error:null};},getUserById:async id=>({data:{user:users.find(u=>u.id===id)},error:null})}}};
+const client={from:table=>new Query(table),auth:{getUser:async token=>({data:{user:users.find(u=>u.id===token)||null},error:null}),signInWithPassword:async()=>({error:null}),signOut:async()=>({error:null}),signInWithOtp:async params=>{magicLinks.push(params);return {error:null};},admin:{inviteUserByEmail:async(email,options)=>{if(email==='smtp-error@example.invalid')return {data:{user:null},error:{message:'SMTP unavailable'}};invites.push({email,options});created++;const user={id:crypto.randomUUID(),email};users.push(user);return {data:{user},error:null};},listUsers:async()=>({data:{users},error:null}),createUser:async values=>{created++;const user={id:crypto.randomUUID(),email:values.email};users.push(user);return {data:{user},error:null};},updateUserById:async()=>{passwordUpdates++;return {error:null};},getUserById:async id=>({data:{user:users.find(u=>u.id===id)},error:null})}}};
 let handler;
 let source=(await transform(await readFile(new URL('../../supabase/functions/lms-admin/index.ts',import.meta.url),'utf8'),{loader:'ts',format:'esm'})).code;source=source.replace(/^import .*\n/,'');
 runInNewContext(source,{createClient:()=>client,Deno:{env:{get:()=>''},serve:fn=>handler=fn},Response,Request,console});
@@ -31,9 +31,49 @@ assert.equal((await call(teacher,{action:'provision',role:'student',course_id:b}
 assert.equal((await call(teacher,{action:'set_instructor_active',user_id:pending,active:false})).status,403);
 const dash=await call(teacher,{action:'dashboard'});assert.equal(dash.status,200);assert.equal(dash.data.courses.length,1);assert.equal(dash.data.courses[0].id,a);
 const enroll=await call(teacher,{action:'provision',role:'student',course_id:a,email:users[2].email,display_name:'Existing student'});assert.equal(enroll.status,200);assert.equal(enroll.data.created,false);assert.equal(passwordUpdates,0);assert.equal(created,0);
-const provision=await call(owner,{action:'provision',role:'instructor',email:'new@example.invalid',display_name:'New instructor',temporaryPassword:'Temporary-example-123',country:'Eritrea',city:'Asmara'});assert.equal(provision.status,200);assert.equal(created,1);assert.equal(tables.qh_lms_accounts.at(-1).must_change_password,true);assert.equal(tables.qh_staff_members.length,1);
+assert.equal(magicLinks.length,1);assert.match(magicLinks[0].options.emailRedirectTo,/\/student-welcome\.html$/);
+const provision=await call(owner,{action:'provision',role:'instructor',email:'new@example.invalid',display_name:'New instructor',temporaryPassword:'Temporary-example-123',country:'Eritrea',city:'Asmara'});assert.equal(provision.status,200);assert.equal(created,1);assert.equal(invites.length,1);assert.equal(invites[0].email,'new@example.invalid');assert.match(invites[0].options.redirectTo,/\/instructor-welcome\.html$/);assert.equal(passwordUpdates,1);assert.equal(provision.data.emailAccepted,true);assert.equal(tables.qh_lms_accounts.at(-1).must_change_password,true);assert.equal(tables.qh_staff_members.length,1);
+assert.equal((await call(teacher,{action:'resend_instructor_invite',user_id:pending})).status,403);
+assert.equal((await call(owner,{action:'resend_instructor_invite',user_id:pending})).status,200);
+assert.equal(magicLinks.length,2);
+assert.equal(magicLinks[1].options.shouldCreateUser,false);
+const beforeStudent=created;
+const newStudent=await call(teacher,{
+ action:'provision',role:'student',course_id:a,email:'newstudent@example.invalid',
+ display_name:'New Student',temporaryPassword:'Temporary-student-123'
+});
+assert.equal(newStudent.status,200);assert.equal(newStudent.data.created,true);assert.equal(newStudent.data.emailAccepted,true);
+assert.equal(created,beforeStudent+1);
+assert.equal(invites.length,2);
+assert.equal(invites[1].email,'newstudent@example.invalid');
+assert.match(invites[1].options.redirectTo,/\/student-welcome\.html$/);
+assert.equal(invites[1].options.data.learning_role,'student');
+assert.equal(tables.qh_lms_accounts.at(-1).must_change_password,true);
+const newStudentId=users.at(-1).id;
+assert.equal((await call(teacher,{action:'resend_student_invite',user_id:newStudentId,course_id:b})).status,403);
+const resendStudent=await call(teacher,{action:'resend_student_invite',user_id:newStudentId,course_id:a});
+assert.equal(resendStudent.status,200);assert.equal(resendStudent.data.emailAccepted,true);
+assert.equal(magicLinks.length,3);
+assert.match(magicLinks.at(-1).options.emailRedirectTo,/\/student-welcome\.html$/);
+const duplicateStudent=await call(teacher,{
+ action:'provision',role:'student',course_id:a,email:'newstudent@example.invalid',display_name:'New Student'
+});
+assert.equal(duplicateStudent.status,200);assert.equal(duplicateStudent.data.duplicate,true);
+assert.equal(invites.length,2);
+assert.equal(magicLinks.length,3);
+const fallback=await call(teacher,{
+ action:'provision',role:'student',course_id:a,email:'smtp-error@example.invalid',
+ display_name:'Email outage test',temporaryPassword:'Temporary-fallback-123'
+});
+assert.equal(fallback.status,200,'registration must continue on mail failure');
+assert.equal(fallback.data.created,true);
+assert.equal(fallback.data.emailAccepted,false,'do not claim failed SMTP sent the email');
+assert.match(fallback.data.message,/no email was sent successfully/);
+assert.equal(tables.qh_lms_accounts.at(-1).must_change_password,true);
 assert.equal((await call(pending,{action:'change_password',currentPassword:'same-password-123',newPassword:'same-password-123'})).status,400);
 const change=await call(pending,{action:'change_password',currentPassword:'temp-password-123',newPassword:'new-password-123'});assert.equal(change.status,200);assert.equal(tables.qh_lms_accounts.find(a=>a.user_id===pending).must_change_password,false);
+const existingInstructor=await call(owner,{action:'provision',role:'instructor',email:users[1].email,display_name:'Existing teacher'});
+assert.equal(existingInstructor.status,200);assert.equal(existingInstructor.data.created,false);assert.equal(existingInstructor.data.duplicate,true);assert.equal(magicLinks.length,3);
 assert.equal((await call(owner,{action:'set_instructor_active',user_id:teacher,active:false})).status,200);
 assert.equal((await call(teacher,{action:'dashboard'})).status,403);
-console.log('PASS: endpoint authentication, instructor scope, account creation, password gate, suspension, and existing-password preservation.');
+console.log('PASS: immediate instructor and student invitations, role-specific links, owner/course-scoped resends, duplicate suppression, password preservation and authorization.');

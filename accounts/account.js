@@ -14,7 +14,7 @@ async function render(){
  $('identity').textContent=session.user.email;
  try {
   const access=await lmsRequest('session');
-  if(access.account?.must_change_password){location.replace('/instructor-dashboard.html');return;}
+  if(access.account?.must_change_password && !recovering){location.replace('/instructor-dashboard.html');return;}
   $('staff-dashboard').hidden=!['owner','instructor'].includes(access.role);
   $('staff-dashboard').href=access.role==='owner'?'/admin/lms.html':'/instructor-dashboard.html';
   $('staff-dashboard').textContent=access.role==='owner'?'Admin Page':'Instructor Dashboard';
@@ -51,11 +51,11 @@ else result=await db.auth.signInWithPassword({email,password});
 if(mode==='signup'&&!result.error&&result.data.user&&result.data.user.identities?.length===0)return message('This email is already taken.');
 if(result.error)throw result.error;message(mode==='login'?'Signed in.':'Check your email for the next step.');await render();
 }catch(e){message(/already (registered|been registered)/i.test(e.message)?'This email is already taken.':e.message);}finally{$('submit').disabled=false;}};
-$('reset-form').onsubmit=async e=>{e.preventDefault();const pw=$('new-password').value;if(pw.length<12)return message('Password must be at least 12 characters.');if(pw!==$('new-password-confirm').value)return message('Passwords do not match.');const {error}=await db.auth.updateUser({password:$('new-password').value});if(error)return message(error.message);recovering=false;history.replaceState(null,'',location.pathname);message('Password updated.');await render();};
+$('reset-form').onsubmit=async e=>{e.preventDefault();const pw=$('new-password').value;if(pw.length<12)return message('Password must be at least 12 characters.');if(pw!==$('new-password-confirm').value)return message('Passwords do not match.');const {error}=await db.auth.updateUser({password:$('new-password').value});if(error)return message(error.message);recovering=false;history.replaceState(null,'',location.pathname);message('Password updated. You can now open your instructor dashboard.');await render();};
 $('logout').onclick=async()=>{const {error}=await db.auth.signOut();if(error)return message(error.message);recovering=false;message('Logged out.');render();};
 $('export').onclick=()=>exportResearch().catch(e=>message(e.message));
 document.querySelectorAll('.pw-toggle').forEach(b=>b.onclick=()=>{const input=$(b.dataset.target);const show=input.type==='password';input.type=show?'text':'password';b.setAttribute('aria-pressed',String(show));b.setAttribute('aria-label',show?'Hide password':'Show password');});
-choose(new URLSearchParams(location.search).get('mode')==='signup'?'signup':'login');
+choose((()=>{const m=new URLSearchParams(location.search).get('mode');return m==='signup'||m==='recover'?m:'login';})());
 $('delete-account').onclick=()=>{$('delete-error').textContent='';$('delete-dialog').showModal();};
 $('cancel-delete').onclick=()=>$('delete-dialog').close();
 $('confirm-delete').onclick=async()=>{

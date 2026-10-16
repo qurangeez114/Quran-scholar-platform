@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Student Invitation · QuranHikma</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font:16px/1.65 system-ui,Arial,sans-serif;color:#183b33;background:#f4f6f2}
+header{background:#143e32;padding:20px 6vw;color:white}header a{color:white;text-decoration:none;font-weight:bold;font-size:21px}
+main{max-width:720px;margin:46px auto;padding:0 20px}
+article{background:#fff;padding:34px;border:1px solid #dce8df;border-radius:15px}
+h1{line-height:1.2;font-size:30px}h2{font-size:20px}
+ol{padding-left:26px}li{padding:8px 0}a.btn{display:inline-block;padding:11px 17px;background:#21624e;color:white;text-decoration:none;border-radius:8px;font-weight:bold;margin:8px 8px 0 0}a.secondary{background:#eaf1ed;color:#173f33}
+#status{padding:12px 16px;background:#eaf1ed;border-radius:8px}
+small{display:block;color:#667b6e;margin:20px 0}
+</style></head>
+<body><header><a href="/">QuranHikma · Learning</a></header>
+<main><article>
+<p>📚 STUDENT ENROLLMENT</p><h1>Welcome to your QuranHikma class</h1>
+<p>Your instructor has registered or enrolled you in the QuranHikma learning platform.</p>
+<p id="status" role="status" aria-live="polite">Checking your invitation…</p>
+<h2>How to begin</h2>
+<ol>
+<li>Open the <strong>secure invitation link</strong> in the email sent when your account was created.</li>
+<li>Sign in with the registered email and the temporary password supplied by your instructor <strong>separately</strong>. You may instead choose Forgot Password and set your own password using email verification.</li>
+<li>On your first sign-in, select your own password of at least 12 characters to protect your account.</li>
+<li>Open your Student Dashboard, choose the assigned course, and start learning.</li>
+</ol>
+<p><a class="btn" href="/student-dashboard.html">Open Student Dashboard</a>
+<a class="btn secondary" href="/account.html">Sign in</a>
+<a class="btn secondary" href="/account.html?mode=recover">Reset password</a></p>
+<small>This page does not contain a personalized activation token. Use the unique link sent in your email, and never share your password. If the invitation has expired, ask your instructor to resend it.</small>
+</article></main>
+<script type="module">
+import {db} from '/accounts/client.js';
+const status=document.getElementById('status');
+try{
+ const {data,error}=await db.auth.getSession();if(error)throw error;
+ if(!data.session)status.textContent='Open the invitation from your email, or sign in. If your link has expired, ask your instructor to resend it.';
+ else{
+  const {data:check,error:checkError}=await db.functions.invoke('lms-admin',{body:{action:'session'}});
+  if(checkError)throw checkError;
+  status.textContent=check.account?.must_change_password
+   ? 'Your account is recognized. Please change your temporary password or use Reset password before starting your course.'
+   : 'You are signed in. Open your Student Dashboard to begin.';
+ }
+}catch{
+ status.textContent='You can sign in or reset your password using the links below. Ask your instructor if you cannot open your class.';
+}
+</script></body></html>
