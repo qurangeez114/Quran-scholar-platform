@@ -206,6 +206,7 @@
           <div class="form-group">
             <label>Content / Video URL</label>
             <textarea id="lessonContent" placeholder="Enter lesson content or paste video URL..."></textarea>
+            <p id="quizHelp" style="display:none;color:#41594b;font-size:14px;">After saving a Quiz lesson, the Question Builder opens so you can create and explain its questions.</p>
           </div>
 
           <div style="display: flex; gap: 1rem;">
@@ -234,6 +235,9 @@
     let currentCourse = null;
     let lessons = [];
     let selectedLessonId = null;
+    const htmlEscape = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    function updateQuizHint() { document.getElementById('quizHelp').style.display = document.getElementById('lessonType').value === 'quiz' ? 'block' : 'none'; }
+    document.getElementById('lessonType').addEventListener('change',updateQuizHint);
 
     async function checkAuth() {
       await requireTeachingAccess();
@@ -269,6 +273,10 @@
 
         document.getElementById('courseBreadcrumb').textContent = currentCourse.title;
         await loadLessons();
+        if (type === 'quiz' && savedLesson?.id) {
+          window.location.href = '/admin/quiz-builder.html?lesson=' + encodeURIComponent(savedLesson.id);
+          return;
+        }
       } catch (error) {
         console.error('Error loading course:', error);
         showAlert('Failed to load course', 'error');
@@ -296,10 +304,11 @@
 
       container.innerHTML = lessons.map(lesson => `
         <div class="lesson-item ${selectedLessonId === lesson.id ? 'active' : ''}" onclick="selectLesson('${lesson.id}')">
-          <div class="lesson-item-title">${lesson.lesson_order}. ${lesson.title}</div>
+          <div class="lesson-item-title">${lesson.lesson_order}. ${htmlEscape(lesson.title)}</div>
           <div class="lesson-item-meta">Type: ${lesson.lesson_type}</div>
           <div class="lesson-item-actions">
             <a class="btn btn-small btn-primary" href="/lesson.html?lesson=${encodeURIComponent(lesson.id)}" onclick="event.stopPropagation()" style="text-decoration:none;display:inline-block;">Open lesson</a>
+            ${lesson.lesson_type === 'quiz' ? '<a class="btn btn-small btn-primary" href="/admin/quiz-builder.html?lesson='+encodeURIComponent(lesson.id)+'" onclick="event.stopPropagation()" style="text-decoration:none;display:inline-block;">Edit questions</a>' : ''}
             <button class="btn btn-small" onclick="editLesson('${lesson.id}', event)">Edit</button>
             <button class="btn btn-small btn-danger" onclick="deleteConfirm('${lesson.id}', event)">Delete</button>
           </div>
@@ -320,6 +329,7 @@
       document.getElementById('formTitle').textContent = '✏️ Edit Lesson';
       document.getElementById('lessonTitle').value = lesson.title;
       document.getElementById('lessonType').value = lesson.lesson_type;
+      updateQuizHint();
       document.getElementById('lessonContent').value = lesson.content || lesson.video_url || '';
       document.getElementById('lessonForm').dataset.editId = lessonId;
       document.getElementById('cancelBtn').style.display = 'block';
@@ -333,6 +343,7 @@
 
     document.getElementById('cancelBtn').addEventListener('click', () => {
       document.getElementById('lessonForm').reset();
+         updateQuizHint();
       document.getElementById('formTitle').textContent = '📝 Create New Lesson';
       document.getElementById('saveLessonBtn').textContent = 'Save Lesson';
       document.getElementById('lessonForm').dataset.editId = '';
@@ -353,8 +364,9 @@
       saveButton.textContent = 'Saving…';
 
       try {
+        let savedLesson;
         if (editId) {
-          await updateLesson(editId, {
+          savedLesson = await updateLesson(editId, {
             title,
             lesson_type: type,
             content: type !== 'video' ? content : null,
@@ -363,7 +375,7 @@
           showAlert('Lesson updated!', 'success');
         } else {
           const nextOrder = Math.max(0, ...lessons.map(l => Number(l.lesson_order) || 0)) + 1;
-          await createLesson(currentCourse.id, title, nextOrder, {
+          savedLesson = await createLesson(currentCourse.id, title, nextOrder, {
             lesson_type: type,
             content: type !== 'video' ? content : null,
             video_url: type === 'video' ? content : null
@@ -372,6 +384,7 @@
         }
 
         document.getElementById('lessonForm').reset();
+        updateQuizHint();
         document.getElementById('formTitle').textContent = '📝 Create New Lesson';
       document.getElementById('saveLessonBtn').textContent = 'Save Lesson';
         document.getElementById('lessonForm').dataset.editId = '';
