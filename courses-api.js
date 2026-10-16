@@ -440,7 +440,7 @@ export async function createDiscussionPost(threadId, content) {
   return data;
 }
 
-export async function submitQuiz(quizId, answers, score) {
+export async function submitQuiz(quizId, answers, score, passingScore = 90) {
   const user = (await supabase.auth.getUser()).data.user;
   if (!user) throw new Error('Not authenticated');
 
@@ -451,7 +451,7 @@ export async function submitQuiz(quizId, answers, score) {
       user_id: user.id,
       answers,
       score,
-      passed: score >= 70
+      passed: score >= passingScore
     })
     .select()
     .single();
