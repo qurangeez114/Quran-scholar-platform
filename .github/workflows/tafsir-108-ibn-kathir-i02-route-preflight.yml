@@ -35,7 +35,7 @@ jobs:
           if [x['route_id'] for x in rows]!=expected: raise SystemExit('Bounded route identity/order mismatch')
           byid={x['route_id']:x for x in rows}
           r01=byid['108-I02-R01']; r04=byid['108-I02-R04']; r06=byid['108-I02-R06']
-          if r01['topology_decision']!='corroborated_collection_records_but_one_lower_chain_family': raise SystemExit('R01 topology mismatch')
+          if r01['topology_decision']!='corroborated_collection_records_but_one_lower_chain_family_with_nasai_11702_directly_verified': raise SystemExit('R01 topology mismatch')
           if r01['convergence_point']!='al-Mukhtar ibn Fulful -> Anas ibn Malik': raise SystemExit('R01 convergence mismatch')
           if len(r01['externally_verified_records'])!=4: raise SystemExit('R01 record count mismatch')
           r01loc={(x['collection'],x['locator'],x['url']) for x in r01['externally_verified_records']}
@@ -45,14 +45,23 @@ jobs:
             ('Sunan Abi Dawud','4747; Book 42, Hadith 152','https://sunnah.com/abudawud:4747'),
             ('Musnad Ahmad','11996; al-Risala ed., 19:54','https://dorar.net/h/i0wpJGj1?osoul=1')}
           if r01loc!=required: raise SystemExit('R01 source-locator mismatch')
-          if not any('al-Nasa' in x for x in r01['unresolved']): raise SystemExit('Missing al-Nasai non-verification guard')
-          if r04['topology_decision']!='distinct_lower_chain_and_distinct_narrative_context' or r04['convergence_point']!='Anas ibn Malik only': raise SystemExit('R04 topology mismatch')
+          if r01['unresolved']!=[]: raise SystemExit('Stale R01 unresolved guard')
+          if r04['topology_decision']!='bukhari_exact_match_distinct_lower_chain_and_narrative_context_muslim_exact_locator_unresolved' or r04['convergence_point']!='Anas ibn Malik only': raise SystemExit('R04 topology mismatch')
           if len(r04['externally_verified_records'])!=1 or r04['externally_verified_records'][0]['locator']!='4964; Book 65, Hadith 486': raise SystemExit('R04 source mismatch')
           if 'not the doze/revelation report' not in r04['externally_verified_records'][0]['scope_match']: raise SystemExit('R04 scope guard missing')
-          if r06.get('identity_guard')!="Do not identify Sa'id without a source-level witness.": raise SystemExit('R06 identity guard missing')
+          if r06.get('identity_guard')!="Identity is analytical metadata from an explicit parallel Yazid ibn Zuray' chain; preserve the abbreviated سعيد in Ibn Kathir and al-Tabari transcriptions.": raise SystemExit('R06 identity guard missing')
+          if r06.get('resolved_identity')!="Sa'id ibn Abi 'Arubah": raise SystemExit('R06 analytical identity mismatch')
+          if r04.get('checked_muslim_candidate',{}).get('locator')!='Sahih Muslim 164a' or not r04.get('unresolved'): raise SystemExit('R04 exact Muslim locator guard missing')
+          for route in rows:
+              if route.get('publication_ready') is not False: raise SystemExit('Unsafe route publication state')
+              artifact=json.load(open(route['review_artifact'],encoding='utf-8'))
+              if artifact.get('route_id')!=route['route_id'] or artifact.get('database_written') is not False or artifact.get('publication_ready') is not False: raise SystemExit('Route artifact identity/state mismatch')
+              if route.get('authentication_state','not_assessed')!='not_assessed' or route.get('proposition_count_effect',0)!=0: raise SystemExit('Unsafe route conclusion')
+          variant=byid['108-I02-R05'].get('material_variant',{})
+          if (variant.get('live_staged'),variant.get('public_ibn_kathir_and_tabari'))!=('سليمان بن هلال','سليمان بن بلال'): raise SystemExit('R05 material variant missing')
           b=review['bounded_result']
-          expected_counts=(6,2,4,5,0,0,0)
-          got=(b['routes_in_ibn_kathir_group'],b['externally_checked_routes'],b['externally_unchecked_routes'],b['verified_external_records'],b['independent_propositions_added'],b['safe_claim_count_change'],b['database_writes'])
+          expected_counts=(6,6,0,4,1,0,0,73,0)
+          got=(b['routes_in_ibn_kathir_group'],b['routes_with_protected_source_level_reviews'],b['routes_without_source_level_review'],b['unresolved_exact_or_edition_locators'],b['material_textual_divergences_requiring_repair'],b['independent_propositions_added'],b['safe_claim_count_change'],b['staged_claim_count'],b['database_writes'])
           if got!=expected_counts: raise SystemExit('Bounded count mismatch '+repr(got))
           group=next(x for x in extraction['route_groups'] if x['claim_id']=='108-I02')
           initial={x['route_id']:x for x in group['routes']}
@@ -83,7 +92,7 @@ jobs:
           print('BOUND_ROUTE_SET','initial I02 routes R01-R06 only; follow-on R07-R11 excluded')
           print('R01','one lower-chain family across 4 checked collection records')
           print('R04','distinct lower chain; different narrative scope')
-          print('UNRESOLVED','R02 R03 R05 R06; al-Nasai direct chain; R04 Muslim locator')
+          print('UNRESOLVED','R02/R03 edition scans; R04 exact Muslim locator; R05 material name variant; R06 cited page scan')
           print('CLAIM_COUNT_CHANGE',0)
           print('IBN_KATHIR_108_I02_ROUTE_PREFLIGHT_PASS')
 
