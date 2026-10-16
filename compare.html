@@ -85,6 +85,39 @@
   .sum-note { font-size:11.5px; color:#8B6A30; font-style:italic; border-top:1px dashed #E2D6B8; padding-top:10px; margin-top:12px; }
   .loading { padding:40px; text-align:center; color:#8B7355; }
   @media print { .cols{flex-wrap:wrap} .col{flex:0 0 100%;max-width:100%} .topbar,.controls,.qira,.vtools{position:static} .vtools{display:none} }
+
+/* Additive source dossier; preserves story comparison columns and controls. */
+#story-source-dossier[hidden]{display:none!important}
+#story-source-dossier{margin:22px 14px 45px;padding:22px;max-width:1160px;background:#fff;border:1px solid #c8d9cb;border-radius:14px;color:#293e35}
+.story-source-heading{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;justify-content:space-between}
+.story-source-heading h2{font-size:24px;line-height:1.3;margin:6px 0}
+.story-source-heading button,.story-source-actions button,.story-source-more{padding:8px 14px;border:1px solid #9ebbae;border-radius:8px;background:#f0f7f3;color:#164d3b;cursor:pointer;font-weight:700;font-size:13px}
+.story-source-kicker{font-size:11px;letter-spacing:.08em;font-weight:800;text-transform:uppercase;color:#467b69}
+.story-source-intro{font-size:14px;line-height:1.75;max-width:930px}
+.story-source-columns{display:grid;grid-template-columns:minmax(0,1fr);gap:20px;margin:20px 0}
+.story-source-type{min-width:0;padding:16px;border:1px solid #e0e6dc;border-radius:10px;background:#fbfcfa}
+.story-source-type h3{font-size:19px;margin:0 0 6px}
+.story-source-type .story-source-count{font-size:13px;color:#53675c;margin:0 0 14px}
+.story-source-record{background:#fff;border:1px solid #dbe3da;border-left:4px solid #39765a;border-radius:7px;margin-bottom:12px;padding:12px;overflow-wrap:anywhere}
+.story-source-record-top{display:flex;gap:12px;justify-content:space-between;align-items:flex-start}
+.story-source-record-top strong{font-size:15px}
+.story-source-meta{font-size:12px;color:#647167;line-height:1.65;margin:5px 0}
+.story-source-grade{font-size:12px;color:#74551c;background:#fff7e6;padding:7px 9px;margin:8px 0}
+.story-source-full{margin-top:10px}
+.story-source-full summary{font-size:13px;color:#155e44;cursor:pointer;font-weight:700;padding:6px 0}
+.story-source-text{padding:12px;background:#fafbf9;border:1px solid #e5eee7;border-radius:7px;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.85;font-size:14px;margin:8px 0}
+.story-source-text.arabic-source{font-family:'Amiri',serif;font-size:19px;line-height:2;direction:rtl;text-align:right}
+.story-source-link{margin:9px 0 0;font-size:12px}
+.story-source-link a{color:#17604e}
+.story-source-empty{font-size:13px;line-height:1.7;color:#6c665c;padding:6px 0}
+.story-source-notes{border-top:1px solid #dde4dc;padding-top:18px}
+.story-source-notes h3{font-size:19px;margin:0 0 6px}
+.story-source-notes textarea{display:block;width:100%;min-height:138px;resize:vertical;border:1px solid #b4c7b9;border-radius:8px;padding:12px;font:15px/1.6 Georgia,serif;background:#fff}
+.story-source-actions{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-top:10px}
+.story-source-actions span{font-size:12px;color:#596f62}
+.vtool.story-source-btn{font:700 11px/1.2 system-ui,sans-serif;max-width:none;white-space:nowrap}
+@media(max-width:780px){.story-source-columns{grid-template-columns:1fr}#story-source-dossier{margin:16px 10px;padding:15px}}
+@media print{#story-source-dossier{max-width:none;break-before:page}.story-source-heading button,.story-source-more,.story-source-actions button{display:none}.story-source-type{break-inside:avoid}}
 </style>
 <style id="qhist-unified-css">
 #qhist-btn {
@@ -241,6 +274,49 @@
   <div class="summary" id="summary"></div>
   <div class="eval" id="eval" style="display:none"></div>
   <div class="cols" id="cols"><div class="loading">Loading…</div></div>
+  <section id="story-source-dossier" hidden aria-labelledby="story-source-title">
+    <div class="story-source-heading">
+      <div>
+        <div class="story-source-kicker">Source evidence · <span class="story-source-story">Story</span></div>
+        <h2 id="story-source-title">Hadith &amp; Tafsīr for <span id="story-source-reference">the selected verse</span></h2>
+        <p id="story-source-event" class="story-source-meta"></p>
+      </div>
+      <button type="button" id="story-source-close">← Return to verse</button>
+    </div>
+    <p class="story-source-intro">This adds the full existing verse-linked sources without changing the Qur'anic story comparison above.
+      <strong>Tafsīr represents attributed commentary; Hadith represents a separate transmitted source.</strong>
+      A database link is a candidate, not proof that a narration is relevant, reliable or historically true.
+      Displayed grades belong to the source catalogue and have not been independently reassessed here.
+      AI-generated Hadith connection entries are not treated as verified evidence.</p>
+    <p id="story-source-status" role="status" aria-live="polite" class="story-source-meta"></p>
+    <div class="story-source-columns">
+      <section class="story-source-type" aria-labelledby="story-source-tafsir-title">
+        <h3 id="story-source-tafsir-title">Classical Tafsīr</h3>
+        <p id="story-source-count-tafsir" class="story-source-count">Select a passage to explore commentary.</p>
+        <div id="story-source-list-tafsir"></div>
+        <button type="button" id="story-source-more-tafsir" class="story-source-more" hidden>Load more commentary</button>
+      </section>
+      <section class="story-source-type" aria-labelledby="story-source-hadith-title">
+        <h3 id="story-source-hadith-title">Related Hadith records</h3>
+        <p id="story-source-count-hadith" class="story-source-count">Select a passage to examine links.</p>
+        <div id="story-source-list-hadith"></div>
+        <button type="button" id="story-source-more-hadith" class="story-source-more" hidden>Load more narrations</button>
+      </section>
+    </div>
+    <section class="story-source-notes" aria-labelledby="story-source-notes-title">
+      <h3 id="story-source-notes-title">Research extraction notes</h3>
+      <p class="story-source-meta">Identify new claims from these sources, compare their wording with the Qur'an and record source disagreements. Notes are yours, not automatically validated conclusions.</p>
+      <textarea id="story-source-notes" aria-label="Research observations for this passage" placeholder="What additional detail does each named source claim?
+Does it appear explicitly in the Qur'anic passage?
+Where do sources agree or disagree?
+Which claims require independent verification?"></textarea>
+      <div class="story-source-actions">
+        <button id="story-source-save" type="button">Save notes locally</button>
+        <button id="story-source-export" type="button">Export research notes (JSON)</button>
+        <span id="story-source-note-status">Notes stay on this device until exported.</span>
+      </div>
+    </section>
+  </section>
   <div class="toast" id="toast"></div>
 
 <script>
@@ -397,6 +473,8 @@ async function load(){
   window.QNAV_PAGE_LABEL=prettyName(STORY);window.QNAV_PAGE_ICON='📚';
   if(window.qhistRecord)qhistRecord(prettyName(STORY),location.href,'📚',suraCount()+' tellings compared');
   buildLangMenu(); render();
+  window.QH_STORY_CONFIG={url:SB_URL,key:SB_KEY,story:STORY,rows:ROWS};
+  if(window.QHStorySources)window.QHStorySources.init(window.QH_STORY_CONFIG);
 }
 function prettyName(s){ return s.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase()); }
 function suraCount(){ return new Set(ROWS.map(r=>r.sura)).size; }
@@ -470,7 +548,7 @@ function renderCols(){
       const ar=v[qira]||v.arabic||'';
       const tblock=[...langs].map(function(l){ var tt=(v.translations||{})[l]; return tt===undefined?'':'<div class="trans'+(ETH.has(l)?' eth':'')+(v.diff_category==='unique_here'?' unique':'')+'">'+(tt||'<em style="color:#B99">—</em>')+'</div>'; }).join('');
       const isSaved=saved.has(key), isHl=hl.has(key);
-      h+='<div class="verse-card'+(isHl?' hl':'')+'" style="border-left-color:'+color+'">'+
+      h+='<div class="verse-card'+(isHl?' hl':'')+'" id="story-ref-'+key.replace(':','-')+'" style="border-left-color:'+color+'">'+
            '<span class="vk">'+key+'</span>'+
            (v.diff_category?'<span class="diff-tag" style="background:'+color+'">'+v.diff_category.replace(/_/g,' ')+'</span>':'')+
            '<div class="arabic">'+ar+'</div>'+
@@ -479,6 +557,7 @@ function renderCols(){
            (v.speaker?'<div class="speaker">— '+v.speaker+(v.person?' · '+v.person:'')+(v.narrator?' · narrator: '+v.narrator:'')+'</div>':'')+
            (v.analysis_note?'<span class="note-toggle" onclick="this.nextElementSibling.classList.toggle(\'show\')">ⓘ why</span><div class="note">'+v.analysis_note+'</div>':'')+
            '<div class="vtools">'+
+             '<button class="vtool story-source-btn" type="button" onclick="QHStorySources.open('+su+','+v.aya+')">📚 Tafsīr &amp; Hadith</button>'+
              '<a class="vtool" title="Read in context" href="/index.html?sura='+su+'&aya='+v.aya+'" target="_blank" rel="noopener">🔗</a>'+
              '<div class="vtool" title="Copy" onclick="copyVerse(\''+key+'\')">📋</div>'+
              '<div class="vtool" title="Share" onclick="shareVerse(\''+key+'\')">↗</div>'+
@@ -901,6 +980,7 @@ window.QNAV_PAGE_ICON = '📚';
 <script>
 
 </script>
+<script src="story-source-dossier.js" defer></script>
 <script src="social-card.js" defer></script>
 <script src="social-card-autowire.js" defer></script>
 <script src="/quran-verse-audio.js" defer></script>
