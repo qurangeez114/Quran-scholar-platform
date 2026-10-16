@@ -18,10 +18,7 @@ const HADITH_TRUSTED_METHODS = new Set([
   'regex_extraction_v2',   // text reference, validated
   'explicit_citation_v1',  // explicit citation
   'manual',                // checked by a person
-  'corpus_promoted',       // promoted after review
   'corpus_verified',       // verified in the corpus
-  'web_verified',          // verified against a web source
-  'corpus-link'            // corpus link
 ]);
 
 // Evidence packets reviewed by hand, e.g. tafsir_evidence_packet_4_34.
