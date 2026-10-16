@@ -15,6 +15,20 @@ export default async (_request: Request, context: any) => {
       : html + tag;
   };
 
+  // Netlify's approximate edge geography enables location reporting without
+  // shipping visitors' IP addresses to an external geolocation service.
+  // Encode as JSON and escape '<' to prevent script-injection from metadata.
+  const visitorGeo = {
+    country: context.geo?.country?.name || null,
+    region: context.geo?.subdivision?.name || null,
+    city: context.geo?.city || null
+  };
+  const geoJson = JSON.stringify(visitorGeo).replace(/</g, '\\u003c');
+  const geoTag = `<script>window.QHikmaVisitorGeo=${geoJson};</script>`;
+  html = html.includes('</body>')
+    ? html.replace('</body>', `${geoTag}\n</body>`)
+    : html + geoTag;
+
   injectScript('/donate-global.js');
   injectScript('/mobile-floating-layout.js');
   injectScript('/tafsir-accuracy-static.js');

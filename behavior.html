@@ -1,121 +1,182 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Behavior study — Quran Hikma</title>
-  <style>
-    body { margin: 0; font-family: Georgia, serif; background: #14110e; color: #f3ead8; }
-    main { max-width: 1100px; margin: 0 auto; padding: 28px 16px 72px; }
-    a { color: #e2c98a; }
-    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
-    .card { background: #1d1914; border: 1px solid #3d3428; border-radius: 12px; padding: 14px; }
-    .card b { display: block; font-size: 1.4rem; }
-    table { width: 100%; border-collapse: collapse; font-size: .9rem; margin-top: 18px; }
-    th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid #3d3428; }
-    th { color: #e2c98a; }
-    input, button { padding: 8px 10px; border-radius: 8px; border: 1px solid #5a4d3b; background: #100e0c; color: #f3ead8; }
-    button { background: #c4a46a; color: #1a140c; border: 0; font-weight: 700; cursor: pointer; }
-    .note { color: #cbbfa8; }
-  </style>
-  <script src="site-motion.js" defer></script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Website visitors | QuranHikma Admin</title>
+<style>
+:root{--ink:#183b34;--green:#1f624e;--sub:#63776f;--line:#dce9e0;--paper:#f4f7f4;--white:#fff}
+*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.55 system-ui,-apple-system,Segoe UI,sans-serif}
+header{background:#14392f;color:#fff;padding:22px 5vw}header a{color:#dcf4e2;text-decoration:none}header strong{font-size:20px}
+main{width:min(1200px,94%);margin:26px auto 60px}
+h1{font-size:clamp(26px,4vw,36px);margin:10px 0 2px;line-height:1.2}h2{font-size:19px;margin:0 0 13px}
+.subtitle{color:var(--sub);margin:0 0 20px}.controls{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin:18px 0}
+select,button{font:inherit;border-radius:9px;padding:10px 13px}
+select{background:white;border:1px solid #abcab6;color:var(--ink)}
+button{cursor:pointer;border:0;background:var(--green);color:white;font-weight:650}
+button:disabled{opacity:.5;cursor:wait}
+#status{min-height:24px;margin:12px 0;color:var(--green)}
+#content[hidden]{display:none}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:22px}
+.card,.panel{background:var(--white);border:1px solid var(--line);border-radius:14px;box-shadow:0 2px 10px #0c3e2d0a}
+.card{padding:18px}.card span{font-size:13px;color:#61746b}.card strong{display:block;font-size:31px;margin:8px 0 0}
+.panels{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.panel{padding:22px;min-width:0}.wide{grid-column:1/-1}
+table{width:100%;border-collapse:collapse;text-align:left}
+th,td{padding:11px 9px;border-bottom:1px solid #edf0ed;vertical-align:top;overflow-wrap:anywhere}
+th{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:#5b6e64}
+.empty{color:#697e70;padding:16px 0}
+.bar{background:#e3efe8;border-radius:999px;height:9px;overflow:hidden;min-width:60px}
+.bar>span{height:100%;background:#31896b;display:block;border-radius:999px}
+.scroll{overflow-x:auto}.scroll table{min-width:700px}
+small,.fine{color:#63766d;font-size:13px}
+footer{padding:24px 0;color:#63766d;font-size:13px}
+@media(max-width:760px){.panels{grid-template-columns:1fr}.panel{padding:17px}.wide{grid-column:auto}}
+</style>
 </head>
 <body>
-  <main>
-    <p><a href="/">Quran</a> · <a href="/login.html">Sign in</a></p>
-    <h1>User behavior for monetization</h1>
-    <p class="note">Sessions, time on site, country, signup-wall hits, and donate or advertise clicks. Paste the service-role key only in this private report. It stays in this tab and is not saved in the site code.</p>
-    <p>
-      <input id="key" type="password" placeholder="service role key" style="width:min(420px,100%)">
-      <button id="load" type="button">Load study</button>
-    </p>
-    <p id="status">Waiting for the key.</p>
-    <div class="cards" id="cards"></div>
-    <h2>Where people are</h2>
-    <table><thead><tr><th>Place</th><th>Sessions</th><th>Avg minutes</th></tr></thead><tbody id="places"></tbody></table>
-    <h2>What they open</h2>
-    <table><thead><tr><th>Page</th><th>Views</th></tr></thead><tbody id="pages"></tbody></table>
-    <h2>Monetization signals</h2>
-    <table><thead><tr><th>Signal</th><th>Count</th></tr></thead><tbody id="signals"></tbody></table>
-    <h2>Latest sessions</h2>
-    <table><thead><tr><th>Seen</th><th>Email</th><th>Place</th><th>Minutes</th><th>Pages</th><th>Device</th></tr></thead><tbody id="latest"></tbody></table>
-  </main>
-  <script>
-    const SB = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
-    const status = document.getElementById('status');
-    function card(label, value) {
-      const el = document.createElement('div');
-      el.className = 'card';
-      el.innerHTML = '<span>' + label + '</span><b></b>';
-      el.querySelector('b').textContent = value;
-      return el;
-    }
-    function rows(id, items, cells) {
-      const body = document.getElementById(id);
-      body.innerHTML = '';
-      items.forEach(function (item) {
-        const tr = document.createElement('tr');
-        cells(item).forEach(function (v) {
-          const td = document.createElement('td');
-          td.textContent = v;
-          tr.appendChild(td);
-        });
-        body.appendChild(tr);
-      });
-    }
-    async function get(key, path) {
-      const r = await fetch(SB + path, { headers: { apikey: key, Authorization: 'Bearer ' + key } });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data.message || data.error || r.status);
-      return data;
-    }
-    document.getElementById('load').onclick = async () => {
-      const key = document.getElementById('key').value.trim();
-      if (!key) return;
-      status.textContent = 'Loading…';
-      try {
-        const sessions = await get(key, '/rest/v1/behavior_sessions?select=*&order=last_seen_at.desc&limit=500');
-        const events = await get(key, '/rest/v1/behavior_events?select=event_type,path,label,country&order=created_at.desc&limit=2000');
-        const minutes = sessions.reduce(function (s, r) { return s + (r.duration_seconds || 0); }, 0) / 60;
-        const signed = sessions.filter(function (r) { return r.signed_in; }).length;
-        const cards = document.getElementById('cards');
-        cards.innerHTML = '';
-        cards.appendChild(card('Sessions', sessions.length));
-        cards.appendChild(card('Avg minutes', sessions.length ? (minutes / sessions.length).toFixed(1) : '0'));
-        cards.appendChild(card('Signed in', signed));
-        cards.appendChild(card('Signup walls', events.filter(function (e) { return e.event_type === 'signup_wall'; }).length));
-        const places = {};
-        sessions.forEach(function (r) {
-          const k = [r.city, r.country].filter(Boolean).join(', ') || 'Unknown';
-          places[k] = places[k] || { n: 0, secs: 0 };
-          places[k].n += 1;
-          places[k].secs += r.duration_seconds || 0;
-        });
-        rows('places', Object.keys(places).sort(function (a, b) { return places[b].n - places[a].n; }).slice(0, 20), function (k) {
-          return [k, places[k].n, (places[k].secs / places[k].n / 60).toFixed(1)];
-        });
-        const pages = {};
-        events.filter(function (e) { return e.event_type === 'page_view'; }).forEach(function (e) {
-          pages[e.path || '/'] = (pages[e.path || '/'] || 0) + 1;
-        });
-        rows('pages', Object.keys(pages).sort(function (a, b) { return pages[b] - pages[a]; }).slice(0, 20), function (k) {
-          return [k, pages[k]];
-        });
-        const signals = {};
-        events.filter(function (e) { return e.event_type === 'monetization_click' || e.event_type === 'signup_wall'; }).forEach(function (e) {
-          const k = e.event_type + (e.label ? ': ' + e.label : '');
-          signals[k] = (signals[k] || 0) + 1;
-        });
-        rows('signals', Object.keys(signals), function (k) { return [k, signals[k]]; });
-        rows('latest', sessions.slice(0, 40), function (r) {
-          return [r.last_seen_at, r.email || 'guest', [r.city, r.country].filter(Boolean).join(', '), ((r.duration_seconds || 0) / 60).toFixed(1), r.page_views || 0, r.device || ''];
-        });
-        status.textContent = 'Loaded ' + sessions.length + ' sessions and ' + events.length + ' events.';
-      } catch (err) {
-        status.textContent = err.message + ' — run sql/behavior_analytics.sql first.';
-      }
-    };
-  </script>
-<script src="/quran-verse-audio.js" defer></script>
+<header><strong>QuranHikma</strong> · <a href="/admin/lms.html">Admin Page</a> · <a href="/">Website</a></header>
+<main>
+<p class="fine">OWNER-ONLY ANALYTICS</p>
+<h1>Website visitors</h1>
+<p class="subtitle">Find out where visits come from, which pages people read, and which visitors are registered users.</p>
+<p id="status" role="status" aria-live="polite">Checking administrator access…</p>
+<section id="content" hidden>
+  <div class="controls">
+    <label for="period">Report period</label>
+    <select id="period">
+      <option value="1">Last 24 hours</option>
+      <option value="7" selected>Last 7 days</option>
+      <option value="30">Last 30 days</option>
+      <option value="all">All recorded visits</option>
+    </select>
+    <button id="refresh" type="button">Refresh report</button>
+    <span class="fine" id="updated"></span>
+  </div>
+  <div class="cards" id="cards"></div>
+  <div class="panels">
+    <section class="panel"><h2>Visitors by country</h2><div id="countries"></div></section>
+    <section class="panel"><h2>Visitors by city</h2><div id="cities"></div></section>
+    <section class="panel"><h2>Most visited pages</h2><div id="pages"></div></section>
+    <section class="panel"><h2>Traffic sources</h2><div id="sources"></div></section>
+    <section class="panel wide"><h2>Latest visitor sessions</h2>
+      <div class="scroll"><table><thead><tr>
+      <th>Last seen</th><th>Who</th><th>Approximate location</th><th>Device</th><th>Page views</th><th>Time on site</th><th>First page</th>
+      </tr></thead><tbody id="recent"></tbody></table></div>
+    </section>
+  </div>
+  <footer>Visits are browser sessions, not necessarily distinct people. Names and emails are shown only for authenticated registered users; guests remain anonymous. Location is approximate and may be unavailable or inaccurate (including VPNs). No raw IP addresses are stored in this report. Figures cover recorded activity only, up to 5,000 recent rows per data type; earlier unrecorded visits cannot be reconstructed.</footer>
+</section>
+</main>
+<script type="module">
+import {db} from '/accounts/client.js';
+const $=id=>document.getElementById(id);
+let permitted=false;
+const status=message=>$('status').textContent=message;
+const date=value=>{try{return new Date(value).toLocaleString()}catch{return '-'}};
+const plural=(num,word)=>num+' '+word+(num===1?'':'s');
+const empty=where=>{where.replaceChildren();where.append(Object.assign(document.createElement('p'),{textContent:'No recorded data for this period.',className:'empty'}));};
+function makeCard(label,value){
+ const div=document.createElement('div');div.className='card';
+ const caption=document.createElement('span');caption.textContent=label;
+ const number=document.createElement('strong');number.textContent=value.toLocaleString?.()??String(value);
+ div.append(caption,number);return div;
+}
+function groupedRows(target,rows,limit=15) {
+ const box=$(target);box.replaceChildren();
+ if(!rows.length){empty(box);return;}
+ const tbl=document.createElement('table'),tbody=document.createElement('tbody');
+ const max=rows[0][1]||1;
+ for(const [label,count] of rows.slice(0,limit)){
+  const tr=document.createElement('tr'),name=document.createElement('td'),cell=document.createElement('td');
+  name.textContent=label;cell.style.width='38%';
+  const num=document.createElement('div');num.textContent=count.toLocaleString();num.style.textAlign='right';
+  const bar=document.createElement('div');bar.className='bar';const fill=document.createElement('span');
+  fill.style.width=Math.round(100*count/max)+'%';bar.append(fill);cell.append(num,bar);
+  tr.append(name,cell);tbody.append(tr);
+ }
+ tbl.append(tbody);box.append(tbl);
+}
+function ranking(values){
+ return [...values.entries()].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]));
+}
+function add(map,key,value=1){map.set(key,(map.get(key)||0)+value);}
+async function readAll(table,fields,timeCol,since,limit=5000){
+ const output=[],page=1000;
+ for(let i=0;i<limit;i+=page){
+  let q=db.from(table).select(fields).order(timeCol,{ascending:false}).range(i,i+page-1);
+  if(since)q=q.gte(timeCol,since);
+  const {data,error}=await q;
+  if(error)throw error;
+  output.push(...(data||[]));
+  if(!data||data.length<page)break;
+ }
+ return output;
+}
+async function refresh(){
+ if(!permitted)return;
+ $('refresh').disabled=true;status('Loading recent visitor records…');
+ try{
+  const days=$('period').value;
+  const since=days==='all'?null:new Date(Date.now()-Number(days)*86400000).toISOString();
+  const [sessions,events]=await Promise.all([
+   readAll('behavior_sessions','session_key,user_id,email,username,signed_in,last_seen_at,duration_seconds,page_views,country,region,city,device,referrer,landing_path','last_seen_at',since),
+   readAll('behavior_events','session_key,event_type,path,label,created_at','created_at',since)
+  ]);
+  const signed=sessions.filter(s=>s.signed_in).length;
+  const totalPageViews=events.filter(e=>e.event_type==='page_view').length;
+  const countries=new Map(),cities=new Map(),sources=new Map(),pages=new Map();
+  for(const s of sessions){
+   add(countries,s.country||'Unknown');
+   add(cities,[s.city,s.region,s.country].filter(Boolean).join(', ')||'Unknown');
+   let source='Direct / unknown';
+   try{if(s.referrer){const u=new URL(s.referrer);source=u.hostname.replace(/^www\./,'')===location.hostname?'Internal navigation':u.hostname.replace(/^www\./,'');}}catch{}
+   add(sources,source);
+  }
+  for(const e of events)if(e.event_type==='page_view')add(pages,e.path||'/');
+  const cards=$('cards');cards.replaceChildren(
+   makeCard('Recorded sessions',sessions.length),
+   makeCard('Page views',totalPageViews),
+   makeCard('Signed-in sessions',signed),
+   makeCard('Countries',countries.size - (countries.has('Unknown')?1:0)),
+   makeCard('Average minutes / session',sessions.length?(sessions.reduce((a,s)=>a+(s.duration_seconds||0),0)/sessions.length/60).toFixed(1):'0')
+  );
+  groupedRows('countries',ranking(countries));
+  groupedRows('cities',ranking(cities));
+  groupedRows('sources',ranking(sources));
+  groupedRows('pages',ranking(pages));
+  const recent=$('recent');recent.replaceChildren();
+  for(const s of sessions.slice(0,100)){
+   const tr=document.createElement('tr');
+   const who=s.signed_in?(s.username||s.email||'Signed-in user')+(s.email&&s.username?' · '+s.email:''):'Anonymous visit · '+s.session_key.slice(0,8);
+   const values=[date(s.last_seen_at),who,[s.city,s.region,s.country].filter(Boolean).join(', ')||'Unknown',s.device||'Unknown',String(s.page_views||0),((s.duration_seconds||0)/60).toFixed(1)+' min',s.landing_path||'/'];
+   for(const value of values){const td=document.createElement('td');td.textContent=value;tr.append(td)}
+   recent.append(tr);
+  }
+  if(!sessions.length){const tr=document.createElement('tr'),td=document.createElement('td');td.colSpan=7;td.textContent='No sessions collected in this period.';tr.append(td);recent.append(tr);}
+  $('updated').textContent='Updated '+new Date().toLocaleTimeString();
+  status(sessions.length?'Showing recorded visitor activity.':'No recorded visits yet. Once the new collector is deployed, load the website in another tab and refresh this page.');
+ }catch(err){status('Could not load report: '+(err.message||err));}
+ finally{$('refresh').disabled=false;}
+}
+try{
+ const {data:session,error:sessionError}=await db.auth.getSession();
+ if(sessionError||!session.session){
+  status('Sign in with your owner account to view website visitors.');
+  const a=document.createElement('a');a.href='/account.html';a.textContent='Sign in';$('status').append(' ',a);
+ }else{
+  const {data:staff,error:roleError}=await db.rpc('qh_is_staff');
+  if(roleError)throw roleError;
+  if(staff!==true)status('Only the QuranHikma owner can view the visitor report.');
+  else {
+   permitted=true;$('content').hidden=false;
+   $('refresh').addEventListener('click',refresh);
+   $('period').addEventListener('change',refresh);
+   await refresh();
+   setInterval(()=>{if(document.visibilityState==='visible')refresh();},60000);
+  }
+ }
+}catch(err){status('Unable to verify administrator access: '+(err.message||err));}
+</script>
 </body>
 </html>
