@@ -469,17 +469,16 @@
           .eq('created_by', currentUser.id);
 
         if (courseError) throw courseError;
-        if (!courses.length) return;
+        if (!courses.length) { document.getElementById('quizzesList').textContent = 'No courses available for this instructor.'; return; }
 
         const { data: quizData, error: quizError } = await supabase
           .from('qh_quiz_answers')
           .select(`
             *,
-            qh_quizzes(
-              title,
+            qh_quizzes!inner(
               questions,
               passing_score,
-              qh_lessons(
+              qh_lessons!inner(
                 title,
                 course_id
               )
@@ -490,7 +489,8 @@
 
         if (quizError) throw quizError;
 
-        quizzes = quizData;
+        const courseId = new URLSearchParams(location.search).get('course');
+        quizzes = (quizData || []).filter(q => !courseId || q.qh_quizzes?.qh_lessons?.course_id === courseId);
         renderQuizzes();
       } catch (error) {
         console.error('Error loading quizzes:', error);
@@ -509,31 +509,31 @@
       container.innerHTML = quizzes.map(q => {
         const quiz = q.qh_quizzes;
         const passed = q.passed;
-        const percentage = Math.round((q.score / (quiz.questions?.length || 1)) * 100);
+        const percentage = q.score;
 
         return `
           <div class="submission-item">
-            <div class="submission-title">${quiz.title}</div>
+            <div class="submission-title">${escapeText(quiz.qh_lessons?.title || "Quiz")}</div>
             <div class="submission-meta">
               Student: ${q.qh_profiles?.first_name || 'Unknown'} ${q.qh_profiles?.last_name || ''} |
               Submitted: ${new Date(q.submitted_at).toLocaleDateString()}
             </div>
             <div style="margin-top: 0.5rem;">
               <span class="submission-status ${passed ? 'status-passed' : 'status-failed'}">
-                ${passed ? '✓ Passed' : '✗ Failed'} - ${q.score}/${quiz.questions?.length || 0} (${percentage}%)
+                ${passed ? '✓ Passed' : '✗ Failed'} - ${percentage}%
               </span>
             </div>
             <div style="margin-top: 0.75rem; padding: 1rem; background: white; border-radius: 6px;">
-              ${quiz.questions?.map((q, idx) => {
+              ${quiz.questions?.map((question, idx) => {
                 const studentAns = q.answers?.[idx];
-                const correct = studentAns === q.correct_answer;
+                const correct = studentAns === question.correct_answer;
                 return `
                   <div class="quiz-question-review">
-                    <div class="quiz-q">${idx + 1}. ${q.question}</div>
+                    <div class="quiz-q">${idx + 1}. ${escapeText(question.question)}</div>
                     <div class="quiz-student-ans ${correct ? 'correct' : 'wrong'}">
-                      Student: ${studentAns || 'No answer'} ${correct ? '✓' : '✗'}
+                      Student: ${escapeText(studentAns ?? 'No answer')} ${correct ? '✓' : '✗'}
                     </div>
-                    <div class="quiz-correct-ans">Correct: ${q.correct_answer}</div>
+                    <div class="quiz-correct-ans">Correct: ${escapeText(question.correct_answer)}</div>
                   </div>
                 `;
               }).join('')}
@@ -543,12 +543,13 @@
       }).join('');
     }
 
+    function escapeText(value) { const el = document.createElement("span"); el.textContent = String(value ?? ""); return el.innerHTML; }
     window.switchTab = function(tab) {
       document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
 
       document.getElementById(tab + 'Tab').classList.add('active');
-      event.target.classList.add('active');
+      document.querySelectorAll('.tab-btn')[tab === 'quizzes' ? 1 : 0].classList.add('active');
 
       if (tab === 'quizzes') {
         loadQuizzes();
@@ -567,7 +568,10 @@
 
     // Initialize
     await checkAuth();
-    await loadAssignments();
+    if (currentUser) {
+      if (new URLSearchParams(location.search).get('tab') === 'quizzes') window.switchTab('quizzes');
+      else await loadAssignments();
+    }
   </script>
 </body>
 </html>
