@@ -1,4 +1,6 @@
 import {db,message,exportResearch} from './client.js';
+// Account deletion stays off until recovery (migration 002) is installed and reviewed.
+const ACCOUNT_DELETION_ENABLED=false;
 let mode='login',recovering=location.hash.includes('type=recovery');
 const $=id=>document.getElementById(id);
 function choose(next){mode=next;$('password').minLength=next==='signup'?12:1;$('auth-help').textContent={login:'Log in with your email and password.',signup:'Use at least 12 characters. Check your email to confirm your account.',recover:'We will email you a link to reset your password.'}[next];document.querySelectorAll('[data-mode]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.mode===next)));$('password-label').hidden=next==='recover';$('password').required=next!=='recover';$('password').autocomplete=next==='signup'?'new-password':'current-password';$('firstName-label').hidden=next!=='signup';$('lastName-label').hidden=next!=='signup';$('firstName').required=false;$('lastName').required=false;$('password-confirm-label').hidden=next!=='signup';$('password-confirm').required=next==='signup';$('submit').textContent={login:'Log in',signup:'Create account',recover:'Send recovery email'}[next];}
@@ -27,8 +29,8 @@ async function render(){
    :'The 72-hour self-recovery period has ended. Contact the site administrator and provide the email address for this account. Only an authorized administrator can restore it.';
   return;
  }
- await ensureProfile(session.user);$('signed-in').hidden=false;$('delete-account').disabled=false;
- $('deletion-availability').textContent='72-hour recovery is available.';
+ await ensureProfile(session.user);$('signed-in').hidden=false;$('delete-account').disabled=!ACCOUNT_DELETION_ENABLED;
+ $('deletion-availability').textContent=ACCOUNT_DELETION_ENABLED?'72-hour recovery is available.':'Account deletion is not available yet.';
  const [{data:staff},{data:archiveAdmin}]=await Promise.all([db.rpc('qh_is_staff'),db.rpc('qh_can_manage_account_archive')]);
  $('staff-dashboard').hidden=staff!==true;$('account-archive-link').hidden=archiveAdmin!==true;
 }
@@ -47,9 +49,10 @@ $('logout').onclick=async()=>{const {error}=await db.auth.signOut();if(error)ret
 $('export').onclick=()=>exportResearch().catch(e=>message(e.message));
 document.querySelectorAll('.pw-toggle').forEach(b=>b.onclick=()=>{const input=$(b.dataset.target);const show=input.type==='password';input.type=show?'text':'password';b.setAttribute('aria-pressed',String(show));b.setAttribute('aria-label',show?'Hide password':'Show password');});
 choose(new URLSearchParams(location.search).get('mode')==='signup'?'signup':'login');
-$('delete-account').onclick=()=>{$('delete-error').textContent='';$('delete-dialog').showModal();};
+$('delete-account').onclick=()=>{if(!ACCOUNT_DELETION_ENABLED)return;$('delete-error').textContent='';$('delete-dialog').showModal();};
 $('cancel-delete').onclick=()=>$('delete-dialog').close();
 $('confirm-delete').onclick=async()=>{
+ if(!ACCOUNT_DELETION_ENABLED){$('delete-error').textContent='Account deletion is not available yet.';return;}
  $('confirm-delete').disabled=true;
  try{
   const {error}=await db.rpc('qh_request_account_deletion');if(error)throw error;
