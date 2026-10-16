@@ -209,7 +209,7 @@
           </div>
 
           <div style="display: flex; gap: 1rem;">
-            <button type="submit" class="btn btn-primary" style="flex: 1;">Save Lesson</button>
+            <button id="saveLessonBtn" type="submit" class="btn btn-primary" style="flex: 1;">Save Lesson</button>
             <button type="button" class="btn" style="flex: 1; background: #ddd; color: #333;" id="cancelBtn">Cancel</button>
           </div>
         </form>
@@ -321,6 +321,9 @@
       document.getElementById('lessonContent').value = lesson.content || lesson.video_url || '';
       document.getElementById('lessonForm').dataset.editId = lessonId;
       document.getElementById('cancelBtn').style.display = 'block';
+      document.getElementById('saveLessonBtn').textContent = 'Save Changes';
+      document.getElementById('lessonForm').scrollIntoView({behavior:'smooth',block:'start'});
+      document.getElementById('lessonTitle').focus({preventScroll:true});
 
       selectedLessonId = lessonId;
       renderLessons();
@@ -329,6 +332,7 @@
     document.getElementById('cancelBtn').addEventListener('click', () => {
       document.getElementById('lessonForm').reset();
       document.getElementById('formTitle').textContent = '📝 Create New Lesson';
+      document.getElementById('saveLessonBtn').textContent = 'Save Lesson';
       document.getElementById('lessonForm').dataset.editId = '';
       selectedLessonId = null;
       renderLessons();
@@ -341,31 +345,43 @@
       const type = document.getElementById('lessonType').value;
       const content = document.getElementById('lessonContent').value;
       const editId = document.getElementById('lessonForm').dataset.editId;
+      const saveButton = document.getElementById('saveLessonBtn');
+      if (saveButton.disabled) return;
+      saveButton.disabled = true;
+      saveButton.textContent = 'Saving…';
 
       try {
         if (editId) {
           await updateLesson(editId, {
             title,
             lesson_type: type,
-            content: type === 'text' ? content : null,
+            content: type !== 'video' ? content : null,
             video_url: type === 'video' ? content : null
           });
           showAlert('Lesson updated!', 'success');
         } else {
-          const nextOrder = lessons.length + 1;
-          await createLesson(currentCourse.id, title, nextOrder);
+          const nextOrder = Math.max(0, ...lessons.map(l => Number(l.lesson_order) || 0)) + 1;
+          await createLesson(currentCourse.id, title, nextOrder, {
+            lesson_type: type,
+            content: type !== 'video' ? content : null,
+            video_url: type === 'video' ? content : null
+          });
           showAlert('Lesson created!', 'success');
         }
 
         document.getElementById('lessonForm').reset();
         document.getElementById('formTitle').textContent = '📝 Create New Lesson';
+      document.getElementById('saveLessonBtn').textContent = 'Save Lesson';
         document.getElementById('lessonForm').dataset.editId = '';
         selectedLessonId = null;
 
         await loadLessons();
       } catch (error) {
         console.error('Error saving lesson:', error);
-        showAlert('Failed to save lesson', 'error');
+        showAlert('Failed to save lesson: ' + (error.message || 'Please try again.'), 'error');
+      } finally {
+        saveButton.disabled = false;
+        saveButton.textContent = document.getElementById('lessonForm').dataset.editId ? 'Save Changes' : 'Save Lesson';
       }
     });
 
