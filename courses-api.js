@@ -614,16 +614,20 @@ export async function updateStudentProgress(courseId, lessonId, completed = fals
 
   const { data, error } = await supabase
     .from('qh_student_progress')
-    .upsert(progressData)
+    .upsert(progressData, { onConflict: 'user_id,lesson_id' })
     .select()
     .single();
 
   if (error) throw error;
 
   // Update enrollment progress percentage
-  await updateEnrollmentProgressFromLessons(courseId);
-
-  return data;
+  try {
+    await updateEnrollmentProgressFromLessons(courseId);
+    return data;
+  } catch (error) {
+    // The lesson record is already saved; distinguish a dashboard-sync failure.
+    return { ...data, enrollmentWarning: error.message || 'Dashboard sync unavailable' };
+  }
 }
 
 export async function getStudentProgress(courseId) {
@@ -666,7 +670,8 @@ export async function updateEnrollmentProgressFromLessons(courseId) {
 
   if (progressError) throw progressError;
 
-  const completedCount = progress.length;
+  const lessonIds = new Set(lessons.map(l => l.id));
+  const completedCount = new Set(progress.filter(p => lessonIds.has(p.lesson_id)).map(p => p.lesson_id)).size;
   const progressPct = Math.round((completedCount / lessons.length) * 100);
 
   // Update enrollment
@@ -674,8 +679,7 @@ export async function updateEnrollmentProgressFromLessons(courseId) {
     .from('qh_enrollments')
     .update({
       progress_pct: progressPct,
-      completed_lessons: completedCount,
-      updated_at: new Date().toISOString()
+      completed_lessons: completedCount
     })
     .eq('course_id', courseId)
     .eq('user_id', user.id);
