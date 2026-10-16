@@ -1,10 +1,10 @@
 {
   "schema_version": "quranhikma-tafsir-import-readiness-v1",
-  "generated_at": "2026-10-12T23:54:34-07:00",
+  "generated_at": "2026-10-16T00:03:00-07:00",
   "surah": 108,
   "status": "design_only_database_write_disabled",
   "authoritative_manifest": "data/tafsir/staging/surah-108-chapter-manifest-2026-10-12.json",
-  "authoritative_claim_total": 52,
+  "authoritative_claim_total": 73,
   "precedent_workflows": [
     ".github/workflows/tafsir-109-pilot-import.yml",
     ".github/workflows/tafsir-109-w08-import.yml"
@@ -17,7 +17,10 @@
       "Normalize and verify a claim-specific Arabic or English evidence anchor against the mapped source row.",
       "Search propositions on the mapped tafsir_entry_id using normalized statement_en.",
       "Refuse mutation on multiple matches; treat a single match as complete only after its voice and evidence links pass readback.",
-      "Require the authoritative 52-claim set and per-scholar counts 11/14/9/5/6/7 before enabling writes."
+      "Require exact authoritative 73-claim ID set and per-scholar counts 18/14/23/5/6/7, matched against all six current evidence/voice plans; refuse stale source blob hashes.",
+      "Require all relevant current validators to pass at pinned input revisions; historical passes do not override a newer failed run.",
+      "Treat source-language proposition fidelity, translation coverage, route topology, and authentication as separate states; never promote one from another.",
+      "Use a complete chapter-wide dry-run artifact with deterministic proposition/voice/evidence/link payloads before considering a separately authorized publishing workflow."
     ],
     "mutation_order": [
       "propositions",
@@ -62,19 +65,22 @@
     "postflight": [
       "Read back the proposition, exactly one intended voice row, and exactly one intended evidence link.",
       "Verify tafsir_entry_id, reporting_work_id, statement, disputed-attribution language where applicable, and stored evidence id.",
-      "Do not mark chapter complete until the public website display is separately verified."
+      "Do not mark chapter complete until the public website display is separately verified.",
+      "Read back evidence_units content and all intended voice fields, not merely nonempty link existence; verify evidence IDs and payload equality.",
+      "For an existing match require exact intended payloads and ownership tags; mismatches stop without repair. Validate pagination/completeness of duplicate searches."
     ],
     "rollback": [
       "Delete proposition_evidence for the new proposition id.",
       "Delete proposition_voice_chain for the new proposition id.",
       "Delete the new proposition.",
       "Delete the new evidence unit.",
-      "Never delete or repair a pre-existing matching row automatically."
+      "Never delete or repair a pre-existing matching row automatically.",
+      "The REST multi-table sequence is compensating cleanup, not an atomic transaction. Record only IDs created by this attempt; never delete an evidence unit if ownership is uncertain; persist cleanup failures and stop."
     ]
   },
   "scholar_readiness": {
     "tabari": {
-      "count": 11,
+      "count": 18,
       "reporting_work_id": 1,
       "state": "blocked",
       "blockers": [
@@ -92,51 +98,90 @@
         "Preserve separate originating voices for I04A-I04D and competing occasion reports."
       ],
       "blockers": [
-        "Add exact external edition locators for all 14 claims.",
-        "Encode English omissions explicitly in evidence metadata, including the atomic I04 claims."
+        "Repair stale bounded I02 route-independence validator: run 38858821348 fails R01 topology mismatch before live-source checks; do not weaken source safeguards.",
+        "Preserve all 18 reviewed route boundaries and unresolved variants/locators. No authentication inferred. Material R05 name divergence must not be silently normalized.",
+        "Encode completed bounded English checks from 2026-10-15; absence is local to corresponding abridged transitions, not a global edition claim.",
+        "Generate final deterministic evidence/voice/link payloads; do not multiply the duplicated chapter witness or conflate competing occasion reports."
       ]
     },
     "qurtubi": {
-      "count": 9,
+      "count": 23,
       "reporting_work_id": 3,
-      "state": "blocked_on_metadata",
+      "state": "evidence_voice_plan_staged_pending_chapter_payload_validation",
       "blockers": [
-        "Carry Q04 partial-English coverage and additional Arabic alternatives explicitly into semantic_link_note."
+        "Carry Q04 and Q08 atomic voice boundaries, partial/absent English coverage and unresolved authorities into final payloads; plan existence is not final payload validation."
       ]
     },
     "jalalayn": {
       "count": 5,
       "reporting_work_id": 4,
-      "state": "source_pair_aligned_pending_row_generation"
+      "state": "evidence_voice_plan_staged_pending_chapter_payload_validation"
     },
     "saadi": {
       "count": 6,
       "reporting_work_id": 55,
-      "state": "source_pair_aligned_pending_row_generation"
+      "state": "evidence_voice_plan_staged_pending_chapter_payload_validation"
     },
     "ibn_abbas_tanwir": {
       "count": 7,
       "reporting_work_id": 56,
-      "state": "blocked",
+      "state": "evidence_voice_plan_staged_pending_chapter_payload_validation",
       "guards": [
         "Label the work as Tanwir al-Miqbas, traditionally attributed to Ibn Abbas, attribution disputed.",
         "Do not create a direct authenticated Ibn Abbas transmission chain."
       ],
       "blockers": [
-        "Resolve entry 29982 replacement-character handling without reproducing corrupted punctuation."
+        "Apply documented entry 29982 encoding decision in payloads; do not repair source text or reproduce corrupted punctuation. Preserve disputed attribution in all layers."
       ]
     }
   },
-  "next_safe_step": "Generate and validate a non-mutating 52-row import manifest only after each claim has a claim-specific source anchor, voice row, evidence row, link metadata, and all listed blockers are closed.",
+  "next_safe_step": "Repair the existing I02 bounded route validator against current six-route review schema while retaining exact source guards; then build a non-mutating 73-row payload manifest from the six evidence/voice plans, with explicit unresolved-source policy and exact readback requirements.",
   "completion_gate": {
     "ready": false,
     "verified_surah_complete": false,
     "reasons": [
-      "Evidence and voice rows are not yet deterministic for all 52 claims.",
-      "Tabari chain and translation work remains open.",
-      "Qurtubi Q04 limitation metadata remains open.",
-      "Tanwir entry 29982 encoding decision remains open.",
-      "Public display has not been verified."
+      "Current validation failure 38858821348 remains unresolved.",
+      "No complete pinned 73-row final payload/dry-run artifact has been verified.",
+      "Remaining Tabari route encoding/final controlled-translation review remains an explicit chapter gate.",
+      "No authorized verified Surah 108 publishing workflow or successful postflight/public-display verification established in this assessment."
     ]
+  },
+  "revision_history": [
+    {
+      "superseded_generated_at": "2026-10-12T23:54:34-07:00",
+      "previous_total": 52,
+      "reason": "Retired 52-claim design predates atomic expansions and completed evidence plans; no publication authorization inferred."
+    }
+  ],
+  "authoritative_counts": {
+    "tabari": 18,
+    "ibn_kathir": 14,
+    "qurtubi": 23,
+    "jalalayn": 5,
+    "saadi": 6,
+    "ibn_abbas": 7
+  },
+  "blocker_assessment": {
+    "basis": "Repository evidence/voice plans, chapter manifest and existing Surah 109 pilot/W08 importer code inspected; this is design assessment, not fresh live-database or external-source verification.",
+    "hard_publication_gates": [
+      "Current validation failure 38858821348 remains unresolved.",
+      "No complete pinned 73-row final payload/dry-run artifact has been verified.",
+      "Remaining Tabari route encoding/final controlled-translation review remains an explicit chapter gate.",
+      "No authorized verified Surah 108 publishing workflow or successful postflight/public-display verification established in this assessment."
+    ],
+    "route_gap_policy": [
+      "Edition/page uncertainty blocks claiming an exact independently verified collection locator; it does not erase a precisely located Ibn Kathir attribution.",
+      "R05 Ibn Hilal/Ibn Bilal and R07/R08 chain variants block normalized chain correction or merger; preserve witness-specific readings.",
+      "R11 Shaqiq OR Masruq must remain unresolved; R10 branches must not be flattened.",
+      "Authentication unassessed blocks any authenticated label, not the recording of an explicitly attributed report. Whether unresolved routes may be published with limitations requires a documented policy decision; none is authorized here."
+    ],
+    "precedent_limits": [
+      "Pilot rejects any exact existing match; W08 accepts nonempty existing voice/evidence links without full semantic equality. Neither is a complete chapter-wide repeat-safe implementation.",
+      "Rollback spans separate REST requests and cannot be described as transactionally atomic.",
+      "Do not modify or invoke historical Surah 109 mutation workflows for Surah 108."
+    ],
+    "failed_run": "https://github.com/qurangeez114/Quran-scholar-platform/actions/runs/38858821348",
+    "inventory_pass": "https://github.com/qurangeez114/Quran-scholar-platform/actions/runs/38858768022",
+    "human_verified": false
   }
 }
