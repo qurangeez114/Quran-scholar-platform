@@ -141,10 +141,8 @@ Deno.serve(async req=>{
     }
     if(!target)fail('Could not create account');
     created=true;
-    if(emailAccepted){
-     const updated=await service.auth.admin.updateUserById(target.id,{password:body.temporaryPassword});
-     if(updated.error)fail('Email request accepted, but temporary-password setup failed. Contact the owner.',503);
-    }
+    const updated=await service.auth.admin.updateUserById(target.id,{password:body.temporaryPassword});
+    if(updated.error)fail('Temporary-password setup failed. Contact the owner.',503);
    }
    if(!target)fail('Could not create account');
    const existing=await checked(service.from('qh_lms_accounts').select('*').eq('user_id',target!.id).maybeSingle());
