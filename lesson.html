@@ -474,6 +474,88 @@
       }
     }
 
+
+    // The watch meter is an estimate of unique seconds actually played in this browser.
+    // It is deliberately separate from saved course-completion credit (which requires Mark as Complete).
+    let videoPlayer, videoTimer, lastVideoSecond = null;
+    function monitorYouTubePlayback(iframe, lessonId) {
+      const status = document.createElement('p');
+      status.id = 'videoWatchStatus';
+      status.style.cssText = 'padding:12px;background:#f0f5f1;border-radius:8px;font-size:14px;';
+      status.setAttribute('role','status');
+      iframe.insertAdjacentElement('afterend',status);
+      const key = 'qh-video-watched:' + (currentUser?.id || 'guest') + ':' + lessonId;
+      let watched = new Set();
+      try {
+        const previous = JSON.parse(localStorage.getItem(key)||'[]');
+        if (Array.isArray(previous)) watched = new Set(previous.filter(n=>Number.isInteger(n)&&n>=0&&n<86400));
+      } catch { /* local storage may be disabled */ }
+      const update = () => {
+        let duration = 0;
+        try { duration = Math.floor(videoPlayer?.getDuration()||0); } catch {}
+        const secs = watched.size;
+        const minutes = Math.floor(secs/60);
+        const rest = String(secs%60).padStart(2,'0');
+        const pct = duration>0 ? ' ('+Math.min(100,Math.round(secs/duration*100))+'% of video)' : '';
+        status.textContent='▶ Video watch indicator: '+minutes+':'+rest+' played here'+pct+'. Skipping ahead does not count. Course progress is saved when you press “Mark as Complete.”';
+      };
+      update();
+      function start(){
+        if (videoTimer) clearInterval(videoTimer);
+        lastVideoSecond = null;
+        videoTimer = setInterval(()=>{
+          if (!videoPlayer || !window.YT || videoPlayer.getPlayerState()!==window.YT.PlayerState.PLAYING) {
+            lastVideoSecond = null;
+            return;
+          }
+          const second = videoPlayer.getCurrentTime();
+          if (Number.isFinite(second) && Number.isFinite(lastVideoSecond)) {
+            const advance = second-lastVideoSecond;
+            if (advance>=0.5 && advance<=2.5) {
+              watched.add(Math.floor(second));
+              if(watched.size%5===0) {
+                try {localStorage.setItem(key,JSON.stringify([...watched]));}catch{}
+              }
+              update();
+            }
+          }
+          lastVideoSecond = second;
+        },1000);
+      }
+      function stop(){
+        if (videoTimer) {clearInterval(videoTimer);videoTimer=null;}
+        lastVideoSecond = null;
+        try {localStorage.setItem(key,JSON.stringify([...watched]));}catch{}
+        update();
+      }
+      function connect() {
+        try {
+          videoPlayer = new window.YT.Player(iframe.id,{
+            events:{
+              onReady:update,
+              onStateChange:event=>{
+                if(event.data===window.YT.PlayerState.PLAYING)start();
+                else stop();
+              }
+            }
+          });
+        } catch {
+          status.textContent='Video playback tracking is unavailable in this browser. Watch the lesson and press “Mark as Complete” when finished.';
+        }
+      }
+      if (window.YT?.Player) {connect();return;}
+      const previousCallback = window.onYouTubeIframeAPIReady;
+      window.onYouTubeIframeAPIReady=()=>{if(typeof previousCallback==='function')previousCallback();connect();};
+      if(!document.querySelector('script[data-qh-youtube-api]')){
+        const script=document.createElement('script');
+        script.src='https://www.youtube.com/iframe_api';
+        script.async=true;
+        script.dataset.qhYoutubeApi='true';
+        script.onerror=()=>{status.textContent='Video tracking is blocked; you can still watch and mark this lesson complete.';};
+        document.head.append(script);
+      }
+    }
+
     function renderLesson() {
       const content = document.getElementById('lessonContent');
       const completeBtn = document.getElementById('completeBtn');
@@ -500,11 +582,13 @@
           if (host === 'youtu.be') videoId = url.pathname.slice(1);
           if (/^[a-zA-Z0-9_-]{11}$/.test(videoId)) {
             const iframe = document.createElement('iframe');
-            iframe.src = 'https://www.youtube-nocookie.com/embed/' + videoId;
+            iframe.src = 'https://www.youtube-nocookie.com/embed/' + videoId + '?enablejsapi=1&origin=' + encodeURIComponent(location.origin);
+            iframe.id='lessonVideoPlayer';
             iframe.title = currentLesson.title;
             iframe.style.cssText = 'width:100%;aspect-ratio:16/9;border:0;border-radius:8px';
             iframe.allow = 'encrypted-media; picture-in-picture';iframe.allowFullscreen = true;
             content.append(iframe);
+            monitorYouTubePlayback(iframe,currentLesson.id);
           }
           const link = document.createElement('a');
           link.href = url.href;link.target = '_blank';link.rel = 'noopener';
@@ -513,6 +597,7 @@
           const error = document.createElement('p');error.textContent = 'Video link is missing or invalid.';content.append(error);
         }
         completeBtn.style.display = 'block';
+        completeBtn.textContent = '✓ I watched this — Mark as Complete';
       } else if (currentLesson.lesson_type === 'quiz') {
         content.innerHTML = '<p>Switch to the <strong>Quiz</strong> tab above to take the quiz.</p>';
         completeBtn.style.display = 'none';
