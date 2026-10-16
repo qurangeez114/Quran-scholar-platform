@@ -17,7 +17,7 @@ test('owner report parses and does not request the privileged service key',()=>{
  const html=read('behavior.html');
  const source=html.match(/<script type="module">([\s\S]*?)<\/script>/)?.[1];
  assert.ok(source,'report module script exists');
- const parsed=source.replace(/^import\s+[^;]+;\s*/,'');
+ const parsed=source.replace(/^\s*import\s+[^;]+;\s*/,'');
  assert.doesNotThrow(()=>new Function('return (async()=>{'+parsed+'\n})'));
  assert.match(source,/db\.rpc\('qh_is_staff'\)/);
  assert.match(source,/behavior_sessions/);
