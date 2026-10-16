@@ -22,6 +22,15 @@ let {document:d,window,calls}=await setup({role:'owner'});
 assert.equal(d.getElementById('dashboard').hidden,false);
 assert.match(d.getElementById('students').textContent,/80%.*100%/s);
 assert.match(d.getElementById('attempts').textContent,/Passed/);
+const firstStudentInvite=d.getElementById('students').querySelector('[data-invite-student]');
+assert.ok(firstStudentInvite,'student resend control present');
+await d.getElementById('students').onclick({target:firstStudentInvite});
+assert.ok(calls.some(c=>c.action==='resend_student_invite'&&c.values.user_id===student&&c.values.course_id==='c1'));
+const firstInstructorInvite=d.getElementById('instructors').querySelector('[data-invite]');
+assert.ok(firstInstructorInvite,'instructor resend control present');
+await d.getElementById('instructors').onclick({target:firstInstructorInvite});
+assert.ok(calls.some(c=>c.action==='resend_instructor_invite'&&c.values.user_id===teacher));
+
 d.getElementById('search').value='no match';d.getElementById('search').dispatchEvent(new window.Event('input'));assert.match(d.getElementById('instructors').textContent,/No matching/);
 d.getElementById('search').value='Test';d.getElementById('search').dispatchEvent(new window.Event('input'));assert.match(d.getElementById('instructors').textContent,/Test Teacher/);
 d.getElementById('student-search').value='absent';d.getElementById('student-search').dispatchEvent(new window.Event('input'));assert.match(d.getElementById('students').textContent,/No enrolled/);
