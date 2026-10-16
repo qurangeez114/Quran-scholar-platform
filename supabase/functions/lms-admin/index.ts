@@ -1,5 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.8';
 const origin = 'https://quranhikma.com';
+const instructorWelcome = origin + '/instructor-welcome.html';
+const studentWelcome = origin + '/student-welcome.html';
 const headers = {'Content-Type':'application/json','Access-Control-Allow-Origin':origin,'Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info','Access-Control-Allow-Methods':'POST, OPTIONS','Cache-Control':'no-store'};
 const url = Deno.env.get('SUPABASE_URL')!;
 const service = createClient(url,Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,{auth:{persistSession:false,autoRefreshToken:false}});
@@ -74,16 +76,56 @@ Deno.serve(async req=>{
    const id=uuid(body.user_id);if(id===actor.id)fail('Owner access cannot be changed here');
    if(typeof body.active!=='boolean')fail('Invalid access setting');
    result=await checked(service.from('qh_lms_accounts').update({active:body.active}).eq('user_id',id).eq('role','instructor').select().single());
+  }else if(body.action==='resend_instructor_invite'){
+   if(!owner)fail('Owner access required',403);
+   const id=uuid(body.user_id);
+   const targetAccount=await checked(service.from('qh_lms_accounts').select('email,role,active').eq('user_id',id).maybeSingle());
+   if(!targetAccount||targetAccount.role!=='instructor'||!targetAccount.active)fail('Active instructor not found');
+   // Existing-account magic link keeps the password unchanged and never creates a new user.
+   const {error:mailError}=await service.auth.signInWithOtp({
+    email:targetAccount.email,options:{shouldCreateUser:false,emailRedirectTo:instructorWelcome}
+   });
+   if(mailError)fail('Invitation email could not be sent. Check email configuration and retry.');
+   result={ok:true,emailAccepted:true,message:'Instructor sign-in link requested for '+targetAccount.email+'. Delivery is not guaranteed; check the inbox or spam folder.'};
+  }else if(body.action==='resend_student_invite'){
+   const courseId=uuid(body.course_id),targetId=uuid(body.user_id);
+   await ownCourse(courseId);
+   const enrolled=await checked(service.from('qh_enrollments')
+     .select('user_id').eq('course_id',courseId).eq('user_id',targetId).maybeSingle());
+   if(!enrolled)fail('Student is not enrolled in this class',404);
+   const {data:userResult,error:userError}=await service.auth.admin.getUserById(targetId);
+   if(userError||!userResult.user?.email)fail('Student account could not be found',404);
+   const {error:mailError}=await service.auth.signInWithOtp({
+    email:userResult.user.email,options:{shouldCreateUser:false,emailRedirectTo:studentWelcome}
+   });
+   if(mailError)fail('Student invitation could not be sent. Check Auth SMTP configuration and retry.',503);
+   result={ok:true,emailAccepted:true,message:'Student sign-in link requested. Delivery depends on SMTP configuration.'};
   }else if(body.action==='provision'){
    const requested=body.role==='instructor'?'instructor':body.role==='student'?'student':fail('Choose student or instructor');
    if(requested==='instructor'&&!owner)fail('Only the owner can authorize instructors',403);
    const courseId=requested==='student'?uuid(body.course_id):null;if(courseId)await ownCourse(courseId);
    const email=text(body.email,254).toLowerCase();if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))fail('Enter a valid email');
    const displayName=text(body.display_name);if(!displayName)fail('Enter a name');
-   let target=await findEmail(email),created=false;
+   let target=await findEmail(email),created=false,emailAccepted=false, alreadyLinked=false;
+   if(target&&courseId){
+    alreadyLinked=!!await checked(service.from('qh_enrollments')
+     .select('user_id').eq('user_id',target.id).eq('course_id',courseId).maybeSingle());
+   }
    if(!target){
-    if(typeof body.temporaryPassword!=='string'||body.temporaryPassword.length<12||body.temporaryPassword.length>128)fail('New accounts require a temporary password of 12–128 characters');
-    const {data,error}=await service.auth.admin.createUser({email,password:body.temporaryPassword,email_confirm:true,user_metadata:{display_name:displayName}});if(error)throw error;target=data.user;created=true;
+    if(typeof body.temporaryPassword!=='string'||body.temporaryPassword.length<12||body.temporaryPassword.length>128)
+      fail('New accounts require a temporary password of 12–128 characters');
+    // Supabase Auth triggers an invitation email immediately on either registration type.
+    // The password is configured server-side and must be delivered out of band,
+    // or the recipient can choose Forgot Password to set their own.
+    const destination=requested==='instructor'?instructorWelcome:studentWelcome;
+    const {data,error}=await service.auth.admin.inviteUserByEmail(email,{
+     data:{display_name:displayName,learning_role:requested},redirectTo:destination
+    });
+    if(error)fail('Registration email was not accepted. Check Auth email/SMTP settings before retrying.',503);
+    if(!data.user)fail('Invitation returned no user record. Contact the owner.');
+    target=data.user;created=true;emailAccepted=true;
+    const updated=await service.auth.admin.updateUserById(target.id,{password:body.temporaryPassword});
+    if(updated.error)fail('Email request accepted, but temporary-password setup failed. Contact the owner.',503);
    }
    if(!target)fail('Could not create account');
    const existing=await checked(service.from('qh_lms_accounts').select('*').eq('user_id',target!.id).maybeSingle());
@@ -93,7 +135,25 @@ Deno.serve(async req=>{
     await checked(service.from('qh_lms_accounts').upsert({user_id:target!.id,email,display_name:displayName,role:requested,managed_by:actor.id,country:text(body.country,80),city:text(body.city,80),active:true,must_change_password:created?true:existing?.must_change_password||false},{onConflict:'user_id'}));
    }
    if(courseId)await checked(service.from('qh_enrollments').upsert({user_id:target!.id,course_id:courseId},{onConflict:'user_id,course_id',ignoreDuplicates:true}));
-   result={ok:true,created,must_change_password:created,message:created?'Account created. Share the temporary password privately. It must be changed at first sign-in.':'Existing account authorized or enrolled. Its password was not changed.'};
+   // Only newly assigned roles/enrollments receive an automatic message.
+   // Existing registered accounts are never assigned a replacement password.
+   const shouldNotifyExisting=!created&&(
+     (requested==='instructor'&&(!existing||existing.role!=='instructor'||!existing.active))
+     ||(requested==='student'&&!alreadyLinked)
+   );
+   if(shouldNotifyExisting){
+    const {error:mailError}=await service.auth.signInWithOtp({
+     email,options:{shouldCreateUser:false,emailRedirectTo:requested==='instructor'?instructorWelcome:studentWelcome}
+    });
+    emailAccepted=!mailError;
+   }
+   const duplicate=!created&&!shouldNotifyExisting;
+   const message=duplicate
+    ?(requested==='instructor'?'Instructor is already authorized. No duplicate email sent.':'Student is already enrolled. No duplicate email sent.')
+    :emailAccepted
+     ?(created?'Account registered; invitation email requested immediately. Share the temporary password separately or let the recipient reset it.':'Existing user assigned; sign-in email requested immediately. Existing password retained.')
+     :'Registration saved, but the invitation email request failed. Check Supabase Auth email settings and resend.';
+   result={ok:true,created,emailAccepted,duplicate,must_change_password:created,message};
   }else fail('Unknown action');
   return new Response(JSON.stringify(result),{headers});
  }catch(e:any){return new Response(JSON.stringify({error:e.status?e.message:'The operation could not be completed. '+(e.code||'Please retry.')}),{status:e.status||400,headers});}
