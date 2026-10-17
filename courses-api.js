@@ -24,7 +24,7 @@ export async function getCourseById(id) {
   return data;
 }
 
-export async function createCourse(title, description = '') {
+export async function createCourse(title, description = '', options = {}) {
   const user = (await supabase.auth.getUser()).data.user;
   if (!user) throw new Error('Not authenticated');
 
@@ -34,7 +34,9 @@ export async function createCourse(title, description = '') {
       title,
       description,
       created_by: user.id,
-      is_published: false
+      is_published: false,
+      visibility: options.visibility === 'private' ? 'private' : 'public',
+      faculty_reuse_enabled: options.faculty_reuse_enabled === true
     })
     .select()
     .single();

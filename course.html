@@ -372,6 +372,7 @@
     let currentCourse = null;
     let enrollment = null;
     let enrollmentRequest = null;
+    let includedByInstructor = null;
     let lessons = [];
 
     async function checkAuth() {
@@ -410,17 +411,28 @@
           enrollment = null;
         }
 
-        // Distinguish requests waiting for instructor approval from actual enrollment.
-        // A student should never see another "Request Enrollment" button after applying.
+        // Linked faculty-shared lessons are accessible through the student's
+        // enrollment in the receiving instructor's class, not the source course.
+        // They confer no source-gradebook access or source certificate.
+        includedByInstructor=null;
         enrollmentRequest=null;
         if(currentUser&&!preview&&!enrollment){
-          const {data:requests,error:requestError}=await supabase.functions.invoke('academic-hub',{
-            body:{action:'enrollment_requests'}
+          const {data:overview,error:overviewError}=await supabase.functions.invoke('academic-hub',{
+            body:{action:'hub_overview'}
           });
-          if(!requestError){
-            enrollmentRequest=(requests?.student_requests||[])
-              .find(r=>r.course_id===courseId&&
-                ['pending','consent_pending'].includes(r.status))||null;
+          if(!overviewError){
+            includedByInstructor=(overview?.included_courses||[])
+              .find(c=>c.id===courseId) || null;
+          }
+          if(!includedByInstructor){
+            const {data:requests,error:requestError}=await supabase.functions.invoke('academic-hub',{
+              body:{action:'enrollment_requests'}
+            });
+            if(!requestError){
+              enrollmentRequest=(requests?.student_requests||[])
+                .find(r=>r.course_id===courseId&&
+                  ['pending','consent_pending'].includes(r.status))||null;
+            }
           }
         }
 
@@ -457,7 +469,7 @@
         return;
       }
 
-      if (!enrollment && !preview) {
+      if (!enrollment && !preview && !includedByInstructor) {
         container.innerHTML = `
           <div style="color: #999; text-align: center; padding: 2rem;">
             <p>Enroll in this course to view lessons</p>
@@ -574,6 +586,14 @@
         } else {
           certificateSection.style.display = 'none';
         }
+      } else if(includedByInstructor){
+        actionBtn.textContent=lessons.length?'Open linked lessons':'No source lessons available';
+        actionBtn.disabled=!lessons.length;
+        actionBtn.onclick=()=>goToLesson(lessons[0]?.id);
+        enrollStatus.textContent='Included by your instructor · '+(includedByInstructor.title||'Shared course')+
+          '. Original instructor retains ownership and grading.';
+        progressCard.style.display='none';
+        certificateSection.style.display='none';
       } else {
         // Pending applications are actionable via the student's dashboard,
         // where they may withdraw or accept an instructor referral.

@@ -14,8 +14,8 @@ function check(request,expectedStatus,expectedLabel,redirect){
  const elements=Object.fromEntries(['actionBtn','enrollmentStatus','progressCard','certificateSection'].map(id=>
   [id,{textContent:'',disabled:false,onclick:null,style:{}}]));
  const window={location:{href:''}};
- const enrollment=null,preview=false,lessons=[],progress=[],enrollmentRequest=request;
- const context={document:{getElementById:id=>elements[id]},window,enrollment,preview,lessons,progress,
+ const enrollment=null,preview=false,lessons=[],progress=[],enrollmentRequest=request,includedByInstructor=null;
+ const context={document:{getElementById:id=>elements[id]},window,enrollment,preview,lessons,progress,includedByInstructor,
   enrollmentRequest,console,enrollInCourse:()=>{}};
  runInNewContext(code+'; updateUI();',context);
  assert.equal(elements.enrollmentStatus.textContent,expectedStatus);
