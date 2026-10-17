@@ -1,0 +1,42 @@
+name: Institutional faculty module
+on:
+  pull_request:
+    paths:
+      - 'accounts/faculty*'
+      - 'faculty*.html'
+      - 'accounts/lms-dashboard.js'
+      - 'admin/lms.html'
+      - 'instructor-dashboard.html'
+      - 'supabase/functions/lms-admin/index.ts'
+      - 'supabase/migrations/20261017_faculty_profiles.sql'
+      - 'tests/lms/**'
+      - '.github/workflows/institutional-faculty.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'accounts/faculty*'
+      - 'faculty*.html'
+      - 'accounts/lms-dashboard.js'
+      - 'supabase/functions/lms-admin/index.ts'
+      - 'tests/lms/**'
+permissions:
+  contents: read
+jobs:
+  faculty:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install test dependencies
+        run: npm install --no-save --ignore-scripts --no-audit --no-fund esbuild linkedom
+      - name: Check source JavaScript syntax
+        run: |
+          node --check accounts/faculty-editor.js
+          node --check accounts/faculty-public.js
+      - name: Test LMS endpoints and account authorization
+        run: node --test tests/lms/endpoint.mjs tests/lms/faculty.mjs tests/lms/faculty-schema.mjs
+      - name: Test all editable interfaces and existing LMS dashboard
+        run: node --test tests/lms/dashboard.mjs tests/lms/faculty-ui.mjs
