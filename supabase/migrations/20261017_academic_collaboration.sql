@@ -209,6 +209,61 @@ end $proc$;
 revoke all on function qh_lms_private.academic_accept_group(uuid,uuid) from public,anon,authenticated;
 grant execute on function qh_lms_private.academic_accept_group(uuid,uuid) to service_role;
 
+-- Private academic media is stored in a dedicated, non-public bucket.
+-- The authenticated API checks membership before signing a short-lived URL.
+insert into storage.buckets(id,name,public,file_size_limit,allowed_mime_types)
+values('qh-academic-media','qh-academic-media',false,26214400,
+ array['audio/mpeg','audio/mp4','audio/x-m4a','audio/wav','audio/x-wav',
+ 'audio/ogg','audio/webm','video/mp4','video/webm','video/quicktime']::text[])
+on conflict (id) do nothing;
+alter table public.qh_academic_messages
+ add column if not exists media_path text,
+ add column if not exists media_kind text check (media_kind in ('audio','video'));
+alter table public.qh_academic_group_posts
+ add column if not exists media_path text,
+ add column if not exists media_kind text check (media_kind in ('audio','video'));
+
+-- A live session uses an authorized third-party live-video URL for its
+-- stream; chat and moderation live inside QuranHikma.
+create table if not exists public.qh_academic_live_classes(
+ id uuid primary key default gen_random_uuid(),
+ course_id uuid not null references public.qh_courses(id) on delete cascade,
+ created_by uuid not null references auth.users(id),
+ title text not null check(length(trim(title)) between 3 and 160),
+ video_url text not null,
+ scheduled_at timestamptz,
+ status text not null default 'scheduled' check(status in ('scheduled','live','ended')),
+ chat_paused boolean not null default false,
+ created_at timestamptz not null default now(),
+ updated_at timestamptz not null default now()
+);
+create index if not exists qh_live_classes_course on public.qh_academic_live_classes(course_id);
+create table if not exists public.qh_academic_live_chat(
+ id uuid primary key default gen_random_uuid(),
+ session_id uuid not null references public.qh_academic_live_classes(id) on delete cascade,
+ author_id uuid not null references auth.users(id),
+ body text not null check(length(trim(body)) between 1 and 700),
+ is_pinned boolean not null default false,
+ is_hidden boolean not null default false,
+ created_at timestamptz not null default now()
+);
+create index if not exists qh_live_chat_session_time on public.qh_academic_live_chat(session_id,created_at desc);
+create table if not exists public.qh_academic_live_reactions(
+ id uuid primary key default gen_random_uuid(),
+ session_id uuid not null references public.qh_academic_live_classes(id) on delete cascade,
+ author_id uuid not null references auth.users(id),
+ emoji text not null check(emoji in ('👍','👏','💡','❓','❤️')),
+ created_at timestamptz not null default now()
+);
+create index if not exists qh_live_reactions_time on public.qh_academic_live_reactions(session_id,created_at desc);
+alter table public.qh_academic_live_classes enable row level security;
+alter table public.qh_academic_live_chat enable row level security;
+alter table public.qh_academic_live_reactions enable row level security;
+revoke all on public.qh_academic_live_classes,public.qh_academic_live_chat,
+ public.qh_academic_live_reactions from public,anon,authenticated;
+grant all on public.qh_academic_live_classes,public.qh_academic_live_chat,
+ public.qh_academic_live_reactions to service_role;
+
 -- Course discovery and lesson access must enforce expiration in the database,
 -- not merely by hiding buttons in the interface.
 drop policy if exists lms_courses_read on public.qh_courses;
