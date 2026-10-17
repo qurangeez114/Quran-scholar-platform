@@ -11,6 +11,7 @@ const studentB='10000000-0000-4000-8000-000000000004';
 const courseA='20000000-0000-4000-8000-000000000001';
 const courseB='20000000-0000-4000-8000-000000000002';
 const users=[teacherA,teacherB,studentA,studentB].map(id=>({id}));
+const mediaObjects=new Set();
 const db={
  qh_staff_members:[],
  qh_lms_accounts:[
@@ -86,7 +87,13 @@ const client={
   }
   return {data:true,error:null};
  },
- storage:{from:()=>({})}
+ storage:{from:()=>({
+  createSignedUploadUrl:async path=>{mediaObjects.add(path);return{data:{token:'test-token',path},error:null};},
+  list:async(folder,{search})=>({data:[...mediaObjects].filter(p=>p.startsWith(folder+'/')&&p.endsWith(search))
+    .map(p=>({name:p.split('/').pop()})),error:null}),
+  createSignedUrl:async(path,ttl)=>mediaObjects.has(path)?{data:{signedUrl:'https://media.example/private/'+path},error:null}:
+    {data:null,error:{message:'Not found'}}
+ })}
 };
 let handler;
 let code=(await transform(readFileSync('supabase/functions/academic-hub/index.ts','utf8'),{loader:'ts',format:'esm'})).code;
@@ -101,8 +108,38 @@ async function request(id,action,payload={}){
  }));
  const result=await res.json();return {code:res.status,data:result};
 }
+let preflight=await handler(new Request('https://quranhikma.com/functions/v1/academic-hub',{
+ method:'OPTIONS',headers:{Origin:'https://www.quranhikma.com'}
+}));
+assert.equal(preflight.status,200);
+assert.equal(preflight.headers.get('access-control-allow-origin'),'https://www.quranhikma.com',
+ 'CORS preflight must return allowed requesting origin');
+preflight=await handler(new Request('https://quranhikma.com/functions/v1/academic-hub',{
+ method:'OPTIONS',headers:{Origin:'https://attacker.invalid'}
+}));
+assert.equal(preflight.status,403,'Untrusted browser origins cannot request collaboration access');
 let r=await request(null,'hub_overview');assert.equal(r.code,401);
 r=await request(studentA,'faculty_message_list');assert.equal(r.code,403);
+r=await request(teacherA,'faculty_media_prepare',{recipient_id:teacherB,media_kind:'audio',
+ size:8192,mime:'audio/mpeg'});
+assert.equal(r.code,200,JSON.stringify(r.data));
+const facultyMedia=r.data.path;
+assert.equal(r.data.mime,'audio/mpeg');
+r=await request(teacherA,'faculty_message_send',{recipient_id:teacherB,
+ text:'Audio source comparison',media_path:facultyMedia,media_kind:'audio'});
+assert.equal(r.code,200,JSON.stringify(r.data));const facultyMsg=r.data.id;
+r=await request(teacherB,'media_open',{kind:'faculty',id:facultyMsg});
+assert.equal(r.code,200,'Intended instructor can open time-limited signed audio');
+assert.ok(r.data.url.startsWith('https://media.example/private/faculty/'));
+assert.equal(r.data.expires_in,60);
+r=await request(studentA,'media_open',{kind:'faculty',id:facultyMsg});
+assert.equal(r.code,403,'Students cannot access private faculty recordings');
+r=await request(teacherA,'faculty_media_prepare',{recipient_id:teacherB,media_kind:'video',
+ size:26214401,mime:'video/mp4'});
+assert.equal(r.code,400,'Oversized lecture clips must be rejected');
+r=await request(teacherA,'faculty_media_prepare',{recipient_id:teacherB,media_kind:'video',
+ size:3000,mime:'application/x-msdownload'});
+assert.equal(r.code,400,'Unsafe file types must be rejected');
 r=await request(studentA,'course_settings',{course_id:courseA,visibility:'private'});assert.equal(r.code,403);
 r=await request(studentA,'live_create',{course_id:courseA,title:'Seminar',video_url:'https://youtu.be/abcdefghijk'});assert.equal(r.code,403);
 r=await request(studentA,'enrollment_request',{course_id:courseB});assert.equal(r.code,200,JSON.stringify(r.data));
@@ -129,10 +166,22 @@ r=await request(studentA,'group_decide',{request_id:membershipId,accept:true});
 assert.equal(r.code,200,JSON.stringify(r.data));
 r=await request(studentB,'group_post',{group_id:groupId,text:'Primary source 1'});
 assert.equal(r.code,200,JSON.stringify(r.data));
+r=await request(studentA,'group_media_prepare',{group_id:groupId,media_kind:'video',
+ size:2048,mime:'video/mp4'});
+assert.equal(r.code,200,JSON.stringify(r.data));
+const groupMedia=r.data.path;
+r=await request(studentA,'group_post',{group_id:groupId,text:'Lesson discussion video',
+ media_path:groupMedia,media_kind:'video'});
+assert.equal(r.code,200,JSON.stringify(r.data));
+const groupMediaPost=r.data.id;
+r=await request(studentB,'media_open',{kind:'group',id:groupMediaPost});
+assert.equal(r.code,200,'Current members can view course-group video');
 r=await request(studentB,'group_leave',{group_id:groupId});
 assert.equal(r.code,200);
 r=await request(studentB,'group_posts',{group_id:groupId});
 assert.equal(r.code,403,'Leaving group immediately revokes access');
+r=await request(studentB,'media_open',{kind:'group',id:groupMediaPost});
+assert.equal(r.code,403,'Leaving also revokes signed-media access');
 r=await request(studentB,'group_join_request',{group_id:groupId});
 assert.equal(r.code,200,'Student can request to rejoin after leaving');
 const withdrawn=r.data.id;
