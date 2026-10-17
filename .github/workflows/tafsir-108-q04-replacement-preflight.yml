@@ -38,6 +38,7 @@ jobs:
               raise SystemExit("Unsafe replacement state")
           if extraction.get("database_written") is not False or qdoc.get("database_written") is not False:
               raise SystemExit("Unsafe source staging state")
+          # Historical pre-integration replacement arithmetic, not current chapter totals.
           counts=repl.get("expected_counts_after_replacement",{})
           if counts!={"current_total":52,"remove_parent":1,"add_atomic_candidates":14,"expected_total":65,"current_qurtubi":9,"expected_qurtubi":22}:
               raise SystemExit("Replacement count contract mismatch "+repr(counts))
@@ -102,11 +103,22 @@ jobs:
           for doc in docs:
               claims=doc["claims"]
               if doc["scholar_key"]=="qurtubi":
-                  claims=[x for x in claims if x["id"]!="108-Q04"]+candidates
+                  # Replacements are already integrated; do not append them twice.
+                  indexed={x["id"]:x for x in claims}
+                  if "108-Q04" in indexed:
+                      raise SystemExit("Retired Q04 parent remains in integrated research")
+                  fidelity_fields=("statement_en","evidence_anchor_ar","voice_position","voice_state","verse_mapping","arabic_entry_id","english_entry_id","mufassir_own_position")
+                  for candidate in candidates:
+                      saved=indexed.get(candidate["id"])
+                      if saved is None:
+                          raise SystemExit("Integrated replacement missing "+candidate["id"])
+                      for field in fidelity_fields:
+                          if saved.get(field)!=candidate.get(field):
+                              raise SystemExit("Integrated replacement drift "+candidate["id"]+" "+field)
               counts_actual[doc["scholar_key"]]=len(claims)
               combined.extend((doc["scholar_key"],x["id"],x.get("statement_en") or x.get("claim","")) for x in claims)
-          expected_counts={"tabari":11,"ibn_kathir":14,"qurtubi":22,"jalalayn":5,"saadi":6,"ibn_abbas":7}
-          if counts_actual!=expected_counts or len(combined)!=65 or len({x[1] for x in combined})!=65:
+          expected_counts={"tabari":18,"ibn_kathir":14,"qurtubi":23,"jalalayn":5,"saadi":6,"ibn_abbas":7}
+          if counts_actual!=expected_counts or len(combined)!=73 or len({x[1] for x in combined})!=73:
               raise SystemExit("Combined count mismatch "+json.dumps(counts_actual))
           def norm(value):
               value=unicodedata.normalize("NFKD",value or "").encode("ascii","ignore").decode().casefold()
