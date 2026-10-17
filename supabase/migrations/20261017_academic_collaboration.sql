@@ -60,6 +60,50 @@ create table if not exists public.qh_academic_message_reports (
  created_at timestamptz not null default now(),
  unique(message_id,reporter_id)
 );
+-- Student study groups require explicit enrollment and explicit membership consent.
+-- All group data stays private behind authenticated and role-checked API actions.
+create table if not exists public.qh_academic_study_groups(
+ id uuid primary key default gen_random_uuid(),
+ course_id uuid not null references public.qh_courses(id) on delete cascade,
+ creator_id uuid not null references auth.users(id) on delete cascade,
+ name text not null check(length(trim(name)) between 3 and 100),
+ description text not null default '' check(length(description)<=800),
+ archived boolean not null default false,
+ created_at timestamptz not null default now()
+);
+create index if not exists qh_study_groups_course on public.qh_academic_study_groups(course_id);
+create table if not exists public.qh_academic_group_members(
+ group_id uuid not null references public.qh_academic_study_groups(id) on delete cascade,
+ student_id uuid not null references auth.users(id) on delete cascade,
+ is_owner boolean not null default false,
+ joined_at timestamptz not null default now(),
+ primary key(group_id,student_id)
+);
+create unique index if not exists qh_study_group_one_owner on public.qh_academic_group_members(group_id) where is_owner;
+create table if not exists public.qh_academic_group_requests(
+ id uuid primary key default gen_random_uuid(),
+ group_id uuid not null references public.qh_academic_study_groups(id) on delete cascade,
+ student_id uuid not null references auth.users(id) on delete cascade,
+ initiated_by uuid not null references auth.users(id),
+ kind text not null check(kind in ('invite','join')),
+ status text not null default 'pending' check(status in ('pending','accepted','declined','cancelled')),
+ created_at timestamptz not null default now(),
+ resolved_at timestamptz
+);
+create unique index if not exists qh_group_one_pending on public.qh_academic_group_requests(group_id,student_id)
+ where status='pending';
+create index if not exists qh_group_request_student on public.qh_academic_group_requests(student_id,status);
+create table if not exists public.qh_academic_group_posts(
+ id uuid primary key default gen_random_uuid(),
+ group_id uuid not null references public.qh_academic_study_groups(id) on delete cascade,
+ author_id uuid not null references auth.users(id) on delete cascade,
+ body text not null check(length(trim(body)) between 1 and 3000),
+ resource_url text check(resource_url is null or length(resource_url)<=700),
+ created_at timestamptz not null default now()
+);
+create index if not exists qh_group_posts_recent on public.qh_academic_group_posts(group_id,created_at desc);
+-- Block contacts globally, including new group invites; member-level group posts
+-- from blocked peers are hidden from the viewing student's conversation.
 create table if not exists public.qh_academic_packages(
  id uuid primary key default gen_random_uuid(),
  instructor_id uuid not null references auth.users(id) on delete cascade,
@@ -83,6 +127,10 @@ alter table public.qh_academic_contact_settings enable row level security;
 alter table public.qh_academic_messages enable row level security;
 alter table public.qh_academic_message_blocks enable row level security;
 alter table public.qh_academic_message_reports enable row level security;
+alter table public.qh_academic_study_groups enable row level security;
+alter table public.qh_academic_group_members enable row level security;
+alter table public.qh_academic_group_requests enable row level security;
+alter table public.qh_academic_group_posts enable row level security;
 alter table public.qh_academic_packages enable row level security;
 alter table public.qh_academic_package_items enable row level security;
 revoke all on public.qh_academic_enrollment_requests from public,anon,authenticated;
@@ -90,8 +138,14 @@ revoke all on public.qh_academic_contact_settings from public,anon,authenticated
 revoke all on public.qh_academic_messages from public,anon,authenticated;
 revoke all on public.qh_academic_message_blocks from public,anon,authenticated;
 revoke all on public.qh_academic_message_reports from public,anon,authenticated;
+revoke all on public.qh_academic_study_groups from public,anon,authenticated;
+revoke all on public.qh_academic_group_members from public,anon,authenticated;
+revoke all on public.qh_academic_group_requests from public,anon,authenticated;
+revoke all on public.qh_academic_group_posts from public,anon,authenticated;
 revoke all on public.qh_academic_packages from public,anon,authenticated;
 revoke all on public.qh_academic_package_items from public,anon,authenticated;
+grant all on public.qh_academic_study_groups,public.qh_academic_group_members,
+ public.qh_academic_group_requests,public.qh_academic_group_posts to service_role;
 grant all on public.qh_academic_enrollment_requests,public.qh_academic_contact_settings,
  public.qh_academic_messages,public.qh_academic_message_blocks,
  public.qh_academic_message_reports,public.qh_academic_packages,
