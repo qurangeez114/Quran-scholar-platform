@@ -25,6 +25,8 @@ class Query{
  eq(k,v){this.filters.push(r=>r[k]===v);return this;}
  maybeSingle(){this.singleFlag=true;return this;}
  single(){this.singleFlag=true;return this;}
+ order(){return this;}
+ limit(){return this;}
  insert(row){this.op='insert';this.values=row;return this;}
  upsert(row){this.op='upsert';this.values=row;return this;}
  update(row){this.op='update';this.values=row;return this;}
@@ -103,6 +105,12 @@ result=await call(OWNER,{action:'faculty_admin_save',...full,user_id:TEACHER,ema
 assert.equal(result.status,200,JSON.stringify(result.data));
 assert.equal(accounts[0].email,'new@example.invalid');assert.equal(users[1].email,'new@example.invalid');
 assert.equal(profiles[0].credential_status,'verified');
+assert.equal((await call(TEACHER,{action:'faculty_audit',user_id:TEACHER})).status,403,
+ 'Instructor cannot inspect the protected administrative audit history');
+const ownerHistory=await call(OWNER,{action:'faculty_audit',user_id:TEACHER});
+assert.equal(ownerHistory.status,200);
+assert.ok(ownerHistory.data.some(item=>item.changed_fields.includes('email')));
+
 assert.ok(audit.some(x=>x.changed_fields.includes('email')));
 result=await call(TEACHER,{action:'faculty_save',...full,credentials:'New degree claim'});
 assert.equal(result.status,200);assert.equal(profiles[0].credential_status,'unreviewed','Credential edits remove the verified designation');
