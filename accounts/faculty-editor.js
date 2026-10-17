@@ -14,6 +14,31 @@ const setStatus=(message,kind='')=>{
  $('faculty-status').className='status'+(kind?' '+kind:'');
 };
 const setElement=(name,value)=>{const field=form.elements.namedItem(name);if(field)field.value=value??'';};
+async function loadAudit(){
+ if(!isAdmin||!targetId)return;
+ const root=$('faculty-audit-list');if(!root)return;
+ root.replaceChildren();
+ root.appendChild(Object.assign(document.createElement('p'),{textContent:'Loading change history…',className:'muted'}));
+ try{
+   const items=await lmsRequest('faculty_audit',{user_id:targetId});
+   root.replaceChildren();
+   if(!items?.length){root.appendChild(Object.assign(document.createElement('p'),{textContent:'No changes recorded yet.',className:'muted'}));return;}
+   for(const item of items){
+     const row=document.createElement('article');row.className='audit-event';
+     const date=document.createElement('strong');
+     date.textContent=new Date(item.created_at).toLocaleString();
+     const action=document.createElement('p');
+     action.textContent=(item.action==='admin_profile_update'?'Administrator update':'Instructor update')+
+       ' · '+(item.changed_fields||[]).join(', ');
+     const actor=document.createElement('small');
+     actor.textContent='Performed by account '+String(item.actor_id||'unknown').slice(0,8)+'…';
+     row.append(date,action,actor);root.appendChild(row);
+   }
+ }catch(error){
+   root.replaceChildren();root.appendChild(Object.assign(document.createElement('p'),
+     {textContent:'Could not retrieve history: '+error.message,className:'muted'}));
+ }
+}
 function showRecord(result){
  saved=result;
  const a=result.account||{},p=result.profile||{};
@@ -62,10 +87,12 @@ async function save(event){
    const response=await lmsRequest(isAdmin?'faculty_admin_save':'faculty_save',values);
    showRecord({account:response.account,profile:response.profile});
    setStatus(response.message||'Changes saved.','success');
+   if(isAdmin)await loadAudit();
  }catch(e){setStatus('Changes were not saved: '+e.message,'error');}
  finally{busy=false;$('faculty-save').disabled=false;}
 }
 form.addEventListener('submit',save);
+if(isAdmin)$('faculty-audit-refresh').addEventListener('click',loadAudit);
 $('faculty-revert').addEventListener('click',()=>{
  if(!saved)return;
  showRecord(saved);setStatus('Unsaved changes discarded.','success');
@@ -93,6 +120,7 @@ async function start(){
  if(!saved?.account){setStatus('Instructor record not found.','error');return;}
  showRecord(saved);
  $('faculty-app').hidden=false;
+ if(isAdmin)await loadAudit();
  setStatus('Ready. Your edits are saved only when you select Save faculty profile.');
 }
 start().catch(error=>setStatus('Could not open faculty settings: '+error.message,'error'));
