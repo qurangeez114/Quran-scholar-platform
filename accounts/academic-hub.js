@@ -135,6 +135,12 @@ async function refreshRequests(){
     await api('enrollment_consent',{request_id:r.id,accept:approve});await refreshRequests();
    },approve?'':'subtle-button'));
   }
+  if(['pending','consent_pending'].includes(r.status)){
+   add(actions(box),btn('Withdraw request',async()=>{
+    if(!confirm('Withdraw this pending enrollment request?'))return;
+    await api('enrollment_cancel',{request_id:r.id});await refreshRequests();
+   },'subtle-button'));
+  }
  }
  if(!list.children.length)p(list,'No enrollment requests.');
  const owner=$('instructor-enrollment-requests');owner.replaceChildren();
