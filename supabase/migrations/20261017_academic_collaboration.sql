@@ -112,6 +112,20 @@ create table if not exists public.qh_academic_group_reports(
  created_at timestamptz not null default now(),
  unique(post_id,reporter_id)
 );
+-- Moderation reports are private and reviewed by authorized academic administration.
+alter table public.qh_academic_group_posts
+ add column if not exists is_hidden boolean not null default false;
+alter table public.qh_academic_group_reports
+ add column if not exists status text not null default 'open'
+   check(status in ('open','reviewed','dismissed')),
+ add column if not exists resolved_by uuid,
+ add column if not exists resolved_at timestamptz;
+alter table public.qh_academic_message_reports
+ add column if not exists status text not null default 'open'
+   check(status in ('open','reviewed','dismissed')),
+ add column if not exists resolved_by uuid,
+ add column if not exists resolved_at timestamptz;
+
 create table if not exists public.qh_academic_packages(
  id uuid primary key default gen_random_uuid(),
  instructor_id uuid not null references auth.users(id) on delete cascade,
@@ -296,13 +310,27 @@ create table if not exists public.qh_academic_live_reactions(
  created_at timestamptz not null default now()
 );
 create index if not exists qh_live_reactions_time on public.qh_academic_live_reactions(session_id,created_at desc);
+create table if not exists public.qh_academic_live_reports(
+ id uuid primary key default gen_random_uuid(),
+ message_id uuid not null references public.qh_academic_live_chat(id) on delete cascade,
+ reporter_id uuid not null references auth.users(id) on delete cascade,
+ reason text not null check(length(trim(reason)) between 5 and 700),
+ status text not null default 'open' check(status in ('open','reviewed','dismissed')),
+ resolved_by uuid,
+ resolved_at timestamptz,
+ created_at timestamptz not null default now(),
+ unique(message_id,reporter_id)
+);
+create index if not exists qh_academic_live_reports_status on public.qh_academic_live_reports(status,created_at desc);
+alter table public.qh_academic_live_reports enable row level security;
 alter table public.qh_academic_live_classes enable row level security;
 alter table public.qh_academic_live_chat enable row level security;
 alter table public.qh_academic_live_reactions enable row level security;
 revoke all on public.qh_academic_live_classes,public.qh_academic_live_chat,
- public.qh_academic_live_reactions from public,anon,authenticated;
+ public.qh_academic_live_reactions,public.qh_academic_live_reports
+ from public,anon,authenticated;
 grant all on public.qh_academic_live_classes,public.qh_academic_live_chat,
- public.qh_academic_live_reactions to service_role;
+ public.qh_academic_live_reactions,public.qh_academic_live_reports to service_role;
 
 -- Course discovery and lesson access must enforce expiration in the database,
 -- not merely by hiding buttons in the interface.
