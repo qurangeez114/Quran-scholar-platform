@@ -26,12 +26,13 @@ create table if not exists public.qh_instructor_profiles (
 );
 create table if not exists public.qh_faculty_audit (
   id bigint generated always as identity primary key,
-  actor_id uuid not null references auth.users(id),
-  instructor_id uuid not null references auth.users(id),
+  actor_id uuid not null,
+  instructor_id uuid not null,
   action text not null,
   changed_fields text[] not null default '{}',
   created_at timestamptz not null default now()
 );
+-- Historical audit IDs are deliberately not FK-constrained to auth.users: approved account deletion must not fail.
 create index if not exists qh_faculty_audit_instructor_date on public.qh_faculty_audit(instructor_id, created_at desc);
 alter table public.qh_instructor_profiles enable row level security;
 alter table public.qh_faculty_audit enable row level security;
@@ -39,6 +40,7 @@ revoke all on public.qh_instructor_profiles from public, anon, authenticated;
 revoke all on public.qh_faculty_audit from public, anon, authenticated;
 grant all on public.qh_instructor_profiles to service_role;
 grant all on public.qh_faculty_audit to service_role;
+grant usage, select on sequence public.qh_faculty_audit_id_seq to service_role;
 -- A narrow, filtered public view is the ONLY browser-readable profile source.
 -- No account email, internal credential history, or verification notes are exposed.
 create or replace view public.qh_faculty_directory
