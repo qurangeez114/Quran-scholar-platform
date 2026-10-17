@@ -41,6 +41,7 @@ function startLiveUpdates(){
  },4500);
 }
 const faculty=()=>['instructor','owner'].includes(state?.role);
+const owner=()=>state?.role==='owner';
 const student=()=>state?.role==='student';
 const name=id=>state?.faculty?.find(x=>x.user_id===id)?.display_name||
   state?.students?.find(x=>x.id===id)?.name||'Member';
@@ -75,13 +76,16 @@ function tab(which){
  if(which==='packages'&&faculty())run(refreshPackages);
  if(which==='groups'&&student())run(async()=>{await refreshGroups();if(group)startGroupUpdates();});
  if(which==='live')run(async()=>{await refreshLive();if(live)startLiveUpdates();});
+ if(which==='moderation'&&owner())run(refreshModeration);
 }
 function permissions(){
  for(const n of document.querySelectorAll('.faculty-only'))n.hidden=!faculty();
  for(const n of document.querySelectorAll('.student-only'))n.hidden=!student();
+ for(const n of document.querySelectorAll('.owner-only'))n.hidden=!owner();
  for(const b of document.querySelectorAll('[data-tab]')){
   if(['messages','packages'].includes(b.dataset.tab))b.hidden=!faculty();
   if(b.dataset.tab==='groups')b.hidden=!student();
+  if(b.dataset.tab==='moderation')b.hidden=!owner();
  }
  $('return-dashboard').href=state.role==='owner'?'/admin/lms.html':
   state.role==='instructor'?'/instructor-dashboard.html':'/student-dashboard.html';
@@ -208,6 +212,27 @@ async function refreshMessages(){
  }
  if(!root.children.length)p(root,'No private faculty messages yet.');
  root.scrollTop=root.scrollHeight;
+}
+async function refreshModeration(){
+ if(!owner())throw Error('Only academic administrators can review reports');
+ const reports=await api('moderation_queue');
+ const root=$('moderation-queue');root.replaceChildren();
+ for(const report of reports){
+  const box=card(root,report.type.toUpperCase()+' report',report.reason);
+  p(box,'Reported text: '+report.excerpt);
+  p(box,'Received '+stamp(report.created_at));
+  const row=actions(box);
+  for(const [decision,label] of [['reviewed','Mark reviewed'],
+    ['dismissed','Dismiss report'],['hide','Hide reported content']]){
+   if(decision==='hide'&&report.type==='faculty')continue;
+   add(row,btn(label,async()=>{
+    if(decision==='hide'&&!confirm('Hide this reported material from learners?'))return;
+    await api('moderation_resolve',{type:report.type,report_id:report.id,decision});
+    await refreshModeration();
+   },decision==='hide'?'danger-button':'subtle-button'));
+  }
+ }
+ if(!root.children.length)p(root,'No open academic conduct reports.');
 }
 async function refreshBlocked(){
  const records=await api('blocked_contacts');
@@ -370,6 +395,10 @@ async function liveRead(){
  const root=$('live-chat');root.replaceChildren();
  for(const msg of data.chat){
   const e=entry(root,msg,name(msg.author_id),'none');
+  if(msg.author_id!==state.me)add(actions(e),btn('Report',async()=>{
+   const reason=prompt('Why should this live-class message be reviewed? (at least 5 characters)');
+   if(reason)await api('live_report',{session_id:current.id,message_id:msg.id,reason});
+  },'subtle-button'));
   if(teaching(current.course_id)||state.role==='owner'){
    const a=actions(e);
    add(a,btn(msg.is_pinned?'Unpin':'Pin',async()=>{
@@ -405,6 +434,7 @@ function bind(){
  for(const b of document.querySelectorAll('[data-tab]'))b.addEventListener('click',()=>tab(b.dataset.tab));
  $('courses-refresh').addEventListener('click',()=>run(async()=>{await overview();await refreshRequests();}));
  $('blocked-refresh').addEventListener('click',()=>run(refreshBlocked));
+ $('moderation-refresh').addEventListener('click',()=>run(refreshModeration));
  $('settings-course').addEventListener('change',e=>{
   const c=state.teaching_courses.find(x=>x.id===e.target.value);if(!c)return;
   $('settings-visibility').value=c.visibility||'public';
@@ -482,8 +512,9 @@ async function start(){
  await refreshRequests();if(student())await refreshGroups();
  await refreshBlocked();
  const initial=new URLSearchParams(location.search).get('tab');
- const tabs=['courses','faculty','groups','messages','packages','live'];
- if(tabs.includes(initial)&&!(student()&&['messages','packages'].includes(initial)))tab(initial);
+ const tabs=['courses','faculty','groups','messages','packages','live','moderation'];
+ if(tabs.includes(initial)&&!(student()&&['messages','packages'].includes(initial))&&
+  (initial!=='moderation'||owner()))tab(initial);
  status('Academic workspace ready.'); 
 }
 start().catch(e=>status('Could not open academic workspace: '+e.message,true));
