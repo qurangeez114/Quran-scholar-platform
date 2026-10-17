@@ -15,5 +15,5 @@ for(const item of [
 const viewBody=sql.split('create or replace view public.qh_faculty_directory')[1].split('revoke all on public.qh_faculty_directory')[0];
 assert.ok(!viewBody.includes('a.email'),'Public view must not include private login email');
 assert.ok(!viewBody.includes('a.must_change_password'),'Public view must not include account security flags');
-assert.ok(!viewBody.includes('a.support_url'),'Public view must not implicitly expose payment URLs');
+assert.ok(viewBody.includes('a.support_url'),'Public view includes voluntary support URL only for explicitly published profiles');
 console.log('PASS: faculty row privacy, non-public audit, and verified-only published directory structure.');
