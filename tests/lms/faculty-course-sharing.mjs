@@ -33,7 +33,7 @@ for(const id of ['courseVisibility','courseFacultyReuse','editVisibility','editF
 }
 assert.match(admin,/faculty_reuse_enabled:\s*document\.getElementById\('courseFacultyReuse'\)\.checked/);
 assert.match(admin,/await updateCourse\(courseId, \{ title, description, is_published, visibility, faculty_reuse_enabled \}\)/);
-assert.match(courseAPI,/faculty_reuse_enabled:\s*options\.faculty_reuse_enabled===true/);
+assert.match(courseAPI,/faculty_reuse_enabled:\s*options\.faculty_reuse_enabled\s*===\s*true/);
 assert.match(detail,/includedByInstructor/);
 assert.match(detail,/Original instructor retains ownership and grading/);
 assert.match(client,/faculty_catalog/);
