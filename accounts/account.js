@@ -49,7 +49,7 @@ if(mode==='signup'){const firstName=$('firstName').value.trim(),lastName=$('last
 else if(mode==='recover')result=await db.auth.resetPasswordForEmail(email,{redirectTo:location.origin+'/account.html'});
 else result=await db.auth.signInWithPassword({email,password});
 if(mode==='signup'&&!result.error&&result.data.user&&result.data.user.identities?.length===0)return message('This email is already taken.');
-if(result.error)throw result.error;message(mode==='login'?'Signed in.':'Check your email for the next step.');await render();
+if(result.error)throw result.error;if(mode==='login'){location.href='/';return;}message('Check your email for the next step.');await render();
 }catch(e){message(/already (registered|been registered)/i.test(e.message)?'This email is already taken.':e.message);}finally{$('submit').disabled=false;}};
 $('reset-form').onsubmit=async e=>{e.preventDefault();const pw=$('new-password').value;if(pw.length<12)return message('Password must be at least 12 characters.');if(pw!==$('new-password-confirm').value)return message('Passwords do not match.');const {error}=await db.auth.updateUser({password:$('new-password').value});if(error)return message(error.message);recovering=false;history.replaceState(null,'',location.pathname);message('Password updated. You can now open your instructor dashboard.');await render();};
 $('logout').onclick=async()=>{const {error}=await db.auth.signOut();if(error)return message(error.message);recovering=false;message('Logged out.');render();};
