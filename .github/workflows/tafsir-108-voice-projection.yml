@@ -1,0 +1,64 @@
+name: Validate Surah 108 voice projection
+on:
+  push:
+    paths:
+      - '.github/workflows/tafsir-108-voice-projection.yml'
+      - 'data/tafsir/staging/surah-108-voice-projection-2026-10-17.json'
+      - 'data/tafsir/staging/surah-108-payload-assembly-2026-10-16.json'
+      - 'data/tafsir/staging/surah-108-link-schema-q06-mapping-2026-10-17.json'
+      - 'data/tafsir/staging/surah-108-voice-column-audit-2026-10-17.json'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tafsir-108-voice-projection
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate staging projection without network or database access
+        shell: python
+        run: |
+          import json,hashlib,pathlib
+          base=pathlib.Path("data/tafsir/staging")
+          def read(name):
+              raw=(base/name).read_bytes()
+              return json.loads(raw),hashlib.sha1(b"blob "+str(len(raw)).encode()+b"\0"+raw).hexdigest()
+          projection,_=read("surah-108-voice-projection-2026-10-17.json")
+          assembly,asha=read("surah-108-payload-assembly-2026-10-16.json")
+          schema,ssha=read("surah-108-link-schema-q06-mapping-2026-10-17.json")
+          audit,audsha=read("surah-108-voice-column-audit-2026-10-17.json")
+          assert projection["inputs"]==dict(assembly_blob_sha=asha,schema_blob_sha=ssha,audit_blob_sha=audsha),"Stale projection input"
+          for doc in (projection,assembly):
+              assert doc["database_written"] is False and doc["publication_ready"] is False and doc["chapter_complete"] is False
+          columns={x["column_name"] for x in schema["columns"] if x["table_name"]=="proposition_voice_chain"}
+          assert len(projection["rows"])==len(assembly["rows"])==73
+          indexed={x["claim_id"]:x for x in projection["rows"]}
+          assert len(indexed)==73
+          projected=unmapped=metadata=holds=0
+          for row in assembly["rows"]:
+              saved=indexed[row["claim_id"]]
+              assert saved["publication_ready"] is False
+              payload=row.get("proposed_payload") or (row["plan_row"] if "proposition" in row.get("plan_row",{}) else None)
+              if payload is None:
+                  assert saved["state"]=="blocked_no_four_table_payload" and "database_fields" not in saved
+                  unmapped+=1
+                  continue
+              projected+=1
+              fields=saved["database_fields"]
+              extra=saved["staging_metadata"]
+              assert set(fields)<=columns
+              assert not ({"id","proposition_id"} & set(fields))
+              assert not (set(fields)&set(extra))
+              assert dict(fields,**extra)==payload["voice"],"Lossy voice projection "+row["claim_id"]
+              metadata+=bool(extra)
+              assert saved["semantic_publication_hold"]==row.get("semantic_publication_hold")
+              holds+=bool(saved["semantic_publication_hold"])
+              assert saved["state"]=="staging_only_not_insertable" and saved["blockers"]
+          assert projection["counts"]==dict(total_claims=73,projected=projected,unmapped=unmapped,rows_with_preserved_metadata=metadata,semantic_holds=holds)
+          assert (projected,unmapped,metadata,holds)==(61,12,41,10)
+          print("PASS: 61 lossless voice projections; 12 unmapped; 41 metadata envelopes; 10 semantic holds.")
+          print("Static integrity only; no live source verification, publication approval, or database writes.")
