@@ -120,6 +120,7 @@ await instructor.submit('package-create-form',{title:'Integrated Learning Packag
 assert.ok(instructor.calls.some(x=>x.action==='package_create'),'Course package creation button must work');
 await instructor.click('blocked-refresh');
 assert.ok(instructor.calls.some(x=>x.action==='blocked_contacts'),'Blocked list refresh works');
+instructor.document.getElementById('live-course').value=COURSE_A;
 await instructor.submit('live-create-form',{title:'Academic seminar',video_url:'https://youtu.be/abcdefghijk',scheduled_at:''});
 assert.ok(instructor.calls.some(x=>x.action==='live_create'&&x.video_url.includes('youtu.be')),
  'Live scheduling must use selected class');
