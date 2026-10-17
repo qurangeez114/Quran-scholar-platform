@@ -190,6 +190,14 @@ Deno.serve(async req=>{
     if(await blocked(msg.sender_id,msg.recipient_id))fail('Contact blocked',403);
     result=await signed(msg.media_path);
    }else fail('Invalid media context');
+  }else if(action==='blocked_contacts'){
+   const records=await checked(sb.from('qh_academic_message_blocks')
+     .select('blocked_id,created_at').eq('blocker_id',me).order('created_at',{ascending:false}).limit(150));
+   result=await Promise.all(records.map(async(row:any)=>{
+     const person=await checked(sb.from('qh_lms_accounts').select('display_name')
+       .eq('user_id',row.blocked_id).maybeSingle());
+     return {id:row.blocked_id,name:person?.display_name||'Blocked contact',created_at:row.created_at};
+   }));
   }else if(action==='block_contact'){
    const other=guid(body.user_id);if(other===me)fail('Cannot block yourself');
    if(body.block===true)await checked(sb.from('qh_academic_message_blocks').upsert({blocker_id:me,blocked_id:other}));
@@ -351,6 +359,15 @@ Deno.serve(async req=>{
     result=await checked(sb.from('qh_academic_group_requests').insert({
      group_id:g.id,student_id:target,initiated_by:me,kind:invite?'invite':'join'
     }).select('id,status').single());
+   }else if(action==='group_cancel_request'){
+    if(!student)fail('Only students can withdraw study-group requests',403);
+    const request=await checked(sb.from('qh_academic_group_requests').select('*')
+      .eq('id',guid(body.request_id)).maybeSingle());
+    if(!request||request.student_id!==me||request.status!=='pending')
+      fail('Only your own pending invitation or join request can be cancelled',403);
+    result=await checked(sb.from('qh_academic_group_requests').update({
+      status:'cancelled',resolved_at:new Date().toISOString()
+    }).eq('id',request.id).eq('student_id',me).eq('status','pending').select('id,status').single());
    }else if(action==='group_requests'){
     if(!student)fail('Study group membership is for students',403);
     const inbox=await checked(sb.from('qh_academic_group_requests').select('*')
