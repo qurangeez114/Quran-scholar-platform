@@ -45,7 +45,7 @@ grant usage, select on sequence public.qh_faculty_audit_id_seq to service_role;
 -- No account email, internal credential history, or verification notes are exposed.
 create or replace view public.qh_faculty_directory
 with (security_barrier=true) as
-select p.user_id, a.display_name, a.city, a.country,
+select p.user_id, a.display_name, a.city, a.country, a.support_url,
   p.headline,p.biography,p.credentials,p.academic_affiliation,
   p.research_interests,p.teaching_languages,p.publications,p.office_hours,
   p.portrait_url,p.website_url,p.orcid_url,p.google_scholar_url,
