@@ -196,95 +196,58 @@ export async function deleteCourseMaterial(materialId, fileUrl) {
   }
 }
 
-// Bulk enroll multiple students in a course
+// Bulk student referral helper. A referral is NOT an enrollment.
+ // The student must consent, then the receiving instructor must approve.
+ // Kept for compatibility with existing callers, but never write to enrollments directly.
 export async function bulkEnrollStudents(courseId, studentEmails) {
-  if (!studentEmails || studentEmails.length === 0) {
-    throw new Error('No students provided');
+  if (!Array.isArray(studentEmails) || studentEmails.length === 0) {
+    throw new Error('Select at least one student to recommend');
   }
-
-  const enrollmentResults = {
-    successful: [],
-    failed: []
-  };
-
-  for (const email of studentEmails) {
-    try {
-      // Find user by email
-      const { data: users, error: searchError } = await supabase
-        .from('qh_profiles')
-        .select('user_id')
-        .eq('email', email)
-        .single();
-
-      if (searchError || !users) {
-        enrollmentResults.failed.push({
-          email,
-          reason: 'User not found'
-        });
+  const {data:auth,error:authError}=await supabase.auth.getUser();
+  if(authError||!auth?.user)throw new Error('Sign in as an instructor first');
+  const user=auth.user;
+  const {data:course,error:courseError}=await supabase.from('qh_courses')
+    .select('id,created_by,visibility,is_published,access_closes_at')
+    .eq('id',courseId).maybeSingle();
+  if(courseError||!course)throw new Error('Receiving instructor class not found');
+  if(course.created_by===user.id){
+    throw new Error('For your own class, use the instructor roster invitation workflow; do not bulk-enroll without student consent.');
+  }
+  if(!course.is_published || (course.access_closes_at&&Date.parse(course.access_closes_at)<=Date.now())){
+    throw new Error('The receiving course is closed or unpublished');
+  }
+  const results={successful:[],failed:[]};
+  for(const raw of studentEmails){
+    const email=typeof raw==='string'?raw.trim().toLowerCase():'';
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
+      results.failed.push({email,reason:'Invalid student email'});
+      continue;
+    }
+    try{
+      const {data:profile,error:lookupError}=await supabase.from('qh_profiles')
+        .select('user_id').eq('email',email).maybeSingle();
+      if(lookupError||!profile?.user_id){
+        results.failed.push({email,reason:'Student not found or not accessible'});
         continue;
       }
-
-      const userId = users.user_id;
-
-      // Check if already enrolled
-      const { data: existing, error: checkError } = await supabase
-        .from('qh_enrollments')
-        .select('id')
-        .eq('course_id', courseId)
-        .eq('user_id', userId)
-        .single();
-
-      if (existing) {
-        enrollmentResults.failed.push({
-          email,
-          reason: 'Already enrolled'
-        });
+      const {data,error}=await supabase.functions.invoke('academic-hub',{
+        body:{action:'enrollment_request',course_id:courseId,student_id:profile.user_id}
+      });
+      if(error){
+        let detail;try{detail=await error.context?.json();}catch{}
+        results.failed.push({email,reason:detail?.error||error.message||'Referral unavailable'});
         continue;
       }
-
-      // Enroll the student
-      const { data: enrollment, error: enrollError } = await supabase
-        .from('qh_enrollments')
-        .insert({
-          course_id: courseId,
-          user_id: userId,
-          enrolled_at: new Date().toISOString()
-        })
-        .select()
-        .single();
-
-      if (enrollError) throw enrollError;
-
-      // Send enrollment email
-      try {
-        const { sendEnrollmentEmail } = await import('./email-notifications.js');
-        const { data: course } = await supabase
-          .from('qh_courses')
-          .select('title')
-          .eq('id', courseId)
-          .single();
-
-        if (course) {
-          await sendEnrollmentEmail(userId, email, course.title, courseId);
-        }
-      } catch (emailError) {
-        console.error('Failed to send enrollment email:', emailError);
-        // Don't fail enrollment if email fails
-      }
-
-      enrollmentResults.successful.push({
-        email,
-        enrollmentId: enrollment.id
+      // The pending consent requirement must remain visible to all callers.
+      results.successful.push({
+        email,requestId:data?.id||null,status:data?.status||'consent_pending',
+        enrollmentId:null,notice:'Referral submitted; student consent and receiving instructor approval still required.'
       });
-    } catch (error) {
-      enrollmentResults.failed.push({
-        email,
-        reason: error.message
-      });
+    }catch(error){
+      results.failed.push({email,reason:error?.message||'Could not send referral'});
     }
   }
-
-  return enrollmentResults;
+  return results;
 }
 
 export async function enrollInCourse(courseId) {
