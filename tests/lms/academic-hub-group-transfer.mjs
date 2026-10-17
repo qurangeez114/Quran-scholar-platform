@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const migration=readFileSync('supabase/migrations/20261017_academic_group_owner_integrity.sql','utf8');
+const api=readFileSync('supabase/functions/academic-hub/index.ts','utf8');
+assert.match(migration,/select gm\.student_id into current_owner[\s\S]*?gm\.is_owner=true/);
+assert.match(migration,/r\.initiated_by<>current_owner/);
+assert.match(migration,/p_actor<>current_owner/);
+assert.match(migration,/kind='invite' and initiated_by=p_old and status='pending'/);
+assert.match(migration,/revoke all on function public\.qh_academic_accept_group\(uuid,uuid\) from public,anon,authenticated/);
+assert.match(migration,/grant execute on function public\.qh_academic_accept_group\(uuid,uuid\) to service_role/);
+assert.match(api,/from\('qh_academic_group_members'\)[\s\S]*?\.eq\('is_owner',true\)\.maybeSingle\(\)/);
+const requestSection=api.slice(api.indexOf("action==='group_requests'"),api.indexOf("action==='group_decide'"));
+assert.match(requestSection,/from\('qh_academic_group_members'\)/);
+assert.match(requestSection,/\.eq\('is_owner',true\)/);
+assert.ok(!requestSection.includes("eq('creator_id',me)"));
+console.log('PASS: admission and owner queues follow current membership; old invitations cancelled; RPC access restricted.');
