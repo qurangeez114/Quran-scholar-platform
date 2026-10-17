@@ -95,6 +95,39 @@ const directoryHTML=await readFile(new URL('faculty.html',root),'utf8');
    'User-provided biography must not render executable HTML');
  assert.equal(document.getElementById('faculty-detail').textContent.includes('private@example.invalid'),false);
 }
+// A named faculty link must also work for its owner and the administrator before publication.
+for(const mode of ['owner','self','student','anonymous']){
+ const {document}=parseHTML(directoryHTML);
+ const requested=[];
+ const viewingUser=mode==='owner'?'10000000-0000-4000-8000-000000000001':teacher;
+ const db={
+   from:()=>({select:()=>({eq:()=>Promise.resolve({data:[],error:null})})}),
+   auth:{getSession:async()=>({data:{session:mode==='anonymous'?null:{user:{id:viewingUser}}},error:null})}
+ };
+ const lmsRequest=async(action,values)=>{
+   requested.push({action,values});
+   if(mode==='student')throw Error('Access denied');
+   return {account:{...sampleAccount,role:'instructor'},profile:{...profile,is_published:false},editable:true};
+ };
+ runInNewContext(publicSrc,{document,URL,URLSearchParams,location:{search:'?id='+teacher},db,lmsRequest,console});
+ await new Promise(resolve=>setTimeout(resolve,15));
+ const detail=document.getElementById('faculty-detail');
+ const preview=document.getElementById('faculty-private-preview');
+ if(mode==='owner'||mode==='self'){
+   assert.equal(detail.hidden,false,mode+' should see protected faculty preview');
+   assert.equal(preview.hidden,false,mode+' should see unpublished warning');
+   assert.match(document.getElementById('faculty-public-status').textContent,/Private preview/);
+   assert.equal(requested.length,1,mode+' should load the protected faculty API');
+   assert.equal(requested[0].values.user_id,teacher);
+   assert.equal(document.getElementById('faculty-private-edit').getAttribute('href'),
+     mode==='owner'?'/faculty-admin.html?id='+teacher:'/faculty-profile.html');
+   assert.equal(detail.textContent.includes('private@example.invalid'),false);
+ }else{
+   assert.equal(detail.hidden,true,mode+' must not see unpublished content');
+   assert.match(document.getElementById('faculty-public-status').textContent,/not publicly available/);
+   if(mode==='anonymous')assert.equal(requested.length,0,'Anonymous visitor cannot query private faculty API');
+ }
+}
 const dashboard=await readFile(new URL('accounts/lms-dashboard.js',root),'utf8');
 const adminHTML=await readFile(new URL('admin/lms.html',root),'utf8');
 const instructor=await readFile(new URL('instructor-dashboard.html',root),'utf8');
