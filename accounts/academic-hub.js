@@ -99,9 +99,13 @@ async function overview(){
  select('settings-course',teach,'Choose your class');
  select('group-course',mineCourses.filter(c=>!c.access_closes_at||new Date(c.access_closes_at)>new Date()),'Choose class');
  select('faculty-recipient',state.faculty.filter(x=>x.user_id!==state.me),'Choose instructor','display_name','user_id');
- select('package-course',available,'Choose public class');
+ select('package-course',state.faculty_catalog||[],'Choose shared course');
+ select('include-host-course',teach,'Choose your class');
+ select('include-source-course',(state.faculty_catalog||[])
+   .filter(c=>c.created_by!==state.me),'Choose faculty-shared source course');
  select('live-course',liveCourses,'Choose class');
  renderCourses();renderFaculty();
+ renderInclusions();
 }
 function renderCourses(){
  const root=$('course-catalog');root.replaceChildren();
@@ -118,6 +122,16 @@ function renderCourses(){
   if(mine(c.id))p(box,'Enrolled');
  }
  if(!root.children.length)p(root,'No currently published public courses.');
+ const included=state.included_courses||[];
+ if(included.length){
+   const title=add(root,el('div',undefined,'academic-panel'));
+   add(title,el('h3','Courses included by my instructors'));
+   for(const c of included){
+     const host=(state.my_courses||[]).find(x=>x.id===c.host_course_id);
+     const b=card(title,c.title,'From: '+name(c.created_by)+' · Included in '+(host?.title||'your class'));
+     add(actions(b),link('/course.html?course='+encodeURIComponent(c.id),'Open linked lessons'));
+   }
+ }
 }
 function renderFaculty(){
  const root=$('faculty-grid');root.replaceChildren();
@@ -247,6 +261,23 @@ async function refreshBlocked(){
  }
  if(!list.children.length)p(list,'You have no blocked contacts.');
 }
+function renderInclusions(){
+ const root=$('course-inclusions');root.replaceChildren();
+ const included=state.included_courses||[];
+ for(const inc of included){
+  const host=(state.teaching_courses||[]).find(c=>c.id===inc.host_course_id);
+  if(!host)continue;
+  const box=card(root,inc.title,'Original instructor: '+name(inc.created_by)+' · Included in '+host.title);
+  const a=actions(box);
+  add(a,link('/course.html?course='+encodeURIComponent(inc.id),'View source lessons'));
+  add(a,btn('Remove from class',async()=>{
+   if(!confirm('Remove this shared course from your class? Your students will lose linked access.'))return;
+   await api('course_uninclude',{host_course_id:inc.host_course_id,source_course_id:inc.id});
+   await overview();
+  },'subtle-button'));
+ }
+ if(!root.children.length)p(root,'No shared courses have been included in your classes.');
+}
 async function refreshPackages(){
  packageState=await api('package_list');
  select('package-picker',packageState.packages,'Choose package');
@@ -255,13 +286,13 @@ async function refreshPackages(){
   const box=card(list,pack.title,pack.description);
   const items=packageState.items.filter(x=>x.package_id===pack.id);
   for(const item of items){
-   const c=state.public_courses.find(x=>x.id===item.course_id);
+   const c=(state.faculty_catalog||[]).find(x=>x.id===item.course_id);
    const row=actions(box);
    if(c){
     add(row,link('/course.html?course='+encodeURIComponent(item.course_id),c.title+
       ' · '+name(c.created_by)));
    }else{
-    add(row,el('span','Unavailable, private, or expired · not accessible to new students','academic-muted'));
+    add(row,el('span','Source course no longer shareable · original instructor may have withdrawn reuse permission','academic-muted'));
    }
    add(row,btn('Remove from package',async()=>{
     await api('package_remove',{package_id:pack.id,course_id:item.course_id});await refreshPackages();
@@ -269,7 +300,7 @@ async function refreshPackages(){
   }
   if(!items.length)p(box,'No classes in this package yet.');
  }
- if(!list.children.length)p(list,'Create a package, then include any eligible public class.');
+ if(!list.children.length)p(list,'Create a package, then include any source course its creator has made available to instructors.');
 }
 async function refreshGroups(){
  const [groups,requests,pref]=await Promise.all([
@@ -462,6 +493,7 @@ function bind(){
  $('settings-course').addEventListener('change',e=>{
   const c=state.teaching_courses.find(x=>x.id===e.target.value);if(!c)return;
   $('settings-visibility').value=c.visibility||'public';
+  $('settings-faculty-reuse').checked=c.faculty_reuse_enabled===true;
   $('settings-deadline').value=c.access_closes_at?
    new Date(new Date(c.access_closes_at)-new Date(c.access_closes_at).getTimezoneOffset()*60000).toISOString().slice(0,16):'';
  });
@@ -474,6 +506,7 @@ function bind(){
  }
  form('course-settings-form',async f=>{
   await api('course_settings',{course_id:f.elements.course_id.value,visibility:f.elements.visibility.value,
+   faculty_reuse_enabled:$('settings-faculty-reuse').checked,
    access_closes_at:f.elements.access_closes_at.value?new Date(f.elements.access_closes_at.value).toISOString():null});
   await overview();
  });
@@ -505,6 +538,9 @@ function bind(){
  });
  form('package-create-form',async f=>{await api('package_create',values(f));f.reset();await refreshPackages();});
  form('package-add-form',async f=>{await api('package_add',values(f));await refreshPackages();});
+ form('course-include-form',async f=>{
+  await api('course_include',values(f));await overview();
+ });
  $('live-course').addEventListener('change',()=>run(refreshLive));
  form('live-create-form',async f=>{
   const v=values(f),course_id=$('live-course').value;
