@@ -175,11 +175,16 @@ Deno.serve(async req=>{
      if(authUpdateError)fail('Login identity update failed; no account changes were saved',503);
      authUpdated=true;
    }
+   let accountCommitted=false,profileCommitted=false;
    try{
-     if(accountChanged)await checked(service.from('qh_lms_accounts')
-       .update({display_name:name,email,city,country,support_url:support}).eq('user_id',targetId).eq('role','instructor'));
+     if(accountChanged){
+       await checked(service.from('qh_lms_accounts')
+         .update({display_name:name,email,city,country,support_url:support}).eq('user_id',targetId).eq('role','instructor'));
+       accountCommitted=true;
+     }
      const profile=await checked(service.from('qh_instructor_profiles')
        .upsert({user_id:targetId,...patch},{onConflict:'user_id'}).select().single());
+     profileCommitted=true;
      const accountFields=['display_name','email','city','country','support_url'].filter(k=>({
        display_name:name,email,city,country,support_url:support
      } as any)[k]!==existing[k]);
@@ -194,13 +199,30 @@ Deno.serve(async req=>{
      result={ok:true,account:{...existing,display_name:name,email,city,country,support_url:support},
        profile,message:adminEdit?'Instructor account and profile updated.':'Faculty profile saved.'};
    }catch(err){
+     // Compensating rollback: email is managed by Auth while faculty profile and LMS
+     // identity are independent Postgres writes. Never return success for partial saves.
+     let rollbackFailed=false;
+     if(profileCommitted){
+       try{
+         if(before) await checked(service.from('qh_instructor_profiles')
+           .upsert(before,{onConflict:'user_id'}));
+         else await checked(service.from('qh_instructor_profiles').delete().eq('user_id',targetId));
+       }catch{rollbackFailed=true;}
+     }
+     if(accountCommitted){
+       try{await checked(service.from('qh_lms_accounts').update({
+         display_name:existing.display_name,email:existing.email,city:existing.city,
+         country:existing.country,support_url:existing.support_url
+       }).eq('user_id',targetId).eq('role','instructor'));}
+       catch{rollbackFailed=true;}
+     }
      if(authUpdated&&originalUser){
-       // Best effort rollback avoids a silent split between Supabase Auth and the LMS.
        const rollback:any={user_metadata:originalUser.user_metadata||{}};
        if(email!==existing.email){rollback.email=originalUser.email;rollback.email_confirm=true;}
        const {error:revertError}=await service.auth.admin.updateUserById(targetId,rollback);
-       if(revertError)fail('Profile could not be saved and login email reconciliation requires administrator attention',503);
+       if(revertError)rollbackFailed=true;
      }
+     if(rollbackFailed)fail('Faculty update failed; administrator reconciliation is required before retrying',503);
      throw err;
    }
   }else if(body.action==='save_profile'){
