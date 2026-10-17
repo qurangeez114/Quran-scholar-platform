@@ -137,8 +137,16 @@ Deno.serve(async req=>{
      .select('user_id,headline,academic_affiliation,credential_status,is_published')
      .in('user_id',ids)):[];
    const indexed=new Map(profiles.map((p:any)=>[p.user_id,p]));
-   result=accounts.map((row:any)=>({...row,...(indexed.get(row.user_id)||{}),
-     has_profile:indexed.has(row.user_id)}));
+   result=accounts.map((row:any)=>{
+     const p:any=indexed.get(row.user_id)||{};
+     // Explicitly whitelist output properties. Do not accidentally expose login
+     // email or administrative flags if an underlying query ever expands.
+     return {user_id:row.user_id,display_name:row.display_name,city:row.city,
+       country:row.country,active:row.active,
+       headline:p.headline||'',academic_affiliation:p.academic_affiliation||'',
+       credential_status:p.credential_status||'unreviewed',
+       is_published:p.is_published===true,has_profile:indexed.has(row.user_id)};
+   });
   }else if(body.action==='faculty_get'){
    // Instructors may preview only their own unpublished profile.
    // Never silently substitute their own record for a requested third-party profile.
