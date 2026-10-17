@@ -26,6 +26,14 @@ for(const id of ['settings-faculty-reuse','course-include-form','include-host-co
  assert.ok(html.includes('id="'+id+'"'),'Missing faculty control '+id);
  assert.ok(client.includes("'"+id+"'"),'Missing faculty control event '+id);
 }
+const admin=readFileSync('admin/courses.html','utf8');
+const courseAPI=readFileSync('courses-api.js','utf8');
+for(const id of ['courseVisibility','courseFacultyReuse','editVisibility','editFacultyReuse']){
+ assert.ok(admin.includes('id="'+id+'"'),'Course creator needs complete setting: '+id);
+}
+assert.match(admin,/faculty_reuse_enabled:\s*document\.getElementById\('courseFacultyReuse'\)\.checked/);
+assert.match(admin,/await updateCourse\(courseId, \{ title, description, is_published, visibility, faculty_reuse_enabled \}\)/);
+assert.match(courseAPI,/faculty_reuse_enabled:\s*options\.faculty_reuse_enabled===true/);
 assert.match(detail,/includedByInstructor/);
 assert.match(detail,/Original instructor retains ownership and grading/);
 assert.match(client,/faculty_catalog/);
