@@ -83,7 +83,7 @@ const directoryHTML=await readFile(new URL('faculty.html',root),'utf8');
  const db={from:()=>({select:()=>({eq:()=>Promise.resolve({data:[{...profile,...sampleAccount}],error:null})})})};
  runInNewContext(publicSrc,{document,URL,URLSearchParams,location:{search:'?id='+teacher},db,console});
  await new Promise(resolve=>setTimeout(resolve,10));
- assert.equal(document.getElementById('faculty-detail').hidden,false);
+ assert.equal(document.getElementById('faculty-detail').hidden,false,document.getElementById('faculty-public-status').textContent);
  assert.equal(document.getElementById('faculty-bio').querySelector('p').textContent,profile.biography);
  assert.equal(document.getElementById('faculty-bio').querySelector('script'),null,
    'User-provided biography must not render executable HTML');
