@@ -120,7 +120,7 @@ assert.equal(r.code,403,'Classmate must join before reading posts');
 r=await request(studentB,'group_join_request',{group_id:groupId});
 assert.equal(r.code,200,JSON.stringify(r.data));const membershipId=r.data.id;
 r=await request(studentB,'group_decide',{request_id:membershipId,accept:true});
-assert.equal(r.code,403,'Only group owner may approve join requests');
+assert.equal(r.code,403,'Only group owner may approve join requests: '+JSON.stringify(r.data));
 r=await request(studentA,'group_decide',{request_id:membershipId,accept:true});
 assert.equal(r.code,200,JSON.stringify(r.data));
 r=await request(studentB,'group_post',{group_id:groupId,text:'Primary source 1'});
