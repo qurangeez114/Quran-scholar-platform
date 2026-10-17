@@ -7,6 +7,7 @@ on:
       - 'data/tafsir/staging/surah-108-payload-assembly-2026-10-16.json'
       - 'data/tafsir/staging/surah-108-link-schema-q06-mapping-2026-10-17.json'
       - 'data/tafsir/staging/surah-108-voice-column-audit-2026-10-17.json'
+      - 'data/tafsir/staging/qurtubi-108-q06-bilingual-source-check-2026-10-17.json'
   workflow_dispatch:
 permissions:
   contents: read
@@ -60,5 +61,29 @@ jobs:
               assert saved["state"]=="staging_only_not_insertable" and saved["blockers"]
           assert projection["counts"]==dict(total_claims=73,projected=projected,unmapped=unmapped,rows_with_preserved_metadata=metadata,semantic_holds=holds)
           assert (projected,unmapped,metadata,holds)==(61,12,41,10)
+          source_check,_=read("qurtubi-108-q06-bilingual-source-check-2026-10-17.json")
+          assert source_check["input_assembly_blob_sha"]==asha,"Stale Q06 source checkpoint"
+          assert source_check["result"]=="source_hashes_and_bilingual_claim_scope_verified"
+          assert source_check["database_written"] is False and source_check["publication_ready"] is False
+          q06=next(x for x in assembly["rows"] if x["claim_id"]=="108-Q06")
+          payload=q06["proposed_payload"]
+          assert payload["voice"]["originating_voice_name"]=="Malik"
+          assert payload["voice"]["originating_voice_type"]=="named_earlier_exegete"
+          assert payload["evidence"]["attributed_authority_name"]=="Malik"
+          assert payload["evidence"]["unit_type"]=="single_named_attribution"
+          assert payload["proposition"]["mufassir_own_position"]=="reported_only"
+          assert payload["proposition"]["statement_en"]==q06["authoritative_research_claim"]["statement_en"]
+          assert "Ibn al-Arabi" in payload["link"]["semantic_link_note"]
+          assert q06["semantic_publication_hold"],"Source check alone must not remove hold"
+          witnesses={x["entry_id"]:x for x in source_check["locators"]}
+          assert set(witnesses)=={13240,38031}
+          for entry_id,lang,hash_field in ((13240,"ar","expected_sha256"),(38031,"en","translation_witness_expected_sha256")):
+              witness=witnesses[entry_id]
+              assert witness["language"]==lang and witness["sha256"]==payload["source"][hash_field]
+              assert len(witness["spans"])==6
+              for span in witness["spans"]:
+                  assert span["anchor"] and span["end_codepoint_0"]-span["start_codepoint_0"]==len(span["anchor"])
+                  assert witness["context_start_codepoint_0"]<=span["start_codepoint_0"]<span["end_codepoint_0"]<=witness["context_end_codepoint_0"]
+          print("Q06 saved bilingual checkpoint and separate speaker/reporter mapping consistent; hold retained.")
           print("PASS: 61 lossless voice projections; 12 unmapped; 41 metadata envelopes; 10 semantic holds.")
           print("Static integrity only; no live source verification, publication approval, or database writes.")
