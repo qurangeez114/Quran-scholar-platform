@@ -1,0 +1,54 @@
+name: Validate Surah 108 I01 candidates
+on:
+  push:
+    paths:
+      - '.github/workflows/tafsir-108-i01-candidate-integrity.yml'
+      - 'data/tafsir/staging/ibn-kathir-108-i01-four-table-candidates-2026-10-17.json'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tafsir-108-i01-candidate-integrity
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check saved candidates without network or database access
+        shell: python
+        run: |
+          import json,pathlib
+          base=pathlib.Path("data/tafsir/staging")
+          doc=json.loads((base/"ibn-kathir-108-i01-four-table-candidates-2026-10-17.json").read_text())
+          assert doc["surah"]==108 and doc["parent_claim_id"]=="108-I01"
+          for key in ("database_written","publication_ready","human_verified","chapter_complete","parent_replaced"):
+              assert doc[key] is False,key
+          assert doc["authoritative_claim_count"]==73
+          rows=doc["candidates"]
+          assert [r["draft_label"] for r in rows]==["108-I01-A","108-I01-B"]
+          markers=[r["proposition"]["extracted_by"] for r in rows]
+          assert len(set(markers))==2,"Duplicate extraction markers"
+          for row,suffix in zip(rows,("A","B")):
+              p=row["proposition"]
+              assert p["extracted_by"]==row["link"]["linked_by"]=="work-surah108-v1:i01-candidate:"+suffix
+              assert p["source_type"]=="tafsir_entry" and p["tafsir_entry_id"]==48457
+              assert p["claim_type_id"]==7
+              assert p["extraction_validity"]=="pending_source_verification"
+              assert p["verification_state"]=="source_language_located"
+              assert p["supporting_span"] in doc["source_check"]["arabic_opening"]
+              assert row["voice"]["reporting_work_id"]==2 and row["voice"]["originating_voice_name"] is None
+              assert row["evidence"]["unit_type"]=="unattributed_assertion"
+              assert row["evidence"]["attributed_authority_name"] is None
+              assert row["evidence"]["independence_state"]=="unknown"
+              for section in ("proposition","voice","evidence","link"):
+                  assert not ({"id","proposition_id","evidence_unit_id"} & set(row[section])),"Invented generated ID"
+          assert rows[0]["voice"]["originating_voice_type"]=="exegete_own_view"
+          assert rows[0]["proposition"]["mufassir_own_position"]=="unclear"
+          assert rows[1]["voice"]["originating_voice_type"]=="unattributed_group"
+          assert rows[1]["proposition"]["mufassir_own_position"]=="reported_only"
+          assert doc["source_check"]["arabic_sha256"]=="088bd57659f0a6645f7195f2e98caf9562e0571eca8214730cd55c07401402b2"
+          assert doc["source_check"]["english_sha256"]=="7e5883c137fce598750407a0a0d4aca5fa03e791f371b3ffdd5d7c280511afda"
+          print("PASS: distinct markers, exact saved Arabic spans, separate voices, source hashes and publication holds.")
+          print("Static staging integrity only; no live database validation or publication approval.")
