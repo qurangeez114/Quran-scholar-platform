@@ -37,7 +37,7 @@ class Query{
   }else if(this.op==='insert'){
    const row={...this.values};tables[this.name].push(row);rows=[row];
   }else if(this.op==='update')rows.forEach(r=>Object.assign(r,this.values));
-  return Promise.resolve({data:this.singleFlag?rows[0]||null:rows,error:null}).then(resolve,reject);
+  return Promise.resolve({data:JSON.parse(JSON.stringify(this.singleFlag?rows[0]||null:rows)),error:null}).then(resolve,reject);
  }
 }
 const auth={getUser:async token=>({data:{user:users.find(u=>u.id===token)||null},error:null}),
