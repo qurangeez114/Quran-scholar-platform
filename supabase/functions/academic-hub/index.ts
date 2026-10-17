@@ -152,7 +152,14 @@ Deno.serve(async req=>{
    if(action==='faculty_message_list'){
     const received=await checked(sb.from('qh_academic_messages').select('*').eq('recipient_id',me).order('created_at',{ascending:false}).limit(75));
     const sent=await checked(sb.from('qh_academic_messages').select('*').eq('sender_id',me).order('created_at',{ascending:false}).limit(75));
-    result=[...received,...sent].sort((a:any,b:any)=>Date.parse(a.created_at)-Date.parse(b.created_at)).slice(-120);
+    const blockedThem=await checked(sb.from('qh_academic_message_blocks')
+      .select('blocked_id').eq('blocker_id',me));
+    const blockedMe=await checked(sb.from('qh_academic_message_blocks')
+      .select('blocker_id').eq('blocked_id',me));
+    const deny=new Set([...blockedThem.map((r:any)=>r.blocked_id),
+      ...blockedMe.map((r:any)=>r.blocker_id)]);
+    result=[...received,...sent].filter((m:any)=>!deny.has(m.sender_id===me?m.recipient_id:m.sender_id))
+      .sort((a:any,b:any)=>Date.parse(a.created_at)-Date.parse(b.created_at)).slice(-120);
    }else{
     const recipient=guid(body.recipient_id);
     if(recipient===me)fail('Choose another instructor');
@@ -202,7 +209,7 @@ Deno.serve(async req=>{
    const deadline=at(body.access_closes_at);
    result=await checked(sb.from('qh_courses').update({visibility,access_closes_at:deadline,updated_at:new Date().toISOString()})
      .eq('id',c.id).select('id,title,visibility,access_closes_at').single());
-  }else if(action==='enrollment_request'||action==='enrollment_requests'||action==='enrollment_decide'||action==='enrollment_consent'){
+  }else if(action==='enrollment_request'||action==='enrollment_requests'||action==='enrollment_decide'||action==='enrollment_consent'||action==='enrollment_cancel'){
    if(action==='enrollment_requests'){
     const mine=await checked(sb.from('qh_academic_enrollment_requests')
       .select('*').eq('student_id',me).order('created_at',{ascending:false}).limit(100));
@@ -247,7 +254,13 @@ Deno.serve(async req=>{
       .eq('id',guid(body.request_id)).maybeSingle());
     if(!request)fail('Enrollment request unavailable',404);
     const c=await getCourse(request.course_id);
-    if(action==='enrollment_consent'){
+    if(action==='enrollment_cancel'){
+     if(request.student_id!==me||!['consent_pending','pending'].includes(request.status))
+       fail('Only students may withdraw their pending requests',403);
+     result=await checked(sb.from('qh_academic_enrollment_requests').update({
+      status:'cancelled',responded_by:me,responded_at:new Date().toISOString(),updated_at:new Date().toISOString()
+     }).eq('id',request.id).in('status',['consent_pending','pending']).select('id,status').single());
+    }else if(action==='enrollment_consent'){
      if(request.student_id!==me||request.status!=='consent_pending')fail('Consent request unavailable',403);
      const accept=body.accept===true;
      result=await checked(sb.from('qh_academic_enrollment_requests').update({
@@ -350,6 +363,7 @@ Deno.serve(async req=>{
     const r=await checked(sb.from('qh_academic_group_requests').select('*')
       .eq('id',guid(body.request_id)).maybeSingle());
     if(!r||r.status!=='pending')fail('Group invitation/request unavailable');
+    if(!student)fail('Study-group membership is limited to students',403);
     const g=await getGroup(r.group_id);
     if(r.kind==='invite'&&r.student_id!==me)fail('Only invited student may decide',403);
     if(r.kind==='join'){
@@ -429,6 +443,7 @@ Deno.serve(async req=>{
       .eq('course_id',course.id).order('created_at',{ascending:false}).limit(50));
    }else if(action==='live_create'){
     const course=await getCourse(body.course_id);if(!owns(course))fail('Class owner required',403);
+    if(ended(course))fail('Extend the closed class before scheduling a session',403);
     const video=https(body.video_url);
     const host=new URL(video!).hostname.toLowerCase();
     if(!['youtube.com','www.youtube.com','youtu.be','www.youtube-nocookie.com','vimeo.com','www.vimeo.com'].includes(host))
