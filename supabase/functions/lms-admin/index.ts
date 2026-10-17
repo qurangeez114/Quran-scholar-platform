@@ -131,6 +131,14 @@ Deno.serve(async req=>{
    if(!target)fail('Instructor account not found',404);
    const profile=await checked(service.from('qh_instructor_profiles').select('*').eq('user_id',targetId).maybeSingle());
    result={account:target,profile,editable:owner||targetId===actor.id};
+  }else if(body.action==='faculty_audit'){
+   if(!owner)fail('Only administrators may inspect faculty audit history',403);
+   const targetId=uuid(body.user_id);
+   const instructor=await checked(service.from('qh_lms_accounts').select('user_id').eq('user_id',targetId).eq('role','instructor').maybeSingle());
+   if(!instructor)fail('Instructor account not found',404);
+   result=await checked(service.from('qh_faculty_audit')
+     .select('actor_id,action,changed_fields,created_at')
+     .eq('instructor_id',targetId).order('created_at',{ascending:false}).limit(30));
   }else if(body.action==='faculty_save'||body.action==='faculty_admin_save'){
    const adminEdit=body.action==='faculty_admin_save';
    if(adminEdit&&!owner)fail('Only administrators can edit instructor accounts',403);
