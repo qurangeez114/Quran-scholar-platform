@@ -1,6 +1,6 @@
 import {db} from './client.js';
 const $=id=>document.getElementById(id);
-const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const fields=[['biography','faculty-bio'],['credentials','faculty-credentials'],
  ['research_interests','faculty-research'],['publications','faculty-publications'],
  ['teaching_languages','faculty-languages'],['office_hours','faculty-hours']];
