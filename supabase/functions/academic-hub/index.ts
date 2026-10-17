@@ -103,7 +103,50 @@ Deno.serve(async req=>{
      .select('id,title,created_by,is_published,visibility,access_closes_at').eq('created_by',me).order('created_at',{ascending:false}).limit(200)):[];
    const faculty=await checked(sb.from('qh_lms_accounts')
      .select('user_id,display_name,active').eq('role','instructor').eq('active',true).order('display_name').limit(100));
-   result={role,me,faculty,public_courses:courses,my_courses:myCourses,teaching_courses:myTeaching};
+   const ownIds=myTeaching.map((c:any)=>c.id);
+   const roster=teacher&&ownIds.length?await checked(sb.from('qh_enrollments')
+     .select('course_id,user_id').in('course_id',ownIds).limit(1000)):[];
+   const rosterIds=[...new Set(roster.map((r:any)=>r.user_id))] as string[];
+   const students=await Promise.all(rosterIds.map(async id=>{
+     const p=await checked(sb.from('qh_lms_accounts').select('display_name,role').eq('user_id',id).maybeSingle());
+     const user=p?.display_name?null:await sb.auth.admin.getUserById(id);
+     return {id,name:p?.display_name||user?.data?.user?.user_metadata?.display_name||'Student'};
+   }));
+   result={role,me,faculty,public_courses:courses,my_courses:myCourses,
+     teaching_courses:myTeaching,roster,students};
+  }else if(action==='peer_discovery'||action==='group_classmates'){
+   if(!student)fail('Only students may use student peer discovery',403);
+   if(action==='peer_discovery'){
+     if(typeof body.enabled==='boolean'){
+       await checked(sb.from('qh_academic_contact_settings').upsert({
+         user_id:me,student_peer_messages:body.enabled,updated_at:new Date().toISOString()
+       }));
+     }
+     const setting=await checked(sb.from('qh_academic_contact_settings')
+       .select('student_peer_messages').eq('user_id',me).maybeSingle());
+     result={enabled:setting?.student_peer_messages===true};
+   }else{
+     const c=await getCourse(body.course_id);await requireClass(c);
+     const settings=await checked(sb.from('qh_academic_contact_settings')
+       .select('student_peer_messages').eq('user_id',me).maybeSingle());
+     if(!settings?.student_peer_messages)fail('Enable group discovery to invite classmates',403);
+     const classmates=await checked(sb.from('qh_enrollments').select('user_id')
+       .eq('course_id',c.id).limit(150));
+     const ids=classmates.map((r:any)=>r.user_id).filter((id:string)=>id!==me);
+     const opt=ids.length?await checked(sb.from('qh_academic_contact_settings')
+       .select('user_id').in('user_id',ids).eq('student_peer_messages',true)):[];
+     const visible=[] as any[];
+     for(const item of opt){
+       if(await blocked(me,item.user_id))continue;
+       const acct=await checked(sb.from('qh_lms_accounts').select('display_name,role,active')
+         .eq('user_id',item.user_id).maybeSingle());
+       if(acct?.role==='instructor'||acct?.active===false)continue;
+       const other=acct?.display_name?null:await sb.auth.admin.getUserById(item.user_id);
+       visible.push({id:item.user_id,name:acct?.display_name||
+         other?.data?.user?.user_metadata?.display_name||'Student'});
+     }
+     result=visible;
+   }
   }else if(action==='faculty_message_send'||action==='faculty_message_list'||action==='faculty_media_prepare'){
    if(!teacher)fail('Faculty-only conversation',403);
    if(action==='faculty_message_list'){
@@ -282,8 +325,12 @@ Deno.serve(async req=>{
      if(!student)fail('Student group only',403);
      const m=await member(g.id);if(!m?.is_owner)fail('Group owner permission required',403);
      if(!await enrolled(c.id,target))fail('Invite only students enrolled in this course',403);
+     const consent=await checked(sb.from('qh_academic_contact_settings')
+       .select('student_peer_messages').eq('user_id',target).maybeSingle());
+     if(!consent?.student_peer_messages)fail('Student has not opted in to group invitations',403);
      if(await blocked(me,target))fail('Contact blocked',403);
     }else if(!student)fail('Students may request to join groups',403);
+    else if(await blocked(me,g.creator_id))fail('Group owner is blocked',403);
     if(await member(g.id,target))fail('Already a member');
     const pending=await checked(sb.from('qh_academic_group_requests').select('id')
       .eq('group_id',g.id).eq('student_id',target).eq('status','pending').maybeSingle());
