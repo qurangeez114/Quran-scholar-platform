@@ -124,6 +124,29 @@ Deno.serve(async req=>{
    const peopleIds=[...new Set([...enrollments.map((e:any)=>e.user_id),...attempts.map((a:any)=>a.user_id),...accounts.map((a:any)=>a.user_id),...courses.map((c:any)=>c.created_by)])] as string[];
    const people=await Promise.all(peopleIds.map(async id=>{const {data,error}=await service.auth.admin.getUserById(id);if(error)throw error;return {user_id:id,email:data.user.email,display_name:data.user.user_metadata?.display_name||''};}));
    result={role,accounts,courses,enrollments,lessons,quizzes,attempts,progress,assignments:submissions,submissions:work,people};
+  }else if(body.action==='faculty_staff_list'){
+   // Private directory of draft accounts; never use the public faculty view for drafts.
+   if(!owner&&role!=='instructor')fail('Faculty records are limited to teaching staff',403);
+   const accounts=owner
+     ?await checked(service.from('qh_lms_accounts')
+       .select('user_id,display_name,city,country,active').eq('role','instructor').order('display_name'))
+     :[{user_id:actor.id,display_name:account.display_name,city:account.city,
+       country:account.country,active:account.active}];
+   const ids=accounts.map((r:any)=>r.user_id);
+   const profiles=ids.length?await checked(service.from('qh_instructor_profiles')
+     .select('user_id,headline,academic_affiliation,credential_status,is_published')
+     .in('user_id',ids)):[];
+   const indexed=new Map(profiles.map((p:any)=>[p.user_id,p]));
+   result=accounts.map((row:any)=>{
+     const p:any=indexed.get(row.user_id)||{};
+     // Explicitly whitelist output properties. Do not accidentally expose login
+     // email or administrative flags if an underlying query ever expands.
+     return {user_id:row.user_id,display_name:row.display_name,city:row.city,
+       country:row.country,active:row.active,
+       headline:p.headline||'',academic_affiliation:p.academic_affiliation||'',
+       credential_status:p.credential_status||'unreviewed',
+       is_published:p.is_published===true,has_profile:indexed.has(row.user_id)};
+   });
   }else if(body.action==='faculty_get'){
    // Instructors may preview only their own unpublished profile.
    // Never silently substitute their own record for a requested third-party profile.

@@ -23,6 +23,7 @@ class Query{
  constructor(name){this.name=name;this.filters=[];this.op='read';this.singleFlag=false;}
  select(){return this;}
  eq(k,v){this.filters.push(r=>r[k]===v);return this;}
+ in(k,vals){this.filters.push(r=>vals.includes(r[k]));return this;}
  maybeSingle(){this.singleFlag=true;return this;}
  single(){this.singleFlag=true;return this;}
  order(){return this;}
@@ -71,6 +72,19 @@ const full={
  facebook_url:null,instagram_url:null,x_url:null,is_published:true,
  display_name:'Instructor Revised',city:'Asmara',country:'Eritrea',support_url:''
 };
+assert.equal((await call(null,{action:'faculty_staff_list'})).status,401,
+ 'Anonymous visitors cannot list unpublished instructors');
+assert.equal((await call(STUDENT,{action:'faculty_staff_list'})).status,403,
+ 'Students cannot list private instructor profiles');
+const ownerList=await call(OWNER,{action:'faculty_staff_list'});
+assert.equal(ownerList.status,200);
+assert.equal(ownerList.data.length,2,'Owner can discover both registered instructors');
+assert.ok(ownerList.data.every(r=>!('email' in r)),'Staff directory must not expose login email');
+assert.ok(ownerList.data.every(r=>r.has_profile===false),'Account without a profile remains discoverable by owner');
+const ownList=await call(TEACHER,{action:'faculty_staff_list'});
+assert.equal(ownList.status,200);
+assert.equal(ownList.data.length,1,'Instructor must only see own draft');
+assert.equal(ownList.data[0].user_id,TEACHER);
 assert.equal((await call(null,{action:'faculty_get'})).status,401);
 assert.equal((await call(STUDENT,{action:'faculty_get'})).status,403);
 assert.equal((await call(TEACHER,{action:'faculty_get',user_id:OTHER})).status,403,

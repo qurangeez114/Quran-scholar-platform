@@ -31,7 +31,7 @@ function addLink(host,value,label){
 }
 function showDetail(profile,{privatePreview=false,editorUrl=null}={}){
  $('faculty-directory-heading').hidden=true;$('directory-controls').hidden=true;
- $('faculty-directory').hidden=true;$('faculty-detail').hidden=false;
+ $('faculty-directory').hidden=true;$('faculty-staff-panel').hidden=true;$('faculty-detail').hidden=false;
  $('faculty-name').textContent=profile.display_name;
  $('faculty-headline').textContent=profile.headline||'Instructor';
  $('faculty-affiliation').textContent=[profile.academic_affiliation,profile.city,profile.country].filter(Boolean).join(' · ');
@@ -79,7 +79,54 @@ async function showPrivateProfile(id){
    setStatus('This instructor profile is not publicly available.',true);
  }
 }
-let all=[];
+let all=[],staffDrafts=[];
+function renderStaffDirectory(){
+ const panel=$('faculty-staff-panel');
+ const root=$('faculty-staff-grid');root.replaceChildren();
+ const needle=$('directory-search').value.trim().toLocaleLowerCase();
+ const shown=staffDrafts.filter(p=>[p.display_name,p.headline,p.academic_affiliation,p.city,p.country]
+   .join(' ').toLocaleLowerCase().includes(needle));
+ panel.hidden=!staffDrafts.length;
+ for(const p of shown){
+   const card=make('article','faculty-card faculty-private-card');
+   const heading=make('h3');
+   const name=make('a','faculty-staff-name',p.display_name||'Instructor');
+   name.href='/faculty.html?id='+encodeURIComponent(p.user_id);
+   name.setAttribute('aria-label','View instructor profile: '+(p.display_name||'Instructor'));
+   heading.appendChild(name);card.appendChild(heading);
+   card.appendChild(make('p','muted',p.headline||'Professional profile not yet completed'));
+   if(p.academic_affiliation)card.appendChild(make('p','muted',p.academic_affiliation));
+   const label=!p.active?'Inactive account':p.is_published?'Public profile':'Draft · staff only';
+   card.appendChild(make('span','badge warning',label));
+   const edit=make('a','faculty-edit-action','Edit instructor');
+   edit.href='/faculty-admin.html?id='+encodeURIComponent(p.user_id);
+   // Instructors can only edit their own record. The server returns one record
+   // to instructors and all records to the owner; route decision is based on identity.
+   if(p.user_id===staffSessionUserId)edit.href='/faculty-profile.html';
+   card.appendChild(edit);
+   root.appendChild(card);
+ }
+ if(!shown.length)root.appendChild(make('p','muted','No instructor records match this search.'));
+}
+let staffSessionUserId=null;
+async function loadStaffDirectory(){
+ if(!db.auth?.getSession)return 0;
+ try{
+   const {data,error}=await db.auth.getSession();
+   if(error||!data?.session)return 0;
+   staffSessionUserId=data.session.user?.id||null;
+   const records=await lmsRequest('faculty_staff_list');
+   if(!Array.isArray(records))return 0;
+   staffDrafts=records.filter(p=>!p.is_published||!p.active);
+   renderStaffDirectory();
+   return staffDrafts.length;
+ }catch{
+   // Public directory works independently; never expose staff records on auth failure.
+   staffDrafts=[];
+   $('faculty-staff-panel').hidden=true;
+   return 0;
+ }
+}
 function renderDirectory(){
  const needle=$('directory-search').value.trim().toLocaleLowerCase();
  const visible=all.filter(p=>[p.display_name,p.headline,p.academic_affiliation,p.research_interests].join(' ').toLocaleLowerCase().includes(needle));
@@ -94,7 +141,9 @@ function renderDirectory(){
    card.appendChild(credential);root.appendChild(card);
  }
  if(!visible.length)root.appendChild(make('p','muted','No published instructors match this search.'));
- $('directory-count').textContent=visible.length+' faculty profiles';
+ renderStaffDirectory();
+ $('directory-count').textContent=visible.length+' public faculty profiles'+
+   (staffDrafts.length?' · '+staffDrafts.length+' staff-only records':'');
 }
 async function start(){
  const id=new URLSearchParams(location.search).get('id');
@@ -107,6 +156,10 @@ async function start(){
  if(id){if(!data?.length){await showPrivateProfile(id);return;}showDetail(data[0]);return;}
  all=data||[];$('directory-controls').hidden=false;$('faculty-directory').hidden=false;
  $('directory-search').addEventListener('input',renderDirectory);
- renderDirectory();setStatus(all.length?'Showing published faculty profiles.':'No published faculty profiles are available yet.');
+ const staffCount=await loadStaffDirectory();
+ renderDirectory();
+ setStatus(all.length?'Showing published faculty profiles.':
+   staffCount?'No public faculty profiles are published yet. Registered instructors appear below for authorized staff only.':
+   'No faculty profiles have been published yet. Instructor profiles will appear after they are completed and published.');
 }
 start().catch(()=>setStatus('Faculty profiles could not be loaded.',true));
