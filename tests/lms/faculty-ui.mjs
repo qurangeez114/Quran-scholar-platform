@@ -90,9 +90,9 @@ const directoryHTML=await readFile(new URL('faculty.html',root),'utf8');
  assert.equal(document.getElementById('faculty-detail').textContent.includes('private@example.invalid'),false);
 }
 const dashboard=await readFile(new URL('accounts/lms-dashboard.js',root),'utf8');
-const admin=await readFile(new URL('admin/lms.html',root),'utf8');
+const adminHTML=await readFile(new URL('admin/lms.html',root),'utf8');
 const instructor=await readFile(new URL('instructor-dashboard.html',root),'utf8');
 assert.ok(dashboard.includes('/faculty-admin.html?id='),'Admin edit link attached to instructor card');
-assert.ok(admin.includes('/faculty.html'),'Admin faculty directory navigation exists');
+assert.ok(adminHTML.includes('/faculty.html'),'Admin faculty directory navigation exists');
 assert.ok(instructor.includes('/faculty-profile.html'),'Instructor self-service profile accessible');
 console.log('PASS: instructor and owner save, revert, publish toggles, protected email changes, directory search, rendered profile and no exposed private email.');
