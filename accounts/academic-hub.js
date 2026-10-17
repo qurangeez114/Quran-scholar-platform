@@ -16,7 +16,7 @@ const select=(id,records,placeholder,name='title',key='id')=>{
 };
 const values=form=>Object.fromEntries(new FormData(form));
 const https=x=>{try{const u=new URL(x);return u.protocol==='https:'&&!u.username&&!u.password?u.href:null;}catch{return null;}};
-let state=null,group=null,groupList={groups:[],my_memberships:[]},groupMembers=[],live=null,liveSessions=[],packageState={packages:[],items:[]},groupClock=null,liveClock=null;
+let state=null,group=null,groupList={groups:[],my_memberships:[]},groupMembers=[],live=null,liveSessions=[],packageState={packages:[],items:[]},groupClock=null,liveClock=null,displayedLiveKey=null;
 let groupPolling=false,livePolling=false;
 function stopGroupUpdates(){if(groupClock!==null){clearInterval(groupClock);groupClock=null;}}
 function stopLiveUpdates(){if(liveClock!==null){clearInterval(liveClock);liveClock=null;}}
@@ -257,7 +257,12 @@ async function refreshPackages(){
   for(const item of items){
    const c=state.public_courses.find(x=>x.id===item.course_id);
    const row=actions(box);
-   add(row,link('/course.html?course='+encodeURIComponent(item.course_id),c?.title||'Class'));
+   if(c){
+    add(row,link('/course.html?course='+encodeURIComponent(item.course_id),c.title+
+      ' · '+name(c.created_by)));
+   }else{
+    add(row,el('span','Unavailable, private, or expired · not accessible to new students','academic-muted'));
+   }
    add(row,btn('Remove from package',async()=>{
     await api('package_remove',{package_id:pack.id,course_id:item.course_id});await refreshPackages();
    },'subtle-button'));
@@ -375,12 +380,36 @@ async function refreshLive(){
  }
  if(!root.children.length)p(root,'No live sessions in this class.');
 }
+function renderLiveVideo(session){
+ const key=session.id+'|'+session.status+'|'+session.video_url;
+ if(displayedLiveKey===key)return;
+ displayedLiveKey=key;
+ const surface=$('live-video');surface.replaceChildren();
+ if(session.status!=='live'){
+  add(surface,el('p',session.status==='ended'?
+    'This session has ended. The live stream is no longer available here.':
+    'The instructor has not started this live session yet.'));
+  return;
+ }
+ const embed=videoURL(session.video_url);
+ if(embed){
+  const iframe=el('iframe');iframe.src=embed;iframe.title=session.title;
+  iframe.allow='autoplay; encrypted-media; picture-in-picture';
+  iframe.referrerPolicy='strict-origin-when-cross-origin';
+  iframe.allowFullscreen=true;iframe.loading='lazy';surface.appendChild(iframe);
+ }else{
+  const safe=https(session.video_url);
+  if(safe)add(surface,link(safe,'Open instructor-provided video stream ↗'));
+  else add(surface,el('p','Video link unavailable.'));
+ }
+}
 async function liveRead(){
  if(!live)return;
  const requested=live.id;
  const data=await api('live_read',{session_id:requested}),current=data.session;
  if(!live||live.id!==requested)return;
  live=current;
+ renderLiveVideo(current);
  $('live-state').textContent='Status: '+current.status+(current.chat_paused?' · Chat paused':'');
  const reactionSummary={};
  for(const reaction of data.reactions||[]){
@@ -420,13 +449,8 @@ async function liveRead(){
 async function enterLive(id){
  stopLiveUpdates();
  live=liveSessions.find(s=>s.id===id);if(!live)return;
+ displayedLiveKey=null;
  $('live-room').hidden=false;$('live-title').textContent=live.title;
- const surface=$('live-video');surface.replaceChildren();
- const embed=videoURL(live.video_url);
- if(embed){
-  const f=el('iframe');f.src=embed;f.title=live.title;
-  f.allow='autoplay; encrypted-media; picture-in-picture';f.allowFullscreen=true;f.loading='lazy';surface.appendChild(f);
- }else add(surface,link(live.video_url,'Open video stream ↗'));
  await liveRead();$('live-room').scrollIntoView({block:'start'});
  startLiveUpdates();
 }
