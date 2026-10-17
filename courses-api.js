@@ -288,37 +288,18 @@ export async function bulkEnrollStudents(courseId, studentEmails) {
 }
 
 export async function enrollInCourse(courseId) {
-  const user = (await supabase.auth.getUser()).data.user;
-  if (!user) throw new Error('Not authenticated');
-
-  const { data, error } = await supabase
-    .from('qh_enrollments')
-    .insert({
-      course_id: courseId,
-      user_id: user.id
-    })
-    .select()
-    .single();
-
-  if (error) {
-    // Already enrolled
-    if (error.code === '23505') {
-      return { already_enrolled: true };
-    }
-    throw error;
+  const user=(await supabase.auth.getUser()).data.user;
+  if(!user)throw Error('Sign in to request admission');
+  // Enrollment is not self-approved. The receiving instructor must approve it.
+  // This matches referrals, where a student also consents before faculty review.
+  const {data,error}=await supabase.functions.invoke('academic-hub',{
+    body:{action:'enrollment_request',course_id:courseId}
+  });
+  if(error){
+    let detail;try{detail=await error.context?.json();}catch{}
+    throw Error(detail?.error||error.message||'Unable to request enrollment');
   }
-
-  // Send enrollment confirmation email
-  try {
-    const { sendEnrollmentEmail } = await import('./email-notifications.js');
-    const { data: course } = await getCourseById(courseId);
-    await sendEnrollmentEmail(user.id, user.email, course.title, courseId);
-  } catch (err) {
-    // Silently fail - email is optional
-    console.error('Failed to send enrollment email:', err);
-  }
-
-  return data;
+  return {request_submitted:true,status:data?.status||'pending'};
 }
 
 export async function getEnrollments(userId = null) {
