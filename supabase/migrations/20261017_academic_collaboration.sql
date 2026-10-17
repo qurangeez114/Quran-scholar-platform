@@ -222,9 +222,11 @@ begin
  then raise exception 'Class is closed'; end if;
  if not exists(select 1 from public.qh_enrollments where course_id=g.course_id and user_id=r.student_id)
  then raise exception 'Student must be enrolled in the class'; end if;
- if exists(select 1 from public.qh_academic_message_blocks
- where (blocker_id=p_actor and blocked_id=r.student_id) or
- (blocker_id=r.student_id and blocked_id=p_actor)) and p_actor<>r.student_id
+ -- A block from either participant revokes the ability to admit members,
+ -- including invitations that were issued before the block was placed.
+ if exists(select 1 from public.qh_academic_message_blocks b
+   where (b.blocker_id=g.creator_id and b.blocked_id=r.student_id)
+      or (b.blocker_id=r.student_id and b.blocked_id=g.creator_id))
  then raise exception 'This contact is blocked'; end if;
  if r.kind='invite' and p_actor<>r.student_id
  then raise exception 'Only the invitee may accept'; end if;
