@@ -23,7 +23,14 @@ async function simulate(role){
  const {document,window}=parseHTML(html);
  for(const e of document.querySelectorAll('[id]'))e.scrollIntoView=()=>{};
  for(const select of document.querySelectorAll('select')){
+  let selected='';
   Object.defineProperty(select,'options',{configurable:true,get(){return this.querySelectorAll('option')}});
+  // linkedom exposes SELECT.value as getter-only; real browsers provide a setter.
+  Object.defineProperty(select,'value',{configurable:true,
+   get(){return selected;},
+   set(v){selected=String(v);for(const option of this.querySelectorAll('option'))
+     option.selected=option.value===selected;}
+  });
  }
  for(const form of document.querySelectorAll('form')){
   const elements={};
