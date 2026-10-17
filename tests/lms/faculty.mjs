@@ -73,8 +73,10 @@ const full={
 };
 assert.equal((await call(null,{action:'faculty_get'})).status,401);
 assert.equal((await call(STUDENT,{action:'faculty_get'})).status,403);
-assert.equal((await call(TEACHER,{action:'faculty_get',user_id:OTHER})).status,200,
-  'Instructors fetch only their own record even when they supply another ID');
+assert.equal((await call(TEACHER,{action:'faculty_get',user_id:OTHER})).status,403,
+  'An instructor cannot open someone else’s unpublished faculty record');
+assert.equal((await call(TEACHER,{action:'faculty_get',user_id:TEACHER})).status,200,
+  'An instructor can preview their own draft profile');
 assert.equal((await call(TEACHER,{action:'faculty_admin_save',user_id:OTHER,...full})).status,403);
 const published=await call(TEACHER,{action:'faculty_save',...full,credential_status:'verified'});
 assert.equal(published.status,200,JSON.stringify(published.data));
