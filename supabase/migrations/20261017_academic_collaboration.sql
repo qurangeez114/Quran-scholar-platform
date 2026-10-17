@@ -165,9 +165,10 @@ grant all on public.qh_academic_enrollment_requests,public.qh_academic_contact_s
 -- Final approval and enrollment happen atomically, with a row lock.
 create or replace function public.qh_academic_approve_enrollment(p_request uuid,p_actor uuid)
 returns uuid language plpgsql security definer set search_path to '' as $proc$
-declare r public.qh_academic_enrollment_requests%rowtype;
-declare c public.qh_courses%rowtype;
-declare enrollment_id uuid;
+declare
+ r public.qh_academic_enrollment_requests%rowtype;
+ c public.qh_courses%rowtype;
+ enrollment_id uuid;
 begin
  select * into r from public.qh_academic_enrollment_requests
  where id=p_request for update;
@@ -178,6 +179,7 @@ begin
  then raise exception 'Only the receiving instructor may approve enrollment'; end if;
  if c.access_closes_at is not null and c.access_closes_at<=now()
  then raise exception 'Class has closed'; end if;
+ if not c.is_published then raise exception 'Class is not published'; end if;
  insert into public.qh_enrollments(user_id,course_id)
  values(r.student_id,r.course_id)
  on conflict(user_id,course_id) do nothing;
@@ -194,13 +196,16 @@ grant execute on function public.qh_academic_approve_enrollment(uuid,uuid) to se
 -- Students explicitly accept or reject group invitations and join approvals.
 create or replace function public.qh_academic_accept_group(p_request uuid,p_actor uuid)
 returns uuid language plpgsql security definer set search_path to '' as $proc$
-declare r public.qh_academic_group_requests%rowtype;
-declare g public.qh_academic_study_groups%rowtype;
+declare
+ r public.qh_academic_group_requests%rowtype;
+ g public.qh_academic_study_groups%rowtype;
 begin
  select * into r from public.qh_academic_group_requests where id=p_request for update;
  if not found or r.status<>'pending' then raise exception 'Group request is no longer pending'; end if;
  select * into g from public.qh_academic_study_groups where id=r.group_id;
  if not found or g.archived then raise exception 'Group unavailable'; end if;
+ if not exists(select 1 from public.qh_courses c where c.id=g.course_id and (c.access_closes_at is null or c.access_closes_at>now()))
+ then raise exception 'Class is closed'; end if;
  if not exists(select 1 from public.qh_enrollments where course_id=g.course_id and user_id=r.student_id)
  then raise exception 'Student must be enrolled in the class'; end if;
  if exists(select 1 from public.qh_academic_message_blocks
@@ -209,6 +214,11 @@ begin
  then raise exception 'This contact is blocked'; end if;
  if r.kind='invite' and p_actor<>r.student_id
  then raise exception 'Only the invitee may accept'; end if;
+ if exists (
+  select 1 from public.qh_academic_message_blocks bl
+  where (bl.blocker_id=r.student_id and bl.blocked_id=g.creator_id)
+     or (bl.blocker_id=g.creator_id and bl.blocked_id=r.student_id)
+ ) then raise exception 'Group owner is blocked'; end if;
  if r.kind='join' and not exists(select 1 from public.qh_academic_group_members
  where group_id=r.group_id and student_id=p_actor and is_owner)
  then raise exception 'Only the group owner may approve a join request'; end if;
