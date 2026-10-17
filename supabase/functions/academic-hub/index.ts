@@ -179,7 +179,7 @@ Deno.serve(async req=>{
    const kind=str(body.kind,20),itemId=guid(body.id);
    if(kind==='group'){
     const post=await checked(sb.from('qh_academic_group_posts').select('*').eq('id',itemId).maybeSingle());
-    if(!post?.media_path)fail('Recording unavailable',404);
+    if(!post?.media_path||post.is_hidden)fail('Recording unavailable',404);
     const g=await getGroup(post.group_id);
     await requireClass(await getCourse(g.course_id));
     if(!await member(g.id))fail('Join this group before opening media',403);
@@ -212,6 +212,46 @@ Deno.serve(async req=>{
    result=await checked(sb.from('qh_academic_message_reports').upsert({
     message_id:msg.id,reporter_id:me,reason:str(body.reason,700)
    },{onConflict:'message_id,reporter_id'}).select('id').single());
+  }else if(action==='moderation_queue'||action==='moderation_resolve'){
+   if(!owner)fail('Only academic administrators can review abuse reports',403);
+   const types:Record<string,{table:string,key:string,contentTable:string}>={
+    faculty:{table:'qh_academic_message_reports',key:'message_id',contentTable:'qh_academic_messages'},
+    group:{table:'qh_academic_group_reports',key:'post_id',contentTable:'qh_academic_group_posts'},
+    live:{table:'qh_academic_live_reports',key:'message_id',contentTable:'qh_academic_live_chat'}
+   };
+   if(action==='moderation_queue'){
+    const rows:any[]=[];
+    for(const [type,meta] of Object.entries(types)){
+     const reports=await checked(sb.from(meta.table).select('*').eq('status','open')
+      .order('created_at',{ascending:false}).limit(25));
+     for(const report of reports){
+      const msg=await checked(sb.from(meta.contentTable).select('body')
+       .eq('id',report[meta.key]).maybeSingle());
+      rows.push({type,id:report.id,reason:report.reason,
+       excerpt:String(msg?.body||'Content no longer available').slice(0,500),
+       reporter_id:report.reporter_id,created_at:report.created_at});
+     }
+    }
+    result=rows.sort((a,b)=>Date.parse(b.created_at)-Date.parse(a.created_at));
+   }else{
+    const type=str(body.type,20),meta=types[type];
+    if(!meta)fail('Choose a report type');
+    const decision=str(body.decision,20);
+    if(!['reviewed','dismissed','hide'].includes(decision))fail('Choose a moderation decision');
+    if(type==='faculty'&&decision==='hide')fail('Faculty correspondence is reviewed separately');
+    const report=await checked(sb.from(meta.table).select('*').eq('id',guid(body.report_id))
+      .eq('status','open').maybeSingle());
+    if(!report)fail('Report has already been processed',404);
+    if(decision==='hide'){
+     const hidden=await checked(sb.from(meta.contentTable).update({is_hidden:true})
+      .eq('id',report[meta.key]).select('id').maybeSingle());
+     if(!hidden)fail('Content already removed',404);
+    }
+    result=await checked(sb.from(meta.table).update({
+      status:decision==='dismissed'?'dismissed':'reviewed',
+      resolved_by:me,resolved_at:new Date().toISOString()
+    }).eq('id',report.id).eq('status','open').select('id,status,resolved_at').single());
+   }
   }else if(action==='course_settings'){
    const c=await getCourse(body.course_id);
    if(!owns(c))fail('Only the class owner may change settings',403);
@@ -434,7 +474,7 @@ Deno.serve(async req=>{
     if(!await member(g.id))fail('Only members may access group conversations',403);
     if(action==='group_posts'){
      const rows=await checked(sb.from('qh_academic_group_posts').select('*')
-       .eq('group_id',g.id).order('created_at',{ascending:false}).limit(80));
+       .eq('group_id',g.id).eq('is_hidden',false).order('created_at',{ascending:false}).limit(80));
      const blockList=await checked(sb.from('qh_academic_message_blocks').select('blocked_id').eq('blocker_id',me));
      const blockedBy=await checked(sb.from('qh_academic_message_blocks').select('blocker_id').eq('blocked_id',me));
      const ids=new Set([...blockList.map((b:any)=>b.blocked_id),...blockedBy.map((b:any)=>b.blocker_id)]);
@@ -480,6 +520,15 @@ Deno.serve(async req=>{
      const reactions=await checked(sb.from('qh_academic_live_reactions').select('emoji,author_id,created_at')
        .eq('session_id',session.id).order('created_at',{ascending:false}).limit(100));
      result={session,chat:chat.reverse(),reactions};
+    }else if(action==='live_report'){
+     const message=await checked(sb.from('qh_academic_live_chat').select('id')
+       .eq('id',guid(body.message_id)).eq('session_id',session.id).maybeSingle());
+     if(!message)fail('Message unavailable',404);
+     const reason=str(body.reason,700);
+     if(reason.length<5)fail('Explain the reason for reporting');
+     result=await checked(sb.from('qh_academic_live_reports').upsert({
+       message_id:message.id,reporter_id:me,reason
+     },{onConflict:'message_id,reporter_id'}).select('id').single());
     }else if(action==='live_message'||action==='live_react'){
      if(session.status!=='live')fail('Live session is not currently open',403);
      if(session.chat_paused&&!owns(course))fail('Instructor has paused the chat',403);
