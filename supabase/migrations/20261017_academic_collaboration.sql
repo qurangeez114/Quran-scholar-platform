@@ -104,6 +104,14 @@ create table if not exists public.qh_academic_group_posts(
 create index if not exists qh_group_posts_recent on public.qh_academic_group_posts(group_id,created_at desc);
 -- Block contacts globally, including new group invites; member-level group posts
 -- from blocked peers are hidden from the viewing student's conversation.
+create table if not exists public.qh_academic_group_reports(
+ id uuid primary key default gen_random_uuid(),
+ post_id uuid not null references public.qh_academic_group_posts(id) on delete cascade,
+ reporter_id uuid not null references auth.users(id) on delete cascade,
+ reason text not null check(length(trim(reason)) between 5 and 700),
+ created_at timestamptz not null default now(),
+ unique(post_id,reporter_id)
+);
 create table if not exists public.qh_academic_packages(
  id uuid primary key default gen_random_uuid(),
  instructor_id uuid not null references auth.users(id) on delete cascade,
@@ -131,6 +139,7 @@ alter table public.qh_academic_study_groups enable row level security;
 alter table public.qh_academic_group_members enable row level security;
 alter table public.qh_academic_group_requests enable row level security;
 alter table public.qh_academic_group_posts enable row level security;
+alter table public.qh_academic_group_reports enable row level security;
 alter table public.qh_academic_packages enable row level security;
 alter table public.qh_academic_package_items enable row level security;
 revoke all on public.qh_academic_enrollment_requests from public,anon,authenticated;
@@ -142,17 +151,19 @@ revoke all on public.qh_academic_study_groups from public,anon,authenticated;
 revoke all on public.qh_academic_group_members from public,anon,authenticated;
 revoke all on public.qh_academic_group_requests from public,anon,authenticated;
 revoke all on public.qh_academic_group_posts from public,anon,authenticated;
+revoke all on public.qh_academic_group_reports from public,anon,authenticated;
 revoke all on public.qh_academic_packages from public,anon,authenticated;
 revoke all on public.qh_academic_package_items from public,anon,authenticated;
 grant all on public.qh_academic_study_groups,public.qh_academic_group_members,
- public.qh_academic_group_requests,public.qh_academic_group_posts to service_role;
+ public.qh_academic_group_requests,public.qh_academic_group_posts,
+ public.qh_academic_group_reports to service_role;
 grant all on public.qh_academic_enrollment_requests,public.qh_academic_contact_settings,
  public.qh_academic_messages,public.qh_academic_message_blocks,
  public.qh_academic_message_reports,public.qh_academic_packages,
  public.qh_academic_package_items to service_role;
 
 -- Final approval and enrollment happen atomically, with a row lock.
-create or replace function qh_lms_private.academic_approve_enrollment(p_request uuid,p_actor uuid)
+create or replace function public.qh_academic_approve_enrollment(p_request uuid,p_actor uuid)
 returns uuid language plpgsql security definer set search_path to '' as $proc$
 declare r public.qh_academic_enrollment_requests%rowtype;
 declare c public.qh_courses%rowtype;
@@ -176,12 +187,12 @@ begin
  responded_at=now(),updated_at=now() where id=r.id;
  return enrollment_id;
 end $proc$;
-revoke all on function qh_lms_private.academic_approve_enrollment(uuid,uuid) from public,anon,authenticated;
+revoke all on function public.qh_academic_approve_enrollment(uuid,uuid) from public,anon,authenticated;
 grant usage on schema qh_lms_private to service_role;
-grant execute on function qh_lms_private.academic_approve_enrollment(uuid,uuid) to service_role;
+grant execute on function public.qh_academic_approve_enrollment(uuid,uuid) to service_role;
 
 -- Students explicitly accept or reject group invitations and join approvals.
-create or replace function qh_lms_private.academic_accept_group(p_request uuid,p_actor uuid)
+create or replace function public.qh_academic_accept_group(p_request uuid,p_actor uuid)
 returns uuid language plpgsql security definer set search_path to '' as $proc$
 declare r public.qh_academic_group_requests%rowtype;
 declare g public.qh_academic_study_groups%rowtype;
@@ -206,8 +217,27 @@ begin
  update public.qh_academic_group_requests set status='accepted',resolved_at=now() where id=r.id;
  return r.group_id;
 end $proc$;
-revoke all on function qh_lms_private.academic_accept_group(uuid,uuid) from public,anon,authenticated;
-grant execute on function qh_lms_private.academic_accept_group(uuid,uuid) to service_role;
+revoke all on function public.qh_academic_accept_group(uuid,uuid) from public,anon,authenticated;
+grant execute on function public.qh_academic_accept_group(uuid,uuid) to service_role;
+
+-- Transfer ownership inside a transaction so groups cannot become ownerless.
+create or replace function public.qh_academic_transfer_group(p_group uuid,p_old uuid,p_new uuid)
+returns boolean language plpgsql security definer set search_path to '' as $proc$
+begin
+ if p_old=p_new then raise exception 'Choose a different member'; end if;
+ perform 1 from public.qh_academic_study_groups where id=p_group for update;
+ if not exists(select 1 from public.qh_academic_group_members
+   where group_id=p_group and student_id=p_old and is_owner)
+ then raise exception 'Only owner may transfer'; end if;
+ if not exists(select 1 from public.qh_academic_group_members
+   where group_id=p_group and student_id=p_new)
+ then raise exception 'New owner must already be a member'; end if;
+ update public.qh_academic_group_members set is_owner=false where group_id=p_group and student_id=p_old;
+ update public.qh_academic_group_members set is_owner=true where group_id=p_group and student_id=p_new;
+ return true;
+end $proc$;
+revoke all on function public.qh_academic_transfer_group(uuid,uuid,uuid) from public,anon,authenticated;
+grant execute on function public.qh_academic_transfer_group(uuid,uuid,uuid) to service_role;
 
 -- Private academic media is stored in a dedicated, non-public bucket.
 -- The authenticated API checks membership before signing a short-lived URL.
