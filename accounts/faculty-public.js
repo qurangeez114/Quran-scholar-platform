@@ -42,6 +42,8 @@ function showDetail(profile){
  setImage($('faculty-portrait'),profile.portrait_url,profile.display_name);
  const socials=$('faculty-socials');socials.replaceChildren();
  for(const [key,label] of links)addLink(socials,profile[key],label);
+ addLink(socials,profile.support_url,'Voluntary support / donate');
+ $('faculty-support-note').hidden=!linkSafe(profile.support_url);
  for(const [key,elementId] of fields){
    const wrap=$(elementId);wrap.hidden=!profile[key];
    wrap.querySelector('p').textContent=profile[key]||'';
