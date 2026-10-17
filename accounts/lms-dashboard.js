@@ -61,7 +61,6 @@ async function submit(form,action){
  catch(e){status(e.message);}finally{button.disabled=false;}
 }
 $('provision-form').onsubmit=e=>{e.preventDefault();return submit(e.currentTarget,'provision');};
-$('profile-form').onsubmit=e=>{e.preventDefault();return submit(e.currentTarget,'save_profile');};
 $('provision-form').elements.role.onchange=roleForm;
 $('password-form').onsubmit=async e=>{
  e.preventDefault();const form=e.currentTarget,values=Object.fromEntries(new FormData(form));
@@ -102,7 +101,6 @@ async function start(){
  state=await lmsRequest('session');
  if(state.account?.must_change_password){$('password-panel').hidden=false;status('Set your own password to continue.');return;}
  if(!['owner','instructor'].includes(state.role)){status('This page is for authorized instructors and the owner.');return;}
- if(state.account)for(const key of ['display_name','country','city','support_url'])$('profile-form').elements[key].value=state.account[key]||'';
  await refresh();$('dashboard').hidden=false;
 }
 start().catch(e=>status(e.message));
