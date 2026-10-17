@@ -193,7 +193,7 @@ async function refreshMessages(){
   const a=actions(box);
   add(a,btn('Block',async()=>{
    if(!confirm('Block this contact?'))return;
-   await api('block_contact',{user_id:other,block:true});await refreshMessages();
+   await api('block_contact',{user_id:other,block:true});await refreshMessages();await refreshBlocked();
   },'subtle-button'));
   add(a,btn('Report',async()=>{
    const reason=prompt('Reason for reporting this message:');
@@ -202,6 +202,19 @@ async function refreshMessages(){
  }
  if(!root.children.length)p(root,'No private faculty messages yet.');
  root.scrollTop=root.scrollHeight;
+}
+async function refreshBlocked(){
+ const records=await api('blocked_contacts');
+ const list=$('blocked-contacts-list');list.replaceChildren();
+ for(const record of records){
+  const box=card(list,record.name,'Blocked contact');
+  add(actions(box),btn('Unblock',async()=>{
+   if(!confirm('Allow this contact to communicate with you again?'))return;
+   await api('block_contact',{user_id:record.id,block:false});
+   await refreshBlocked();
+  },'subtle-button'));
+ }
+ if(!list.children.length)p(list,'You have no blocked contacts.');
 }
 async function refreshPackages(){
  packageState=await api('package_list');
@@ -242,14 +255,22 @@ async function refreshGroups(){
  for(const r of [...requests.received,...requests.owned]){
   if(seen.has(r.id)||r.status!=='pending')continue;seen.add(r.id);
   if(r.kind==='invite'&&r.student_id!==state.me)continue;
-  if(r.kind==='join'&&!myGroup(r.group_id)?.is_owner)continue;
+  if(r.kind==='join'&&!myGroup(r.group_id)?.is_owner&&r.student_id!==state.me)continue;
   const g=groups.groups.find(x=>x.id===r.group_id);
+  const ownPending=r.kind==='join'&&r.student_id===state.me&&!myGroup(r.group_id)?.is_owner;
   const box=card(list,(r.kind==='invite'?'Invitation: ':'Join request: ')+(g?.name||'Group'),
-   r.kind==='invite'?'Accept to join voluntarily.':'Review this classmate’s membership request.');
+   ownPending?'Awaiting group-owner review':r.kind==='invite'
+    ?'Accept to join voluntarily.':'Review this classmate’s membership request.');
   const a=actions(box);
-  for(const yes of [true,false])add(a,btn(yes?'Accept':'Decline',async()=>{
-   await api('group_decide',{request_id:r.id,accept:yes});await refreshGroups();
-  },yes?'':'subtle-button'));
+  if(ownPending){
+   add(a,btn('Withdraw request',async()=>{
+    await api('group_cancel_request',{request_id:r.id});await refreshGroups();
+   },'subtle-button'));
+  }else{
+   for(const yes of [true,false])add(a,btn(yes?'Accept':'Decline',async()=>{
+    await api('group_decide',{request_id:r.id,accept:yes});await refreshGroups();
+   },yes?'':'subtle-button'));
+  }
  }
  if(!list.children.length)p(list,'No pending invitations or membership requests.');
 }
@@ -277,7 +298,7 @@ async function members(){
   const row=actions(root);add(row,el('span',m.name+(m.is_owner?' · Owner':'')));
   if(m.student_id!==state.me)add(row,btn('Block member',async()=>{
    if(!confirm('Block this student?'))return;
-   await api('block_contact',{user_id:m.student_id,block:true});await groupPosts();
+   await api('block_contact',{user_id:m.student_id,block:true});await groupPosts();await refreshBlocked();
   },'subtle-button'));
  }
 }
@@ -376,6 +397,7 @@ async function enterLive(id){
 function bind(){
  for(const b of document.querySelectorAll('[data-tab]'))b.addEventListener('click',()=>tab(b.dataset.tab));
  $('courses-refresh').addEventListener('click',()=>run(async()=>{await overview();await refreshRequests();}));
+ $('blocked-refresh').addEventListener('click',()=>run(refreshBlocked));
  $('settings-course').addEventListener('change',e=>{
   const c=state.teaching_courses.find(x=>x.id===e.target.value);if(!c)return;
   $('settings-visibility').value=c.visibility||'public';
@@ -451,6 +473,7 @@ async function start(){
  if(error||!data?.session){status('Please sign in to use the academic collaboration workspace.',true);return;}
  await overview();$('hub-workspace').hidden=false;bind();
  await refreshRequests();if(student())await refreshGroups();
+ await refreshBlocked();
  const initial=new URLSearchParams(location.search).get('tab');
  const tabs=['courses','faculty','groups','messages','packages','live'];
  if(tabs.includes(initial)&&!(student()&&['messages','packages'].includes(initial)))tab(initial);
