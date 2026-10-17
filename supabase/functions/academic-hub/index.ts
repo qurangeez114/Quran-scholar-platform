@@ -36,7 +36,7 @@ Deno.serve(async req=>{
   const student=role==='student';
   const isTeacher=(id:string)=>sb.from('qh_lms_accounts').select('user_id,display_name,active').eq('user_id',id).eq('role','instructor').eq('active',true).maybeSingle();
   const getCourse=async(id:any)=>{
-   const c=await checked(sb.from('qh_courses').select('id,title,description,created_by,is_published,visibility,access_closes_at').eq('id',guid(id)).maybeSingle());
+   const c=await checked(sb.from('qh_courses').select('id,title,description,created_by,is_published,visibility,faculty_reuse_enabled,access_closes_at').eq('id',guid(id)).maybeSingle());
    if(!c)fail('Class not found',404);return c;
   };
   const owns=(c:any)=>owner||teacher&&c.created_by===me;
@@ -55,7 +55,7 @@ Deno.serve(async req=>{
   const getSession=async(id:any)=>{const s=await checked(sb.from('qh_academic_live_classes').select('*')
     .eq('id',guid(id)).maybeSingle());if(!s)fail('Live session not found',404);return s;};
   const courseList=async()=>{
-   const all=await checked(sb.from('qh_courses').select('id,title,description,created_by,is_published,visibility,access_closes_at')
+   const all=await checked(sb.from('qh_courses').select('id,title,description,created_by,is_published,visibility,faculty_reuse_enabled,access_closes_at')
     .eq('is_published',true).eq('visibility','public').order('created_at',{ascending:false}).limit(120));
    return all.filter((c:any)=>!ended(c));
   };
@@ -99,10 +99,10 @@ Deno.serve(async req=>{
    const courses=await courseList();
    const myIds=[...new Set(mine.map((e:any)=>e.course_id))];
    const myCourses=myIds.length?await checked(sb.from('qh_courses')
-     .select('id,title,created_by,is_published,visibility,access_closes_at').in('id',myIds)):[];
-   const myTeaching=teacher?await checked(owner?sb.from('qh_courses').select('id,title,created_by,is_published,visibility,access_closes_at')
+     .select('id,title,created_by,is_published,visibility,faculty_reuse_enabled,access_closes_at').in('id',myIds)):[];
+   const myTeaching=teacher?await checked(owner?sb.from('qh_courses').select('id,title,created_by,is_published,visibility,faculty_reuse_enabled,access_closes_at')
      .order('created_at',{ascending:false}).limit(200):sb.from('qh_courses')
-     .select('id,title,created_by,is_published,visibility,access_closes_at').eq('created_by',me).order('created_at',{ascending:false}).limit(200)):[];
+     .select('id,title,created_by,is_published,visibility,faculty_reuse_enabled,access_closes_at').eq('created_by',me).order('created_at',{ascending:false}).limit(200)):[];
    const faculty=await checked(sb.from('qh_lms_accounts')
      .select('user_id,display_name,active').eq('role','instructor').eq('active',true).order('display_name').limit(100));
    const ownIds=myTeaching.map((c:any)=>c.id);
@@ -114,8 +114,28 @@ Deno.serve(async req=>{
      const user=p?.display_name?null:await sb.auth.admin.getUserById(id);
      return {id,name:p?.display_name||user?.data?.user?.user_metadata?.display_name||'Student'};
    }));
+   const availableToFaculty=teacher?await checked(sb.from('qh_courses')
+     .select('id,title,created_by,is_published,visibility,faculty_reuse_enabled,access_closes_at')
+     .eq('faculty_reuse_enabled',true).eq('is_published',true)
+     .order('created_at',{ascending:false}).limit(200)):[];
+   const facultyCatalog=availableToFaculty.filter((c:any)=>!ended(c));
+   const hostIds=teacher?ownIds:myIds;
+   const inclusions=hostIds.length?await checked(sb.from('qh_academic_course_inclusions')
+     .select('host_course_id,source_course_id').in('host_course_id',hostIds)):[];
+   const sourceIds=[...new Set(inclusions.map((x:any)=>x.source_course_id))] as string[];
+   const includedRows=sourceIds.length?await checked(sb.from('qh_courses')
+     .select('id,title,created_by,is_published,visibility,faculty_reuse_enabled,access_closes_at')
+     .in('id',sourceIds)):[];
+   const activeHosts=[...myCourses,...myTeaching].filter((c:any)=>!ended(c))
+     .map((c:any)=>c.id);
+   const activeSources=includedRows.filter((c:any)=>c.is_published&&c.faculty_reuse_enabled&&!ended(c));
+   const includedCourses=inclusions.filter((inc:any)=>activeHosts.includes(inc.host_course_id))
+     .map((inc:any)=>({...activeSources.find((c:any)=>c.id===inc.source_course_id),
+       host_course_id:inc.host_course_id}))
+     .filter((c:any)=>c.id);
    result={role,me,faculty,public_courses:courses,my_courses:myCourses,
-     teaching_courses:myTeaching,roster,students};
+     teaching_courses:myTeaching,faculty_catalog:facultyCatalog,
+     included_courses:includedCourses,roster,students};
   }else if(action==='peer_discovery'||action==='group_classmates'){
    if(!student)fail('Only students may use student peer discovery',403);
    if(action==='peer_discovery'){
@@ -257,8 +277,12 @@ Deno.serve(async req=>{
    if(!owns(c))fail('Only the class owner may change settings',403);
    const visibility=str(body.visibility,15);if(!['public','private'].includes(visibility))fail('Choose public or private');
    const deadline=at(body.access_closes_at);
-   result=await checked(sb.from('qh_courses').update({visibility,access_closes_at:deadline,updated_at:new Date().toISOString()})
-     .eq('id',c.id).select('id,title,visibility,access_closes_at').single());
+   if(typeof body.faculty_reuse_enabled!=='boolean')
+     fail('Choose whether other instructors can include the course',400);
+   result=await checked(sb.from('qh_courses').update({
+     visibility,faculty_reuse_enabled:body.faculty_reuse_enabled,
+     access_closes_at:deadline,updated_at:new Date().toISOString()
+   }).eq('id',c.id).select('id,title,visibility,faculty_reuse_enabled,access_closes_at').single());
   }else if(action==='enrollment_request'||action==='enrollment_requests'||action==='enrollment_decide'||action==='enrollment_consent'||action==='enrollment_cancel'){
    if(action==='enrollment_requests'){
     const mine=await checked(sb.from('qh_academic_enrollment_requests')
@@ -330,6 +354,27 @@ Deno.serve(async req=>{
      }else fail('Choose approve or decline');
     }
    }
+  }else if(action==='course_include'||action==='course_uninclude'){
+   if(!teacher)fail('Only instructors can include another course in a class',403);
+   const host=await getCourse(body.host_course_id);
+   const source=await getCourse(body.source_course_id);
+   if(!owns(host))fail('You can only add material to your own class',403);
+   if(host.id===source.id)fail('A class cannot include itself');
+   if(source.created_by===host.created_by&&!owner)
+      fail('Choose an independently authored source class');
+   if(action==='course_include'){
+     if(!source.is_published||!source.faculty_reuse_enabled||ended(source))
+       fail('The source instructor has not granted reuse permission',403);
+     if(ended(host))fail('Extend your class before adding material',403);
+     result=await checked(sb.from('qh_academic_course_inclusions').upsert({
+       host_course_id:host.id,source_course_id:source.id,assigned_by:me
+     },{onConflict:'host_course_id,source_course_id'})
+       .select('host_course_id,source_course_id').single());
+   }else{
+     await checked(sb.from('qh_academic_course_inclusions').delete()
+       .eq('host_course_id',host.id).eq('source_course_id',source.id));
+     result={ok:true};
+   }
   }else if(action==='package_create'||action==='package_list'||action==='package_add'||action==='package_remove'){
    if(!teacher)fail('Only faculty may build course packages',403);
    if(action==='package_list'){
@@ -348,8 +393,8 @@ Deno.serve(async req=>{
     if(!pack)fail('You may change only your own course packages',403);
     const course=await getCourse(body.course_id);
     if(action==='package_add'){
-     if(!course.is_published||course.visibility!=='public'||ended(course))
-       fail('Only active published public courses can be included');
+     if(!course.is_published||!course.faculty_reuse_enabled||ended(course))
+       fail('The source instructor has not granted faculty reuse permission',403);
      result=await checked(sb.from('qh_academic_package_items')
        .upsert({package_id:pack.id,course_id:course.id},{onConflict:'package_id,course_id'})
        .select('package_id,course_id').single());
