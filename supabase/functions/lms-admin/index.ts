@@ -144,11 +144,11 @@ Deno.serve(async req=>{
    const changed=Object.keys(patch).filter(k=>k!=='updated_at'&&patch[k]!==(before?.[k]??(k==='is_published'?false:null)));
    // Verification must not survive changes in the claimed academic qualifications.
    const credentialsChanged=['credentials','academic_affiliation'].some(k=>patch[k]!== (before?.[k]||''));
-   const name=adminEdit?cleanField(body.display_name,160,'Name'):existing.display_name;
-   if(adminEdit&&!name)fail('Instructor name is required');
-   const city=adminEdit?cleanField(body.city,80,'City'):existing.city;
-   const country=adminEdit?cleanField(body.country,80,'Country'):existing.country;
-   const support=adminEdit?supportUrl(body.support_url):existing.support_url;
+   const name=cleanField(body.display_name,160,'Name');
+   if(!name)fail('Instructor name is required');
+   const city=cleanField(body.city,80,'City');
+   const country=cleanField(body.country,80,'Country');
+   const support=supportUrl(body.support_url);
    const email=adminEdit?cleanField(body.email,254,'Email').toLowerCase():existing.email;
    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))fail('Enter a valid instructor email address');
    if(adminEdit){
@@ -158,11 +158,10 @@ Deno.serve(async req=>{
      patch.credential_status=credentialsChanged&&!body.confirm_credential_review?'unreviewed':proposed;
    }else patch.credential_status=credentialsChanged?'unreviewed':before?.credential_status||'unreviewed';
    // Login email can only be changed by an administrator; record and reconcile both copies.
-   const accountChanged=adminEdit&&
-      (name!==existing.display_name||email!==existing.email||city!==existing.city||
-       country!==existing.country||support!==existing.support_url);
+   const accountChanged=name!==existing.display_name||email!==existing.email||city!==existing.city||
+       country!==existing.country||support!==existing.support_url;
    let authUpdated=false;let originalUser:any=null;
-   if(adminEdit&&(email!==existing.email||name!==existing.display_name)){
+   if(email!==existing.email||name!==existing.display_name){
      const {data:current,error:getErr}=await service.auth.admin.getUserById(targetId);
      if(getErr||!current?.user)fail('Instructor login could not be retrieved',503);
      originalUser=current.user;
@@ -181,9 +180,9 @@ Deno.serve(async req=>{
        .update({display_name:name,email,city,country,support_url:support}).eq('user_id',targetId).eq('role','instructor'));
      const profile=await checked(service.from('qh_instructor_profiles')
        .upsert({user_id:targetId,...patch},{onConflict:'user_id'}).select().single());
-     const accountFields=adminEdit?['display_name','email','city','country','support_url'].filter(k=>({
+     const accountFields=['display_name','email','city','country','support_url'].filter(k=>({
        display_name:name,email,city,country,support_url:support
-     } as any)[k]!==existing[k]):[];
+     } as any)[k]!==existing[k]);
      const changedFields=[...changed,...accountFields];
      if(before?.credential_status!==patch.credential_status)changedFields.push('credential_status');
      if(changedFields.length){
