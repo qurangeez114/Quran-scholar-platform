@@ -15,6 +15,45 @@ const supportUrl=(value:unknown)=>{
  if(parsed!.protocol!=='https:'||parsed!.username||parsed!.password||parsed!.port||!allowed.includes(parsed!.hostname)||parsed!.pathname==='/')fail('Use your personal PayPal, Ko-fi, Buy Me a Coffee, Patreon or Stripe payment link');
  return parsed!.href;
 };
+
+const cleanField=(value:unknown,max:number,label:string)=>{
+ if(value===undefined||value===null)return '';
+ if(typeof value!=='string'||value.length>max)fail(label+' must be at most '+max+' characters');
+ return value.trim();
+};
+const profileFields:Record<string,number>={
+ headline:180,biography:9000,credentials:5000,academic_affiliation:600,
+ research_interests:2500,teaching_languages:500,publications:6000,office_hours:600
+};
+const profileLinks=['portrait_url','website_url','orcid_url','google_scholar_url',
+ 'linkedin_url','youtube_url','facebook_url','instagram_url','x_url'];
+const urlHosts:Record<string,string[]>={
+ orcid_url:['orcid.org','www.orcid.org'],
+ google_scholar_url:['scholar.google.com'],
+ linkedin_url:['linkedin.com','www.linkedin.com'],
+ youtube_url:['youtube.com','www.youtube.com','youtu.be'],
+ facebook_url:['facebook.com','www.facebook.com'],
+ instagram_url:['instagram.com','www.instagram.com'],
+ x_url:['x.com','www.x.com','twitter.com','www.twitter.com']
+};
+function publicLink(value:unknown,field:string):string|null{
+ const raw=cleanField(value,600,field);if(!raw)return null;
+ let u:URL;try{u=new URL(raw);}catch{fail('Enter a valid HTTPS address for '+field);}
+ if(u!.protocol!=='https:'||u!.username||u!.password||u!.port)fail('Only plain HTTPS addresses are accepted for '+field);
+ if(urlHosts[field]&&!urlHosts[field].includes(u!.hostname.toLowerCase()))fail('Use the official website for '+field);
+ if(field==='portrait_url'&&!/\.(?:png|jpe?g|webp)(?:$|\?)/i.test(u!.pathname+u!.search))
+   fail('Portrait must use a direct HTTPS PNG, JPG or WebP image URL');
+ return u!.href;
+}
+const facultyInput=(body:any)=>{
+ const patch:Record<string,any>={};
+ for(const [key,max] of Object.entries(profileFields))patch[key]=cleanField(body[key],max,key);
+ for(const key of profileLinks)patch[key]=publicLink(body[key],key);
+ if(typeof body.is_published!=='boolean')fail('Choose whether the profile is published');
+ patch.is_published=body.is_published;
+ patch.updated_at=new Date().toISOString();
+ return patch;
+};
 const uuid = (value:unknown) => { const v=text(value); if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)) fail('Invalid identifier'); return v; };
 async function findEmail(email:string){
  for(let page=1;page<=100;page++){
@@ -85,6 +124,86 @@ Deno.serve(async req=>{
    const peopleIds=[...new Set([...enrollments.map((e:any)=>e.user_id),...attempts.map((a:any)=>a.user_id),...accounts.map((a:any)=>a.user_id),...courses.map((c:any)=>c.created_by)])] as string[];
    const people=await Promise.all(peopleIds.map(async id=>{const {data,error}=await service.auth.admin.getUserById(id);if(error)throw error;return {user_id:id,email:data.user.email,display_name:data.user.user_metadata?.display_name||''};}));
    result={role,accounts,courses,enrollments,lessons,quizzes,attempts,progress,assignments:submissions,submissions:work,people};
+  }else if(body.action==='faculty_get'){
+   const targetId=owner&&body.user_id?uuid(body.user_id):actor.id;
+   if(!owner&&targetId!==actor.id)fail('Cannot access another instructor profile',403);
+   const target=await checked(service.from('qh_lms_accounts').select('*').eq('user_id',targetId).eq('role','instructor').maybeSingle());
+   if(!target)fail('Instructor account not found',404);
+   const profile=await checked(service.from('qh_instructor_profiles').select('*').eq('user_id',targetId).maybeSingle());
+   result={account:target,profile,editable:owner||targetId===actor.id};
+  }else if(body.action==='faculty_save'||body.action==='faculty_admin_save'){
+   const adminEdit=body.action==='faculty_admin_save';
+   if(adminEdit&&!owner)fail('Only administrators can edit instructor accounts',403);
+   if(!adminEdit&&role!=='instructor')fail('Only instructors can edit their own profile',403);
+   const targetId=adminEdit?uuid(body.user_id):actor.id;
+   const existing=await checked(service.from('qh_lms_accounts').select('*').eq('user_id',targetId).eq('role','instructor').maybeSingle());
+   if(!existing)fail('Instructor account not found',404);
+   if(!adminEdit&&!existing.active)fail('Instructor access is suspended',403);
+   const before=await checked(service.from('qh_instructor_profiles').select('*').eq('user_id',targetId).maybeSingle());
+   const patch=facultyInput(body);
+   const changed=Object.keys(patch).filter(k=>k!=='updated_at'&&patch[k]!==(before?.[k]??(k==='is_published'?false:null)));
+   // Verification must not survive changes in the claimed academic qualifications.
+   const credentialsChanged=['credentials','academic_affiliation'].some(k=>patch[k]!== (before?.[k]||''));
+   const name=adminEdit?cleanField(body.display_name,160,'Name'):existing.display_name;
+   if(adminEdit&&!name)fail('Instructor name is required');
+   const city=adminEdit?cleanField(body.city,80,'City'):existing.city;
+   const country=adminEdit?cleanField(body.country,80,'Country'):existing.country;
+   const support=adminEdit?supportUrl(body.support_url):existing.support_url;
+   const email=adminEdit?cleanField(body.email,254,'Email').toLowerCase():existing.email;
+   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))fail('Enter a valid instructor email address');
+   if(adminEdit){
+     const proposed=body.credential_status;
+     if(!['unreviewed','verified','not_verified'].includes(proposed))fail('Invalid credential verification status');
+     if(proposed==='verified'&&credentialsChanged&&!body.confirm_credential_review)fail('Verify the updated credentials before marking them verified');
+     patch.credential_status=credentialsChanged&&!body.confirm_credential_review?'unreviewed':proposed;
+   }else patch.credential_status=credentialsChanged?'unreviewed':before?.credential_status||'unreviewed';
+   // Login email can only be changed by an administrator; record and reconcile both copies.
+   const accountChanged=adminEdit&&
+      (name!==existing.display_name||email!==existing.email||city!==existing.city||
+       country!==existing.country||support!==existing.support_url);
+   let authUpdated=false;let originalUser:any=null;
+   if(adminEdit&&(email!==existing.email||name!==existing.display_name)){
+     const {data:current,error:getErr}=await service.auth.admin.getUserById(targetId);
+     if(getErr||!current?.user)fail('Instructor login could not be retrieved',503);
+     originalUser=current.user;
+     if(email!==existing.email){
+       const other=await findEmail(email);if(other&&other.id!==targetId)fail('Email already belongs to another account');
+       if(body.confirm_email_change!==true)fail('Confirm the login email change before saving');
+     }
+     const update:any={user_metadata:{...(originalUser.user_metadata||{}),display_name:name}};
+     if(email!==existing.email){update.email=email;update.email_confirm=true;}
+     const {error:authUpdateError}=await service.auth.admin.updateUserById(targetId,update);
+     if(authUpdateError)fail('Login identity update failed; no account changes were saved',503);
+     authUpdated=true;
+   }
+   try{
+     if(accountChanged)await checked(service.from('qh_lms_accounts')
+       .update({display_name:name,email,city,country,support_url:support}).eq('user_id',targetId).eq('role','instructor'));
+     const profile=await checked(service.from('qh_instructor_profiles')
+       .upsert({user_id:targetId,...patch},{onConflict:'user_id'}).select().single());
+     const accountFields=adminEdit?['display_name','email','city','country','support_url'].filter(k=>({
+       display_name:name,email,city,country,support_url:support
+     } as any)[k]!==existing[k]):[];
+     const changedFields=[...changed,...accountFields];
+     if(before?.credential_status!==patch.credential_status)changedFields.push('credential_status');
+     if(changedFields.length){
+       await checked(service.from('qh_faculty_audit').insert({
+         actor_id:actor.id,instructor_id:targetId,action:adminEdit?'admin_profile_update':'instructor_profile_update',
+         changed_fields:changedFields
+       }));
+     }
+     result={ok:true,account:{...existing,display_name:name,email,city,country,support_url:support},
+       profile,message:adminEdit?'Instructor account and profile updated.':'Faculty profile saved.'};
+   }catch(err){
+     if(authUpdated&&originalUser){
+       // Best effort rollback avoids a silent split between Supabase Auth and the LMS.
+       const rollback:any={user_metadata:originalUser.user_metadata||{}};
+       if(email!==existing.email){rollback.email=originalUser.email;rollback.email_confirm=true;}
+       const {error:revertError}=await service.auth.admin.updateUserById(targetId,rollback);
+       if(revertError)fail('Profile could not be saved and login email reconciliation requires administrator attention',503);
+     }
+     throw err;
+   }
   }else if(body.action==='save_profile'){
    if(!account)fail('Instructor profile not found');
    result=await checked(service.from('qh_lms_accounts').update({display_name:text(body.display_name),country:text(body.country,80),city:text(body.city,80),support_url:supportUrl(body.support_url)}).eq('user_id',actor.id).select().single());
