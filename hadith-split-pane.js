@@ -18,15 +18,28 @@ function renderHadithSplitPane(entry, idx = 0, showButtons = true) {
   const englishText = entry.text || entry.text_english || '';
   const arabicText = entry.arabic_text || entry.original_text || '';
 
-  // Determine hadith grade
-  const grade = (entry.grade || 'ungraded').toLowerCase();
-  const gradeClass = `hadith-grade hadith-grade-${grade}`;
-  const gradeLabel = {
+  // Grade as written in the data; grades that reject a hadith are flagged.
+  const grade = String(entry.grade || 'ungraded').trim().toLowerCase();
+  const gradeCss = grade.replace(/[^a-z0-9_-]/g, '') || 'ungraded';
+  const gradeClass = `hadith-grade hadith-grade-${gradeCss}`;
+  const gradeLabels = {
     sahih: 'Sahih',
     hasan: 'Hasan',
     daif: 'Daif',
-    ungraded: 'Ungraded'
-  }[grade] || (entry.grade ? String(entry.grade) : 'Ungraded');
+    ungraded: 'Ungraded',
+    mawdu: 'Fabricated (mawḍūʿ)',
+    fabricated: 'Fabricated',
+    munkar: 'Munkar',
+    shadh: 'Shādh'
+  };
+  const gradeLabel = gradeLabels[grade] || (entry.grade ? escapeHtml(String(entry.grade)) : 'Ungraded');
+  const isRejectedGrade = /mawdu|mawḍūʿ|fabricat|munkar|shadh|shaadh/.test(grade);
+  const warningHtml = isRejectedGrade
+    ? `<div role="note" style="margin:0 0 12px;padding:8px 12px;border-left:4px solid #B3261E;background:#FDECEA;color:#7A1A14;font-size:13px;font-weight:600;">⚠ Graded "${gradeLabel}" in classical hadith scholarship. Check the grading before relying on this report.</div>`
+    : '';
+
+  // Verify Source link: only http(s) URLs
+  const sourceHref = safeHttpUrl(entry.source_url || entry.sourceUrl);
 
   // Build metadata section
   let metadataHtml = '';
@@ -42,11 +55,11 @@ function renderHadithSplitPane(entry, idx = 0, showButtons = true) {
       `);
     }
 
-    if (entry.scholar) {
+    if (entry.narrator) {
       metaItems.push(`
         <div class="hadith-meta-item">
           <span class="hadith-meta-label">Narrator</span>
-          <span class="hadith-meta-value">${escapeHtml(entry.scholar)}</span>
+          <span class="hadith-meta-value">${escapeHtml(entry.narrator)}</span>
         </div>
       `);
     }
@@ -55,7 +68,7 @@ function renderHadithSplitPane(entry, idx = 0, showButtons = true) {
       metaItems.push(`
         <div class="hadith-meta-item">
           <span class="hadith-meta-label">Grade</span>
-          <span class="${gradeClass}">${gradeLabel}</span>
+          <span class="${gradeClass}"${isRejectedGrade ? ' style="color:#B3261E;font-weight:700;"' : ''}>${gradeLabel}</span>
         </div>
       `);
     }
@@ -88,8 +101,8 @@ function renderHadithSplitPane(entry, idx = 0, showButtons = true) {
         <button class="hadith-action-btn" onclick="shareHadith('${id}', '${escapeHtml(entry.collection || 'Hadith')}')">
           🔗 Share
         </button>
-        ${entry.source_url ? `
-          <a href="${entry.source_url}" target="_blank" rel="noopener" class="hadith-reference-link">
+        ${sourceHref ? `
+          <a href="${escapeHtml(sourceHref)}" target="_blank" rel="noopener" class="hadith-reference-link">
             🔍 Verify Source
           </a>
         ` : ''}
@@ -109,10 +122,11 @@ function renderHadithSplitPane(entry, idx = 0, showButtons = true) {
       <!-- Right Pane: Arabic Text -->
       <div class="hadith-right-pane">
         <div class="hadith-arabic-title">Arabic</div>
-        <div class="hadith-arabic-text">${arabicText}</div>
+        <div class="hadith-arabic-text">${arabicText ? escapeHtml(arabicText) : '<span style="color:#888;font-style:italic;">Arabic text not available for this entry.</span>'}</div>
       </div>
 
       <!-- Metadata & Actions (spans full width) -->
+      ${warningHtml}
       ${metadataHtml}
       ${buttonsHtml}
     </div>
@@ -296,6 +310,15 @@ function shareHadith(id, collection = 'Hadith') {
  * @param {String} text - Text to escape
  * @returns {String} Escaped HTML
  */
+function safeHttpUrl(u) {
+  try {
+    const url = new URL(String(u || ''));
+    return (url.protocol === 'https:' || url.protocol === 'http:') ? url.href : '';
+  } catch {
+    return '';
+  }
+}
+
 function escapeHtml(text) {
   if (!text) return '';
   const map = {
