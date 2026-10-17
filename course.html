@@ -8,12 +8,12 @@
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: #f5f5f5;
+      background: #f3f6f8;
       color: #333;
     }
 
     .hero {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: #173446;
       color: white;
       padding: 3rem 1rem;
       text-align: center;
@@ -371,6 +371,7 @@
     let currentUser = null;
     let currentCourse = null;
     let enrollment = null;
+    let enrollmentRequest = null;
     let lessons = [];
 
     async function checkAuth() {
@@ -407,6 +408,20 @@
           enrollment = await getEnrollment(courseId);
         } catch (err) {
           enrollment = null;
+        }
+
+        // Distinguish requests waiting for instructor approval from actual enrollment.
+        // A student should never see another "Request Enrollment" button after applying.
+        enrollmentRequest=null;
+        if(currentUser&&!preview&&!enrollment){
+          const {data:requests,error:requestError}=await supabase.functions.invoke('academic-hub',{
+            body:{action:'enrollment_requests'}
+          });
+          if(!requestError){
+            enrollmentRequest=(requests?.student_requests||[])
+              .find(r=>r.course_id===courseId&&
+                ['pending','consent_pending'].includes(r.status))||null;
+          }
         }
 
         if(preview){await requireTeachingAccess();const managed=await lmsRequest('dashboard');if(!managed.courses.some(c=>c.id===courseId))throw Error('You can preview only classes you manage');}
@@ -560,9 +575,20 @@
           certificateSection.style.display = 'none';
         }
       } else {
-        actionBtn.textContent = '📚 Request Enrollment';
-        actionBtn.onclick = enrollInCourse;
-        enrollStatus.textContent = 'Not enrolled';
+        // Pending applications are actionable via the student's dashboard,
+        // where they may withdraw or accept an instructor referral.
+        actionBtn.disabled = false;
+        if(enrollmentRequest){
+          actionBtn.textContent = 'View Enrollment Request';
+          actionBtn.onclick = () => { window.location.href='/academic-hub.html?tab=courses'; };
+          enrollStatus.textContent = enrollmentRequest.status==='consent_pending'
+            ? 'Instructor recommendation — your confirmation required'
+            : 'Admission request pending instructor approval';
+        }else{
+          actionBtn.textContent = '📚 Request Enrollment';
+          actionBtn.onclick = enrollInCourse;
+          enrollStatus.textContent = 'Not enrolled';
+        }
         certificateSection.style.display = 'none';
       }
     }
