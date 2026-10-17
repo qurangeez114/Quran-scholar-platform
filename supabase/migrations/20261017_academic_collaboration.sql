@@ -151,6 +151,64 @@ grant all on public.qh_academic_enrollment_requests,public.qh_academic_contact_s
  public.qh_academic_message_reports,public.qh_academic_packages,
  public.qh_academic_package_items to service_role;
 
+-- Final approval and enrollment happen atomically, with a row lock.
+create or replace function qh_lms_private.academic_approve_enrollment(p_request uuid,p_actor uuid)
+returns uuid language plpgsql security definer set search_path to '' as $proc$
+declare r public.qh_academic_enrollment_requests%rowtype;
+declare c public.qh_courses%rowtype;
+declare enrollment_id uuid;
+begin
+ select * into r from public.qh_academic_enrollment_requests
+ where id=p_request for update;
+ if not found or r.status<>'pending' then raise exception 'Enrollment request is no longer pending'; end if;
+ select * into c from public.qh_courses where id=r.course_id;
+ if not found then raise exception 'Class not found'; end if;
+ if c.created_by<>p_actor and not exists(select 1 from public.qh_staff_members where user_id=p_actor)
+ then raise exception 'Only the receiving instructor may approve enrollment'; end if;
+ if c.access_closes_at is not null and c.access_closes_at<=now()
+ then raise exception 'Class has closed'; end if;
+ insert into public.qh_enrollments(user_id,course_id)
+ values(r.student_id,r.course_id)
+ on conflict(user_id,course_id) do nothing;
+ select id into enrollment_id from public.qh_enrollments
+ where user_id=r.student_id and course_id=r.course_id;
+ update public.qh_academic_enrollment_requests set status='approved',responded_by=p_actor,
+ responded_at=now(),updated_at=now() where id=r.id;
+ return enrollment_id;
+end $proc$;
+revoke all on function qh_lms_private.academic_approve_enrollment(uuid,uuid) from public,anon,authenticated;
+grant usage on schema qh_lms_private to service_role;
+grant execute on function qh_lms_private.academic_approve_enrollment(uuid,uuid) to service_role;
+
+-- Students explicitly accept or reject group invitations and join approvals.
+create or replace function qh_lms_private.academic_accept_group(p_request uuid,p_actor uuid)
+returns uuid language plpgsql security definer set search_path to '' as $proc$
+declare r public.qh_academic_group_requests%rowtype;
+declare g public.qh_academic_study_groups%rowtype;
+begin
+ select * into r from public.qh_academic_group_requests where id=p_request for update;
+ if not found or r.status<>'pending' then raise exception 'Group request is no longer pending'; end if;
+ select * into g from public.qh_academic_study_groups where id=r.group_id;
+ if not found or g.archived then raise exception 'Group unavailable'; end if;
+ if not exists(select 1 from public.qh_enrollments where course_id=g.course_id and user_id=r.student_id)
+ then raise exception 'Student must be enrolled in the class'; end if;
+ if exists(select 1 from public.qh_academic_message_blocks
+ where (blocker_id=p_actor and blocked_id=r.student_id) or
+ (blocker_id=r.student_id and blocked_id=p_actor)) and p_actor<>r.student_id
+ then raise exception 'This contact is blocked'; end if;
+ if r.kind='invite' and p_actor<>r.student_id
+ then raise exception 'Only the invitee may accept'; end if;
+ if r.kind='join' and not exists(select 1 from public.qh_academic_group_members
+ where group_id=r.group_id and student_id=p_actor and is_owner)
+ then raise exception 'Only the group owner may approve a join request'; end if;
+ insert into public.qh_academic_group_members(group_id,student_id)
+ values(r.group_id,r.student_id) on conflict do nothing;
+ update public.qh_academic_group_requests set status='accepted',resolved_at=now() where id=r.id;
+ return r.group_id;
+end $proc$;
+revoke all on function qh_lms_private.academic_accept_group(uuid,uuid) from public,anon,authenticated;
+grant execute on function qh_lms_private.academic_accept_group(uuid,uuid) to service_role;
+
 -- Course discovery and lesson access must enforce expiration in the database,
 -- not merely by hiding buttons in the interface.
 drop policy if exists lms_courses_read on public.qh_courses;
