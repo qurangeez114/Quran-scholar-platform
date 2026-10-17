@@ -50,7 +50,6 @@ Deno.serve(async req=>{
   };
   const member=async(groupId:string,id=me)=>await checked(sb.from('qh_academic_group_members')
     .select('student_id,is_owner,joined_at').eq('group_id',groupId).eq('student_id',id).maybeSingle());
-  const groupOwner=async(g:any)=>{if(!await member(g.id,me)?.is_owner){const m=await member(g.id);if(!m?.is_owner)fail('Group owner permission required',403);}};
   const getSession=async(id:any)=>{const s=await checked(sb.from('qh_academic_live_classes').select('*')
     .eq('id',guid(id)).maybeSingle());if(!s)fail('Live session not found',404);return s;};
   const courseList=async()=>{
@@ -132,6 +131,7 @@ Deno.serve(async req=>{
     const g=await getGroup(post.group_id);
     await requireClass(await getCourse(g.course_id));
     if(!await member(g.id))fail('Join this group before opening media',403);
+    if(post.author_id!==me&&await blocked(me,post.author_id))fail('Contact blocked',403);
     result=await signed(post.media_path);
    }else if(kind==='faculty'){
     if(!teacher)fail('Faculty-only media',403);
@@ -176,13 +176,18 @@ Deno.serve(async req=>{
     if(self&&!student&&!owner)fail('Student enrollment requests are for student accounts');
     if(!self&&c.created_by===me)fail('Use your own class enrollment tools for your class');
     if(c.visibility==='private'&&self&&!owner)fail('Private classes require an instructor invitation',403);
-    if(!self&&!await enrolled((await checked(sb.from('qh_enrollments')
-      .select('course_id').eq('user_id',target).limit(1)))[0]?.course_id||'',target)){
-      // Require evidence the referring instructor actually teaches the student.
+    const targetUser=await sb.auth.admin.getUserById(target);
+    if(targetUser.error||!targetUser.data?.user)fail('Student account not found',404);
+    const targetAccount=await checked(sb.from('qh_lms_accounts').select('role,active')
+      .eq('user_id',target).maybeSingle());
+    if(targetAccount&&(!targetAccount.active||targetAccount.role==='instructor'))
+      fail('Choose an active student account',403);
+    if(!self&&!owner){
+      // Faculty referrals must originate from an instructor who already teaches the student.
       const mine=await checked(sb.from('qh_courses').select('id').eq('created_by',me).limit(200));
       const match=mine.length?await checked(sb.from('qh_enrollments').select('id').eq('user_id',target)
         .in('course_id',mine.map((x:any)=>x.id)).limit(1)):[];
-      if(!match.length&&!owner)fail('You may refer only students from your classes',403);
+      if(!match.length)fail('You may refer only students from your own classes',403);
     }
     if(await enrolled(c.id,target))fail('Student is already enrolled');
     const old=await checked(sb.from('qh_academic_enrollment_requests')
@@ -208,7 +213,7 @@ Deno.serve(async req=>{
     }else{
      if(!owns(c)||request.status!=='pending')fail('Only the receiving teacher may review this request',403);
      if(body.accept===true){
-      const {data,error}=await sb.schema('qh_lms_private').rpc('academic_approve_enrollment',
+      const {data,error}=await sb.rpc('qh_academic_approve_enrollment',
        {p_request:request.id,p_actor:me});
       if(error)fail('Enrollment approval failed: '+error.message);
       result={ok:true,status:'approved',enrollment_id:data};
@@ -258,7 +263,10 @@ Deno.serve(async req=>{
     const existing=groups.length?await checked(sb.from('qh_academic_group_members').select('group_id,student_id,is_owner')
       .in('group_id',groups.map((g:any)=>g.id))):[];
     const my=existing.filter((m:any)=>m.student_id===me);
-    result={groups:groups.filter((g:any)=>!endedPlaceholder(g,body)),my_memberships:my};
+    const courses=ids.length?await checked(sb.from('qh_courses')
+      .select('id,access_closes_at').in('id',ids)):[];
+    const active=new Set(courses.filter((c:any)=>!ended(c)).map((c:any)=>c.id));
+    result={groups:groups.filter((g:any)=>active.has(g.course_id)),my_memberships:my};
    }else if(action==='group_create'){
     if(!student)fail('Only students can create study groups',403);
     const c=await getCourse(body.course_id);await requireClass(c);
@@ -301,7 +309,7 @@ Deno.serve(async req=>{
      const m=await member(g.id);if(!m?.is_owner)fail('Only the group owner may decide',403);
     }
     if(body.accept===true){
-     const {data,error}=await sb.schema('qh_lms_private').rpc('academic_accept_group',
+     const {data,error}=await sb.rpc('qh_academic_accept_group',
        {p_request:r.id,p_actor:me});
      if(error)fail('Could not accept membership: '+error.message);
      result={ok:true,group_id:data};
@@ -317,8 +325,8 @@ Deno.serve(async req=>{
      if(!m.is_owner)fail('Only the group owner may transfer ownership',403);
      const next=guid(body.student_id);
      if(next===me||!others.some((x:any)=>x.student_id===next))fail('Choose an existing group member');
-     await checked(sb.from('qh_academic_group_members').update({is_owner:false}).eq('group_id',g.id).eq('student_id',me));
-     await checked(sb.from('qh_academic_group_members').update({is_owner:true}).eq('group_id',g.id).eq('student_id',next));
+     const {error}=await sb.rpc('qh_academic_transfer_group',{p_group:g.id,p_old:me,p_new:next});
+     if(error)fail('Could not transfer group ownership');
     }else{
      if(m.is_owner&&others.length>1&&action==='group_leave')
        fail('Transfer ownership before leaving your group');
