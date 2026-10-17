@@ -28,7 +28,7 @@ const db={
  qh_academic_enrollment_requests:[],qh_academic_messages:[],qh_academic_message_blocks:[],
  qh_academic_study_groups:[],qh_academic_group_members:[],qh_academic_group_requests:[],
  qh_academic_group_posts:[],qh_academic_group_reports:[],qh_academic_contact_settings:[],
- qh_academic_packages:[],qh_academic_package_items:[],qh_academic_live_classes:[],
+ qh_academic_packages:[],qh_academic_package_items:[],qh_academic_course_inclusions:[],qh_academic_live_classes:[],
  qh_academic_live_chat:[],qh_academic_live_reactions:[]
 };
 class Q {
@@ -241,6 +241,38 @@ assert.equal(r.code,403,'Former owner cannot approve after transfer');
 r=await request(studentB,'group_decide',{request_id:transferJoinId,accept:true});
 assert.equal(r.code,200,'New owner can approve student membership');
 
+// Reuse is independent of student visibility and requires creator opt-in.
+r=await request(teacherB,'course_include',{host_course_id:courseB,source_course_id:courseA});
+assert.equal(r.code,403,'Other teacher cannot include a course without explicit reuse permission');
+r=await request(studentB,'course_include',{host_course_id:courseB,source_course_id:courseA});
+assert.equal(r.code,403,'Students cannot assign source courses');
+r=await request(teacherA,'course_settings',{course_id:courseA,visibility:'private',
+ faculty_reuse_enabled:true,access_closes_at:null});
+assert.equal(r.code,200,'Creator can opt into teacher sharing while keeping student access private');
+assert.equal(db.qh_courses[0].visibility,'private');
+assert.equal(db.qh_courses[0].faculty_reuse_enabled,true);
+r=await request(teacherB,'course_include',{host_course_id:courseB,source_course_id:courseA});
+assert.equal(r.code,200,JSON.stringify(r.data));
+assert.ok(!db.qh_enrollments.some(e=>e.user_id===studentB&&e.course_id===courseA),
+ 'Including source lessons must not enroll student in original instructor course');
+r=await request(studentB,'hub_overview');
+assert.equal(r.code,200);
+assert.ok(r.data.included_courses.some(c=>c.id===courseA&&c.host_course_id===courseB),
+ 'Host-class student can open linked original source lessons');
+r=await request(teacherA,'course_settings',{course_id:courseA,visibility:'private',
+ faculty_reuse_enabled:false,access_closes_at:null});
+assert.equal(r.code,200,'Creator can revoke faculty sharing independently of private visibility');
+r=await request(studentB,'hub_overview');
+assert.equal(r.code,200);
+assert.ok(!r.data.included_courses.some(c=>c.id===courseA),
+ 'Revoking original creator permission immediately removes linked lesson access');
+r=await request(teacherB,'course_include',{host_course_id:courseB,source_course_id:courseA});
+assert.equal(r.code,403,'Revoked courses cannot be included again');
+r=await request(teacherB,'course_uninclude',{host_course_id:courseB,source_course_id:courseA});
+assert.equal(r.code,200,'Receiving instructor can remove previously linked source');
+r=await request(teacherB,'course_include',{host_course_id:courseA,source_course_id:courseB});
+assert.equal(r.code,403,'Receiving instructor cannot change someone else\'s course');
+
 r=await request(teacherB,'live_create',{course_id:courseB,title:'Live source seminar',
  video_url:'https://youtu.be/abcdefghijk'});
 assert.equal(r.code,200,JSON.stringify(r.data));const liveId=r.data.id;
@@ -249,9 +281,9 @@ r=await request(teacherB,'live_manage',{session_id:liveId,status:'live',chat_pau
 r=await request(studentA,'live_message',{session_id:liveId,text:'A relevant question'});assert.equal(r.code,200);
 r=await request(teacherB,'live_manage',{session_id:liveId,status:'live',chat_paused:true});assert.equal(r.code,200);
 r=await request(studentA,'live_message',{session_id:liveId,text:'Still typing'});assert.equal(r.code,403,'Paused room rejects student posts');
-r=await request(teacherB,'course_settings',{course_id:courseB,visibility:'private',
+r=await request(teacherB,'course_settings',{course_id:courseB,visibility:'private',faculty_reuse_enabled:false,
  access_closes_at:'2020-01-01T00:00:00Z'});assert.equal(r.code,200);
 r=await request(studentA,'live_read',{session_id:liveId});assert.equal(r.code,403,'Expired class denies live-room access');
-r=await request(teacherB,'course_settings',{course_id:courseB,visibility:'public',access_closes_at:null});
+r=await request(teacherB,'course_settings',{course_id:courseB,visibility:'public',faculty_reuse_enabled:false,access_closes_at:null});
 assert.equal(r.code,200,'Teacher can extend the closed class');
 console.log('PASS: server auth boundaries, multi-class enrollment approval, student-led groups with consent/exit, opt-in invitations, live moderation and class closing/extension.');
