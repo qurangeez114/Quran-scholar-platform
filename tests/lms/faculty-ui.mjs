@@ -32,6 +32,7 @@ async function editPage(mode){
   calls.push({action,values});
   if(action==='session')return {role:mode==='admin'?'owner':'instructor',account:sampleAccount};
   if(action==='faculty_get')return JSON.parse(JSON.stringify(data));
+  if(action==='faculty_audit')return [{created_at:'2026-10-17T10:00:00Z',action:'admin_profile_update',actor_id:teacher,changed_fields:['display_name']}];
   if(action==='faculty_admin_save'||action==='faculty_save'){
    return {account:{...sampleAccount,...values},profile:{...profile,...values},message:'Saved'};
   }
@@ -56,6 +57,11 @@ self.form.elements.namedItem('headline').value='Changed without save';
 self.document.getElementById('faculty-revert').click();
 assert.equal(self.form.elements.namedItem('headline').value,'Faculty Lecturer','Revert restores saved profile');
 let admin=await editPage('admin');
+assert.match(admin.document.getElementById('faculty-audit-list').textContent,/display_name/);
+admin.document.getElementById('faculty-audit-refresh').click();
+await new Promise(resolve=>setTimeout(resolve,10));
+assert.ok(admin.calls.filter(c=>c.action==='faculty_audit').length>=2,'Refresh history action loads from server');
+
 admin.form.elements.namedItem('email').value='changed@example.invalid';
 admin.submit();await new Promise(resolve=>setTimeout(resolve,10));
 assert.equal(admin.calls.filter(x=>x.action==='faculty_admin_save').length,0,
