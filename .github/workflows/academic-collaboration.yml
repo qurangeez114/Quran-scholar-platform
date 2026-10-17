@@ -1,0 +1,43 @@
+name: Academic Collaboration QA
+on:
+  pull_request:
+    paths:
+      - 'academic-hub.html'
+      - 'accounts/academic-hub.js'
+      - 'accounts/academic-hub.css'
+      - 'supabase/functions/academic-hub/**'
+      - 'supabase/migrations/20261017_academic_collaboration.sql'
+      - 'course.html'
+      - 'courses-api.js'
+      - 'tests/lms/academic-hub-*.mjs'
+      - '.github/workflows/academic-collaboration.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'academic-hub.html'
+      - 'accounts/academic-hub.js'
+      - 'supabase/functions/academic-hub/**'
+      - 'tests/lms/academic-hub-*.mjs'
+permissions:
+  contents: read
+jobs:
+  collaboration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install test dependencies
+        run: npm install --no-save --ignore-scripts --no-audit --no-fund esbuild linkedom
+      - name: Check syntax
+        run: node --check accounts/academic-hub.js
+      - name: Verify linked UI actions and security contracts
+        run: node --test tests/lms/academic-hub-static.mjs tests/lms/academic-hub-live-video.mjs
+      - name: Verify role-based academic actions
+        run: node --test tests/lms/academic-hub-permissions.mjs
+      - name: Verify actual dashboard controls
+        run: node --test tests/lms/academic-hub-ui.mjs
+      - name: Existing learning-management regression tests
+        run: node --test tests/lms/dashboard.mjs tests/lms/endpoint.mjs
