@@ -14,11 +14,11 @@ await transform(api,{loader:'ts',format:'esm'});
 await transform(js,{loader:'js',format:'esm'});
 for(const action of [
  'hub_overview','faculty_message_send','faculty_message_list','faculty_media_prepare',
- 'media_open','block_contact','faculty_report_message','course_settings','enrollment_request',
+ 'media_open','block_contact','blocked_contacts','faculty_report_message','course_settings','enrollment_request',
  'enrollment_requests','enrollment_decide','enrollment_consent','enrollment_cancel',
  'package_create','package_add','package_remove','package_list','peer_discovery',
  'group_classmates','group_browse','group_create','group_invite','group_join_request',
- 'group_requests','group_decide','group_leave','group_transfer','group_members',
+ 'group_requests','group_decide','group_cancel_request','group_leave','group_transfer','group_members',
  'group_posts','group_post','group_media_prepare','group_report','live_list',
  'live_create','live_read','live_message','live_react','live_manage','live_moderate'
 ]){
@@ -29,7 +29,7 @@ const {document}=parseHTML(html);
 for(const id of [
  'courses-refresh','course-catalog','referral-form','referral-student','referral-course',
  'course-settings-form','settings-course','settings-deadline','settings-clear',
- 'faculty-grid','my-enrollment-requests','instructor-enrollment-requests','faculty-message-form',
+ 'faculty-grid','blocked-refresh','blocked-contacts-list','my-enrollment-requests','instructor-enrollment-requests','faculty-message-form',
  'faculty-recipient','faculty-attachment','faculty-inbox-refresh','faculty-conversation',
  'group-list','group-create-form','group-requests','group-conversation-panel',
  'group-invite-form','group-invite-person','group-transfer-form','group-transfer-person',
