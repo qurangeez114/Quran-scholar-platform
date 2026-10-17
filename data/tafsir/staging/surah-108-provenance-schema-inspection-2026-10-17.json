@@ -1,0 +1,182 @@
+{
+  "schema_version": "quranhikma-provenance-schema-inspection-v1",
+  "at": "2026-10-17T00:03:00-07:00",
+  "surah": 108,
+  "project_id": "ylosytbxpzxzwfzjpaej",
+  "method": "Three SELECT-only catalog queries; no application rows or credentials retrieved, no DDL/DML or workflow dispatch.",
+  "queries": [
+    "select t.tgname, t.tgrelid::regclass::text as table_name, t.tgdeferrable, t.tginitdeferred, p.proname, pg_get_functiondef(p.oid) as function_definition from pg_trigger t join pg_proc p on p.oid=t.tgfoid where not t.tgisinternal and (t.tgname ilike '%provenance%' or p.proname ilike '%provenance%') order by table_name,t.tgname",
+    "select table_name,column_name,data_type,is_nullable,column_default from information_schema.columns where table_schema='public' and table_name in ('proposition_voice_chain','evidence_units','evidence_links','transmission_routes') order by table_name,ordinal_position",
+    "select table_name,column_name,data_type,is_nullable,column_default from information_schema.columns where table_schema='public' and (table_name ilike '%evidence%link%' or table_name ilike '%transmission%') order by table_name,ordinal_position"
+  ],
+  "trigger_results": [
+    {
+      "tgname": "enforce_l2_provenance",
+      "table_name": "propositions",
+      "tgdeferrable": true,
+      "tginitdeferred": true,
+      "proname": "check_l2_provenance_exists",
+      "function_definition": "CREATE OR REPLACE FUNCTION public.check_l2_provenance_exists()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nBEGIN\n  IF NEW.normative_polarity IS NOT NULL AND NOT EXISTS (\n    SELECT 1 FROM structured_coding_provenance WHERE proposition_id=NEW.id AND field_name='normative_polarity') THEN\n    RAISE EXCEPTION 'propositions.id=% has normative_polarity set with no structured_coding_provenance row. Insert provenance in the same transaction.', NEW.id;\n  END IF;\n  IF NEW.scope_generality IS NOT NULL AND NOT EXISTS (\n    SELECT 1 FROM structured_coding_provenance WHERE proposition_id=NEW.id AND field_name='scope_generality') THEN\n    RAISE EXCEPTION 'propositions.id=% has scope_generality set with no structured_coding_provenance row.', NEW.id;\n  END IF;\n  IF NEW.comparison_object_id IS NOT NULL AND NOT EXISTS (\n    SELECT 1 FROM structured_coding_provenance WHERE proposition_id=NEW.id AND field_name='comparison_object_id') THEN\n    RAISE EXCEPTION 'propositions.id=% has comparison_object_id set with no structured_coding_provenance row.', NEW.id;\n  END IF;\n  RETURN NEW;\nEND; $function$\n"
+    }
+  ],
+  "column_results": [
+    {
+      "table_name": "evidence_units",
+      "column_name": "id",
+      "data_type": "bigint",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "evidence_units",
+      "column_name": "unit_type",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "evidence_units",
+      "column_name": "attributed_authority_name",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "evidence_units",
+      "column_name": "content_summary",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "evidence_units",
+      "column_name": "independence_state",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": "'unknown'::text"
+    },
+    {
+      "table_name": "evidence_units",
+      "column_name": "independence_justification",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "evidence_units",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "table_name": "proposition_voice_chain",
+      "column_name": "id",
+      "data_type": "bigint",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "proposition_voice_chain",
+      "column_name": "proposition_id",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "proposition_voice_chain",
+      "column_name": "reporting_work_id",
+      "data_type": "bigint",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "proposition_voice_chain",
+      "column_name": "originating_voice_type",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "proposition_voice_chain",
+      "column_name": "originating_voice_name",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "proposition_voice_chain",
+      "column_name": "quoted_collection",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "proposition_voice_chain",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    }
+  ],
+  "related_column_results": [
+    {
+      "table_name": "evidence_transmission_routes",
+      "column_name": "id",
+      "data_type": "bigint",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "evidence_transmission_routes",
+      "column_name": "evidence_unit_id",
+      "data_type": "bigint",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "evidence_transmission_routes",
+      "column_name": "route_description",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "evidence_transmission_routes",
+      "column_name": "transmitter_chain",
+      "data_type": "ARRAY",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "evidence_transmission_routes",
+      "column_name": "source_citation_text",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "evidence_transmission_routes",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    }
+  ],
+  "findings": [
+    "enforce_l2_provenance is initially deferred and checks provenance rows only when normative_polarity, scope_generality or comparison_object_id is non-null. It does not validate speaker/reporter fidelity.",
+    "proposition_voice_chain has originating voice fields and quoted_collection but no dedicated intermediate_reporter column. Do not repurpose quoted_collection as a person name without a verified convention.",
+    "The queried public names evidence_links and transmission_routes returned no columns; evidence_transmission_routes exists. Exact proposition-to-evidence link relation still requires discovery.",
+    "Evidence and voice bigint IDs show no column_default; identity metadata and insert workflow allocation must be checked before concluding IDs require manual assignment."
+  ],
+  "q06_recommendation": "Keep Malik and Ibn al-Arabi roles distinct in staging metadata; do not invent a transmission route or reinterpret quoted_collection. Q06 publication hold remains until source-preserving payload mapping and full constraints are validated.",
+  "limitations": [
+    "Column and one trigger inspection is not full schema validation; FK/CHECK/unique/identity/generated details pending.",
+    "No live English/source hash recheck in this run.",
+    "No claim completeness or publication approval inferred."
+  ],
+  "database_written": false,
+  "publication_ready": false,
+  "chapter_complete": false,
+  "next_step": "Discover exact proposition-evidence relation and its metadata columns plus voice constraints; then design Q06 mapping using existing supported fields."
+}
