@@ -421,6 +421,8 @@
       generateCertificate
     } from './courses-api.js';
 
+    import {requireTeachingAccess,lmsRequest} from './accounts/lms-access.js';
+    const preview = new URLSearchParams(location.search).get('preview') === '1';
     let currentUser = null;
     let currentLesson = null;
     let currentCourse = null;
@@ -465,10 +467,13 @@
         document.getElementById('lessonTitle').textContent = currentLesson.title;
         document.title = `${currentLesson.title} - QuranHikma`;
 
+        if(preview){await requireTeachingAccess();const managed=await lmsRequest('dashboard');if(!managed.courses.some(c=>c.id===currentCourse.id))throw Error('You can preview only classes you manage');}
         renderLesson();
+        const rules=document.createElement('p');rules.setAttribute('role','status');rules.style.cssText='padding:1rem;background:#eef4f0;border-radius:8px';
+        rules.textContent=preview?'Instructor preview: answers can be practiced; results, submissions, discussions and completion are not saved.':currentLesson.lesson_type==='quiz'?'Completion: pass the final quiz. Read the feedback and complete any reworded check before the grade is saved.':currentLesson.lesson_type==='assignment'?'Completion: submit your work. Your instructor grades the submission separately.':'Completion: finish this lesson, then press Mark as Complete. Video watching is tracked separately; it does not automatically award completion.';
+        document.getElementById('lessonContent').before(rules);
         // Secondary panels must not block the quiz or assignment.
-        void refreshLessonProgress();
-        void loadDiscussion();
+        if(!preview){void refreshLessonProgress();void loadDiscussion();}
 
         // Load quiz or assignment if needed
         if (currentLesson.lesson_type === 'quiz') {
@@ -498,6 +503,7 @@
       status.setAttribute('role','status');
       iframe.insertAdjacentElement('afterend',status);
       const key = 'qh-video-watched:' + (currentUser?.id || 'guest') + ':' + lessonId;
+      const resumeKey=key+':position';
       let watched = new Set();
       try {
         const previous = JSON.parse(localStorage.getItem(key)||'[]');
@@ -525,6 +531,7 @@
           if (Number.isFinite(second) && Number.isFinite(lastVideoSecond)) {
             const advance = second-lastVideoSecond;
             if (advance>=0.5 && advance<=2.5) {
+              if(!preview)try{localStorage.setItem(resumeKey,String(Math.floor(second)));}catch{}
               watched.add(Math.floor(second));
               if(watched.size%5===0) {
                 try {localStorage.setItem(key,JSON.stringify([...watched]));}catch{}
@@ -545,7 +552,7 @@
         try {
           videoPlayer = new window.YT.Player(iframe.id,{
             events:{
-              onReady:update,
+              onReady:()=>{if(!preview)try{const saved=Number(localStorage.getItem(resumeKey));if(saved>0&&saved<videoPlayer.getDuration()-5)videoPlayer.seekTo(saved,true);}catch{}update();},
               onStateChange:event=>{
                 if(event.data===window.YT.PlayerState.PLAYING)start();
                 else stop();
@@ -752,6 +759,7 @@
 
         const passed = percentage >= Number(currentQuiz.passing_score || 90);
         button.textContent='Saving results…';
+        if(preview){result.textContent='Preview score: '+percentage+'%. Nothing was saved.';return;}
         await submitQuiz(currentQuiz.id, answers, percentage, currentQuiz.passing_score);
         // A later failed retry must not erase an earlier passing lesson completion.
         const existing = (await getStudentProgress(currentCourse.id))
@@ -815,6 +823,7 @@
     document.getElementById('assignmentForm').addEventListener('submit', async (e) => {
       e.preventDefault();
 
+      if(preview){showAlert('Preview only: submission not saved.','info');return;}
       if (!currentAssignment) return;
 
       const content = document.getElementById('assignmentContent').value;
@@ -847,6 +856,7 @@
         }
 
         // Submit assignment with optional file
+        if(preview){showAlert('Preview only: submission not saved.','info');return;}
         await submitAssignment(currentAssignment.id, content, fileUrl, fileName);
 
         // Update student progress for assignment submission
@@ -930,16 +940,17 @@
     document.getElementById('closeDiscussion').addEventListener('click',()=>document.getElementById('discussionDialog').close());
     document.getElementById('discussionDialog').addEventListener('close',()=>{currentThreadId=null;});
     document.getElementById('newThreadForm').addEventListener('submit',async e=>{
-      e.preventDefault();const button=e.submitter;button.disabled=true;
+      e.preventDefault();if(preview)return showAlert('Discussions are read-only in preview.','info');const button=e.submitter;button.disabled=true;
       try{
         const title=document.getElementById('newThreadTitle').value.trim();
         if(title.length<3||title.length>180)throw Error('Use a title between 3 and 180 characters.');
+        if(preview)return showAlert('Discussions are read-only in preview.','info');
         await createDiscussionThread(currentLesson.id,title);
         e.target.reset();await loadDiscussion();discussionNotice('Discussion created.');
       }catch(err){discussionNotice('Could not create discussion: '+(err.message||err));}finally{button.disabled=false;}
     });
     document.getElementById('replyForm').addEventListener('submit',async e=>{
-      e.preventDefault();const button=e.submitter;button.disabled=true;
+      e.preventDefault();if(preview)return showAlert('Discussions are read-only in preview.','info');const button=e.submitter;button.disabled=true;
       const file=document.getElementById('replyFile').files[0];
       let objectPath=null;
       try{
@@ -989,7 +1000,7 @@
 
     window.goToCourse = function() {
       if (!currentCourse) return;
-      window.location.href = `/course.html?course=${currentCourse.id}`;
+      window.location.href = `/course.html?course=${currentCourse.id}${preview?'&preview=1':''}`;
     };
 
     window.goToNextLesson = async function() {
@@ -1000,9 +1011,9 @@
 
       const currentIndex = lessons.findIndex(l => l.id === currentLesson.id);
       if (currentIndex < lessons.length - 1) {
-        window.location.href = `/lesson.html?lesson=${lessons[currentIndex + 1].id}`;
+        window.location.href = `/lesson.html?lesson=${lessons[currentIndex + 1].id}${preview?'&preview=1':''}`;
       } else {
-        alert('You have completed all lessons in this course!');
+        window.location.href = `/course.html?course=${currentCourse.id}${preview?'&preview=1':''}`;
       }
     };
 
@@ -1025,6 +1036,7 @@
 
     window.markLessonComplete = async function() {
       const button = document.getElementById('completeBtn');
+      if(preview){showAlert('Preview only: completion is not saved.','info');return;}
       if (button.disabled) return;
       button.disabled=true;button.textContent='Saving completion…';
       try {

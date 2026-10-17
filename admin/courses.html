@@ -281,6 +281,7 @@
     import { requireTeachingAccess } from '../accounts/lms-access.js';
     import { getCourses, createCourse, updateCourse, deleteCourse } from '../courses-api.js';
 
+    import {loadCourseReadiness} from '../accounts/course-readiness.js';
     let currentUser = null;
     let courses = [];
 
@@ -326,6 +327,7 @@
             </span>
           </div>
           <div class="course-actions">
+            <a class="btn btn-secondary" href="/course.html?course=${course.id}&preview=1">Preview as student</a>
             <button class="btn btn-secondary" onclick="editCourse('${course.id}')">Edit</button>
             <a class="btn btn-secondary" href="/admin/grading.html?tab=quizzes&course=${course.id}">Results</a>
             <button class="btn btn-primary" onclick="viewLessons('${course.id}')">Lessons</button>
@@ -377,6 +379,7 @@
       const is_published = document.getElementById('editPublished').checked;
 
       try {
+        if(is_published){const issues=await loadCourseReadiness(supabase,courseId);if(issues.length){alert('Before publishing:\n\n'+issues.join('\n'));return;}}
         await updateCourse(courseId, { title, description, is_published });
         showAlert('Course updated successfully!', 'success');
         closeEditModal();

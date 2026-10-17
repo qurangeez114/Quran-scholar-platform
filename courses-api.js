@@ -795,11 +795,23 @@ export async function getStudentDashboard() {
 
   const certificateCourses = new Set(certificates.map(c => c.course_id));
 
-  return enrollments.map(enrollment => ({
-    ...enrollment,
-    hasCertificate: certificateCourses.has(enrollment.course_id),
-    isCompleted: enrollment.progress_pct === 100
-  }));
+  const ids=enrollments.map(e=>e.course_id);
+  const [lessonResult,progressResult]=ids.length?await Promise.all([
+    supabase.from('qh_lessons').select('id,course_id,title,lesson_order').in('course_id',ids).order('lesson_order',{ascending:true}).order('id',{ascending:true}),
+    supabase.from('qh_student_progress').select('lesson_id,completed').eq('user_id',user.id).in('course_id',ids)
+  ]):[{data:[]},{data:[]}];
+  if(lessonResult.error)throw lessonResult.error;
+  if(progressResult.error)throw progressResult.error;
+  const completed=new Set((progressResult.data||[]).filter(p=>p.completed).map(p=>p.lesson_id));
+  return enrollments.map(enrollment => {
+    const lessons=(lessonResult.data||[]).filter(l=>l.course_id===enrollment.course_id);
+    const done=lessons.filter(l=>completed.has(l.id)).length;
+    return {...enrollment,completed_lessons:done,total_lessons:lessons.length,
+      progress_pct:lessons.length?Math.round(done/lessons.length*100):0,
+      nextLesson:lessons.find(l=>!completed.has(l.id))||null,
+      hasCertificate:certificateCourses.has(enrollment.course_id),
+      isCompleted:lessons.length>0&&done===lessons.length};
+  });
 }
 
 // Like a discussion post

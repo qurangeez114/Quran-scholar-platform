@@ -8,6 +8,13 @@ const service = createClient(url,Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,{aut
 const fail = (message:string,status=400) => { throw Object.assign(new Error(message),{status}); };
 const checked = async (query:any) => { const {data,error}=await query; if(error) throw error; return data; };
 const text = (value:unknown,max=160) => typeof value==='string'?value.trim().slice(0,max):'';
+const supportUrl=(value:unknown)=>{
+ const raw=text(value,600);if(!raw)return null;
+ let parsed:URL;try{parsed=new URL(raw);}catch{fail('Enter a valid HTTPS support link');}
+ const allowed=['paypal.me','www.paypal.com','paypal.com','ko-fi.com','buymeacoffee.com','www.buymeacoffee.com','patreon.com','www.patreon.com','buy.stripe.com'];
+ if(parsed!.protocol!=='https:'||parsed!.username||parsed!.password||parsed!.port||!allowed.includes(parsed!.hostname)||parsed!.pathname==='/')fail('Use your personal PayPal, Ko-fi, Buy Me a Coffee, Patreon or Stripe payment link');
+ return parsed!.href;
+};
 const uuid = (value:unknown) => { const v=text(value); if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)) fail('Invalid identifier'); return v; };
 async function findEmail(email:string){
  for(let page=1;page<=100;page++){
@@ -45,6 +52,16 @@ Deno.serve(async req=>{
    return new Response(JSON.stringify({ok:true}),{headers});
   }
   if(account?.must_change_password&&!owner)fail('Change your temporary password first',403);
+  if(body.action==='instructor_support'){
+   const course=await checked(service.from('qh_courses').select('id,created_by,is_published').eq('id',uuid(body.course_id)).single());
+   if(!course.is_published&&!owner&&course.created_by!==actor.id){
+    const enrolled=await checked(service.from('qh_enrollments').select('user_id').eq('course_id',course.id).eq('user_id',actor.id).maybeSingle());
+    if(!enrolled)fail('Course access required',403);
+   }
+   const teacher=await checked(service.from('qh_lms_accounts').select('display_name,support_url,active,role').eq('user_id',course.created_by).maybeSingle());
+   const result=teacher?.active&&teacher.role==='instructor'&&teacher.support_url?{name:teacher.display_name,url:supportUrl(teacher.support_url)}:null;
+   return new Response(JSON.stringify(result),{headers});
+  }
   if(!owner&&role!=='instructor')fail('Instructor or owner access required',403);
   const ownCourse=async(id:string)=>{
    const course=await checked(service.from('qh_courses').select('*').eq('id',id).single());
@@ -70,7 +87,7 @@ Deno.serve(async req=>{
    result={role,accounts,courses,enrollments,lessons,quizzes,attempts,progress,assignments:submissions,submissions:work,people};
   }else if(body.action==='save_profile'){
    if(!account)fail('Instructor profile not found');
-   result=await checked(service.from('qh_lms_accounts').update({display_name:text(body.display_name),country:text(body.country,80),city:text(body.city,80)}).eq('user_id',actor.id).select().single());
+   result=await checked(service.from('qh_lms_accounts').update({display_name:text(body.display_name),country:text(body.country,80),city:text(body.city,80),support_url:supportUrl(body.support_url)}).eq('user_id',actor.id).select().single());
   }else if(body.action==='set_instructor_active'){
    if(!owner)fail('Owner access required',403);
    const id=uuid(body.user_id);if(id===actor.id)fail('Owner access cannot be changed here');

@@ -11,7 +11,7 @@ function moduleJs(page){
   assert.ok(match,'Expected inline module script');
   return match[1].replace(/^\s*import\s+(?:\{[\s\S]*?\}|\w+)\s+from\s+['"][^'"]+['"];?/gm,'');
 }
-for (const path of ['admin/quiz-builder.html','admin/lesson-manager.html','lesson.html']) {
+for (const path of ['admin/quiz-builder.html','admin/lesson-manager.html','lesson.html','course.html','admin/courses.html','student-dashboard.html']) {
  test(path+' parses as JavaScript',()=>{
    assert.doesNotThrow(()=>new vm.Script('(async function(){'+moduleJs(html(path))+'\n})'));
  });
@@ -73,3 +73,4 @@ test('Multimedia discussions use real schema and safe rendering',()=>{
  assert.doesNotMatch(p,/href="#" class="btn btn-secondary btn-small"/);
  assert.match(p,/if \(await checkAuth\(\)\)/);
  });
+

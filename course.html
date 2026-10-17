@@ -360,8 +360,14 @@
 
   <script type="module">
     import { supabase } from './accounts/client.js';
-    import { getCourseById, getLessonsByCourse, getEnrollment, generateCertificatePDF, getCourseMaterials } from './courses-api.js';
+    import { getCourseById, getLessonsByCourse, getEnrollment, generateCertificatePDF, getCourseMaterials, getStudentProgress } from './courses-api.js';
 
+    import {requireTeachingAccess, lmsRequest} from './accounts/lms-access.js';
+    import {mountInstructorSupport} from './accounts/instructor-support.js';
+    import {loadCourseReadiness} from './accounts/course-readiness.js';
+    const preview = new URLSearchParams(location.search).get('preview') === '1';
+    let progress = [];
+    const esc = value => String(value ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     let currentUser = null;
     let currentCourse = null;
     let enrollment = null;
@@ -403,7 +409,11 @@
           enrollment = null;
         }
 
+        if(preview){await requireTeachingAccess();const managed=await lmsRequest('dashboard');if(!managed.courses.some(c=>c.id===courseId))throw Error('You can preview only classes you manage');}
+        if(enrollment&&!preview)progress=await getStudentProgress(courseId);
         await loadLessons();
+        if(preview){const issues=await loadCourseReadiness(supabase,courseId);const panel=document.createElement('section');panel.className='section';const heading=document.createElement('h2');heading.textContent=issues.length?'Before publishing':'Course content checks passed';panel.append(heading);for(const issue of issues){const p=document.createElement('p');p.textContent=issue;panel.append(p);}document.getElementById('lessonsList').parentElement.prepend(panel);}
+        await mountInstructorSupport(currentCourse.id,document.getElementById('lessonsList').parentElement);
         await loadMaterials();
         updateUI();
 
@@ -432,7 +442,7 @@
         return;
       }
 
-      if (!enrollment) {
+      if (!enrollment && !preview) {
         container.innerHTML = `
           <div style="color: #999; text-align: center; padding: 2rem;">
             <p>Enroll in this course to view lessons</p>
@@ -453,8 +463,8 @@
           <div class="lesson-item" onclick="goToLesson('${lesson.id}')">
             <div class="lesson-number">${lesson.lesson_order}</div>
             <div class="lesson-info">
-              <div class="lesson-title">${lesson.title}</div>
-              <span class="lesson-type">${typeEmoji} ${lesson.lesson_type}</span>
+              <div class="lesson-title">${esc(lesson.title)}</div>
+              <span class="lesson-type">${typeEmoji} ${esc(lesson.lesson_type)}</span>
             </div>
             <div class="lesson-arrow">→</div>
           </div>
@@ -517,9 +527,17 @@
       const progressCard = document.getElementById('progressCard');
       const certificateSection = document.getElementById('certificateSection');
 
+      if (preview) {
+        actionBtn.textContent="Preview first lesson";actionBtn.disabled=!lessons.length;
+        actionBtn.onclick=()=>goToLesson(lessons[0]?.id);
+        enrollStatus.textContent="Instructor preview — no enrollment or progress saved";
+        return;
+      }
       if (enrollment) {
-        actionBtn.textContent = '▶ Start Learning';
-        actionBtn.onclick = () => goToLesson(lessons[0]?.id);
+        const next=lessons.find(l=>!progress.some(p=>p.lesson_id===l.id&&p.completed));
+        actionBtn.textContent = next?'Continue: '+next.title:'Review lessons';
+        actionBtn.disabled=!lessons.length;
+        actionBtn.onclick = () => goToLesson((next||lessons[0])?.id);
         enrollStatus.textContent = '✓';
 
         // Show progress
@@ -567,11 +585,12 @@
     };
 
     window.goToLesson = function(lessonId) {
-      if (!enrollment) {
+      if (!enrollment && !preview) {
         showAlert('Please enroll in the course first', 'info');
         return;
       }
-      window.location.href = `/lesson.html?lesson=${lessonId}`;
+      if(!lessonId)return;
+      window.location.href = `/lesson.html?lesson=${encodeURIComponent(lessonId)}${preview?'&preview=1':''}`;
     };
 
     window.handleAction = function() {
