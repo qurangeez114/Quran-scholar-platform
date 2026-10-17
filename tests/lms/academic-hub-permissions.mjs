@@ -82,8 +82,23 @@ const client={
   if(name==='qh_academic_accept_group'){
    const r=db.qh_academic_group_requests.find(x=>x.id===args.p_request);
    if(!r||r.status!=='pending')return {error:{message:'not pending'}};
+   const current=db.qh_academic_group_members.find(m=>m.group_id===r.group_id&&m.is_owner);
+   if(!current || (r.kind==='join'&&args.p_actor!==current.student_id)
+      || (r.kind==='invite'&&(args.p_actor!==r.student_id||r.initiated_by!==current.student_id)))
+       return {error:{message:'Only the current group owner can approve'}};
    db.qh_academic_group_members.push({group_id:r.group_id,student_id:r.student_id,is_owner:false});
    r.status='accepted';return {data:r.group_id,error:null};
+  }
+  if(name==='qh_academic_transfer_group'){
+   const current=db.qh_academic_group_members.find(m=>m.group_id===args.p_group&&m.is_owner);
+   const next=db.qh_academic_group_members.find(m=>m.group_id===args.p_group&&m.student_id===args.p_new);
+   if(!current||current.student_id!==args.p_old||!next)return {error:{message:'Transfer refused'}};
+   current.is_owner=false;next.is_owner=true;
+   for(const invite of db.qh_academic_group_requests){
+    if(invite.group_id===args.p_group&&invite.kind==='invite'&&invite.initiated_by===args.p_old&&invite.status==='pending')
+      invite.status='cancelled';
+   }
+   return {data:true,error:null};
   }
   return {data:true,error:null};
  },
@@ -205,6 +220,27 @@ r=await request(studentA,'group_invite',{group_id:groupId,student_id:studentB});
 assert.equal(r.code,200,JSON.stringify(r.data));
 r=await request(studentB,'group_decide',{request_id:r.data.id,accept:true});
 assert.equal(r.code,200,'Invited student must accept explicitly');
+// Transfer makes student B the current owner, not the historical creator A.
+r=await request(studentA,'group_transfer',{group_id:groupId,student_id:studentB});
+assert.equal(r.code,200,'Current owner can transfer group responsibility');
+r=await request(studentA,'group_leave',{group_id:groupId});
+assert.equal(r.code,200,'Former owner can now leave without archiving the group');
+r=await request(studentA,'group_join_request',{group_id:groupId});
+assert.equal(r.code,200,'Former owner may request to rejoin as an ordinary classmate');
+const transferJoinId=r.data.id;
+r=await request(studentA,'group_requests');
+assert.equal(r.code,200);
+assert.ok(!r.data.owned.some(x=>x.id===transferJoinId),
+ 'Former owner must not see the new owner\'s private join-review queue');
+r=await request(studentB,'group_requests');
+assert.equal(r.code,200);
+assert.ok(r.data.owned.some(x=>x.id===transferJoinId),
+ 'Current owner must see pending join requests');
+r=await request(studentA,'group_decide',{request_id:transferJoinId,accept:true});
+assert.equal(r.code,403,'Former owner cannot approve after transfer');
+r=await request(studentB,'group_decide',{request_id:transferJoinId,accept:true});
+assert.equal(r.code,200,'New owner can approve student membership');
+
 r=await request(teacherB,'live_create',{course_id:courseB,title:'Live source seminar',
  video_url:'https://youtu.be/abcdefghijk'});
 assert.equal(r.code,200,JSON.stringify(r.data));const liveId=r.data.id;

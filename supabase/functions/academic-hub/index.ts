@@ -393,7 +393,14 @@ Deno.serve(async req=>{
      if(!consent?.student_peer_messages)fail('Student has not opted in to group invitations',403);
      if(await blocked(me,target))fail('Contact blocked',403);
     }else if(!student)fail('Students may request to join groups',403);
-    else if(await blocked(me,g.creator_id))fail('Group owner is blocked',403);
+    else{
+      // Ownership can transfer. Resolve the current owner rather than the
+      // original creator before allowing a join request.
+      const current=await checked(sb.from('qh_academic_group_members')
+        .select('student_id').eq('group_id',g.id).eq('is_owner',true).maybeSingle());
+      if(!current)fail('Group has no active owner',409);
+      if(await blocked(me,current.student_id))fail('Group owner is blocked',403);
+    }
     if(await member(g.id,target))fail('Already a member');
     const pending=await checked(sb.from('qh_academic_group_requests').select('id')
       .eq('group_id',g.id).eq('student_id',target).eq('status','pending').maybeSingle());
@@ -414,9 +421,13 @@ Deno.serve(async req=>{
     if(!student)fail('Study group membership is for students',403);
     const inbox=await checked(sb.from('qh_academic_group_requests').select('*')
       .eq('student_id',me).order('created_at',{ascending:false}).limit(120));
-    const own=await checked(sb.from('qh_academic_study_groups').select('id').eq('creator_id',me).eq('archived',false));
+    const own=await checked(sb.from('qh_academic_group_members').select('group_id')
+      .eq('student_id',me).eq('is_owner',true));
+    // Membership, not the historical creator_id, determines who can review
+    // other students' join requests following an ownership transfer.
     const pending=own.length?await checked(sb.from('qh_academic_group_requests').select('*')
-      .in('group_id',own.map((g:any)=>g.id)).order('created_at',{ascending:false}).limit(150)):[];
+      .in('group_id',own.map((g:any)=>g.group_id)).eq('status','pending')
+      .order('created_at',{ascending:false}).limit(150)):[];
     result={received:inbox,owned:pending};
    }else if(action==='group_decide'){
     const r=await checked(sb.from('qh_academic_group_requests').select('*')
