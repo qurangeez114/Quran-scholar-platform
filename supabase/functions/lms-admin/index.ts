@@ -154,7 +154,7 @@ Deno.serve(async req=>{
    if(adminEdit){
      const proposed=body.credential_status;
      if(!['unreviewed','verified','not_verified'].includes(proposed))fail('Invalid credential verification status');
-     if(proposed==='verified'&&credentialsChanged&&!body.confirm_credential_review)fail('Verify the updated credentials before marking them verified');
+     if(proposed==='verified'&&(credentialsChanged||before?.credential_status!=='verified')&&body.confirm_credential_review!==true)fail('Review credential evidence before marking this profile verified');
      patch.credential_status=credentialsChanged&&!body.confirm_credential_review?'unreviewed':proposed;
    }else patch.credential_status=credentialsChanged?'unreviewed':before?.credential_status||'unreviewed';
    // Login email can only be changed by an administrator; record and reconcile both copies.
