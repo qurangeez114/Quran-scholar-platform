@@ -1,0 +1,196 @@
+{
+  "at": "2026-10-17T01:07:00-07:00",
+  "surah": 108,
+  "method": "SELECT-only live catalog inspection",
+  "queries": [
+    "select c.table_name,c.column_name,c.data_type,c.is_nullable,c.column_default,c.is_identity,c.identity_generation from information_schema.columns c where c.table_schema='public' and (c.table_name ilike '%proposition%evidence%' or c.table_name='proposition_voice_chain') order by c.table_name,c.ordinal_position",
+    "select conrelid::regclass::text as table_name,conname,contype,pg_get_constraintdef(oid) as definition from pg_constraint where conrelid in ('public.proposition_voice_chain'::regclass,'public.proposition_evidence'::regclass,'public.evidence_units'::regclass) order by table_name,conname"
+  ],
+  "columns": [
+    {
+      "table_name": "proposition_evidence",
+      "column_name": "proposition_id",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "proposition_evidence",
+      "column_name": "evidence_unit_id",
+      "data_type": "bigint",
+      "is_nullable": "NO",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "proposition_evidence",
+      "column_name": "semantic_link_note",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "proposition_evidence",
+      "column_name": "linked_by",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "proposition_evidence",
+      "column_name": "linked_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "column_default": "now()",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "proposition_voice_chain",
+      "column_name": "id",
+      "data_type": "bigint",
+      "is_nullable": "NO",
+      "column_default": null,
+      "is_identity": "YES",
+      "identity_generation": "ALWAYS"
+    },
+    {
+      "table_name": "proposition_voice_chain",
+      "column_name": "proposition_id",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "proposition_voice_chain",
+      "column_name": "reporting_work_id",
+      "data_type": "bigint",
+      "is_nullable": "NO",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "proposition_voice_chain",
+      "column_name": "originating_voice_type",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "proposition_voice_chain",
+      "column_name": "originating_voice_name",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "proposition_voice_chain",
+      "column_name": "quoted_collection",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "proposition_voice_chain",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "column_default": "now()",
+      "is_identity": "NO",
+      "identity_generation": null
+    }
+  ],
+  "constraints": [
+    {
+      "table_name": "evidence_units",
+      "conname": "evidence_units_independence_state_check",
+      "contype": "c",
+      "definition": "CHECK ((independence_state = ANY (ARRAY['unknown'::text, 'not_independent'::text, 'possibly_independent'::text, 'independence_supported'::text])))"
+    },
+    {
+      "table_name": "evidence_units",
+      "conname": "evidence_units_pkey",
+      "contype": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "evidence_units",
+      "conname": "evidence_units_unit_type_check",
+      "contype": "c",
+      "definition": "CHECK ((unit_type = ANY (ARRAY['grouped_named_attribution'::text, 'single_named_attribution'::text, 'single_hadith_citation'::text, 'quran_cross_reference'::text, 'grammatical_argument'::text, 'lexical_argument'::text, 'unattributed_assertion'::text])))"
+    },
+    {
+      "table_name": "proposition_evidence",
+      "conname": "proposition_evidence_evidence_unit_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (evidence_unit_id) REFERENCES evidence_units(id) ON DELETE RESTRICT"
+    },
+    {
+      "table_name": "proposition_evidence",
+      "conname": "proposition_evidence_pkey",
+      "contype": "p",
+      "definition": "PRIMARY KEY (proposition_id, evidence_unit_id)"
+    },
+    {
+      "table_name": "proposition_evidence",
+      "conname": "proposition_evidence_proposition_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (proposition_id) REFERENCES propositions(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "proposition_voice_chain",
+      "conname": "proposition_voice_chain_pkey",
+      "contype": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "proposition_voice_chain",
+      "conname": "proposition_voice_chain_proposition_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (proposition_id) REFERENCES propositions(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "proposition_voice_chain",
+      "conname": "proposition_voice_chain_reporting_work_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (reporting_work_id) REFERENCES sources(id) ON DELETE RESTRICT"
+    },
+    {
+      "table_name": "proposition_voice_chain",
+      "conname": "pvc_name_required_check",
+      "contype": "c",
+      "definition": "CHECK ((((originating_voice_type = ANY (ARRAY['exegete_own_view'::text, 'unattributed_group'::text])) AND (originating_voice_name IS NULL)) OR ((originating_voice_type <> ALL (ARRAY['exegete_own_view'::text, 'unattributed_group'::text])) AND (originating_voice_name IS NOT NULL))))"
+    },
+    {
+      "table_name": "proposition_voice_chain",
+      "conname": "pvc_type_check",
+      "contype": "c",
+      "definition": "CHECK ((originating_voice_type = ANY (ARRAY['exegete_own_view'::text, 'named_earlier_exegete'::text, 'companion_report'::text, 'hadith_report'::text, 'unattributed_group'::text])))"
+    }
+  ],
+  "findings": [
+    "Exact link table is proposition_evidence; semantic_link_note is required text.",
+    "proposition_voice_chain.id is GENERATED ALWAYS identity; no manual voice ID required.",
+    "Malik can occupy named_earlier_exegete with a non-null name. Reporter Ibn al-Arabi must remain separately described, not concatenated as an originating person.",
+    "No database insertion or full-source revalidation performed."
+  ],
+  "database_written": false,
+  "publication_ready": false,
+  "next_step": "Verify Q06 effective override and live Arabic/English sources using the existing authorized read-only validation workflow; hold remains until that verification."
+}
