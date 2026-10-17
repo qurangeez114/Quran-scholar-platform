@@ -1,8 +1,8 @@
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2.49.8';
 const origin='https://quranhikma.com';
-const headers={'Content-Type':'application/json','Access-Control-Allow-Origin':origin,
+const baseHeaders={'Content-Type':'application/json',
  'Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info','Access-Control-Allow-Methods':'POST, OPTIONS',
- 'Cache-Control':'no-store'};
+ 'Cache-Control':'no-store','Vary':'Origin'};
 const sb=createClient(Deno.env.get('SUPABASE_URL')!,Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
  {auth:{persistSession:false,autoRefreshToken:false}});
 const fail=(text:string,status=400):never=>{throw Object.assign(new Error(text),{status});};
@@ -15,11 +15,13 @@ const at=(value:any)=>{if(value===null||value===undefined||value==='')return nul
  const t=new Date(value);if(!Number.isFinite(t.getTime()))fail('Enter a valid expiration date');return t.toISOString();};
 const ended=(c:any)=>!!(c.access_closes_at&&new Date(c.access_closes_at).getTime()<=Date.now());
 Deno.serve(async req=>{
+ const host=req.headers.get('Origin');
+ const allowed=!host||host===origin||host==='https://www.quranhikma.com';
+ const headers={...baseHeaders,'Access-Control-Allow-Origin':allowed&&host?host:origin};
+ if(!allowed)return new Response(JSON.stringify({error:'Origin is not allowed'}),{status:403,headers});
  if(req.method==='OPTIONS')return new Response(null,{headers});
  if(req.method!=='POST')return new Response(JSON.stringify({error:'POST required'}),{status:405,headers});
  try{
-  const host=req.headers.get('Origin');
-  if(host&&host!==origin&&host!=='https://www.quranhikma.com')fail('Origin is not allowed',403);
   const token=req.headers.get('Authorization')?.replace(/^Bearer\s+/i,'');
   if(!token)fail('Sign in required',401);
   const {data:auth,error:authError}=await sb.auth.getUser(token);
