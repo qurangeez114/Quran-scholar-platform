@@ -50,7 +50,11 @@ class Q {
    matched=values.map(v=>{
     let row=this.operation==='upsert'?table.find(x=>Object.keys(v).every(k=>k.endsWith('_id')?x[k]===v[k]:true)):null;
     if(row)Object.assign(row,v);
-    else{row={id:randomUUID(),...v,created_at:new Date().toISOString()};table.push(row);}
+    else{row={id:randomUUID(),...v,created_at:new Date().toISOString()};
+     if(this.table==='qh_academic_group_requests')row.status??='pending';
+     if(this.table==='qh_academic_live_classes')row.status??='scheduled';
+     if(this.table==='qh_academic_study_groups')row.archived??=false;
+     table.push(row);}
     return row;
    });
   }else if(this.operation==='update'){
