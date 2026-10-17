@@ -65,6 +65,8 @@ assert.match(sql,/grant all on public\.qh_academic_live_classes[\s\S]*?to servic
 assert.ok(!sql.includes('grant select on public.qh_academic_messages to anon'));
 assert.ok(sql.includes('public.qh_academic_approve_enrollment'));
 assert.ok(sql.includes('public.qh_academic_accept_group'));
+assert.match(sql,/b\.blocker_id=g\.creator_id and b\.blocked_id=r\.student_id/,'Group admission must enforce owner-to-invitee blocks');
+assert.match(sql,/b\.blocker_id=r\.student_id and b\.blocked_id=g\.creator_id/,'Group admission must enforce invitee-to-owner blocks');
 assert.ok(sql.includes('public.qh_academic_transfer_group'));
 assert.ok(sql.includes("and (access_closes_at is null or access_closes_at>now())"),
  'Course read policy must enforce expiration');
