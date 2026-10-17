@@ -41,5 +41,5 @@ assert.match(surface.children[0].textContent,/ended/);
 render({...example,status:'live',id:'room-two'});
 assert.equal(surface.children[0].tag,'iframe','A new session can launch a new stream');
 assert.match(html,/unlisted external video links are not secure access controls/i);
-assert.match(js,/Unavailable, private, or expired/,'Unavailable package items must be visibly labeled');
+assert.match(js,/Source course no longer shareable/,'Unavailable package items must be visibly labeled');
 console.log('PASS: scheduled video hidden, started video visible, polling does not reload stream, ended stream removed and external privacy explained.');
