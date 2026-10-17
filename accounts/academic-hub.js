@@ -16,7 +16,26 @@ const select=(id,records,placeholder,name='title',key='id')=>{
 };
 const values=form=>Object.fromEntries(new FormData(form));
 const https=x=>{try{const u=new URL(x);return u.protocol==='https:'&&!u.username&&!u.password?u.href:null;}catch{return null;}};
-let state=null,group=null,groupList={groups:[],my_memberships:[]},groupMembers=[],live=null,liveSessions=[],packageState={packages:[],items:[]},clock=null;
+let state=null,group=null,groupList={groups:[],my_memberships:[]},groupMembers=[],live=null,liveSessions=[],packageState={packages:[],items:[]},groupClock=null,liveClock=null;
+let groupPolling=false,livePolling=false;
+function stopGroupUpdates(){if(groupClock!==null){clearInterval(groupClock);groupClock=null;}}
+function stopLiveUpdates(){if(liveClock!==null){clearInterval(liveClock);liveClock=null;}}
+function startGroupUpdates(){
+ stopGroupUpdates();
+ groupClock=setInterval(async()=>{
+  if(!group||document.hidden||$('tab-groups').hidden||groupPolling)return;
+  groupPolling=true;try{await groupPosts();}catch{stopGroupUpdates();status('Study group updates stopped. Refresh your group to reconnect.',true);}
+  finally{groupPolling=false;}
+ },8000);
+}
+function startLiveUpdates(){
+ stopLiveUpdates();
+ liveClock=setInterval(async()=>{
+  if(!live||document.hidden||$('tab-live').hidden||livePolling)return;
+  livePolling=true;try{await liveRead();}catch{stopLiveUpdates();status('Classroom updates stopped. Re-enter the room to reconnect.',true);}
+  finally{livePolling=false;}
+ },4500);
+}
 const faculty=()=>['instructor','owner'].includes(state?.role);
 const student=()=>state?.role==='student';
 const name=id=>state?.faculty?.find(x=>x.user_id===id)?.display_name||
@@ -40,6 +59,8 @@ async function run(fn,b){
  finally{if(b)b.disabled=false;}
 }
 function tab(which){
+ if(which!=='groups')stopGroupUpdates();
+ if(which!=='live')stopLiveUpdates();
  for(const b of document.querySelectorAll('[data-tab]')){
   b.classList.toggle('active',b.dataset.tab===which);
   b.setAttribute('aria-selected',String(b.dataset.tab===which));
@@ -48,8 +69,8 @@ function tab(which){
  if(which==='courses')run(refreshRequests);
  if(which==='messages'&&faculty())run(refreshMessages);
  if(which==='packages'&&faculty())run(refreshPackages);
- if(which==='groups'&&student())run(refreshGroups);
- if(which==='live')run(refreshLive);
+ if(which==='groups'&&student())run(async()=>{await refreshGroups();if(group)startGroupUpdates();});
+ if(which==='live')run(async()=>{await refreshLive();if(live)startLiveUpdates();});
 }
 function permissions(){
  for(const n of document.querySelectorAll('.faculty-only'))n.hidden=!faculty();
@@ -255,6 +276,7 @@ async function members(){
  }
 }
 async function openGroup(id){
+ stopGroupUpdates();
  const found=groupList.groups.find(g=>g.id===id);
  if(!found||!myGroup(id))throw Error('Join this group first.');
  group=found;$('group-conversation-panel').hidden=false;
@@ -268,6 +290,7 @@ async function openGroup(id){
    'Select opted-in classmate','name');
  }
  $('group-conversation-panel').scrollIntoView({block:'start'});
+ startGroupUpdates();
 }
 const videoURL=value=>{
  let u;try{u=new URL(value);}catch{return null;}
@@ -296,8 +319,21 @@ async function refreshLive(){
 }
 async function liveRead(){
  if(!live)return;
- const data=await api('live_read',{session_id:live.id}),current=data.session;live=current;
+ const requested=live.id;
+ const data=await api('live_read',{session_id:requested}),current=data.session;
+ if(!live||live.id!==requested)return;
+ live=current;
  $('live-state').textContent='Status: '+current.status+(current.chat_paused?' · Chat paused':'');
+ const reactionSummary={};
+ for(const reaction of data.reactions||[]){
+  reactionSummary[reaction.emoji]=(reactionSummary[reaction.emoji]||0)+1;
+ }
+ $('live-reaction-summary').textContent=Object.entries(reactionSummary).length
+   ?'Recent reactions: '+Object.entries(reactionSummary).map(([emoji,n])=>emoji+' '+n).join('   ')
+   :'No reactions yet. Use the buttons below to participate.';
+ // Instructors can moderate only live sessions belonging to their own courses.
+ for(const control of document.querySelectorAll('#live-room .faculty-only'))
+   control.hidden=!teaching(current.course_id)&&state?.role!=='owner';
  const root=$('live-chat');root.replaceChildren();
  for(const msg of data.chat){
   const e=entry(root,msg,name(msg.author_id),'none');
@@ -319,6 +355,7 @@ async function liveRead(){
  for(const b of document.querySelectorAll('[data-emoji]'))b.disabled=current.status!=='live';
 }
 async function enterLive(id){
+ stopLiveUpdates();
  live=liveSessions.find(s=>s.id===id);if(!live)return;
  $('live-room').hidden=false;$('live-title').textContent=live.title;
  const surface=$('live-video');surface.replaceChildren();
@@ -328,6 +365,7 @@ async function enterLive(id){
   f.allow='autoplay; encrypted-media; picture-in-picture';f.allowFullscreen=true;f.loading='lazy';surface.appendChild(f);
  }else add(surface,link(live.video_url,'Open video stream ↗'));
  await liveRead();$('live-room').scrollIntoView({block:'start'});
+ startLiveUpdates();
 }
 function bind(){
  for(const b of document.querySelectorAll('[data-tab]'))b.addEventListener('click',()=>tab(b.dataset.tab));
@@ -359,6 +397,7 @@ function bind(){
  $('group-leave').addEventListener('click',()=>run(async()=>{
   if(!group||!confirm('Leave the study group? You will lose access to its discussion and recordings.'))return;
   await api('group_leave',{group_id:group.id});group=null;
+  stopGroupUpdates();
   $('group-conversation-panel').hidden=true;await refreshGroups();
  }));
  form('group-invite-form',async f=>{await api('group_invite',{group_id:group.id,student_id:f.elements.student_id.value});await refreshGroups();});
@@ -399,6 +438,7 @@ function bind(){
   if(!live)throw Error('Enter a live class');
   await api('live_react',{session_id:live.id,emoji:b.dataset.emoji});await liveRead();
  },b));
+ window.addEventListener('pagehide',()=>{stopGroupUpdates();stopLiveUpdates();});
 }
 async function start(){
  const {data,error}=await db.auth.getSession();
