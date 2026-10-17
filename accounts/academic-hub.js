@@ -24,7 +24,9 @@ function startGroupUpdates(){
  stopGroupUpdates();
  groupClock=setInterval(async()=>{
   if(!group||document.hidden||$('tab-groups').hidden||groupPolling)return;
-  groupPolling=true;try{await groupPosts();}catch{stopGroupUpdates();status('Study group updates stopped. Refresh your group to reconnect.',true);}
+  groupPolling=true;try{await groupPosts();}catch{stopGroupUpdates();group=null;
+    $('group-posts').replaceChildren();$('group-conversation-panel').hidden=true;
+    status('Group access or connection expired. Reopen the group after verifying membership.',true);}
   finally{groupPolling=false;}
  },8000);
 }
@@ -32,7 +34,9 @@ function startLiveUpdates(){
  stopLiveUpdates();
  liveClock=setInterval(async()=>{
   if(!live||document.hidden||$('tab-live').hidden||livePolling)return;
-  livePolling=true;try{await liveRead();}catch{stopLiveUpdates();status('Classroom updates stopped. Re-enter the room to reconnect.',true);}
+  livePolling=true;try{await liveRead();}catch{stopLiveUpdates();live=null;
+    $('live-video').replaceChildren();$('live-chat').replaceChildren();$('live-room').hidden=true;
+    status('Classroom access or connection expired. Re-enter after confirming enrollment.',true);}
   finally{livePolling=false;}
  },4500);
 }
@@ -178,7 +182,9 @@ function entry(root,record,author,kind){
  if(record.media_path)add(actions(item),btn('Play '+record.media_kind,async()=>{
   const data=await api('media_open',{kind,id:record.id});
   if(!https(data.url))throw Error('Media URL unavailable');
+  for(const old of item.querySelectorAll('.academic-embedded-media'))old.remove();
   const media=el(record.media_kind==='video'?'video':'audio');
+  media.className='academic-embedded-media';
   media.src=data.url;media.controls=true;media.preload='none';media.style.maxWidth='100%';
   if(record.media_kind==='video')media.style.width='100%';
   item.appendChild(media);
@@ -364,7 +370,7 @@ async function liveRead(){
  const root=$('live-chat');root.replaceChildren();
  for(const msg of data.chat){
   const e=entry(root,msg,name(msg.author_id),'none');
-  if(teaching(current.course_id)){
+  if(teaching(current.course_id)||state.role==='owner'){
    const a=actions(e);
    add(a,btn(msg.is_pinned?'Unpin':'Pin',async()=>{
     await api('live_moderate',{session_id:live.id,message_id:msg.id,pin:!msg.is_pinned,hide:false});await liveRead();
@@ -379,7 +385,8 @@ async function liveRead(){
  $('live-chat-form').querySelector('button').disabled=current.status!=='live'||
   current.chat_paused&&!teaching(current.course_id);
  $('live-pause').textContent=current.chat_paused?'Resume chat':'Pause chat';
- for(const b of document.querySelectorAll('[data-emoji]'))b.disabled=current.status!=='live';
+ for(const b of document.querySelectorAll('[data-emoji]'))b.disabled=current.status!=='live'||
+  (current.chat_paused&&!teaching(current.course_id)&&state.role!=='owner');
 }
 async function enterLive(id){
  stopLiveUpdates();
