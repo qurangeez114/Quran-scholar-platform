@@ -287,6 +287,12 @@
           <label>Description</label>
           <textarea id="courseDescription" placeholder="Describe what students will learn..."></textarea>
         </div>
+        <div class="form-group"><label for="courseVisibility">Student access</label>
+          <select id="courseVisibility"><option value="private">Private — only my enrolled students</option>
+          <option value="public">Public — students may discover and request access</option></select></div>
+        <div class="form-group"><label><input type="checkbox" id="courseFacultyReuse">
+          Allow other instructors to include my course in their classes</label>
+          <p style="font-size:12px;color:#657580;margin-top:6px">This is separate from student access. You keep authorship and private grades; sharing can be revoked.</p></div>
         <button type="submit" class="btn btn-primary">Create Course</button>
       </form>
     </div>
@@ -320,6 +326,12 @@
             <input type="checkbox" id="editPublished"> Published
           </label>
         </div>
+        <div class="form-group"><label for="editVisibility">Student access</label>
+          <select id="editVisibility"><option value="private">Private — only my enrolled students</option>
+          <option value="public">Public — students may discover and request access</option></select></div>
+        <div class="form-group"><label><input type="checkbox" id="editFacultyReuse">
+          Other instructors may include this course in their classes</label>
+          <p style="font-size:12px;color:#657580;margin-top:6px">Uncheck to revoke linked access. This does not transfer ownership or grades.</p></div>
         <div style="display: flex; gap: 1rem;">
           <button type="submit" class="btn btn-primary" style="flex: 1;">Save Changes</button>
           <button type="button" class="btn btn-secondary" onclick="closeEditModal()" style="flex: 1;">Cancel</button>
@@ -402,7 +414,10 @@
       const description = document.getElementById('courseDescription').value;
 
       try {
-        await createCourse(title, description);
+        await createCourse(title, description,{
+          visibility:document.getElementById('courseVisibility').value,
+          faculty_reuse_enabled:document.getElementById('courseFacultyReuse').checked
+        });
         showAlert('Course created successfully!', 'success');
         document.getElementById('createCourseForm').reset();
         await loadCourses();
@@ -420,6 +435,8 @@
       document.getElementById('editTitle').value = course.title;
       document.getElementById('editDescription').value = course.description || '';
       document.getElementById('editPublished').checked = course.is_published;
+      document.getElementById('editVisibility').value = course.visibility||'public';
+      document.getElementById('editFacultyReuse').checked = course.faculty_reuse_enabled===true;
 
       document.getElementById('editModal').classList.add('active');
     };
@@ -435,10 +452,12 @@
       const title = document.getElementById('editTitle').value;
       const description = document.getElementById('editDescription').value;
       const is_published = document.getElementById('editPublished').checked;
+      const visibility = document.getElementById('editVisibility').value;
+      const faculty_reuse_enabled = document.getElementById('editFacultyReuse').checked;
 
       try {
         if(is_published){const issues=await loadCourseReadiness(supabase,courseId);if(issues.length){alert('Before publishing:\n\n'+issues.join('\n'));return;}}
-        await updateCourse(courseId, { title, description, is_published });
+        await updateCourse(courseId, { title, description, is_published, visibility, faculty_reuse_enabled });
         showAlert('Course updated successfully!', 'success');
         closeEditModal();
         await loadCourses();
