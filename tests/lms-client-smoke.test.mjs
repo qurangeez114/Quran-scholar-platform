@@ -62,3 +62,14 @@ test('Multimedia discussions use real schema and safe rendering',()=>{
  assert.match(api,/qh_discussion_attachments/);
  assert.doesNotMatch(api,/qh_profiles\(first_name, last_name\)/);
 });
+
+ test('Student dashboard uses explicit tab targets, escaped course text and real certificate controls',()=>{
+ const p=html('student-dashboard.html');
+ assert.doesNotThrow(()=>new vm.Script('(async function(){'+moduleJs(p)+'\n})'));
+ assert.doesNotMatch(p,/event\.target\.classList/);
+ assert.match(p,/switchTab\('courses', this\)/);
+ assert.match(p,/escapeHtml\(enrollment\.qh_courses/);
+ assert.match(p,/data-download-certificate/);
+ assert.doesNotMatch(p,/href="#" class="btn btn-secondary btn-small"/);
+ assert.match(p,/if \(await checkAuth\(\)\)/);
+ });
