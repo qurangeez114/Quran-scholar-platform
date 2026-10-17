@@ -22,6 +22,21 @@ let {document:d,window,calls}=await setup({role:'owner'});
 assert.equal(d.getElementById('dashboard').hidden,false);
 assert.match(d.getElementById('students').textContent,/80%.*100%/s);
 assert.match(d.getElementById('attempts').textContent,/Passed/);
+// Instructor names navigate to their profile, while the independent edit action remains available.
+const instructorName=d.getElementById('instructors').querySelector('.faculty-name-link');
+assert.ok(instructorName,'Admin instructor name is a clickable link');
+assert.equal(instructorName.getAttribute('href'),'/faculty.html?id='+teacher);
+assert.match(instructorName.textContent,/Test Teacher/);
+const editFaculty=d.getElementById('instructors').querySelector('.faculty-edit-link');
+assert.equal(editFaculty.getAttribute('href'),'/faculty-admin.html?id='+teacher);
+const courseInstructor=d.getElementById('classes').querySelector('.faculty-name-link');
+assert.ok(courseInstructor,'Course list links the instructor name to faculty page');
+assert.equal(courseInstructor.getAttribute('href'),'/faculty.html?id='+teacher);
+const studentRowInstructor=d.getElementById('students').querySelector('td:nth-child(3) .faculty-name-link');
+assert.ok(studentRowInstructor,'Student roster instructor column links to faculty page');
+assert.equal(studentRowInstructor.getAttribute('href'),'/faculty.html?id='+teacher);
+assert.equal(d.getElementById('students').querySelector('td:first-child .faculty-name-link'),null,
+ 'Student name must not be mislabeled as a faculty profile link');
 const firstStudentInvite=d.getElementById('students').querySelector('[data-invite-student]');
 assert.ok(firstStudentInvite,'student resend control present');
 await d.getElementById('students').onclick({target:firstStudentInvite});

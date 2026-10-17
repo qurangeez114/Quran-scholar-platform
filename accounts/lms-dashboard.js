@@ -6,6 +6,11 @@ let snapshot,state;
 const status=text=>$('status').textContent=text;
 const person=id=>snapshot.people.find(p=>p.user_id===id);
 const name=id=>person(id)?.display_name||person(id)?.email||id;
+const instructorLink=(id,label)=>{
+  // IDs originate from the authenticated dashboard snapshot; never insert them unescaped.
+  const text=esc(label||name(id));
+  return '<a class="faculty-name-link" href="/faculty.html?id='+encodeURIComponent(id)+'" title="View instructor profile: '+text+'">'+text+'</a>';
+};
 const course=id=>snapshot.courses.find(c=>c.id===id);
 const quiz=id=>snapshot.quizzes.find(q=>q.id===id);
 const lesson=id=>snapshot.lessons.find(l=>l.id===id);
@@ -38,9 +43,9 @@ function render(){
  options($('city-filter'),[...new Set(eligible.map(i=>i.city).filter(Boolean))].sort(),v=>v,v=>v,'All cities');
  const term=$('search').value.toLowerCase();
  const visible=instructors.filter(i=>(`${i.display_name} ${i.email}`).toLowerCase().includes(term)&&(!$('country-filter').value||i.country===$('country-filter').value)&&(!$('city-filter').value||i.city===$('city-filter').value)).sort((a,b)=>String(a[$('sort').value]).localeCompare(String(b[$('sort').value])));
- $('instructors').innerHTML=visible.map(i=>`<article class="card"><h3>${esc(i.display_name)}</h3><p>${esc(i.email)}</p><p>${esc(i.city||'City not set')}, ${esc(i.country||'Country not set')}</p><p>${i.active?'Active':'Suspended'} · ${i.must_change_password?'Password change pending':'Account ready'}</p><a href="/faculty-admin.html?id=${encodeURIComponent(i.user_id)}" class="faculty-edit-link">Edit account &amp; faculty profile</a> <button type="button" data-view="${i.user_id}">View classes and students</button> <button type="button" data-invite="${i.user_id}" ${i.active?'':'disabled title="Restore the account before inviting"'}>Resend invitation email</button> <button type="button" data-toggle="${i.user_id}" data-active="${i.active}">${i.active?'Suspend access':'Restore access'}</button></article>`).join('')||'<p>No matching instructors.</p>';
+ $('instructors').innerHTML=visible.map(i=>`<article class="card"><h3>${instructorLink(i.user_id,i.display_name)}</h3><p>${esc(i.email)}</p><p>${esc(i.city||'City not set')}, ${esc(i.country||'Country not set')}</p><p>${i.active?'Active':'Suspended'} · ${i.must_change_password?'Password change pending':'Account ready'}</p><a href="/faculty-admin.html?id=${encodeURIComponent(i.user_id)}" class="faculty-edit-link">Edit account &amp; faculty profile</a> <button type="button" data-view="${i.user_id}">View classes and students</button> <button type="button" data-invite="${i.user_id}" ${i.active?'':'disabled title="Restore the account before inviting"'}>Resend invitation email</button> <button type="button" data-toggle="${i.user_id}" data-active="${i.active}">${i.active?'Suspend access':'Restore access'}</button></article>`).join('')||'<p>No matching instructors.</p>';
  const courses=filteredCourses(),ids=new Set(courses.map(c=>c.id));
- $('classes').innerHTML=courses.map(c=>`<article class="card"><h3>${esc(c.title)}</h3><p>${esc(name(c.created_by))} · ${c.is_published?'Published':'Draft'}</p><p>${snapshot.enrollments.filter(e=>e.course_id===c.id).length} enrolled students</p><a href="/admin/lesson-manager.html?course=${c.id}">Lessons</a><a href="/course.html?course=${c.id}&preview=1">Preview as student</a><a href="/admin/grading.html?tab=quizzes&course=${c.id}">Results</a></article>`).join('')||'<p>No matching classes.</p>';
+ $('classes').innerHTML=courses.map(c=>`<article class="card"><h3>${esc(c.title)}</h3><p>${instructorLink(c.created_by)} · ${c.is_published?'Published':'Draft'}</p><p>${snapshot.enrollments.filter(e=>e.course_id===c.id).length} enrolled students</p><a href="/admin/lesson-manager.html?course=${c.id}">Lessons</a><a href="/course.html?course=${c.id}&preview=1">Preview as student</a><a href="/admin/grading.html?tab=quizzes&course=${c.id}">Results</a></article>`).join('')||'<p>No matching classes.</p>';
  const studentTerm=$('student-search').value.toLowerCase();
  const matches=id=>`${name(id)} ${person(id)?.email||''}`.toLowerCase().includes(studentTerm);
  $('students').innerHTML=snapshot.enrollments.filter(e=>ids.has(e.course_id)&&matches(e.user_id)).map(e=>{
@@ -48,7 +53,7 @@ function render(){
  const total=snapshot.lessons.filter(l=>l.course_id===e.course_id).length;
  const done=snapshot.progress.filter(p=>p.user_id===e.user_id&&p.course_id===e.course_id&&p.completed).length;
  const work=snapshot.submissions.filter(s=>s.user_id===e.user_id&&snapshot.assignments.some(a=>a.id===s.assignment_id&&lesson(a.lesson_id)?.course_id===e.course_id)).length;
- return `<tr><td>${esc(name(e.user_id))}<br>${esc(person(e.user_id)?.email)}</td><td>${esc(course(e.course_id)?.title)}</td><td>${esc(name(course(e.course_id)?.created_by))}</td><td>${total?Math.round(done/total*100):0}% (${done}/${total})</td><td>${latest?`${latest.score}% · ${latest.passed?'Passed':'Not passed'}`:'—'}</td><td>${best?`${best.score}% · ${best.passed?'Passed':'Not passed'}`:'—'}</td><td>${work}</td><td><button type="button" data-invite-student="${e.user_id}" data-course="${e.course_id}">Resend login email</button></td></tr>`;
+ return `<tr><td>${esc(name(e.user_id))}<br>${esc(person(e.user_id)?.email)}</td><td>${esc(course(e.course_id)?.title)}</td><td>${instructorLink(course(e.course_id)?.created_by)}</td><td>${total?Math.round(done/total*100):0}% (${done}/${total})</td><td>${latest?`${latest.score}% · ${latest.passed?'Passed':'Not passed'}`:'—'}</td><td>${best?`${best.score}% · ${best.passed?'Passed':'Not passed'}`:'—'}</td><td>${work}</td><td><button type="button" data-invite-student="${e.user_id}" data-course="${e.course_id}">Resend login email</button></td></tr>`;
  }).join('')||'<tr><td colspan="8">No enrolled students match these filters.</td></tr>';
  $('attempts').innerHTML=snapshot.attempts.filter(a=>ids.has(lesson(quiz(a.quiz_id)?.lesson_id)?.course_id)&&matches(a.user_id)).map(a=>{
  const l=lesson(quiz(a.quiz_id)?.lesson_id);return `<tr><td>${esc(name(a.user_id))}</td><td>${esc(course(l?.course_id)?.title)}<br>${esc(l?.title)}</td><td>${a.score}%</td><td>${a.passed?'Passed':'Not passed'}</td><td>${esc(new Date(a.submitted_at).toLocaleString())}</td><td><details><summary>Submitted answers</summary><pre>${esc(JSON.stringify(a.answers,null,2))}</pre></details></td></tr>`;

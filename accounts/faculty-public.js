@@ -1,4 +1,5 @@
 import {db} from './client.js';
+import {lmsRequest} from './lms-access.js';
 const $=id=>document.getElementById(id);
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const fields=[['biography','faculty-bio'],['credentials','faculty-credentials'],
@@ -28,7 +29,7 @@ function addLink(host,value,label){
  anchor.href=href;anchor.target='_blank';anchor.rel='noopener noreferrer';
  host.appendChild(anchor);
 }
-function showDetail(profile){
+function showDetail(profile,{privatePreview=false,editorUrl=null}={}){
  $('faculty-directory-heading').hidden=true;$('directory-controls').hidden=true;
  $('faculty-directory').hidden=true;$('faculty-detail').hidden=false;
  $('faculty-name').textContent=profile.display_name;
@@ -48,8 +49,35 @@ function showDetail(profile){
    const wrap=$(elementId);wrap.hidden=!profile[key];
    wrap.querySelector('p').textContent=profile[key]||'';
  }
+ $('faculty-private-preview').hidden=!privatePreview;
+ if(privatePreview){
+   const edit=$('faculty-private-edit');
+   edit.href=editorUrl||'/faculty.html';
+   edit.hidden=!editorUrl;
+ }
  document.title=profile.display_name+' · QuranHikma Faculty';
- setStatus('Published faculty profile. Qualifications not explicitly labeled verified are self-reported.');
+ setStatus(privatePreview
+   ?'Private preview: this instructor profile is not publicly published.'
+   :'Published faculty profile. Qualifications not explicitly labeled verified are self-reported.');
+}
+async function showPrivateProfile(id){
+ // Unpublished records must never be queried through the public faculty view.
+ // The server authorizes only the owner or the instructor reviewing their own record.
+ const {data,error}=await db.auth.getSession();
+ if(error||!data?.session){setStatus('This instructor profile is not publicly available.',true);return;}
+ try{
+   const response=await lmsRequest('faculty_get',{user_id:id});
+   if(response?.account?.user_id!==id||response.account.role!=='instructor')
+     throw Error('No access to this faculty profile');
+   const profile={...response.account,...(response.profile||{})};
+   showDetail(profile,{
+     privatePreview:true,
+     editorUrl:response.editable?(response.account.user_id===data.session.user?.id
+       ?'/faculty-profile.html':'/faculty-admin.html?id='+encodeURIComponent(id)):null
+   });
+ }catch{
+   setStatus('This instructor profile is not publicly available.',true);
+ }
 }
 let all=[];
 function renderDirectory(){
@@ -76,7 +104,7 @@ async function start(){
  else query=query.order('display_name');
  const {data,error}=await query;
  if(error){setStatus('Faculty records are unavailable at the moment.',true);return;}
- if(id){if(!data?.length){setStatus('This profile is not published or not available.',true);return;}showDetail(data[0]);return;}
+ if(id){if(!data?.length){await showPrivateProfile(id);return;}showDetail(data[0]);return;}
  all=data||[];$('directory-controls').hidden=false;$('faculty-directory').hidden=false;
  $('directory-search').addEventListener('input',renderDirectory);
  renderDirectory();setStatus(all.length?'Showing published faculty profiles.':'No published faculty profiles are available yet.');

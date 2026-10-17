@@ -125,7 +125,9 @@ Deno.serve(async req=>{
    const people=await Promise.all(peopleIds.map(async id=>{const {data,error}=await service.auth.admin.getUserById(id);if(error)throw error;return {user_id:id,email:data.user.email,display_name:data.user.user_metadata?.display_name||''};}));
    result={role,accounts,courses,enrollments,lessons,quizzes,attempts,progress,assignments:submissions,submissions:work,people};
   }else if(body.action==='faculty_get'){
-   const targetId=owner&&body.user_id?uuid(body.user_id):actor.id;
+   // Instructors may preview only their own unpublished profile.
+   // Never silently substitute their own record for a requested third-party profile.
+   const targetId=body.user_id?uuid(body.user_id):actor.id;
    if(!owner&&targetId!==actor.id)fail('Cannot access another instructor profile',403);
    const target=await checked(service.from('qh_lms_accounts').select('*').eq('user_id',targetId).eq('role','instructor').maybeSingle());
    if(!target)fail('Instructor account not found',404);
