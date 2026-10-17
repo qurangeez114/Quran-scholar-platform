@@ -98,7 +98,9 @@ assert.equal(accounts[0].email,'original@example.invalid');
 result=await call(OWNER,{action:'faculty_admin_save',...full,user_id:TEACHER,email:'other@example.invalid',confirm_email_change:true,credential_status:'verified',confirm_credential_review:true});
 assert.equal(result.status,400,'Cannot duplicate a login email');
 result=await call(OWNER,{action:'faculty_admin_save',...full,user_id:TEACHER,email:'new@example.invalid',confirm_email_change:true,credential_status:'verified',confirm_credential_review:false});
-assert.equal(result.status,200,JSON.stringify(result.data)); // no changes to verified claims: admin may verify unchanged claims
+assert.equal(result.status,400,'Admin must acknowledge evidence review before verification');
+result=await call(OWNER,{action:'faculty_admin_save',...full,user_id:TEACHER,email:'new@example.invalid',confirm_email_change:true,credential_status:'verified',confirm_credential_review:true});
+assert.equal(result.status,200,JSON.stringify(result.data));
 assert.equal(accounts[0].email,'new@example.invalid');assert.equal(users[1].email,'new@example.invalid');
 assert.equal(profiles[0].credential_status,'verified');
 assert.ok(audit.some(x=>x.changed_fields.includes('email')));
