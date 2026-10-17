@@ -219,7 +219,7 @@ export async function bulkEnrollStudents(courseId, studentEmails) {
   const results={successful:[],failed:[]};
   for(const raw of studentEmails){
     const email=typeof raw==='string'?raw.trim().toLowerCase():'';
-    if(!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)){
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
       results.failed.push({email,reason:'Invalid student email'});
       continue;
     }
