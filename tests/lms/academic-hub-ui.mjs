@@ -80,7 +80,7 @@ async function simulate(role){
   storage:{from:()=>({uploadToSignedUrl:async()=>({error:null})})}
  };
  const confirm=()=>true;
- runInNewContext(src,{document,window:{addEventListener(){}},location:{search:''},
+ runInNewContext('"use strict";\n'+src,{document,window:{addEventListener(){}},location:{search:''},
   db,FormData,URL,URLSearchParams,Date,confirm,prompt:()=>null,
   clearInterval:()=>{},setInterval:()=>123,console});
  await nextTick();
@@ -126,6 +126,9 @@ assert.ok(instructor.calls.some(x=>x.action==='live_create'&&x.video_url.include
  'Live scheduling must use selected class');
 const learner=await simulate('student');
 assert.ok(learner.document.querySelector('[data-tab="messages"]').hidden===true);
+assert.equal(learner.document.getElementById('hub-status').textContent,'Academic workspace ready.',
+ 'Student initialization must complete, including membership requests');
+assert.match(learner.document.getElementById('group-requests').textContent,/No pending invitations/);
 await learner.submit('group-create-form',{course_id:COURSE_A,name:'Critical Reading Group',description:'Study together'});
 assert.ok(learner.calls.some(x=>x.action==='group_create'&&x.name==='Critical Reading Group'),
  'Student group creation form must work');
