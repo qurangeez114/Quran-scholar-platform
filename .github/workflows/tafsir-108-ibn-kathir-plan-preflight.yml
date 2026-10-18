@@ -31,8 +31,10 @@ jobs:
           rclaims=research['claims']; pclaims=plan['claims']
           rids=[c['id'] for c in rclaims]; pids=[c['claim_id'] for c in pclaims]
           expected=['108-I01','108-I02','108-I03','108-I04A','108-I04B','108-I04C','108-I04D','108-I05','108-I06','108-I07','108-I08','108-I09','108-I10','108-I11']
+          split_expected=['108-I01-A','108-I01-B']+expected[1:]
+          if rids==split_expected: expected=split_expected
           if rids!=expected or pids!=expected: raise SystemExit('Atomic claim order/identity mismatch')
-          if '108-I04' in pids or len(set(pids))!=14 or plan.get('expected_claim_count')!=14: raise SystemExit('Retired parent or count defect')
+          if '108-I04' in pids or len(set(pids))!=len(expected) or plan.get('expected_claim_count')!=len(expected): raise SystemExit('Retired parent or count defect')
           blob=subprocess.check_output(['git','hash-object',research_path],text=True).strip()
           if plan.get('source_blob_sha')!=blob: raise SystemExit('Plan source blob is stale')
           rmap={c['id']:c for c in rclaims}
@@ -67,7 +69,8 @@ jobs:
           print('AUDIT_MODE read-only; no writes')
           print('ATOMIC_CLAIMS',len(pclaims),json.dumps(pids))
           print('LIVE_ENTRY_HASHES',json.dumps(hashes,sort_keys=True))
-          print('EXTERNAL_LOCATORS','14/14 printed edition volume/page unresolved')
+          located=sum(c.get('external_locator_state')=='live_entry_and_dar_taybah_print_locator_verified; route_independence_unassessed' for c in pclaims)
+          print('EXTERNAL_LOCATORS',str(located)+'/'+str(len(pclaims))+' printed edition volume/page located; route independence separately assessed')
           print('IBN_KATHIR_108_ATOMIC_PLAN_PASS')
 
 # Read-only validator; no database mutation is present.

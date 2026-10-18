@@ -4,6 +4,7 @@ on:
     paths:
       - '.github/workflows/tafsir-108-ibn-kathir-locator-preflight.yml'
       - 'data/tafsir/staging/ibn-kathir-108-external-locators-2026-10-14.json'
+      - 'data/tafsir/staging/ibn-kathir-108-research-2026-10-12.json'
   workflow_dispatch:
 permissions:
   contents: read
@@ -25,18 +26,23 @@ jobs:
           loc=json.load(open('data/tafsir/staging/ibn-kathir-108-external-locators-2026-10-14.json',encoding='utf-8'))
           research=json.load(open('data/tafsir/staging/ibn-kathir-108-research-2026-10-12.json',encoding='utf-8'))
           expected=['108-I01','108-I02','108-I03','108-I04A','108-I04B','108-I04C','108-I04D','108-I05','108-I06','108-I07','108-I08','108-I09','108-I10','108-I11']
+          split_expected=['108-I01-A','108-I01-B']+expected[1:]
+          if [x['id'] for x in research['claims']]==split_expected: expected=split_expected
           rows=loc['claims']; ids=[x['claim_id'] for x in rows]
           if ids!=expected or ids!=[x['id'] for x in research['claims']]: raise SystemExit('Claim identity/order mismatch')
           if loc.get('database_written') is not False or loc.get('publication_ready') is not False: raise SystemExit('Unsafe publication metadata')
           ed=loc['edition']
           if (ed['editor'],ed['publisher'],ed['edition_number'],ed['publication_year_hijri'],ed['publication_year_gregorian'],ed['locator_volume'])!=('Sami ibn Muhammad al-Salama','Dar Taybah lil-Nashr wa-al-Tawzi, Riyadh',2,1420,1999,8): raise SystemExit('Edition identity mismatch')
           expected_pages={'108-I01':[498],'108-I02':[498],'108-I03':[498],'108-I04A':[501],'108-I04B':[501],'108-I04C':[501],'108-I04D':[502],'108-I05':[502,503],'108-I06':[504],'108-I07':[504],'108-I08':[504],'108-I09':[504],'108-I10':[504],'108-I11':[504]}
+          if expected[0]=='108-I01-A':
+              del expected_pages['108-I01']
+              expected_pages.update({'108-I01-A':[498],'108-I01-B':[498]})
           for x in rows:
               if x['volume']!=8 or x['pages']!=expected_pages[x['claim_id']]: raise SystemExit('Page mapping mismatch '+x['claim_id'])
               for p in x['pages']:
                   if str(p) not in loc['page_sources']: raise SystemExit('Missing page URL '+str(p))
           c=loc['coverage_summary']
-          if c['atomic_claims']!=14 or c['claims_with_print_volume_page_locator']!=14 or c['claims_without_print_volume_page_locator']!=0: raise SystemExit('Coverage summary mismatch')
+          if c['atomic_claims']!=len(expected) or c['claims_with_print_volume_page_locator']!=len(expected) or c['claims_without_print_volume_page_locator']!=0: raise SystemExit('Coverage summary mismatch')
           key=os.environ.get('SUPABASE_SERVICE_KEY','')
           if not key: raise SystemExit('Missing protected database credential')
           entry_ids=sorted({x['arabic_entry_id'] for x in research['claims']})
@@ -59,7 +65,7 @@ jobs:
           if failures: raise SystemExit('Live Arabic evidence failure '+json.dumps(failures,ensure_ascii=False))
           print('AUDIT_MODE read-only; no writes')
           print('EDITION','Dar Taybah 2nd ed. 1420/1999, volume 8')
-          print('PRINT_LOCATORS','14/14',json.dumps(expected_pages,sort_keys=True))
+          print('PRINT_LOCATORS',str(len(expected))+'/'+str(len(expected)),json.dumps(expected_pages,sort_keys=True))
           print('ROUTE_INDEPENDENCE','still pending; no authentication inferred')
           print('IBN_KATHIR_108_PRINT_LOCATOR_PASS')
 
