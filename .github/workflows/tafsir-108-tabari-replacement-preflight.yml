@@ -4,7 +4,8 @@ on:
     paths:
       - '.github/workflows/tafsir-108-tabari-replacement-preflight.yml'
       - 'data/tafsir/staging/tabari-108-atomic-replacement-candidates-2026-10-13.json'
-      - 'data/tafsir/staging/tabari-108-1-research-2026-10-10.json'
+      - 'data/tafsir/staging/*108*research*.json'
+      - 'data/tafsir/staging/ibn-kathir-108-i01-four-table-candidates-2026-10-17.json'
   workflow_dispatch:
 permissions:
   contents: read
@@ -105,9 +106,20 @@ jobs:
                       raise SystemExit("Tabari replacement inventory mismatch")
               counts[doc["scholar_key"]]=len(claims)
               combined.extend((doc["scholar_key"],x["id"],x.get("proposition") or x.get("statement_en") or x.get("claim","")) for x in claims)
-          expected_counts={"tabari":18,"ibn_kathir":14,"qurtubi":23,"jalalayn":5,"saadi":6,"ibn_abbas":7}
-          if counts!=expected_counts or len(combined)!=73 or len({x[1] for x in combined})!=73:
-              raise SystemExit("Combined count mismatch "+json.dumps(counts))
+          original=set(["108-T01","108-T02","108-T03","108-T04A","108-T04B","108-T04C","108-T04D","108-T05","108-T06","108-T07","108-T08A","108-T08B","108-T09","108-T10","108-T11A","108-T11B","108-T11C","108-T11D","108-I01","108-I02","108-I03","108-I04A","108-I04B","108-I04C","108-I04D","108-I05","108-I06","108-I07","108-I08","108-I09","108-I10","108-I11","108-Q01","108-Q02","108-Q03","108-Q04A","108-Q04B","108-Q04C","108-Q04D","108-Q04E","108-Q04F","108-Q04G","108-Q04H","108-Q04I","108-Q04J","108-Q04K","108-Q04L","108-Q04M","108-Q04N","108-Q05","108-Q06","108-Q07","108-Q08A","108-Q08B","108-Q09","108-J01","108-J02","108-J03","108-J04","108-J05","108-S01","108-S02","108-S03","108-S04","108-S05","108-S06","108-W01","108-W02","108-W03","108-W04","108-W05","108-W06","108-W07"])
+          split=(original-{"108-I01"})|{"108-I01-A","108-I01-B"}
+          actual_ids={x[1] for x in combined}
+          if len(combined)!=len(actual_ids) or actual_ids not in (original,split): raise SystemExit("Partial, mixed, duplicate or unexpected combined inventory")
+          is_split=actual_ids==split
+          if is_split:
+              draft=json.load(open("data/tafsir/staging/ibn-kathir-108-i01-four-table-candidates-2026-10-17.json",encoding="utf-8"))
+              if [x["draft_label"] for x in draft["candidates"]]!=["108-I01-A","108-I01-B"]: raise SystemExit("Unexpected I01 candidate inventory")
+              ik=next(d for d in docs if d["scholar_key"]=="ibn_kathir")
+              for item in draft["candidates"]:
+                  claim=next(c for c in ik["claims"] if c["id"]==item["draft_label"])
+                  if claim["statement_en"]!=item["proposition"]["statement_en"] or claim["evidence_anchor_ar"]!=item["proposition"]["supporting_span"]: raise SystemExit("I01 candidate source text mismatch")
+          expected_counts={"tabari":18,"ibn_kathir":15 if is_split else 14,"qurtubi":23,"jalalayn":5,"saadi":6,"ibn_abbas":7}
+          if counts!=expected_counts: raise SystemExit("Combined scholar counts mismatch "+json.dumps(counts))
           def norm(v):
               v=unicodedata.normalize("NFKD",v or "").encode("ascii","ignore").decode().casefold()
               return re.sub(r"[^a-z0-9]+"," ",v).strip()
