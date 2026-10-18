@@ -318,7 +318,7 @@ async function refreshGroups(){
   }));
  }
  if(!root.children.length)p(root,'No groups in your currently enrolled courses.');
- const list=$('group-requests');list.replaceChildren(),seen=new Set();
+ const list=$('group-requests'),seen=new Set();list.replaceChildren();
  for(const r of [...requests.received,...requests.owned]){
   if(seen.has(r.id)||r.status!=='pending')continue;seen.add(r.id);
   if(r.kind==='invite'&&r.student_id!==state.me)continue;
