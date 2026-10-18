@@ -4,6 +4,7 @@ on:
     paths:
       - '.github/workflows/tafsir-108-i04-replacement-preflight.yml'
       - 'data/tafsir/staging/ibn-kathir-108-research-2026-10-12.json'
+      - 'data/tafsir/staging/ibn-kathir-108-i01-four-table-candidates-2026-10-17.json'
       - 'data/tafsir/staging/ibn-kathir-108-i04-replacement-candidates-2026-10-12.json'
   workflow_dispatch:
 permissions:
@@ -28,8 +29,18 @@ jobs:
           replacement=json.load(open(base+'ibn-kathir-108-i04-replacement-candidates-2026-10-12.json',encoding='utf-8'))
           expected_ids=['108-I04A','108-I04B','108-I04C','108-I04D']
           ids=[c['id'] for c in source['claims']]
-          if len(ids)!=14 or len(set(ids))!=14 or '108-I04' in ids:
-              raise SystemExit('Expected integrated 14-claim Ibn Kathir inventory without retired parent')
+          original={'108-I01','108-I02','108-I03','108-I04A','108-I04B','108-I04C','108-I04D','108-I05','108-I06','108-I07','108-I08','108-I09','108-I10','108-I11'}
+          split=(original-{'108-I01'})|{'108-I01-A','108-I01-B'}
+          if len(ids)!=len(set(ids)) or set(ids) not in (original,split):
+              raise SystemExit('Partial, mixed, duplicate, or unexpected Ibn Kathir inventory')
+          if set(ids)==split:
+              draft=json.load(open(base+'ibn-kathir-108-i01-four-table-candidates-2026-10-17.json',encoding='utf-8'))
+              if [x['draft_label'] for x in draft['candidates']]!=['108-I01-A','108-I01-B']:
+                  raise SystemExit('Unexpected I01 candidate inventory')
+              for item in draft['candidates']:
+                  claim=next(x for x in source['claims'] if x['id']==item['draft_label'])
+                  if claim['statement_en']!=item['proposition']['statement_en'] or claim['evidence_anchor_ar']!=item['proposition']['supporting_span']:
+                      raise SystemExit('I01 candidate source text mismatch')
           integrated=[c for c in source['claims'] if c['id'] in expected_ids]
           if [c['id'] for c in integrated]!=expected_ids:
               raise SystemExit('Integrated I04 IDs/order mismatch')
