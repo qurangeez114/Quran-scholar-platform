@@ -5,6 +5,7 @@ on:
       - '.github/workflows/tafsir-108-ibn-kathir-i04-integration-preflight.yml'
       - 'data/tafsir/staging/ibn-kathir-108-i04-integration-normalization-2026-10-15.json'
       - 'data/tafsir/staging/ibn-kathir-108-research-2026-10-12.json'
+      - 'data/tafsir/staging/ibn-kathir-108-i01-four-table-candidates-2026-10-17.json'
       - 'data/tafsir/staging/ibn-kathir-108-i04-replacement-candidates-2026-10-12.json'
   workflow_dispatch:
 permissions:
@@ -33,8 +34,19 @@ jobs:
               if n.get(k)!=v: raise SystemExit(f'Unsafe or mismatched {k}: {n.get(k)!r}')
           ids=[x['id'] for x in c['claims']]
           wanted=['108-I04A','108-I04B','108-I04C','108-I04D']
-          if len(ids)!=14 or len(set(ids))!=14 or any(x not in ids for x in wanted) or '108-I04' in ids:
+          # Counts in n, integ and p describe the historical I04 integration, not a later I01 split.
+          original={'108-I01','108-I02','108-I03','108-I04A','108-I04B','108-I04C','108-I04D','108-I05','108-I06','108-I07','108-I08','108-I09','108-I10','108-I11'}
+          split=(original-{'108-I01'})|{'108-I01-A','108-I01-B'}
+          if len(ids)!=len(set(ids)) or set(ids) not in (original,split):
               raise SystemExit('Authoritative atomic claim inventory changed')
+          if set(ids)==split:
+              draft=json.load(open(base+'ibn-kathir-108-i01-four-table-candidates-2026-10-17.json',encoding='utf-8'))
+              if [x['draft_label'] for x in draft['candidates']]!=['108-I01-A','108-I01-B']:
+                  raise SystemExit('Unexpected I01 candidates')
+              for item in draft['candidates']:
+                  claim=next(x for x in c['claims'] if x['id']==item['draft_label'])
+                  if claim['statement_en']!=item['proposition']['statement_en'] or claim['evidence_anchor_ar']!=item['proposition']['supporting_span']:
+                      raise SystemExit('I01 split candidate text mismatch')
           found=[x for x in c['claims'] if x['id'] in wanted]
           if [x['id'] for x in found]!=wanted or any(x.get('status')!='atomic_replacement_integrated_after_protected_preflight' for x in found):
               raise SystemExit('I04 integration labels are not normalized')
@@ -61,7 +73,7 @@ jobs:
           print('AUDIT_MODE read-only; no writes')
           print('NORMALIZED_I04_IDS',json.dumps(wanted))
           print('IBN_KATHIR_CLAIMS',len(ids))
-          print('STAGED_CLAIMS',n['staged_claim_count'])
+          print('HISTORICAL_I04_STAGED_CLAIMS',n['staged_claim_count'])
           print('DATABASE_WRITES',n['database_write_count'])
           print('PUBLICATION_READY',n['publication_ready'])
           print('TAFSIR_108_IBN_KATHIR_I04_INTEGRATION_PASS')
