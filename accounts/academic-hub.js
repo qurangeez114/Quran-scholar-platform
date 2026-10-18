@@ -404,7 +404,9 @@ const videoURL=value=>{
 async function refreshLive(){
  const course_id=$('live-course').value,root=$('live-list');root.replaceChildren();
  if(!course_id)return;
- liveSessions=await api('live_list',{course_id});
+ const sessions=await api('live_list',{course_id});
+ if($('live-course').value!==course_id)return;
+ liveSessions=sessions;
  for(const r of liveSessions){
   const box=card(root,r.title,'Status: '+r.status+' · '+stamp(r.scheduled_at));
   add(actions(box),btn('Enter classroom',()=>enterLive(r.id)));
@@ -541,7 +543,13 @@ function bind(){
  form('course-include-form',async f=>{
   await api('course_include',values(f));await overview();
  });
- $('live-course').addEventListener('change',()=>run(refreshLive));
+ $('live-course').addEventListener('change',()=>{
+  stopLiveUpdates();live=null;liveSessions=[];displayedLiveKey=null;
+  $('live-video').replaceChildren();$('live-chat').replaceChildren();
+  $('live-reaction-summary').textContent='';
+  $('live-room').hidden=true;
+  run(refreshLive);
+ });
  form('live-create-form',async f=>{
   const v=values(f),course_id=$('live-course').value;
   if(!course_id)throw Error('Choose a course');
