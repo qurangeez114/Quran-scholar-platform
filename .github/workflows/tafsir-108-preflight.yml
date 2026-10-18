@@ -3,7 +3,8 @@ on:
   push:
     paths:
       - '.github/workflows/tafsir-108-preflight.yml'
-      - 'data/tafsir/staging/tabari-108-1-research-2026-10-10.json'
+      - 'data/tafsir/staging/*108*research*.json'
+      - 'data/tafsir/staging/ibn-kathir-108-i01-four-table-candidates-2026-10-17.json'
   workflow_dispatch:
 permissions:
   contents: read
@@ -38,11 +39,21 @@ jobs:
               for c in d['claims']:
                   x=dict(c); x['_path']=p; x['_scholar']=d['scholar_key']; claims.append(x)
           ids=[c['id'] for c in claims]
-          if len(ids)!=73 or len(set(ids))!=73: raise SystemExit('Expected 73 unique claims, got '+str(len(ids))+'/'+str(len(set(ids))))
+          original=set(["108-T01","108-T02","108-T03","108-T04A","108-T04B","108-T04C","108-T04D","108-T05","108-T06","108-T07","108-T08A","108-T08B","108-T09","108-T10","108-T11A","108-T11B","108-T11C","108-T11D","108-I01","108-I02","108-I03","108-I04A","108-I04B","108-I04C","108-I04D","108-I05","108-I06","108-I07","108-I08","108-I09","108-I10","108-I11","108-Q01","108-Q02","108-Q03","108-Q04A","108-Q04B","108-Q04C","108-Q04D","108-Q04E","108-Q04F","108-Q04G","108-Q04H","108-Q04I","108-Q04J","108-Q04K","108-Q04L","108-Q04M","108-Q04N","108-Q05","108-Q06","108-Q07","108-Q08A","108-Q08B","108-Q09","108-J01","108-J02","108-J03","108-J04","108-J05","108-S01","108-S02","108-S03","108-S04","108-S05","108-S06","108-W01","108-W02","108-W03","108-W04","108-W05","108-W06","108-W07"])
+          split=(original-{'108-I01'})|{'108-I01-A','108-I01-B'}
+          actual_ids=set(ids)
+          if len(ids)!=len(actual_ids) or actual_ids not in (original,split): raise SystemExit('Partial, mixed, duplicate, or unexpected claim inventory')
+          is_split=actual_ids==split
+          if is_split:
+              candidate=json.load(open('data/tafsir/staging/ibn-kathir-108-i01-four-table-candidates-2026-10-17.json',encoding='utf-8'))
+              for draft in candidate['candidates']:
+                  claim=next(c for c in claims if c['id']==draft['draft_label'])
+                  if claim['statement_en']!=draft['proposition']['statement_en'] or claim['evidence_anchor_ar']!=draft['proposition']['supporting_span']:
+                      raise SystemExit('I01 split text diverges from source-located candidate')
           required_tabari={'108-T04A','108-T04B','108-T04C','108-T04D','108-T08A','108-T08B','108-T11A','108-T11B','108-T11C','108-T11D'}
           if not required_tabari.issubset(set(ids)): raise SystemExit('Missing atomic Tabari IDs '+json.dumps(sorted(required_tabari-set(ids))))
           if {'108-T04','108-T08','108-T11'} & set(ids): raise SystemExit('Compressed Tabari IDs remain after atomic replacement')
-          expected_counts={'tabari':18,'ibn_kathir':14,'qurtubi':23,'jalalayn':5,'saadi':6,'ibn_abbas':7}
+          expected_counts={'tabari':18,'ibn_kathir':15 if is_split else 14,'qurtubi':23,'jalalayn':5,'saadi':6,'ibn_abbas':7}
           actual={k:sum(1 for c in claims if c['_scholar']==k) for k in expected_counts}
           if actual!=expected_counts: raise SystemExit('Scholar counts mismatch '+json.dumps(actual))
           entries=[5261,5262,5263,48457,48458,48459,13239,13240,13241,38030,38031,38032,23671,23672,23673,36286,36287,36288,48103,48104,48105,29980,29981,29982]
