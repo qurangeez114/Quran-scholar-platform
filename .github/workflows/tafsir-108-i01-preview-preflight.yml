@@ -1,0 +1,36 @@
+name: Validate Surah 108 isolated I01 integration preview
+on:
+  push:
+    paths:
+      - 'tools/preview-i01-integration.py'
+      - 'tools/test-i01-preview.py'
+      - '.github/workflows/tafsir-108-i01-preview-preflight.yml'
+      - 'data/tafsir/staging/*108*.json'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tafsir-108-i01-preview-preflight
+  cancel-in-progress: false
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Snapshot checked-out staging without database or network access
+        shell: python
+        run: |
+          import hashlib, json, os, pathlib
+          snapshot={}
+          for path in pathlib.Path('data/tafsir/staging').glob('*108*.json'):
+              raw=path.read_bytes()
+              snapshot[path.as_posix()]={'content':raw.decode('utf-8'),'sha':hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest()}
+          target=pathlib.Path(os.environ['RUNNER_TEMP'])/'i01-snapshot.json'
+          target.write_text(json.dumps(snapshot,ensure_ascii=False),encoding='utf-8')
+      - name: Verify valid preview and six unsafe-input rejections
+        run: python tools/test-i01-preview.py "$RUNNER_TEMP/i01-snapshot.json"
+      - name: Generate isolated preview, never replace staging
+        run: python tools/preview-i01-integration.py "$RUNNER_TEMP/i01-snapshot.json" "$RUNNER_TEMP/i01-preview"
+      - name: Verify staging files remain untouched
+        run: git diff --exit-code -- data/tafsir/staging
