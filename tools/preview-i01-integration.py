@@ -8,6 +8,8 @@ def blob(raw):
     return hashlib.sha1(b"blob "+str(len(raw)).encode()+b"\0"+raw).hexdigest()
 
 def build(snapshot):
+    if not __debug__:
+        raise RuntimeError("Optimized Python disables safety assertions; run without -O")
     for path, record in snapshot.items():
         assert blob(record["content"].encode()) == record["sha"], "Stale/corrupt snapshot "+path
     base="data/tafsir/staging/"
@@ -27,6 +29,17 @@ def build(snapshot):
     research,plan,assembly=get(rn),get(pn),get(an)
     overlay=get("ibn-kathir-108-i01-replacement-overlay-2026-10-17.json")
     draft=get("ibn-kathir-108-i01-four-table-candidates-2026-10-17.json")
+    for doc in (overlay, draft):
+        assert doc["database_written"] is False and doc["publication_ready"] is False
+        assert doc["chapter_complete"] is False
+    assert draft["parent_replaced"] is False and overlay["overlay_applied"] is False
+    expected=["108-I01-A", "108-I01-B"]
+    assert [c["draft_label"] for c in draft["candidates"]]==expected, "Candidate order/cardinality mismatch"
+    additions=overlay["operation"]["add_staging_rows"]
+    assert [r["claim_id"] for r in additions]==expected, "Overlay order/cardinality mismatch"
+    for row,candidate in zip(additions,draft["candidates"]):
+        for section in ("proposition", "voice", "evidence", "link"):
+            assert row["proposed_payload"][section]==candidate[section], "Overlay/candidate payload mismatch: "+section
     assert overlay["inputs"]["assembly_blob_sha"]==snapshot[base+an]["sha"]
     assert overlay["inputs"]["candidate_blob_sha"]==snapshot[overlay["inputs"]["candidate_path"]]["sha"]
     assert len(research["claims"])==len(plan["claims"])==14 and len(assembly["rows"])==73
@@ -64,7 +77,6 @@ def build(snapshot):
        "historical_preflight_is_not_current_validation":True,"publication_ready":False}
     save("surah-108-chapter-manifest-2026-10-12.json",manifest)
     original=copy.deepcopy(assembly["rows"])
-    additions=overlay["operation"]["add_staging_rows"]
     for row,r,p in zip(additions,replacements,plan_replacements):
         row["authoritative_research_claim"]=r;row["plan_row"]=p
     assembly["rows"]=[y for x in assembly["rows"] for y in (additions if x["claim_id"]=="108-I01" else [x])]
