@@ -108,5 +108,5 @@ if __name__=="__main__":
     target.mkdir(parents=True)
     for path,content in outputs.items():
         dest=target/path;dest.parent.mkdir(parents=True,exist_ok=True);dest.write_text(content)
-    print("PASS: 8 linked preview files; 74 claims; 63 mapped / 11 unmapped; all 72 unrelated rows preserved.")
+    print(f"PASS: {len(outputs)} linked preview files; 74 claims; 63 mapped / 11 unmapped; all 72 unrelated rows preserved.")
     print("Preview only. Update fixed-count projection workflow and validate all dependencies before integrating. No database access.")
