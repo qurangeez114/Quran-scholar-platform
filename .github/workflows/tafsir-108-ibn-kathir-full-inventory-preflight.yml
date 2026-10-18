@@ -5,6 +5,7 @@ on:
       - '.github/workflows/tafsir-108-ibn-kathir-full-inventory-preflight.yml'
       - 'data/tafsir/staging/ibn-kathir-108-full-inventory-audit-2026-10-15.json'
       - 'data/tafsir/staging/ibn-kathir-108-research-2026-10-12.json'
+      - 'data/tafsir/staging/ibn-kathir-108-i01-four-table-candidates-2026-10-17.json'
       - 'data/tafsir/staging/ibn-kathir-108-route-extraction-2026-10-12.json'
       - 'data/tafsir/staging/ibn-kathir-108-i02-r01-r11-coverage-checkpoint-2026-10-15.json'
       - 'data/tafsir/staging/ibn-kathir-108-i06-i10-consolidation-2026-10-15.json'
@@ -36,8 +37,26 @@ jobs:
           for k,v in expected.items():
               if a.get(k)!=v: raise SystemExit(f'Unsafe or mismatched {k}: {a.get(k)!r}')
           claim_ids=[x['id'] for x in c['claims']]
-          if claim_ids!=a['claim_inventory']['expected_ids'] or len(set(claim_ids))!=14:
+          historical_ids=a['claim_inventory']['expected_ids']
+          split_ids=['108-I01-A','108-I01-B']+historical_ids[1:]
+          split_active=claim_ids==split_ids
+          if historical_ids[0]!='108-I01' or len(set(historical_ids))!=14:
+              raise SystemExit('Historical parent inventory changed')
+          if claim_ids!=historical_ids and not split_active:
               raise SystemExit('Ibn Kathir claim inventory changed')
+          if len(set(claim_ids))!=len(claim_ids):
+              raise SystemExit('Duplicate current claim identity')
+          if split_active:
+              draft=json.load(open(base+'ibn-kathir-108-i01-four-table-candidates-2026-10-17.json',encoding='utf-8'))
+              if draft.get('publication_ready') is not False or draft.get('database_written') is not False:
+                  raise SystemExit('Unsafe I01 candidate provenance')
+              for current,candidate in zip(c['claims'][:2],draft['candidates']):
+                  if current['id']!=candidate['draft_label'] or current['statement_en']!=candidate['proposition']['statement_en']:
+                      raise SystemExit('I01 split/candidate content mismatch')
+                  if current['arabic_entry_id']!=48457 or current['english_entry_id']!=11079:
+                      raise SystemExit('I01 split canonical identity mismatch')
+              if len(draft['candidates'])!=2:
+                  raise SystemExit('Expected exactly two I01 candidates')
           extracted=[]
           for g in e['route_groups']:
               extracted.extend(r['route_id'] for r in g.get('routes',[]))
@@ -85,11 +104,13 @@ jobs:
           want={(48457,108,1,'ar','ibn_kathir'),(48458,108,2,'ar','ibn_kathir'),(48459,108,3,'ar','ibn_kathir'),(11079,108,1,'en','ibn_kathir'),(11080,108,2,'en','ibn_kathir'),(11081,108,3,'en','ibn_kathir')}
           if got!=want: raise SystemExit('Live bilingual identities changed')
           print('AUDIT_MODE read-only; no writes')
-          print('IBN_KATHIR_CLAIMS',len(claim_ids))
+          print('HISTORICAL_AUDIT_IBN_KATHIR_CLAIMS',a['ibn_kathir_claim_count'])
+          print('CURRENT_IBN_KATHIR_CLAIMS',len(claim_ids))
+          print('I01_SPLIT_LINKED_TO_HISTORICAL_PARENT',split_active)
           print('EXTRACTED_ROUTES',len(set(extracted_all)))
           print('REVIEWED_ROUTES',len(reviewed))
           print('BOUNDED_NON_ROUTE_REVIEWS',len(boundaries))
-          print('STAGED_CLAIMS',a['staged_claim_count'])
+          print('HISTORICAL_AUDIT_STAGED_CLAIMS',a['staged_claim_count'])
           print('DATABASE_WRITES',a['database_write_count'])
           print('SCHOLAR_COMPLETE',a['scholar_complete'])
           print('TAFSIR_108_IBN_KATHIR_FULL_INVENTORY_PASS')
