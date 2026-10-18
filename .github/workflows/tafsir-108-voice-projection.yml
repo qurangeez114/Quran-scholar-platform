@@ -3,6 +3,7 @@ on:
   push:
     paths:
       - '.github/workflows/tafsir-108-voice-projection.yml'
+      - 'data/tafsir/staging/ibn-kathir-108-i01-four-table-candidates-2026-10-17.json'
       - 'data/tafsir/staging/surah-108-voice-projection-2026-10-17.json'
       - 'data/tafsir/staging/surah-108-payload-assembly-2026-10-16.json'
       - 'data/tafsir/staging/surah-108-link-schema-q06-mapping-2026-10-17.json'
@@ -36,9 +37,22 @@ jobs:
           for doc in (projection,assembly):
               assert doc["database_written"] is False and doc["publication_ready"] is False and doc["chapter_complete"] is False
           columns={x["column_name"] for x in schema["columns"] if x["table_name"]=="proposition_voice_chain"}
-          assert len(projection["rows"])==len(assembly["rows"])==73
+          original=set(["108-T01","108-T02","108-T03","108-T04A","108-T04B","108-T04C","108-T04D","108-T05","108-T06","108-T07","108-T08A","108-T08B","108-T09","108-T10","108-T11A","108-T11B","108-T11C","108-T11D","108-I01","108-I02","108-I03","108-I04A","108-I04B","108-I04C","108-I04D","108-I05","108-I06","108-I07","108-I08","108-I09","108-I10","108-I11","108-Q01","108-Q02","108-Q03","108-Q04A","108-Q04B","108-Q04C","108-Q04D","108-Q04E","108-Q04F","108-Q04G","108-Q04H","108-Q04I","108-Q04J","108-Q04K","108-Q04L","108-Q04M","108-Q04N","108-Q05","108-Q06","108-Q07","108-Q08A","108-Q08B","108-Q09","108-J01","108-J02","108-J03","108-J04","108-J05","108-S01","108-S02","108-S03","108-S04","108-S05","108-S06","108-W01","108-W02","108-W03","108-W04","108-W05","108-W06","108-W07"])
+          actual={r["claim_id"] for r in assembly["rows"]}
+          split=(original-{"108-I01"})|{"108-I01-A","108-I01-B"}
+          assert actual==original or actual==split,"Partial or mixed I01 inventory"
+          is_split=actual==split
+          total=74 if is_split else 73
+          if is_split:
+              candidates,_=read("ibn-kathir-108-i01-four-table-candidates-2026-10-17.json")
+              for candidate in candidates["candidates"]:
+                  row=next(r for r in assembly["rows"] if r["claim_id"]==candidate["draft_label"])
+                  for section in ("proposition","voice","evidence","link"):
+                      assert row["proposed_payload"][section]==candidate[section],"I01 candidate divergence"
+                  assert row["semantic_publication_hold"],"I01 split must retain hold"
+          assert len(projection["rows"])==len(assembly["rows"])==total
           indexed={x["claim_id"]:x for x in projection["rows"]}
-          assert len(indexed)==73
+          assert len(indexed)==total
           projected=unmapped=metadata=holds=0
           for row in assembly["rows"]:
               saved=indexed[row["claim_id"]]
@@ -59,8 +73,8 @@ jobs:
               assert saved["semantic_publication_hold"]==row.get("semantic_publication_hold")
               holds+=bool(saved["semantic_publication_hold"])
               assert saved["state"]=="staging_only_not_insertable" and saved["blockers"]
-          assert projection["counts"]==dict(total_claims=73,projected=projected,unmapped=unmapped,rows_with_preserved_metadata=metadata,semantic_holds=holds)
-          assert (projected,unmapped,metadata,holds)==(61,12,41,10)
+          assert projection["counts"]==dict(total_claims=total,projected=projected,unmapped=unmapped,rows_with_preserved_metadata=metadata,semantic_holds=holds)
+          assert (projected,unmapped,metadata,holds)==((63,11,41,12) if is_split else (61,12,41,10))
           source_check,_=read("qurtubi-108-q06-bilingual-source-check-2026-10-17.json")
           assert source_check["input_assembly_blob_sha"]==asha,"Stale Q06 source checkpoint"
           assert source_check["result"]=="source_hashes_and_bilingual_claim_scope_verified"
@@ -85,5 +99,5 @@ jobs:
                   assert span["anchor"] and span["end_codepoint_0"]-span["start_codepoint_0"]==len(span["anchor"])
                   assert witness["context_start_codepoint_0"]<=span["start_codepoint_0"]<span["end_codepoint_0"]<=witness["context_end_codepoint_0"]
           print("Q06 saved bilingual checkpoint and separate speaker/reporter mapping consistent; hold retained.")
-          print("PASS: 61 lossless voice projections; 12 unmapped; 41 metadata envelopes; 10 semantic holds.")
+          print(f"PASS: {projected} lossless voice projections; {unmapped} unmapped; {metadata} metadata envelopes; {holds} semantic holds.")
           print("Static integrity only; no live source verification, publication approval, or database writes.")
