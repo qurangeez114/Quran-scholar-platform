@@ -1,8 +1,20 @@
-import {db,message,exportResearch} from './client.js';
+import {db,message as setMessage,exportResearch} from './client.js';
 import {lmsRequest} from './lms-access.js';
 let mode='login',recovering=location.hash.includes('type=recovery');
 const $=id=>document.getElementById(id);
-function choose(next){mode=next;$('password').minLength=next==='signup'?12:1;$('auth-help').textContent={login:'Log in with your email and password.',signup:'Use at least 12 characters. Check your email to confirm your account.',recover:'We will email you a link to reset your password.'}[next];document.querySelectorAll('[data-mode]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.mode===next)));$('password-label').hidden=next==='recover';$('password').required=next!=='recover';$('password').autocomplete=next==='signup'?'new-password':'current-password';$('firstName-label').hidden=next!=='signup';$('lastName-label').hidden=next!=='signup';$('firstName').required=false;$('lastName').required=false;$('password-confirm-label').hidden=next!=='signup';$('password-confirm').required=next==='signup';$('submit').textContent={login:'Log in',signup:'Create account',recover:'Send recovery email'}[next];}
+function message(text,error=false){
+ const node=$('status');
+ node.classList.toggle('auth-error',error);
+ node.setAttribute('role',error?'alert':'status');
+ node.setAttribute('aria-live',error?'assertive':'polite');
+ setMessage(text);
+ for(const id of ['email','password']){
+  if(error&&mode==='login')$(id).setAttribute('aria-invalid','true');
+  else $(id).removeAttribute('aria-invalid');
+ }
+ if(error){node.setAttribute('tabindex','-1');node.focus();}
+}
+function choose(next){mode=next;message('');$('password').minLength=next==='signup'?12:1;$('auth-help').textContent={login:'Log in with your email and password.',signup:'Use at least 12 characters. Check your email to confirm your account.',recover:'We will email you a link to reset your password.'}[next];document.querySelectorAll('[data-mode]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.mode===next)));$('password-label').hidden=next==='recover';$('password').required=next!=='recover';$('password').autocomplete=next==='signup'?'new-password':'current-password';$('firstName-label').hidden=next!=='signup';$('lastName-label').hidden=next!=='signup';$('firstName').required=false;$('lastName').required=false;$('password-confirm-label').hidden=next!=='signup';$('password-confirm').required=next==='signup';$('submit').textContent={login:'Log in',signup:'Create account',recover:'Send recovery email'}[next];}
 document.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>choose(b.dataset.mode));
 async function ensureProfile(user){const {data:existing}=await db.from('qh_profiles').select('user_id').eq('user_id',user.id).maybeSingle();if(existing)return;const m=user.user_metadata||{};const {error}=await db.from('qh_profiles').insert({user_id:user.id,display_name:m.display_name||''});if(error)console.error('Profile create failed:',error.message);}
 async function render(){
@@ -42,7 +54,7 @@ async function render(){
  $('account-archive-link').hidden=archiveAdmin!==true;
 }
 db.auth.onAuthStateChange(event=>{if(event==='PASSWORD_RECOVERY')recovering=true;setTimeout(render,0);});
-$('auth-form').onsubmit=async e=>{e.preventDefault();$('submit').disabled=true;try{
+$('auth-form').onsubmit=async e=>{e.preventDefault();message(mode==='login'?'Signing in…':'Submitting…');$('submit').disabled=true;try{
 const email=$('email').value.trim(),password=$('password').value;let result;
 if(mode==='signup'){if(password.length<12)return message('Password must be at least 12 characters.');if(password!==$('password-confirm').value)return message('Passwords do not match.');}
 if(mode==='signup'){const firstName=$('firstName').value.trim(),lastName=$('lastName').value.trim();result=await db.auth.signUp({email,password,options:{emailRedirectTo:location.origin+'/account.html',data:{display_name:`${firstName} ${lastName}`.trim()}}});}
@@ -50,7 +62,7 @@ else if(mode==='recover')result=await db.auth.resetPasswordForEmail(email,{redir
 else result=await db.auth.signInWithPassword({email,password});
 if(mode==='signup'&&!result.error&&result.data.user&&result.data.user.identities?.length===0)return message('This email is already taken.');
 if(result.error)throw result.error;message(mode==='login'?'Signed in.':'Check your email for the next step.');await render();
-}catch(e){message(/already (registered|been registered)/i.test(e.message)?'This email is already taken.':e.message);}finally{$('submit').disabled=false;}};
+}catch(e){const invalid=mode==='login'&&(e.code==='invalid_credentials'||/invalid login credentials|invalid credentials|invalid email or password/i.test(e.message||''));message(invalid?'Invalid email or password. Please try again.':/already (registered|been registered)/i.test(e.message)?'This email is already taken.':e.message,true);}finally{$('submit').disabled=false;}};
 $('reset-form').onsubmit=async e=>{e.preventDefault();const pw=$('new-password').value;if(pw.length<12)return message('Password must be at least 12 characters.');if(pw!==$('new-password-confirm').value)return message('Passwords do not match.');const {error}=await db.auth.updateUser({password:$('new-password').value});if(error)return message(error.message);recovering=false;history.replaceState(null,'',location.pathname);message('Password updated. You can now open your instructor dashboard.');await render();};
 $('logout').onclick=async()=>{const {error}=await db.auth.signOut();if(error)return message(error.message);recovering=false;message('Logged out.');render();};
 $('export').onclick=()=>exportResearch().catch(e=>message(e.message));
