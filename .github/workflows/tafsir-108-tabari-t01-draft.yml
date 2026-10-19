@@ -1,0 +1,34 @@
+name: Validate Surah 108 Tabari T01 staging draft
+on:
+  push:
+    paths:
+      - 'scripts/validate-tabari-t01-draft.py'
+      - '.github/workflows/tafsir-108-tabari-t01-draft.yml'
+      - 'data/tafsir/staging/tabari-108-t01-four-table-draft-2026-10-18.json'
+      - 'data/tafsir/staging/tabari-108-t01-stored-source-check-2026-10-18.json'
+  pull_request:
+    paths:
+      - 'scripts/validate-tabari-t01-draft.py'
+      - '.github/workflows/tafsir-108-tabari-t01-draft.yml'
+      - 'data/tafsir/staging/tabari-108-t01-four-table-draft-2026-10-18.json'
+      - 'data/tafsir/staging/tabari-108-t01-stored-source-check-2026-10-18.json'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tafsir-108-tabari-t01-draft-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  staging-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check T01 draft and reject 14 unsafe mutations
+        run: python3 scripts/validate-tabari-t01-draft.py --root . --self-test
+      - name: Confirm validator did not modify tracked files
+        run: git diff --exit-code
+# Offline staging-contract test only. No secrets, database connection,
+# payload integration, publication, or claim of completed source review.
