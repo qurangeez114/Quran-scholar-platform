@@ -28,6 +28,7 @@ def validate(d, s):
     require((d['authoritative_claim_count'], d['mapped_claim_count_unchanged'], d['unmapped_claim_count_unchanged']) == (74,63,11), 'inventory')
     require(s['claim_id'] == '108-T01' and s['source']['entry_id'] == 5261, 'checkpoint identity')
     require(d['source']['sha256'] == s['source']['sha256'] == SOURCE_HASH, 'source hash')
+    require((d['source']['entry_id'], d['source']['language'], d['source']['scholar'], d['source']['verse']) == (5261,'ar','Tabari','108:1'), 'draft source identity')
     require((d['source']['span_start'],d['source']['span_end']) == (165,234), 'source bounds')
     require((s['heading']['start'],s['heading']['end']) == (165,234), 'checkpoint bounds')
     require(s['heading']['text'] == SPAN and len(SPAN) == 69, 'heading')
@@ -40,11 +41,13 @@ def validate(d, s):
     require(p['claim_type_id'] == 44 and p['source_type'] == 'tafsir_entry' and p['tafsir_entry_id'] == 5261, 'source/type mapping')
     require(p['speaker_type'] == 'unspecified' and p['speaker_name'] is None and p['mufassir_own_position'] == 'reported_only', 'reported anonymous voice')
     require(p['extraction_validity'] == 'pending_source_verification' and p['verification_state'] == 'source_language_located', 'verification ceiling')
+    require((p['assertion_mode'],p['status'],p['attribution_fidelity'],p['quranic_textual_support']) == ('explicit','active','accurate_paraphrase','not_stated'), 'proposition semantics')
     require(c['voice'] == {'reporting_work_id':1,'originating_voice_type':'unattributed_group','originating_voice_name':None,'quoted_collection':None}, 'voice/collection')
     e = c['evidence']
     require(e['unit_type'] == 'unattributed_assertion' and e['attributed_authority_name'] is None and e['independence_state'] == 'unknown', 'evidence attribution')
     require(p['extracted_by'] == c['link']['linked_by'] == 'work-surah108-v1:t01-candidate', 'marker')
-    require(bool(c['link']['semantic_link_note']) and bool(e['content_summary']), 'evidence/link text')
+    require(e['content_summary'] == "Tabari reports an unnamed group's interpretation of al-Kawthar as a river in Paradise given by Allah to Muhammad.", 'evidence summary scope')
+    require(c['link']['semantic_link_note'] == "The complete anonymous heading supports the river, Paradise and gift-to-Muhammad scope. Following named reports begin at codepoint 234 and are excluded. This is reported interpretation, not Tabari's own preference.", 'link scope')
     require(all(not any(k in row for k in ('id','proposition_id','evidence_unit_id','transmission_routes')) for row in c.values()), 'no fabricated IDs/routes')
     f = d['fidelity']
     require(f['english_witness'] == 'absent' and f['translation_status'] == 'controlled_research_translation_from_arabic' and f['independence'] == 'unknown', 'fidelity')
@@ -66,6 +69,14 @@ def self_test(d, s):
         (('mapped_claim_count_unchanged',),64),
         (('candidate','proposition','id'),123),
         (('candidate','voice','transmission_routes'),['invented']),
+        (('source','entry_id'),5262),
+        (('source','language'),'en'),
+        (('candidate','proposition','assertion_mode'),'inferred'),
+        (('candidate','proposition','quranic_textual_support'),'explicit'),
+        (('candidate','proposition','attribution_fidelity'),'exact_quotation'),
+        (('candidate','proposition','status'),'superseded'),
+        (('candidate','evidence','content_summary'),'Tabari himself prefers this interpretation.'),
+        (('candidate','link','semantic_link_note'),'All named reports belong to this heading.'),
     ]
     validate(d,s)
     for path, value in changes:
