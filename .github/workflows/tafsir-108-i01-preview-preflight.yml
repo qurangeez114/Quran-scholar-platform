@@ -5,6 +5,7 @@ on:
       - 'tools/preview-i01-integration.py'
       - 'tools/test-i01-preview.py'
       - 'tools/verify-i01-lifecycle.py'
+      - 'scripts/*tabari-t01*.py'
       - '.github/workflows/tafsir-108-i01-preview-preflight.yml'
       - 'data/tafsir/staging/*108*.json'
   workflow_dispatch:
@@ -27,12 +28,18 @@ jobs:
           ref: e57ce1f68c3ae19296aac130e246ccd5f712c4aa
           path: .i01-baseline
           persist-credentials: false
+      - name: Read pinned post-I01 pre-T01 baseline
+        uses: actions/checkout@v4
+        with:
+          ref: 5517c14dbde1656932d55a7d310b458f7c1866f7
+          path: .t01-baseline
+          persist-credentials: false
       - name: Snapshot checked-out staging without database or network access
         shell: python
         run: |
           import hashlib, json, os, pathlib
           paths=["data/tafsir/staging/ibn-kathir-108-external-locators-2026-10-14.json","data/tafsir/staging/surah-108-voice-projection-2026-10-17.json","data/tafsir/staging/surah-108-chapter-manifest-2026-10-12.json","data/tafsir/staging/ibn-kathir-108-i01-replacement-overlay-2026-10-17.json","data/tafsir/staging/surah-108-voice-column-audit-2026-10-17.json","data/tafsir/staging/surah-108-link-schema-q06-mapping-2026-10-17.json","data/tafsir/staging/qurtubi-108-q06-bilingual-source-check-2026-10-17.json","data/tafsir/staging/surah-108-payload-assembly-2026-10-16.json","data/tafsir/staging/ibn-kathir-108-research-2026-10-12.json","data/tafsir/staging/ibn-kathir-108-i01-four-table-candidates-2026-10-17.json","data/tafsir/staging/ibn-kathir-108-evidence-voice-plan-2026-10-12.json"]
-          for root,label in ((pathlib.Path('.i01-baseline'),'baseline'),(pathlib.Path('.'),'current')):
+          for root,label in ((pathlib.Path('.i01-baseline'),'baseline'),(pathlib.Path('.t01-baseline'),'post'),(pathlib.Path('.'),'current')):
               snapshot={}
               for name in paths:
                   raw=(root/name).read_bytes()
@@ -41,7 +48,22 @@ jobs:
               target.write_text(json.dumps(snapshot,ensure_ascii=False),encoding='utf-8')
       - name: Verify valid preview and six unsafe-input rejections
         run: python tools/test-i01-preview.py "$RUNNER_TEMP/i01-baseline.json"
-      - name: Verify original or exact coordinated staging lifecycle
-        run: python tools/verify-i01-lifecycle.py "$RUNNER_TEMP/i01-baseline.json" "$RUNNER_TEMP/i01-current.json"
+      - name: Verify historical I01 split against pinned post-I01 baseline
+        run: python tools/verify-i01-lifecycle.py "$RUNNER_TEMP/i01-baseline.json" "$RUNNER_TEMP/i01-post.json"
+      - name: Verify exact subsequent T01 transition
+        run: python3 scripts/test-tabari-t01-coordinated-lifecycle.py --baseline .t01-baseline --current .
+      - name: Preserve every other historical I01 input
+        shell: python
+        run: |
+          import json, os, pathlib
+          base=pathlib.Path(os.environ['RUNNER_TEMP'])
+          post=json.loads((base/'i01-post.json').read_text())
+          current=json.loads((base/'i01-current.json').read_text())
+          allowed={'data/tafsir/staging/surah-108-payload-assembly-2026-10-16.json','data/tafsir/staging/surah-108-voice-projection-2026-10-17.json','data/tafsir/staging/qurtubi-108-q06-bilingual-source-check-2026-10-17.json'}
+          if set(post)!=set(current):
+              raise SystemExit('Missing or unexpected I01 snapshot input')
+          for path in set(post)-allowed:
+              if post[path]!=current[path]:
+                  raise SystemExit('Unrelated I01 input changed: '+path)
       - name: Verify staging files remain untouched
         run: git diff --exit-code -- data/tafsir/staging
