@@ -3,6 +3,9 @@ on:
   push:
     paths:
       - 'scripts/validate-tabari-t01-draft.py'
+      - 'scripts/*tabari-t02*.py'
+      - 'data/tafsir/staging/tabari-108-t02-four-table-draft-2026-10-19.json'
+      - 'data/tafsir/staging/tabari-108-t02-readonly-preflight-2026-10-19.json'
       - 'scripts/test-tabari-t01-overlay.py'
       - 'scripts/preview-tabari-t01-coordinated.py'
       - 'scripts/test-tabari-t01-coordinated-lifecycle.py'
@@ -16,6 +19,9 @@ on:
   pull_request:
     paths:
       - 'scripts/validate-tabari-t01-draft.py'
+      - 'scripts/*tabari-t02*.py'
+      - 'data/tafsir/staging/tabari-108-t02-four-table-draft-2026-10-19.json'
+      - 'data/tafsir/staging/tabari-108-t02-readonly-preflight-2026-10-19.json'
       - 'scripts/test-tabari-t01-overlay.py'
       - 'scripts/preview-tabari-t01-coordinated.py'
       - 'scripts/test-tabari-t01-coordinated-lifecycle.py'
@@ -46,8 +52,16 @@ jobs:
           ref: 5517c14dbde1656932d55a7d310b458f7c1866f7
           path: .t01-baseline
           persist-credentials: false
-      - name: Verify coordinated T01 transition and partial-change rejections
-        run: python3 scripts/test-tabari-t01-coordinated-lifecycle.py --baseline .t01-baseline --current .
+      - name: Read pinned post-T01 pre-T02 baseline
+        uses: actions/checkout@v4
+        with:
+          ref: f737063faf85198b8cf46286b8643681bba9687c
+          path: .t02-baseline
+          persist-credentials: false
+      - name: Verify historical T01 transition and partial-change rejections
+        run: python3 scripts/test-tabari-t01-coordinated-lifecycle.py --baseline .t01-baseline --current .t02-baseline
+      - name: Verify current exact T02 transition and partial-change rejections
+        run: python3 scripts/test-tabari-t02-coordinated-lifecycle.py --baseline .t02-baseline --current .
       - name: Check T01 draft and reject unsafe mutations
         run: python3 scripts/validate-tabari-t01-draft.py --root . --self-test
       - name: Check pinned assembly overlay without applying it
