@@ -1,0 +1,53 @@
+name: Validate Surah 108 Tabari T02 historical assembly preview
+on:
+  push:
+    paths:
+      - 'scripts/test-tabari-t02-overlay.py'
+      - 'data/tafsir/staging/tabari-108-t02-four-table-draft-2026-10-19.json'
+      - 'data/tafsir/staging/tabari-108-t02-readonly-preflight-2026-10-19.json'
+      - 'data/tafsir/staging/tabari-108-t02-source-boundary-review-2026-10-19.json'
+      - 'data/tafsir/staging/surah-108-payload-assembly-2026-10-16.json'
+      - '.github/workflows/tafsir-108-tabari-t02-draft.yml'
+  pull_request:
+    paths:
+      - 'scripts/test-tabari-t02-overlay.py'
+      - 'data/tafsir/staging/tabari-108-t02-four-table-draft-2026-10-19.json'
+      - 'data/tafsir/staging/tabari-108-t02-readonly-preflight-2026-10-19.json'
+      - 'data/tafsir/staging/tabari-108-t02-source-boundary-review-2026-10-19.json'
+      - 'data/tafsir/staging/surah-108-payload-assembly-2026-10-16.json'
+      - '.github/workflows/tafsir-108-tabari-t02-draft.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tafsir-108-tabari-t02-draft-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  historical-assembly-preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Read pinned pre-T02 integration inputs
+        uses: actions/checkout@v4
+        with:
+          ref: f737063faf85198b8cf46286b8643681bba9687c
+          path: .t02-baseline
+          persist-credentials: false
+      - name: Confirm current research inputs match reviewed baseline
+        shell: bash
+        run: |
+          cmp data/tafsir/staging/tabari-108-t02-four-table-draft-2026-10-19.json .t02-baseline/data/tafsir/staging/tabari-108-t02-four-table-draft-2026-10-19.json
+          cmp data/tafsir/staging/tabari-108-t02-readonly-preflight-2026-10-19.json .t02-baseline/data/tafsir/staging/tabari-108-t02-readonly-preflight-2026-10-19.json
+          cmp data/tafsir/staging/tabari-108-t02-source-boundary-review-2026-10-19.json .t02-baseline/data/tafsir/staging/tabari-108-t02-source-boundary-review-2026-10-19.json
+      - name: Test historical assembly preview and nine unsafe changes
+        run: python3 scripts/test-tabari-t02-overlay.py --root .t02-baseline
+      - name: Confirm preview did not modify tracked files
+        run: |
+          git diff --exit-code
+          git -C .t02-baseline diff --exit-code
+# Historical assembly preview only. A separate coordinated lifecycle check
+# must validate the current assembly, projection and consumers before integration.
+# No secrets, database access, publication or source-authenticity approval.
