@@ -1,8 +1,12 @@
-name: Validate Surah 108 Tabari T02 historical assembly preview
+name: Validate Surah 108 Tabari T02 coordinated staging preview
 on:
   push:
     paths:
       - 'scripts/test-tabari-t02-overlay.py'
+      - 'scripts/preview-tabari-t02-coordinated.py'
+      - 'scripts/test-tabari-t02-coordinated-lifecycle.py'
+      - 'data/tafsir/staging/surah-108-voice-projection-2026-10-17.json'
+      - 'data/tafsir/staging/qurtubi-108-q06-bilingual-source-check-2026-10-17.json'
       - 'data/tafsir/staging/tabari-108-t02-four-table-draft-2026-10-19.json'
       - 'data/tafsir/staging/tabari-108-t02-readonly-preflight-2026-10-19.json'
       - 'data/tafsir/staging/tabari-108-t02-source-boundary-review-2026-10-19.json'
@@ -11,6 +15,10 @@ on:
   pull_request:
     paths:
       - 'scripts/test-tabari-t02-overlay.py'
+      - 'scripts/preview-tabari-t02-coordinated.py'
+      - 'scripts/test-tabari-t02-coordinated-lifecycle.py'
+      - 'data/tafsir/staging/surah-108-voice-projection-2026-10-17.json'
+      - 'data/tafsir/staging/qurtubi-108-q06-bilingual-source-check-2026-10-17.json'
       - 'data/tafsir/staging/tabari-108-t02-four-table-draft-2026-10-19.json'
       - 'data/tafsir/staging/tabari-108-t02-readonly-preflight-2026-10-19.json'
       - 'data/tafsir/staging/tabari-108-t02-source-boundary-review-2026-10-19.json'
@@ -44,10 +52,14 @@ jobs:
           cmp data/tafsir/staging/tabari-108-t02-source-boundary-review-2026-10-19.json .t02-baseline/data/tafsir/staging/tabari-108-t02-source-boundary-review-2026-10-19.json
       - name: Test historical assembly preview and nine unsafe changes
         run: python3 scripts/test-tabari-t02-overlay.py --root .t02-baseline
+      - name: Test coordinated preview and stale consumer rejections
+        run: python3 scripts/preview-tabari-t02-coordinated.py --root .t02-baseline
+      - name: Validate current original or exact three-file state
+        run: python3 scripts/test-tabari-t02-coordinated-lifecycle.py --baseline .t02-baseline --current .
       - name: Confirm preview did not modify tracked files
         run: |
           git diff --exit-code
           git -C .t02-baseline diff --exit-code
-# Historical assembly preview only. A separate coordinated lifecycle check
-# must validate the current assembly, projection and consumers before integration.
+# Validates T02's three linked staging files. Other I01/T01 and voice-projection
+# workflow consumers still require review before integration.
 # No secrets, database access, publication or source-authenticity approval.
