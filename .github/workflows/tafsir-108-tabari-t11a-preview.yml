@@ -22,13 +22,19 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - name: Read pinned pre-T11A assembly
+        uses: actions/checkout@v4
+        with:
+          ref: cf1bccf8793c6b8c381a052cc25213bde72849f6
+          path: .t11a-baseline
+          persist-credentials: false
       - name: Validate draft and reject ten unsafe mutations
         run: python scripts/validate-tabari-t11a-draft.py --self-test
       - name: Verify preview is identical under two hash seeds
         shell: python
         run: |
           import json, os, subprocess, sys
-          command=[sys.executable,"scripts/preview-tabari-t11a-coordinated.py"]
+          command=[sys.executable,"scripts/preview-tabari-t11a-coordinated.py","--root",".t11a-baseline","--draft-root","."]
           results=[]
           for seed in ("1","77"):
               env=dict(os.environ,PYTHONHASHSEED=seed)
@@ -37,11 +43,5 @@ jobs:
           assert results[0]["files_applied"] is False
           assert results[0]["database_written"] is False
           print(json.dumps(results[0]))
-      - name: Read pinned pre-T11A assembly
-        uses: actions/checkout@v4
-        with:
-          ref: cf1bccf8793c6b8c381a052cc25213bde72849f6
-          path: .t11a-baseline
-          persist-credentials: false
       - name: Reject partial or divergent staging transitions
         run: python scripts/test-tabari-t11a-coordinated-lifecycle.py --baseline .t11a-baseline --current .
