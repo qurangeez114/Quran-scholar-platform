@@ -15,8 +15,9 @@ function check(request,expectedStatus,expectedLabel,redirect){
   [id,{textContent:'',disabled:false,onclick:null,style:{}}]));
  const window={location:{href:''}};
  const enrollment=null,preview=false,lessons=[],progress=[],enrollmentRequest=request,includedByInstructor=null;
+ const currentUser={id:'10000000-0000-4000-8000-000000000001'};
  const context={document:{getElementById:id=>elements[id]},window,enrollment,preview,lessons,progress,includedByInstructor,
-  enrollmentRequest,console,enrollInCourse:()=>{}};
+  enrollmentRequest,currentUser,console,enrollInCourse:()=>{}};
  runInNewContext(code+'; updateUI();',context);
  assert.equal(elements.enrollmentStatus.textContent,expectedStatus);
  assert.equal(elements.actionBtn.textContent,expectedLabel);

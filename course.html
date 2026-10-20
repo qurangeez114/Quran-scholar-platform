@@ -77,11 +77,15 @@
       padding: 1rem;
       background: #f9f9f9;
       border-radius: 8px;
-      border-left: 4px solid #667eea;
+      border-left: 4px solid #176b65;
       transition: all 0.3s;
       cursor: pointer;
     }
 
+    .course-access-notice {background:#f3f8f8;border:1px solid #d2e3e2;border-left:4px solid #b89d65;border-radius:9px;padding:20px;color:#35505d;}
+    .course-access-notice h3 {margin:0 0 8px;color:#234a58;font-size:18px;}
+    .course-access-notice p {margin:0 0 12px;line-height:1.6;}
+    .course-access-link{color:#176c67;font-weight:750;text-underline-offset:3px;}
     .lesson-item:hover {
       background: #f0f0f0;
       box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
@@ -90,7 +94,7 @@
     .lesson-number {
       font-size: 1.5rem;
       font-weight: 600;
-      color: #667eea;
+      color: #176b65;
       min-width: 40px;
       text-align: center;
     }
@@ -115,7 +119,7 @@
     }
 
     .lesson-arrow {
-      color: #667eea;
+      color: #176b65;
       font-weight: 600;
     }
 
@@ -136,7 +140,7 @@
     .stat-number {
       font-size: 1.8rem;
       font-weight: 600;
-      color: #667eea;
+      color: #176b65;
     }
 
     .stat-label {
@@ -160,12 +164,12 @@
     }
 
     .btn-primary {
-      background: #667eea;
+      background: #176b65;
       color: white;
     }
 
     .btn-primary:hover {
-      background: #5568d3;
+      background: #145d57;
     }
 
     .btn-secondary {
@@ -193,7 +197,7 @@
 
     .progress-fill {
       height: 100%;
-      background: linear-gradient(90deg, #667eea, #764ba2);
+      background: linear-gradient(90deg, #176b65, #285a6d);
       width: 0%;
       transition: width 0.3s;
     }
@@ -376,12 +380,10 @@
     let lessons = [];
 
     async function checkAuth() {
-      const { data } = await supabase.auth.getSession();
-      currentUser = data.session?.user;
-
-      if (!currentUser) {
-        window.location.href = '/account.html';
-      }
+      const {data,error}=await supabase.auth.getSession();
+      currentUser=error?null:data.session?.user||null;
+      // Public course descriptions remain visible to visitors. Lessons stay
+      // protected by enrollment and the database's course access policies.
     }
 
     function getCourseIdFromUrl() {
@@ -446,7 +448,9 @@
 
       } catch (error) {
         console.error('Error loading course:', error);
-        showAlert('Failed to load course', 'error');
+        showAlert('This class could not be opened. It may be private, unpublished, closed or temporarily unavailable. If you are already enrolled, sign in and try again.', 'error');
+        document.getElementById('courseTitle').textContent='Class unavailable';
+        document.getElementById('lessonsList').textContent='No class details are currently available.';
       }
     }
 
@@ -464,17 +468,35 @@
       const container = document.getElementById('lessonsList');
       document.getElementById('lessonCount').textContent = lessons.length;
 
-      if (lessons.length === 0) {
-        container.innerHTML = '<p style="color: #999;">No lessons yet.</p>';
+      // A pending application is NOT enrollment. Lesson rows are invisible
+      // under RLS before approval, which must never be labeled "No lessons".
+      if (!enrollment && !preview && !includedByInstructor) {
+        const explanation=document.createElement('div');
+        explanation.className='course-access-notice';
+        const heading=document.createElement('h3');
+        heading.textContent=enrollmentRequest?.status==='consent_pending'
+          ? 'Your confirmation is needed'
+          : enrollmentRequest?.status==='pending'?'Waiting for instructor approval'
+          : 'Class lessons require enrollment';
+        const copy=document.createElement('p');
+        copy.textContent=enrollmentRequest?.status==='pending'
+          ? 'Your application has been sent. You can access the class lessons once the receiving instructor approves enrollment.'
+          : enrollmentRequest?.status==='consent_pending'
+          ? 'An instructor has recommended this class. Please accept the recommendation and wait for the receiving instructor to approve you.'
+          : 'Explore the class details here, then sign in and request admission to access the lessons.';
+        explanation.append(heading,copy);
+        if(enrollmentRequest){
+          const a=document.createElement('a');
+          a.href='/academic-hub.html?tab=courses';a.className='course-access-link';
+          a.textContent='Review my enrollment request →';
+          explanation.appendChild(a);
+        }
+        container.replaceChildren(explanation);
         return;
       }
 
-      if (!enrollment && !preview && !includedByInstructor) {
-        container.innerHTML = `
-          <div style="color: #999; text-align: center; padding: 2rem;">
-            <p>Enroll in this course to view lessons</p>
-          </div>
-        `;
+      if (lessons.length === 0) {
+        container.textContent='No lessons have been published for this class yet. Please contact the instructor.';
         return;
       }
 
@@ -599,7 +621,11 @@
         // Pending applications are actionable via the student's dashboard,
         // where they may withdraw or accept an instructor referral.
         actionBtn.disabled = false;
-        if(enrollmentRequest){
+        if(!currentUser){
+          actionBtn.textContent='Sign in to request admission';
+          actionBtn.onclick=()=>{window.location.href='/account.html';};
+          enrollStatus.textContent='Sign in for access to class lessons';
+        }else if(enrollmentRequest){
           actionBtn.textContent = 'View Enrollment Request';
           actionBtn.onclick = () => { window.location.href='/academic-hub.html?tab=courses'; };
           enrollStatus.textContent = enrollmentRequest.status==='consent_pending'
@@ -632,8 +658,8 @@
     };
 
     window.goToLesson = function(lessonId) {
-      if (!enrollment && !preview) {
-        showAlert('Please enroll in the course first', 'info');
+      if (!enrollment && !preview && !includedByInstructor) {
+        showAlert('Class lessons unlock after the instructor approves your enrollment request', 'info');
         return;
       }
       if(!lessonId)return;
