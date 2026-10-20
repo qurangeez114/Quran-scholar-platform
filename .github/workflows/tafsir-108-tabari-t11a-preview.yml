@@ -1,0 +1,39 @@
+name: Validate Surah 108 Tabari T11A draft and preview
+on:
+  push:
+    paths:
+      - '.github/workflows/tafsir-108-tabari-t11a-preview.yml'
+      - 'scripts/*tabari-t11a*.py'
+      - 'data/tafsir/staging/tabari-108-t11a-*.json'
+      - 'data/tafsir/staging/surah-108-payload-assembly-2026-10-16.json'
+      - 'data/tafsir/staging/surah-108-voice-projection-2026-10-17.json'
+      - 'data/tafsir/staging/qurtubi-108-q06-bilingual-source-check-2026-10-17.json'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tafsir-108-tabari-t11a-preview
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate draft and reject ten unsafe mutations
+        run: python scripts/validate-tabari-t11a-draft.py --self-test
+      - name: Verify preview is identical under two hash seeds
+        shell: python
+        run: |
+          import json, os, subprocess, sys
+          command=[sys.executable,"scripts/preview-tabari-t11a-coordinated.py"]
+          results=[]
+          for seed in ("1","77"):
+              env=dict(os.environ,PYTHONHASHSEED=seed)
+              results.append(json.loads(subprocess.check_output(command,env=env,text=True)))
+          assert results[0]==results[1], "Nondeterministic preview"
+          assert results[0]["files_applied"] is False
+          assert results[0]["database_written"] is False
+          print(json.dumps(results[0]))
