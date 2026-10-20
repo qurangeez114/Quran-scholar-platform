@@ -3,6 +3,8 @@ on:
   push:
     paths:
       - 'scripts/test-tabari-t02-overlay.py'
+      - 'scripts/*tabari-t11a*.py'
+      - 'data/tafsir/staging/tabari-108-t11a-*.json'
       - 'scripts/preview-tabari-t02-coordinated.py'
       - 'scripts/test-tabari-t02-coordinated-lifecycle.py'
       - 'data/tafsir/staging/surah-108-voice-projection-2026-10-17.json'
@@ -15,6 +17,8 @@ on:
   pull_request:
     paths:
       - 'scripts/test-tabari-t02-overlay.py'
+      - 'scripts/*tabari-t11a*.py'
+      - 'data/tafsir/staging/tabari-108-t11a-*.json'
       - 'scripts/preview-tabari-t02-coordinated.py'
       - 'scripts/test-tabari-t02-coordinated-lifecycle.py'
       - 'data/tafsir/staging/surah-108-voice-projection-2026-10-17.json'
@@ -38,6 +42,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - name: Read pinned post-T02 pre-T11A baseline
+        uses: actions/checkout@v4
+        with:
+          ref: cf1bccf8793c6b8c381a052cc25213bde72849f6
+          path: .t11a-baseline
+          persist-credentials: false
       - name: Read pinned pre-T02 integration inputs
         uses: actions/checkout@v4
         with:
@@ -55,7 +65,9 @@ jobs:
       - name: Test coordinated preview and stale consumer rejections
         run: python3 scripts/preview-tabari-t02-coordinated.py --root .t02-baseline
       - name: Validate current original or exact three-file state
-        run: python3 scripts/test-tabari-t02-coordinated-lifecycle.py --baseline .t02-baseline --current .
+        run: python3 scripts/test-tabari-t02-coordinated-lifecycle.py --baseline .t02-baseline --current .t11a-baseline
+      - name: Verify exact coordinated T11A state
+        run: python3 scripts/test-tabari-t11a-coordinated-lifecycle.py --baseline .t11a-baseline --current .
       - name: Confirm preview did not modify tracked files
         run: |
           git diff --exit-code
