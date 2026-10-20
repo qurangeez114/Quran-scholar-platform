@@ -29,7 +29,7 @@ def build(a,p,q,d):
     projected.update(state="isolated_multirow_preview_not_integrated",target_table="proposition_voice_chain",database_rows=[],staging_row_metadata=[],publication_ready=False,semantic_publication_hold=row["semantic_publication_hold"],blockers=["Plural consumer adaptation pending","proposition_id unresolved"])
     fields={"reporting_work_id","originating_voice_type","originating_voice_name","quoted_collection"}
     for v in c["voices"]:
-        db={k:v[k] for k in fields}
+        db={k:v[k] for k in sorted(fields)}
         meta={k:v[k] for k in v if k not in fields}
         check(dict(db,**meta)==v,"lossy voice")
         projected["database_rows"].append(db)
