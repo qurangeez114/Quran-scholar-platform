@@ -576,6 +576,33 @@
       }
     }
 
+    function renderSafeLessonText(container, source) {
+      const raw=String(source||'No content');
+      const parsed=new DOMParser().parseFromString(raw,'text/html');
+      const allowed=new Set(['H2','H3','H4','P','STRONG','EM','B','I','UL','OL','LI','BLOCKQUOTE','BR','A']);
+      function appendSafe(node,parent){
+        if(node.nodeType===Node.TEXT_NODE){parent.append(document.createTextNode(node.textContent));return;}
+        if(node.nodeType!==Node.ELEMENT_NODE)return;
+        const tag=node.tagName;
+        if(!allowed.has(tag)){for(const child of node.childNodes)appendSafe(child,parent);return;}
+        const clean=document.createElement(tag.toLowerCase());
+        if(tag==='A'){
+          try{const url=new URL(node.getAttribute('href'),location.origin);
+            if(['https:','http:'].includes(url.protocol)){
+              clean.href=url.href;clean.rel='noopener noreferrer';clean.target='_blank';
+            }
+          }catch{}
+          if(!clean.href){for(const child of node.childNodes)appendSafe(child,parent);return;}
+        }
+        for(const child of node.childNodes)appendSafe(child,clean);
+        parent.append(clean);
+      }
+      if(!/<(?:h[2-4]|p|ul|ol|li|blockquote|strong|em|br)\b/i.test(raw)){
+        const p=document.createElement('p');p.style.whiteSpace='pre-wrap';p.textContent=raw;container.append(p);return;
+      }
+      for(const child of parsed.body.childNodes)appendSafe(child,container);
+    }
+
     function renderLesson() {
       const content = document.getElementById('lessonContent');
       const completeBtn = document.getElementById('completeBtn');
@@ -585,7 +612,7 @@
 
       if (currentLesson.lesson_type === 'text') {
         content.replaceChildren();
-        const text=document.createElement('p');text.style.whiteSpace='pre-wrap';text.textContent=currentLesson.content || 'No content';content.append(text);
+        renderSafeLessonText(content,currentLesson.content);
         if(currentCourse.id==='c9c5bd84-0e8b-45ba-9597-7112cf5089b1') {const link=document.createElement('a');link.href='/sample-video-class.html';link.textContent='Open guided practice and reworded final check';content.append(link);}
         completeBtn.style.display = 'block';
       } else if (currentLesson.lesson_type === 'video') {
