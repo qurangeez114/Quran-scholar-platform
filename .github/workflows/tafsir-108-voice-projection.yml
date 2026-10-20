@@ -5,6 +5,8 @@ on:
       - '.github/workflows/tafsir-108-voice-projection.yml'
       - 'scripts/*tabari-t01*.py'
       - 'scripts/*tabari-t02*.py'
+      - 'scripts/*tabari-t11a*.py'
+      - 'data/tafsir/staging/tabari-108-t11a-*.json'
       - 'data/tafsir/staging/tabari-108-t02-*.json'
       - 'data/tafsir/staging/tabari-108-t01-*.json'
       - 'data/tafsir/staging/ibn-kathir-108-i01-four-table-candidates-2026-10-17.json'
@@ -39,11 +41,20 @@ jobs:
           ref: f737063faf85198b8cf46286b8643681bba9687c
           path: .t02-baseline
           persist-credentials: false
+      - name: Read pinned post-T02 pre-T11A baseline
+        uses: actions/checkout@v4
+        with:
+          ref: cf1bccf8793c6b8c381a052cc25213bde72849f6
+          path: .t11a-baseline
+          persist-credentials: false
       - name: Validate staging projection without network or database access
         shell: python
         run: |
           import json,hashlib,pathlib,subprocess,sys
-          base=pathlib.Path("data/tafsir/staging")
+          t11a=json.loads(subprocess.check_output([sys.executable,"scripts/test-tabari-t11a-coordinated-lifecycle.py","--baseline",".t11a-baseline","--current","."],text=True))
+          assert t11a["status"]=="PASS"
+          print("T11A coordinated state:",t11a["current_state"])
+          base=pathlib.Path(".t11a-baseline/data/tafsir/staging")
           def read(name):
               raw=(base/name).read_bytes()
               return json.loads(raw),hashlib.sha1(b"blob "+str(len(raw)).encode()+b"\0"+raw).hexdigest()
@@ -96,7 +107,7 @@ jobs:
           if is_split:
               historical=subprocess.check_output([sys.executable,"scripts/test-tabari-t01-coordinated-lifecycle.py","--baseline",".t01-baseline","--current",".t02-baseline"],text=True)
               assert "Current state: exact_three_file_preview" in historical,"Pinned T01 transition changed"
-              lifecycle=json.loads(subprocess.check_output([sys.executable,"scripts/test-tabari-t02-coordinated-lifecycle.py","--baseline",".t02-baseline","--current","."],text=True))
+              lifecycle=json.loads(subprocess.check_output([sys.executable,"scripts/test-tabari-t02-coordinated-lifecycle.py","--baseline",".t02-baseline","--current",".t11a-baseline"],text=True))
               assert lifecycle["status"]=="PASS" and lifecycle["current_state"] in ("original_unapplied","exact_three_file_preview"),"Unknown T02 lifecycle"
               expected=(65,9,41,12) if lifecycle["current_state"]=="exact_three_file_preview" else (64,10,41,12)
           assert (projected,unmapped,metadata,holds)==expected
