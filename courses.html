@@ -269,7 +269,18 @@
         titleLink.href='/course.html?course='+encodeURIComponent(course.id);
         titleLink.textContent=course.title||'Untitled class';
         title.appendChild(titleLink);content.appendChild(title);
-        paragraph(content,course.description||'Class overview and enrollment details','course-description');
+        const description=document.createElement('p');description.className='course-description';
+        const raw=course.description||'Class overview and enrollment details';
+        const urlPattern=/https?:\/\/[^\s<>"']+/g;
+        let last=0;for(const match of raw.matchAll(urlPattern)){
+          description.append(document.createTextNode(raw.slice(last,match.index)));
+          const a=document.createElement('a');a.href=match[0];a.textContent=match[0];a.target='_blank';a.rel='noopener noreferrer';a.style.overflowWrap='anywhere';description.append(a);
+          last=match.index+match[0].length;
+        }
+        description.append(document.createTextNode(raw.slice(last)));content.appendChild(description);
+        const details=document.createElement('p');details.className='course-description';
+        details.textContent='Tuition: Ask instructor · Schedule: To be announced · Instructor: See class details';
+        content.appendChild(details);
         const meta=document.createElement('div');meta.className='course-meta';content.appendChild(meta);
         const state=document.createElement('span');meta.appendChild(state);
         const detail=document.createElement('a');
