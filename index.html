@@ -2898,7 +2898,7 @@ async function loadSura(id) {
     if (targetAya && targetAya < 1) targetAya = 1;
     const url = window.location.pathname + '?sura=' + id + (targetAya ? '&aya=' + targetAya : '');
     const sub = targetAya
-      ? 'Verse ' + targetAya + ' · ' + (_histTotal || '') + ' verses total'
+      ? histRef(id, targetAya, _histTotal)
       : (_histTotal || '') + ' verses total';
     // Use the in-place updater (not qhistRecord) so opening the same sura
     // again — or later scrolling within it — collapses into ONE history
@@ -3023,6 +3023,10 @@ async function loadSura(id) {
    the user settles on a different verse (scrolling while reading), updates
    the sura's Activity History entry to name that specific verse — e.g.
    "Verse 42 · 107 verses total" instead of just the sura's total count. */
+/* Clear, chapter:verse wording for history rows, e.g. "Sura 5 · Verse 37 of 120". */
+function histRef(suraNum, aya, total){
+  return 'Sura ' + suraNum + ' · Verse ' + aya + (total ? ' of ' + total : '');
+}
 let _verseProgressObserver = null;
 let _verseProgressDebounceTimer = null;
 let _verseProgressLastCommitted = null;
@@ -3039,7 +3043,7 @@ function startVerseProgressTracker(suraId, label, total) {
     if (currentSura !== suraId) return; // user has since navigated to a different sura
     _verseProgressLastCommitted = ayaNum;
     const url = window.location.pathname + '?sura=' + suraId + '&aya=' + ayaNum;
-    const sub = 'Verse ' + ayaNum + ' · ' + (total || '') + ' verses total';
+    const sub = histRef(suraId, ayaNum, total);
     if (window.qhistUpdateVerseProgress) qhistUpdateVerseProgress(label, url, '📖', sub);
   };
 
@@ -5739,7 +5743,7 @@ async function loadVerseContext(suraId, targetAya, before, after) {
     label = suraArabic ? suraArabic + ' · ' + suraEnglish : suraEnglish;
     window._pendingHistAya = null; // already used by caller; avoid double-consuming
     const url = window.location.pathname + '?sura=' + suraId + '&aya=' + targetAya;
-    const sub = 'Verse ' + targetAya + ' · ' + (info?.number_of_ayas || '') + ' verses total';
+    const sub = histRef(suraId, targetAya, info?.number_of_ayas);
     // Same-sura entries collapse into one row (see qhistUpdateVerseProgress),
     // so a direct verse deep-link merges with any existing history row for
     // this sura instead of creating a second, separate one.
