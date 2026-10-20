@@ -101,6 +101,32 @@ Deno.serve(async req=>{
    const result=teacher?.active&&teacher.role==='instructor'&&teacher.support_url?{name:teacher.display_name,url:supportUrl(teacher.support_url)}:null;
    return new Response(JSON.stringify(result),{headers});
   }
+  if(body.action==='school_applications_list'||body.action==='school_application_review'){
+    if(!owner)fail('School admissions are restricted to administrators',403);
+    if(body.action==='school_applications_list'){
+      const requested=body.status==='all'?'all':
+        ['submitted','under_review','waitlisted','accepted','declined'].includes(body.status)?body.status:'all';
+      let query=service.from('qh_school_applications')
+        .select('id,full_name,email,country,city,program_interest,learning_goal,academic_background,education_level,preferred_language,attendance_mode,status,reviewer_note,submitted_at,reviewed_at')
+        .order('submitted_at',{ascending:false}).limit(200);
+      if(requested!=='all')query=query.eq('status',requested);
+      const rows=await checked(query);
+      return new Response(JSON.stringify(rows),{headers});
+    }
+    const id=uuid(body.application_id);
+    const allowed=['submitted','under_review','waitlisted','accepted','declined'];
+    const status=cleanField(body.status,30,'status');
+    if(!allowed.includes(status))fail('Choose a valid application status');
+    const note=cleanField(body.note||'',2500,'review note');
+    const {data,error}=await service.rpc('qh_review_school_application',{
+      p_id:id,p_reviewer:actor.id,p_status:status,p_note:note
+    });
+    if(error)fail('Could not save the application decision',400);
+    return new Response(JSON.stringify({
+      ok:true,id:data,status,
+      notice:'Review saved. This action does not create a student account or send an admission email.'
+    }),{headers});
+  }
   if(!owner&&role!=='instructor')fail('Instructor or owner access required',403);
   const ownCourse=async(id:string)=>{
    const course=await checked(service.from('qh_courses').select('*').eq('id',id).single());
