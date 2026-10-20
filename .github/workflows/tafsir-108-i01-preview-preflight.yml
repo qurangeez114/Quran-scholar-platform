@@ -6,6 +6,7 @@ on:
       - 'tools/test-i01-preview.py'
       - 'tools/verify-i01-lifecycle.py'
       - 'scripts/*tabari-t01*.py'
+      - 'scripts/*tabari-t02*.py'
       - '.github/workflows/tafsir-108-i01-preview-preflight.yml'
       - 'data/tafsir/staging/*108*.json'
   workflow_dispatch:
@@ -34,6 +35,12 @@ jobs:
           ref: 5517c14dbde1656932d55a7d310b458f7c1866f7
           path: .t01-baseline
           persist-credentials: false
+      - name: Read pinned post-T01 pre-T02 baseline
+        uses: actions/checkout@v4
+        with:
+          ref: f737063faf85198b8cf46286b8643681bba9687c
+          path: .t02-baseline
+          persist-credentials: false
       - name: Snapshot checked-out staging without database or network access
         shell: python
         run: |
@@ -50,8 +57,10 @@ jobs:
         run: python tools/test-i01-preview.py "$RUNNER_TEMP/i01-baseline.json"
       - name: Verify historical I01 split against pinned post-I01 baseline
         run: python tools/verify-i01-lifecycle.py "$RUNNER_TEMP/i01-baseline.json" "$RUNNER_TEMP/i01-post.json"
-      - name: Verify exact subsequent T01 transition
-        run: python3 scripts/test-tabari-t01-coordinated-lifecycle.py --baseline .t01-baseline --current .
+      - name: Verify historical T01 transition against pinned pre-T02 baseline
+        run: python3 scripts/test-tabari-t01-coordinated-lifecycle.py --baseline .t01-baseline --current .t02-baseline
+      - name: Verify current exact T02 transition
+        run: python3 scripts/test-tabari-t02-coordinated-lifecycle.py --baseline .t02-baseline --current .
       - name: Preserve every other historical I01 input
         shell: python
         run: |
