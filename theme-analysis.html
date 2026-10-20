@@ -279,6 +279,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
   <label class="lang-label"><input type="checkbox" id="lg-tr" onchange="rerenderVerses()"> Translit</label>
   <label class="lang-label"><input type="checkbox" id="lg-en" checked onchange="rerenderVerses()"> English</label>
   <label class="lang-label"><input type="checkbox" id="lg-ti" onchange="rerenderVerses()"> Tigrinya</label>
+  <label class="lang-label"><input type="checkbox" id="lg-ti2" onchange="rerenderVerses()"> Tigrinya Tafsir</label>
   <label class="lang-label"><input type="checkbox" id="lg-am" onchange="rerenderVerses()"> Amharic</label>
 </div>
 
@@ -769,10 +770,30 @@ async function loadThemeVerses() {
     // IMPORTANT: Transform field names and assign to VERSES so rerenderVerses() works
     // The API returns: sura, aya
     // But the rest of the code expects: sura_id, aya_number
+    // The Tigrinya tafsir lives in `ayas`, not `theme_verses`, so fetch it for
+    // exactly these verses. If this fails, the page still renders without it.
+    let tafsirByRef = new Map();
+    try {
+      // Batches keep each request URL short, even for large themes.
+      const chunks = [];
+      for (let i = 0; i < rows.length; i += 80) chunks.push(rows.slice(i, i + 80));
+      const parts = await Promise.all(chunks.map(chunk => sbGet('ayas', {
+        select: 'sura_id,aya_number,tigrinya2',
+        or: '(' + chunk.map(r => `and(sura_id.eq.${r.sura},aya_number.eq.${r.aya})`).join(',') + ')',
+        tigrinya2: 'not.is.null'
+      })));
+      parts.forEach(batch => {
+        if (Array.isArray(batch)) batch.forEach(t => tafsirByRef.set(t.sura_id + ':' + t.aya_number, t.tigrinya2));
+      });
+    } catch (err) {
+      console.warn('Tigrinya tafsir unavailable:', err);
+    }
+
     VERSES = rows.map(v => ({
       ...v,
       sura_id: v.sura,
-      aya_number: v.aya
+      aya_number: v.aya,
+      tigrinya2: tafsirByRef.get(v.sura + ':' + v.aya) || ''
     }));
     
     console.log('Rendering', rows.length, 'verses');
@@ -802,6 +823,7 @@ function getLang() {
     ar: document.getElementById('lg-ar')?.checked,
     en: document.getElementById('lg-en')?.checked,
     ti: document.getElementById('lg-ti')?.checked,
+    ti2: document.getElementById('lg-ti2')?.checked,
     am: document.getElementById('lg-am')?.checked,
     tr: document.getElementById('lg-tr')?.checked
   };
@@ -840,6 +862,7 @@ function renderVerseCard(v, idx) {
       + (L.tr && v.arabic ? '<div class="translit-text" style="font-size:13px;color:#666;line-height:1.8;margin-bottom:4px;direction:ltr;text-align:left;font-weight:bold;">'+esc(transliterateArabic(v.arabic))+'</div>' : '')
       + (L.en && v.english ? '<div class="english-text" style="font-weight:bold;">'+esc(v.english)+'</div>' : '')
       + (L.ti && v.tigrinya ? '<div class="tigrinya-text" style="font-weight:bold;">'+esc(v.tigrinya)+'</div>' : '')
+      + (L.ti2 && v.tigrinya2 ? '<div class="tigrinya-text" style="font-weight:normal;color:#333;font-size:14px;"><span style="font-size:10px;font-weight:700;letter-spacing:1px;color:#7A5C2B;text-transform:uppercase;">Tafsir</span><br>'+esc(v.tigrinya2)+'</div>' : '')
       + (L.am && v.amharic ? '<div class="amharic-text" style="font-weight:bold;">'+esc(v.amharic)+'</div>' : '')
     + '</div>'
     + '</div>';
@@ -1073,6 +1096,7 @@ function renderContradictionSide(v, label, isA) {
       + (L.tr && v.arabic ? '<div style="font-size:12px;color:#666;line-height:1.8;margin-bottom:4px;font-weight:bold;">'+esc(transliterateArabic(v.arabic))+'</div>' : '')
       + (L.en && v.english  ? '<div style="font-size:12px;color:#444;line-height:1.6;font-style:italic;margin-bottom:4px;font-weight:bold;">'+esc(v.english)+'</div>' : '')
       + (L.ti && v.tigrinya ? '<div style="font-size:14px;font-weight:700;color:#000;line-height:1.8;text-shadow:-1px -1px 0 #fff,1px -1px 0 #fff,-1px 1px 0 #fff,1px 1px 0 #fff;margin-bottom:4px;">'+esc(v.tigrinya)+'</div>' : '')
+      + (L.ti2 && v.tigrinya2 ? '<div style="font-size:13px;color:#333;line-height:1.8;margin-bottom:4px;"><span style="font-size:10px;font-weight:700;letter-spacing:1px;color:#7A5C2B;text-transform:uppercase;">Tafsir</span><br>'+esc(v.tigrinya2)+'</div>' : '')
       + (L.am && v.amharic  ? '<div style="font-size:13px;color:#333;line-height:1.8;margin-bottom:4px;">'+esc(v.amharic)+'</div>' : '')
       + (L.or && v.oromo    ? '<div style="font-size:12px;color:#555;line-height:1.7;margin-bottom:4px;">'+esc(v.oromo)+'</div>' : '')
       + (L.so && v.somali   ? '<div style="font-size:12px;color:#555;line-height:1.7;">'+esc(v.somali)+'</div>' : '')
@@ -1100,6 +1124,7 @@ function renderContradictions() {
             + (L.tr && v && v.arabic ? '<div style="font-size:12px;color:#666;line-height:1.8;margin-bottom:4px;font-weight:bold;">'+esc(transliterateArabic(v.arabic))+'</div>' : '')
             + (L.en && v && v.english  ? '<div style="font-size:12px;color:#444;font-style:italic;margin-bottom:6px;">'+esc(v.english)+'</div>' : '')
             + (L.ti && v && v.tigrinya ? '<div style="font-size:14px;font-weight:700;color:#000;line-height:1.8;text-shadow:-1px -1px 0 #fff,1px -1px 0 #fff,-1px 1px 0 #fff,1px 1px 0 #fff;margin-bottom:4px;">'+esc(v.tigrinya)+'</div>' : '')
+            + (L.ti2 && v && v.tigrinya2 ? '<div style="font-size:13px;color:#333;line-height:1.8;margin-bottom:4px;"><span style="font-size:10px;font-weight:700;letter-spacing:1px;color:#7A5C2B;text-transform:uppercase;">Tafsir</span><br>'+esc(v.tigrinya2)+'</div>' : '')
             + (L.am && v && v.amharic  ? '<div style="font-size:13px;color:#333;line-height:1.8;margin-bottom:4px;">'+esc(v.amharic)+'</div>' : '')
             + (L.or && v && v.oromo    ? '<div style="font-size:12px;color:#555;line-height:1.7;margin-bottom:4px;">'+esc(v.oromo)+'</div>' : '')
             + (L.so && v && v.somali   ? '<div style="font-size:12px;color:#555;line-height:1.7;">'+esc(v.somali)+'</div>' : '');
@@ -1561,6 +1586,7 @@ function taCopy(idx) {
   if (L.ar && v.arabic) parts.push(v.arabic);
   if (L.en && v.english) parts.push(v.english);
   if (L.ti && v.tigrinya) parts.push(v.tigrinya);
+  if (L.ti2 && v.tigrinya2) parts.push(v.tigrinya2);
   navigator.clipboard.writeText(parts.join('\n')).catch(()=>{});
   showToast('📋 Copied!');
 }
