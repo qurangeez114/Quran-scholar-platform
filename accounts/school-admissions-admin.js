@@ -59,6 +59,9 @@ async function refresh(){
       application_id:app.id,status:sel.value,note:note.value
      });
      status(result.notice||'Application review saved.');
+     // The previous refresh is still running until its handler returns;
+     // unlock before reloading the updated application status.
+     loading=false;
      await refresh();
     }catch(error){status(error.message||'Unable to save admissions review',true);}
     finally{save.disabled=false;}
