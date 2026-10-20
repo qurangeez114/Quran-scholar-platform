@@ -323,11 +323,11 @@
           <h2>Course Stats</h2>
           <div class="stats">
             <div class="stat">
-              <div class="stat-number" id="lessonCount">0</div>
+              <div class="stat-number" id="lessonCount">Restricted</div>
               <div class="stat-label">Lessons</div>
             </div>
             <div class="stat">
-              <div class="stat-number" id="enrollmentStatus">—</div>
+              <div class="stat-number" id="enrollmentStatus">Sign in</div>
               <div class="stat-label">Status</div>
             </div>
           </div>
@@ -441,6 +441,7 @@
         if(preview){await requireTeachingAccess();const managed=await lmsRequest('dashboard');if(!managed.courses.some(c=>c.id===courseId))throw Error('You can preview only classes you manage');}
         if(enrollment&&!preview)progress=await getStudentProgress(courseId);
         await loadLessons();
+        if(!currentUser)document.getElementById('enrollmentStatus').textContent='Sign in to apply';
         if(preview){const issues=await loadCourseReadiness(supabase,courseId);const panel=document.createElement('section');panel.className='section';const heading=document.createElement('h2');heading.textContent=issues.length?'Before publishing':'Course content checks passed';panel.append(heading);for(const issue of issues){const p=document.createElement('p');p.textContent=issue;panel.append(p);}document.getElementById('lessonsList').parentElement.prepend(panel);}
         await mountInstructorSupport(currentCourse.id,document.getElementById('lessonsList').parentElement);
         await loadMaterials();
@@ -466,7 +467,7 @@
 
     function renderLessons() {
       const container = document.getElementById('lessonsList');
-      document.getElementById('lessonCount').textContent = lessons.length;
+      document.getElementById('lessonCount').textContent = (!enrollment && !preview && !includedByInstructor) ? 'After admission' : lessons.length;
 
       // A pending application is NOT enrollment. Lesson rows are invisible
       // under RLS before approval, which must never be labeled "No lessons".
