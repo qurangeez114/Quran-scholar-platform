@@ -7,6 +7,8 @@ on:
       - 'tools/verify-i01-lifecycle.py'
       - 'scripts/*tabari-t01*.py'
       - 'scripts/*tabari-t02*.py'
+      - 'scripts/*tabari-t11a*.py'
+      - 'data/tafsir/staging/tabari-108-t11a-*.json'
       - '.github/workflows/tafsir-108-i01-preview-preflight.yml'
       - 'data/tafsir/staging/*108*.json'
   workflow_dispatch:
@@ -22,6 +24,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          persist-credentials: false
+      - name: Read pinned post-T02 pre-T11A baseline
+        uses: actions/checkout@v4
+        with:
+          ref: cf1bccf8793c6b8c381a052cc25213bde72849f6
+          path: .t11a-baseline
           persist-credentials: false
       - name: Read pinned pre-integration baseline
         uses: actions/checkout@v4
@@ -60,7 +68,9 @@ jobs:
       - name: Verify historical T01 transition against pinned pre-T02 baseline
         run: python3 scripts/test-tabari-t01-coordinated-lifecycle.py --baseline .t01-baseline --current .t02-baseline
       - name: Verify current exact T02 transition
-        run: python3 scripts/test-tabari-t02-coordinated-lifecycle.py --baseline .t02-baseline --current .
+        run: python3 scripts/test-tabari-t02-coordinated-lifecycle.py --baseline .t02-baseline --current .t11a-baseline
+      - name: Verify exact coordinated T11A state
+        run: python3 scripts/test-tabari-t11a-coordinated-lifecycle.py --baseline .t11a-baseline --current .
       - name: Preserve every other historical I01 input
         shell: python
         run: |
