@@ -4,6 +4,8 @@ on:
     paths:
       - '.github/workflows/tafsir-108-voice-projection.yml'
       - 'scripts/*tabari-t01*.py'
+      - 'scripts/*tabari-t02*.py'
+      - 'data/tafsir/staging/tabari-108-t02-*.json'
       - 'data/tafsir/staging/tabari-108-t01-*.json'
       - 'data/tafsir/staging/ibn-kathir-108-i01-four-table-candidates-2026-10-17.json'
       - 'data/tafsir/staging/surah-108-voice-projection-2026-10-17.json'
@@ -30,6 +32,12 @@ jobs:
         with:
           ref: 5517c14dbde1656932d55a7d310b458f7c1866f7
           path: .t01-baseline
+          persist-credentials: false
+      - name: Read pinned post-T01 pre-T02 baseline
+        uses: actions/checkout@v4
+        with:
+          ref: f737063faf85198b8cf46286b8643681bba9687c
+          path: .t02-baseline
           persist-credentials: false
       - name: Validate staging projection without network or database access
         shell: python
@@ -86,9 +94,11 @@ jobs:
           assert projection["counts"]==dict(total_claims=total,projected=projected,unmapped=unmapped,rows_with_preserved_metadata=metadata,semantic_holds=holds)
           expected=(61,12,41,10)
           if is_split:
-              lifecycle=subprocess.check_output([sys.executable,"scripts/test-tabari-t01-coordinated-lifecycle.py","--baseline",".t01-baseline","--current","."],text=True)
-              assert "Current state: original_unapplied" in lifecycle or "Current state: exact_three_file_preview" in lifecycle,"Unknown T01 lifecycle"
-              expected=(64,10,41,12) if "Current state: exact_three_file_preview" in lifecycle else (63,11,41,12)
+              historical=subprocess.check_output([sys.executable,"scripts/test-tabari-t01-coordinated-lifecycle.py","--baseline",".t01-baseline","--current",".t02-baseline"],text=True)
+              assert "Current state: exact_three_file_preview" in historical,"Pinned T01 transition changed"
+              lifecycle=json.loads(subprocess.check_output([sys.executable,"scripts/test-tabari-t02-coordinated-lifecycle.py","--baseline",".t02-baseline","--current","."],text=True))
+              assert lifecycle["status"]=="PASS" and lifecycle["current_state"] in ("original_unapplied","exact_three_file_preview"),"Unknown T02 lifecycle"
+              expected=(65,9,41,12) if lifecycle["current_state"]=="exact_three_file_preview" else (64,10,41,12)
           assert (projected,unmapped,metadata,holds)==expected
           source_check,_=read("qurtubi-108-q06-bilingual-source-check-2026-10-17.json")
           assert source_check["input_assembly_blob_sha"]==asha,"Stale Q06 source checkpoint"
