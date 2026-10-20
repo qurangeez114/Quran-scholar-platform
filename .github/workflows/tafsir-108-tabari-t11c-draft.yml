@@ -1,0 +1,37 @@
+name: Validate Surah 108 Tabari T11C draft
+
+on:
+  push:
+    paths:
+      - '.github/workflows/tafsir-108-tabari-t11c-draft.yml'
+      - 'scripts/validate-tabari-t11c-draft.py'
+      - 'data/tafsir/staging/tabari-108-t11c-five-table-draft-2026-10-20.json'
+      - 'data/tafsir/staging/tabari-108-t11c-transmission-route-dossier-2026-10-20.json'
+  pull_request:
+    paths:
+      - '.github/workflows/tafsir-108-tabari-t11c-draft.yml'
+      - 'scripts/validate-tabari-t11c-draft.py'
+      - 'data/tafsir/staging/tabari-108-t11c-five-table-draft-2026-10-20.json'
+      - 'data/tafsir/staging/tabari-108-t11c-transmission-route-dossier-2026-10-20.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tafsir-108-t11c-draft-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate isolated draft and reject unsafe mutations
+        run: python scripts/validate-tabari-t11c-draft.py --root . --self-test
