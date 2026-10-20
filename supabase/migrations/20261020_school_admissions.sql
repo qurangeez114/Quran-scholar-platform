@@ -50,3 +50,30 @@ revoke all on public.qh_school_application_reviews from public,anon,authenticate
 grant all on public.qh_school_applications,public.qh_school_application_reviews to service_role;
 comment on table public.qh_school_applications is
  'Private admissions applications. A submitted or accepted application does not create an account or course enrollment.';
+
+-- Changes to admission decisions and their audit trail are atomic.
+create or replace function public.qh_review_school_application(
+  p_id uuid,p_reviewer uuid,p_status text,p_note text
+) returns uuid language plpgsql security definer set search_path to '' as $proc$
+declare record public.qh_school_applications%rowtype;
+begin
+ if not exists(select 1 from public.qh_staff_members where user_id=p_reviewer)
+ then raise exception 'Authorized administrator required'; end if;
+ if p_status not in ('submitted','under_review','waitlisted','accepted','declined')
+ then raise exception 'Invalid application status'; end if;
+ if length(coalesce(p_note,''))>2500 then raise exception 'Review note too long'; end if;
+ select * into record from public.qh_school_applications where id=p_id for update;
+ if not found then raise exception 'Application not found'; end if;
+ update public.qh_school_applications
+ set status=p_status,reviewer_note=coalesce(p_note,''),
+ reviewed_by=p_reviewer,reviewed_at=now(),updated_at=now()
+ where id=p_id;
+ insert into public.qh_school_application_reviews
+  (application_id,reviewer_id,old_status,new_status,review_note)
+ values (p_id,p_reviewer,record.status,p_status,coalesce(p_note,''));
+ return p_id;
+end $proc$;
+revoke all on function public.qh_review_school_application(uuid,uuid,text,text)
+ from public,anon,authenticated;
+grant execute on function public.qh_review_school_application(uuid,uuid,text,text)
+ to service_role;
