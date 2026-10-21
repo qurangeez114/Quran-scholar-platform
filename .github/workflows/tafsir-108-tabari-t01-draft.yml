@@ -5,6 +5,8 @@ on:
       - 'scripts/validate-tabari-t01-draft.py'
       - 'scripts/*tabari-t02*.py'
       - 'scripts/*tabari-t11a*.py'
+      - 'scripts/*tabari-t11c*.py'
+      - 'data/tafsir/staging/tabari-108-t11c-*.json'
       - 'data/tafsir/staging/tabari-108-t11a-*.json'
       - 'data/tafsir/staging/tabari-108-t02-four-table-draft-2026-10-19.json'
       - 'data/tafsir/staging/tabari-108-t02-readonly-preflight-2026-10-19.json'
@@ -23,6 +25,8 @@ on:
       - 'scripts/validate-tabari-t01-draft.py'
       - 'scripts/*tabari-t02*.py'
       - 'scripts/*tabari-t11a*.py'
+      - 'scripts/*tabari-t11c*.py'
+      - 'data/tafsir/staging/tabari-108-t11c-*.json'
       - 'data/tafsir/staging/tabari-108-t11a-*.json'
       - 'data/tafsir/staging/tabari-108-t02-four-table-draft-2026-10-19.json'
       - 'data/tafsir/staging/tabari-108-t02-readonly-preflight-2026-10-19.json'
@@ -50,6 +54,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - name: Read pinned post-T11A pre-T11C baseline
+        uses: actions/checkout@v4
+        with:
+          ref: b551d9167b53a32e0c120d9096b56dc644e7b3dd
+          path: .t11c-baseline
+          persist-credentials: false
       - name: Read pinned post-T02 pre-T11A baseline
         uses: actions/checkout@v4
         with:
@@ -72,8 +82,10 @@ jobs:
         run: python3 scripts/test-tabari-t01-coordinated-lifecycle.py --baseline .t01-baseline --current .t02-baseline
       - name: Verify current exact T02 transition and partial-change rejections
         run: python3 scripts/test-tabari-t02-coordinated-lifecycle.py --baseline .t02-baseline --current .t11a-baseline
-      - name: Verify exact coordinated T11A state
-        run: python3 scripts/test-tabari-t11a-coordinated-lifecycle.py --baseline .t11a-baseline --current .
+      - name: Verify current T11C coordinated lifecycle
+        run: python3 scripts/test-tabari-t11c-coordinated-lifecycle.py --baseline .t11c-baseline --current .
+      - name: Verify historical coordinated T11A state
+        run: python3 scripts/test-tabari-t11a-coordinated-lifecycle.py --baseline .t11a-baseline --current .t11c-baseline
       - name: Check T01 draft and reject unsafe mutations
         run: python3 scripts/validate-tabari-t01-draft.py --root . --self-test
       - name: Check pinned assembly overlay without applying it
