@@ -378,7 +378,7 @@
     function renderAssignments() {
       const container = document.getElementById('assignmentsList');
 
-      const ungraded = assignments.filter(a => !a.submission.grade);
+      const ungraded = assignments.filter(a => a.submission.grade == null);
 
       if (ungraded.length === 0) {
         container.innerHTML = '<div class="empty-state">No ungraded assignments</div>';
@@ -388,7 +388,7 @@
       container.innerHTML = ungraded.map(a => `
         <div class="submission-item ${currentSubmission?.id === a.submission.id ? 'selected' : ''}"
              onclick="selectAssignment('${a.id}', '${a.submission.id}')">
-          <div class="submission-title">${a.title}</div>
+          <div class="submission-title">${escapeText(a.qh_lessons?.title||"Research assignment")}</div>
           <div class="submission-meta">
             Student: ${a.submission.qh_profiles?.first_name || 'Unknown'} ${a.submission.qh_profiles?.last_name || ''} |
             Submitted: ${new Date(a.submission.submitted_at).toLocaleDateString()}
@@ -405,7 +405,8 @@
       currentAssignment = item;
       currentSubmission = item.submission;
 
-      document.getElementById('assignmentTitle').textContent = item.title;
+      document.getElementById('assignmentTitle').textContent = item.qh_lessons?.title||'Research assignment';
+      document.getElementById('researchRubric').style.display=item.qh_lessons?.title==='Capstone research paper and instructor assessment'?'block':'none';
 
       // Build submission display with text content and file link if available
       let submissionHTML = `<div style="background: #f9f9f9; padding: 1rem; border-radius: 6px; margin-bottom: 1rem;">`;
