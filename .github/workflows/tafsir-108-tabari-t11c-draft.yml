@@ -5,12 +5,16 @@ on:
     paths:
       - '.github/workflows/tafsir-108-tabari-t11c-draft.yml'
       - 'scripts/validate-tabari-t11c-draft.py'
+      - 'scripts/preview-tabari-t11c-coordinated.py'
+      - 'scripts/test-tabari-t11c-coordinated-lifecycle.py'
       - 'data/tafsir/staging/tabari-108-t11c-five-table-draft-2026-10-20.json'
       - 'data/tafsir/staging/tabari-108-t11c-transmission-route-dossier-2026-10-20.json'
   pull_request:
     paths:
       - '.github/workflows/tafsir-108-tabari-t11c-draft.yml'
       - 'scripts/validate-tabari-t11c-draft.py'
+      - 'scripts/preview-tabari-t11c-coordinated.py'
+      - 'scripts/test-tabari-t11c-coordinated-lifecycle.py'
       - 'data/tafsir/staging/tabari-108-t11c-five-table-draft-2026-10-20.json'
       - 'data/tafsir/staging/tabari-108-t11c-transmission-route-dossier-2026-10-20.json'
   workflow_dispatch:
@@ -35,3 +39,17 @@ jobs:
           python-version: '3.12'
       - name: Validate isolated draft and reject unsafe mutations
         run: python scripts/validate-tabari-t11c-draft.py --root . --self-test
+      - name: Read pinned post-T11A baseline
+        uses: actions/checkout@v4
+        with:
+          ref: b551d9167b53a32e0c120d9096b56dc644e7b3dd
+          path: .t11c-baseline
+          persist-credentials: false
+      - name: Verify deterministic coordinated preview
+        run: |
+          PYTHONHASHSEED=1 python scripts/preview-tabari-t11c-coordinated.py --root .t11c-baseline > /tmp/t11c-1.json
+          PYTHONHASHSEED=77 python scripts/preview-tabari-t11c-coordinated.py --root .t11c-baseline > /tmp/t11c-77.json
+          diff /tmp/t11c-1.json /tmp/t11c-77.json
+          cat /tmp/t11c-1.json
+      - name: Reject partial or divergent staging transitions
+        run: python scripts/test-tabari-t11c-coordinated-lifecycle.py --baseline .t11c-baseline --current .
