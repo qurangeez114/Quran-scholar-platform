@@ -8,6 +8,8 @@ on:
       - 'scripts/*tabari-t01*.py'
       - 'scripts/*tabari-t02*.py'
       - 'scripts/*tabari-t11a*.py'
+      - 'scripts/*tabari-t11c*.py'
+      - 'data/tafsir/staging/tabari-108-t11c-*.json'
       - 'data/tafsir/staging/tabari-108-t11a-*.json'
       - '.github/workflows/tafsir-108-i01-preview-preflight.yml'
       - 'data/tafsir/staging/*108*.json'
@@ -24,6 +26,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          persist-credentials: false
+      - name: Read pinned post-T11A pre-T11C baseline
+        uses: actions/checkout@v4
+        with:
+          ref: b551d9167b53a32e0c120d9096b56dc644e7b3dd
+          path: .t11c-baseline
           persist-credentials: false
       - name: Read pinned post-T02 pre-T11A baseline
         uses: actions/checkout@v4
@@ -69,8 +77,10 @@ jobs:
         run: python3 scripts/test-tabari-t01-coordinated-lifecycle.py --baseline .t01-baseline --current .t02-baseline
       - name: Verify current exact T02 transition
         run: python3 scripts/test-tabari-t02-coordinated-lifecycle.py --baseline .t02-baseline --current .t11a-baseline
-      - name: Verify exact coordinated T11A state
-        run: python3 scripts/test-tabari-t11a-coordinated-lifecycle.py --baseline .t11a-baseline --current .
+      - name: Verify current T11C coordinated lifecycle
+        run: python3 scripts/test-tabari-t11c-coordinated-lifecycle.py --baseline .t11c-baseline --current .
+      - name: Verify historical coordinated T11A state
+        run: python3 scripts/test-tabari-t11a-coordinated-lifecycle.py --baseline .t11a-baseline --current .t11c-baseline
       - name: Preserve every other historical I01 input
         shell: python
         run: |
