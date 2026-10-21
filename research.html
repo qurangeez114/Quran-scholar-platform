@@ -153,6 +153,7 @@ section.src h2{font-size:25px;font-weight:600;margin-top:34px}
   <button class="bnav-btn" onclick="location.href='contradiction.html'"><span class="bni">⚡</span><span>Tensions</span></button>
   <button class="bnav-btn" onclick="location.href='narrations.html'"><span class="bni">🧵</span><span>Narrations</span></button>
 </nav>
+<script src="/research-actions.js"></script>
 <script>
 const SB='https://ylosytbxpzxzwfzjpaej.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
@@ -281,12 +282,24 @@ function snip(text,vars){
 }
 function esc2(t){return (t||'').toString();}
 function fullText(a){ const f=a.nextElementSibling; f.hidden=!f.hidden; a.textContent=f.hidden?'Read in full \u2193':'Show less \u2191'; return false; }
+function raId(key,r){
+  if(key==='quran') return 'q:'+r.sura+':'+r.aya;
+  if(key==='hadith'&&r.id) return 'h:'+r.id;
+  const base=[r.id,r.title,r.sura,r.aya,(r.text||'').slice(0,60)].join('|');
+  let h=0; for(let i=0;i<base.length;i++) h=(h*31+base.charCodeAt(i))|0;
+  return key+':'+(h>>>0).toString(36);
+}
 function card(key,r,vars){
   const cfg=SRC[key];
   const ref=cfg.ref(r);
   const ttl=r.title?`<div class="ttl">${highlight(r.title,vars)}</div>`:'';
   const href=cfg.link(r);
-  return `<div class="card"><div class="meta">${esc(ref)}</div>${ttl}${r.arabic?`<div class="txt" dir="rtl" lang="ar" style="font-size:1.25em;line-height:1.9">${highlight(snip(r.arabic,vars),vars)}</div>`:''}<div class="txt">${highlight(snip(r.text,vars),vars)}</div><div class="more">${['propositions','tensions','topics'].includes(key)?`<a href="#" onclick="return fullText(this)">Read in full \u2193</a><div class="full" hidden>${highlight(esc2(r.text),vars)}</div>`:`<a href="${href}">Open \u2192</a>`}</div></div>`;
+  let tools='', da='';
+  if(window.ResearchActions){
+    const id=ResearchActions.register({id:raId(key,r),type:key,ref:(LABEL[key]||key)+(ref?' \u00b7 '+ref:''),title:r.title||'',text:r.text||'',arabic:r.arabic||'',url:href,sura:r.sura,aya:r.aya});
+    da=` data-ra="${esc(id)}"`; tools=ResearchActions.bar(id);
+  }
+  return `<div class="card"${da}><div class="meta">${esc(ref)}</div>${ttl}${r.arabic?`<div class="txt" dir="rtl" lang="ar" style="font-size:1.25em;line-height:1.9">${highlight(snip(r.arabic,vars),vars)}</div>`:''}<div class="txt">${highlight(snip(r.text,vars),vars)}</div><div class="more">${['propositions','tensions','topics'].includes(key)?`<a href="#" onclick="return fullText(this)">Read in full \u2193</a><div class="full" hidden>${highlight(esc2(r.text),vars)}</div>`:`<a href="${href}">Open \u2192</a>`}</div>${tools}</div>`;
 }
 
 function cut(t){ t=t||''; if(t.length<238) return t; const i=t.lastIndexOf(' '); return (i>150?t.slice(0,i):t)+'\u2026'; }
@@ -467,10 +480,66 @@ async function showHadith(id,hq){
 
 function jump(k){ const e=$('src-'+k); if(e) e.scrollIntoView({behavior:'smooth',block:'start'}); }
 
+/* ---- Query handling ----
+   Sentences and questions are reduced to their content words before they
+   reach the database: "What does the Quran say about treating parents?"
+   becomes "treating parents". Quoted phrases are kept as typed. */
+const STOP=new Set(('a an the and or but nor of in on at to for from by with into onto about over under than then so as is are was were be been being am do does did doing done have has had having '+
+ 'what whats which who whom whose when where why how whether if can could should would will shall may might must '+
+ 'i me my we us our you your he him his she her it its they them their this that these those there here '+
+ 'say says said tell tells told mention mentions mentioned teach teaches taught explain explains mean means meaning '+
+ 'quran qur\'an koran quranic islam islamic muslim muslims verse verses ayah ayat hadith hadiths please any some all '+
+ 'regarding concerning according something anything thing things also just really very much many more most').split(/\s+/));
+function cleanQuery(q){
+  const phrases=[]; q=q.replace(/"([^"]+)"/g,(m,p)=>{phrases.push('"'+p.trim()+'"');return ' ';});
+  const raw=q.replace(/[?!.,;:()]+/g,' ').split(/\s+/).filter(Boolean);
+  const kept=raw.filter(w=>/[\u0600-\u06FF]/.test(w)||!STOP.has(w.toLowerCase().replace(/['\u2019]s$/,'')));
+  const out=[...phrases,...kept].join(' ').trim();
+  return out||raw.join(' ');
+}
+function terms(q){ return q.replace(/"/g,'').split(/\s+/).filter(w=>w.length>1).map(w=>w.toLowerCase()); }
+// Server variants: drop truncated stems such as "alla" for "Allah" so they are
+// not highlighted or shown as "Also searched as".
+const PROTECT=['allah','allahu','rasulullah','insha','inshallah','mashallah','subhanallah','alhamdulillah','bismillah'];
+function goodVars(vars){ return vars.filter(v=>{const l=(v||'').toLowerCase(); return !PROTECT.some(p=>p!==l&&p.startsWith(l)&&l.length>=3&&l.length<p.length);}); }
+// Rank rows inside a source by how many of the search words they contain.
+function rankRows(rows,ts){
+  if(ts.length<2) return rows;
+  const sc=r=>{const t=((r.title||'')+' '+(r.text||'')+' '+(r.arabic||'')).toLowerCase(); return ts.reduce((a,w)=>a+(t.includes(w.replace(/(ing|ed|es|s)$/,''))?1:0),0);};
+  return rows.map((r,i)=>[r,sc(r),i]).sort((x,y)=>y[1]-x[1]||x[2]-y[2]).map(x=>x[0]);
+}
+// Did you mean: uses the suggest_terms RPC (migrations/20261020_search_fuzzy.sql)
+// when it exists; silently does nothing before that migration is applied.
+async function didYouMean(q){
+  try{ const r=await rpc('suggest_terms',{q:q,lim:3}); return (r||[]).map(x=>x.suggestion||x).filter(s=>s&&s.toLowerCase()!==q.toLowerCase()); }catch(e){ return []; }
+}
+function srcSection(key,r,vars,q){
+  let h=`<h2>${esc(LABEL[key])} <small>${r.failed?'timed out':r.count?(r.capped?'more than 1,000 matches':n(r.count)+' match'+(r.count==1?'':'es')):'no matches'}</small></h2><p class="what">${esc(SRC[key].what)}</p>${r.relaxed?'<p class="what"><i>No passage has every word you typed, so these are the closest matches: they contain most of your words.</i></p>':''}`;
+  if(r.failed) h+=`<div class="none">This source took too long to answer for the whole phrase. <a href="#" onclick="retrySrc('${key}');return false">Try again with the main word only</a></div>`;
+  else if(r.count){
+    h+=rankRows(r.rows||[],terms(q)).map(x=>card(key,x,vars)).join('');
+    if(r.count>(r.rows||[]).length) h+=`<div class="more"><a href="research.html?q=${encodeURIComponent(q)}${['hadith','tafsir'].includes(key)?'&source='+key:''}">See all ${r.capped?'1,000+':n(r.count)} in the full search →</a></div>`;
+  } else h+='<div class="none">Nothing in this source for this search.</div>';
+  return h;
+}
+let SEQ=0, LASTQ='';
+async function retrySrc(key){
+  const el=$('src-'+key); if(!el) return;
+  const ts=terms(LASTQ).sort((a,b)=>b.length-a.length); const q1=ts[0]||LASTQ;
+  el.innerHTML=`<h2>${esc(LABEL[key])} <small><span class="spin"></span>searching</small></h2>`;
+  let r; try{ r=await rpc('site_search_src',{src:key,q:q1,lim:6}); }catch(e){ r={count:0,rows:[],failed:true}; }
+  const vars=goodVars([...new Set([...(r.variants||[]),...terms(LASTQ)])]);
+  el.innerHTML=srcSection(key,r,vars,LASTQ)+(r.failed?'':`<p class="what"><i>Searched for \u201c${esc(q1)}\u201d only.</i></p>`);
+  if(window.ResearchActions) ResearchActions.restore(el);
+}
+
 async function search(q){
   q=q.trim();
   if(!q){ $('out').innerHTML='<div class="empty">Type a word or question in the box above, then press Search.</div>'; $('q').focus(); return; }
+  if(q===CUR && SEQ && document.querySelector('#out .spin')) return; // same search already running
   CUR=q;
+  const my=++SEQ;
+  const sq=cleanQuery(q); LASTQ=sq;
   document.querySelectorAll('#scope,.areas').forEach(e=>e.style.display='none');
   setTimeout(()=>$('out').scrollIntoView({behavior:'smooth',block:'start'}),50);
   const SCT=SEL.slice();
@@ -478,29 +547,54 @@ async function search(q){
   const srcSel=SCT.filter(x=>x.startsWith('src:')).map(x=>x.slice(4));
   const bookSel=SCT.filter(x=>!x.startsWith('src:'));
   const only=SCT.length?srcSel:null;
-  $('out').innerHTML='<div class="empty"><span class="spin"></span>Searching every source…</div>';
-  try{
-    const res=await Promise.all((only?only:ORDER).map(k=>rpc('site_search_src',{src:k,q:q,lim:6}).catch(()=>({key:k,count:0,rows:[],variants:[q],failed:true}))));
-    const vars=[...new Set(res.flatMap(r=>r.variants||[q]))];
-    let dg=null;
-    if(only) dg={};
-    else try{
-      const [h,m,t]=await Promise.all([rpc('digest_hadith',{q}),rpc('digest_madhhab',{q}),rpc('digest_tafsir',{q})]);
-      dg={hadith:h,madhhab:m,tafsir:t};
-    }catch(e){}
-    let cres=[]; try{cres=await rpc('contradiction_search',{q:q,lim:6});}catch(e){}
-    let sb=[]; if(!only){ try{sb=await rpc('source_books',{q:q});}catch(e){} }
-    if(only&&!only.length){ $('out').innerHTML='<div id="pickerslot"></div>'; } else render(res,vars,q,dg);
-    if(bookSel.length){ const sec=await booksSection(bookSel,q); const slot=$('pickerslot'); if(slot) slot.replaceWith(sec); else $('out').prepend(sec); }
-    else insertPicker(sb,q);
-    if(cres.length&&(!only||only.length)){
-      const el=document.createElement('section'); el.className='src'; el.id='src-contra';
-      el.innerHTML='<h2>Contradictions and tensions <small>'+cres.length+' related</small></h2><p class="what">Entries from the contradiction catalogue that touch this subject, with evidence. <a href="#" onclick="showHub();return false">Browse all categories →</a></p>'+cres.map(evCard).join('');
-      const first=document.querySelector('#out section.src'); if(first) first.parentNode.insertBefore(el,first);
-    }
-  }catch(e){
-    $('out').innerHTML='<div class="empty">The search could not be completed. Please try again.</div>';
+  const keys=only?only:ORDER;
+  // Progressive rendering: draw every section at once with a spinner and fill
+  // each one in as its own request returns, instead of waiting for the slowest.
+  let h=sq!==q?`<div class="variants">Searching for the key words: <span>${esc(sq)}</span></div>`:'';
+  h+='<div class="tabs">'+keys.map(k=>`<button class="tab" id="tab-${k}" onclick="jump('${k}')">${esc(LABEL[k])} <b>\u2026</b></button>`).join('')+'</div><div id="dym"></div><div id="pickerslot"></div><div id="ovslot"></div>';
+  h+=keys.map(k=>`<section class="src" id="src-${k}"><h2>${esc(LABEL[k])} <small><span class="spin"></span>searching</small></h2></section>`).join('');
+  h+=`<div class="note">Results come straight from the site\u2019s own database. Some sources, especially hadith linked to the later suras, were assembled automatically and have not yet been reviewed verse by verse; each source above says what it contains so you can judge how much weight to give it.</div>`;
+  if(only&&!only.length) h='<div id="pickerslot"></div>';
+  $('out').innerHTML=h;
+  const allVars=new Set(terms(sq));
+  const results={};
+  const fill=(k,r)=>{
+    if(my!==SEQ) return;
+    results[k]=r; (r.variants||[]).forEach(v=>allVars.add(v));
+    const vars=goodVars([...allVars]);
+    const el=$('src-'+k); if(el){ el.innerHTML=srcSection(k,r,vars,sq); if(window.ResearchActions) ResearchActions.restore(el); }
+    const t=$('tab-'+k); if(t){ t.classList.toggle('off',!r.count); t.querySelector('b').textContent=r.failed?'!':r.capped?'1000+':n(r.count||0); }
+    // A multi-word query that times out on a big source (hadith) is retried
+    // automatically with its most specific word, instead of showing "0".
+    if(r.failed && terms(sq).length>1) retrySrc(k).then(()=>{ if(my!==SEQ) return; const t2=$('tab-'+k), sec=$('src-'+k); if(t2&&sec){ const m=sec.querySelector('h2 small'); t2.querySelector('b').textContent=m&&/more than/.test(m.textContent)?'1000+':m&&/^[\d,]+/.test(m.textContent)?m.textContent.match(/^[\d,]+/)[0]:(sec.querySelector('.card')?'\u2713':'0'); } });
+  };
+  const srcP=Promise.all(keys.map(k=>rpc('site_search_src',{src:k,q:sq,lim:6}).catch(()=>({key:k,count:0,rows:[],variants:[sq],failed:true})).then(r=>{fill(k,r);return r;})));
+  // Side panels load in parallel with the sources, each on its own.
+  if(!only){
+    Promise.all([rpc('digest_hadith',{q:sq}),rpc('digest_madhhab',{q:sq}),rpc('digest_tafsir',{q:sq})]).then(async([hd,m,t])=>{
+      const res=await srcP; if(my!==SEQ) return;
+      const s=$('ovslot'); if(s) s.outerHTML=overview({hadith:hd,madhhab:m,tafsir:t},res,sq)||'';
+    }).catch(()=>{});
+    rpc('source_books',{q:sq}).then(sb=>{ if(my===SEQ && !bookSel.length) insertPicker(sb,sq); }).catch(()=>{});
   }
+  if(bookSel.length){ booksSection(bookSel,sq).then(sec=>{ if(my!==SEQ) return; const slot=$('pickerslot'); if(slot) slot.replaceWith(sec); else $('out').prepend(sec); }).catch(()=>{}); }
+  rpc('contradiction_search',{q:sq,lim:6}).then(cres=>{
+    if(my!==SEQ||!cres||!cres.length||(only&&!only.length)) return;
+    const el=document.createElement('section'); el.className='src'; el.id='src-contra';
+    el.innerHTML='<h2>Contradictions and tensions <small>'+cres.length+' related</small></h2><p class="what">Entries from the contradiction catalogue that touch this subject, with evidence. <a href="#" onclick="showHub();return false">Browse all categories →</a></p>'+cres.map(evCard).join('');
+    const first=document.querySelector('#out section.src'); if(first) first.parentNode.insertBefore(el,first);
+  }).catch(()=>{});
+  const res=await srcP;
+  if(my!==SEQ) return;
+  const total=res.reduce((a,r)=>a+(r.count||0),0);
+  const uniq=goodVars([...allVars]).filter(v=>!terms(sq).includes(v.toLowerCase()));
+  let top=uniq.length?`<div class="variants">Also searched as: ${uniq.map(v=>`<span>${esc(v)}</span>`).join(' ')}</div>`:'';
+  if(!total){
+    const sug=await didYouMean(sq); if(my!==SEQ) return;
+    top+=sug.length?`<div class="empty">Did you mean ${sug.map(s=>`<a href="#" onclick="$('q').value=this.textContent;search(this.textContent);return false">${esc(s)}</a>`).join(', ')}?</div>`:'';
+    top+=`<div class="empty">Nothing found for \u201c${esc(q)}\u201d in any source.<br>Try another spelling, an Arabic form, or a simpler word. If the subject is real and missing, that is a gap in the site\u2019s coverage, not a sign that nothing was written about it.</div>`;
+  }
+  const d=$('dym'); if(d) d.innerHTML=top;
 }
 function go(e){ e.preventDefault(); const v=$('q').value.trim(); if(/^(contradictions?|tensions?|inconsistenc(y|ies)|contradictions? in the (qur.?an|quran))$/i.test(v)){showHub();return;} search(v); }
 
@@ -511,5 +605,6 @@ const hid=new URLSearchParams(location.search).get('hadith');
 loadWhere().then(()=>{ if(hid&&!p){ showHadith(hid,new URLSearchParams(location.search).get('hq')||''); } else if(p){ $('q').value=p; search(p); } });
 </script>
 <script src="/quran-verse-audio.js" defer></script>
+<script src="/presentation-builder.js" defer></script>
 </body>
 </html>
