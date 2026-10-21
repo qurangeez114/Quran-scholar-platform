@@ -3,12 +3,16 @@ on:
   push:
     paths:
       - 'scripts/validate-ibn-kathir-i02-draft.py'
+      - 'scripts/preview-ibn-kathir-i02-coordinated.py'
+      - 'scripts/test-ibn-kathir-i02-coordinated-lifecycle.py'
       - 'data/tafsir/staging/ibn-kathir-108-i02-five-table-draft-2026-10-21.json'
       - 'data/tafsir/staging/ibn-kathir-108-i02-r01-evidence-voice-dossier-2026-10-21.json'
       - '.github/workflows/tafsir-108-ibn-kathir-i02-draft.yml'
   pull_request:
     paths:
       - 'scripts/validate-ibn-kathir-i02-draft.py'
+      - 'scripts/preview-ibn-kathir-i02-coordinated.py'
+      - 'scripts/test-ibn-kathir-i02-coordinated-lifecycle.py'
       - 'data/tafsir/staging/ibn-kathir-108-i02-five-table-draft-2026-10-21.json'
       - 'data/tafsir/staging/ibn-kathir-108-i02-r01-evidence-voice-dossier-2026-10-21.json'
       - '.github/workflows/tafsir-108-ibn-kathir-i02-draft.yml'
@@ -29,3 +33,17 @@ jobs:
           python-version: '3.12'
       - name: Validate isolated draft and reject unsafe mutations
         run: python scripts/validate-ibn-kathir-i02-draft.py --root . --self-test
+      - name: Read pinned post-T11C baseline
+        uses: actions/checkout@v4
+        with:
+          ref: 95afa2011f8c777206ff8ddf2858565c09a8ebfd
+          path: .i02-baseline
+          persist-credentials: false
+      - name: Verify deterministic non-applying preview
+        run: |
+          PYTHONHASHSEED=1 python scripts/preview-ibn-kathir-i02-coordinated.py --root .i02-baseline > /tmp/i02-1.json
+          PYTHONHASHSEED=77 python scripts/preview-ibn-kathir-i02-coordinated.py --root .i02-baseline > /tmp/i02-77.json
+          diff /tmp/i02-1.json /tmp/i02-77.json
+          cat /tmp/i02-1.json
+      - name: Reject partial or divergent transitions
+        run: python scripts/test-ibn-kathir-i02-coordinated-lifecycle.py --baseline .i02-baseline --current .
