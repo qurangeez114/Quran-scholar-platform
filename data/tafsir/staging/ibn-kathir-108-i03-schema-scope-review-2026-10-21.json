@@ -1,0 +1,78 @@
+{
+  "schema_version": "quranhikma-i03-schema-scope-review-v1",
+  "surah": 108,
+  "claim_id": "108-I03",
+  "status": "schema_review_complete_clause_association_design_pending",
+  "at": "2026-10-21T13:05:00-07:00",
+  "baseline_commit": "56bbe90418c47e798e994d0d99e7c0756da791c3",
+  "read_only_schema_observation": {
+    "method": "Live SELECT on pg_constraint and information_schema.columns; no data writes.",
+    "voice_table": "proposition_voice_chain",
+    "columns": [
+      "id",
+      "proposition_id",
+      "reporting_work_id",
+      "originating_voice_type",
+      "originating_voice_name",
+      "quoted_collection",
+      "created_at"
+    ],
+    "anonymous_voice_type": "unattributed_group",
+    "anonymous_name_must_be_null": true,
+    "available_evidence_types": [
+      "grouped_named_attribution",
+      "single_named_attribution",
+      "single_hadith_citation",
+      "quran_cross_reference",
+      "grammatical_argument",
+      "lexical_argument",
+      "unattributed_assertion"
+    ],
+    "independence_values": [
+      "unknown",
+      "not_independent",
+      "possibly_independent",
+      "independence_supported"
+    ]
+  },
+  "source_dossier_blob": "832b3ef893ecdcab4ac01a8de11a8adb0765fbb8",
+  "findings": [
+    {
+      "issue": "Two anonymous group voices would project to identical physical rows for one compound proposition.",
+      "reason": "No physical group-label, clause-key or evidence-unit reference column exists on proposition_voice_chain.",
+      "consequence": "Distinct staging keys alone cannot preserve reader-versus-jurist clause association after projection."
+    },
+    {
+      "issue": "grouped_named_attribution and single_named_attribution would overstate named-source coverage.",
+      "reason": "No individual reader or jurist is named in this paragraph.",
+      "consequence": "Do not substitute invented authority names or put group labels into originating_voice_name, which must be NULL for unattributed_group."
+    },
+    {
+      "issue": "Existing evidence categories do not directly label anonymous reported inference.",
+      "consequence": "If unattributed_assertion is selected later, retain explicit reported-group and inferential scope in summaries/links, and document the category limitation."
+    }
+  ],
+  "design_options": [
+    {
+      "option": "Two atomic child propositions under historical I03 claim",
+      "benefit": "Each proposition gets one anonymous-group voice and its own exact clause evidence, preserving the relationship through proposition_id.",
+      "requirements": "Review proposition claim-type catalog and draft two-proposition staging shape; coordinate consumer assumptions and keep historical claim count separate from physical proposition count."
+    },
+    {
+      "option": "One compound proposition plus staging-only clause association",
+      "limitation": "Current physical voice schema would lose the distinction; cannot call projection lossless without a verified durable association strategy."
+    }
+  ],
+  "decision": "Do not produce a falsely lossless one-proposition/two-identical-voice payload. Next draft should evaluate two scoped child propositions while preserving I03 historical claim identity.",
+  "counts_unchanged": {
+    "claims": 74,
+    "mapped": 68,
+    "unmapped": 6,
+    "semantic_holds": 15
+  },
+  "database_written": false,
+  "assembly_changed": false,
+  "publication_ready": false,
+  "chapter_complete": false,
+  "next_step": "Read current proposition claim-type catalog and stage a two-child-proposition I03 candidate, with one anonymous group voice per child, exact clause hashes and English absence limits. No schema migration implied."
+}
