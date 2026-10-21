@@ -265,8 +265,17 @@
             </div>
 
             <form id="gradeAssignmentForm" style="margin-top: 1rem;">
+              <fieldset id="researchRubric" style="border:1px solid #cadbd6;padding:12px;border-radius:8px">
+                <legend>Historical research rubric (100 points)</legend>
+                <p style="font-size:.9rem">Score each criterion; the total fills the grade field. Apply only to the Muhammad Research capstones.</p>
+                <label>Source accuracy (0–20)<input type="number" data-rubric="Sources" min="0" max="20" value="0"></label>
+                <label>Historical criticism (0–25)<input type="number" data-rubric="Historical criticism" min="0" max="25" value="0"></label>
+                <label>Competing explanations (0–20)<input type="number" data-rubric="Competing explanations" min="0" max="20" value="0"></label>
+                <label>Argumentation (0–20)<input type="number" data-rubric="Argumentation" min="0" max="20" value="0"></label>
+                <label>Conclusion and uncertainty (0–15)<input type="number" data-rubric="Conclusion and uncertainty" min="0" max="15" value="0"></label>
+              </fieldset>
               <div class="form-group">
-                <label>Grade (0-100)</label>
+                <label>Grade (0–100)</label>
                 <input type="number" id="assignmentGrade" min="0" max="100" required>
               </div>
 
@@ -431,13 +440,28 @@
       renderAssignments();
     };
 
-    document.getElementById('gradeAssignmentForm').addEventListener('submit', async (e) => {
+    document.querySelectorAll('[data-rubric]').forEach(input=>input.addEventListener('input',()=>{
+      document.getElementById('assignmentGrade').value=[...document.querySelectorAll('[data-rubric]')].reduce((sum,el)=>sum+(Number(el.value)||0),0);
+    }));
+        document.getElementById('gradeAssignmentForm').addEventListener('submit', async (e) => {
       e.preventDefault();
 
       if (!currentSubmission) return;
 
-      const grade = parseInt(document.getElementById('assignmentGrade').value);
-      const feedback = document.getElementById('assignmentFeedback').value;
+      const grade = parseInt(document.getElementById('assignmentGrade').value,10);
+      if(!Number.isInteger(grade)||grade<0||grade>100){showAlert('Grade must be 0–100','error');return;}
+      const rubricInputs=[...document.querySelectorAll('[data-rubric]')];
+      const isResearchCapstone=currentAssignment?.qh_lessons?.title==='Capstone research paper and instructor assessment';
+      let feedback=document.getElementById('assignmentFeedback').value;
+      if(isResearchCapstone){
+        const maxes=[20,25,20,20,15];
+        const values=rubricInputs.map((input,i)=>Number(input.value));
+        if(values.some((v,i)=>!Number.isInteger(v)||v<0||v>maxes[i])){showAlert('Check each rubric score','error');return;}
+        const total=values.reduce((a,b)=>a+b,0);
+        if(total!==grade){showAlert('Rubric total does not match final grade','error');return;}
+        if(!feedback.trim()){showAlert('Add written evidence-based feedback','error');return;}
+        feedback='Rubric: '+rubricInputs.map((input,i)=>input.dataset.rubric+': '+values[i]+'/'+maxes[i]).join('; ')+'.\n\n'+feedback;
+      }
 
       try {
         const { error } = await supabase
