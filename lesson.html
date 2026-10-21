@@ -618,8 +618,7 @@
       } else if (currentLesson.lesson_type === 'video') {
         content.replaceChildren();
         const description = document.createElement('p');
-        description.textContent = currentLesson.content || 'Watch the video, then continue to the next lesson.';
-        content.append(description);
+        renderSafeLessonText(content,currentLesson.content || 'Watch the video, then continue to the next lesson.');
         try {
           const url = new URL(currentLesson.video_url);
           if (!['https:', 'http:'].includes(url.protocol)) throw Error('Invalid video URL');
@@ -629,7 +628,12 @@
           if (host === 'youtu.be') videoId = url.pathname.slice(1);
           if (/^[a-zA-Z0-9_-]{11}$/.test(videoId)) {
             const iframe = document.createElement('iframe');
-            iframe.src = 'https://www.youtube-nocookie.com/embed/' + videoId + '?enablejsapi=1&origin=' + encodeURIComponent(location.origin);
+            const start=Number(url.searchParams.get('start')||0);
+            const end=Number(url.searchParams.get('end')||0);
+            const playback=new URLSearchParams({enablejsapi:'1',origin:location.origin});
+            if(Number.isInteger(start)&&start>0)playback.set('start',String(start));
+            if(Number.isInteger(end)&&end>start)playback.set('end',String(end));
+            iframe.src='https://www.youtube-nocookie.com/embed/'+videoId+'?'+playback.toString();
             iframe.id='lessonVideoPlayer';
             iframe.title = currentLesson.title;
             iframe.style.cssText = 'width:100%;aspect-ratio:16/9;border:0;border-radius:8px';
