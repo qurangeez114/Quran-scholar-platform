@@ -842,6 +842,28 @@
 
         currentAssignment = data;
         document.getElementById('assignmentForm').style.display = 'block';
+        if(currentUser&&!preview){
+          const {data:previous,error:previousError}=await supabase
+            .from('qh_assignment_submissions')
+            .select('id,content,grade,feedback,submitted_at,graded_at')
+            .eq('assignment_id',currentAssignment.id)
+            .eq('user_id',currentUser.id)
+            .order('submitted_at',{ascending:false}).limit(1);
+          if(previousError)throw previousError;
+          const saved=previous?.[0];
+          if(saved){
+            const panel=document.getElementById('assignmentResult');
+            panel.replaceChildren();
+            const heading=document.createElement('h3');
+            heading.textContent=saved.grade===null?'Paper submitted — awaiting instructor review':'Instructor grade: '+saved.grade+'/100';
+            const date=document.createElement('p');date.textContent='Submitted: '+new Date(saved.submitted_at).toLocaleDateString();
+            const feedback=document.createElement('p');
+            feedback.style.whiteSpace='pre-wrap';
+            feedback.textContent=saved.feedback||'Instructor feedback is not available yet.';
+            panel.append(heading,date,feedback);
+            document.getElementById('assignmentContent').value=saved.content||'';
+          }
+        }
       } catch (error) {
         console.error('Error loading assignment:', error);
       }
