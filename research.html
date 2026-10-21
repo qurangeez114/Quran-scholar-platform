@@ -492,7 +492,8 @@ const STOP=new Set(('a an the and or but nor of in on at to for from by with int
  'regarding concerning according something anything thing things also just really very much many more most').split(/\s+/));
 function cleanQuery(q){
   const phrases=[]; q=q.replace(/"([^"]+)"/g,(m,p)=>{phrases.push('"'+p.trim()+'"');return ' ';});
-  const raw=q.replace(/[?!.,;:()]+/g,' ').split(/\s+/).filter(Boolean);
+  if(/^\s*\d{1,3}\s*[:.]\s*\d{1,3}(\s*-\s*\d{1,3})?\s*$/.test(q)) return q.replace(/\s+/g,''); // verse reference such as 2:255
+  const raw=q.replace(/(\d)\s*:\s*(\d)/g,'$1\u0000$2').replace(/[?!.,;:()]+/g,' ').replace(/\u0000/g,':').split(/\s+/).filter(Boolean);
   const kept=raw.filter(w=>/[\u0600-\u06FF]/.test(w)||!STOP.has(w.toLowerCase().replace(/['\u2019]s$/,'')));
   const out=[...phrases,...kept].join(' ').trim();
   return out||raw.join(' ');
@@ -587,7 +588,7 @@ async function search(q){
   const res=await srcP;
   if(my!==SEQ) return;
   const total=res.reduce((a,r)=>a+(r.count||0),0);
-  const uniq=goodVars([...allVars]).filter(v=>!terms(sq).includes(v.toLowerCase()));
+  const uniq=goodVars([...allVars]).filter(v=>!terms(sq).includes(v.toLowerCase())&&v.toLowerCase()!==sq.toLowerCase());
   let top=uniq.length?`<div class="variants">Also searched as: ${uniq.map(v=>`<span>${esc(v)}</span>`).join(' ')}</div>`:'';
   if(!total){
     const sug=await didYouMean(sq); if(my!==SEQ) return;
