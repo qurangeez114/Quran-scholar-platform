@@ -93,7 +93,7 @@
     var sb = window.supabase.createClient(SB_URL, SB_ANON);
     var { data } = await sb.auth.getSession();
     if (!data.session) return;
-    chip('qh-my-pages', 'My pages').onclick = function () { location.href = '/my-pages.html'; };
+    chip('qh-my-pages', 'My saved pages').onclick = function () { location.href = '/my-pages.html'; };
     var basket = localStorage.getItem('presentationBasket') || localStorage.getItem('savedPresentations');
     if (basket) {
       chip('qh-save-presentation', 'Save presentation').onclick = function () {
