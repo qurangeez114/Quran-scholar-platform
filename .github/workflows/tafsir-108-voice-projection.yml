@@ -6,6 +6,8 @@ on:
       - 'scripts/*tabari-t01*.py'
       - 'scripts/*tabari-t02*.py'
       - 'scripts/*tabari-t11a*.py'
+      - 'scripts/*tabari-t11c*.py'
+      - 'data/tafsir/staging/tabari-108-t11c-*.json'
       - 'data/tafsir/staging/tabari-108-t11a-*.json'
       - 'data/tafsir/staging/tabari-108-t02-*.json'
       - 'data/tafsir/staging/tabari-108-t01-*.json'
@@ -47,11 +49,19 @@ jobs:
           ref: cf1bccf8793c6b8c381a052cc25213bde72849f6
           path: .t11a-baseline
           persist-credentials: false
+      - name: Read pinned post-T11A pre-T11C baseline
+        uses: actions/checkout@v4
+        with:
+          ref: b551d9167b53a32e0c120d9096b56dc644e7b3dd
+          path: .t11c-baseline
+          persist-credentials: false
+      - name: Validate current T11C lifecycle separately
+        run: python scripts/test-tabari-t11c-coordinated-lifecycle.py --baseline .t11c-baseline --current .
       - name: Validate staging projection without network or database access
         shell: python
         run: |
           import json,hashlib,pathlib,subprocess,sys
-          t11a=json.loads(subprocess.check_output([sys.executable,"scripts/test-tabari-t11a-coordinated-lifecycle.py","--baseline",".t11a-baseline","--current","."],text=True))
+          t11a=json.loads(subprocess.check_output([sys.executable,"scripts/test-tabari-t11a-coordinated-lifecycle.py","--baseline",".t11a-baseline","--current",".t11c-baseline"],text=True))
           assert t11a["status"]=="PASS"
           print("T11A coordinated state:",t11a["current_state"])
           base=pathlib.Path(".t11a-baseline/data/tafsir/staging")
