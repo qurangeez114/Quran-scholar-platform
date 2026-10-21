@@ -678,20 +678,26 @@
 
 
     let quizStage = 'practice';
+    let quizShuffleSeed = Math.floor(Math.random()*1000000);
     const quizButton = () => document.querySelector('#quizForm button[type="submit"]');
-
     function currentRoundQuestions() {
-      if (quizStage !== 'final') return currentQuiz.questions;
-      return currentQuiz.questions.map(q => {
-        const v = q.variant;
-        if (!v || !v.q || !Array.isArray(v.options) || v.options.length < 2) return q;
-        return {
-          question: v.q,
-          options: v.options,
-          correct_answer: v.options[Number(v.answer) || 0],
-          explanation: q.explanation,
-          option_explanations: Array.isArray(v.rationale) ? v.rationale : []
-        };
+      return currentQuiz.questions.map((original,idx)=>{
+        const v=quizStage==='final'?original.variant:null;
+        const candidate=v&&v.q&&Array.isArray(v.options)&&v.options.length>=2
+          ? {...original,question:v.q,options:v.options,
+             correct_answer:v.options[Number(v.answer)||0],
+             option_explanations:Array.isArray(v.rationale)?v.rationale:[]} : original;
+        const options=candidate.options||[];
+        // Seed is chosen once per quiz round; repeated rendering and grading
+        // use the same arrangement, while a fresh attempt changes the order.
+        let seed=(quizShuffleSeed+idx*9973)>>>0;
+        const order=options.map((_,i)=>i);
+        for(let j=order.length-1;j>0;j--){
+          seed=(Math.imul(seed,1664525)+1013904223)>>>0;
+          const k=seed%(j+1);[order[j],order[k]]=[order[k],order[j]];
+        }
+        return {...candidate,options:order.map(i=>options[i]),
+          option_explanations:order.map(i=>candidate.option_explanations?.[i]||'')};
       });
     }
 
@@ -779,6 +785,7 @@
           result.append(info);
           addExplanations(questions,answers,'Practice feedback — learn from every answer');
           quizStage='final';
+          quizShuffleSeed=Math.floor(Math.random()*1000000);
           renderQuiz();
           result.scrollIntoView({behavior:'smooth',block:'start'});
           return;
@@ -812,7 +819,7 @@
           again.type='button';
           again.textContent='↻ Retry the quiz';
           again.addEventListener('click',()=>{
-            quizStage='practice';result.replaceChildren();renderQuiz();
+            quizStage='practice';quizShuffleSeed=Math.floor(Math.random()*1000000);result.replaceChildren();renderQuiz();
             document.getElementById('quizForm').scrollIntoView({behavior:'smooth'});
           });
           result.append(again);
