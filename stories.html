@@ -529,8 +529,10 @@ async function openStory(story){
   document.getElementById('s-res').style.display='none';
   const main=document.getElementById('storyMain');
   main.innerHTML='<div class="loading" style="padding:40px;"><div class="spin"></div></div>';
-  // Fetch sources
-  const sources=await sb('story_sources','story_id=eq.'+story.id+'&select=*&order=tradition.asc');
+  // Fetch sources; show a useful partial view if optional comparisons are offline.
+  let sources=[];
+  try{sources=await sb('story_sources','story_id=eq.'+story.id+'&select=*&order=tradition.asc')}
+  catch(error){console.warn('Story comparisons unavailable:',error)}
   // Fetch ancient_sources (verse-level sources for suras in this story)
   let ancientSources=[];
   try{
@@ -679,7 +681,9 @@ async function openHadith(slug,topic){
   document.getElementById('s-res').style.display='none';
   const main=document.getElementById('storyMain');
   main.innerHTML='<div class="loading"><div class="spin"></div></div>';
-  const sources=await sb('hadith_comparative','slug=eq.'+slug+'&select=*&order=tradition.asc');
+  let sources=[];
+  try{sources=await sb('hadith_comparative','slug=eq.'+slug+'&select=*&order=tradition.asc')}
+  catch(error){main.innerHTML='<div class="stories-status" role="alert">Hadith comparisons could not be retrieved. Try again later.</div>';return}
   if(!sources.length){main.innerHTML='<p style="padding:20px;color:var(--dim);">No sources found.</p>';return;}
   const srcHTML=sources.map(s=>`
     <div class="src-card">
@@ -731,11 +735,13 @@ async function doSearch(){
   content.style.display='block';
   content.innerHTML='<div class="loading"><div class="spin"></div></div>';
   const enc=encodeURIComponent(q);
-  const [stSrc,hdSrc,verses]=await Promise.all([
+  const [stSrc,hdSrc,verses]=await Promise.allSettled([
     sb('story_sources','or=(summary.ilike.*'+enc+'*,similarities.ilike.*'+enc+'*,differences.ilike.*'+enc+'*,source_name.ilike.*'+enc+'*)&select=*,quranic_stories(name_english,slug)&limit=15'),
     sb('hadith_comparative','or=(topic.ilike.*'+enc+'*,summary.ilike.*'+enc+'*,hadith_text.ilike.*'+enc+'*)&select=*&limit=10'),
     sb('ayas','or=(english.ilike.*'+enc+'*,arabic.ilike.*'+enc+'*)&select=sura_id,aya_number,arabic,english&limit=5')
   ]);
+  const getRows=(result,label)=>{if(result.status==='fulfilled')return result.value; console.warn(label+' search failed',result.reason);return []};
+  const sourceRows=getRows(stSrc,'Story sources'),hadithRows=getRows(hdSrc,'Hadith'),verseRows=getRows(verses,'Verses');
   // Also check story names
   const matchedStories=allStories.filter(s=>s.name_english.toLowerCase().includes(q.toLowerCase())||(s.summary||'').toLowerCase().includes(q.toLowerCase()));
   let html='';
