@@ -378,17 +378,13 @@ export async function submitAssignment(assignmentId, content, fileUrl = null, fi
   const user = (await supabase.auth.getUser()).data.user;
   if (!user) throw new Error('Not authenticated');
 
-  const { data, error } = await supabase
-    .from('qh_assignment_submissions')
-    .upsert({
-      assignment_id: assignmentId,
-      user_id: user.id,
-      content: content,
-      file_url: fileUrl,
-      file_name: fileName
-    })
-    .select()
-    .single();
+  // Server-side RPC: updates the existing submission (keeping any grade) or inserts one.
+  const { data, error } = await supabase.rpc('qh_submit_assignment', {
+    p_assignment: assignmentId,
+    p_content: content,
+    p_file_url: fileUrl,
+    p_file_name: fileName
+  });
 
   if (error) throw error;
   return data;
