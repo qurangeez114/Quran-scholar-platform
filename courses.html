@@ -155,6 +155,22 @@
     }
     .alert.error { background: #ffebee; color: #c62828; border-left: 4px solid #c62828; }
     .alert.success { background: #e8f5e9; color: #2e7d32; border-left: 4px solid #2e7d32; }
+    .view-toggle{display:flex;justify-content:flex-end;gap:.5rem;margin:1rem 0 -1rem}
+    .view-toggle button{padding:.5rem 1rem;border:1px solid #b6d1d1;background:#fff;color:#225967;border-radius:6px;font-weight:600;cursor:pointer}
+    .view-toggle button[aria-pressed="true"]{background:#176b65;color:#fff;border-color:#176b65}
+    .course-num{display:none;font-weight:700;color:#176b65;min-width:2.5rem}
+    .courses-grid.list-view{grid-template-columns:1fr;gap:.6rem}
+    .list-view .course-card{flex-direction:row;align-items:center;border-radius:8px;padding:.5rem 1rem;gap:1rem}
+    .list-view .course-card:hover{transform:none}
+    .list-view .course-thumbnail,.list-view .course-extra{display:none}
+    .list-view .course-num{display:block}
+    .list-view .course-content{padding:.4rem 0;display:grid;grid-template-columns:1fr auto;gap:.2rem 1rem;align-items:center}
+    .list-view .course-title{font-size:1.05rem;margin:0}
+    .list-view .course-description.course-summary{grid-column:1;margin:0;font-size:.85rem;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+    .list-view .course-meta{border:0;padding:0;margin:0;grid-column:1}
+    .list-view .course-action{grid-column:2;grid-row:1/span 3;width:auto;margin:0;white-space:nowrap}
+    .list-view .course-detail-link{display:none}
+    @media (max-width:600px){.list-view .course-content{grid-template-columns:1fr}.list-view .course-action{grid-column:1;grid-row:auto;width:100%;margin-top:.4rem}}
   </style>
   <script src="site-motion.js" defer></script>
 <script src="/site-chrome.js" defer></script>
@@ -179,6 +195,10 @@
 
     <div id="alertContainer"></div>
 
+    <div class="view-toggle" role="group" aria-label="Course layout">
+      <button type="button" id="gridViewBtn" aria-pressed="true">▦ Grid</button>
+      <button type="button" id="listViewBtn" aria-pressed="false">☰ List</button>
+    </div>
     <div id="coursesContainer" class="courses-grid">
       <div class="loader">Loading courses...</div>
     </div>
@@ -249,6 +269,35 @@
       parent.appendChild(node);return node;
     }
 
+    function courseNumber(course){
+      const m=String(course.title||'').match(/(\d+)\s*$/)||String(course.title||'').match(/(\d+)/);
+      return m?Number(m[1]):null;
+    }
+    function seriesName(course){return String(course.title||'').replace(/\d+\s*$/,'').trim().toLowerCase();}
+    function sortCourses(list){
+      const orderKey=c=>c.sort_order??c.order_index??c.position??c.display_order??null;
+      return [...list].sort((a,b)=>{
+        const sa=seriesName(a),sb=seriesName(b);
+        if(sa!==sb)return sa.localeCompare(sb,undefined,{numeric:true});
+        const na=courseNumber(a),nb=courseNumber(b);
+        if(na!=null&&nb!=null&&na!==nb)return na-nb;
+        if(na!=null&&nb==null)return -1; if(nb!=null&&na==null)return 1;
+        const oa=orderKey(a),ob=orderKey(b);
+        if(oa!=null&&ob!=null&&oa!==ob)return oa-ob;
+        return String(a.title||'').localeCompare(String(b.title||''),undefined,{numeric:true});
+      });
+    }
+    function applyView(view){
+      const list=view==='list';
+      document.getElementById('coursesContainer').classList.toggle('list-view',list);
+      document.getElementById('gridViewBtn').setAttribute('aria-pressed',String(!list));
+      document.getElementById('listViewBtn').setAttribute('aria-pressed',String(list));
+      try{localStorage.setItem('qh_courses_view',list?'list':'grid');}catch(e){}
+    }
+    document.getElementById('gridViewBtn').addEventListener('click',()=>applyView('grid'));
+    document.getElementById('listViewBtn').addEventListener('click',()=>applyView('list'));
+    try{applyView(localStorage.getItem('qh_courses_view')==='list'?'list':'grid');}catch(e){}
+
     async function renderCourses() {
       const container = document.getElementById('coursesContainer');
       container.replaceChildren();
@@ -260,8 +309,12 @@
         container.appendChild(box);
         return;
       }
+      courses=sortCourses(courses);
       for (const course of courses) {
         const card=document.createElement('article');card.className='course-card';
+        const num=document.createElement('span');num.className='course-num';
+        const n=courseNumber(course);num.textContent=n!=null?String(n).padStart(2,'0'):'•';num.setAttribute('aria-hidden','true');
+        card.appendChild(num);
         const art=document.createElement('div');art.className='course-thumbnail';
         art.textContent=/tafsir/i.test(course.title||'')?'🔎':/detective|evidence/i.test(course.title||'')?'🧩':/video|bridge/i.test(course.title||'')?'🎬':'📚';art.setAttribute('aria-hidden','true');
         card.appendChild(art);
@@ -272,7 +325,7 @@
         titleLink.href='/course.html?course='+encodeURIComponent(course.id);
         titleLink.textContent=course.title||'Untitled class';
         title.appendChild(titleLink);content.appendChild(title);
-        const description=document.createElement('p');description.className='course-description';
+        const description=document.createElement('p');description.className='course-description course-summary';
         const raw=course.description||'Class overview and enrollment details';
         const urlPattern=/https?:\/\/[^\s<>"']+/g;
         let last=0;for(const match of raw.matchAll(urlPattern)){
@@ -283,7 +336,7 @@
         description.append(document.createTextNode(raw.slice(last)));content.appendChild(description);
         const practiceMatch=String(course.description||'').match(/https?:\/\/quranhikma\.com\/sample-video-class\.html/i);
         if(practiceMatch){const practice=document.createElement('a');practice.href='/sample-video-class.html';practice.className='course-detail-link';practice.textContent='Try interactive class preview →';content.appendChild(practice);}
-        const details=document.createElement('p');details.className='course-description';
+        const details=document.createElement('p');details.className='course-description course-extra';
         details.textContent='Tuition: Ask instructor · Schedule: To be announced · Instructor: See class details';
         content.appendChild(details);
         const meta=document.createElement('div');meta.className='course-meta';content.appendChild(meta);
