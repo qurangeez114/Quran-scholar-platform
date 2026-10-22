@@ -784,6 +784,16 @@
       const score = answers.filter((ans,i)=>ans === questions[i].correct_answer).length;
       const percentage = Math.round(score / questions.length * 100);
       const result = document.getElementById('quizResult');
+      const missing = answers.map((a,i)=>a?null:i+1).filter(Boolean);
+      if (missing.length) {
+        result.textContent = 'Please answer every question before submitting. Not answered: question ' + missing.join(', ') + '.';
+        result.setAttribute('role','alert');
+        const firstQ = document.querySelector('input[name="q'+(missing[0]-1)+'"]');
+        if (firstQ) firstQ.scrollIntoView({behavior:'smooth',block:'center'});
+        button.disabled = false;
+        button.textContent = quizStage==='final' ? 'Submit Final Check' : 'Practice: Check My Answers (not graded)';
+        return;
+      }
       try {
         const hasReworded = currentQuiz.questions.some(q=>q.variant?.q && Array.isArray(q.variant.options));
         if (quizStage === 'practice' && hasReworded) {
