@@ -29,7 +29,7 @@
   function navHtml() {
     var cur = PARENT[file()] || file();
     return NAV.map(function (n) {
-      return '<button class="bnav-btn' + (n[0] === cur ? ' active' : '') + '" onclick="location.href=\'' + n[0] + '\'"><span class="bni">' + n[1] + '</span><span>' + n[2] + '</span></button>';
+      return '<a class="bnav-btn' + (n[0] === cur ? ' active' : '') + '" href="/' + n[0] + '"' + (n[0] === cur ? ' aria-current="page"' : '') + '><span class="bni">' + n[1] + '</span><span>' + n[2] + '</span></a>';
     }).join('');
   }
 
