@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.8';
-import { sendEmail, acceptanceEmail, assignmentEmail } from '../_shared/notify.ts';
+import { sendEmail, acceptanceEmail, assignmentEmail, offerEmail } from '../_shared/notify.ts';
 const origin = 'https://quranhikma.com';
 const instructorWelcome = origin + '/instructor-welcome.html';
 const studentWelcome = origin + '/student-welcome.html';
@@ -102,7 +102,7 @@ Deno.serve(async req=>{
    const result=teacher?.active&&teacher.role==='instructor'&&teacher.support_url?{name:teacher.display_name,url:supportUrl(teacher.support_url)}:null;
    return new Response(JSON.stringify(result),{headers});
   }
-  if(body.action==='school_applications_list'||body.action==='school_application_review'||body.action==='school_application_assign'||body.action==='school_application_instructors'){
+  if(body.action==='school_applications_list'||body.action==='school_application_review'||body.action==='school_application_assign'||body.action==='school_application_instructors'||body.action==='school_application_offer'||body.action==='school_application_offer_withdraw'){
     if(!owner)fail('School admissions are restricted to administrators',403);
     if(body.action==='school_applications_list'){
       const requested=body.status==='all'?'all':
@@ -118,7 +118,11 @@ Deno.serve(async req=>{
         .eq('role','instructor').eq('active',true).order('display_name'));
       const titleOf=new Map(titles.map((c:any)=>[c.id,c.title]));
       const nameOf=new Map(instructors.map((i:any)=>[i.user_id,i.display_name||i.email]));
+      const appIds=rows.map((r:any)=>r.id);
+      const offers=appIds.length?await checked(service.from('qh_school_application_offers')
+        .select('application_id,instructor_id,status,offered_at,responded_at').in('application_id',appIds)):[];
       const out=rows.map((r:any)=>({...r,
+        offers:offers.filter((o:any)=>o.application_id===r.id).map((o:any)=>({...o,instructor_name:nameOf.get(o.instructor_id)||'Instructor (inactive)'})),
         requested_courses:(r.requested_course_ids||[]).map((id:string)=>({id,title:titleOf.get(id)||'Unavailable class'})),
         instructor_name:r.instructor_id?(nameOf.get(r.instructor_id)||'Instructor (inactive)'):null}));
       return new Response(JSON.stringify(out),{headers});
@@ -127,6 +131,33 @@ Deno.serve(async req=>{
       const instructors=await checked(service.from('qh_lms_accounts').select('user_id,display_name,email')
         .eq('role','instructor').eq('active',true).order('display_name'));
       return new Response(JSON.stringify(instructors.map((x:any)=>({user_id:x.user_id,name:x.display_name||x.email}))),{headers});
+    }
+    if(body.action==='school_application_offer'){
+      const id=uuid(body.application_id);
+      if(!Array.isArray(body.instructor_ids)||!body.instructor_ids.length||body.instructor_ids.length>50)fail('Choose one or more instructors');
+      const ids=[...new Set(body.instructor_ids.map(uuid))];
+      const {data:offered,error:offerError}=await service.rpc('qh_offer_application',{p_application:id,p_instructors:ids,p_actor:actor.id});
+      if(offerError)fail(offerError.message||'Offer failed',400);
+      const app=await checked(service.from('qh_school_applications').select('full_name,requested_course_ids,program_interest').eq('id',id).single());
+      const titles=app.requested_course_ids?.length?await checked(service.from('qh_courses').select('title').in('id',app.requested_course_ids)):[];
+      const newIds:string[]=offered?.offered_instructor_ids||[];
+      let sent=0;const failed:string[]=[];
+      for(const tid of newIds){
+        const t=await checked(service.from('qh_lms_accounts').select('display_name,email').eq('user_id',tid).maybeSingle());
+        let to=t?.email||'';
+        const u=await service.auth.admin.getUserById(tid); if(!u.error&&u.data.user?.email)to=u.data.user.email;
+        const mail=offerEmail(t?.display_name||'',app.full_name,titles.map((c:any)=>c.title));
+        const r=await sendEmail(to,mail.subject,mail.text); if(r.sent)sent++; else failed.push((t?.display_name||tid)+': '+(r.skipped||r.error));
+      }
+      return new Response(JSON.stringify({ok:true,...offered,emails_sent:sent,email_failures:failed,
+        notice:'Offered to '+newIds.length+' instructor(s)'+(ids.length>newIds.length?' ('+(ids.length-newIds.length)+' already had an open offer)':'')+'. '+
+        sent+' email(s) sent'+(failed.length?'; not sent: '+failed.join(', '):'')+'. The first to accept gets the student.'}),{headers});
+    }
+    if(body.action==='school_application_offer_withdraw'){
+      const id=uuid(body.application_id),instructor=uuid(body.instructor_id);
+      const {data:w,error:wError}=await service.rpc('qh_withdraw_application_offer',{p_application:id,p_instructor:instructor,p_actor:actor.id});
+      if(wError)fail(wError.message||'Withdraw failed',400);
+      return new Response(JSON.stringify({ok:true,...w,notice:'Offer withdrawn.'}),{headers});
     }
     if(body.action==='school_application_assign'){
       const id=uuid(body.application_id),instructor=uuid(body.instructor_id);

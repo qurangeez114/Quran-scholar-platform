@@ -67,6 +67,42 @@ async function refresh(){
      finally{go.disabled=false;}
     });
    }
+   if(app.status==='accepted'){
+    const offerBox=append(box,element('div',undefined,'admissions-admin-review'));
+    const offers=app.offers||[];
+    if(offers.length){
+     append(offerBox,element('p','Offers:','admissions-admin-hint'));
+     const ul=append(offerBox,element('ul'));
+     const label={offered:'waiting for reply',accepted:'accepted ✓',declined:'declined',closed:'closed (taken by another)',withdrawn:'withdrawn'};
+     for(const o of offers){
+      const li=append(ul,element('li',o.instructor_name+' — '+(label[o.status]||o.status)));
+      if(o.status==='offered'){
+       const w=append(li,element('button','Withdraw'));w.type='button';w.style.marginLeft='8px';
+       w.addEventListener('click',async()=>{w.disabled=true;
+        try{const r=await lmsRequest('school_application_offer_withdraw',{application_id:app.id,instructor_id:o.instructor_id});
+         status(r.notice||'Offer withdrawn.');loading=false;await refresh();}
+        catch(error){status(error.message||'Unable to withdraw offer',true);w.disabled=false;}});
+      }
+     }
+    }
+    if(!app.instructor_id){
+     const multiLabel=append(offerBox,element('label','Offer to several instructors (first to accept gets the student)'));
+     const multi=append(multiLabel,element('select'));multi.multiple=true;multi.size=Math.min(6,Math.max(2,(instructors||[]).length));
+     const open=new Set(offers.filter(o=>o.status==='offered').map(o=>o.instructor_id));
+     for(const t of instructors||[]){if(open.has(t.user_id))continue;append(multi,element('option',t.name)).value=t.user_id;}
+     append(offerBox,element('p','Hold Ctrl (Windows) or ⌘ (Mac) to pick more than one.','admissions-admin-hint'));
+     const offerBtn=append(offerBox,element('button','Offer to selected'));offerBtn.type='button';
+     offerBtn.addEventListener('click',async()=>{
+      const ids=[...multi.selectedOptions].map(o=>o.value);
+      if(!ids.length){status('Select at least one instructor to offer to.',true);return;}
+      offerBtn.disabled=true;
+      try{const r=await lmsRequest('school_application_offer',{application_id:app.id,instructor_ids:ids});
+       status(r.notice||'Offers sent.');loading=false;await refresh();}
+      catch(error){status(error.message||'Unable to send offers',true);}
+      finally{offerBtn.disabled=false;}
+     });
+    }
+   }
    const form=append(box,element('form',undefined,'admissions-admin-review'));
    const label=append(form,element('label','Review status'));
    const sel=append(label,element('select'));sel.name='status';

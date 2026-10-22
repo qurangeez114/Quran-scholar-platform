@@ -27,3 +27,7 @@ export function assignmentEmail(name:string,instructor:string,classes:string[],r
  return {subject:reassigned?'Your QuranHikma instructor has changed':'Meet your QuranHikma instructor',
   text:`Assalamu alaikum ${name||''},\n\n${reassigned?'Your studies at QuranHikma School are now guided by a new instructor':'Your instructor at QuranHikma School has been assigned'}: ${instructor||'a QuranHikma instructor'}.\n\nYour classes:\n${list(classes)}\n\nSign in at https://quranhikma.com/account.html with this email address to open your lessons. If you have not created an account yet, sign up with this same email and your classes will be waiting for you.\n\nWith warm regards,\nQuranHikma`};
 }
+export function offerEmail(instructor:string,student:string,classes:string[]){
+ return {subject:'New student offered to you: '+(student||'QuranHikma applicant'),
+  text:`Assalamu alaikum ${instructor||''},\n\nAn accepted QuranHikma School applicant, ${student||'a new student'}, has been offered to you and to other instructors. The first instructor to accept becomes their teacher.\n\nClasses requested:\n${list(classes)}\n\nOpen your dashboard to accept or decline: https://quranhikma.com/instructor-dashboard.html\n\nWith warm regards,\nQuranHikma`};
+}

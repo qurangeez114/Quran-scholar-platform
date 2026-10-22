@@ -23,7 +23,7 @@ const api=async(action,fields={})=>{
  }
  return data;
 };
-let role=null,overview=null,requests=null,applicants=null,running=false;
+let role=null,overview=null,requests=null,applicants=null,offers=null,running=false;
 const roleMode=()=>{
  const root=$('academic-dashboard');
  return root?.dataset.role==='instructor'?'instructor':'student';
@@ -128,7 +128,26 @@ function renderInstructor(){
 const programName=v=>({quranic_studies:'Qur’anic Studies',hadith_and_history:'Hadith & History',
  comparative_scripture:'Comparative Scripture',arabic_languages:'Arabic & Languages',
  independent_research:'Independent Research',general_learning:'General Learning'}[v]||v||'');
+function renderOffers(){
+ const box=$('academic-dashboard-offers');if(!box)return;
+ box.replaceChildren();
+ if(!offers){empty(box,'Offers are unavailable right now.');return;}
+ const classes=a=>(a.requested_courses||[]).map(c=>c.title).join(', ')||'No classes selected';
+ const text={offered:'Waiting for your answer',accepted:'You accepted — this student is yours',declined:'You declined',
+  taken:'Already taken: another instructor accepted this student first',withdrawn:'Offer withdrawn by the administrator'};
+ for(const o of offers){
+  const rec=record(box,o.full_name||'Applicant',[text[o.status]||o.status,o.email,programName(o.program_interest),'Classes: '+classes(o)].filter(Boolean).join(' · '));
+  if(o.status==='offered'&&role==='instructor'){
+   const actions=add(rec,create('div',undefined,'academic-dashboard-actions'));
+   action(actions,'Accept',async()=>{try{await api('offer_respond',{application_id:o.application_id,accept:true});}
+    catch(e){running=false;await refresh();throw e;}});
+   action(actions,'Decline',()=>api('offer_respond',{application_id:o.application_id,accept:false}),true);
+  }
+ }
+ if(!offers.length)empty(box,'No students have been offered to you.');
+}
 function renderApplicants(){
+ renderOffers();
  const open=$('academic-dashboard-applicants'),mine=$('academic-dashboard-my-applicants');
  if(!open||!mine)return;
  open.replaceChildren();mine.replaceChildren();
@@ -157,7 +176,8 @@ async function refresh(){
    return;
   }
   overview=newOverview;requests=newRequests;
-  if(roleMode()==='instructor'){try{applicants=await api('applications_browse');}catch{applicants=null;}}
+  if(roleMode()==='instructor'){try{applicants=await api('applications_browse');}catch{applicants=null;}
+   try{offers=await api('offers_mine');}catch{offers=null;}}
   $('academic-dashboard').hidden=false;
   if(roleMode()==='student')renderStudent();else renderInstructor();
   setStatus('Updated academic information.');
