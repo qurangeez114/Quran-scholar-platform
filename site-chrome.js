@@ -86,9 +86,8 @@
   }
 
   function addSchoolNav() {
-    var path = location.pathname.replace(/^\\/+/, '');
-    var school = /^(?:courses|course|lesson|student-dashboard|instructor-dashboard|faculty|faculty-profile|faculty-admin|apply|academic-hub|account|login|my-pages|my-research|quiz-results|sample-course|sample-video-class|admin-dashboard|admin-users|admin-evaluation-manager|instructor-welcome|student-welcome|admin\\/(?:lms|courses|lesson-manager|quiz-builder|grading|bulk-enrollment|analytics|deleted-accounts))\\.html$/i;
-    if (!school.test(path)) return;
+    var path = location.pathname.charAt(0)==='/' ? location.pathname.slice(1) : location.pathname;
+    if (!["courses.html","course.html","lesson.html","student-dashboard.html","instructor-dashboard.html","faculty.html","faculty-profile.html","faculty-admin.html","apply.html","academic-hub.html","account.html","login.html","my-pages.html","my-research.html","quiz-results.html","sample-course.html","sample-video-class.html","admin-dashboard.html","admin-users.html","admin-evaluation-manager.html","instructor-welcome.html","student-welcome.html","admin/lms.html","admin/courses.html","admin/lesson-manager.html","admin/quiz-builder.html","admin/grading.html","admin/bulk-enrollment.html","admin/analytics.html","admin/deleted-accounts.html"].includes(path)) return;
     if (document.getElementById('qh-school-topnav')) return;
     var s = document.createElement('style');
     s.id='qh-school-topnav-css';
