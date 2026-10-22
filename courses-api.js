@@ -292,7 +292,7 @@ export async function getEnrollment(courseId) {
     .select('*')
     .eq('course_id', courseId)
     .eq('user_id', user.id)
-    .single();
+    .maybeSingle();
 
   if (error && error.code === 'PGRST116') {
     return null; // Not enrolled

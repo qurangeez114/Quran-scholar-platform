@@ -140,7 +140,7 @@ function renderCourses(){
  const root=$('course-catalog');root.replaceChildren();
  for(const c of sortCourses(state.public_courses||[])){
   const box=card(root,c.title,c.description||'Public academic class');
-  const n=courseNumber(c),num=el('span',n!=null?String(n).padStart(2,'0'):'•','course-num');num.setAttribute('aria-hidden','true');box.prepend(num);
+  const n=courseNumber(c),num=el('span',n!=null?String(n).padStart(2,'0'):'Sample',n!=null?'course-num':'course-num course-num-sample');num.setAttribute('aria-hidden','true');box.prepend(num);
   if(state.me)decorateProgress(box,c.id);
   p(box,'Instructor: '+name(c.created_by)+' · '+(c.access_closes_at?'Closes '+stamp(c.access_closes_at):'No deadline'));
   const a=actions(box);
