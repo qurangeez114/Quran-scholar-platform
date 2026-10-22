@@ -1,4 +1,5 @@
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2.49.8';
+import {sendEmail,assignmentEmail} from '../_shared/notify.ts';
 const origin='https://quranhikma.com';
 const baseHeaders={'Content-Type':'application/json',
  'Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info','Access-Control-Allow-Methods':'POST, OPTIONS',
@@ -283,6 +284,36 @@ Deno.serve(async req=>{
      visibility,faculty_reuse_enabled:body.faculty_reuse_enabled,
      access_closes_at:deadline,updated_at:new Date().toISOString()
    }).eq('id',c.id).select('id,title,visibility,faculty_reuse_enabled,access_closes_at').single());
+  }else if(action==='applications_browse'||action==='application_claim'){
+   if(!teacher)fail('Instructor access required',403);
+   const titlesFor=async(ids:any[])=>{
+    const u=[...new Set(ids)] as string[];if(!u.length)return new Map<string,string>();
+    const rows=await checked(sb.from('qh_courses').select('id,title').in('id',u));
+    return new Map(rows.map((c:any)=>[c.id,c.title]));
+   };
+   if(action==='applications_browse'){
+    // Unassigned accepted applicants: no contact details until claimed.
+    const open=await checked(sb.from('qh_school_applications')
+      .select('id,full_name,program_interest,preferred_language,attendance_mode,requested_course_ids,reviewed_at')
+      .eq('status','accepted').is('instructor_id',null).order('reviewed_at',{ascending:false}).limit(100));
+    const mine=await checked(sb.from('qh_school_applications')
+      .select('id,full_name,email,program_interest,preferred_language,attendance_mode,requested_course_ids,assigned_at')
+      .eq('instructor_id',me).order('assigned_at',{ascending:false}).limit(100));
+    const titles=await titlesFor([...open,...mine].flatMap((a:any)=>a.requested_course_ids||[]));
+    const withClasses=(a:any)=>({...a,requested_courses:(a.requested_course_ids||[]).map((id:string)=>({id,title:titles.get(id)||'Unavailable class'}))});
+    result={available:open.map(withClasses),assigned_to_me:mine.map(withClasses)};
+   }else{
+    if(!(account?.role==='instructor'&&account.active))fail('Only active instructors can claim applicants',403);
+    const id=guid(body.application_id);
+    const {data:claimed,error:claimError}=await sb.rpc('qh_assign_application',
+      {p_application:id,p_instructor:me,p_actor:me,p_mode:'claim'});
+    if(claimError)fail(claimError.message.includes('already been assigned')?'This applicant has already been claimed':claimError.message,409);
+    const app=await checked(sb.from('qh_school_applications').select('full_name,email,requested_course_ids').eq('id',id).single());
+    const titles=await titlesFor(app.requested_course_ids||[]);
+    const mail=assignmentEmail(app.full_name,account.display_name||'your instructor',[...titles.values()] as string[],false);
+    const email=await sendEmail(app.email,mail.subject,mail.text);
+    result={ok:true,...claimed,email,student:{name:app.full_name,email:app.email}};
+   }
   }else if(action==='enrollment_request'||action==='enrollment_requests'||action==='enrollment_decide'||action==='enrollment_consent'||action==='enrollment_cancel'){
    if(action==='enrollment_requests'){
     const mine=await checked(sb.from('qh_academic_enrollment_requests')

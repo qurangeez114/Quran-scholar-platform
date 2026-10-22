@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.8';
+import { sendEmail, acceptanceEmail, assignmentEmail } from '../_shared/notify.ts';
 const origin = 'https://quranhikma.com';
 const instructorWelcome = origin + '/instructor-welcome.html';
 const studentWelcome = origin + '/student-welcome.html';
@@ -101,30 +102,69 @@ Deno.serve(async req=>{
    const result=teacher?.active&&teacher.role==='instructor'&&teacher.support_url?{name:teacher.display_name,url:supportUrl(teacher.support_url)}:null;
    return new Response(JSON.stringify(result),{headers});
   }
-  if(body.action==='school_applications_list'||body.action==='school_application_review'){
+  if(body.action==='school_applications_list'||body.action==='school_application_review'||body.action==='school_application_assign'||body.action==='school_application_instructors'){
     if(!owner)fail('School admissions are restricted to administrators',403);
     if(body.action==='school_applications_list'){
       const requested=body.status==='all'?'all':
         ['submitted','under_review','waitlisted','accepted','declined'].includes(body.status)?body.status:'all';
       let query=service.from('qh_school_applications')
-        .select('id,full_name,email,country,city,program_interest,learning_goal,academic_background,education_level,preferred_language,attendance_mode,status,reviewer_note,submitted_at,reviewed_at')
+        .select('id,full_name,email,country,city,program_interest,learning_goal,academic_background,education_level,preferred_language,attendance_mode,status,reviewer_note,submitted_at,reviewed_at,requested_course_ids,applicant_user_id,instructor_id,assigned_at')
         .order('submitted_at',{ascending:false}).limit(200);
       if(requested!=='all')query=query.eq('status',requested);
       const rows=await checked(query);
-      return new Response(JSON.stringify(rows),{headers});
+      const courseIds=[...new Set(rows.flatMap((r:any)=>r.requested_course_ids||[]))];
+      const titles=courseIds.length?await checked(service.from('qh_courses').select('id,title').in('id',courseIds)):[];
+      const instructors=await checked(service.from('qh_lms_accounts').select('user_id,display_name,email')
+        .eq('role','instructor').eq('active',true).order('display_name'));
+      const titleOf=new Map(titles.map((c:any)=>[c.id,c.title]));
+      const nameOf=new Map(instructors.map((i:any)=>[i.user_id,i.display_name||i.email]));
+      const out=rows.map((r:any)=>({...r,
+        requested_courses:(r.requested_course_ids||[]).map((id:string)=>({id,title:titleOf.get(id)||'Unavailable class'})),
+        instructor_name:r.instructor_id?(nameOf.get(r.instructor_id)||'Instructor (inactive)'):null}));
+      return new Response(JSON.stringify(out),{headers});
+    }
+    if(body.action==='school_application_instructors'){
+      const instructors=await checked(service.from('qh_lms_accounts').select('user_id,display_name,email')
+        .eq('role','instructor').eq('active',true).order('display_name'));
+      return new Response(JSON.stringify(instructors.map((x:any)=>({user_id:x.user_id,name:x.display_name||x.email}))),{headers});
+    }
+    if(body.action==='school_application_assign'){
+      const id=uuid(body.application_id),instructor=uuid(body.instructor_id);
+      const mode=body.mode==='reassign'?'reassign':'assign';
+      const {data:assigned,error:assignError}=await service.rpc('qh_assign_application',{
+        p_application:id,p_instructor:instructor,p_actor:actor.id,p_mode:mode});
+      if(assignError)fail(assignError.message||'Assignment failed',400);
+      const app=await checked(service.from('qh_school_applications').select('full_name,email,requested_course_ids').eq('id',id).single());
+      const teacher=await checked(service.from('qh_lms_accounts').select('display_name,email').eq('user_id',instructor).single());
+      const titles=app.requested_course_ids?.length?await checked(service.from('qh_courses').select('title').in('id',app.requested_course_ids)):[];
+      const mail=assignmentEmail(app.full_name,teacher.display_name||teacher.email,titles.map((c:any)=>c.title),mode==='reassign');
+      const email=await sendEmail(app.email,mail.subject,mail.text);
+      const enrolledCount=(assigned?.enrolled_course_ids||[]).length;
+      return new Response(JSON.stringify({ok:true,...assigned,email,
+        notice:(mode==='reassign'?'Reassigned':'Assigned')+' to '+(teacher.display_name||teacher.email)+'. '+
+        (assigned?.applicant_user_id?enrolledCount+' class enrollment(s) created.':'No student account yet; enrollments are created when they sign up and are assigned again.')+
+        (email.sent?' Email sent.':' Email not sent ('+(email.skipped||email.error)+').')}),{headers});
     }
     const id=uuid(body.application_id);
     const allowed=['submitted','under_review','waitlisted','accepted','declined'];
     const status=cleanField(body.status,30,'status');
     if(!allowed.includes(status))fail('Choose a valid application status');
     const note=cleanField(body.note||'',2500,'review note');
+    const prior=await checked(service.from('qh_school_applications').select('status,full_name,email,requested_course_ids').eq('id',id).maybeSingle());
+    if(!prior)fail('Application not found',404);
     const {data,error}=await service.rpc('qh_review_school_application',{
       p_id:id,p_reviewer:actor.id,p_status:status,p_note:note
     });
     if(error)fail('Could not save the application decision',400);
+    let email:any=null;
+    if(status==='accepted'&&prior.status!=='accepted'){
+      const titles=prior.requested_course_ids?.length?await checked(service.from('qh_courses').select('title').in('id',prior.requested_course_ids)):[];
+      const mail=acceptanceEmail(prior.full_name,titles.map((c:any)=>c.title));
+      email=await sendEmail(prior.email,mail.subject,mail.text);
+    }
     return new Response(JSON.stringify({
-      ok:true,id:data,status,
-      notice:'Review saved. This action does not create a student account or send an admission email.'
+      ok:true,id:data,status,email,
+      notice:'Review saved.'+(email?(email.sent?' Acceptance email sent.':' Acceptance email not sent ('+(email.skipped||email.error)+').'):'')
     }),{headers});
   }
   if(!owner&&role!=='instructor')fail('Instructor or owner access required',403);

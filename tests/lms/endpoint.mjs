@@ -20,8 +20,8 @@ class Query{
 }
 const client={from:table=>new Query(table),auth:{getUser:async token=>({data:{user:users.find(u=>u.id===token)||null},error:null}),signInWithPassword:async()=>({error:null}),signOut:async()=>({error:null}),signInWithOtp:async params=>{magicLinks.push(params);return {error:null};},admin:{inviteUserByEmail:async(email,options)=>{if(email==='smtp-error@example.invalid')return {data:{user:null},error:{message:'SMTP unavailable'}};invites.push({email,options});created++;const user={id:crypto.randomUUID(),email};users.push(user);return {data:{user},error:null};},listUsers:async()=>({data:{users},error:null}),createUser:async values=>{created++;const user={id:crypto.randomUUID(),email:values.email};users.push(user);return {data:{user},error:null};},updateUserById:async()=>{passwordUpdates++;return {error:null};},getUserById:async id=>({data:{user:users.find(u=>u.id===id)},error:null})}}};
 let handler;
-let source=(await transform(await readFile(new URL('../../supabase/functions/lms-admin/index.ts',import.meta.url),'utf8'),{loader:'ts',format:'esm'})).code;source=source.replace(/^import .*\n/,'');
-runInNewContext(source,{createClient:()=>client,Deno:{env:{get:()=>''},serve:fn=>handler=fn},Response,Request,console});
+let source=(await transform(await readFile(new URL('../../supabase/functions/lms-admin/index.ts',import.meta.url),'utf8'),{loader:'ts',format:'esm'})).code;source=source.replace(/^import .*\n/gm,'');
+runInNewContext(source,{createClient:()=>client,sendEmail:async()=>({sent:false,skipped:'test'}),acceptanceEmail:()=>({subject:'',text:''}),assignmentEmail:()=>({subject:'',text:''}),Deno:{env:{get:()=>''},serve:fn=>handler=fn},Response,Request,console});
 const call=async(id,body)=>{const headers={'Content-Type':'application/json'};if(id)headers.Authorization='Bearer '+id;const response=await handler(new Request('https://test.invalid',{method:'POST',headers,body:JSON.stringify(body)}));return {status:response.status,data:await response.json()};};
 assert.equal((await call(null,{action:'dashboard'})).status,401);
 assert.equal((await call(student,{action:'dashboard'})).status,403);

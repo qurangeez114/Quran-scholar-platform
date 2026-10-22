@@ -23,7 +23,7 @@ const api=async(action,fields={})=>{
  }
  return data;
 };
-let role=null,overview=null,requests=null,running=false;
+let role=null,overview=null,requests=null,applicants=null,running=false;
 const roleMode=()=>{
  const root=$('academic-dashboard');
  return root?.dataset.role==='instructor'?'instructor':'student';
@@ -123,6 +123,26 @@ function renderInstructor(){
   add(actions,link('/academic-hub.html?tab=packages','Teaching packages'));
  }
  if(!taught.length)empty(courses,'No classes assigned yet. Create your first class to begin.');
+ renderApplicants();
+}
+const programName=v=>({quranic_studies:'Qur’anic Studies',hadith_and_history:'Hadith & History',
+ comparative_scripture:'Comparative Scripture',arabic_languages:'Arabic & Languages',
+ independent_research:'Independent Research',general_learning:'General Learning'}[v]||v||'');
+function renderApplicants(){
+ const open=$('academic-dashboard-applicants'),mine=$('academic-dashboard-my-applicants');
+ if(!open||!mine)return;
+ open.replaceChildren();mine.replaceChildren();
+ if(!applicants){empty(open,'Applicants are unavailable right now.');return;}
+ const classes=a=>(a.requested_courses||[]).map(c=>c.title).join(', ')||'No classes selected';
+ for(const a of applicants.available||[]){
+  const box=record(open,a.full_name,[programName(a.program_interest),'Classes: '+classes(a)].filter(Boolean).join(' · '));
+  const actions=add(box,create('div',undefined,'academic-dashboard-actions'));
+  if(role==='instructor')action(actions,'Claim',()=>api('application_claim',{application_id:a.id}));
+ }
+ if(!(applicants.available||[]).length)empty(open,'No accepted applicants are waiting for an instructor.');
+ for(const a of applicants.assigned_to_me||[])
+  record(mine,a.full_name,[a.email,programName(a.program_interest),'Classes: '+classes(a)].filter(Boolean).join(' · '));
+ if(!(applicants.assigned_to_me||[]).length)empty(mine,'You have not claimed any applicants yet.');
 }
 async function refresh(){
  if(running)return;
@@ -137,6 +157,7 @@ async function refresh(){
    return;
   }
   overview=newOverview;requests=newRequests;
+  if(roleMode()==='instructor'){try{applicants=await api('applications_browse');}catch{applicants=null;}}
   $('academic-dashboard').hidden=false;
   if(roleMode()==='student')renderStudent();else renderInstructor();
   setStatus('Updated academic information.');

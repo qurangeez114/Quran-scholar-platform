@@ -10,13 +10,14 @@ const friendly={
  independent_research:'Independent Research',general_learning:'General Learning'
 };
 const statuses=['submitted','under_review','waitlisted','accepted','declined'];
-let loading=false;
+let loading=false,instructors=null;
 async function refresh(){
  if(loading)return;loading=true;
  const button=$('admissions-refresh');button.disabled=true;
  status('Loading private application records…');
  try{
   const rows=await lmsRequest('school_applications_list',{status:$('admissions-filter').value});
+  if(!instructors){try{instructors=await lmsRequest('school_application_instructors');}catch{instructors=[];}}
   const root=$('admissions-admin-list');root.replaceChildren();
   if(!Array.isArray(rows))throw Error('Applications response unavailable');
   for(const app of rows){
@@ -41,6 +42,31 @@ async function refresh(){
     append(line,element('strong',name+': '));
     append(line,document.createTextNode(value||'Not supplied'));
    }
+   const classes=append(box,element('p',undefined,'admissions-admin-meta'));
+   classes.textContent='Requested classes: '+((app.requested_courses||[]).map(c=>c.title).join(', ')||'none selected');
+   if(app.status==='accepted'){
+    const assignBox=append(box,element('div',undefined,'admissions-admin-review'));
+    append(assignBox,element('p',app.instructor_id?'Assigned instructor: '+(app.instructor_name||'Instructor'):'Not yet assigned to an instructor','admissions-admin-hint'));
+    const pickLabel=append(assignBox,element('label',app.instructor_id?'Reassign to':'Assign to'));
+    const pick=append(pickLabel,element('select'));
+    append(pick,element('option','Choose an instructor')).value='';
+    for(const t of instructors||[]){
+     if(t.user_id===app.instructor_id)continue;
+     append(pick,element('option',t.name)).value=t.user_id;
+    }
+    const go=append(assignBox,element('button',app.instructor_id?'Reassign':'Assign'));go.type='button';
+    go.addEventListener('click',async()=>{
+     if(!pick.value){status('Choose an instructor first.',true);return;}
+     go.disabled=true;
+     try{
+      const result=await lmsRequest('school_application_assign',{
+       application_id:app.id,instructor_id:pick.value,mode:app.instructor_id?'reassign':'assign'});
+      status(result.notice||'Instructor assigned.');
+      loading=false;await refresh();
+     }catch(error){status(error.message||'Unable to assign instructor',true);}
+     finally{go.disabled=false;}
+    });
+   }
    const form=append(box,element('form',undefined,'admissions-admin-review'));
    const label=append(form,element('label','Review status'));
    const sel=append(label,element('select'));sel.name='status';
@@ -51,7 +77,7 @@ async function refresh(){
    const noteLabel=append(form,element('label','Internal review note'));
    const note=append(noteLabel,element('textarea'));note.name='note';note.maxLength=2500;note.rows=2;note.value=app.reviewer_note||'';
    const save=append(form,element('button','Save review'));save.type='submit';
-   append(form,element('p','Decisions are recorded internally; no automatic email or account creation.','admissions-admin-hint'));
+   append(form,element('p','Accepting sends the applicant a welcome email listing their requested classes (when email is configured).','admissions-admin-hint'));
    form.addEventListener('submit',async event=>{
     event.preventDefault();save.disabled=true;
     try{

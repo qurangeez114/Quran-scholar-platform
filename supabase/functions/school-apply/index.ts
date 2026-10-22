@@ -55,8 +55,30 @@ Deno.serve(async req=>{
    education_level:choice(body.education_level,'education_level'),
    preferred_language:field(body.preferred_language,80,'preferred language',2),
    attendance_mode:choice(body.attendance_mode,'attendance_mode'),
-   privacy_consent:true
+   privacy_consent:true,
+   requested_course_ids:[] as string[],
+   applicant_user_id:null as string|null
   };
+  // Up to 5 requested classes; each must be a published, public, open course.
+  const ids=body.requested_course_ids??[];
+  if(!Array.isArray(ids)||ids.length>5)fail('Choose up to 5 classes');
+  const uuidRe=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const unique=[...new Set(ids)] as string[];
+  if(unique.some(v=>typeof v!=='string'||!uuidRe.test(v)))fail('Invalid class selection');
+  if(unique.length){
+   const {data:courses,error:courseError}=await sb.from('qh_courses')
+    .select('id,access_closes_at').in('id',unique).eq('is_published',true).eq('visibility','public');
+   if(courseError)throw courseError;
+   const open=(courses||[]).filter((c:any)=>!c.access_closes_at||new Date(c.access_closes_at).getTime()>Date.now());
+   if(open.length!==unique.length)fail('One of the selected classes is not available');
+   application.requested_course_ids=unique;
+  }
+  // Link the applicant's account when they are signed in (anon key tokens are ignored).
+  const token=req.headers.get('Authorization')?.replace(/^Bearer\s+/i,'');
+  if(token){
+   const {data:who}=await sb.auth.getUser(token).catch(()=>({data:null} as any));
+   if(who?.user?.id)application.applicant_user_id=who.user.id;
+  }
   // Repeat submissions from the same email are throttled; do not expose prior
   // application details or reference numbers to someone who knows an email.
   const dayAgo=new Date(Date.now()-24*60*60*1000).toISOString();
