@@ -9,7 +9,7 @@
     document.head.appendChild(__m);
   }
   var NAV = [
-    ['index.html','📖','Quran'],['campaigns.html','⚔️','Campaigns'],['research.html','🔬','Research'],
+    ['index.html','📖','Quran'],['my-pages.html','🗃️','My Page'],['campaigns.html','⚔️','Campaigns'],['research.html','🔬','Research'],
     ['themes.html','🗂️','Themes'],['madhhab.html','⚖️','Madhhab'],['sira.html','🕌','Sīra'],
     ['stories.html','📚','Stories'],['books.html','📕','Books'],['fatwas.html','🧾','Fatwa'],['narrations.html','🧵','Narrations'],
     ['marketplace.html','🛒','Market'],['muhammad.html','☪️','Muhammad'],['contradiction.html','⚡','Tensions'],
