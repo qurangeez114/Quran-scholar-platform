@@ -2,6 +2,13 @@ name: Validate Surah 108 provisional I04A speaker split
 on:
   push:
     paths:
+      - 'scripts/preview-ibn-kathir-i04a-coordinated.py'
+      - 'scripts/test-ibn-kathir-i04a-coordinated-lifecycle.py'
+      - 'data/tafsir/staging/surah-108-payload-assembly-2026-10-16.json'
+      - 'data/tafsir/staging/surah-108-voice-projection-2026-10-17.json'
+      - 'data/tafsir/staging/qurtubi-108-q06-bilingual-source-check-2026-10-17.json'
+      - 'data/tafsir/staging/ibn-kathir-108-research-2026-10-12.json'
+      - 'data/tafsir/staging/ibn-kathir-108-evidence-voice-plan-2026-10-12.json'
       - 'scripts/validate-ibn-kathir-i04a-combined.py'
       - 'data/tafsir/staging/ibn-kathir-108-i04a-combined-candidate-2026-10-22.json'
       - 'scripts/validate-ibn-kathir-i04a-route-projection.py'
@@ -13,6 +20,13 @@ on:
       - '.github/workflows/tafsir-108-ibn-kathir-i04a-draft.yml'
   pull_request:
     paths:
+      - 'scripts/preview-ibn-kathir-i04a-coordinated.py'
+      - 'scripts/test-ibn-kathir-i04a-coordinated-lifecycle.py'
+      - 'data/tafsir/staging/surah-108-payload-assembly-2026-10-16.json'
+      - 'data/tafsir/staging/surah-108-voice-projection-2026-10-17.json'
+      - 'data/tafsir/staging/qurtubi-108-q06-bilingual-source-check-2026-10-17.json'
+      - 'data/tafsir/staging/ibn-kathir-108-research-2026-10-12.json'
+      - 'data/tafsir/staging/ibn-kathir-108-evidence-voice-plan-2026-10-12.json'
       - 'scripts/validate-ibn-kathir-i04a-combined.py'
       - 'data/tafsir/staging/ibn-kathir-108-i04a-combined-candidate-2026-10-22.json'
       - 'scripts/validate-ibn-kathir-i04a-route-projection.py'
@@ -44,6 +58,20 @@ jobs:
         run: python scripts/validate-ibn-kathir-i04a-route-projection.py --root data/tafsir/staging --self-test
       - name: Validate combined candidate against both components
         run: python scripts/validate-ibn-kathir-i04a-combined.py --root data/tafsir/staging --self-test
+      - name: Read pinned pre-I04A repair baseline
+        uses: actions/checkout@v4
+        with:
+          ref: 5474fd1c60950b614d898eb518d6bfaa2a25e71c
+          path: .i04a-baseline
+          persist-credentials: false
+      - name: Check deterministic five-file preview
+        run: |
+          PYTHONHASHSEED=1 python scripts/preview-ibn-kathir-i04a-coordinated.py --root .i04a-baseline > /tmp/i04a-1.json
+          PYTHONHASHSEED=77 python scripts/preview-ibn-kathir-i04a-coordinated.py --root .i04a-baseline > /tmp/i04a-77.json
+          diff /tmp/i04a-1.json /tmp/i04a-77.json
+          cat /tmp/i04a-1.json
+      - name: Reject partial and divergent five-file repairs
+        run: python scripts/test-ibn-kathir-i04a-coordinated-lifecycle.py --baseline .i04a-baseline --current .
       - name: Confirm staging remained unchanged
         run: git diff --exit-code -- data/tafsir/staging
 # Offline validation only. No secrets, database connection or publication.
