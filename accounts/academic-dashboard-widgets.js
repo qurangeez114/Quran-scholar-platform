@@ -104,7 +104,8 @@ function renderInstructor(){
  for(const r of pending){
   const person=students.find(s=>s.id===r.student_id);
   const box=record(list,courseName(r.course_id),
-    (person?.name||'Student')+' · '+(r.request_type==='faculty'?'Accepted referral':'Student application'));
+    [r.student_name||person?.name||'Student',r.student_email,
+     r.request_type==='faculty'?'Accepted referral':'Student application'].filter(Boolean).join(' · '));
   const actions=add(box,create('div',undefined,'academic-dashboard-actions'));
   action(actions,'Approve',()=>api('enrollment_decide',{request_id:r.id,accept:true}));
   action(actions,'Decline',()=>api('enrollment_decide',{request_id:r.id,accept:false}),true);

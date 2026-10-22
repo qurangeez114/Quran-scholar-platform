@@ -290,7 +290,20 @@ Deno.serve(async req=>{
     const own=teacher?await checked(sb.from('qh_courses').select('id').eq('created_by',me).limit(200)):[];
     const assigned=own.length?await checked(sb.from('qh_academic_enrollment_requests')
       .select('*').in('course_id',own.map((c:any)=>c.id)).order('created_at',{ascending:false}).limit(120)):[];
-    result={student_requests:mine,teacher_requests:assigned};
+    // Instructors need to know who is applying: attach the applicant's name and
+    // login email (only for requests to courses this instructor owns).
+    const applicantIds=[...new Set(assigned.map((r:any)=>r.student_id).filter(Boolean))] as string[];
+    const applicants=new Map<string,{name:string,email:string}>();
+    await Promise.all(applicantIds.map(async id=>{
+     const acct=await checked(sb.from('qh_lms_accounts').select('display_name').eq('user_id',id).maybeSingle());
+     const u=await sb.auth.admin.getUserById(id);
+     const user=u?.data?.user;
+     applicants.set(id,{name:acct?.display_name||user?.user_metadata?.display_name||user?.user_metadata?.full_name||'',
+       email:user?.email||''});
+    }));
+    const teacherRequests=assigned.map((r:any)=>({...r,
+     student_name:applicants.get(r.student_id)?.name||'',student_email:applicants.get(r.student_id)?.email||''}));
+    result={student_requests:mine,teacher_requests:teacherRequests};
    }else if(action==='enrollment_request'){
     const c=await getCourse(body.course_id);
     if(ended(c)||!c.is_published)fail('Course is closed or unpublished');

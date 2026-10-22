@@ -169,8 +169,9 @@ async function refreshRequests(){
  for(const r of results.teacher_requests||[]){
   if(r.status!=='pending')continue;
   const course=state.teaching_courses.find(x=>x.id===r.course_id);
-  const sname=state.students?.find(x=>x.id===r.student_id)?.name||'Student';
-  const box=card(owner,course?.title||'Class',sname+' · '+(r.request_type==='faculty'?'Consented referral':'Student request'));
+  const sname=r.student_name||state.students?.find(x=>x.id===r.student_id)?.name||'Student';
+  const box=card(owner,course?.title||'Class',[sname,r.student_email,
+    r.request_type==='faculty'?'Consented referral':'Student request'].filter(Boolean).join(' · '));
   const a=actions(box);
   for(const approve of [true,false])add(a,btn(approve?'Approve':'Decline',async()=>{
    await api('enrollment_decide',{request_id:r.id,accept:approve});
