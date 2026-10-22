@@ -85,6 +85,45 @@
     else { a.style.cssText += 'position:fixed;top:10px;right:56px;z-index:9998;background:#FDFAF4;'; document.body.appendChild(a); }
   }
 
-  function init() { loadModal(); addNav(); setTimeout(addClock, 400); setTimeout(addAccount, 400); }
+  function addSchoolNav() {
+    var path = location.pathname.replace(/^\\/+/, '');
+    var school = /^(?:courses|course|lesson|student-dashboard|instructor-dashboard|faculty|faculty-profile|faculty-admin|apply|academic-hub|account|login|my-pages|my-research|quiz-results|sample-course|sample-video-class|admin-dashboard|admin-users|admin-evaluation-manager|instructor-welcome|student-welcome|admin\\/(?:lms|courses|lesson-manager|quiz-builder|grading|bulk-enrollment|analytics|deleted-accounts))\\.html$/i;
+    if (!school.test(path)) return;
+    if (document.getElementById('qh-school-topnav')) return;
+    var s = document.createElement('style');
+    s.id='qh-school-topnav-css';
+    s.textContent =
+      '#qh-school-topnav{position:sticky;top:0;z-index:10001;background:#fbf8f0;border-bottom:1px solid #d9cdb7;box-shadow:0 2px 7px #1c211914;font:500 13px/1.4 Arial,sans-serif;color:#382f24}' +
+      '#qh-school-topnav .qh-school-inner{max-width:1400px;margin:auto;display:flex;align-items:center;gap:4px;padding:6px 14px;overflow-x:auto;scrollbar-width:thin}' +
+      '#qh-school-topnav .qh-school-brand{font-weight:750;color:#694a20;text-decoration:none;white-space:nowrap;padding:8px 11px;margin-right:12px;border-right:1px solid #ddd0b7}' +
+      '#qh-school-topnav details{position:relative;flex:0 0 auto}' +
+      '#qh-school-topnav summary,#qh-school-topnav .qh-school-link{display:inline-flex;align-items:center;gap:6px;padding:9px 12px;border-radius:6px;color:#3f372d;text-decoration:none;white-space:nowrap;cursor:pointer;list-style:none;font-weight:600}' +
+      '#qh-school-topnav summary::-webkit-details-marker{display:none}' +
+      '#qh-school-topnav summary::after{content:"⌄";font-size:14px;color:#866c3f}' +
+      '#qh-school-topnav summary:hover,#qh-school-topnav .qh-school-link:hover,#qh-school-topnav details[open]>summary{background:#f0e6d3}' +
+      '#qh-school-topnav .qh-school-menu{position:fixed;z-index:10002;min-width:220px;max-width:calc(100vw - 24px);max-height:min(65vh,500px);overflow-y:auto;background:#fff;border:1px solid #ded0b8;border-radius:9px;padding:6px;box-shadow:0 12px 30px #20201b28}' +
+      '#qh-school-topnav .qh-school-menu a{display:block;text-decoration:none;border-radius:5px;padding:10px 12px;color:#393126;white-space:normal;font-size:13px}' +
+      '#qh-school-topnav .qh-school-menu a:hover,#qh-school-topnav .qh-school-menu a:focus-visible{background:#f7eddb;color:#653e06}' +
+      '#qh-school-topnav .qh-current{color:#855b1a!important;background:#f5ead5}' +
+      '@media(max-width:650px){#qh-school-topnav .qh-school-inner{padding:3px 7px;gap:0}#qh-school-topnav .qh-school-brand{padding:8px 7px;margin-right:5px;font-size:12px}#qh-school-topnav summary,#qh-school-topnav .qh-school-link{padding:8px 9px;font-size:12px}}';
+    document.head.appendChild(s);
+    var root = document.createElement('nav'); root.id='qh-school-topnav'; root.setAttribute('aria-label','School navigation');
+    var groups = [
+      ['Explore',[['Courses','/courses.html'],['Sample class','/sample-video-class.html'],['Apply to study','/apply.html'],['Faculty directory','/faculty.html']]],
+      ['My Learning',[['Student dashboard','/student-dashboard.html'],['My courses','/academic-hub.html?tab=courses'],['Learning groups','/academic-hub.html?tab=groups'],['Live classes','/academic-hub.html?tab=live'],['Quiz results','/quiz-results.html']]],
+      ['Teaching',[['Instructor dashboard','/instructor-dashboard.html'],['Manage courses','/admin/courses.html'],['Lesson manager','/admin/lesson-manager.html'],['Quiz builder','/admin/quiz-builder.html'],['Grading','/admin/grading.html'],['Faculty profile','/faculty-profile.html']]],
+      ['Community',[['Faculty','/faculty.html'],['Messages','/academic-hub.html?tab=messages'],['Research workspace','/my-research.html']]],
+      ['Administration',[['Admin dashboard','/admin-dashboard.html'],['School administration','/admin/lms.html'],['Student applications','/admin/lms.html'],['Manage users','/admin-users.html'],['Analytics','/admin/analytics.html']]]
+    ];
+    var inner=document.createElement('div');inner.className='qh-school-inner';
+    var brand=document.createElement('a');brand.className='qh-school-brand';brand.href='/courses.html';brand.textContent='QuranHikma School';inner.appendChild(brand);
+    groups.forEach(function(g){var d=document.createElement('details'),sm=document.createElement('summary'),m=document.createElement('div');sm.textContent=g[0];m.className='qh-school-menu';m.hidden=false;g[1].forEach(function(link){var a=document.createElement('a');a.href=link[1];a.textContent=link[0];if((location.pathname+location.search)===link[1] || (location.pathname===link[1] && !location.search))a.classList.add('qh-current');m.appendChild(a);});d.appendChild(sm);d.appendChild(m);d.addEventListener('toggle',function(){if(d.open){root.querySelectorAll('details').forEach(function(other){if(other!==d)other.open=false;});var rect=sm.getBoundingClientRect();m.style.top=Math.min(rect.bottom+4,window.innerHeight-75)+'px';m.style.left=Math.max(8,Math.min(rect.left,window.innerWidth-236))+'px';}});inner.appendChild(d);});
+    var account=document.createElement('a');account.href='/account.html';account.className='qh-school-link';account.textContent='Account';inner.appendChild(account);
+    root.appendChild(inner);document.body.insertBefore(root,document.body.firstChild);
+    document.addEventListener('click',function(e){if(!root.contains(e.target))root.querySelectorAll('details').forEach(function(d){d.open=false;});});
+    document.addEventListener('keydown',function(e){if(e.key==='Escape')root.querySelectorAll('details').forEach(function(d){d.open=false;});});
+  }
+
+  function init() { loadModal(); addSchoolNav(); addNav(); setTimeout(addClock, 400); setTimeout(addAccount, 400); }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();
