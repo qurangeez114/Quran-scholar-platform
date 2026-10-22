@@ -32,7 +32,16 @@ loadClasses();
 form.addEventListener('submit',async event=>{
  event.preventDefault();
  if(busy)return;
- if(!form.reportValidity())return;
+ form.querySelectorAll('[aria-invalid]').forEach(el=>{el.removeAttribute('aria-invalid');el.style.outline='';});
+ if(!form.checkValidity()){
+  const bad=[...form.elements].filter(el=>el.willValidate&&!el.checkValidity());
+  bad.forEach(el=>{el.setAttribute('aria-invalid','true');el.style.outline='2px solid #c0392b';});
+  const first=bad[0];
+  const label=(first.closest('label')?.childNodes[0]?.textContent||first.name||'A field').replace('*','').trim();
+  setStatus(`Please fix: ${label} — ${first.validationMessage}`+(bad.length>1?` (${bad.length} fields need attention)`:''),true);
+  first.scrollIntoView({behavior:'smooth',block:'center'});first.focus({preventScroll:true});
+  form.reportValidity();return;
+ }
  const data=Object.fromEntries(new FormData(form).entries());
  if(data.privacy_consent!=='on'){setStatus('Consent is required before submitting.',true);return;}
  data.privacy_consent=true;
