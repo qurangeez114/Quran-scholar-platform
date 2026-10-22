@@ -107,10 +107,41 @@ async function overview(){
  renderCourses();renderFaculty();
  renderInclusions();
 }
+function courseNumber(c){const t=String(c.title||'');const m=t.match(/(\d+)\s*$/)||t.match(/(\d+)/);return m?Number(m[1]):null;}
+function seriesName(c){return String(c.title||'').replace(/\d+\s*$/,'').trim().toLowerCase();}
+function sortCourses(list){
+ const ok=c=>c.sort_order??c.order_index??c.position??c.display_order??null;
+ return [...list].sort((a,b)=>{const sa=seriesName(a),sb=seriesName(b);if(sa!==sb)return sa.localeCompare(sb,undefined,{numeric:true});
+  const na=courseNumber(a),nb=courseNumber(b);if(na!=null&&nb!=null&&na!==nb)return na-nb;if(na!=null&&nb==null)return -1;if(nb!=null&&na==null)return 1;
+  const oa=ok(a),ob=ok(b);if(oa!=null&&ob!=null&&oa!==ob)return oa-ob;return String(a.title||'').localeCompare(String(b.title||''),undefined,{numeric:true});});
+}
+let progressApi=null;
+async function decorateProgress(box,courseId){
+ try{
+  progressApi??=import('/courses-api.js');
+  const {getLessonsByCourse,getStudentProgress}=await progressApi;
+  const [lessons,progress]=await Promise.all([getLessonsByCourse(courseId),getStudentProgress(courseId)]);
+  const ids=new Set((lessons||[]).map(l=>l.id));if(!ids.size||!box.isConnected)return;
+  const done=new Set((progress||[]).filter(x=>x.completed&&ids.has(x.lesson_id)).map(x=>x.lesson_id)).size;
+  const pct=Math.round(done/ids.size*100);
+  const [cls,label]=done>=ids.size?['status-completed','Completed']:done>0?['status-in-progress','In progress '+pct+'%']:['status-not-started','Not started'];
+  box.classList.add(cls);const h=box.querySelector('h3');box.insertBefore(el('span',label,'hub-status-badge'),h);
+ }catch(e){console.warn('Progress lookup unavailable',e);}
+}
+function applyCourseView(view){
+ const list=view==='list',root=$('course-catalog'),g=$('hub-grid-view'),l=$('hub-list-view');if(!root||!g||!l)return;
+ root.classList.toggle('list-view',list);g.setAttribute('aria-pressed',String(!list));l.setAttribute('aria-pressed',String(list));
+ try{localStorage.setItem('qh_hub_courses_view',list?'list':'grid');}catch{}
+}
+$('hub-grid-view')?.addEventListener('click',()=>applyCourseView('grid'));
+$('hub-list-view')?.addEventListener('click',()=>applyCourseView('list'));
+try{applyCourseView(localStorage.getItem('qh_hub_courses_view')==='list'?'list':'grid');}catch{}
 function renderCourses(){
  const root=$('course-catalog');root.replaceChildren();
- for(const c of state.public_courses){
+ for(const c of sortCourses(state.public_courses||[])){
   const box=card(root,c.title,c.description||'Public academic class');
+  const n=courseNumber(c),num=el('span',n!=null?String(n).padStart(2,'0'):'•','course-num');num.setAttribute('aria-hidden','true');box.prepend(num);
+  if(state.me)decorateProgress(box,c.id);
   p(box,'Instructor: '+name(c.created_by)+' · '+(c.access_closes_at?'Closes '+stamp(c.access_closes_at):'No deadline'));
   const a=actions(box);
   add(a,link('/course.html?course='+encodeURIComponent(c.id),'Class details'));
