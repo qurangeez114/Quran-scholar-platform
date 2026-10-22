@@ -11,7 +11,7 @@
   var NAV = [
     ['index.html','📖','Quran'],['campaigns.html','⚔️','Campaigns'],['research.html','🔬','Research'],
     ['themes.html','🗂️','Themes'],['madhhab.html','⚖️','Madhhab'],['sira.html','🕌','Sīra'],
-    ['stories.html','📚','Stories'],['books.html','📕','Books'],['narrations.html','🧵','Narrations'],
+    ['stories.html','📚','Stories'],['books.html','📕','Books'],['fatwas.html','⚖️','Fatwa'],['narrations.html','🧵','Narrations'],
     ['marketplace.html','🛒','Market'],['muhammad.html','☪️','Muhammad'],['contradiction.html','⚡','Tensions'],
     ['knowledge-graph.html','🕸️','Graph']
   ];
@@ -34,19 +34,32 @@
   }
 
   function addNav() {
+    // Centralized, consistent navigation: overrides legacy page-specific nav markup
+    // without allowing multiple bars to overlap.
+    var st = document.getElementById('qh-unified-nav-style');
+    if (!st) {
+      st = document.createElement('style'); st.id = 'qh-unified-nav-style';
+      st.textContent =
+        '#bottom-nav{position:fixed!important;bottom:0!important;left:0!important;right:0!important;top:auto!important;width:100%!important;height:64px!important;min-height:64px!important;background:#FDFAF4!important;border-top:1px solid #D4C7AA!important;display:flex!important;flex-direction:row!important;z-index:2147483000!important;overflow-x:auto!important;overflow-y:hidden!important;scrollbar-width:none!important;box-shadow:0 -2px 9px rgba(0,0,0,.12)!important;padding:0!important;margin:0!important;white-space:nowrap!important;}' +
+        '#bottom-nav::-webkit-scrollbar{display:none!important}' +
+        '#bottom-nav .bnav-btn{box-sizing:border-box!important;flex:0 0 76px!important;min-width:76px!important;max-width:76px!important;width:76px!important;height:64px!important;min-height:64px!important;display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;gap:3px!important;padding:5px 2px!important;margin:0!important;background:transparent!important;border:0!important;border-right:1px solid #EEE5D7!important;border-radius:0!important;color:#524a3b!important;font:600 10px/1.2 Arial,sans-serif!important;letter-spacing:0!important;text-transform:none!important;text-decoration:none!important;text-align:center!important;overflow:hidden!important;white-space:nowrap!important;cursor:pointer!important;}' +
+        '#bottom-nav .bnav-btn .bni{font-size:20px!important;line-height:24px!important;display:block!important;margin:0!important}' +
+        '#bottom-nav .bnav-btn.active{background:#F3E8CF!important;color:#754e0c!important;box-shadow:inset 0 3px #B8902A!important}' +
+        '#bottom-nav .bnav-btn:focus-visible{outline:2px solid #9c742a!important;outline-offset:-3px!important}' +
+        'body{padding-bottom:max(76px,env(safe-area-inset-bottom))!important}' +
+        '#bnav,.fatwa-bottom-nav{display:none!important}' +
+        '@media(min-width:900px){#bottom-nav .bnav-btn{flex-basis:80px!important;min-width:80px!important;max-width:80px!important;width:80px!important}}';
+      document.head.appendChild(st);
+    }
     var existing = document.getElementById('bottom-nav');
-    if (existing) { existing.innerHTML = navHtml(); return; } /* same full menu on every page */
-    var st = document.createElement('style');
-    st.textContent =
-      '#bottom-nav{position:fixed;bottom:0;left:0;right:0;height:54px;background:#FDFAF4;border-top:1.5px solid #E8DDC0;display:flex;z-index:9999;box-shadow:0 -2px 8px rgba(0,0,0,.1);overflow-x:auto;scrollbar-width:none}' +
-      '#bottom-nav::-webkit-scrollbar{display:none}' +
-      '.bnav-btn{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;background:none;border:none;border-right:1px solid #F0EAE0;cursor:pointer;padding:4px 1px;color:#AAA;font-size:8.5px;font-weight:700;text-transform:uppercase;min-width:62px;white-space:nowrap;font-family:inherit}' +
-      '.bnav-btn.active{color:#B8902A;background:#FDF8EE}.bnav-btn .bni{font-size:14px;line-height:1}' +
-      'body{padding-bottom:80px}';
-    document.head.appendChild(st);
-    var nav = document.createElement('nav'); nav.id = 'bottom-nav';
-    nav.innerHTML = navHtml();
-    document.body.appendChild(nav);
+    if (!existing) { existing=document.createElement('nav');existing.id='bottom-nav';document.body.appendChild(existing); }
+    existing.setAttribute('aria-label','QuranHikma site navigation');
+    existing.innerHTML=navHtml();
+    // Make the newly active item visible on narrow screens.
+    var active=existing.querySelector('.active');
+    if (active && active.offsetLeft > existing.clientWidth-90) {
+      existing.scrollLeft=Math.max(0,active.offsetLeft-existing.clientWidth/2+40);
+    }
   }
 
   function addClock() {
