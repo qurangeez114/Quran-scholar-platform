@@ -171,6 +171,14 @@
     .list-view .course-action{grid-column:2;grid-row:1/span 3;width:auto;margin:0;white-space:nowrap}
     .list-view .course-detail-link{display:none}
     @media (max-width:600px){.list-view .course-content{grid-template-columns:1fr}.list-view .course-action{grid-column:1;grid-row:auto;width:100%;margin-top:.4rem}}
+    .course-card.status-completed{border-left:6px solid #2e7d32;background:#f1f8f1}
+    .course-card.status-in-progress{border-left:6px solid #d99a00;background:#fff9e6}
+    .course-card.status-not-started{border-left:6px solid #c62828;background:#fdf1f1}
+    .status-badge{display:inline-block;align-self:flex-start;font-size:.78rem;font-weight:700;padding:.15rem .55rem;border-radius:999px;margin-bottom:.5rem}
+    .status-completed .status-badge{background:#2e7d32;color:#fff}
+    .status-in-progress .status-badge{background:#f5c542;color:#4a3500}
+    .status-not-started .status-badge{background:#c62828;color:#fff}
+    .list-view .status-badge{grid-column:1;margin:0}
   </style>
   <script src="site-motion.js" defer></script>
 <script src="/site-chrome.js" defer></script>
@@ -206,7 +214,7 @@
 
   <script type="module">
     import { supabase } from './accounts/client.js';
-    import { getCourses, getEnrollment, enrollInCourse } from './courses-api.js';
+    import { getCourses, getEnrollment, enrollInCourse, getLessonsByCourse, getStudentProgress } from './courses-api.js';
 
     let courses = [];
     let currentUser = null;
@@ -350,6 +358,21 @@
         if(currentUser){
           try{enrollment=await getEnrollment(course.id);}
           catch(error){console.warn('Enrollment lookup unavailable',error);}
+        }
+        if(currentUser){
+          try{
+            const [lessons,progress]=await Promise.all([getLessonsByCourse(course.id),getStudentProgress(course.id)]);
+            const ids=new Set((lessons||[]).map(l=>l.id));
+            const done=new Set((progress||[]).filter(p=>p.completed&&ids.has(p.lesson_id)).map(p=>p.lesson_id)).size;
+            const total=ids.size;
+            if(total){
+              const pct=Math.round(done/total*100);
+              const [cls,label]=done>=total?['status-completed','Completed']:done>0?['status-in-progress',`In progress ${pct}%`]:['status-not-started','Not started'];
+              card.classList.add(cls);
+              const badge=document.createElement('span');badge.className='status-badge';badge.textContent=label;
+              content.insertBefore(badge,title);
+            }
+          }catch(error){console.warn('Progress lookup unavailable',error);}
         }
         const pending=pendingByCourse.get(course.id);
         const action=button('Request admission');content.appendChild(action);
