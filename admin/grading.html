@@ -344,18 +344,28 @@
           .from('qh_assignments')
           .select(`
             *,
-            qh_lessons(
+            qh_lessons!inner(
               title,
               course_id
             ),
-            qh_assignment_submissions(
-              *,
-              qh_profiles(first_name, last_name)
-            )
+            qh_assignment_submissions(*)
           `)
           .in('qh_lessons.course_id', courses.map(c => c.id));
 
         if (assignmentError) throw assignmentError;
+
+        // qh_assignment_submissions.user_id references auth.users, not qh_profiles,
+        // so names are fetched separately and merged (qh_profiles: user_id, display_name).
+        const userIds = [...new Set((assignmentData || []).flatMap(a => (a.qh_assignment_submissions || []).map(s => s.user_id)).filter(Boolean))];
+        const names = new Map();
+        if (userIds.length) {
+          const { data: profiles } = await supabase.from('qh_profiles').select('user_id,display_name').in('user_id', userIds);
+          (profiles || []).forEach(p => names.set(p.user_id, p));
+        }
+        (assignmentData || []).forEach(a => (a.qh_assignment_submissions || []).forEach(s => {
+          const p = names.get(s.user_id);
+          s.qh_profiles = p ? { first_name: p.display_name, last_name: '' } : null;
+        }));
 
         // Flatten for easier rendering
         assignments = [];
