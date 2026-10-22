@@ -360,7 +360,14 @@
         const names = new Map();
         if (userIds.length) {
           const { data: profiles } = await supabase.from('qh_profiles').select('user_id,display_name').in('user_id', userIds);
-          (profiles || []).forEach(p => names.set(p.user_id, p));
+          (profiles || []).forEach(p => { if (p.display_name) names.set(p.user_id, p); });
+          // qh_profiles RLS hides other users' rows; the lms-admin dashboard returns enrolled students' names to instructors/owner.
+          if (userIds.some(id => !names.has(id))) {
+            try {
+              const { data: dash, error: dashError } = await supabase.functions.invoke('lms-admin', { body: { action: 'dashboard' } });
+              if (!dashError) (dash?.people || []).forEach(p => { if (!names.has(p.user_id)) names.set(p.user_id, { user_id: p.user_id, display_name: p.display_name || p.email }); });
+            } catch (e) { console.warn('Student names unavailable', e); }
+          }
         }
         (assignmentData || []).forEach(a => (a.qh_assignment_submissions || []).forEach(s => {
           const p = names.get(s.user_id);
@@ -475,7 +482,7 @@
       }
 
       try {
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('qh_assignment_submissions')
           .update({
             grade,
@@ -483,9 +490,11 @@
             graded_by: currentUser.id,
             graded_at: new Date().toISOString()
           })
-          .eq('id', currentSubmission.id);
+          .eq('id', currentSubmission.id)
+          .select('id');
 
         if (error) throw error;
+        if (!data || !data.length) throw new Error('Grade was not saved (no permission to update this submission)');
 
         showAlert('Assignment graded!', 'success');
         await loadAssignments();

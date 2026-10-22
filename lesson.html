@@ -861,9 +861,10 @@
             .select('id,content,grade,feedback,submitted_at,graded_at')
             .eq('assignment_id',currentAssignment.id)
             .eq('user_id',currentUser.id)
-            .order('submitted_at',{ascending:false}).limit(1);
+            .order('submitted_at',{ascending:false});
           if(previousError)throw previousError;
-          const saved=previous?.[0];
+          // Students may have several submission rows; prefer the most recent graded one so feedback is never hidden by a later ungraded duplicate.
+          const saved=(previous||[]).find(r=>r.grade!==null&&r.grade!==undefined)||previous?.[0];
           if(saved){
             const panel=document.getElementById('assignmentResult');
             panel.replaceChildren();
