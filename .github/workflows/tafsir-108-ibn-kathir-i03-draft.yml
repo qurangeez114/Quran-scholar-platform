@@ -2,6 +2,11 @@ name: Validate Surah 108 isolated I03 atomic draft
 on:
   push:
     paths:
+      - 'scripts/preview-ibn-kathir-i03-coordinated.py'
+      - 'scripts/test-ibn-kathir-i03-coordinated-lifecycle.py'
+      - 'data/tafsir/staging/surah-108-payload-assembly-2026-10-16.json'
+      - 'data/tafsir/staging/surah-108-voice-projection-2026-10-17.json'
+      - 'data/tafsir/staging/qurtubi-108-q06-bilingual-source-check-2026-10-17.json'
       - 'scripts/validate-ibn-kathir-i03-draft.py'
       - 'scripts/project-ibn-kathir-i03-voices.py'
       - 'data/tafsir/staging/ibn-kathir-108-i03-two-proposition-draft-2026-10-21.json'
@@ -9,6 +14,11 @@ on:
       - '.github/workflows/tafsir-108-ibn-kathir-i03-draft.yml'
   pull_request:
     paths:
+      - 'scripts/preview-ibn-kathir-i03-coordinated.py'
+      - 'scripts/test-ibn-kathir-i03-coordinated-lifecycle.py'
+      - 'data/tafsir/staging/surah-108-payload-assembly-2026-10-16.json'
+      - 'data/tafsir/staging/surah-108-voice-projection-2026-10-17.json'
+      - 'data/tafsir/staging/qurtubi-108-q06-bilingual-source-check-2026-10-17.json'
       - 'scripts/validate-ibn-kathir-i03-draft.py'
       - 'scripts/project-ibn-kathir-i03-voices.py'
       - 'data/tafsir/staging/ibn-kathir-108-i03-two-proposition-draft-2026-10-21.json'
@@ -34,3 +44,13 @@ jobs:
         run: python scripts/validate-ibn-kathir-i03-draft.py --root . --self-test
       - name: Preserve child references in anonymous voice projection
         run: python scripts/project-ibn-kathir-i03-voices.py --root .
+      - name: Check out pinned post-I02 staging baseline
+        uses: actions/checkout@v4
+        with:
+          ref: 52d17712d7f3138ec18471ab588813da8e04a15b
+          path: .i03-baseline
+          persist-credentials: false
+      - name: Validate deterministic coordinated preview against pinned baseline
+        run: python scripts/preview-ibn-kathir-i03-coordinated.py --root .i03-baseline
+      - name: Reject partial or divergent three-file transitions
+        run: python scripts/test-ibn-kathir-i03-coordinated-lifecycle.py --baseline .i03-baseline --current .
