@@ -86,8 +86,18 @@ exports.handler=async event=>{
         excerpt:page.excerpt.slice(0,6000),kind:'visitor-supplied page excerpt'});
     if(scope!=='page') sources.push(...await webSearch(messages.at(-1).content,scope));
     const packet=sources.map((s,i)=>'['+(i+1)+'] '+s.title+'\n'+s.url+'\n'+s.excerpt).join('\n\n').slice(0,12000);
+    const isSchool=Boolean(pageUrl&&['quranhikma.com','www.quranhikma.com']
+      .includes(new URL(pageUrl).hostname)&&
+      /^\/(course|lesson|courses|student-dashboard|instructor-dashboard|sample-course|sample-video-class|quiz-results|academic-hub)\.html$/.test(new URL(pageUrl).pathname));
     const system=[
       'You are the QuranHikma Research Assistant. Reply in visitor ISO language: '+language+'.',
+      ...(isSchool?[
+        'You are supporting a class as a tutor, not taking the course or a graded assessment for the learner.',
+        'Explain concepts, work through analogous practice examples, offer hints and feedback on reasoning.',
+        'Never provide the answer key, select quiz choices, complete active assessments or write final graded submissions for students.',
+        'If a learner requests the answer to a graded quiz, redirect to a conceptual hint and source evidence.',
+        'Never claim to know enrollment status, private classes or course materials not explicitly supplied.',
+      ]:[]),
       'Be neutral, evidence-based and text-first; distinguish scholarship, original texts and your own explanation.',
       'Cite supplied source snippets [1], [2], etc only where those specific excerpts support a statement.',
       'Never invent quotations, URLs, hadith numbers, positions of scholars or evidence.',
