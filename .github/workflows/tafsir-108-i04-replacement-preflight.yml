@@ -6,6 +6,13 @@ on:
       - 'data/tafsir/staging/ibn-kathir-108-research-2026-10-12.json'
       - 'data/tafsir/staging/ibn-kathir-108-i01-four-table-candidates-2026-10-17.json'
       - 'data/tafsir/staging/ibn-kathir-108-i04-replacement-candidates-2026-10-12.json'
+      - 'scripts/preview-ibn-kathir-i04a-coordinated.py'
+      - 'scripts/test-ibn-kathir-i04a-coordinated-lifecycle.py'
+      - 'data/tafsir/staging/ibn-kathir-108-i04a-combined-candidate-2026-10-22.json'
+      - 'data/tafsir/staging/ibn-kathir-108-evidence-voice-plan-2026-10-12.json'
+      - 'data/tafsir/staging/surah-108-payload-assembly-2026-10-16.json'
+      - 'data/tafsir/staging/surah-108-voice-projection-2026-10-17.json'
+      - 'data/tafsir/staging/qurtubi-108-q06-bilingual-source-check-2026-10-17.json'
   workflow_dispatch:
 permissions:
   contents: read
@@ -18,6 +25,16 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Read pinned post-I03 pre-I04A staging baseline
+        uses: actions/checkout@v4
+        with:
+          ref: 5474fd1c60950b614d898eb518d6bfaa2a25e71c
+          path: .i04a-baseline
+          persist-credentials: false
+      - name: Enforce exact I04A five-file transition and reject unsafe mutations
+        run: python scripts/test-ibn-kathir-i04a-coordinated-lifecycle.py --baseline .i04a-baseline --current .
       - name: Validate integrated atomic replacements read-only
         env:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
@@ -25,7 +42,7 @@ jobs:
         run: |
           import json,os,urllib.parse,urllib.request
           base='data/tafsir/staging/'
-          source=json.load(open(base+'ibn-kathir-108-research-2026-10-12.json',encoding='utf-8'))
+          source=json.load(open('.i04a-baseline/'+base+'ibn-kathir-108-research-2026-10-12.json',encoding='utf-8'))
           replacement=json.load(open(base+'ibn-kathir-108-i04-replacement-candidates-2026-10-12.json',encoding='utf-8'))
           expected_ids=['108-I04A','108-I04B','108-I04C','108-I04D']
           ids=[c['id'] for c in source['claims']]
