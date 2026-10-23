@@ -2,6 +2,12 @@ import {db,message as setMessage,exportResearch} from './client.js';
 import {lmsRequest} from './lms-access.js';
 let mode='login',recovering=location.hash.includes('type=recovery');
 const $=id=>document.getElementById(id);
+function requestedFatwaReturn(){
+ const value=new URLSearchParams(location.search).get('returnTo');
+ if(!value || !value.startsWith('/') || value.startsWith('//') || value.includes('\\'))return '';
+ try{const target=new URL(value,location.origin);return target.origin===location.origin && target.pathname==='/fatwas.html'?target.pathname+target.search+target.hash:'';}catch(_){return '';}
+}
+
 function message(text,error=false){
  const node=$('status');
  node.classList.toggle('auth-error',error);
@@ -48,7 +54,8 @@ async function render(){
    :'The 72-hour self-recovery period has ended. Contact the site administrator and provide the email address for this account. Only an authorized administrator can restore it.';
   return;
  }
- await ensureProfile(session.user);$('signed-in').hidden=false;$('delete-account').disabled=false;
+ await ensureProfile(session.user);$('signed-in').hidden=false;
+ const backToFatwa=requestedFatwaReturn();if(backToFatwa&&!recovering){location.replace(backToFatwa);return;}$('delete-account').disabled=false;
  $('deletion-availability').textContent='72-hour recovery is available.';
  const [{data:staff},{data:archiveAdmin}]=await Promise.all([db.rpc('qh_is_staff'),db.rpc('qh_can_manage_account_archive')]);
  $('account-archive-link').hidden=archiveAdmin!==true;
@@ -61,7 +68,7 @@ if(mode==='signup'){const firstName=$('firstName').value.trim(),lastName=$('last
 else if(mode==='recover')result=await db.auth.resetPasswordForEmail(email,{redirectTo:location.origin+'/account.html'});
 else result=await db.auth.signInWithPassword({email,password});
 if(mode==='signup'&&!result.error&&result.data.user&&result.data.user.identities?.length===0)return message('This email is already taken.');
-if(result.error)throw result.error;message(mode==='login'?'Signed in.':'Check your email for the next step.');await render();
+if(result.error)throw result.error;const returnTarget=requestedFatwaReturn();if(result.data?.session && returnTarget && mode==='login'){location.replace(returnTarget);return;}message(mode==='login'?'Signed in.':'Check your email for the next step.');await render();
 }catch(e){const invalid=mode==='login'&&(e.code==='invalid_credentials'||/invalid login credentials|invalid credentials|invalid email or password/i.test(e.message||''));message(invalid?'Invalid email or password. Please try again.':/already (registered|been registered)/i.test(e.message)?'This email is already taken.':e.message,true);}finally{$('submit').disabled=false;}};
 $('reset-form').onsubmit=async e=>{e.preventDefault();const pw=$('new-password').value;if(pw.length<12)return message('Password must be at least 12 characters.');if(pw!==$('new-password-confirm').value)return message('Passwords do not match.');const {error}=await db.auth.updateUser({password:$('new-password').value});if(error)return message(error.message);recovering=false;history.replaceState(null,'',location.pathname);message('Password updated. You can now open your instructor dashboard.');await render();};
 $('logout').onclick=async()=>{const {error}=await db.auth.signOut();if(error)return message(error.message);recovering=false;message('Logged out.');render();};
