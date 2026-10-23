@@ -2,6 +2,11 @@ name: Validate Surah 108 isolated I01 integration preview
 on:
   push:
     paths:
+      - 'scripts/preview-ibn-kathir-i04a-coordinated.py'
+      - 'scripts/test-ibn-kathir-i04a-coordinated-lifecycle.py'
+      - 'data/tafsir/staging/ibn-kathir-108-i04a-combined-candidate-2026-10-22.json'
+      - 'data/tafsir/staging/ibn-kathir-108-research-2026-10-12.json'
+      - 'data/tafsir/staging/ibn-kathir-108-evidence-voice-plan-2026-10-12.json'
       - 'tools/preview-i01-integration.py'
       - 'tools/test-i01-preview.py'
       - 'tools/verify-i01-lifecycle.py'
@@ -26,6 +31,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          persist-credentials: false
+      - name: Read pinned post-I03 pre-I04A repair baseline
+        uses: actions/checkout@v4
+        with:
+          ref: 5474fd1c60950b614d898eb518d6bfaa2a25e71c
+          path: .i04a-baseline
           persist-credentials: false
       - name: Read pinned post-T11A pre-T11C baseline
         uses: actions/checkout@v4
@@ -62,7 +73,7 @@ jobs:
         run: |
           import hashlib, json, os, pathlib
           paths=["data/tafsir/staging/ibn-kathir-108-external-locators-2026-10-14.json","data/tafsir/staging/surah-108-voice-projection-2026-10-17.json","data/tafsir/staging/surah-108-chapter-manifest-2026-10-12.json","data/tafsir/staging/ibn-kathir-108-i01-replacement-overlay-2026-10-17.json","data/tafsir/staging/surah-108-voice-column-audit-2026-10-17.json","data/tafsir/staging/surah-108-link-schema-q06-mapping-2026-10-17.json","data/tafsir/staging/qurtubi-108-q06-bilingual-source-check-2026-10-17.json","data/tafsir/staging/surah-108-payload-assembly-2026-10-16.json","data/tafsir/staging/ibn-kathir-108-research-2026-10-12.json","data/tafsir/staging/ibn-kathir-108-i01-four-table-candidates-2026-10-17.json","data/tafsir/staging/ibn-kathir-108-evidence-voice-plan-2026-10-12.json"]
-          for root,label in ((pathlib.Path('.i01-baseline'),'baseline'),(pathlib.Path('.t01-baseline'),'post'),(pathlib.Path('.'),'current')):
+          for root,label in ((pathlib.Path('.i01-baseline'),'baseline'),(pathlib.Path('.t01-baseline'),'post'),(pathlib.Path('.i04a-baseline'),'current')):
               snapshot={}
               for name in paths:
                   raw=(root/name).read_bytes()
@@ -111,4 +122,6 @@ jobs:
       - name: Validate exact I02 coordinated transition
         run: python3 scripts/test-ibn-kathir-i02-coordinated-lifecycle.py --baseline .i02-baseline --current .i03-baseline
       - name: Validate exact I03 coordinated transition
-        run: python3 scripts/test-ibn-kathir-i03-coordinated-lifecycle.py --baseline .i03-baseline --current .
+        run: python3 scripts/test-ibn-kathir-i03-coordinated-lifecycle.py --baseline .i03-baseline --current .i04a-baseline
+      - name: Validate exact I04A five-file repair
+        run: python3 scripts/test-ibn-kathir-i04a-coordinated-lifecycle.py --baseline .i04a-baseline --current .
