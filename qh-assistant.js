@@ -48,6 +48,7 @@
     const root=make('div');root.id='qh-ai-root';root.setAttribute('data-no-translate','');
     root.innerHTML='<div class="qh-ai-global"><label for="qh-ai-language" title="Website language">🌐 <span class="qh-ai-sr">Website language</span></label><select id="qh-ai-language" aria-label="Website and assistant language"></select><button id="qh-ai-power" type="button" aria-label="Turn AI assistant off" aria-pressed="true">AI: On</button></div>'+
       '<button type="button" id="qh-ai-launch" aria-label="Open research assistant" aria-expanded="false">✦ Ask Hikma</button>'+
+      '<button type="button" id="qh-ai-selection" hidden aria-label="Discuss highlighted text with Hikma">✦ Discuss selection</button>'+
       '<section id="qh-ai-panel" role="dialog" aria-label="QuranHikma research assistant" hidden>'+
       '<header><strong>QuranHikma • Research assistant</strong><button id="qh-ai-close" type="button" aria-label="Close">×</button></header>'+
       '<div class="qh-ai-tools"><label><input id="qh-ai-include" type="checkbox"> Include selected text / page excerpt</label>'+
@@ -75,12 +76,14 @@
     });lang.value=language;
     if(inSchool)launch.textContent='✦ Class Tutor';
     const power=$('qh-ai-power');
+    const selectionButton=$('qh-ai-selection');
     function setAssistantEnabled(value){
       assistantEnabled=Boolean(value);save(PREF,assistantEnabled?'true':'false');
       power.textContent=assistantEnabled?'AI: On':'AI: Off';
       power.setAttribute('aria-label',assistantEnabled?'Turn AI assistant off':'Turn AI assistant on');
       power.setAttribute('aria-pressed',String(assistantEnabled));
       launch.hidden=!assistantEnabled;
+      selectionButton.hidden=true;
       document.querySelectorAll('.qh-passage-actions').forEach(el=>{el.hidden=!assistantEnabled;});
       if(!assistantEnabled){
         activeController?.abort();activeController=null;
@@ -90,6 +93,49 @@
     }
     power.addEventListener('click',()=>setAssistantEnabled(!assistantEnabled));
     setAssistantEnabled(assistantEnabled);
+    // Selection actions are opt-in. Do not silently send highlights or form values.
+    function updateSelectionButton(){
+      if(!assistantEnabled){selectionButton.hidden=true;return;}
+      const selection=window.getSelection();
+      const anchor=selection?.anchorNode;
+      const focus=selection?.focusNode;
+      const anchorElement=anchor?.nodeType===1?anchor:anchor?.parentElement;
+      const focusElement=focus?.nodeType===1?focus:focus?.parentElement;
+      const isPrivateControl=el=>el?.closest('input,textarea,select,[contenteditable],#qh-ai-root');
+      const text=selection?.toString()?.trim()||'';
+      if(!text||text.length<3||!anchorElement||!focusElement
+        ||isPrivateControl(anchorElement)||isPrivateControl(focusElement)){
+        selectionButton.hidden=true;return;
+      }
+      selectedText=text.slice(0,4900);
+      let rect;
+      try{rect=selection.getRangeAt(0).getBoundingClientRect();}catch{}
+      if(!rect||rect.width===0&&rect.height===0){selectionButton.hidden=true;return;}
+      selectionButton.hidden=false;
+      selectionButton.style.top=Math.min(innerHeight-52,Math.max(8,rect.bottom+8))+'px';
+      selectionButton.style.left=Math.min(innerWidth-176,Math.max(8,rect.left))+'px';
+    }
+    document.addEventListener('selectionchange',()=>{
+      setTimeout(updateSelectionButton,75);
+    });
+    document.addEventListener('scroll',()=>{
+      if(!selectionButton.hidden)selectionButton.hidden=true;
+    },{passive:true,capture:true});
+    selectionButton.addEventListener('mousedown',e=>e.preventDefault());
+    selectionButton.addEventListener('click',e=>{
+      e.preventDefault();
+      const passage=selectedText.trim();
+      if(!assistantEnabled||passage.length<3)return;
+      passageContext={text:passage,label:'Highlighted text on '+document.title};
+      replyLanguageOverride=null;
+      $('qh-ai-include').checked=true;
+      $('qh-ai-passage-preview').hidden=false;
+      $('qh-ai-passage-preview').textContent='Highlighted passage selected (sent only when you press Send): '+
+        passage.slice(0,260)+(passage.length>260?'…':'');
+      question.value='Explain the highlighted passage, summarize its meaning, and identify what its sources do and do not establish.';
+      selectionButton.hidden=true;
+      toggle(true);
+    });
     if(inSchool)root.querySelectorAll('[data-qh-prompt]').forEach(btn=>btn.addEventListener('click',()=>{
       if(!assistantEnabled)return;
       question.value=btn.dataset.qhPrompt;question.focus();
@@ -191,7 +237,7 @@
     function toggle(open){
       if(!assistantEnabled)return;
       panel.hidden=!open;launch.setAttribute('aria-expanded',String(open));
-      if(open){render();question.focus();}
+      if(open){selectionButton.hidden=true;render();question.focus();}
     }
     launch.addEventListener('click',()=>toggle(panel.hidden));
     $('qh-ai-close').addEventListener('click',()=>toggle(false));
@@ -226,6 +272,7 @@
           sources:data.sources||[],time:new Date().toISOString()});
         persist();render();status.textContent=data.provenance||'Check original sources.';
         passageContext=null;replyLanguageOverride=null;
+        selectedText='';
         $('qh-ai-include').checked=false;
         $('qh-ai-passage-preview').hidden=true;
       }catch(error){if(assistantEnabled&&error.name!=='AbortError')status.textContent=error.message||'Request failed';}
