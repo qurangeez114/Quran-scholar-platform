@@ -1,0 +1,223 @@
+{
+  "schema_version": "quranhikma-i05-live-constraint-review-v1",
+  "at": "2026-10-23T10:01:00-07:00",
+  "surah": 108,
+  "claim_id": "108-I05",
+  "method": "Three read-only SELECT queries: pg_constraint, canonical tafsir entry identities, selected claim_types",
+  "constraints": [
+    {
+      "table_name": "evidence_units",
+      "conname": "evidence_units_independence_state_check",
+      "contype": "c",
+      "definition": "CHECK ((independence_state = ANY (ARRAY['unknown'::text, 'not_independent'::text, 'possibly_independent'::text, 'independence_supported'::text])))"
+    },
+    {
+      "table_name": "evidence_units",
+      "conname": "evidence_units_unit_type_check",
+      "contype": "c",
+      "definition": "CHECK ((unit_type = ANY (ARRAY['grouped_named_attribution'::text, 'single_named_attribution'::text, 'single_hadith_citation'::text, 'quran_cross_reference'::text, 'grammatical_argument'::text, 'lexical_argument'::text, 'unattributed_assertion'::text])))"
+    },
+    {
+      "table_name": "proposition_evidence",
+      "conname": "proposition_evidence_evidence_unit_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (evidence_unit_id) REFERENCES evidence_units(id) ON DELETE RESTRICT"
+    },
+    {
+      "table_name": "proposition_evidence",
+      "conname": "proposition_evidence_proposition_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (proposition_id) REFERENCES propositions(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "proposition_voice_chain",
+      "conname": "proposition_voice_chain_proposition_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (proposition_id) REFERENCES propositions(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "proposition_voice_chain",
+      "conname": "proposition_voice_chain_reporting_work_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (reporting_work_id) REFERENCES sources(id) ON DELETE RESTRICT"
+    },
+    {
+      "table_name": "proposition_voice_chain",
+      "conname": "pvc_name_required_check",
+      "contype": "c",
+      "definition": "CHECK ((((originating_voice_type = ANY (ARRAY['exegete_own_view'::text, 'unattributed_group'::text])) AND (originating_voice_name IS NULL)) OR ((originating_voice_type <> ALL (ARRAY['exegete_own_view'::text, 'unattributed_group'::text])) AND (originating_voice_name IS NOT NULL))))"
+    },
+    {
+      "table_name": "proposition_voice_chain",
+      "conname": "pvc_type_check",
+      "contype": "c",
+      "definition": "CHECK ((originating_voice_type = ANY (ARRAY['exegete_own_view'::text, 'named_earlier_exegete'::text, 'companion_report'::text, 'hadith_report'::text, 'unattributed_group'::text])))"
+    },
+    {
+      "table_name": "propositions",
+      "conname": "propositions_assertion_mode_check",
+      "contype": "c",
+      "definition": "CHECK ((assertion_mode = ANY (ARRAY['explicit'::text, 'inferred'::text, 'quoted'::text, 'reported_action'::text, 'narrator_commentary'::text])))"
+    },
+    {
+      "table_name": "propositions",
+      "conname": "propositions_attribution_fidelity_check",
+      "contype": "c",
+      "definition": "CHECK (((attribution_fidelity IS NULL) OR (attribution_fidelity = ANY (ARRAY['exact_quotation'::text, 'accurate_paraphrase'::text, 'partial_paraphrase'::text, 'problematic'::text]))))"
+    },
+    {
+      "table_name": "propositions",
+      "conname": "propositions_claim_subject_type_check",
+      "contype": "c",
+      "definition": "CHECK ((claim_subject_type = ANY (ARRAY['allah'::text, 'prophet'::text, 'companion'::text, 'women_general'::text, 'men_general'::text, 'spouses_general'::text, 'specific_individual'::text, 'group'::text, 'institution_or_practice'::text, 'entity_class'::text, 'unspecified'::text])))"
+    },
+    {
+      "table_name": "propositions",
+      "conname": "propositions_claim_type_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (claim_type_id) REFERENCES claim_types(id)"
+    },
+    {
+      "table_name": "propositions",
+      "conname": "propositions_comparison_object_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (comparison_object_id) REFERENCES comparison_objects(id)"
+    },
+    {
+      "table_name": "propositions",
+      "conname": "propositions_extraction_validity_check",
+      "contype": "c",
+      "definition": "CHECK ((extraction_validity = ANY (ARRAY['verified'::text, 'legitimate_translation_expansion'::text, 'unverified_source_contamination'::text, 'pending_source_verification'::text, 'withdrawn'::text])))"
+    },
+    {
+      "table_name": "propositions",
+      "conname": "propositions_hadith_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (hadith_id) REFERENCES hadith_corpus(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "propositions",
+      "conname": "propositions_mufassir_own_position_check",
+      "contype": "c",
+      "definition": "CHECK (((mufassir_own_position IS NULL) OR (mufassir_own_position = ANY (ARRAY['preferred'::text, 'reported_only'::text, 'rejected'::text, 'unclear'::text]))))"
+    },
+    {
+      "table_name": "propositions",
+      "conname": "propositions_normative_polarity_check",
+      "contype": "c",
+      "definition": "CHECK ((normative_polarity = ANY (ARRAY['positive'::text, 'negative'::text, 'not_applicable'::text])))"
+    },
+    {
+      "table_name": "propositions",
+      "conname": "propositions_one_source_check",
+      "contype": "c",
+      "definition": "CHECK ((((source_type = 'hadith'::text) AND (hadith_id IS NOT NULL) AND (quran_verse_id IS NULL) AND (tafsir_entry_id IS NULL)) OR ((source_type = 'quran_verse'::text) AND (quran_verse_id IS NOT NULL) AND (hadith_id IS NULL) AND (tafsir_entry_id IS NULL)) OR ((source_type = 'tafsir_entry'::text) AND (tafsir_entry_id IS NOT NULL) AND (hadith_id IS NULL) AND (quran_verse_id IS NULL))))"
+    },
+    {
+      "table_name": "propositions",
+      "conname": "propositions_quran_verse_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (quran_verse_id) REFERENCES quran_verses(id)"
+    },
+    {
+      "table_name": "propositions",
+      "conname": "propositions_quranic_textual_support_check",
+      "contype": "c",
+      "definition": "CHECK (((quranic_textual_support IS NULL) OR (quranic_textual_support = ANY (ARRAY['explicit'::text, 'possible_inference'::text, 'not_stated'::text]))))"
+    },
+    {
+      "table_name": "propositions",
+      "conname": "propositions_scope_generality_check",
+      "contype": "c",
+      "definition": "CHECK ((scope_generality = ANY (ARRAY['general_unconditional'::text, 'conditional'::text, 'specific_instance'::text, 'not_applicable'::text])))"
+    },
+    {
+      "table_name": "propositions",
+      "conname": "propositions_source_type_check",
+      "contype": "c",
+      "definition": "CHECK ((source_type = ANY (ARRAY['hadith'::text, 'quran_verse'::text, 'tafsir_entry'::text])))"
+    },
+    {
+      "table_name": "propositions",
+      "conname": "propositions_speaker_type_check",
+      "contype": "c",
+      "definition": "CHECK ((speaker_type = ANY (ARRAY['prophet'::text, 'allah'::text, 'companion'::text, 'sub_narrator'::text, 'compiler'::text, 'translator_editor'::text, 'unspecified'::text])))"
+    },
+    {
+      "table_name": "propositions",
+      "conname": "propositions_status_check",
+      "contype": "c",
+      "definition": "CHECK ((status = ANY (ARRAY['active'::text, 'superseded'::text])))"
+    },
+    {
+      "table_name": "propositions",
+      "conname": "propositions_tafsir_entry_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (tafsir_entry_id) REFERENCES tafsir_entries(id) ON DELETE RESTRICT"
+    },
+    {
+      "table_name": "propositions",
+      "conname": "propositions_temporal_applicability_check",
+      "contype": "c",
+      "definition": "CHECK ((temporal_applicability = ANY (ARRAY['unrestricted'::text, 'occasion_specific'::text, 'unspecified'::text])))"
+    },
+    {
+      "table_name": "propositions",
+      "conname": "propositions_verification_state_check",
+      "contype": "c",
+      "definition": "CHECK ((verification_state = ANY (ARRAY['legacy_verification_unspecified'::text, 'unreviewed'::text, 'source_language_located'::text, 'reviewer_approved_translation_only'::text, 'source_language_proposition_verified'::text, 'independently_reconstructed'::text, 'double_reviewed'::text])))"
+    }
+  ],
+  "canonical_entries": [
+    {
+      "id": 11080,
+      "sura": 108,
+      "aya": 2,
+      "language": "en",
+      "scholar_key": "ibn_kathir"
+    },
+    {
+      "id": 48458,
+      "sura": 108,
+      "aya": 2,
+      "language": "ar",
+      "scholar_key": "ibn_kathir"
+    }
+  ],
+  "claim_types": [
+    {
+      "id": 4,
+      "code": "command",
+      "label_en": "Command",
+      "description": "A commanded X."
+    },
+    {
+      "id": 14,
+      "code": "reported_speech",
+      "label_en": "Reported speech",
+      "description": "A narrator's report that someone said something, without full direct quotation."
+    },
+    {
+      "id": 44,
+      "code": "lexical_meaning",
+      "label_en": "Lexical meaning",
+      "description": "What a specific word or phrase means."
+    }
+  ],
+  "findings": [
+    "Reported subset claim_type_id 14 remains reported_speech. Its selected explicit, reported_only, source_language_located, pending_source_verification and accurate_paraphrase values are allowed by observed checks.",
+    "grouped_named_attribution with unknown independence is allowed. Named voice types companion_report and named_earlier_exegete require non-null names; draft provides them.",
+    "Canonical Arabic entry 48458 and English entry 11080 are confirmed as Ibn Kathir 108:2.",
+    "Foreign keys require existing source work IDs and resolved physical proposition/evidence IDs. Canonical tafsir entry target checked; reporting_work_id=2 identity remains to be revalidated.",
+    "Catalog exposes command=4 and lexical_meaning=44. Authorial I05 statements describe interpretation of a command; catalog availability alone does not decide semantic claim type. Preserve that choice as pending rather than assigning reported_speech."
+  ],
+  "limits": [
+    "No insertion, constraint execution against candidate rows, trigger or policy test performed.",
+    "Live duplicate search remains pending.",
+    "No candidate or historical inventory changes; six-scholar baseline unchanged."
+  ],
+  "next_step": "Check reporting source identity and bounded live duplicates; choose authorial claim types based on source scope, then complete full candidate while preserving adjacent holds.",
+  "database_written": false,
+  "publication_ready": false,
+  "chapter_complete": false
+}
