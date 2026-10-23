@@ -8,6 +8,8 @@ function requestedFatwaReturn(){
  try{const target=new URL(value,location.origin);return target.origin===location.origin && target.pathname==='/fatwas.html'?target.pathname+target.search+target.hash:'';}catch(_){return '';}
 }
 
+function accountEmailRedirect(){const back=requestedFatwaReturn();return location.origin+'/account.html'+(back?'?returnTo='+encodeURIComponent(back):'');}
+
 function message(text,error=false){
  const node=$('status');
  node.classList.toggle('auth-error',error);
@@ -64,13 +66,13 @@ db.auth.onAuthStateChange(event=>{if(event==='PASSWORD_RECOVERY')recovering=true
 $('auth-form').onsubmit=async e=>{e.preventDefault();message(mode==='login'?'Signing in…':'Submitting…');$('submit').disabled=true;try{
 const email=$('email').value.trim(),password=$('password').value;let result;
 if(mode==='signup'){if(password.length<12)return message('Password must be at least 12 characters.');if(password!==$('password-confirm').value)return message('Passwords do not match.');}
-if(mode==='signup'){const firstName=$('firstName').value.trim(),lastName=$('lastName').value.trim();result=await db.auth.signUp({email,password,options:{emailRedirectTo:location.origin+'/account.html',data:{display_name:`${firstName} ${lastName}`.trim()}}});}
-else if(mode==='recover')result=await db.auth.resetPasswordForEmail(email,{redirectTo:location.origin+'/account.html'});
+if(mode==='signup'){const firstName=$('firstName').value.trim(),lastName=$('lastName').value.trim();result=await db.auth.signUp({email,password,options:{emailRedirectTo:accountEmailRedirect(),data:{display_name:`${firstName} ${lastName}`.trim()}}});}
+else if(mode==='recover')result=await db.auth.resetPasswordForEmail(email,{redirectTo:accountEmailRedirect()});
 else result=await db.auth.signInWithPassword({email,password});
 if(mode==='signup'&&!result.error&&result.data.user&&result.data.user.identities?.length===0)return message('This email is already taken.');
 if(result.error)throw result.error;const returnTarget=requestedFatwaReturn();if(result.data?.session && returnTarget && mode==='login'){location.replace(returnTarget);return;}message(mode==='login'?'Signed in.':'Check your email for the next step.');await render();
 }catch(e){const invalid=mode==='login'&&(e.code==='invalid_credentials'||/invalid login credentials|invalid credentials|invalid email or password/i.test(e.message||''));message(invalid?'Invalid email or password. Please try again.':/already (registered|been registered)/i.test(e.message)?'This email is already taken.':e.message,true);}finally{$('submit').disabled=false;}};
-$('reset-form').onsubmit=async e=>{e.preventDefault();const pw=$('new-password').value;if(pw.length<12)return message('Password must be at least 12 characters.');if(pw!==$('new-password-confirm').value)return message('Passwords do not match.');const {error}=await db.auth.updateUser({password:$('new-password').value});if(error)return message(error.message);recovering=false;history.replaceState(null,'',location.pathname);message('Password updated. You can now open your instructor dashboard.');await render();};
+$('reset-form').onsubmit=async e=>{e.preventDefault();const pw=$('new-password').value;if(pw.length<12)return message('Password must be at least 12 characters.');if(pw!==$('new-password-confirm').value)return message('Passwords do not match.');const {error}=await db.auth.updateUser({password:$('new-password').value});if(error)return message(error.message);recovering=false;history.replaceState(null,'',location.pathname+location.search);message('Password updated. You can now open your instructor dashboard.');await render();};
 $('logout').onclick=async()=>{const {error}=await db.auth.signOut();if(error)return message(error.message);recovering=false;message('Logged out.');render();};
 $('export').onclick=()=>exportResearch().catch(e=>message(e.message));
 document.querySelectorAll('.pw-toggle').forEach(b=>b.onclick=()=>{const input=$(b.dataset.target);const show=input.type==='password';input.type=show?'text':'password';b.setAttribute('aria-pressed',String(show));b.setAttribute('aria-label',show?'Hide password':'Show password');});
