@@ -10,6 +10,8 @@ def need(ok,msg):
 def validate(d,l):
     u=next(x for x in l['units'] if x['key']=='108-I05-R01')
     ctx=u['arabic_locator'];s=ctx['text'];base=ctx['start']
+    need(hashlib.sha256(s.encode()).hexdigest()=='8787bffa010b3d2c87d5cc64e5a455305de12f3926bbe955ad81fae2898eb0fe','pinned R01 source context drift')
+    need(l['witness_sha256']=='088bd57659f0a6645f7195f2e98caf9562e0571eca8214730cd55c07401402b2','pinned source witness drift')
     need(d['source']['context']==ctx,'context drift')
     need(d['source']['witness_sha256']==l['witness_sha256'],'witness drift')
     need(d['source']['canonical_entry_id']==48458 and d['source']['captured_entry_id']==48457,'canonical/witness confusion')
@@ -53,10 +55,17 @@ def main():
     bad(lambda b:b['parallel_reference'].update(dependency='full chain reconstructed'))
     bad(lambda b:b['dialogue'][2]['locator'].update(start=0))
     bad(lambda b:b.update(publication_ready=True))
+    bad(lambda b:b['source'].update(witness_sha256='unverified'))
     if a.self_test:
+        altered=copy.deepcopy(l)
+        altered['witness_sha256']='unverified'
+        joint=copy.deepcopy(d);joint['source']['witness_sha256']='unverified'
+        try:validate(joint,altered)
+        except ValueError:pass
+        else:raise ValueError('joint witness drift accepted')
         for b in cases:
             try:validate(b,l)
             except ValueError:continue
             raise ValueError('unsafe mutation accepted')
-    print(json.dumps(dict(status='PASS',rejected_cases=len(cases) if a.self_test else 0,database_written=False,publication_ready=False)))
+    print(json.dumps(dict(status='PASS',rejected_cases=len(cases)+1 if a.self_test else 0,database_written=False,publication_ready=False)))
 if __name__=='__main__':main()
