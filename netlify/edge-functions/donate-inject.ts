@@ -36,6 +36,16 @@ export default async (_request: Request, context: any) => {
   injectScript('/behavior-collector.js');
   injectScript('/save-selection.js');
 
+  // AI/translation uses paid external services. Keep completely hidden until
+  // staff enables the feature after privacy, source and abuse-limit testing.
+  if (Netlify.env.get('QH_ASSISTANT_ENABLED') === 'true') {
+    if (!html.includes('href="/qh-assistant.css"')) {
+      const style = '<link rel="stylesheet" href="/qh-assistant.css">';
+      html = html.includes('</head>') ? html.replace('</head>', style + '\n</head>') : style + html;
+    }
+    injectScript('/qh-assistant.js');
+  }
+
   const headers = new Headers(response.headers);
   headers.delete("content-length");
   return new Response(html, {
