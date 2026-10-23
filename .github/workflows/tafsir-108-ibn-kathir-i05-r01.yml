@@ -1,0 +1,34 @@
+name: Validate Surah 108 I05-R01 chain and dialogue
+on:
+  push:
+    paths:
+      - 'scripts/validate-ibn-kathir-i05-r01.py'
+      - 'data/tafsir/staging/ibn-kathir-108-i05-r01-chain-dialogue-dossier-2026-10-23.json'
+      - 'data/tafsir/staging/ibn-kathir-108-i05-adjacent-coverage-ledger-2026-10-23.json'
+      - '.github/workflows/tafsir-108-ibn-kathir-i05-r01.yml'
+  pull_request:
+    paths:
+      - 'scripts/validate-ibn-kathir-i05-r01.py'
+      - 'data/tafsir/staging/ibn-kathir-108-i05-r01-chain-dialogue-dossier-2026-10-23.json'
+      - 'data/tafsir/staging/ibn-kathir-108-i05-adjacent-coverage-ledger-2026-10-23.json'
+      - '.github/workflows/tafsir-108-ibn-kathir-i05-r01.yml'
+permissions:
+  contents: read
+concurrency:
+  group: tafsir-108-i05-r01-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate printed chain and nested speakers; reject unsafe mutations
+        run: python scripts/validate-ibn-kathir-i05-r01.py --self-test
+      - name: Confirm read-only validation
+        run: git diff --exit-code
