@@ -89,8 +89,15 @@ exports.handler=async event=>{
     const isSchool=Boolean(pageUrl&&['quranhikma.com','www.quranhikma.com']
       .includes(new URL(pageUrl).hostname)&&
       /^\/(course|lesson|courses|student-dashboard|instructor-dashboard|sample-course|sample-video-class|quiz-results|academic-hub)\.html$/.test(new URL(pageUrl).pathname));
+    const passageTranslation=body.mode==='arabic_to_english';
     const system=[
-      'You are the QuranHikma Research Assistant. Reply in visitor ISO language: '+language+'.',
+      'You are the QuranHikma Research Assistant. Reply in visitor ISO language: '+(passageTranslation?'en':language)+'.',
+      ...(passageTranslation?[
+        'Task: Arabic-to-English source translation of ONLY the Arabic passages supplied under Reference material.',
+        'Keep Arabic source intact by labeling original Arabic separately from an explicitly AI-generated English translation.',
+        'Never invent missing original text or present an AI version as a published verified translation.',
+        'Do not translate unrelated English headings or narration excerpts as if they were original Arabic.'
+      ]:[]),
       ...(isSchool?[
         'You are supporting a class as a tutor, not taking the course or a graded assessment for the learner.',
         'Explain concepts, work through analogous practice examples, offer hints and feedback on reasoning.',
