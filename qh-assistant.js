@@ -22,6 +22,8 @@
   try{const v=JSON.parse(get(STORAGE,'[]'));if(Array.isArray(v))messages=v.slice(-40).filter(m=>
     ['user','assistant'].includes(m.role)&&typeof m.text==='string');}catch{}
   let selectedText='';
+  let passageContext=null;
+  let replyLanguageOverride=null;
   document.addEventListener('selectionchange',()=>{
     const txt=String(window.getSelection()||'').trim();
     if(txt&&!(document.getElementById('qh-ai-root')?.contains(window.getSelection()?.anchorNode)))
@@ -51,7 +53,8 @@
       '<div class="qh-ai-tools"><label><input id="qh-ai-include" type="checkbox"> Include selected text / page excerpt</label>'+
       '<label>Search <select id="qh-ai-scope"><option value="page">This page only</option><option value="site">QuranHikma website</option><option value="web">Public web</option></select></label></div>'+
       (inSchool?'<div class="qh-ai-prompts" aria-label="Class tutor prompts"><button type="button" data-qh-prompt="Explain this lesson step by step, using evidence and examples.">Explain lesson</button><button type="button" data-qh-prompt="Give me a hint about the topic without answering any quiz or assignment for me.">Give a hint</button><button type="button" data-qh-prompt="Summarize the main ideas and explain what I should learn.">Summarize</button><button type="button" data-qh-prompt="How can I check the original evidence for this topic?">Find evidence</button></div>':'')+
-      '<div id="qh-ai-messages" aria-live="polite" aria-relevant="additions text"></div>'+
+      '<div id="qh-ai-passage-preview" class="qh-ai-passage-preview" hidden></div>'+ 
+      '<div id="qh-ai-messages" aria-live="polite" aria-relevant="additions text"></div>'+ 
       '<p id="qh-ai-status" role="status">Research responses are AI-generated; check original source links.</p>'+
       '<form id="qh-ai-form"><textarea id="qh-ai-question" maxlength="2200" rows="2" aria-label="Ask a question" placeholder="Ask about this page, compare sources, or request research…"></textarea>'+
       '<button id="qh-ai-mic" type="button" title="Dictate a question" aria-label="Dictate question">🎤</button>'+
@@ -78,6 +81,7 @@
       power.setAttribute('aria-label',assistantEnabled?'Turn AI assistant off':'Turn AI assistant on');
       power.setAttribute('aria-pressed',String(assistantEnabled));
       launch.hidden=!assistantEnabled;
+      document.querySelectorAll('.qh-passage-actions').forEach(el=>{el.hidden=!assistantEnabled;});
       if(!assistantEnabled){
         activeController?.abort();activeController=null;
         panel.hidden=true;launch.setAttribute('aria-expanded','false');
@@ -90,6 +94,79 @@
       if(!assistantEnabled)return;
       question.value=btn.dataset.qhPrompt;question.focus();
     }));
+    function setPassage(element, action){
+      if(!assistantEnabled)return;
+      const clone=element.cloneNode(true);
+      clone.querySelectorAll('.qh-passage-actions,script,style,button,input,textarea,select').forEach(n=>n.remove());
+      let passage=(clone.innerText||clone.textContent||'').trim();
+      const verse=element.closest('.verse-card');
+      const verseNumber=verse?.querySelector('.verse-num')?.textContent?.trim()||'';
+      const originalArabic=verse?.querySelector('.verse-arabic')?.textContent?.trim()||'';
+      // Panel-specific material may omit the Arabic verse that it comments on.
+      if(originalArabic&&element.classList.contains('tab-panel')){
+        passage=(verseNumber+'\nArabic verse: '+originalArabic+'\n'+passage).trim();
+      }
+      passage=passage.slice(0,4900);
+      if(passage.length<12){$('qh-ai-status').textContent='Please open or select the passage first.';toggle(true);return;}
+      if(action==='translate'&&!/[\u0600-\u06ff]/.test(passage)){
+        $('qh-ai-status').textContent='No Arabic text found here. Select the Arabic passage to translate.';
+        toggle(true);return;
+      }
+      passageContext={text:passage,label:(verseNumber?verseNumber+' • ':'')+
+        (element.classList.contains('tab-panel')?(element.id.split('-').at(-1)||'Study panel'):'Source passage')};
+      replyLanguageOverride=action==='translate'?'en':null;
+      $('qh-ai-include').checked=true;
+      $('qh-ai-passage-preview').hidden=false;
+      $('qh-ai-passage-preview').textContent='Selected for the next request: '+
+        passageContext.label+' — '+passage.slice(0,220)+(passage.length>220?'…':'')+
+        ' (sent only when you press Send)';
+      question.value=action==='translate'
+        ?'Translate the Arabic in the selected passage to English. Preserve the original Arabic and label the English as an AI-generated translation, not a verified published translation.'
+        :action==='compare'
+        ?'Compare the selected passage with the verse and related interpretations. Distinguish sources, evidence and uncertain claims.'
+        :action==='explain'
+        ?'Explain the selected passage in plain language and distinguish its original wording from interpretation.'
+        :'Summarize this selected passage, keeping names, references and important qualifications.';
+      toggle(true);
+      $('qh-ai-status').textContent='Review the selected excerpt; it will be sent to the AI only after you press Send.';
+      question.focus();
+    }
+    function enhancePassages(){
+      if(!assistantEnabled)return;
+      // These are research pages only; never scrape classrooms, messages, or private user notes.
+      if(!/^\/(?:index\.html|verse-detail\.html|study_page\.html|theme-reader\.html|theme-analysis\.html)?$/.test(location.pathname))return;
+      const container=document.querySelector('#verseArea')||document.querySelector('main')||document.body;
+      const targets=container.querySelectorAll('.verse-card .tab-panel,.hadith-card,.tafsir-card');
+      let added=0;
+      for(const target of targets){
+        if(added>=150)break;
+        if(target.querySelector(':scope > .qh-passage-actions'))continue;
+        if(!target.textContent||target.textContent.trim().length<30)continue;
+        const toolbar=make('div','qh-passage-actions');toolbar.setAttribute('data-qh-passage-actions','');
+        const options=[['Summarize','summary'],['Arabic → English','translate'],
+          ['Explain','explain'],['Compare','compare']];
+        for(const [label,action] of options){
+          const btn=make('button',null,'✦ '+label);
+          btn.type='button';btn.setAttribute('aria-label',label+' this passage');
+          btn.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();setPassage(target,action);});
+          toolbar.appendChild(btn);
+        }
+        target.appendChild(toolbar);added++;
+      }
+    }
+    if(/^\/(?:index\.html|verse-detail\.html|study_page\.html|theme-reader\.html|theme-analysis\.html)?$/.test(location.pathname)){
+      let scheduled=false;
+      const observer=new MutationObserver(changes=>{
+        if(changes.every(c=>[...c.addedNodes].every(n=>
+          n.nodeType===1&&n.classList?.contains('qh-passage-actions'))))return;
+        if(scheduled)return;
+        scheduled=true;
+        setTimeout(()=>{scheduled=false;enhancePassages();},200);
+      });
+      observer.observe(document.querySelector('#verseArea')||document.body,
+        {childList:true,subtree:true});
+      enhancePassages();
+    }
     function persist(){save(STORAGE,JSON.stringify(messages.slice(-40)));}
     function render(){
       list.replaceChildren();
@@ -130,11 +207,12 @@
       question.value='';messages.push({role:'user',text:q,time:new Date().toISOString()});
       persist();render();status.textContent='Preparing response…';
       $('qh-ai-send').disabled=true;
-      const excerpt=$('qh-ai-include').checked ? (selectedText||
-        (document.querySelector('main')||document.body).innerText.slice(0,5000)) : '';
+      const excerpt=$('qh-ai-include').checked ? (
+        passageContext?.text || selectedText || (document.querySelector('main')||document.body).innerText.slice(0,5000)) : '';
       try{
         const request={
           action:'chat',language,scope:$('qh-ai-scope').value,
+          mode:replyLanguageOverride==='en'?'arabic_to_english':'explain',
           page:{title:document.title,url:location.href.split('#')[0],excerpt},
           messages:messages.slice(-16).map(m=>({role:m.role,content:m.text}))
         };
@@ -147,6 +225,9 @@
         messages.push({role:'assistant',text:String(data.answer||'No answer was generated'),
           sources:data.sources||[],time:new Date().toISOString()});
         persist();render();status.textContent=data.provenance||'Check original sources.';
+        passageContext=null;replyLanguageOverride=null;
+        $('qh-ai-include').checked=false;
+        $('qh-ai-passage-preview').hidden=true;
       }catch(error){if(assistantEnabled&&error.name!=='AbortError')status.textContent=error.message||'Request failed';}
       finally{activeController=null;$('qh-ai-send').disabled=false;if(assistantEnabled)question.focus();}
     });
