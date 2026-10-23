@@ -2,6 +2,11 @@ name: Validate Surah 108 isolated I03 atomic draft
 on:
   push:
     paths:
+      - 'scripts/preview-ibn-kathir-i04a-coordinated.py'
+      - 'scripts/test-ibn-kathir-i04a-coordinated-lifecycle.py'
+      - 'data/tafsir/staging/ibn-kathir-108-research-2026-10-12.json'
+      - 'data/tafsir/staging/ibn-kathir-108-evidence-voice-plan-2026-10-12.json'
+      - 'data/tafsir/staging/ibn-kathir-108-i04a-combined-candidate-2026-10-22.json'
       - 'scripts/preview-ibn-kathir-i03-coordinated.py'
       - 'scripts/test-ibn-kathir-i03-coordinated-lifecycle.py'
       - 'data/tafsir/staging/surah-108-payload-assembly-2026-10-16.json'
@@ -14,6 +19,11 @@ on:
       - '.github/workflows/tafsir-108-ibn-kathir-i03-draft.yml'
   pull_request:
     paths:
+      - 'scripts/preview-ibn-kathir-i04a-coordinated.py'
+      - 'scripts/test-ibn-kathir-i04a-coordinated-lifecycle.py'
+      - 'data/tafsir/staging/ibn-kathir-108-research-2026-10-12.json'
+      - 'data/tafsir/staging/ibn-kathir-108-evidence-voice-plan-2026-10-12.json'
+      - 'data/tafsir/staging/ibn-kathir-108-i04a-combined-candidate-2026-10-22.json'
       - 'scripts/preview-ibn-kathir-i03-coordinated.py'
       - 'scripts/test-ibn-kathir-i03-coordinated-lifecycle.py'
       - 'data/tafsir/staging/surah-108-payload-assembly-2026-10-16.json'
@@ -52,5 +62,13 @@ jobs:
           persist-credentials: false
       - name: Validate deterministic coordinated preview against pinned baseline
         run: python scripts/preview-ibn-kathir-i03-coordinated.py --root .i03-baseline
-      - name: Reject partial or divergent three-file transitions
-        run: python scripts/test-ibn-kathir-i03-coordinated-lifecycle.py --baseline .i03-baseline --current .
+      - name: Read pinned post-I03 pre-I04A repair baseline
+        uses: actions/checkout@v4
+        with:
+          ref: 5474fd1c60950b614d898eb518d6bfaa2a25e71c
+          path: .i04a-baseline
+          persist-credentials: false
+      - name: Reject partial or divergent historical I03 transitions
+        run: python scripts/test-ibn-kathir-i03-coordinated-lifecycle.py --baseline .i03-baseline --current .i04a-baseline
+      - name: Reject partial or divergent I04A five-file repairs
+        run: python scripts/test-ibn-kathir-i04a-coordinated-lifecycle.py --baseline .i04a-baseline --current .
