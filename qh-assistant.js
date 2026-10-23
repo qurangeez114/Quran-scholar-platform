@@ -10,11 +10,14 @@
   const LOCALES={en:'en-US',ar:'ar-SA',am:'am-ET',ti:'ti-ET',om:'om-ET',so:'so-SO',
     fr:'fr-FR',es:'es-ES',tr:'tr-TR',ur:'ur-PK',de:'de-DE',id:'id-ID'};
   const API='/.netlify/functions/qh-assistant';
-  const STORAGE='qh_assistant_guest_session_v1',LANG='qh_site_language_v1';
+  const STORAGE='qh_assistant_guest_session_v1',LANG='qh_site_language_v1',PREF='qh_assistant_user_enabled_v1';
   const get=(key,fallback)=>{try{return localStorage.getItem(key)||fallback;}catch{return fallback;}};
   const save=(key,value)=>{try{localStorage.setItem(key,value);}catch{}};
   let language=get(LANG,(navigator.language||'en').split('-')[0]);
   if(!LANGS[language]) language='en';
+  let assistantEnabled=get(PREF,'true')!=='false';
+  let activeController=null;
+  const inSchool=/\/(course|lesson|courses|student-dashboard|instructor-dashboard|sample-course|sample-video-class|quiz-results|academic-hub)\.html$/.test(location.pathname);
   let messages=[];
   try{const v=JSON.parse(get(STORAGE,'[]'));if(Array.isArray(v))messages=v.slice(-40).filter(m=>
     ['user','assistant'].includes(m.role)&&typeof m.text==='string');}catch{}
@@ -41,12 +44,13 @@
   function init(){
     if(document.getElementById('qh-ai-root'))return;
     const root=make('div');root.id='qh-ai-root';root.setAttribute('data-no-translate','');
-    root.innerHTML='<div class="qh-ai-global"><label for="qh-ai-language" title="Website language">🌐 <span class="qh-ai-sr">Website language</span></label><select id="qh-ai-language" aria-label="Website and assistant language"></select></div>'+
+    root.innerHTML='<div class="qh-ai-global"><label for="qh-ai-language" title="Website language">🌐 <span class="qh-ai-sr">Website language</span></label><select id="qh-ai-language" aria-label="Website and assistant language"></select><button id="qh-ai-power" type="button" aria-label="Turn AI assistant off" aria-pressed="true">AI: On</button></div>'+
       '<button type="button" id="qh-ai-launch" aria-label="Open research assistant" aria-expanded="false">✦ Ask Hikma</button>'+
       '<section id="qh-ai-panel" role="dialog" aria-label="QuranHikma research assistant" hidden>'+
       '<header><strong>QuranHikma • Research assistant</strong><button id="qh-ai-close" type="button" aria-label="Close">×</button></header>'+
       '<div class="qh-ai-tools"><label><input id="qh-ai-include" type="checkbox"> Include selected text / page excerpt</label>'+
       '<label>Search <select id="qh-ai-scope"><option value="page">This page only</option><option value="site">QuranHikma website</option><option value="web">Public web</option></select></label></div>'+
+      (inSchool?'<div class="qh-ai-prompts" aria-label="Class tutor prompts"><button type="button" data-qh-prompt="Explain this lesson step by step, using evidence and examples.">Explain lesson</button><button type="button" data-qh-prompt="Give me a hint about the topic without answering any quiz or assignment for me.">Give a hint</button><button type="button" data-qh-prompt="Summarize the main ideas and explain what I should learn.">Summarize</button><button type="button" data-qh-prompt="How can I check the original evidence for this topic?">Find evidence</button></div>':'')+
       '<div id="qh-ai-messages" aria-live="polite" aria-relevant="additions text"></div>'+
       '<p id="qh-ai-status" role="status">Research responses are AI-generated; check original source links.</p>'+
       '<form id="qh-ai-form"><textarea id="qh-ai-question" maxlength="2200" rows="2" aria-label="Ask a question" placeholder="Ask about this page, compare sources, or request research…"></textarea>'+
@@ -66,6 +70,26 @@
     Object.entries(LANGS).forEach(([code,name])=>{
       const opt=make('option',null,name);opt.value=code;lang.appendChild(opt);
     });lang.value=language;
+    if(inSchool)launch.textContent='✦ Class Tutor';
+    const power=$('qh-ai-power');
+    function setAssistantEnabled(value){
+      assistantEnabled=Boolean(value);save(PREF,assistantEnabled?'true':'false');
+      power.textContent=assistantEnabled?'AI: On':'AI: Off';
+      power.setAttribute('aria-label',assistantEnabled?'Turn AI assistant off':'Turn AI assistant on');
+      power.setAttribute('aria-pressed',String(assistantEnabled));
+      launch.hidden=!assistantEnabled;
+      if(!assistantEnabled){
+        activeController?.abort();activeController=null;
+        panel.hidden=true;launch.setAttribute('aria-expanded','false');
+        if('speechSynthesis' in window)speechSynthesis.cancel();
+      }
+    }
+    power.addEventListener('click',()=>setAssistantEnabled(!assistantEnabled));
+    setAssistantEnabled(assistantEnabled);
+    if(inSchool)root.querySelectorAll('[data-qh-prompt]').forEach(btn=>btn.addEventListener('click',()=>{
+      if(!assistantEnabled)return;
+      question.value=btn.dataset.qhPrompt;question.focus();
+    }));
     function persist(){save(STORAGE,JSON.stringify(messages.slice(-40)));}
     function render(){
       list.replaceChildren();
@@ -88,6 +112,7 @@
       });list.scrollTop=list.scrollHeight;
     }
     function toggle(open){
+      if(!assistantEnabled)return;
       panel.hidden=!open;launch.setAttribute('aria-expanded',String(open));
       if(open){render();question.focus();}
     }
@@ -101,7 +126,7 @@
       else translatePage(status);
     });
     form.addEventListener('submit',async e=>{
-      e.preventDefault();const q=question.value.trim();if(!q)return;
+      e.preventDefault();if(!assistantEnabled)return;const q=question.value.trim();if(!q)return;
       question.value='';messages.push({role:'user',text:q,time:new Date().toISOString()});
       persist();render();status.textContent='Preparing response…';
       $('qh-ai-send').disabled=true;
@@ -113,15 +138,17 @@
           page:{title:document.title,url:location.href.split('#')[0],excerpt},
           messages:messages.slice(-16).map(m=>({role:m.role,content:m.text}))
         };
+        const controller=new AbortController();activeController=controller;
         const response=await fetch(API,{method:'POST',headers:{'content-type':'application/json'},
-          body:JSON.stringify(request)});
+          signal:controller.signal,body:JSON.stringify(request)});
         const data=await response.json();
+        if(!assistantEnabled)return;
         if(!response.ok)throw Error(data.error||'Assistant unavailable');
         messages.push({role:'assistant',text:String(data.answer||'No answer was generated'),
           sources:data.sources||[],time:new Date().toISOString()});
         persist();render();status.textContent=data.provenance||'Check original sources.';
-      }catch(error){status.textContent=error.message||'Request failed';}
-      finally{$('qh-ai-send').disabled=false;question.focus();}
+      }catch(error){if(assistantEnabled&&error.name!=='AbortError')status.textContent=error.message||'Request failed';}
+      finally{activeController=null;$('qh-ai-send').disabled=false;if(assistantEnabled)question.focus();}
     });
     $('qh-ai-txt').addEventListener('click',()=>download('QuranHikma-discussion.txt',transcript(),'text/plain;charset=utf-8'));
     $('qh-ai-json').addEventListener('click',()=>download('QuranHikma-discussion.json',
