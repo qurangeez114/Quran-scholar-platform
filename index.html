@@ -6603,7 +6603,10 @@ function rowToHadithEntry(r) {
   const isAIGenerated = r.hadith_grade === 'ai_synthesis' || r.is_ai_generated;
 
   return {
-    scholar: (r.collection || 'Hadith') + (gradeBadge ? ' ' + gradeBadge : ''),
+    scholar: r.narrator || r.collection || 'Hadith',
+    collection: r.collection || '',
+    narrator: r.narrator || '',
+    grade: inferredGrade || '',
     tradition: r.tradition,
     text: body,
     meta: metaParts.join(' · ') || null,
@@ -6659,7 +6662,8 @@ function rowToHadithEntryFromCorpus(r) {
     isAI: false,
     aya_number: r.aya_number,
     gradeBadge,
-    sourceUrl: r.source_url,
+    sourceUrl: r.source_url || '',
+    source_url: r.source_url || '',
     _fromLinkTable: true
   };
 }
@@ -6745,89 +6749,72 @@ async function loadHadithPanel(sura, aya) {
   const tabBtn = document.getElementById(`hadith-tab-${aya}`);
   const current = traditionState[tradKey(sura, aya, 'hadith')] || 'sunni';
 
+  // Source of truth: hadith_verse_links -> hadith_corpus_canonical.
+  // Trusted links (cited in the hadith, or checked by a person) are shown by default.
+  // Matcher and AI links appear only under "show suggested". The legacy
+  // hadith_connections table is not read here.
+  async function fetchLinkedHadith(query) {
+    const linkRows = await sbFetch('hadith_verse_links', { select: 'hadith_id,aya_number,link_method', ...query });
+    if (!linkRows.length) return [];
+    const ids = [...new Set(linkRows.map(l => l.hadith_id))].join(',');
+    const corpusRows = await sbFetch('hadith_corpus_canonical', {
+      select: 'id,collection,hadith_number,tradition,text_english,text_arabic,narrator,grade,source_url',
+      id: `in.(${ids})`
+    });
+    const byId = new Map(corpusRows.map(r => [r.id, r]));
+    return linkRows
+      .filter(l => byId.has(l.hadith_id))
+      .map(l => ({ row: byId.get(l.hadith_id), aya_number: l.aya_number, link_method: l.link_method }));
+  }
+
+  function splitHadithByTrust(linked) {
+    const rank = { trusted: 0, suggested: 1 };
+    const classed = linked
+      .map(x => ({
+        ...x,
+        trust: typeof classifyHadithLink === 'function'
+          ? classifyHadithLink({ link_method: x.link_method, hadith_grade: x.row.grade })
+          : 'suggested'
+      }))
+      .filter(x => x.trust !== 'hidden' && x.row.text_english)
+      .sort((a, b) => rank[a.trust] - rank[b.trust]);
+    const out = { trusted: [], suggested: [] };
+    const seenLinks = new Set(), seenText = new Set();
+    for (const x of classed) {
+      const linkKey = x.row.id + ':' + x.aya_number;
+      const entry = rowToHadithEntryFromCorpus({ ...x.row, aya_number: x.aya_number });
+      const textKey = (entry.scholar || '') + '|' + (entry.text || '').slice(0, 60);
+      if (seenLinks.has(linkKey) || seenText.has(textKey)) continue;
+      seenLinks.add(linkKey);
+      seenText.add(textKey);
+      entry.trust = x.trust;
+      entry.link_method = x.link_method;
+      out[x.trust].push(entry);
+    }
+    return out;
+  }
+
   let directEntries = [];
+  let suggestedEntries = [];
   let suraHadith = [];
 
-  // Hide AI-synthesized hadith from display: they are AI-generated and their
-  // references (incl. those attributed to canonical collections) are unverified.
-  // Only show entries backed by a real, sourced narration.
-  const isRealHadith = r => (r.hadith_grade || '').toLowerCase() !== 'ai_synthesis' && !r.is_ai_generated;
-
   try {
-    const rows = await sbFetch('hadith_connections', {
-      select: 'hadith_text,narrator,collection,reference,hadith_grade,tradition,similarity_note,difference_note,aya_number,is_ai_generated',
-      sura_id: `eq.${sura}`,
-      aya_number: `eq.${aya}`
-    });
-    directEntries = rows.filter(isRealHadith).map(rowToHadithEntry);
-  } catch {}
-
-  // Merge in hadith linked via hadith_verse_links -> hadith_corpus_canonical
-  // (a separate source populated by the pattern-extraction automation).
-  // Combined so the tab shows the COMPLETE set of linked hadith, not just
-  // whichever table happened to be queried first.
-  try {
-    const linkRows = await sbFetch('hadith_verse_links', {
-      select: 'hadith_id',
-      sura_id: `eq.${sura}`,
-      aya_number: `eq.${aya}`
-    });
-    if (linkRows.length) {
-      const ids = linkRows.map(r => r.hadith_id).join(',');
-      const corpusRows = await sbFetch('hadith_corpus_canonical', {
-        select: 'id,collection,hadith_number,tradition,text_english,text_arabic,narrator,grade,source_url,aya_number',
-        id: `in.(${ids})`
-      });
-      const existingKeys = new Set(directEntries.map(e => (e.scholar || '') + '|' + (e.text || '').slice(0, 60)));
-      corpusRows.forEach(r => {
-        if (!r.text_english) return;
-        const entry = rowToHadithEntryFromCorpus(r);
-        const key = (entry.scholar || '') + '|' + (entry.text || '').slice(0, 60);
-        if (!existingKeys.has(key)) { directEntries.push(entry); existingKeys.add(key); }
-      });
-    }
+    const split = splitHadithByTrust(await fetchLinkedHadith({ sura_id: `eq.${sura}`, aya_number: `eq.${aya}` }));
+    directEntries = split.trusted;
+    suggestedEntries = split.suggested;
   } catch {}
 
   if (directEntries.length === 0) {
     try {
-      const rows = await sbFetch('hadith_connections', {
-        select: 'hadith_text,narrator,collection,reference,hadith_grade,tradition,similarity_note,difference_note,aya_number,is_ai_generated',
-        sura_id: `eq.${sura}`,
-        order: 'aya_number',
-        limit: 50
-      });
-      suraHadith = rows.filter(isRealHadith).map(rowToHadithEntry);
-    } catch {}
-
-    // Also pull the sura-wide hadith_verse_links -> hadith_corpus_canonical
-    // data (the same source merged into directEntries above) — without this,
-    // the fallback only ever draws from the older, much smaller
-    // hadith_connections table and misses most of what's actually linked.
-    try {
-      const linkRows = await sbFetch('hadith_verse_links', {
-        select: 'hadith_id,aya_number',
-        sura_id: `eq.${sura}`,
-        order: 'aya_number',
-        limit: 200
-      });
-      if (linkRows.length) {
-        const ayaById = {};
-        linkRows.forEach(r => { ayaById[r.hadith_id] = r.aya_number; });
-        const ids = linkRows.map(r => r.hadith_id).join(',');
-        const corpusRows = await sbFetch('hadith_corpus_canonical', {
-          select: 'id,collection,hadith_number,tradition,text_english,grade,source_url',
-          id: `in.(${ids})`
-        });
-        const existingKeys = new Set(suraHadith.map(e => (e.scholar || '') + '|' + (e.text || '').slice(0, 60)));
-        corpusRows.forEach(r => {
-          if (!r.text_english) return;
-          const entry = rowToHadithEntryFromCorpus({ ...r, aya_number: ayaById[r.id] });
-          const key = (entry.scholar || '') + '|' + (entry.text || '').slice(0, 60);
-          if (!existingKeys.has(key)) { suraHadith.push(entry); existingKeys.add(key); }
-        });
-      }
+      suraHadith = splitHadithByTrust(
+        await fetchLinkedHadith({ sura_id: `eq.${sura}`, order: 'aya_number', limit: 200 })
+      ).trusted;
     } catch {}
   }
+
+  const suggestedHtml = suggestedEntries.length
+    ? `<details class="hadith-suggested-links"><summary>Show ${suggestedEntries.length} suggested link${suggestedEntries.length === 1 ? '' : 's'} (matched by name or AI, not verified)</summary>${renderScholarEntries(suggestedEntries, current, '')}</details>`
+    : '';
 
   if (tabBtn) {
     tabBtn.textContent = directEntries.length > 0
@@ -6842,6 +6829,7 @@ async function loadHadithPanel(sura, aya) {
     html += `<div class="hadith-section-divider"><span class="hadith-section-title">Hadith linked to ${sura}:${aya} (${directEntries.length})</span></div>`;
     html += `<div id="hadith-compare-${aya}"></div>`;
     html += renderScholarEntries(directEntries, current, '');
+    html += suggestedHtml;
     html += `<button class="hadith-action-btn secondary" onclick="switchToTafsir(${aya})">📖 Read Tafsīr for context</button>`;
     panel.innerHTML = html;
     if (directEntries.length >= 1) {
@@ -6855,6 +6843,7 @@ async function loadHadithPanel(sura, aya) {
     <b>No hadith directly linked to ${sura}:${aya}</b><br>
     <span style="font-weight:500;font-size:12px">This is common — most verses do not have a specific narration tied to them. Below are related hadith from the same sūrah for educational study.</span>
   </div>`;
+  html += suggestedHtml;
 
   if (suraHadith.length > 0) {
     const grouped = {};
@@ -12033,6 +12022,7 @@ window.QNAV_PAGE_LABEL='Quran Reader';window.QNAV_PAGE_ICON='📖';
 </script>
 
 <!-- Hadith Split-Pane Layout Renderer -->
+<script src="hadith-trust.js" defer></script>
 <script src="hadith-split-pane.js" defer></script>
 
 <!-- Social Media Card Generator with Navigation -->
