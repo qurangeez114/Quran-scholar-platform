@@ -198,7 +198,7 @@ const SRC={
  hadith:{what:'Reports of the Prophet in the major Sunni and Shia collections, with their grades. Sahih-graded reports are shown first.',link:r=>`research.html?hadith=${r.id}&hq=${encodeURIComponent(CUR||'')}`,ref:r=>`${r.collection} #${r.number}${r.grade?' · '+r.grade:''}${r.tradition?' · '+r.tradition:''}`},
  tafsir:{what:'Classical and modern commentary on the verses.',link:r=>`/?sura=${r.sura}&aya=${r.aya}`,ref:r=>`${r.title||'Tafsir'} on ${r.sura}:${r.aya}${r.tradition?' · '+r.tradition:''}`},
  madhhab:{what:'How the schools of law (Hanafi, Maliki, Shafi\u02bfi, Hanbali, Ja\u02bffari and others) treat the subject.',link:r=>`madhhab.html`,ref:r=>r.tradition||''},
- sira:{what:'Events from the life of the Prophet.',link:r=>`sira.html`,ref:r=>r.year?`${r.year} CE`:''},
+ sira:{what:'Sīra event narratives and campaign passages. Keyword matches identify possible sources, not verified answers.',link:r=>`sira.html`,ref:r=>['Sīra report',r.year?`${r.year} CE`:'',(r.source_ref||'').replace(/https:\/\/\S+/g,'').trim()].filter(Boolean).join(' · ')},
  campaigns:{what:'Battles and expeditions, with their verses, hadith and sources.',link:r=>`stories.html`,ref:r=>r.year?`${r.year} CE`:''},
  themes:{what:'Thematic studies that group verses and hadith by subject.',link:r=>`themes.html`,ref:r=>r.tradition||''},
  propositions:{what:'Individual claims extracted from hadith and commentary, so they can be compared one by one.',link:r=>`research.html?q=${encodeURIComponent(CUR)}`,ref:r=>'Claim'},
@@ -348,8 +348,10 @@ function card(key,r,vars){
   const ref=cfg.ref(r);
   const ttl=r.title?`<div class="ttl">${highlight(r.title,vars)}</div>`:'';
   const href=cfg.link(r);
+  const sourceURL=key==='sira'?(r.source_ref||'').match(/https:\/\/hadithunlocked\.com\/ibnhisham\/[0-9]+\/[0-9]+/):null;
+  const citation=sourceURL?`<p class="what"><a href="${esc(sourceURL[0])}" target="_blank" rel="noopener noreferrer">Read the cited source ↗</a></p>`:'';
   const related=key==='hadith'&&/^[1-9][0-9]*$/.test(String(r.id))?`<details class="hadith-connections" ontoggle="if(this.open)loadHadithConnections(this.querySelector('.hc-content'))"><summary>Related and contrasting Hadith</summary><div class="hc-content" data-hadith-id="${Number(r.id)}"></div></details>`:'';
-  return `<div class="card"><div class="meta">${esc(ref)}</div>${ttl}${r.arabic?`<div class="txt" dir="rtl" lang="ar" style="font-size:1.25em;line-height:1.9">${highlight(snip(r.arabic,vars),vars)}</div>`:''}<div class="txt">${highlight(snip(r.text,vars),vars)}</div><div class="more">${['propositions','tensions','topics'].includes(key)?`<a href="#" onclick="return fullText(this)">Read in full \u2193</a><div class="full" hidden>${highlight(esc2(r.text),vars)}</div>`:`<a href="${href}">Open \u2192</a>`}</div>${related}</div>`;
+  return `<div class="card"><div class="meta">${esc(ref)}</div>${ttl}${r.arabic?`<div class="txt" dir="rtl" lang="ar" style="font-size:1.25em;line-height:1.9">${highlight(snip(r.arabic,vars),vars)}</div>`:''}<div class="txt">${highlight(snip(r.text,vars),vars)}</div><div class="more">${['propositions','tensions','topics','sira'].includes(key)?`<a href="#" onclick="return fullText(this)">Read in full \u2193</a><div class="full" hidden>${highlight(esc2(r.text),vars)}</div>`:`<a href="${href}">Open \u2192</a>`}</div>${citation}${related}</div>`;
 }
 
 function cut(t){ t=t||''; if(t.length<238) return t; const i=t.lastIndexOf(' '); return (i>150?t.slice(0,i):t)+'\u2026'; }
@@ -566,24 +568,25 @@ async function search(q){
       if(!result.count)discovery.discover(q);
       return;
     }
-    const res=(await Promise.all((only?only:ORDER).map(k=>rpc('site_search_src',{src:k,q:q,lim:6},signal).then(r=>{if(!r)throw new Error('No source response');return r;}).catch(()=>({key:k,count:0,rows:[],variants:[q],failed:true})))));
+    const res=(await Promise.all((only?only:ORDER).map(k=>rpc(k==='sira'?'qh_sira_search':'site_search_src',k==='sira'?{q,lim:12}:{src:k,q,lim:6},signal).then(r=>{if(!r)throw new Error('No source response');return r;}).catch(()=>({key:k,count:0,rows:[],variants:[q],failed:true})))));
     if(version!==searchVersion)return;
+    if(q.split(/\s+/).length>4)res.sort((a,b)=>(b.key==='sira'&&b.count>0?1:0)-(a.key==='sira'&&a.count>0?1:0));
     const topicSearch=res.some(r=>r.topic_match);
     const vars=[...new Set(res.flatMap(r=>r.variants||[q]))];
     // Show source results before optional summaries and book counts finish.
     render(res,vars,q,{});
-    if(!bookSel.length&&!res.some(r=>r.count>0)){
-      discovery.discover(q,{incomplete:res.some(r=>r.failed)});
-      return;
+    if(!bookSel.length&&!res.some(r=>r.count>0&&!r.relaxed)){
+      discovery.discover(q,{incomplete:res.some(r=>r.failed),weak:res.some(r=>r.count>0)});
+      if(!res.some(r=>r.count>0))return;
     }
     let dg=null;
-    if(only||topicSearch) dg={};
+    if(only||topicSearch||q.split(/\s+/).length>4) dg={};
     else try{
       const [h,m,t]=await Promise.all([rpc('digest_hadith',{q},signal),rpc('digest_madhhab',{q},signal),rpc('digest_tafsir',{q},signal)]);
       dg={hadith:h,madhhab:m,tafsir:t};
     }catch(e){}
-    let cres=[]; try{if(!topicSearch) cres=await rpc('contradiction_search',{q:q,lim:6},signal);}catch(e){}
-    let sb=[]; if(!only&&!topicSearch){ try{sb=await rpc('source_books',{q:q},signal);}catch(e){} }
+    let cres=[]; try{if(!topicSearch&&q.split(/\s+/).length<=4) cres=await rpc('contradiction_search',{q:q,lim:6},signal);}catch(e){}
+    let sb=[]; if(!only&&!topicSearch&&q.split(/\s+/).length<=4){ try{sb=await rpc('source_books',{q:q},signal);}catch(e){} }
     if(version!==searchVersion)return;
     if(only&&!only.length){ $('out').innerHTML='<div id="pickerslot"></div>'; } else render(res,vars,q,dg);
     if(bookSel.length){ const sec=await booksSection(bookSel,q); const slot=$('pickerslot'); if(slot) slot.replaceWith(sec); else $('out').prepend(sec); }

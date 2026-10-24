@@ -1,11 +1,13 @@
 /* Spelling choices and attributed external-source discovery for Research. */
 (function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;else root.QHDiscovery=api;})(typeof window==='undefined'?this:window,function(){
- const BASE=['Quran','Hadith','Sunnah','Sunan','Abu Dawud','Abu Dawood','Sunan Abi Dawud','Bukhari','Sahih al-Bukhari','Muslim','Sahih Muslim','Tirmidhi','Ibn Majah','Nasai','Tabari','Ibn Kathir','Qurtubi','Jalalayn','Zamakhshari','tafsir','jizya','apostasy','inheritance','slavery','women','children','rights','non-Muslim','Islamic','country','Christian','Christianity','Jewish','Judaism','Muhammad','Abraham','Moses','Jesus','Mary','Zaynab','Zayd','Aisha','Khaybar','Badr','Uhud','Mecca','Medina','Augustine','Chrysostom','stoning','marriage','divorce','prayer','fasting','justice','charity','education','history','Quranic','Arabic','English','translation','surah','verse','prophet','punishment','covenant','religion','freedom','protection','people','book','scholar','scholars'];
+ const BASE=['Quran','Hadith','Sunnah','Sunan','Abu Dawud','Abu Dawood','Sunan Abi Dawud','Bukhari','Sahih al-Bukhari','Muslim','Sahih Muslim','Tirmidhi','Ibn Majah','Nasai','Tabari','Ibn Kathir','Qurtubi','Jalalayn','Zamakhshari','tafsir','jizya','apostasy','inheritance','slavery','women','children','rights','non-Muslim','Islamic','country','Christian','Christianity','Jewish','Judaism','Muhammad','Abraham','Moses','Jesus','Mary','Zaynab','Zayd','Aisha','Khaybar','Badr','Uhud','Mecca','Medina','Augustine','Chrysostom','stoning','marriage','divorce','prayer','fasting','justice','charity','education','history','Quranic','Arabic','English','translation','surah','verse','prophet','punishment','covenant','religion','freedom','protection','people','book','scholar','scholars','Safiyya','Safiyyah','Safiya','Abu Ayyub','Ibn Ishaq','Ibn Hisham','Sira'];
  const STOP=new Set('the in of a an and or to for on at is are was were by with from that this about what when where why who how which do does did can could would should not no all any have has had their they them our your there some as be been being it its into under between more most than then through only also said say found find result search'.split(' '));
  const norm=s=>s.normalize('NFKC').toLowerCase().replace(/[\u064B-\u065F\u0670\u0640]/g,'');
  function distance(a,b){a=[...norm(a)];b=[...norm(b)];const d=Array.from({length:a.length+1},()=>Array(b.length+1).fill(0));for(let i=0;i<=a.length;i++)d[i][0]=i;for(let j=0;j<=b.length;j++)d[0][j]=j;for(let i=1;i<=a.length;i++)for(let j=1;j<=b.length;j++){d[i][j]=Math.min(d[i-1][j]+1,d[i][j-1]+1,d[i-1][j-1]+(a[i-1]===b[j-1]?0:1));if(i>1&&j>1&&a[i-1]===b[j-2]&&a[i-2]===b[j-1])d[i][j]=Math.min(d[i][j],d[i-2][j-2]+1);}return d[a.length][b.length];}
  function suggestions(q,extra=[]){
   q=q.trim();if(q.length<3||q.length>180)return [];
+  const contextual=/\bsofia\b/i.test(q)&&/captur|kh[ae]ybar|m[ou]hamm?[ae]d|marri|tent/i.test(q);
+  if(contextual)return [q.replace(/\bsofia\b/ig,'Safiyya').replace(/\b(mohammed|mohammad|muhammed)\b/ig,'Muhammad')];
   const phrases=[...BASE,...extra].filter(s=>typeof s==='string'&&s.length<=100);
   const ref=q.match(/^(.*?)([\s#:]+[0-9٠-٩۰-۹]+[a-z]?)\s*$/i);
   if(ref){
@@ -41,11 +43,11 @@
   function cancel(){version++;if(controller)controller.abort();controller=null;external.replaceChildren();external.hidden=true;}
   enabled.addEventListener('change',()=>{if(!enabled.checked)cancel();});
   function message(text){const p=document.createElement('p');p.textContent=text;external.append(p);}
-  async function discover(q,{incomplete=false,manual=false}={}){
+  async function discover(q,{incomplete=false,manual=false,weak=false}={}){
    cancel();if(!enabled.checked)return;const id=version;controller=new AbortController();const activeController=controller;const timeout=setTimeout(()=>activeController.abort(),24000);
    external.hidden=false;external.setAttribute('aria-busy','true');
    const heading=document.createElement('h2');heading.textContent='External sources';external.append(heading);
-   message(manual?'Checking external reference sources for your search…':incomplete?'Some local sources were unavailable. Checking external references as well…':'No local matches. Checking external reference sources…');
+   message(manual?'Checking external reference sources for your search…':weak?'Only partial local matches were found. Checking external references as well…':incomplete?'Some local sources were unavailable. Checking external references as well…':'No local matches. Checking external reference sources…');
    try{
     const response=await fetch('/.netlify/functions/research-discovery',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({q}),signal:controller.signal});
     const data=await response.json();if(id!==version)return;

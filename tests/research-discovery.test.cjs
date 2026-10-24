@@ -82,3 +82,24 @@ test('Research page offers corrections and invokes fallback only after missing l
  vm.createContext(context);vm.runInContext(script,context);
  return vm.runInContext("search('Abu Dawd 99999')",context).then(()=>assert.deepEqual(fallbacks,['Abu Dawd 99999']));
 });
+
+test('ambiguous Sofia gets a contextual choice without rewriting other Sofia searches',()=>{
+ const q='Sofia after captured Mohammed slept with her right away';
+ assert.ok(spelling.suggestions(q).includes('Safiyya after captured Muhammad slept with her right away'));
+ assert.ok(!spelling.suggestions('Sofia university').some(x=>x.includes('Safiyya')));
+ assert.deepEqual(spelling.suggestions('Safiyya Khaybar'),[]);
+});
+
+test('Sira cards retain full text and escape untrusted source metadata',()=>{
+ const html=fs.readFileSync('research.html','utf8');
+ const script=html.match(/<script>\nconst SB=[\s\S]*?<\/script>/)[0].replace(/^<script>/,'').replace(/<\/script>$/,'').split('\nloadScope();')[0];
+ const out={};
+ const context={AbortController,URLSearchParams,console,document:{getElementById:()=>out},location:{search:''},QHDiscovery:{init:()=>({})}};
+ vm.createContext(context);vm.runInContext(script,context);
+ const rendered=vm.runInContext(`card('sira',{title:'Tent report',text:'Beginning '+ 'word '.repeat(100)+'FULL END',source_ref:'Ibn Hisham <script>bad()</script> https://hadithunlocked.com/ibnhisham/74/6'},[])`,context);
+ assert.ok(rendered.includes('Read in full'));
+ assert.ok(rendered.includes('FULL END'));
+ assert.ok(rendered.includes('Read the cited source'));
+ assert.ok(!rendered.includes('<script>bad()'));
+ assert.ok(!vm.runInContext(`card('sira',{text:'Example',source_ref:'https://evil.test/'},[])`,context).includes('href="https://evil'));
+});
