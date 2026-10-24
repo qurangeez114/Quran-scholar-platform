@@ -88,11 +88,11 @@ function renderHadithSplitPane(entry, idx = 0, showButtons = true) {
         <button class="hadith-action-btn" onclick="shareHadith('${id}', '${escapeHtml(entry.collection || 'Hadith')}')">
           🔗 Share
         </button>
-        ${entry.source_url ? `
-          <a href="${entry.source_url}" target="_blank" rel="noopener" class="hadith-reference-link">
-            🔍 Verify Source
+        ${Number.isSafeInteger(Number(entry.hadith_corpus_id))&&Number(entry.hadith_corpus_id)>0 ? `
+          <a href="research.html?hadith=${Number(entry.hadith_corpus_id)}" class="hadith-reference-link">
+            🔬 Check citation &amp; edition
           </a>
-        ` : ''}
+        ` : entry.source_url ? `<span class="hadith-reference-note" title="Not independently verified against the publisher">Publisher citation pending review</span>` : ''}
       </div>
     `;
   }
