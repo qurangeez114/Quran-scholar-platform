@@ -13,7 +13,7 @@ function safeURL(value){try{const u=new URL(value);if(u.protocol!=='https:'||u.u
  }catch(_){}return null;}
 async function request(url,options={},ms=6000){
  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),ms);
- try{const r=await fetch(url,{...options,signal:controller.signal,redirect:'error'});if(!r.ok)throw Error('Source unavailable');
+ try{const r=await fetch(url,{...options,signal:controller.signal,redirect:'error'});if(!r.ok){const error=Error('Source unavailable');error.status=r.status;throw error;}
  const text=await r.text();if(text.length>1500000)throw Error('Response too large');return options.raw?text:JSON.parse(text);
  }finally{clearTimeout(timer);}
 }
@@ -26,7 +26,9 @@ function refURL(q){
 }
 async function hadith(q){
  const url=refURL(q);if(!url)return [];
- const html=await request(url,{headers:{'User-Agent':UA},raw:true},6000);
+ let html;
+ try{html=await request(url,{headers:{'User-Agent':UA},raw:true},6000);}
+ catch(error){if(error.status===404)return [];throw error;}
  const title=plain((html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)||[])[1]);
  const number=url.split(':').pop();
  if(!title.includes(number)||!/Sunan|Sahih|Jami|Hadith/i.test(title)||/not found|access denied|verify|just a moment/i.test(title))return [];
