@@ -21,7 +21,7 @@ async function db(path,options={}){return request(SB+'/rest/v1/'+path,{...option
 function refURL(q){
  const m=q.toLowerCase().match(/^(.*?)\s*[:#\s]\s*(\d+[a-z]?)$/);if(!m)return null;
  const k=m[1].replace(/[^a-z]/g,'');
- const map={abudawd:'abudawud',sunanabudawd:'abudawud',sunanabudawood:'abudawud',abidawud:'abudawud',abudawud:'abudawud',abudawood:'abudawud',sunanabidawud:'abudawud',sunanabudawud:'abudawud',bukhari:'bukhari',sahihbukhari:'bukhari',sahihalbukhari:'bukhari',muslim:'muslim',sahihmuslim:'muslim',tirmidhi:'tirmidhi',jamiattirmidhi:'tirmidhi',sunanibnmajah:'ibnmajah',sunanannasai:'nasai',ibnmajah:'ibnmajah',nasai:'nasai'};
+ const map={abudawd:'abudawud',sunanabudawd:'abudawud',sunanabudawood:'abudawud',abidawud:'abudawud',abudawud:'abudawud',abudawood:'abudawud',sunanabidawud:'abudawud',sunanabudawud:'abudawud',bukhari:'bukhari',bukari:'bukhari',sahihbukari:'bukhari',sahihbukhari:'bukhari',sahihalbukhari:'bukhari',muslim:'muslim',muslem:'muslim',sahihmuslem:'muslim',sahihmuslim:'muslim',tirmidhi:'tirmidhi',jamiattirmidhi:'tirmidhi',sunanibnmajah:'ibnmajah',sunanannasai:'nasai',ibnmajah:'ibnmajah',nasai:'nasai'};
  return map[k]?'https://sunnah.com/'+map[k]+':'+m[2]:null;
 }
 async function hadith(q){
