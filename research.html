@@ -330,7 +330,7 @@ function overview(dg,results,q){
 }
 function render(results,vars,q,dg){
   const total=results.reduce((a,r)=>a+(r.count||0),0);
-  let h='';
+  let h=results.some(r=>r.topic_match)?'<div class="note" style="margin-top:12px"><b>Related-topic search: rights and legal status of non-Muslims.</b> Includes protections, obligations and restrictions. Quran and tafsir passages are selected by related verse references; other sources match related terminology. These results do not imply that every source takes the same position.</div>':'';
   const uniqVars=[...new Set(vars)].filter(v=>v.toLowerCase()!==q.toLowerCase());
   if(uniqVars.length) h+=`<div class="variants">Also searched as: ${uniqVars.map(v=>`<span>${esc(v)}</span>`).join(' ')}</div>`;
   h+='<div class="tabs">'+results.map(r=>`<button class="tab ${r.count?'':'off'}" onclick="jump('${r.key}')">${esc(LABEL[r.key])} <b>${r.capped?'1000+':n(r.count)}</b></button>`).join('')+'</div>';
@@ -482,15 +482,16 @@ async function search(q){
   $('out').innerHTML='<div class="empty"><span class="spin"></span>Searching every source…</div>';
   try{
     const res=await Promise.all((only?only:ORDER).map(k=>rpc('site_search_src',{src:k,q:q,lim:6}).catch(()=>({key:k,count:0,rows:[],variants:[q],failed:true}))));
+    const topicSearch=res.some(r=>r.topic_match);
     const vars=[...new Set(res.flatMap(r=>r.variants||[q]))];
     let dg=null;
-    if(only) dg={};
+    if(only||topicSearch) dg={};
     else try{
       const [h,m,t]=await Promise.all([rpc('digest_hadith',{q}),rpc('digest_madhhab',{q}),rpc('digest_tafsir',{q})]);
       dg={hadith:h,madhhab:m,tafsir:t};
     }catch(e){}
-    let cres=[]; try{cres=await rpc('contradiction_search',{q:q,lim:6});}catch(e){}
-    let sb=[]; if(!only){ try{sb=await rpc('source_books',{q:q});}catch(e){} }
+    let cres=[]; try{if(!topicSearch) cres=await rpc('contradiction_search',{q:q,lim:6});}catch(e){}
+    let sb=[]; if(!only&&!topicSearch){ try{sb=await rpc('source_books',{q:q});}catch(e){} }
     if(only&&!only.length){ $('out').innerHTML='<div id="pickerslot"></div>'; } else render(res,vars,q,dg);
     if(bookSel.length){ const sec=await booksSection(bookSel,q); const slot=$('pickerslot'); if(slot) slot.replaceWith(sec); else $('out').prepend(sec); }
     else insertPicker(sb,q);
