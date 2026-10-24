@@ -3,7 +3,7 @@ CREATE OR REPLACE FUNCTION public.site_search_src(src text, q text, lim integer 
  LANGUAGE plpgsql
  STABLE
 AS $function$
-declare vs text[]; wr text[] := books_wregs(q); pats text[]; reg record; w text; c int := 0; r jsonb; ar boolean := q ~ '[؀-ۿ]'; cols text[]; cat text; strip boolean; n int; thr int; relaxed boolean := false; sc text; base text;
+declare vs text[]; wr text[]; pats text[]; reg record; w text; c int := 0; r jsonb; ar boolean := q ~ '[؀-ۿ]'; cols text[]; cat text; strip boolean; n int; thr int; relaxed boolean := false; sc text; base text;
 begin
 
   -- Resolve a collection and reference number before searching passage words.
@@ -37,8 +37,8 @@ begin
         if ref_collection is not null then
           select * into reg from search_registry where key = src;
           select count(*) into c from hadith_corpus
-            where collection = ref_collection and lower(hadith_number) = ref_number;
-          execute format('select coalesce(jsonb_agg(x), ''[]''::jsonb) from (select %s as x from hadith_corpus where collection = $1 and lower(hadith_number) = $2 order by id limit $3) s', reg.row_expr)
+            where collection = ref_collection and hadith_number = ref_number;
+          execute format('select coalesce(jsonb_agg(x), ''[]''::jsonb) from (select %s as x from hadith_corpus where collection = $1 and hadith_number = $2 order by id limit $3) s', reg.row_expr)
             into r using ref_collection, ref_number, greatest(0,least(coalesce(lim,8),100));
           return jsonb_build_object('key','hadith','label',reg.label,'count',c,'rows',r,
             'variants',jsonb_build_array(q),'relaxed',false,'reference_match',true);
@@ -46,6 +46,7 @@ begin
       end if;
     end;
   end if;
+  wr := books_wregs(q);
   select array_agg(distinct v) into vs from (select unnest(search_variants(x)) v from unnest(regexp_split_to_array(trim(q),'\s+')) x where lower(x) not in ('the','in','of','a','an','and','or','to','for','on','at','is','are','was','by','with','from','that','this','about')) s;
   if vs is null then vs := search_variants(q); end if;
   select array_agg('%'||x||'%') into pats from unnest(vs) x;
