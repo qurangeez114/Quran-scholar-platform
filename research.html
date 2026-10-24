@@ -129,6 +129,15 @@ section.src h2{font-size:25px;font-weight:600;margin-top:34px}
 .hc-evidence{padding:12px;background:#f5f4ed;border-left:3px solid #b8a36d;overflow-wrap:anywhere}.hc-assessment{font-size:14px;color:#244d3e}.hc-pair{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px}.hc-more>summary{min-height:44px;cursor:pointer;color:#0f766e;padding:8px 0}
 .hc-content button{font:inherit;padding:10px 14px;border:1px solid #b8ccc2;border-radius:8px;background:#fff;cursor:pointer}
 @media(max-width:700px){.hadith-connections{padding:12px}.hc-pair{grid-template-columns:minmax(0,1fr);gap:8px}.hc-section h3{font-size:20px}}
+.ref-banner{margin:14px 0 18px;padding:16px 18px;border:1px solid #c7d8cb;border-left:5px solid #0f766e;border-radius:10px;background:#eff8f2;line-height:1.55}
+.ref-banner.caution{border-color:#e6c77c;border-left-color:#a36c12;background:#fff8e9}
+.ref-banner strong{font-size:19px;display:block}.ref-banner p{margin:6px 0 0;font-size:15.5px}
+.ref-badge{display:inline-block;margin:3px 0 8px;padding:4px 10px;background:#e4f3eb;border:1px solid #99bfae;border-radius:20px;color:#205342;font-size:13px;font-weight:600}
+.ref-badge.caution{background:#fff2d7;border-color:#e3c37d;color:#82571b}
+.ref-other{margin:22px 0;padding:12px 16px;border:1px solid #e0d6b4;border-radius:10px;background:#fff9ed}
+.ref-other summary{font-size:17px;font-weight:600;cursor:pointer;min-height:44px;display:list-item}
+.ref-other p{font-size:14px;color:#675637}
+@media(max-width:600px){.ref-banner{padding:12px 14px}.ref-other{padding:10px 12px}}
 </style>
   <script src="site-motion.js" defer></script>
 <script src="/site-chrome.js" defer></script>
@@ -351,8 +360,9 @@ function card(key,r,vars){
   const sourceURL=key==='sira'?(r.source_ref||'').match(/https:\/\/hadithunlocked\.com\/ibnhisham\/[0-9]+\/[0-9]+/):null;
   const citation=sourceURL?`<p class="what"><a href="${esc(sourceURL[0])}" target="_blank" rel="noopener noreferrer">Read the cited source ↗</a></p>`:'';
   const verifiedPublisher=key==='hadith'&&/^https:\/\/sunnah\.com\/(?:abudawud|bukhari|muslim|tirmidhi|ibnmajah|nasai):[0-9]+[a-z]?$/.test(r.publisher_url||'')?`<p class="what"><a href="${esc(r.publisher_url)}" target="_blank" rel="noopener noreferrer">Verify this reference at Sunnah.com ↗</a> · Locally catalogued as #${esc(r.catalogue_number||'')}</p>`:'';
+  const refBadge=key==='hadith'&&r.reference_status?(r.reference_status==='verified_publisher_mapping'?'<span class="ref-badge">Curated publisher reference mapping</span>':`<span class="ref-badge caution">Unverified local catalogue candidate · record ${Number(r.id)}</span>`):'';
   const related=key==='hadith'&&/^[1-9][0-9]*$/.test(String(r.id))?`<details class="hadith-connections" ontoggle="if(this.open)loadHadithConnections(this.querySelector('.hc-content'))"><summary>Related and contrasting Hadith</summary><div class="hc-content" data-hadith-id="${Number(r.id)}"></div></details>`:'';
-  return `<div class="card"><div class="meta">${esc(ref)}</div>${ttl}${r.arabic?`<div class="txt" dir="rtl" lang="ar" style="font-size:1.25em;line-height:1.9">${highlight(snip(r.arabic,vars),vars)}</div>`:''}<div class="txt">${highlight(snip(r.text,vars),vars)}</div><div class="more">${['propositions','tensions','topics','sira'].includes(key)?`<a href="#" onclick="return fullText(this)">Read in full \u2193</a><div class="full" hidden>${highlight(esc2(r.text),vars)}</div>`:`<a href="${href}">Open \u2192</a>`}</div>${citation}${verifiedPublisher}${related}</div>`;
+  return `<div class="card"><div class="meta">${esc(ref)}</div>${refBadge}${ttl}${r.arabic?`<div class="txt" dir="rtl" lang="ar" style="font-size:1.25em;line-height:1.9">${highlight(snip(r.arabic,vars),vars)}</div>`:''}<div class="txt">${highlight(snip(r.text,vars),vars)}</div><div class="more">${['propositions','tensions','topics','sira'].includes(key)?`<a href="#" onclick="return fullText(this)">Read in full \u2193</a><div class="full" hidden>${highlight(esc2(r.text),vars)}</div>`:`<a href="${href}">Open \u2192</a>`}</div>${citation}${verifiedPublisher}${related}</div>`;
 }
 
 function cut(t){ t=t||''; if(t.length<238) return t; const i=t.lastIndexOf(' '); return (i>150?t.slice(0,i):t)+'\u2026'; }
@@ -396,6 +406,13 @@ function overview(dg,results,q){
 function render(results,vars,q,dg){
   const total=results.reduce((a,r)=>a+(r.count||0),0);
   let h=results.some(r=>r.topic_match)?'<div class="note" style="margin-top:12px"><b>Related-topic search: rights and legal status of non-Muslims.</b> Includes protections, obligations and restrictions. Quran and tafsir passages are selected by related verse references; other sources match related terminology. These results do not imply that every source takes the same position.</div>':'';
+  const exactReference=results.find(r=>r.reference_match);
+  if(exactReference){
+    const verified=exactReference.verified_reference===true;
+    const name=verified?'Publisher number linked to a curated record':exactReference.ambiguous?'Reference is ambiguous — multiple stored narrations':exactReference.count?'Local reference found — publisher numbering unverified':'Reference not present in the local collection';
+    const msg=exactReference.notice||'Citation verification is still required.';
+    h+=`<div class="ref-banner ${verified?'':'caution'}" role="status"><strong>${esc(name)}</strong><p>${esc(msg)}</p></div>`;
+  }
   const uniqVars=[...new Set(vars)].filter(v=>v.toLowerCase()!==q.toLowerCase());
   if(uniqVars.length) h+=`<div class="variants">Also searched as: ${uniqVars.map(v=>`<span>${esc(v)}</span>`).join(' ')}</div>`;
   h+='<div class="tabs">'+results.map(r=>`<button class="tab ${r.count?'':'off'}" onclick="jump('${r.key}')">${esc(LABEL[r.key])} <b>${r.capped?'1000+':n(r.count)}</b></button>`).join('')+'</div>';
@@ -413,6 +430,10 @@ function render(results,vars,q,dg){
     } else h+=r.failed?'<div class="none">This source is temporarily unavailable. Please retry.</div>':'<div class="none">Nothing in this source for this search.</div>';
     h+='</section>';
   });
+  if(exactReference?.conflicting_local_count>0){
+    const others=exactReference.conflicting_local_rows||[];
+    h+=`<details class="ref-other"><summary>${n(exactReference.conflicting_local_count)} additional local record(s) share this number — unverified</summary><p>These local records are preserved for scholarship, but they have NOT been established as the requested publisher citation. Different wording, numbering systems, and reported grades must be checked individually.</p>${others.map(r=>card('hadith',r,vars)).join('')}${exactReference.conflicting_local_count>others.length?'<p>Only the first eight candidates are shown.</p>':''}</details>`;
+  }
   h+=`<div class="note">Results come straight from the site\u2019s own database. Some sources, especially hadith linked to the later suras, were assembled automatically and have not yet been reviewed verse by verse; each source above says what it contains so you can judge how much weight to give it.</div>`;
   $('out').innerHTML=h;
 }
@@ -505,7 +526,7 @@ async function wordVars(q){
 async function showHadith(id,hq){
   document.querySelectorAll('#scope,.areas').forEach(e=>e.style.display='none');
   $('out').innerHTML='<div class="empty"><span class="spin"></span>Loading the hadith…</div>';
-  let h=null,links=[],publisherRefs=[];
+  let h=null,links=[],publisherRefs=[],referenceAudit=null;
   try{
     const r=await fetch(SB+'/rest/v1/hadith_corpus?id=eq.'+encodeURIComponent(id)+'&select=id,collection,hadith_number,narrator,book_chapter,tradition,grade,grade_details,isnad,text_arabic,text_english,source_url',{headers:H});
     h=(await r.json())[0];
@@ -519,11 +540,15 @@ async function showHadith(id,hq){
     const r=await fetch(SB+'/rest/v1/external_reference_map?hadith_corpus_id=eq.'+encodeURIComponent(id)+'&site=eq.sunnah.com&select=external_reference,url,verified_on&limit=10',{headers:H});
     if(r.ok)publisherRefs=(await r.json()).filter(x=>/^https:\/\/sunnah\.com\/(?:abudawud|bukhari|muslim|tirmidhi|ibnmajah|nasai):[0-9]+[a-z]?$/.test(x.url||''));
   }catch(e){}
+  try{
+    referenceAudit=await rpc('qh_resolve_hadith_reference',{p_collection:h.collection,p_reference:h.hadith_number,p_limit:3,p_query:h.collection+' '+h.hadith_number});
+  }catch(e){}
   const HV=(hq||'').split(/\s+/).filter(w=>w.length>=2&&!/^(the|and|for|with|from|that|this|about|was|are)$/i.test(w)).flatMap(w=>{const m=w.match(/^[A-Za-z]{4,}$/)?w.replace(/(ing|ed|es|s)$/i,''):w;return m.length>=3?[w,m]:[w];});
   const vs=new Set(); (links||[]).forEach(l=>vs.add(l.sura_id+':'+l.aya_number));
   $('out').innerHTML=`<div class="hub"><button class="back" onclick="history.length>1?history.back():location.href='research.html'">← Back to results</button>
    <h2>${esc(h.collection)}${h.hadith_number?' #'+esc(h.hadith_number):''}</h2>
    <div class="kicker">${[h.grade,h.tradition,h.narrator&&('Narrator: '+h.narrator),h.book_chapter].filter(Boolean).map(esc).join(' · ')}</div>
+   ${referenceAudit?.ambiguous?`<div class="ref-banner caution"><strong>Reference collision detected</strong><p>${esc(referenceAudit.notice)} The record below is only one of the candidates; confirm the edition before citing it.</p></div>`:!publisherRefs.length?`<div class="ref-banner caution"><strong>Publisher reference not verified</strong><p>The number and text below come from an imported local record. The source citation must be reconciled against the publisher edition before scholarly use.</p></div>`:''}
    <div class="hpair">
      <div class="hen">${h.text_english?highlight(h.text_english,HV):'<span class="hnone">No English text for this report.</span>'}</div>
      <div class="har" dir="rtl" lang="ar">${h.text_arabic?highlight(h.text_arabic,HV):'<span class="hnone">No Arabic text for this report.</span>'}</div>
@@ -531,7 +556,7 @@ async function showHadith(id,hq){
    ${h.isnad?`<div class="row"><b>Chain of narrators</b>${esc(h.isnad)}</div>`:''}
    ${h.grade_details?`<div class="row"><b>Grading note</b>${typeof QHHadithConnections==='undefined'?esc(JSON.stringify(h.grade_details)):QHHadithConnections.grading(h.grade_details)}</div>`:''}
    ${vs.size?`<div class="row"><b>Related verses</b>${[...vs].map(v=>{const [a,b]=v.split(':');return `<a href="/?sura=${a}&aya=${b}">${v}</a>`;}).join(' · ')}</div>`:''}
-   ${publisherRefs.length?`<div class="row"><b>Verified publisher numbering</b>${publisherRefs.map(p=>`<a href="${esc(p.url)}" target="_blank" rel="noopener noreferrer">Sunnah.com #${esc(p.external_reference)} ↗</a>`).join(' · ')}<br><small>Local catalogue #${esc(h.hadith_number)} uses a different numbering scheme.</small></div>`:h.source_url?`<div class="row"><b>Stored source link (numbering unverified)</b><a href="${esc(h.source_url)}" target="_blank" rel="noopener noreferrer">${esc(h.source_url)}</a></div>`:''}
+   ${publisherRefs.length?`<div class="row"><b>Curated publisher reference</b>${publisherRefs.map(p=>`<a href="${esc(p.url)}" target="_blank" rel="noopener noreferrer">Sunnah.com #${esc(p.external_reference)} ↗</a>`).join(' · ')}<br><small>Imported corpus number #${esc(h.hadith_number)}. Publisher mapping reviewed; textual interpretation and grading remain distinct.</small></div>`:h.source_url?`<div class="row"><b>Unverified stored citation</b><span>${esc(h.source_url)}</span><br><small>This stored URL has not been checked against this narration and should not be treated as verification.</small></div>`:''}
    <div class="hadith-connections hc-content" id="detail-hadith-connections" data-hadith-id="${Number(h.id)}"></div>
    </div>`;
   loadHadithConnections($('detail-hadith-connections'));
@@ -570,7 +595,7 @@ async function search(q){
       render([result],[q,reference],q,{});
       const firstConnections=document.querySelector('#out .hadith-connections');if(firstConnections){firstConnections.open=true;loadHadithConnections(firstConnections.querySelector('.hc-content'));}
       $('out').insertAdjacentHTML('afterbegin','<p class="what">Exact hadith reference: '+esc(reference)+(result.edition_alias?'. Matched to an existing corpus report using the verified publisher-to-local numbering map. The same hadith has a different local catalogue number.':'. Collection spelling normalized from your query. Records use the numbering stored in each edition.')+'</p>');
-      if(!result.count)discovery.discover(q);
+      if(!result.count || result.ambiguous || result.conflicting_local_count>0)discovery.discover(q,{weak:!!result.count});
       return;
     }
     const res=(await Promise.all((only?only:ORDER).map(k=>rpc(k==='sira'?'qh_sira_search':'site_search_src',k==='sira'?{q,lim:12}:{src:k,q,lim:6},signal).then(r=>{if(!r)throw new Error('No source response');return r;}).catch(()=>({key:k,count:0,rows:[],variants:[q],failed:true})))));
