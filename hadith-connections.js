@@ -16,6 +16,16 @@
    ${row.summary?`<details><summary>Connection note</summary><p>${esc(row.summary)}</p></details>`:''}
    <p class="hc-links">${local?`<a href="${local}">Read full Arabic and English →</a>`:''}${external?` <a href="${esc(external)}" target="_blank" rel="noopener noreferrer">Publisher source ↗</a>`:''}</p></article>`;
  }
+ function grading(value){
+  const values=Array.isArray(value)?value:[value];
+  const rows=values.map(item=>{
+   if(typeof item==='string')return esc(item);
+   if(!item||typeof item!=='object')return '';
+   if(item.name||item.grade)return esc(item.name||'Assessor not recorded')+': '+esc(item.grade||'Grade not recorded');
+   return Object.entries(item).map(([key,text])=>esc(key)+': '+esc(typeof text==='object'?JSON.stringify(text):text)).join('; ');
+  }).filter(Boolean);
+  return '<ul>'+rows.map(row=>'<li>'+row+'</li>').join('')+'</ul>';
+ }
  function pair(row){
   return `<details class="hc-comparison"><summary>${esc(row.type||'Textual difference')} <span>${esc(row.review_status||'unreviewed')} catalogue assessment</span></summary>
    <p class="hc-assessment">${row.involves_current?'This comparison includes the current report.':'This comparison is between other reports in the same narration group.'}</p>
@@ -56,5 +66,5 @@
   }
   return {load};
  }
- return {init,render,report,safeURL};
+ return {init,render,report,safeURL,grading};
 });

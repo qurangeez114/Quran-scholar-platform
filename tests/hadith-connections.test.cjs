@@ -11,3 +11,5 @@ test('lookup is lazy and repeated opens reuse one request',async()=>{
  let calls=0;const api=ui.init({rpc:async()=>{calls++;return {found:true,similar:[],comparisons:[]};}});
  const host={dataset:{hadithId:'19579'},setAttribute(){},innerHTML:''};await api.load(host);await api.load(host);assert.equal(calls,1);assert.equal(host.dataset.loaded,'true');
 });
+
+test('recorded grading objects display assessors rather than object placeholders',()=>{const html=ui.grading([{name:'Assessor A',grade:'Sahih'},{name:'Assessor B',grade:'Hasan'}]);assert.match(html,/Assessor A: Sahih/);assert.match(html,/Assessor B: Hasan/);assert.doesNotMatch(html,/object Object/);});
