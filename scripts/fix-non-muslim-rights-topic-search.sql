@@ -51,7 +51,7 @@ begin
   if lower(q) ~ '(non[ -]?muslims?|dhimm|religious minorit|people of the book)'
      and lower(q) ~ '(rights?|protect|treat|status|freedom|islamic countr|muslim countr)' then
     declare
-      topic_subject text := '(non[ -]?muslims?|dhimm|jizy[ae]|mu.?ah[ai]d|contracting (man|men|person)|covenant[^.]{0,50}(muslim|protect)|protected (person|people|communit)|people of the book)';
+      topic_subject text := '(non[ -]?muslims?|dhimm|jizy[ae]|mu[’ʿ -]?ah[ai]d|contracting (man|men|person)|covenant[^.]{0,50}(muslim|protect)|protected (person|people|communit)|people of the book)';
       topic_context text := '(rights?|protect|treat|justice|oppress|wrong|kill|tax|jizy|worship|religio|freedom|church|synagogue|property|marriage|court|testimony|equal|citizen|covenant|treaty|treaties|peace|compulsion|convert)';
       topic_where text;
       topic_order text := '1';
@@ -75,7 +75,9 @@ begin
         topic_where := '('||cat||') ~* $1 and ('||cat||') ~* $2 and ('||reg.extra_where||')';
         if src='hadith' then
           topic_where := 'to_tsvector(''english'',text_english) @@ to_tsquery(''english'',''dhimmi:* | dhimma:* | jizya:* | muahad:* | (contracting & (man | person)) | (protected & (person | people | communities)) | (non & muslim) | (people & book)'') and text_english ~* $1 and text_english ~* $2';
-          topic_order := 'case when text_english ~* ''wrongs a contracting'' then 0 when text_english ~* ''(dhimm|jizy|mu.?ah[ai]d|non[ -]?muslim|protected (person|people|communit))'' then 1 else 2 end, (grade ilike ''sahih%'') desc nulls last, id';
+          topic_order := 'case when text_english ~* ''wrongs a contracting'' then 0 when text_english ~* ''(dhimm|jizy|mu[’ʿ -]?ah[ai]d|non[ -]?muslim|protected (person|people|communit))'' then 1 else 2 end, (grade ilike ''sahih%'') desc nulls last, id';
+        elsif src='madhhab' then
+          topic_order := 'case when topic ~* ''(dhimmi status|rights of non[ -]?muslim|jizya as|religious minorit)'' then 0 when topic ~* ''(dhimm|non[ -]?muslim|jizy)'' then 1 else 2 end, '||reg.order_expr;
         else
           topic_order := format('case when (%s) ~* ''(rights?|protect|freedom|status)'' then 0 else 1 end, %s',cat,reg.order_expr);
         end if;
