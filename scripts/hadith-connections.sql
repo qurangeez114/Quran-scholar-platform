@@ -51,8 +51,16 @@ begin
    from (select nv.id,nv.narrative_group_id,nv.hadith_corpus_id,nv.source_collection,nv.source_reference,nv.narrator,nv.version_summary,nv.citation_ambiguous,
   em.url verified_url,em.external_reference,null::text grade_note
  from public.narrative_versions nv left join lateral (
-  select url,external_reference from public.external_reference_map m where m.hadith_corpus_id=nv.hadith_corpus_id
-  order by verified_on desc nulls last,id limit 1
+  select mapped.url,mapped.external_reference from (
+   select m.url,m.external_reference,0 priority,m.id duplicate_order
+   from public.external_reference_map m where m.hadith_corpus_id=nv.hadith_corpus_id
+   union all
+   select lm.url_prefix||original.hadith_number,original.hadith_number,1,d.duplicate_id
+   from public.hadith_text_duplicates d
+   join public.hadith_corpus original on original.id=d.duplicate_id
+   join public.external_link_map lm on lm.collection=nv.source_collection and lm.site='sunnah.com' and lm.url_style='flat_number'
+   where d.canonical_id=nv.hadith_corpus_id and d.duplicate_id<=36390
+  ) mapped order by mapped.priority,mapped.duplicate_order limit 1
  ) em on true) v join public.hadith_corpus h on h.id=v.hadith_corpus_id
    where v.narrative_group_id=any(group_ids) and v.hadith_corpus_id<>p_hadith_id
     and md5(regexp_replace(coalesce(h.text_english,''),'\s+',' ','g'))<>md5(regexp_replace(coalesce(current_report.text_english,''),'\s+',' ','g'))
@@ -76,14 +84,30 @@ begin
    join (select nv.id,nv.narrative_group_id,nv.hadith_corpus_id,nv.source_collection,nv.source_reference,nv.narrator,nv.version_summary,nv.citation_ambiguous,
   em.url verified_url,em.external_reference,null::text grade_note
  from public.narrative_versions nv left join lateral (
-  select url,external_reference from public.external_reference_map m where m.hadith_corpus_id=nv.hadith_corpus_id
-  order by verified_on desc nulls last,id limit 1
+  select mapped.url,mapped.external_reference from (
+   select m.url,m.external_reference,0 priority,m.id duplicate_order
+   from public.external_reference_map m where m.hadith_corpus_id=nv.hadith_corpus_id
+   union all
+   select lm.url_prefix||original.hadith_number,original.hadith_number,1,d.duplicate_id
+   from public.hadith_text_duplicates d
+   join public.hadith_corpus original on original.id=d.duplicate_id
+   join public.external_link_map lm on lm.collection=nv.source_collection and lm.site='sunnah.com' and lm.url_style='flat_number'
+   where d.canonical_id=nv.hadith_corpus_id and d.duplicate_id<=36390
+  ) mapped order by mapped.priority,mapped.duplicate_order limit 1
  ) em on true) a on a.id=c.version_a_id
    join (select nv.id,nv.narrative_group_id,nv.hadith_corpus_id,nv.source_collection,nv.source_reference,nv.narrator,nv.version_summary,nv.citation_ambiguous,
   em.url verified_url,em.external_reference,null::text grade_note
  from public.narrative_versions nv left join lateral (
-  select url,external_reference from public.external_reference_map m where m.hadith_corpus_id=nv.hadith_corpus_id
-  order by verified_on desc nulls last,id limit 1
+  select mapped.url,mapped.external_reference from (
+   select m.url,m.external_reference,0 priority,m.id duplicate_order
+   from public.external_reference_map m where m.hadith_corpus_id=nv.hadith_corpus_id
+   union all
+   select lm.url_prefix||original.hadith_number,original.hadith_number,1,d.duplicate_id
+   from public.hadith_text_duplicates d
+   join public.hadith_corpus original on original.id=d.duplicate_id
+   join public.external_link_map lm on lm.collection=nv.source_collection and lm.site='sunnah.com' and lm.url_style='flat_number'
+   where d.canonical_id=nv.hadith_corpus_id and d.duplicate_id<=36390
+  ) mapped order by mapped.priority,mapped.duplicate_order limit 1
  ) em on true) b on b.id=c.version_b_id
    join public.hadith_corpus ha on ha.id=a.hadith_corpus_id
    join public.hadith_corpus hb on hb.id=b.hadith_corpus_id
