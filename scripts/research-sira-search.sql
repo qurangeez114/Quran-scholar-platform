@@ -16,7 +16,7 @@ begin
  select array_agg(distinct lexeme) into tokens from unnest(tsvector_to_array(to_tsvector('english',nq))) lexeme
  where lexeme not in ('say','said','hadith','search','right','away','immedi','word','result','find');
  if coalesce(cardinality(tokens),0)=0 then return jsonb_build_object('key','sira','count',0,'rows','[]'::jsonb,'variants',jsonb_build_array(nq)); end if;
- select to_tsquery('english',string_agg(quote_literal(x),' | ')) into tq from unnest(tokens) x;
+ select to_tsquery('english',string_agg(case x when 'safiyya' then '(safiyya | safiyyah | safiya | safiyah)' when 'muhammad' then '(muhammad | mohammed | mohammad | muhammed)' when 'ayyub' then '(ayyub | ayub)' else quote_literal(x) end,' | ')) into tq from unnest(tokens) x;
  with docs as (
  select 'event:'||id as id,title_en as title,story_en as text,story_ar as arabic,source_ref,year_ce as year,
  to_tsvector('english',coalesce(title_en,'')||' '||coalesce(story_en,'')||' '||coalesce(title_ar,'')||' '||coalesce(story_ar,'')) as doc
@@ -28,7 +28,7 @@ begin
  from public.campaign_sirah
  where to_tsvector('english',coalesce(topic,'')||' '||coalesce(english_text,'')||' '||coalesce(arabic_text,'')) @@ tq
  ), scored as (
- select *, (select count(*) from unnest(tokens) t where doc @@ plainto_tsquery('english',t)) as hits,ts_rank_cd(doc,tq) as rank from docs
+ select *, (select count(*) from unnest(tokens) t where doc @@ case t when 'safiyya' then to_tsquery('english','safiyya | safiyyah | safiya | safiyah') when 'muhammad' then to_tsquery('english','muhammad | mohammed | mohammad | muhammed') when 'ayyub' then to_tsquery('english','ayyub | ayub') else plainto_tsquery('english',t) end) as hits,ts_rank_cd(doc,tq) as rank from docs
  ), unique_docs as (
  select distinct on (coalesce(text,''),coalesce(source_ref,'')) * from scored where hits>=least(2,cardinality(tokens)) order by coalesce(text,''),coalesce(source_ref,''),rank desc
  ), ranked as (
