@@ -20,7 +20,7 @@ function fakeBackend({failSave=false,failProvider=false,cached=false,budget=true
   if(url.includes('qh_external_sources?')){if(failSave)throw Error('database down');stored=JSON.parse(options.body);return json(stored);}
   if(url.startsWith('https://en.wikipedia.org/')){if(failProvider)throw Error('provider down');return json({query:{pages:[{title:'Jizya',fullurl:'https://en.wikipedia.org/wiki/Jizya',extract:'A sourced encyclopedia description.',revisions:[{revid:12345}]},{title:'Unsafe',fullurl:'https://attacker.example/collect'}]}});}
   if(url.startsWith('https://api.crossref.org/'))return json({message:{items:[{DOI:'10.1234/study',title:['Historical study of jizya'],author:[{family:'Author'}],published:{'date-parts':[[2020]]}}]}});
-  if(url==='https://sunnah.com/abudawud:99999')return {ok:true,text:async()=>'<title>404 Not Found</title>'};
+  if(url==='https://sunnah.com/abudawud:99999')return {ok:false,status:404,text:async()=>'<title>404 Not Found</title>'};
   throw Error('Unexpected URL '+url);
  };
  return {calls};
