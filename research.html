@@ -350,8 +350,9 @@ function card(key,r,vars){
   const href=cfg.link(r);
   const sourceURL=key==='sira'?(r.source_ref||'').match(/https:\/\/hadithunlocked\.com\/ibnhisham\/[0-9]+\/[0-9]+/):null;
   const citation=sourceURL?`<p class="what"><a href="${esc(sourceURL[0])}" target="_blank" rel="noopener noreferrer">Read the cited source ↗</a></p>`:'';
+  const verifiedPublisher=key==='hadith'&&/^https:\/\/sunnah\.com\/(?:abudawud|bukhari|muslim|tirmidhi|ibnmajah|nasai):[0-9]+[a-z]?$/.test(r.publisher_url||'')?`<p class="what"><a href="${esc(r.publisher_url)}" target="_blank" rel="noopener noreferrer">Verify this reference at Sunnah.com ↗</a> · Locally catalogued as #${esc(r.catalogue_number||'')}</p>`:'';
   const related=key==='hadith'&&/^[1-9][0-9]*$/.test(String(r.id))?`<details class="hadith-connections" ontoggle="if(this.open)loadHadithConnections(this.querySelector('.hc-content'))"><summary>Related and contrasting Hadith</summary><div class="hc-content" data-hadith-id="${Number(r.id)}"></div></details>`:'';
-  return `<div class="card"><div class="meta">${esc(ref)}</div>${ttl}${r.arabic?`<div class="txt" dir="rtl" lang="ar" style="font-size:1.25em;line-height:1.9">${highlight(snip(r.arabic,vars),vars)}</div>`:''}<div class="txt">${highlight(snip(r.text,vars),vars)}</div><div class="more">${['propositions','tensions','topics','sira'].includes(key)?`<a href="#" onclick="return fullText(this)">Read in full \u2193</a><div class="full" hidden>${highlight(esc2(r.text),vars)}</div>`:`<a href="${href}">Open \u2192</a>`}</div>${citation}${related}</div>`;
+  return `<div class="card"><div class="meta">${esc(ref)}</div>${ttl}${r.arabic?`<div class="txt" dir="rtl" lang="ar" style="font-size:1.25em;line-height:1.9">${highlight(snip(r.arabic,vars),vars)}</div>`:''}<div class="txt">${highlight(snip(r.text,vars),vars)}</div><div class="more">${['propositions','tensions','topics','sira'].includes(key)?`<a href="#" onclick="return fullText(this)">Read in full \u2193</a><div class="full" hidden>${highlight(esc2(r.text),vars)}</div>`:`<a href="${href}">Open \u2192</a>`}</div>${citation}${verifiedPublisher}${related}</div>`;
 }
 
 function cut(t){ t=t||''; if(t.length<238) return t; const i=t.lastIndexOf(' '); return (i>150?t.slice(0,i):t)+'\u2026'; }
@@ -504,7 +505,7 @@ async function wordVars(q){
 async function showHadith(id,hq){
   document.querySelectorAll('#scope,.areas').forEach(e=>e.style.display='none');
   $('out').innerHTML='<div class="empty"><span class="spin"></span>Loading the hadith…</div>';
-  let h=null,links=[];
+  let h=null,links=[],publisherRefs=[];
   try{
     const r=await fetch(SB+'/rest/v1/hadith_corpus?id=eq.'+encodeURIComponent(id)+'&select=id,collection,hadith_number,narrator,book_chapter,tradition,grade,grade_details,isnad,text_arabic,text_english,source_url',{headers:H});
     h=(await r.json())[0];
@@ -514,6 +515,10 @@ async function showHadith(id,hq){
     links=await r.json();
   }catch(e){}
   if(!h){ $('out').innerHTML='<div class="empty">That hadith could not be found.</div>'; return; }
+  try{
+    const r=await fetch(SB+'/rest/v1/external_reference_map?hadith_corpus_id=eq.'+encodeURIComponent(id)+'&site=eq.sunnah.com&select=external_reference,url,verified_on&limit=10',{headers:H});
+    if(r.ok)publisherRefs=(await r.json()).filter(x=>/^https:\/\/sunnah\.com\/(?:abudawud|bukhari|muslim|tirmidhi|ibnmajah|nasai):[0-9]+[a-z]?$/.test(x.url||''));
+  }catch(e){}
   const HV=(hq||'').split(/\s+/).filter(w=>w.length>=2&&!/^(the|and|for|with|from|that|this|about|was|are)$/i.test(w)).flatMap(w=>{const m=w.match(/^[A-Za-z]{4,}$/)?w.replace(/(ing|ed|es|s)$/i,''):w;return m.length>=3?[w,m]:[w];});
   const vs=new Set(); (links||[]).forEach(l=>vs.add(l.sura_id+':'+l.aya_number));
   $('out').innerHTML=`<div class="hub"><button class="back" onclick="history.length>1?history.back():location.href='research.html'">← Back to results</button>
@@ -526,7 +531,7 @@ async function showHadith(id,hq){
    ${h.isnad?`<div class="row"><b>Chain of narrators</b>${esc(h.isnad)}</div>`:''}
    ${h.grade_details?`<div class="row"><b>Grading note</b>${typeof QHHadithConnections==='undefined'?esc(JSON.stringify(h.grade_details)):QHHadithConnections.grading(h.grade_details)}</div>`:''}
    ${vs.size?`<div class="row"><b>Related verses</b>${[...vs].map(v=>{const [a,b]=v.split(':');return `<a href="/?sura=${a}&aya=${b}">${v}</a>`;}).join(' · ')}</div>`:''}
-   ${h.source_url?`<div class="row"><b>Source</b><a href="${esc(h.source_url)}" target="_blank" rel="noopener">${esc(h.source_url)}</a></div>`:''}
+   ${publisherRefs.length?`<div class="row"><b>Verified publisher numbering</b>${publisherRefs.map(p=>`<a href="${esc(p.url)}" target="_blank" rel="noopener noreferrer">Sunnah.com #${esc(p.external_reference)} ↗</a>`).join(' · ')}<br><small>Local catalogue #${esc(h.hadith_number)} uses a different numbering scheme.</small></div>`:h.source_url?`<div class="row"><b>Stored source link (numbering unverified)</b><a href="${esc(h.source_url)}" target="_blank" rel="noopener noreferrer">${esc(h.source_url)}</a></div>`:''}
    <div class="hadith-connections hc-content" id="detail-hadith-connections" data-hadith-id="${Number(h.id)}"></div>
    </div>`;
   loadHadithConnections($('detail-hadith-connections'));
@@ -564,7 +569,7 @@ async function search(q){
       if(!result||!result.reference_match)throw new Error('Reference lookup unavailable');
       render([result],[q,reference],q,{});
       const firstConnections=document.querySelector('#out .hadith-connections');if(firstConnections){firstConnections.open=true;loadHadithConnections(firstConnections.querySelector('.hc-content'));}
-      $('out').insertAdjacentHTML('afterbegin','<p class="what">Exact hadith reference: '+esc(reference)+'. Collection spelling normalized from your query. Records use the numbering stored in each edition.</p>');
+      $('out').insertAdjacentHTML('afterbegin','<p class="what">Exact hadith reference: '+esc(reference)+(result.edition_alias?'. Matched to an existing corpus report using the verified publisher-to-local numbering map. The same hadith has a different local catalogue number.':'. Collection spelling normalized from your query. Records use the numbering stored in each edition.')+'</p>');
       if(!result.count)discovery.discover(q);
       return;
     }
