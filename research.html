@@ -101,6 +101,22 @@ section.src h2{font-size:25px;font-weight:600;margin-top:34px}
 .hpair{display:grid;grid-template-columns:1fr 1fr;gap:0;margin:16px 0;border:1px solid #d9e0da;border-radius:12px;overflow:hidden;background:#fff}.hen,.har{padding:18px 20px;line-height:1.75}.hen{white-space:pre-line;font-size:16px;border-right:1px solid #d9e0da}.har{font-size:1.4em;line-height:2.1;text-align:right;background:#fbfaf5}.hnone{color:#8a8a8a;font-size:14px}@media(max-width:700px){.hpair{grid-template-columns:1fr}.hen{border-right:0;border-bottom:1px solid #d9e0da}}
 @media(max-width:700px){.hpair{border:0;background:transparent;border-radius:0}.hen{font-size:19px;line-height:1.85;padding:14px 4px;border:0}.har{font-size:1.55em;padding:14px 4px;border-top:1px solid #d9e0da;background:transparent}.hub h2{background:#8fb5b0;color:#fff;margin:0 -16px 8px;padding:10px 16px;font-size:18px}}
 .where{margin:12px auto 2px;max-width:880px;text-align:center}#whereBtn{font:inherit;font-size:15px;padding:8px 16px;border:1.5px solid #cbd6cf;border-radius:22px;background:#fff;cursor:pointer;color:var(--ink)}#wherePanel{margin:10px auto 0;text-align:left;background:#fff;border:1px solid #d9e0da;border-radius:14px;padding:12px 14px;max-height:55vh;overflow:auto}#wherePanel[hidden]{display:none}.wp-top{display:flex;gap:8px;flex-wrap:wrap;align-items:center;position:sticky;top:-12px;background:#fff;padding:6px 0 8px}.wp-top input{flex:1 1 180px;font:inherit;font-size:14.5px;padding:7px 12px;border:1.5px solid #cbd6cf;border-radius:18px}.wg{margin:8px 0}.wgt{font-size:12.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink2);margin:6px 0}.wopt{display:inline-flex;align-items:center;gap:6px;margin:0 8px 8px 0;padding:6px 11px;border:1px solid #e0d6b4;background:#f6f4ec;border-radius:18px;font-size:14px;cursor:pointer;user-select:none}.wopt input{accent-color:#244d3e;margin:0}.wopt.on{background:#244d3e;color:#fff;border-color:#244d3e}.wopt.on input{accent-color:#fff}#whereChips{margin-top:8px}.wchip{display:inline-block;margin:0 6px 6px 0;padding:3px 10px;border-radius:14px;background:#e9efe9;color:#244d3e;font-size:13px}
+
+.spelling-choices{text-align:left;max-width:680px;margin:12px auto;color:#244d3e;font-size:16px}
+.spell-choice{font:inherit;color:#0f766e;background:#fff;border:1px solid #b8ccc2;border-radius:18px;padding:8px 12px;margin:4px;min-height:44px;cursor:pointer;text-decoration:underline}
+.spell-choice:focus-visible{outline:3px solid #244d3e;outline-offset:2px}
+.spell-keep{display:block;color:var(--ink2);font-size:13px;margin-top:4px}
+.external-option{max-width:680px;margin:14px auto;text-align:left;font-size:14px;color:var(--ink2)}
+.external-option label{display:flex;align-items:center;gap:8px;min-height:44px;cursor:pointer}
+.external-option input{width:18px;height:18px;accent-color:#244d3e;flex-shrink:0}
+.external-option p{font-size:12.5px;margin:0;line-height:1.5}
+.external-results{margin:24px 0;padding:18px;background:#fff;border:1px solid #d9e0da;border-radius:12px}
+.external-results h2{font-size:23px;margin:0 0 10px}.external-results>p{font-size:15px;color:var(--ink2)}
+.external-card{margin:18px 0;padding-top:12px;border-top:1px solid var(--line);overflow-wrap:anywhere}
+.external-card>a{font-size:20px;font-weight:600}.external-card p{font-size:15px;margin:6px 0;line-height:1.65}
+.external-card .external-meta{font-size:12px;font-weight:600;color:#8b6f1f}
+.sbox input{min-width:0}
+@media(max-width:600px){.sbox button{padding:0 14px}.spell-choice{display:block;max-width:100%;text-align:left}.external-results{padding:14px}}
 </style>
   <script src="site-motion.js" defer></script>
 <script src="/site-chrome.js" defer></script>
@@ -112,9 +128,11 @@ section.src h2{font-size:25px;font-weight:600;margin-top:34px}
   <h1>Research</h1>
   <p>Ask about any word, person, event or subject. One search covers every source on the site.</p>
   <form class="sbox" onsubmit="go(event)">
-    <input id="q" type="search" placeholder="e.g. jizya, apostasy, Khaybar, inheritance, جزية" autocomplete="off" autofocus>
+    <input id="q" type="search" maxlength="180" placeholder="e.g. jizya, apostasy, Khaybar, inheritance, جزية" autocomplete="off" autofocus>
     <button type="submit">Search</button>
   </form>
+  <div id="spellingChoices" class="spelling-choices" role="status" aria-live="polite" hidden></div>
+  <div class="external-option"><label><input id="externalEnabled" type="checkbox" checked> Check external sources when local results are missing</label><p>Your search is sent to reference providers. Attributed excerpts and source details are saved for reuse; imported records are marked for review.</p><button id="externalSearchNow" type="button" class="spell-choice">Search external sources</button></div>
   <div class="where">
     <button type="button" id="whereBtn" onclick="toggleWhere()" aria-expanded="false">Search in: All sources &#9662;</button>
     <div id="wherePanel" hidden>
@@ -139,6 +157,7 @@ section.src h2{font-size:25px;font-weight:600;margin-top:34px}
 
 <main>
   <div id="out"></div>
+  <section id="externalResults" class="external-results" aria-live="polite" hidden></section>
 </main>
 
 <nav id="bottom-nav">
@@ -154,6 +173,7 @@ section.src h2{font-size:25px;font-weight:600;margin-top:34px}
   <button class="bnav-btn" onclick="location.href='contradiction.html'"><span class="bni">⚡</span><span>Tensions</span></button>
   <button class="bnav-btn" onclick="location.href='narrations.html'"><span class="bni">🧵</span><span>Narrations</span></button>
 </nav>
+<script src="/research-discovery.js"></script>
 <script>
 const SB='https://ylosytbxpzxzwfzjpaej.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
@@ -192,6 +212,7 @@ const CATS=[
 const CATNAME=Object.fromEntries(CATS.map(c=>[c[0],c[1]]));
 let SHOW_SCORED=false, CURCAT=null;
 async function showHub(){
+  discovery.cancel();
   CURCAT=null;
   $('out').innerHTML='<div class="empty"><span class="spin"></span>Loading…</div>';
   let cnt={}; try{cnt=await rpc('contradiction_counts',{});}catch(e){}
@@ -229,6 +250,8 @@ const CQ=/contradict|tension|inconsisten|conflict|discrepan|disagree/i;
 
 
 const $=id=>document.getElementById(id);
+const discovery=typeof QHDiscovery==='undefined'?{cancel(){},refresh(){},discover(){ $('externalResults').hidden=false;$('externalResults').textContent='External discovery is unavailable. Refresh the page to retry.';}}:QHDiscovery.init({input:$('q'),box:$('spellingChoices'),external:$('externalResults'),enabled:$('externalEnabled'),onChoose:q=>search(q),supabaseURL:SB,headers:H});
+$('externalSearchNow').onclick=()=>{const q=$('q').value.trim();if(q.length<3){$('q').focus();return;}$('externalEnabled').checked=true;discovery.discover(q,{manual:true});};
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const n=x=>Number(x||0).toLocaleString('en-US');
 
@@ -362,7 +385,7 @@ function render(results,vars,q,dg){
   if(!total&&!results.some(r=>r.failed)){
     h+=`<div class="empty">Nothing found for \u201c${esc(q)}\u201d in any source.<br>Try another spelling, an Arabic form, or a simpler word. If the subject is real and missing, that is a gap in the site\u2019s coverage, not a sign that nothing was written about it.</div>`;
   }
-  results.forEach(r=>{
+  results.filter(r=>total||r.failed).forEach(r=>{
     h+=`<section class="src" id="src-${r.key}"><h2>${esc(LABEL[r.key])} <small>${r.count?(r.capped?'more than 1,000 matches':n(r.count)+' match'+(r.count==1?'':'es')):'no matches'}</small></h2><p class="what">${esc(SRC[r.key].what)}</p>${r.relaxed?'<p class="what"><i>No passage has every word you typed, so these are the closest matches: they contain most of your words.</i></p>':''}`;
     if(r.count){
       h+=r.rows.map(x=>card(r.key,x,vars)).join('');
@@ -493,6 +516,7 @@ function jump(k){ const e=$('src-'+k); if(e) e.scrollIntoView({behavior:'smooth'
 
 async function search(q){
   q=q.trim();
+  discovery.cancel();discovery.refresh();
   if(!q){ $('out').innerHTML='<div class="empty">Type a word or question in the box above, then press Search.</div>'; $('q').focus(); return; }
   const version=++searchVersion;
   if(searchController)searchController.abort();
@@ -511,7 +535,7 @@ async function search(q){
     const reference=hadithReference(q);
     // A collection + number is an exact lookup, not a search of passage words.
     if(reference){
-      if(SCT.length&&!srcSel.includes('hadith')&&!bookSel.some(b=>b.startsWith('hadith:'))){
+      if(SCT.length&&!srcSel.includes('hadith')&&!bookSel.some(b=>b.startsWith('hadith:')&&hadithReference(b.slice(7)+' '+reference.split(' ').pop())===reference)){
         $('out').innerHTML='<div class="empty">This is a hadith reference. Select All sources or Hadith to look it up.</div>';return;
       }
       const result=await rpc('site_search_src',{src:'hadith',q:reference,lim:100},signal);
@@ -519,6 +543,7 @@ async function search(q){
       if(!result||!result.reference_match)throw new Error('Reference lookup unavailable');
       render([result],[q,reference],q,{});
       $('out').insertAdjacentHTML('afterbegin','<p class="what">Exact hadith reference: '+esc(reference)+'. Collection spelling normalized from your query. Records use the numbering stored in each edition.</p>');
+      if(!result.count)discovery.discover(q);
       return;
     }
     const res=(await Promise.all((only?only:ORDER).map(k=>rpc('site_search_src',{src:k,q:q,lim:6},signal).then(r=>{if(!r)throw new Error('No source response');return r;}).catch(()=>({key:k,count:0,rows:[],variants:[q],failed:true})))));
@@ -527,6 +552,10 @@ async function search(q){
     const vars=[...new Set(res.flatMap(r=>r.variants||[q]))];
     // Show source results before optional summaries and book counts finish.
     render(res,vars,q,{});
+    if(!bookSel.length&&!res.some(r=>r.count>0)){
+      discovery.discover(q,{incomplete:res.some(r=>r.failed)});
+      return;
+    }
     let dg=null;
     if(only||topicSearch) dg={};
     else try{
@@ -539,6 +568,7 @@ async function search(q){
     if(only&&!only.length){ $('out').innerHTML='<div id="pickerslot"></div>'; } else render(res,vars,q,dg);
     if(bookSel.length){ const sec=await booksSection(bookSel,q); const slot=$('pickerslot'); if(slot) slot.replaceWith(sec); else $('out').prepend(sec); }
     else insertPicker(sb,q);
+    if(bookSel.length&&!res.some(r=>r.count>0)&&!document.querySelector('#src-books .card'))discovery.discover(q);
     if(cres.length&&(!only||only.length)){
       const el=document.createElement('section'); el.className='src'; el.id='src-contra';
       el.innerHTML='<h2>Contradictions and tensions <small>'+cres.length+' related</small></h2><p class="what">Entries from the contradiction catalogue that touch this subject, with evidence. <a href="#" onclick="showHub();return false">Browse all categories →</a></p>'+cres.map(evCard).join('');
@@ -560,4 +590,5 @@ loadWhere().then(()=>{ if(hid&&!p){ showHadith(hid,new URLSearchParams(location.
 <script src="/quran-verse-audio.js" defer></script>
 </body>
 </html>
+
 
