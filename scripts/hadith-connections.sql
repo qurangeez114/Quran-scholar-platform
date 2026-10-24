@@ -72,6 +72,9 @@ begin
      or exists(select 1 from public.narrative_versions n where n.id in(c.version_a_id,c.version_b_id) and p_hadith_id=any(n.duplicate_of_corpus_ids))) is_direct,
     jsonb_build_object('comparison_id',c.id,'type',c.comparison_type,'summary',c.comparison_summary,
      'explanation',c.possible_explanation,'review_status',coalesce(c.review_status,'unreviewed'),'confidence',c.confidence,
+     'points',(select coalesce(jsonb_agg(jsonb_build_object('a_en',p.version_a_english,'b_en',p.version_b_english,
+       'a_original',p.version_a_text,'b_original',p.version_b_text,'a_form',p.quote_a_form,'b_form',p.quote_b_form)),'[]'::jsonb)
+       from (select * from public.narrative_comparison_points cp where cp.narrative_comparison_id=c.id order by cp.severity desc,cp.id limit 2) p),
      'involves_current',a.hadith_corpus_id=p_hadith_id or b.hadith_corpus_id=p_hadith_id
        or exists(select 1 from public.narrative_versions n where n.id in(c.version_a_id,c.version_b_id) and p_hadith_id=any(n.duplicate_of_corpus_ids)),
      'a',jsonb_build_object('id',a.hadith_corpus_id,'collection',a.source_collection,'number',ha.hadith_number,

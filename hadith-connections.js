@@ -26,9 +26,17 @@
   }).filter(Boolean);
   return '<ul>'+rows.map(row=>'<li>'+row+'</li>').join('')+'</ul>';
  }
+ function evidence(point){
+  function side(prefix,label){
+   const english=point[prefix+'_en'],original=point[prefix+'_original'],form=point[prefix+'_form']||'form not recorded';
+   return '<div class="hc-evidence"><b>'+label+' · '+esc(form)+'</b>'+(english?'<p>'+esc(english)+'</p>':'')+(original?'<p '+(/[\u0600-\u06ff]/.test(original)?'dir="rtl" lang="ar"':'')+'>'+esc(original)+'</p>':'')+'</div>';
+  }
+  return '<div class="hc-pair">'+side('a','Extract A')+side('b','Extract B')+'</div>';
+ }
  function pair(row){
   return `<details class="hc-comparison"><summary>${esc(row.type||'Textual difference')} <span>${esc(row.review_status||'unreviewed')} catalogue assessment</span></summary>
    <p class="hc-assessment">${row.involves_current?'This comparison includes the current report.':'This comparison is between other reports in the same narration group.'}</p>
+   ${row.points?.length?'<h4>Recorded comparison extracts</h4><p class="hc-meta">Quotation forms are recorded by the catalogue. Condensed extracts are not verbatim quotations.</p>'+row.points.map(evidence).join(''):''}
    <p><b>Recorded difference:</b> ${esc(row.summary)}</p>
    <div class="hc-pair">${report(row.a||{})}${report(row.b||{})}</div>
    ${row.explanation?`<p><b>Catalogue interpretation / possible explanation:</b> ${esc(row.explanation)}</p>`:''}
