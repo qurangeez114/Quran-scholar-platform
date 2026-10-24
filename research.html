@@ -117,6 +117,18 @@ section.src h2{font-size:25px;font-weight:600;margin-top:34px}
 .external-card .external-meta{font-size:12px;font-weight:600;color:#8b6f1f}
 .sbox input{min-width:0}
 @media(max-width:600px){.sbox button{padding:0 14px}.spell-choice{display:block;max-width:100%;text-align:left}.external-results{padding:14px}}
+
+.hadith-connections{margin-top:18px;border:1px solid #d7dfd8;border-radius:10px;background:#fffdf8;padding:14px;color:var(--ink)}
+.hadith-connections>summary{cursor:pointer;font-weight:600;font-size:18px;min-height:44px;display:list-item;line-height:1.6}
+.hc-content{font-size:16px;line-height:1.7}.hc-intro{padding:12px;background:#f4f5ee;border-left:3px solid #8fae9f;margin:12px 0}
+.hc-section{margin:24px 0 8px}.hc-section h3{font-size:22px;margin:0 0 12px}.hc-section h3 span{font-size:14px;color:var(--ink2)}
+.hc-report{padding:12px 0;border-top:1px solid var(--line);overflow-wrap:anywhere}.hc-report h4{margin:0;font-size:18px}.hc-report p{margin:8px 0}
+.hc-meta,.hc-numbering{font-size:13px;color:var(--ink2)}.hc-caution{font-size:14px;color:#825d18;background:#fff5dc;padding:8px;border-radius:5px}
+.hc-links{display:flex;gap:12px;flex-wrap:wrap;font-size:14px}.hc-links a{min-height:44px;display:inline-flex;align-items:center}
+.hc-comparison{padding:12px;margin:12px 0;background:#fff;border:1px solid #dfd5c6;border-radius:8px}.hc-comparison>summary{cursor:pointer;min-height:44px;font-size:17px;font-weight:600}.hc-comparison>summary span{display:block;color:#825d18;font-size:12px;font-weight:400}
+.hc-assessment{font-size:14px;color:#244d3e}.hc-pair{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px}.hc-more>summary{min-height:44px;cursor:pointer;color:#0f766e;padding:8px 0}
+.hc-content button{font:inherit;padding:10px 14px;border:1px solid #b8ccc2;border-radius:8px;background:#fff;cursor:pointer}
+@media(max-width:700px){.hadith-connections{padding:12px}.hc-pair{grid-template-columns:minmax(0,1fr);gap:8px}.hc-section h3{font-size:20px}}
 </style>
   <script src="site-motion.js" defer></script>
 <script src="/site-chrome.js" defer></script>
@@ -174,6 +186,7 @@ section.src h2{font-size:25px;font-weight:600;margin-top:34px}
   <button class="bnav-btn" onclick="location.href='narrations.html'"><span class="bni">🧵</span><span>Narrations</span></button>
 </nav>
 <script src="/research-discovery.js"></script>
+<script src="/hadith-connections.js"></script>
 <script>
 const SB='https://ylosytbxpzxzwfzjpaej.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
@@ -255,6 +268,9 @@ $('externalSearchNow').onclick=()=>{const q=$('q').value.trim();if(q.length<3){$
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const n=x=>Number(x||0).toLocaleString('en-US');
 
+const hadithConnections=typeof QHHadithConnections==='undefined'?null:QHHadithConnections.init({rpc});
+function loadHadithConnections(host){if(hadithConnections)return hadithConnections.load(host);host.textContent='Related-report tools are unavailable. Refresh to retry.';}
+
 async function rpc(fn,body,signal){
   const controller=new AbortController();
   const abort=()=>controller.abort();
@@ -332,7 +348,8 @@ function card(key,r,vars){
   const ref=cfg.ref(r);
   const ttl=r.title?`<div class="ttl">${highlight(r.title,vars)}</div>`:'';
   const href=cfg.link(r);
-  return `<div class="card"><div class="meta">${esc(ref)}</div>${ttl}${r.arabic?`<div class="txt" dir="rtl" lang="ar" style="font-size:1.25em;line-height:1.9">${highlight(snip(r.arabic,vars),vars)}</div>`:''}<div class="txt">${highlight(snip(r.text,vars),vars)}</div><div class="more">${['propositions','tensions','topics'].includes(key)?`<a href="#" onclick="return fullText(this)">Read in full \u2193</a><div class="full" hidden>${highlight(esc2(r.text),vars)}</div>`:`<a href="${href}">Open \u2192</a>`}</div></div>`;
+  const related=key==='hadith'&&/^[1-9][0-9]*$/.test(String(r.id))?`<details class="hadith-connections" ontoggle="if(this.open)loadHadithConnections(this.querySelector('.hc-content'))"><summary>Related and contrasting Hadith</summary><div class="hc-content" data-hadith-id="${Number(r.id)}"></div></details>`:'';
+  return `<div class="card"><div class="meta">${esc(ref)}</div>${ttl}${r.arabic?`<div class="txt" dir="rtl" lang="ar" style="font-size:1.25em;line-height:1.9">${highlight(snip(r.arabic,vars),vars)}</div>`:''}<div class="txt">${highlight(snip(r.text,vars),vars)}</div><div class="more">${['propositions','tensions','topics'].includes(key)?`<a href="#" onclick="return fullText(this)">Read in full \u2193</a><div class="full" hidden>${highlight(esc2(r.text),vars)}</div>`:`<a href="${href}">Open \u2192</a>`}</div>${related}</div>`;
 }
 
 function cut(t){ t=t||''; if(t.length<238) return t; const i=t.lastIndexOf(' '); return (i>150?t.slice(0,i):t)+'\u2026'; }
@@ -508,7 +525,9 @@ async function showHadith(id,hq){
    ${h.grade_details?`<div class="row"><b>Grading note</b>${esc(h.grade_details)}</div>`:''}
    ${vs.size?`<div class="row"><b>Related verses</b>${[...vs].map(v=>{const [a,b]=v.split(':');return `<a href="/?sura=${a}&aya=${b}">${v}</a>`;}).join(' · ')}</div>`:''}
    ${h.source_url?`<div class="row"><b>Source</b><a href="${esc(h.source_url)}" target="_blank" rel="noopener">${esc(h.source_url)}</a></div>`:''}
+   <div class="hadith-connections hc-content" id="detail-hadith-connections" data-hadith-id="${Number(h.id)}"></div>
    </div>`;
+  loadHadithConnections($('detail-hadith-connections'));
   window.scrollTo({top:0});
 }
 
@@ -542,6 +561,7 @@ async function search(q){
       if(version!==searchVersion)return;
       if(!result||!result.reference_match)throw new Error('Reference lookup unavailable');
       render([result],[q,reference],q,{});
+      const firstConnections=document.querySelector('#out .hadith-connections');if(firstConnections){firstConnections.open=true;loadHadithConnections(firstConnections.querySelector('.hc-content'));}
       $('out').insertAdjacentHTML('afterbegin','<p class="what">Exact hadith reference: '+esc(reference)+'. Collection spelling normalized from your query. Records use the numbering stored in each edition.</p>');
       if(!result.count)discovery.discover(q);
       return;
@@ -590,5 +610,6 @@ loadWhere().then(()=>{ if(hid&&!p){ showHadith(hid,new URLSearchParams(location.
 <script src="/quran-verse-audio.js" defer></script>
 </body>
 </html>
+
 
 
