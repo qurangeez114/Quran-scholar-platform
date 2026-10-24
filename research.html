@@ -232,11 +232,33 @@ const $=id=>document.getElementById(id);
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const n=x=>Number(x||0).toLocaleString('en-US');
 
-async function rpc(fn,body){
-  const r=await fetch(SB+'/rest/v1/rpc/'+fn,{method:'POST',headers:H,body:JSON.stringify(body)});
-  if(!r.ok) throw new Error(fn+' '+r.status);
-  return r.json();
+async function rpc(fn,body,signal){
+  const controller=new AbortController();
+  const abort=()=>controller.abort();
+  if(signal){if(signal.aborted) abort(); else signal.addEventListener('abort',abort,{once:true});}
+  let timer;
+  try{
+    // Bound the entire request, including reading its response body.
+    return await Promise.race([
+      (async()=>{
+        const r=await fetch(SB+'/rest/v1/rpc/'+fn,{method:'POST',headers:H,body:JSON.stringify(body),signal:controller.signal});
+        if(!r.ok) throw new Error(fn+' '+r.status);
+        return await r.json();
+      })(),
+      new Promise((_,reject)=>{timer=setTimeout(()=>{controller.abort();reject(new Error('Search request timed out'));},15000);})
+    ]);
+  }finally{clearTimeout(timer);if(signal) signal.removeEventListener('abort',abort);}
 }
+
+function hadithReference(q){
+  const normalized=q.toLowerCase().replace(/[٠-٩۰-۹]/g,c=>String('٠١٢٣٤٥٦٧٨٩'.indexOf(c)>=0?'٠١٢٣٤٥٦٧٨٩'.indexOf(c):'۰۱۲۳۴۵۶۷۸۹'.indexOf(c)));
+  const match=normalized.trim().match(/^(.*?)[\s#:]+([0-9]+[a-z]?)\s*$/);
+  if(!match)return null;
+  const name=match[1].replace(/[^a-z]/g,'');
+  const aliases={abudawd:'Abu Dawud',sunanabudawd:'Abu Dawud',abudawud:'Abu Dawud',sunanabudawud:'Abu Dawud',abudawood:'Abu Dawud',sunanabudawood:'Abu Dawud',abidawud:'Abu Dawud',sunanabidawud:'Abu Dawud',bukhari:'Bukhari',sahihbukhari:'Bukhari',sahihalbukhari:'Bukhari',muslim:'Muslim',sahihmuslim:'Muslim',ibnmajah:'Ibn Majah',sunanibnmajah:'Ibn Majah',tirmidhi:'Tirmidhi',jamiattirmidhi:'Tirmidhi',nasai:'Nasai',sunanannasai:'Nasai'};
+  return aliases[name]?aliases[name]+' '+match[2]:null;
+}
+let searchVersion=0,searchController=null;
 
 async function loadScope(){
   try{
@@ -336,7 +358,8 @@ function render(results,vars,q,dg){
   h+='<div class="tabs">'+results.map(r=>`<button class="tab ${r.count?'':'off'}" onclick="jump('${r.key}')">${esc(LABEL[r.key])} <b>${r.capped?'1000+':n(r.count)}</b></button>`).join('')+'</div>';
   h+='<div id="pickerslot"></div>';
   if(!results.some(r=>r.topic_match)) h+=overview(dg,results,q);
-  if(!total){
+  if(results.some(r=>r.failed)) h+='<div class="note" role="status">Some sources could not be searched in time. Available results are shown below; please retry to check the unavailable sources.</div>';
+  if(!total&&!results.some(r=>r.failed)){
     h+=`<div class="empty">Nothing found for \u201c${esc(q)}\u201d in any source.<br>Try another spelling, an Arabic form, or a simpler word. If the subject is real and missing, that is a gap in the site\u2019s coverage, not a sign that nothing was written about it.</div>`;
   }
   results.forEach(r=>{
@@ -344,7 +367,7 @@ function render(results,vars,q,dg){
     if(r.count){
       h+=r.rows.map(x=>card(r.key,x,vars)).join('');
       if(r.count>r.rows.length) h+=`<div class="more"><a href="research.html?q=${encodeURIComponent(q)}${['hadith','tafsir'].includes(r.key)?'&source='+r.key:''}">See all ${r.capped?'1,000+':n(r.count)} in the full search →</a></div>`;
-    } else h+='<div class="none">Nothing in this source for this search.</div>';
+    } else h+=r.failed?'<div class="none">This source is temporarily unavailable. Please retry.</div>':'<div class="none">Nothing in this source for this search.</div>';
     h+='</section>';
   });
   h+=`<div class="note">Results come straight from the site\u2019s own database. Some sources, especially hadith linked to the later suras, were assembled automatically and have not yet been reviewed verse by verse; each source above says what it contains so you can judge how much weight to give it.</div>`;
@@ -471,6 +494,10 @@ function jump(k){ const e=$('src-'+k); if(e) e.scrollIntoView({behavior:'smooth'
 async function search(q){
   q=q.trim();
   if(!q){ $('out').innerHTML='<div class="empty">Type a word or question in the box above, then press Search.</div>'; $('q').focus(); return; }
+  const version=++searchVersion;
+  if(searchController)searchController.abort();
+  searchController=new AbortController();
+  const signal=searchController.signal;
   CUR=q;
   document.querySelectorAll('#scope,.areas').forEach(e=>e.style.display='none');
   setTimeout(()=>$('out').scrollIntoView({behavior:'smooth',block:'start'}),50);
@@ -481,17 +508,34 @@ async function search(q){
   const only=SCT.length?srcSel:null;
   $('out').innerHTML='<div class="empty"><span class="spin"></span>Searching every source…</div>';
   try{
-    const res=await Promise.all((only?only:ORDER).map(k=>rpc('site_search_src',{src:k,q:q,lim:6}).catch(()=>({key:k,count:0,rows:[],variants:[q],failed:true}))));
+    const reference=hadithReference(q);
+    // A collection + number is an exact lookup, not a search of passage words.
+    if(reference){
+      if(SCT.length&&!srcSel.includes('hadith')&&!bookSel.some(b=>b.startsWith('hadith:'))){
+        $('out').innerHTML='<div class="empty">This is a hadith reference. Select All sources or Hadith to look it up.</div>';return;
+      }
+      const result=await rpc('site_search_src',{src:'hadith',q:reference,lim:100},signal);
+      if(version!==searchVersion)return;
+      if(!result||!result.reference_match)throw new Error('Reference lookup unavailable');
+      render([result],[q,reference],q,{});
+      $('out').insertAdjacentHTML('afterbegin','<p class="what">Exact hadith reference: '+esc(reference)+'. Collection spelling normalized from your query. Records use the numbering stored in each edition.</p>');
+      return;
+    }
+    const res=(await Promise.all((only?only:ORDER).map(k=>rpc('site_search_src',{src:k,q:q,lim:6},signal).then(r=>{if(!r)throw new Error('No source response');return r;}).catch(()=>({key:k,count:0,rows:[],variants:[q],failed:true})))));
+    if(version!==searchVersion)return;
     const topicSearch=res.some(r=>r.topic_match);
     const vars=[...new Set(res.flatMap(r=>r.variants||[q]))];
+    // Show source results before optional summaries and book counts finish.
+    render(res,vars,q,{});
     let dg=null;
     if(only||topicSearch) dg={};
     else try{
-      const [h,m,t]=await Promise.all([rpc('digest_hadith',{q}),rpc('digest_madhhab',{q}),rpc('digest_tafsir',{q})]);
+      const [h,m,t]=await Promise.all([rpc('digest_hadith',{q},signal),rpc('digest_madhhab',{q},signal),rpc('digest_tafsir',{q},signal)]);
       dg={hadith:h,madhhab:m,tafsir:t};
     }catch(e){}
-    let cres=[]; try{if(!topicSearch) cres=await rpc('contradiction_search',{q:q,lim:6});}catch(e){}
-    let sb=[]; if(!only&&!topicSearch){ try{sb=await rpc('source_books',{q:q});}catch(e){} }
+    let cres=[]; try{if(!topicSearch) cres=await rpc('contradiction_search',{q:q,lim:6},signal);}catch(e){}
+    let sb=[]; if(!only&&!topicSearch){ try{sb=await rpc('source_books',{q:q},signal);}catch(e){} }
+    if(version!==searchVersion)return;
     if(only&&!only.length){ $('out').innerHTML='<div id="pickerslot"></div>'; } else render(res,vars,q,dg);
     if(bookSel.length){ const sec=await booksSection(bookSel,q); const slot=$('pickerslot'); if(slot) slot.replaceWith(sec); else $('out').prepend(sec); }
     else insertPicker(sb,q);
@@ -501,7 +545,8 @@ async function search(q){
       const first=document.querySelector('#out section.src'); if(first) first.parentNode.insertBefore(el,first);
     }
   }catch(e){
-    $('out').innerHTML='<div class="empty">The search could not be completed. Please try again.</div>';
+    if(version!==searchVersion)return;
+    $('out').innerHTML='<div class="empty" role="alert">The search could not be completed. Please try again.</div>';
   }
 }
 function go(e){ e.preventDefault(); const v=$('q').value.trim(); if(/^(contradictions?|tensions?|inconsistenc(y|ies)|contradictions? in the (qur.?an|quran))$/i.test(v)){showHub();return;} search(v); }
@@ -515,3 +560,4 @@ loadWhere().then(()=>{ if(hid&&!p){ showHadith(hid,new URLSearchParams(location.
 <script src="/quran-verse-audio.js" defer></script>
 </body>
 </html>
+
