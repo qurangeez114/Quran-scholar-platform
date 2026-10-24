@@ -210,6 +210,28 @@ FROM (VALUES
 WHERE NOT EXISTS (SELECT 1 FROM qh_internal.hadith_reference_review_history x
  WHERE x.action='add_publisher_mapping' AND x.new_corpus_id=c.id);
 
+
+-- Known collection-name typos used by actual site visitors.
+-- The frontend normalizer and external discovery handler use the same aliases.
+DO $alias$
+DECLARE f text;
+BEGIN
+ SELECT pg_get_functiondef('public.site_search_src(text,text,integer)'::regprocedure) INTO f;
+ IF position('when ''bukari'' then ''Sahih al-Bukhari''' IN f)=0 THEN
+   f:=replace(f,'when ''bukhari'' then ''Sahih al-Bukhari''',
+     E'when ''bukhari'' then ''Sahih al-Bukhari''\n          when ''bukari'' then ''Sahih al-Bukhari''\n          when ''sahihbukari'' then ''Sahih al-Bukhari''');
+ END IF;
+ IF position('when ''muslem'' then ''Sahih Muslim''' IN f)=0 THEN
+   f:=replace(f,'when ''muslim'' then ''Sahih Muslim''',
+     E'when ''muslim'' then ''Sahih Muslim''\n          when ''muslem'' then ''Sahih Muslim''\n          when ''sahihmuslem'' then ''Sahih Muslim''');
+ END IF;
+ IF position('when ''abudawd'' then ''Sunan Abu Dawud''' IN f)=0 THEN
+   f:=replace(f,'when ''abudawud'' then ''Sunan Abu Dawud''',
+     E'when ''abudawud'' then ''Sunan Abu Dawud''\n          when ''abudawd'' then ''Sunan Abu Dawud''\n          when ''sunanabudawd'' then ''Sunan Abu Dawud''\n          when ''sunanabidawud'' then ''Sunan Abu Dawud''');
+ END IF;
+ EXECUTE f;
+END $alias$;
+
 -- Test as anon:
 -- BEGIN; SET LOCAL ROLE anon;
 -- SELECT q, r->>'reference_status',r->'rows'->0->>'id'
