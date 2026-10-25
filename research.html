@@ -469,13 +469,13 @@ function argumentPublisherURL(value){
  try{
   const url=new URL(String(value));
   if(url.protocol!=='https:' || url.username || url.password)return null;
-  const allowed=['www.answering-islam.org','www.answering-christianity.com','www.islamic-awareness.org','yaqeeninstitute.org','muslimdebate.org','www.injil.org','www.isaalmasih.net','the-good-way.com','islaminstitut.de'];
+  const allowed=['www.answering-islam.org','www.answering-christianity.com','www.islamic-awareness.org','yaqeeninstitute.org','legacy-api.yaqeeninstitute.org','muslimdebate.org','www.injil.org','www.isaalmasih.net','the-good-way.com','islaminstitut.de','www.jewsforjudaism.org','jewsforjudaism.org','www.bibleodyssey.org','www.earlychristianwritings.com','www.thetorah.com','historyforatheists.com','www.richardcarrier.info'];
   return allowed.includes(url.hostname)?url.href:null;
  }catch(_){return null;}
 }
 function argumentPerspective(value){
  const p=String(value||'').toLowerCase();
- return p.startsWith('muslim')?'Muslim':p.startsWith('christian')?'Christian':'Other';
+ if(p.startsWith('muslim'))return 'Muslim';if(p.startsWith('christian'))return 'Christian';if(p.startsWith('jewish'))return 'Jewish';if(p.startsWith('historical-critical'))return 'Historical-critical';if(p.startsWith('secular'))return 'Secular';return 'Other';
 }
 function argumentExternalLink(href,label){
  const a=document.createElement('a');a.href=href;a.target='_blank';a.rel='noopener noreferrer';a.textContent=label;return a;
@@ -513,9 +513,9 @@ async function loadArgumentCatalog(query,version){
   const workRows=Array.isArray(works)?works.filter(r=>argumentPublisherURL(r.catalog_url)):[];
   const exchangeRows=Array.isArray(exchanges)?exchanges.filter(r=>argumentPublisherURL(r.christian_url)&&argumentPublisherURL(r.muslim_url)):[];
   if(!sourceRows.length&&!claimRows.length&&!workRows.length&&!exchangeRows.length){section.remove();return;}
-  const h=document.createElement('h2');h.textContent='Apologetic, polemical and comparative perspectives';section.append(h);
+  const h=document.createElement('h2');h.textContent='Religious arguments and historical perspectives';section.append(h);
   const notice=document.createElement('p');notice.className='ac-note';
-  notice.textContent='These are the arguments of their authors or publishers. QuranHikma provides a searchable index and identifies the perspective; listing a claim does not mean QuranHikma endorses it, rejects it, or has independently established it. Open the original article to read the argument in its full context.';
+  notice.textContent='Sources are grouped by their authors’ perspectives—Christian, Muslim, Jewish, secular and historical-critical. QuranHikma indexes the material without endorsing, rejecting or independently validating each argument. Open the original source to read the author’s full context.';
   section.append(notice);
   argumentGroup(section,'Christian–Muslim article connections',exchangeRows,ex=>{
    const item=document.createElement('article');item.className='ac-entry';
@@ -528,7 +528,7 @@ async function loadArgumentCatalog(query,version){
    if(ex.explanation){const note=document.createElement('div');note.className='ac-note';note.textContent=ex.explanation;item.append(note);}
    return item;
   },4);
-  for(const side of ['Muslim','Christian','Other']){
+  for(const side of ['Muslim','Christian','Jewish','Historical-critical','Secular','Other']){
     const selectedClaims=claimRows.filter(r=>argumentPerspective(r.perspective)===side);
     argumentGroup(section,side+' argument outlines',selectedClaims,claim=>{
       const item=document.createElement('article');item.className='ac-entry';
