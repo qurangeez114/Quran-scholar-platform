@@ -123,6 +123,10 @@
     document.addEventListener('keydown',function(e){if(e.key==='Escape')root.querySelectorAll('details').forEach(function(d){d.open=false;});});
   }
 
-  function init() { loadModal(); addSchoolNav(); addNav(); setTimeout(addClock, 400); setTimeout(addAccount, 400); }
+  function init() { loadModal(); addSchoolNav(); addNav(); setTimeout(addClock, 400); setTimeout(addAccount, 400);
+    if (['/course.html','/lesson.html','/student-dashboard.html','/instructor-dashboard.html','/academic-hub.html'].includes(location.pathname) && !document.getElementById('qh-learning-activity-script')) {
+      var tracker=document.createElement('script');tracker.id='qh-learning-activity-script';tracker.type='module';tracker.src='/accounts/learning-activity.js';document.head.appendChild(tracker);
+    }
+  }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();
