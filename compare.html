@@ -324,8 +324,8 @@ const SB_URL = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
 const params = new URLSearchParams(location.search);
 const STORY = params.get('story') || 'creation_adam';
-const LANG_NAMES = { en:'English', ur:'اردو', am:'አማርኛ', ti:'ትግርኛ', tr:'Türkçe', fr:'Français', id:'Indonesia', fa:'فارسی', so:'Somali', om:'Oromoo', de:'Deutsch' };
-const ETH = new Set(['am','ti']);
+const LANG_NAMES = { en:'English', ur:'اردو', am:'አማርኛ', ti:'ትግርኛ', ti2:'ትግርኛ ተፍሲር', tr:'Türkçe', fr:'Français', id:'Indonesia', fa:'فارسی', so:'Somali', om:'Oromoo', de:'Deutsch' };
+const ETH = new Set(['am','ti','ti2']);
 let ROWS = [], SUMMARY=null, EVALS=[], order='nuzul', langs=new Set(['en']), qira='arabic', showTranslit=false;
 function transliterateArabic(text){
   if(!text)return'';
@@ -466,6 +466,24 @@ async function load(){
   const res = await fetch(url,{ headers:{ apikey:SB_KEY, Authorization:'Bearer '+SB_KEY } });
   ROWS = await res.json();
   if(!ROWS.length){ document.getElementById('cols').innerHTML='<div class="loading">No data for this story.</div>'; return; }
+  // The Tigrinya tafsir is stored in `ayas`, not in the story translations.
+  // Add it as a language ("ti2") for these verses, in batches to keep URLs short.
+  try {
+    const refs = [...new Map(ROWS.map(r => [r.sura+':'+r.aya, r])).values()];
+    const chunks = [];
+    for (let i = 0; i < refs.length; i += 80) chunks.push(refs.slice(i, i + 80));
+    const parts = await Promise.all(chunks.map(c => fetch(
+      `${SB_URL}/rest/v1/ayas?select=sura_id,aya_number,tigrinya2&tigrinya2=not.is.null` +
+      `&or=(${c.map(r => `and(sura_id.eq.${r.sura},aya_number.eq.${r.aya})`).join(',')})`,
+      { headers:{ apikey:SB_KEY, Authorization:'Bearer '+SB_KEY } }
+    ).then(x => x.json())));
+    const tafsir = new Map();
+    parts.forEach(b => { if (Array.isArray(b)) b.forEach(t => tafsir.set(t.sura_id+':'+t.aya_number, t.tigrinya2)); });
+    ROWS.forEach(r => {
+      const t = tafsir.get(r.sura+':'+r.aya);
+      if (t) r.translations = Object.assign({}, r.translations || {}, { ti2: t });
+    });
+  } catch(e) { console.warn('Tigrinya tafsir unavailable:', e); }
   try { const sr=await fetch(`${SB_URL}/rest/v1/story_summary?story_slug=eq.${STORY}&select=headline,takeaway`,{headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY}}); SUMMARY=(await sr.json())[0]||null; } catch(e){ SUMMARY=null; }
   try { const er=await fetch(`${SB_URL}/rest/v1/story_evaluation?story_slug=eq.${STORY}&select=passage_a,passage_b,same_event,all_identical,additional_details,explicitly_denied,sequence_differs,speaker_changes,narrator_changes,both_true_literal,relationship,confidence,reasoning,narrative_consistency,chronological_consistency,logical_consistency,linguistic_consistency,reasoning_trace&order=id`,{headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY}}); EVALS=await er.json(); } catch(e){ EVALS=[]; }
   renderEval();
