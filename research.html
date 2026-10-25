@@ -425,7 +425,7 @@ function render(results,vars,q,dg){
   }
   const uniqVars=[...new Set(vars)].filter(v=>v.toLowerCase()!==q.toLowerCase());
   if(uniqVars.length) h+=`<div class="variants">Also searched as: ${uniqVars.map(v=>`<span>${esc(v)}</span>`).join(' ')}</div>`;
-  h+='<div class="tabs">'+results.map(r=>`<button class="tab ${r.count?'':'off'}" onclick="jump('${r.key}')">${esc(LABEL[r.key])} <b>${r.capped?'1000+':n(r.count)}</b></button>`).join('')+(!SEL.length?'<button class="tab" type="button" onclick="document.getElementById(\'argumentSourceResults\')?.scrollIntoView({behavior:\'smooth\',block:\'start\'})">Christian &amp; Muslim perspectives</button>':'')+'</div>';
+  h+='<div class="tabs">'+results.map(r=>`<button class="tab ${r.count?'':'off'}" onclick="jump('${r.key}')">${esc(LABEL[r.key])} <b>${r.capped?'1000+':n(r.count)}</b></button>`).join('')+(!SEL.length?'<button class="tab" type="button" onclick="document.getElementById(\'argumentSourceResults\')?.scrollIntoView({behavior:\'smooth\',block:\'start\'})">Arguments &amp; perspectives</button>':'')+'</div>';
   h+='<div id="pickerslot"></div>';
   if(!results.some(r=>r.topic_match)) h+=overview(dg,results,q);
   if(results.some(r=>r.failed)) h+='<div class="note" role="status">Some sources could not be searched in time. Available results are shown below; please retry to check the unavailable sources.</div>';
@@ -499,11 +499,12 @@ function argumentGroup(section,title,items,renderRow,visibleCount){
 async function loadArgumentCatalog(query,version){
  const host=$('argumentSourceResults');if(!host)return;
  try{
-  const [rows,claims,works,exchanges]=await Promise.all([
+  const [rows,claims,works,exchanges,comparisons]=await Promise.all([
     rpc('qh_argument_sources_search',{p_query:query,p_limit:40}),
     rpc('qh_argument_claims_search_v2',{p_query:query,p_limit:40}).catch(()=>[]),
     rpc('qh_argument_works_search',{p_query:query,p_limit:12}).catch(()=>[]),
-    rpc('qh_argument_exchange_search',{p_query:query,p_limit:10}).catch(()=>[])
+    rpc('qh_argument_exchange_search',{p_query:query,p_limit:10}).catch(()=>[]),
+    rpc('qh_argument_comparative_search',{p_query:query,p_limit:14}).catch(()=>[])
   ]);
   if(version!==searchVersion)return;
   const section=$('argumentSourceResults');if(!section)return;
@@ -512,7 +513,8 @@ async function loadArgumentCatalog(query,version){
   const claimRows=Array.isArray(claims)?claims.filter(r=>argumentPublisherURL(r.source_url)):[];
   const workRows=Array.isArray(works)?works.filter(r=>argumentPublisherURL(r.catalog_url)):[];
   const exchangeRows=Array.isArray(exchanges)?exchanges.filter(r=>argumentPublisherURL(r.christian_url)&&argumentPublisherURL(r.muslim_url)):[];
-  if(!sourceRows.length&&!claimRows.length&&!workRows.length&&!exchangeRows.length){section.remove();return;}
+  const comparisonRows=Array.isArray(comparisons)?comparisons.filter(r=>argumentPublisherURL(r.a_url)&&argumentPublisherURL(r.b_url)):[];
+  if(!sourceRows.length&&!claimRows.length&&!workRows.length&&!exchangeRows.length&&!comparisonRows.length){section.remove();return;}
   const h=document.createElement('h2');h.textContent='Religious arguments and historical perspectives';section.append(h);
   const notice=document.createElement('p');notice.className='ac-note';
   notice.textContent='Sources are grouped by their authors’ perspectives—Christian, Muslim, Jewish, secular and historical-critical. QuranHikma indexes the material without endorsing, rejecting or independently validating each argument. Open the original source to read the author’s full context.';
@@ -528,6 +530,19 @@ async function loadArgumentCatalog(query,version){
    if(ex.explanation){const note=document.createElement('div');note.className='ac-note';note.textContent=ex.explanation;item.append(note);}
    return item;
   },4);
+
+  argumentGroup(section,'Cross-perspective research connections',comparisonRows,row=>{
+    const item=document.createElement('article');item.className='ac-entry';
+    const label=document.createElement('strong');label.textContent=row.topic;item.append(label);
+    const first=document.createElement('p');first.append(document.createTextNode(argumentPerspective(row.a_perspective)+' perspective: '));
+    first.append(argumentExternalLink(argumentPublisherURL(row.a_url),row.a_title));item.append(first);
+    const second=document.createElement('p');second.append(document.createTextNode(argumentPerspective(row.b_perspective)+' perspective: '));
+    second.append(argumentExternalLink(argumentPublisherURL(row.b_url),row.b_title));item.append(second);
+    const context=document.createElement('div');context.className='ac-note';
+    context.textContent=(row.relation_kind==='published_reply'?'Documented reply. ':'Related subject, not necessarily a direct rebuttal. ')+(row.neutral_note||'');
+    item.append(context);
+    return item;
+  },5);
   for(const side of ['Muslim','Christian','Jewish','Historical-critical','Secular','Other']){
     const selectedClaims=claimRows.filter(r=>argumentPerspective(r.perspective)===side);
     argumentGroup(section,side+' argument outlines',selectedClaims,claim=>{
