@@ -447,17 +447,17 @@ function render(results,vars,q,dg){
   h+=`<div class="note">Results come straight from the site\u2019s own database. Some sources, especially hadith linked to the later suras, were assembled automatically and have not yet been reviewed verse by verse; each source above says what it contains so you can judge how much weight to give it.</div>`;
   h+='<section class="argument-catalog" id="argumentSourceResults" aria-label="External argument and apologetic sources"><h2>Arguments and outside perspectives</h2><p class="what">Checking indexed source articles…</p></section>';
   $('out').innerHTML=h;
-  loadArgumentCatalog(q,searchVersion);
+  if(!SEL.length)loadArgumentCatalog(q,searchVersion);else{const outside=$('argumentSourceResults');if(outside)outside.remove();}
 }
 
 async function loadArgumentCatalog(query,version){
  const host=$('argumentSourceResults');if(!host)return;
  try{
-  const [rows,claims]=await Promise.all([rpc('qh_argument_sources_search',{p_query:query,p_limit:12}),rpc('qh_argument_claims_search',{p_query:query,p_limit:6}).catch(()=>[])]);
+  const [rows,claims,works]=await Promise.all([rpc('qh_argument_sources_search',{p_query:query,p_limit:12}),rpc('qh_argument_claims_search',{p_query:query,p_limit:6}).catch(()=>[]),rpc('qh_argument_works_search',{p_query:query,p_limit:8}).catch(()=>[])]);
   if(version!==searchVersion)return;
   const section=$('argumentSourceResults');if(!section)return;
   section.replaceChildren();
-  if((!Array.isArray(rows)||!rows.length) && (!Array.isArray(claims)||!claims.length)){section.remove();return;}
+  if((!Array.isArray(rows)||!rows.length) && (!Array.isArray(claims)||!claims.length) && (!Array.isArray(works)||!works.length)){section.remove();return;}
   const header=document.createElement('h2');header.textContent='Outside arguments and perspectives';section.append(header);
   const intro=document.createElement('p');intro.className='ac-note';
   intro.textContent='Externally published Christian apologetic and comparative-religion sources — attributed perspectives, not authenticated primary-source quotations. Titles, links and independently prepared summaries are indexed; full articles remain with their publishers.';
@@ -487,6 +487,21 @@ async function loadArgumentCatalog(query,version){
    if(Array.isArray(record.cited_passages)&&record.cited_passages.length){const refs=document.createElement('p');refs.className='ac-note';refs.textContent='References to examine: '+record.cited_passages.join('; ');article.append(refs);}
    section.append(article);
   }
+
+  if(Array.isArray(works)&&works.length){
+   const heading=document.createElement('h3');heading.textContent='Related books in external catalogs';section.append(heading);
+   const caution=document.createElement('p');caution.className='ac-note';caution.textContent='Bibliographic listings only. Full books are not stored on QuranHikma; linked pages are publisher catalogs, not necessarily direct reading pages.';section.append(caution);
+   for(const work of works){
+    let url;try{url=new URL(work.catalog_url);if(url.protocol!=='https:' || url.hostname!=='the-good-way.com')continue;}catch(_){continue;}
+    const article=document.createElement('article');article.className='ac-entry';
+    const title=document.createElement('strong');title.textContent=work.title;article.append(title);
+    const info=document.createElement('div');info.className='ac-note';info.textContent=[work.author,work.publisher,'Review: '+(work.review_status||'pending')].filter(Boolean).join(' · ');article.append(info);
+    const text=document.createElement('p');text.textContent=work.research_summary;article.append(text);
+    const link=document.createElement('a');link.href=url.href;link.target='_blank';link.rel='noopener noreferrer';link.textContent='View the publisher’s book catalog ↗';article.append(link);
+    section.append(article);
+   }
+  }
+
  }catch(error){
   if(version!==searchVersion)return;
   const section=$('argumentSourceResults');if(!section)return;
