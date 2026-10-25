@@ -144,7 +144,7 @@ const WORKS_AR=[['مجموع الفتاوى','مباحث عقدية وفقهية
 
 const AR_SURAH=["","الفاتحة","البقرة","آل عمران","النساء","المائدة","الأنعام","الأعراف","الأنفال","التوبة","يونس","هود","يوسف","الرعد","إبراهيم","الحجر","النحل","الإسراء","الكهف","مريم","طه","الأنبياء","الحج","المؤمنون","النور","الفرقان","الشعراء","النمل","القصص","العنكبوت","الروم","لقمان","السجدة","الأحزاب","سبأ","فاطر","يس","الصافات","ص","الزمر","غافر","فصلت","الشورى","الزخرف","الدخان","الجاثية","الأحقاف","محمد","الفتح","الحجرات","ق","الذاريات","الطور","النجم","القمر","الرحمن","الواقعة","الحديد","المجادلة","الحشر","الممتحنة","الصف","الجمعة","المنافقون","التغابن","الطلاق","التحريم","الملك","القلم","الحاقة","المعارج","نوح","الجن","المزمل","المدثر","القيامة","الإنسان","المرسلات","النبأ","النازعات","عبس","التكوير","الانفطار","المطففين","الانشقاق","البروج","الطارق","الأعلى","الغاشية","الفجر","البلد","الشمس","الليل","الضحى","الشرح","التين","العلق","القدر","البينة","الزلزلة","العاديات","القارعة","التكاثر","العصر","الهمزة","الفيل","قريش","الماعون","الكوثر","الكافرون","النصر","المسد","الإخلاص","الفلق","الناس"];
 const SOURCE_NAME={azhar:{en:'Al-Azhar',ar:'الأزهر'},amja:{en:'AMJA',ar:'أمجا'}};
-const LINKED_FALLBACK='/data/fatwa_index.json'; /* only present after scholar review; absent file = no link-only rows */
+const EN_SURAH=["", "Al-Faatiha", "Al-Baqara", "Aal-i-Imraan", "An-Nisaa", "Al-Maaida", "Al-An'aam", "Al-A'raaf", "Al-Anfaal", "At-Tawba", "Yunus", "Hud", "Yusuf", "Ar-Ra'd", "Ibrahim", "Al-Hijr", "An-Nahl", "Al-Israa", "Al-Kahf", "Maryam", "Taa-Haa", "Al-Anbiyaa", "Al-Hajj", "Al-Muminoon", "An-Noor", "Al-Furqaan", "Ash-Shu'araa", "An-Naml", "Al-Qasas", "Al-Ankaboot", "Ar-Room", "Luqman", "As-Sajda", "Al-Ahzaab", "Saba", "Faatir", "Yaseen", "As-Saaffaat", "Saad", "Az-Zumar", "Ghafir", "Fussilat", "Ash-Shura", "Az-Zukhruf", "Ad-Dukhaan", "Al-Jaathiya", "Al-Ahqaf", "Muhammad", "Al-Fath", "Al-Hujuraat", "Qaaf", "Adh-Dhaariyat", "At-Tur", "An-Najm", "Al-Qamar", "Ar-Rahmaan", "Al-Waaqia", "Al-Hadid", "Al-Mujaadila", "Al-Hashr", "Al-Mumtahana", "As-Saff", "Al-Jumu'a", "Al-Munaafiqoon", "At-Taghaabun", "At-Talaaq", "At-Tahrim", "Al-Mulk", "Al-Qalam", "Al-Haaqqa", "Al-Ma'aarij", "Nooh", "Al-Jinn", "Al-Muzzammil", "Al-Muddaththir", "Al-Qiyaama", "Al-Insaan", "Al-Mursalaat", "An-Naba", "An-Naazi'aat", "Abasa", "At-Takwir", "Al-Infitaar", "Al-Mutaffifin", "Al-Inshiqaaq", "Al-Burooj", "At-Taariq", "Al-A'laa", "Al-Ghaashiya", "Al-Fajr", "Al-Balad", "Ash-Shams", "Al-Lail", "Ad-Dhuhaa", "Ash-Sharh", "At-Tin", "Al-Alaq", "Al-Qadr", "Al-Bayyina", "Az-Zalzala", "Al-Aadiyaat", "Al-Qaari'a", "At-Takaathur", "Al-Asr", "Al-Humaza", "Al-Fil", "Quraish", "Al-Maa'un", "Al-Kawthar", "Al-Kaafiroon", "An-Nasr", "Al-Masad", "Al-Ikhlaas", "Al-Falaq", "An-Naas"];
 let uiLang=UI_FALLBACK;const surahNames={};
 const LX=()=>I18N[uiLang]||I18N[UI_FALLBACK];
 const T=k=>(LX().ui[k]??I18N[UI_FALLBACK].ui[k]);
@@ -174,12 +174,16 @@ function initUiLang(){const p=new URLSearchParams(location.search).get('lang');l
 $('langToggle').addEventListener('click',e=>{const l=e.target.dataset.uilang;if(l)setUiLang(l,true);});
 /* Link-only entries (question + tags + cited ayat + source URL; no answer text). Mapped to the fatwa_entries item shape. */
 function mapLinked(r){(r.quran_refs||[]).forEach(q=>surahNames[q.surah]=q.surah_name);
- return {id:'link-'+r.source+'-'+r.source_article_id,link_only:true,source:r.source,source_url:r.source_url,published_date:r.published_date,
+ return {id:'link-'+r.source+'-'+r.source_article_id,db_id:r.db_id,link_only:true,source:r.source,source_url:r.source_url,published_date:r.published_date,
   scholar:r.attribution,school:null,topic_tags:r.tags||[],question_summary:r.question_en,question_ar:r.question_ar,ruling_summary:r.summary_en||null,
   quran_refs:(r.quran_refs||[]).map(q=>({sura_id:q.surah,aya_number:q.ayah})),ref_notes:r.ref_notes};}
-async function loadLinked(){try{
-  // Preferred once migrated: link-only rows live in fatwa_entries (entry_kind='link'); this local file is the preview fallback.
-  const r=await fetch(LINKED_FALLBACK);if(!r.ok)return [];return (await r.json()).map(mapLinked);}catch(_){return [];}}
+/* Link-only rows live in fatwa_entries (entry_kind='link'); RLS exposes only status='reviewed'. */
+async function loadLinked(dbItems){const links=dbItems.filter(x=>x.entry_kind==='link');if(!links.length)return dbItems;
+ let refs=[];try{refs=await read('fatwa_verse_refs?select=fatwa_id,sura_id,aya_number,source_note&fatwa_id=in.('+links.map(x=>x.id).join(',')+')');}catch(_){}
+ return dbItems.map(x=>{if(x.entry_kind!=='link')return x;const rr=refs.filter(r=>r.fatwa_id===x.id);
+  return mapLinked({source:x.source_org,source_article_id:x.source_item_id,source_url:x.source_url,published_date:x.published_date,attribution:x.scholar,tags:x.topic_tags,
+   question_en:x.question_summary,question_ar:x.question_ar,summary_en:x.ruling_summary,ref_notes:(rr.find(r=>r.source_note)||{}).source_note||null,
+   quran_refs:rr.map(r=>({surah:r.sura_id,ayah:r.aya_number,surah_name:EN_SURAH[r.sura_id]||('Surah '+r.sura_id)}))});});}
 function mergeItems(dbItems,linked){const seen=new Set(dbItems.map(x=>x.source_url).filter(Boolean));return dbItems.concat(linked.filter(x=>!seen.has(x.source_url)));}
 function fillFilters(){fill('scholar',state.items.map(x=>x.scholar),T('allScholars'));fill('school',state.items.map(x=>x.school),T('allSchools'));
  const topicSel=$('topic'),old=topicSel.value;topicSel.replaceChildren(new Option(T('allTopics'),''));[...new Set(state.items.flatMap(x=>x.topic_tags||[]))].sort((a,b)=>tagName(a).localeCompare(tagName(b),uiLang)).forEach(t=>topicSel.add(new Option(tagName(t),t)));topicSel.value=old;
@@ -327,8 +331,8 @@ document.addEventListener('click',e=>{const open=e.target.closest('[data-open]')
 ['search','scholar','school','topic','surah'].forEach(id=>$(id).addEventListener(id==='search'?'input':'change',renderList));
 $('copy').addEventListener('click',()=>{if(state.selected&&navigator.clipboard)navigator.clipboard.writeText(entryTitle(state.selected)+' — '+scholarName(state.selected.scholar||T('unknownScholar'))+'. '+citation(state.selected));});
 initUiLang();
-(async()=>{let dbItems=[],dbErr=null;try{dbItems=await read('fatwa_entries?select=id,source_id,volume,page,scholar,school,topic_tags,question_summary,ruling_summary,arabic_text,english_text,translation_provenance,context_notes,status&status=eq.reviewed&order=id.desc&limit=500');const sourceIds=[...new Set(dbItems.map(x=>x.source_id).filter(Boolean))];if(sourceIds.length){const sources=await read('sources?select=id,title,author&id=in.('+sourceIds.join(',')+')');state.sourceMap=Object.fromEntries(sources.map(s=>[s.id,s]));}}catch(e){dbErr=e;console.warn('fatwa_entries not readable',e);}
-const linked=await loadLinked();state.items=mergeItems(dbItems,linked);
+(async()=>{let dbItems=[],dbErr=null;try{dbItems=await read('fatwa_entries?select=id,source_id,volume,page,scholar,school,topic_tags,question_summary,ruling_summary,arabic_text,english_text,translation_provenance,context_notes,status,entry_kind,source_org,source_item_id,source_url,question_ar,published_date&status=eq.reviewed&order=id.desc&limit=500');const sourceIds=[...new Set(dbItems.map(x=>x.source_id).filter(Boolean))];if(sourceIds.length){const sources=await read('sources?select=id,title,author&id=in.('+sourceIds.join(',')+')');state.sourceMap=Object.fromEntries(sources.map(s=>[s.id,s]));}}catch(e){dbErr=e;console.warn('fatwa_entries not readable',e);}
+state.items=await loadLinked(dbItems);
 if(!state.items.length){state.availKey=dbErr?'availNoAccess':'availNoneYet';applyUi();return;}
 fillFilters();updateAvail();renderList();const requested=new URLSearchParams(location.search).get('id');const initial=state.items.find(x=>String(x.id)===requested)||state.items[0];if(initial)select(initial);})();
 </script></body></html>
