@@ -3,7 +3,7 @@ import { sendEmail, acceptanceEmail, assignmentEmail, offerEmail } from '../_sha
 const origin = 'https://quranhikma.com';
 const instructorWelcome = origin + '/instructor-welcome.html';
 const studentWelcome = origin + '/student-welcome.html';
-const headers = {'Content-Type':'application/json','Access-Control-Allow-Origin':origin,'Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info','Access-Control-Allow-Methods':'POST, OPTIONS','Cache-Control':'no-store'};
+const baseHeaders = {'Content-Type':'application/json','Access-Control-Allow-Origin':origin,'Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info','Access-Control-Allow-Methods':'POST, OPTIONS','Cache-Control':'no-store'};
 const url = Deno.env.get('SUPABASE_URL')!;
 const service = createClient(url,Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,{auth:{persistSession:false,autoRefreshToken:false}});
 const fail = (message:string,status=400) => { throw Object.assign(new Error(message),{status}); };
@@ -64,12 +64,17 @@ async function findEmail(email:string){
  }
  fail('Account lookup limit reached. Contact the owner.');
 }
+// Allowed browser origins: the live site, www, Netlify deploy previews of this site, and local dev servers.
+const allowedOrigin=(o:string|null)=>!!o&&(o===origin||o==='https://www.quranhikma.com'||
+ /^https:\/\/deploy-preview-\d+--fascinating-sunburst-516df8\.netlify\.app$/.test(o)||
+ /^http:\/\/(localhost|127\.0\.0\.1):\d{1,5}$/.test(o));
 Deno.serve(async req=>{
+ const requestOrigin=req.headers.get('Origin');
+ const headers={...baseHeaders,'Access-Control-Allow-Origin':allowedOrigin(requestOrigin)?requestOrigin!:origin,'Vary':'Origin'};
  if(req.method==='OPTIONS')return new Response(null,{headers});
  if(req.method!=='POST')return new Response(JSON.stringify({error:'POST required'}),{status:405,headers});
  try {
-  const requestOrigin=req.headers.get('Origin');
-  if(requestOrigin&&requestOrigin!==origin&&requestOrigin!=='https://www.quranhikma.com')fail('This origin is not allowed',403);
+  if(requestOrigin&&!allowedOrigin(requestOrigin))fail('This origin is not allowed',403);
   const token=req.headers.get('Authorization')?.replace(/^Bearer\s+/i,''); if(!token)fail('Sign in required',401);
   const {data:auth,error:authError}=await service.auth.getUser(token); if(authError||!auth.user)fail('Sign in required',401);
   const actor=auth.user!;
