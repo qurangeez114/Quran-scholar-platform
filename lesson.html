@@ -471,6 +471,7 @@
 
         if(preview){await requireTeachingAccess();const managed=await lmsRequest('dashboard');if(!managed.courses.some(c=>c.id===currentCourse.id))throw Error('You can preview only classes you manage');}
         renderLesson();
+        renderLessonResources(currentLesson.id);
         const rules=document.createElement('p');rules.setAttribute('role','status');rules.style.cssText='padding:1rem;background:#eef4f0;border-radius:8px';
         rules.textContent=preview?'Instructor preview: answers can be practiced; results, submissions, discussions and completion are not saved.':currentLesson.lesson_type==='quiz'?'Completion: pass the final quiz. Read the feedback and complete any reworded check before the grade is saved.':currentLesson.lesson_type==='assignment'?'Completion: submit your work. Your instructor grades the submission separately.':'Completion: finish this lesson, then press Mark as Complete. Video watching is tracked separately; it does not automatically award completion.';
         document.getElementById('lessonContent').before(rules);
@@ -657,6 +658,56 @@
       } else if (currentLesson.lesson_type === 'assignment') {
         content.innerHTML = '<p>Switch to the <strong>Assignment</strong> tab above to submit your work.</p>';
         completeBtn.style.display = 'none';
+      }
+    }
+
+    // Research resources the instructor attached to this lesson (see admin/lesson-resources.js).
+    async function renderLessonResources(lessonId) {
+      try {
+        const { data, error } = await supabase
+          .from('qh_lesson_resources')
+          .select('resource_kind,resource_ref,resource_title,instructor_note')
+          .eq('lesson_id', lessonId)
+          .order('position', { ascending: true })
+          .order('id', { ascending: true });
+        if (error || !data || !data.length) return;
+        const section = document.createElement('section');
+        section.className = 'lesson-resources';
+        section.setAttribute('aria-labelledby', 'lessonResourcesHeading');
+        const heading = document.createElement('h3');
+        heading.id = 'lessonResourcesHeading';
+        heading.textContent = 'Research resources for this lesson';
+        section.append(heading);
+        const list = document.createElement('ul');
+        for (const r of data) {
+          const li = document.createElement('li');
+          let href = '';
+          if (r.resource_kind === 'verse') {
+            const [s, a] = String(r.resource_ref).split(':');
+            if (/^\d+$/.test(s) && /^\d+$/.test(a)) href = `/?sura=${s}&aya=${a}`;
+          } else if (r.resource_kind === 'hadith' && /^\d+$/.test(r.resource_ref)) {
+            href = `research.html?hadith=${r.resource_ref}`;
+          }
+          const label = r.resource_title || r.resource_kind;
+          if (href) {
+            const a = document.createElement('a');
+            a.href = href;
+            a.textContent = label;
+            li.append(a);
+          } else {
+            li.append(document.createTextNode(label));
+          }
+          if (r.instructor_note) {
+            const note = document.createElement('p');
+            note.textContent = r.instructor_note;
+            li.append(note);
+          }
+          list.append(li);
+        }
+        section.append(list);
+        document.getElementById('lessonContent').after(section);
+      } catch (err) {
+        console.error('Could not load lesson resources', err);
       }
     }
 
