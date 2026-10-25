@@ -1,5 +1,8 @@
 // Instructor tool: search the site's sources and attach results to one or more lessons of the course.
 import { supabase } from '../accounts/client.js';
+import { getLang, makeSelect, fetchVerses, fetchText, isRtl, langName } from '../research-lang.js';
+let lang = getLang();
+let items = [];
 
 const courseId = new URLSearchParams(window.location.search).get('course');
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -33,7 +36,7 @@ function toResource(srcKey, r) {
     const ref = `asbab:${r.sura}:${r.aya}`;
     return { kind: 'source', ref, title: `Reason of revelation for ${r.sura}:${r.aya}` };
   }
-  const ref = `library:${r.id ?? r.title ?? ''}`;
+  const ref = `library:${r.ref ?? r.id ?? r.title ?? ''}`;
   return { kind: 'source', ref, title: r.title ? (r.title + (r.ref ? ' · ' + r.ref : '')) : 'Library book' };
 }
 
@@ -86,7 +89,7 @@ async function runSearch(e) {
     results = all;
     status.textContent = '';
     renderResults();
-    loadVerseArabic();
+    applyLang();
   } catch (err) {
     console.error('Resource search failed', err);
     status.textContent = 'Search failed. Try again.';
@@ -147,6 +150,7 @@ function renderResults() {
   const box = $('resResults');
   box.replaceChildren();
   picks = [];
+  items = [];
   if (!results.some(r => r.rows.length)) { box.append(el('div', 'res-muted', 'Nothing found.')); return; }
   for (const group of results.filter(r => r.rows.length)) {
     const g = el('div', 'res-group');
@@ -173,13 +177,19 @@ function renderResults() {
       }
       const full = clean(row.text);
       const txt = el('div', 'res-snip');
+      const note = el('div', 'res-meta res-langnote');
+      const st = { key: group.key, row, res, txt, body, full, text: full, arabic: '' };
+      items.push(st);
       appendHighlighted(txt, snippetOf(full, lastQuery), lastQuery);
-      body.append(txt);
-      if (full.length > SNIP || group.key === 'hadith') {
+      body.append(txt, note);
+      st.note = note;
+      {
         const more = el('button', 'res-more', 'Show more'); more.type = 'button';
         more.setAttribute('aria-expanded', 'false');
-        more.addEventListener('click', () => toggleFull(more, txt, body, group.key, row, full));
+        st.btn = more;
+        more.addEventListener('click', () => toggleFull(st));
         body.append(more);
+        more.hidden = full.length <= SNIP && group.key !== 'hadith';
       }
       const label = el('label', 'res-pickrow');
       label.append(cb);
@@ -190,51 +200,62 @@ function renderResults() {
   }
 }
 
-async function toggleFull(btn, txt, body, key, row, full) {
-  const open = btn.getAttribute('aria-expanded') === 'true';
+function showSnippet(st, open) {
+  const { txt } = st;
   txt.replaceChildren();
-  body.querySelector('.res-ar-full')?.remove();
-  if (open) {
-    appendHighlighted(txt, snippetOf(full, lastQuery), lastQuery);
-    btn.textContent = 'Show more'; btn.setAttribute('aria-expanded', 'false');
-    return;
+  txt.dir = isRtl(st.lang || 'en') ? 'rtl' : 'auto';
+  const text = st.text || st.full;
+  const hl = (st.lang || 'en') === 'en' ? lastQuery : '';
+  appendHighlighted(txt, open ? text : snippetOf(text, hl), hl);
+  if (st.btn) {
+    st.btn.hidden = !open && text.length <= SNIP && st.key !== 'hadith';
+    st.btn.textContent = open ? 'Show less' : 'Show more';
+    st.btn.setAttribute('aria-expanded', String(open));
   }
-  btn.setAttribute('aria-expanded', 'true'); btn.textContent = 'Show less';
-  let text = full, arabic = '';
-  if (key === 'hadith' && /^\d+$/.test(String(row.id))) {
-    // Search rows are capped at 1,000 characters; fetch the full hadith only when asked.
-    if (!row._full) {
-      txt.textContent = 'Loading…';
-      const { data } = await supabase.from('hadith_corpus')
-        .select('text_english,text_arabic,narrator,grade').eq('id', row.id).maybeSingle();
-      row._full = data || {};
-      txt.replaceChildren();
-    }
-    text = clean(row._full.text_english) || full;
-    arabic = clean(row._full.text_arabic);
-  }
-  appendHighlighted(txt, text, lastQuery);
-  if (arabic) {
-    body.querySelector('.res-ar')?.setAttribute('hidden', '');
-    const ar = el('div', 'res-ar res-ar-full', arabic); ar.dir = 'rtl'; ar.lang = 'ar';
-    txt.before(ar);
-  } else if (!open && key !== 'quran' && full.length >= 1000) {
-    txt.append(el('span', 'res-muted', ' (excerpt)'));
-  }
-  if (open || !arabic) body.querySelector('.res-ar[hidden]')?.removeAttribute('hidden');
 }
 
-// Arabic text for the verse results, one request for all of them.
-async function loadVerseArabic() {
-  const nodes = [...document.querySelectorAll('#resResults .res-ar[data-verse]')];
-  if (!nodes.length) return;
-  const pairs = nodes.map(n => n.dataset.verse.split(':').map(Number)).filter(([s, a]) => s && a);
-  const or = pairs.map(([s, a]) => `and(sura_id.eq.${s},aya_number.eq.${a})`).join(',');
-  try {
-    const { data } = await supabase.from('ayas').select('sura_id,aya_number,arabic').or(or);
-    const map = new Map((data || []).map(r => [`${r.sura_id}:${r.aya_number}`, r.arabic]));
-    nodes.forEach(n => { n.textContent = clean(map.get(n.dataset.verse)); });
-  } catch (err) { console.warn('Could not load Arabic verse text', err); }
+async function toggleFull(st) {
+  const open = st.btn.getAttribute('aria-expanded') !== 'true';
+  if (open && st.key === 'hadith' && !st.fullLoaded && (st.lang || 'en') === 'en') {
+    // Search rows are capped at 1,000 characters; fetch the full hadith only when asked.
+    st.txt.textContent = 'Loading…';
+    const r = await fetchText('hadith', st.res.ref, 'en', st.full).catch(() => null);
+    if (r) { st.text = r.text || st.full; st.fullLoaded = true; }
+  }
+  showSnippet(st, open);
+}
+
+// Re-render every result in the chosen language. Verses in one batch; other items fetched only when not English.
+async function applyLang() {
+  const verses = items.filter(st => st.key === 'quran');
+  if (verses.length) {
+    try {
+      const map = await fetchVerses(verses.map(st => st.res.ref), lang);
+      for (const st of verses) {
+        const v = map.get(st.res.ref); if (!v) continue;
+        const ar = st.body.querySelector('.res-ar'); if (ar) ar.textContent = v.arabic;
+        st.text = lang === 'ar' ? v.arabic : (v.text || st.full); st.lang = lang === 'ar' ? 'ar' : v.lang;
+        st.note.textContent = lang !== 'ar' && v.lang !== lang ? `Not available in ${langName(lang)}; showing English.` : '';
+        if (lang === 'ar' && ar) ar.hidden = true; else if (ar) ar.hidden = false;
+        showSnippet(st, false);
+      }
+    } catch (err) { console.warn('Could not load verse text', err); }
+  }
+  await Promise.all(items.filter(st => st.key !== 'quran').map(async st => {
+    const ar = st.body.querySelector('.res-ar');
+    if (lang === 'en') {
+      st.text = st.fullLoaded ? st.text : st.full; st.lang = 'en'; st.note.textContent = '';
+      if (ar) ar.hidden = false;
+      showSnippet(st, false); return;
+    }
+    const r = await fetchText(st.res.kind, st.res.ref, lang, st.full).catch(() => null);
+    if (!r) return;
+    if (lang === 'ar' && r.arabic) { st.text = r.arabic; st.lang = 'ar'; if (ar) ar.hidden = true; }
+    else { st.text = r.text || st.full; st.lang = r.lang; if (ar) ar.hidden = false; }
+    st.fullLoaded = true;
+    st.note.textContent = r.note;
+    showSnippet(st, false);
+  }));
 }
 
 async function addSelected() {
@@ -306,6 +327,7 @@ async function removeAttached(id) {
 
 function init() {
   if (!courseId) return;
+  $('resSearchForm').after(makeSelect(lang, v => { lang = v; applyLang(); }));
   $('resSearchForm').addEventListener('submit', runSearch);
   $('resAddBtn').addEventListener('click', addSelected);
   $('resLessonView').addEventListener('change', loadAttached);

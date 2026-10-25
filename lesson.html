@@ -406,6 +406,7 @@
 
   <script type="module">
     import { supabase } from './accounts/client.js';
+    import { getLang as resGetLang, makeSelect as resLangSelect, fetchVerses as resFetchVerses, fetchText as resFetchText, isRtl as resIsRtl, langName as resLangName } from './research-lang.js';
     import {
       getCourseById,
       getLessonsByCourse,
@@ -678,6 +679,9 @@
         heading.id = 'lessonResourcesHeading';
         heading.textContent = 'Research resources for this lesson';
         section.append(heading);
+        let lang = resGetLang();
+        const previews = [];
+        section.append(resLangSelect(lang, v => { lang = v; loadPreviews(); }));
         const list = document.createElement('ul');
         for (const r of data) {
           const li = document.createElement('li');
@@ -709,10 +713,58 @@
             note.textContent = r.instructor_note;
             li.append(note);
           }
+          // Short preview in the reader's language; full text on Show more.
+          const ar = document.createElement('div'); ar.className = 'res-ar'; ar.dir = 'rtl'; ar.lang = 'ar'; ar.hidden = true;
+          const txt = document.createElement('div'); txt.className = 'res-snip';
+          const langNote = document.createElement('div'); langNote.className = 'res-langnote';
+          const more = document.createElement('button'); more.type = 'button'; more.className = 'res-more'; more.hidden = true;
+          more.textContent = 'Show more'; more.setAttribute('aria-expanded', 'false');
+          const pv = { r, ar, txt, langNote, more, text: '', open: false };
+          more.addEventListener('click', () => { pv.open = !pv.open; showPreview(pv); });
+          li.append(ar, txt, langNote, more);
+          previews.push(pv);
           list.append(li);
         }
         section.append(list);
         document.getElementById('lessonContent').after(section);
+        const style = document.createElement('style');
+        style.textContent = '.lesson-resources .res-lang{display:block;margin:6px 0 10px;font-size:14px}.lesson-resources .res-lang select{margin-left:4px;padding:4px}.lesson-resources .res-ar{font-family:Amiri,"Scheherazade New",serif;font-size:20px;line-height:1.9;margin:4px 0}.lesson-resources .res-snip{font-size:15px;line-height:1.6;color:#333}.lesson-resources .res-langnote{font-size:12px;color:#8a7a55}.lesson-resources .res-more{background:none;border:none;color:#5A3A8B;text-decoration:underline;cursor:pointer;padding:2px 0}';
+        section.append(style);
+        function showPreview(pv) {
+          const t = pv.text || '';
+          pv.txt.textContent = pv.open || t.length <= 240 ? t : t.slice(0, 240) + '…';
+          pv.more.hidden = t.length <= 240;
+          pv.more.textContent = pv.open ? 'Show less' : 'Show more';
+          pv.more.setAttribute('aria-expanded', String(pv.open));
+        }
+        async function loadPreviews() {
+          const verses = previews.filter(p => p.r.resource_kind === 'verse');
+          if (verses.length) {
+            try {
+              const map = await resFetchVerses(verses.map(p => String(p.r.resource_ref)), lang);
+              for (const p of verses) {
+                const v = map.get(String(p.r.resource_ref)); if (!v) continue;
+                p.ar.textContent = v.arabic; p.ar.hidden = !v.arabic;
+                p.text = lang === 'ar' ? '' : v.text; p.txt.dir = resIsRtl(v.lang) ? 'rtl' : 'auto';
+                p.langNote.textContent = lang !== 'ar' && v.lang !== lang ? `Not available in ${resLangName(lang)}; showing English.` : '';
+                showPreview(p);
+              }
+            } catch (err) { console.warn('Could not load verse text', err); }
+          }
+          await Promise.all(previews.filter(p => p.r.resource_kind !== 'verse').map(async p => {
+            const x = await resFetchText(p.r.resource_kind, p.r.resource_ref, lang, '').catch(() => null);
+            if (!x) return;
+            const useAr = lang === 'ar' && x.arabic;
+            p.ar.textContent = x.arabic; p.ar.hidden = !x.arabic || !useAr && lang !== 'en';
+            if (useAr) { p.text = ''; } else { p.text = x.text; }
+            p.txt.dir = resIsRtl(x.lang) ? 'rtl' : 'auto';
+            p.langNote.textContent = x.note;
+            if (lang === 'en' && x.arabic) { p.ar.textContent = x.arabic.length > 240 ? x.arabic.slice(0, 240) + '…' : x.arabic; p.ar.hidden = false; }
+            if (useAr) { p.ar.textContent = x.arabic; }
+            showPreview(p);
+          }));
+        }
+        loadPreviews();
       } catch (err) {
         console.error('Could not load lesson resources', err);
       }
