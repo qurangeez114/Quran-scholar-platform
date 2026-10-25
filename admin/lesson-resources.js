@@ -55,51 +55,192 @@ function renderPicker() {
     : '<div class="res-muted">Create a lesson first, then add resources to it.</div>';
 }
 
+let lastQuery = '';
+let picks = []; // resource objects for the rendered checkboxes, by index
+
 async function runSearch(e) {
   e.preventDefault();
   const q = $('resQuery').value.trim();
   if (q.length < 2) return;
+  lastQuery = q;
   const status = $('resStatus');
   status.textContent = 'Searching…';
-  $('resResults').innerHTML = '';
+  $('resResults').replaceChildren();
   try {
     const all = await Promise.all(SOURCES.map(s =>
       supabase.rpc('site_search_src', { src: s.key, q, lim: 8 })
         .then(({ data, error }) => ({ key: s.key, label: s.label, rows: error ? [] : (data?.rows || []) }))
         .catch(() => ({ key: s.key, label: s.label, rows: [] }))
     ));
+    // Drop exact duplicates: same stored item (kind + ref) appearing twice in one source.
+    for (const g of all) {
+      const seen = new Set();
+      g.rows = g.rows.filter(row => {
+        const r = toResource(g.key, row);
+        const k = r.kind + '|' + r.ref;
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
+    }
     results = all;
     status.textContent = '';
     renderResults();
+    loadVerseArabic();
   } catch (err) {
     console.error('Resource search failed', err);
     status.textContent = 'Search failed. Try again.';
   }
 }
 
+const clean = t => String(t ?? '').replace(/\s+/g, ' ').trim();
+const SNIP = 220;
+
+// Append text to el with every match of the search term wrapped in <mark>. Text only, never HTML.
+function appendHighlighted(el, text, term) {
+  text = String(text ?? '');
+  const words = String(term || '').split(/\s+/).filter(w => w.length >= 2)
+    .map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  if (!words.length) { el.append(document.createTextNode(text)); return; }
+  const re = new RegExp('(' + words.join('|') + ')', 'gi');
+  let last = 0;
+  for (const m of text.matchAll(re)) {
+    if (m.index > last) el.append(document.createTextNode(text.slice(last, m.index)));
+    const mark = document.createElement('mark');
+    mark.textContent = m[0];
+    el.append(mark);
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) el.append(document.createTextNode(text.slice(last)));
+}
+
+// Start the snippet near the first match so the instructor sees why it matched.
+function snippetOf(text, term) {
+  text = clean(text);
+  if (text.length <= SNIP) return text;
+  const w = String(term || '').split(/\s+/).find(x => x.length >= 2);
+  let start = 0;
+  if (w) { const i = text.toLowerCase().indexOf(w.toLowerCase()); if (i > 80) start = i - 60; }
+  const cut = text.slice(start, start + SNIP);
+  return (start ? '…' : '') + cut + (start + SNIP < text.length ? '…' : '');
+}
+
+function el(tag, cls, text) {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (text != null) n.textContent = text;
+  return n;
+}
+
+function metaLine(key, row) {
+  const bits = [];
+  if (key === 'hadith') {
+    if (row.narrator) bits.push('Narrator: ' + row.narrator);
+    if (row.grade && row.grade !== 'null') bits.push('Grade: ' + row.grade);
+    if (row.tradition) bits.push(row.tradition);
+  } else if (key === 'tafsir' && row.tradition) bits.push(row.tradition);
+  else if ((key === 'asbab' || key === 'library') && row.title) bits.push(row.title);
+  return bits.join(' · ');
+}
+
 function renderResults() {
   const box = $('resResults');
-  if (!results.some(r => r.rows.length)) {
-    box.innerHTML = '<div class="res-muted">Nothing found.</div>';
+  box.replaceChildren();
+  picks = [];
+  if (!results.some(r => r.rows.length)) { box.append(el('div', 'res-muted', 'Nothing found.')); return; }
+  for (const group of results.filter(r => r.rows.length)) {
+    const g = el('div', 'res-group');
+    g.append(el('h4', null, group.label));
+    for (const row of group.rows) {
+      const res = toResource(group.key, row);
+      const idx = picks.push(res) - 1;
+      const item = el('div', 'res-row');
+      const cb = el('input'); cb.type = 'checkbox'; cb.dataset.idx = idx;
+      cb.setAttribute('aria-label', res.title);
+      const body = el('div', 'res-body');
+      const head = el('div');
+      head.append(el('b', null, res.title), document.createTextNode(' '), el('span', 'res-muted', '(' + res.kind + ')'));
+      body.append(head);
+      const meta = metaLine(group.key, row);
+      if (meta) body.append(el('div', 'res-meta', meta));
+      if (group.key === 'quran') {
+        const ar = el('div', 'res-ar'); ar.dir = 'rtl'; ar.lang = 'ar'; ar.dataset.verse = res.ref;
+        body.append(ar);
+      } else if (group.key === 'hadith' && row.arabic) {
+        const ar = el('div', 'res-ar'); ar.dir = 'rtl'; ar.lang = 'ar';
+        ar.textContent = snippetOf(row.arabic, '');
+        body.append(ar);
+      }
+      const full = clean(row.text);
+      const txt = el('div', 'res-snip');
+      appendHighlighted(txt, snippetOf(full, lastQuery), lastQuery);
+      body.append(txt);
+      if (full.length > SNIP || group.key === 'hadith') {
+        const more = el('button', 'res-more', 'Show more'); more.type = 'button';
+        more.setAttribute('aria-expanded', 'false');
+        more.addEventListener('click', () => toggleFull(more, txt, body, group.key, row, full));
+        body.append(more);
+      }
+      const label = el('label', 'res-pickrow');
+      label.append(cb);
+      item.append(label, body);
+      g.append(item);
+    }
+    box.append(g);
+  }
+}
+
+async function toggleFull(btn, txt, body, key, row, full) {
+  const open = btn.getAttribute('aria-expanded') === 'true';
+  txt.replaceChildren();
+  body.querySelector('.res-ar-full')?.remove();
+  if (open) {
+    appendHighlighted(txt, snippetOf(full, lastQuery), lastQuery);
+    btn.textContent = 'Show more'; btn.setAttribute('aria-expanded', 'false');
     return;
   }
-  box.innerHTML = results.filter(r => r.rows.length).map(group => `
-    <div class="res-group">
-      <h4>${esc(group.label)}</h4>
-      ${group.rows.map((row, i) => {
-        const res = toResource(group.key, row);
-        return `<label class="res-row">
-          <input type="checkbox" data-res="${esc(JSON.stringify(res))}">
-          <span><b>${esc(res.title)}</b> <span class="res-muted">(${esc(res.kind)})</span></span>
-        </label>`;
-      }).join('')}
-    </div>`).join('');
+  btn.setAttribute('aria-expanded', 'true'); btn.textContent = 'Show less';
+  let text = full, arabic = '';
+  if (key === 'hadith' && /^\d+$/.test(String(row.id))) {
+    // Search rows are capped at 1,000 characters; fetch the full hadith only when asked.
+    if (!row._full) {
+      txt.textContent = 'Loading…';
+      const { data } = await supabase.from('hadith_corpus')
+        .select('text_english,text_arabic,narrator,grade').eq('id', row.id).maybeSingle();
+      row._full = data || {};
+      txt.replaceChildren();
+    }
+    text = clean(row._full.text_english) || full;
+    arabic = clean(row._full.text_arabic);
+  }
+  appendHighlighted(txt, text, lastQuery);
+  if (arabic) {
+    body.querySelector('.res-ar')?.setAttribute('hidden', '');
+    const ar = el('div', 'res-ar res-ar-full', arabic); ar.dir = 'rtl'; ar.lang = 'ar';
+    txt.before(ar);
+  } else if (!open && key !== 'quran' && full.length >= 1000) {
+    txt.append(el('span', 'res-muted', ' (excerpt)'));
+  }
+  if (open || !arabic) body.querySelector('.res-ar[hidden]')?.removeAttribute('hidden');
+}
+
+// Arabic text for the verse results, one request for all of them.
+async function loadVerseArabic() {
+  const nodes = [...document.querySelectorAll('#resResults .res-ar[data-verse]')];
+  if (!nodes.length) return;
+  const pairs = nodes.map(n => n.dataset.verse.split(':').map(Number)).filter(([s, a]) => s && a);
+  const or = pairs.map(([s, a]) => `and(sura_id.eq.${s},aya_number.eq.${a})`).join(',');
+  try {
+    const { data } = await supabase.from('ayas').select('sura_id,aya_number,arabic').or(or);
+    const map = new Map((data || []).map(r => [`${r.sura_id}:${r.aya_number}`, r.arabic]));
+    nodes.forEach(n => { n.textContent = clean(map.get(n.dataset.verse)); });
+  } catch (err) { console.warn('Could not load Arabic verse text', err); }
 }
 
 async function addSelected() {
   const status = $('resAddStatus');
   const lessonIds = [...document.querySelectorAll('#resLessonPicks input:checked')].map(i => i.value);
-  const picked = [...document.querySelectorAll('#resResults input:checked')].map(i => JSON.parse(i.dataset.res));
+  const picked = [...document.querySelectorAll('#resResults input:checked')].map(i => picks[Number(i.dataset.idx)]).filter(Boolean);
   if (!lessonIds.length || !picked.length) {
     status.textContent = 'Choose at least one lesson and one result.';
     return;
