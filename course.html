@@ -286,7 +286,23 @@
     .material-download:hover {
       background: #c8e6c9;
     }
-  </style>
+  
+/* Academic course overview: public syllabus, not access to gated lessons */
+.academic-overview{margin-bottom:24px;background:#fff;border:1px solid #dbe5e8;border-radius:14px;overflow:hidden;box-shadow:0 2px 10px #1734460b}
+.academic-heading{padding:24px 28px;background:#f5f8fa;border-bottom:1px solid #dbe5e8}
+.academic-eyebrow{font-size:12px;font-weight:800;color:#176b65;letter-spacing:.11em;text-transform:uppercase;margin-bottom:8px}
+.academic-heading h2{font-size:25px;line-height:1.3;color:#173446;margin-bottom:10px}
+.academic-heading p{color:#516471;line-height:1.7;max-width:75ch}
+.academic-body{padding:24px 28px;display:grid;grid-template-columns:minmax(0,1.4fr) minmax(230px,.8fr);gap:30px}
+.academic-body h3{font-size:17px;color:#173446;margin:0 0 12px}
+.academic-body p,.academic-body li{color:#405463;line-height:1.7}
+.academic-body ol{padding-left:23px}.academic-body li{padding:5px 0}
+.academic-body li strong{color:#173446}
+.academic-panel{background:#f6f9f9;border:1px solid #e1e9e9;border-radius:10px;padding:18px;margin-bottom:14px}
+.academic-panel p{margin:0 0 12px}.academic-panel a{color:#176b65;font-weight:650;overflow-wrap:anywhere}
+.academic-outcomes{padding:0 28px 26px}.academic-outcomes h3{margin-bottom:10px;color:#173446}.academic-outcomes ul{padding-left:22px;color:#405463;line-height:1.7}
+@media(max-width:700px){.academic-body{grid-template-columns:1fr;padding:18px}.academic-heading{padding:20px 18px}.academic-outcomes{padding:0 18px 20px}.academic-heading h2{font-size:21px}}
+</style>
   <script src="site-motion.js" defer></script>
 <script src="/site-chrome.js" defer></script>
 </head>
@@ -298,6 +314,8 @@
 
   <div class="container">
     <div id="alertContainer"></div>
+
+    <section id="academicOverview" class="academic-overview" aria-label="Public academic course outline" hidden></section>
 
     <div class="two-column">
       <!-- Main Content -->
@@ -394,6 +412,41 @@
       return params.get('course');
     }
 
+
+    // Public course-level outline: no enrollment bypass and no invented lesson schedule.
+    function renderAcademicOverview(courseId) {
+      const root=document.getElementById('academicOverview');
+      if(!root)return;
+      if(courseId!=='00000000-0000-4000-8000-810000000001'){root.hidden=true;root.replaceChildren();return;}
+      root.hidden=false;
+      root.innerHTML=`
+        <div class="academic-heading">
+          <div class="academic-eyebrow">Muhammad Research · Course 01 of 10 · Historical method</div>
+          <h2>Muhammad: Sources and Historical Method</h2>
+          <p>How can researchers reconstruct the life and historical setting of Muhammad from sources written in different periods, genres, and communities? This course introduces the evidence and the limits of historical inference without treating any single tradition as a substitute for source criticism.</p>
+        </div>
+        <div class="academic-body">
+          <div>
+            <h3>Public thematic outline</h3>
+            <ol>
+              <li><strong>Framing the historical question.</strong> What can be established, and what remains uncertain?</li>
+              <li><strong>The Qur’an as evidence.</strong> Textual references to Muhammad, chronology, audience and genre; close reading of 33:40 and 48:29.</li>
+              <li><strong>Sīra and maghāzī.</strong> Composition, transmission, editorial layers and the distance between events and surviving narratives.</li>
+              <li><strong>Hadith reports.</strong> Chains of transmission, matn comparisons, variant narrations and the scope of authenticity assessments.</li>
+              <li><strong>Non-Muslim witnesses.</strong> External attestations, dates, contexts, and limits of independent corroboration.</li>
+              <li><strong>Historical synthesis.</strong> Compare convergence and disagreement, identify gaps and grade the strength of individual conclusions.</li>
+            </ol>
+          </div>
+          <aside aria-label="Course reading and access details">
+            <div class="academic-panel"><h3>Primary texts</h3><p>Qur’an 33:40 and 48:29 are the starting readings. Additional materials are provided in the course when available.</p><a href="/?sura=33&aya=40">Read Qur’an 33:40 ↗</a><br><a href="/?sura=48&aya=29">Read Qur’an 48:29 ↗</a></div>
+            <div class="academic-panel"><h3>Research resources</h3><p><a href="/muhammad.html">QuranHikma Muhammad research page ↗</a></p><p><a href="https://academic.oup.com/reference/62361/reference-article-abstract/554568841" target="_blank" rel="noopener noreferrer">Oxford scholarly reference ↗</a></p></div>
+            <div class="academic-panel"><h3>Access</h3><p>This page is a public overview. Full lessons require admission. No course fee or meeting schedule is specified here.</p></div>
+          </aside>
+        </div>
+        <div class="academic-outcomes"><h3>Research skills developed</h3><ul><li>Distinguish early attestations from later retrospective accounts.</li><li>Compare sources without confusing a recorded claim with an independently established event.</li><li>Document quotations, provenance, competing explanations and unresolved historical questions.</li></ul></div>
+      `;
+    }
+
     async function loadCourse() {
       const courseId = getCourseIdFromUrl();
       if (!courseId) {
@@ -408,6 +461,7 @@
         document.getElementById('courseTitle').textContent = currentCourse.title;
         document.getElementById('courseDescription').textContent = currentCourse.description || 'No description available';
         document.title = `${currentCourse.title} - QuranHikma`;
+        renderAcademicOverview(courseId);
 
         // Check enrollment
         try {
