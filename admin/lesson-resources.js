@@ -104,9 +104,12 @@ async function addSelected() {
     status.textContent = 'Choose at least one lesson and one result.';
     return;
   }
+  const note = $('resNote').value.trim().slice(0, 500) || null;
+  const addedBy = (await supabase.auth.getUser()).data.user?.id ?? null;
   const rows = [];
   lessonIds.forEach(lesson_id => picked.forEach(p => rows.push({
     lesson_id, course_id: courseId, resource_kind: p.kind, resource_ref: p.ref, resource_title: p.title,
+    instructor_note: note, added_by: addedBy,
   })));
   status.textContent = 'Adding…';
   const { error } = await supabase.from('qh_lesson_resources')
