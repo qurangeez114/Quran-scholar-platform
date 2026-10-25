@@ -156,6 +156,7 @@ section.src h2{font-size:25px;font-weight:600;margin-top:34px}
 .ac-workspace-card p{margin:6px 0 10px}.ac-workspace-card details{margin-top:10px;border-top:1px solid var(--line);padding-top:8px}
 .ac-workspace-card summary{cursor:pointer;font-weight:600}.ac-workspace-card details p{font-size:15px}
 @media(max-width:520px){.ac-workspace{padding:10px}.ac-workspace-controls button{font-size:14px;padding:6px 10px}}
+.ac-chain{margin-top:12px;border-top:1px solid var(--line);padding-top:8px}.ac-chain summary{cursor:pointer;font-weight:600}.ac-chain-steps{padding-left:22px}.ac-chain-steps ol{padding-left:22px;border-left:2px solid var(--goldline);margin:7px 0}.ac-chain-steps li{margin:8px 0;overflow-wrap:anywhere}
 </style>
   <script src="site-motion.js" defer></script>
 <script src="/site-chrome.js" defer></script>
@@ -515,6 +516,65 @@ function argumentExactPassageQuery(query){
  return null;
 }
 
+function appendDocumentedResponseChain(card,origin,links){
+ const direct=links.filter(x=>x.link_kind==='direct_response');
+ const incoming=new Map(),outgoing=new Map();
+ for(const edge of direct){
+  // Only explicitly attributed direct responses are directional: Christian original -> Muslim reply.
+  const a=edge.christian_url,b=edge.muslim_url;
+  if(!outgoing.has(a))outgoing.set(a,[]);outgoing.get(a).push({url:b,title:edge.muslim_title,why:edge.explanation});
+  if(!incoming.has(b))incoming.set(b,[]);incoming.get(b).push({url:a,title:edge.christian_title,why:edge.explanation});
+ }
+ if(!incoming.has(origin)&&!outgoing.has(origin))return;
+ const section=document.createElement('details');section.className='ac-chain';
+ const summary=document.createElement('summary');summary.textContent='Explore documented response chain';section.append(summary);
+ const visited=new Set();let start=origin;
+ // Walk backwards through attributed replies, but never loop or claim an undocumented relationship.
+ for(let i=0;i<10&&incoming.has(start);i++){
+  const parents=incoming.get(start);
+  if(parents.length!==1||visited.has(parents[0].url))break;
+  visited.add(start);start=parents[0].url;
+ }
+ const list=document.createElement('ol');list.className='ac-chain-steps';
+ const follow=(url,title,depth,path)=>{
+  if(depth>=8||path.has(url))return;
+  const nextPath=new Set(path);nextPath.add(url);
+  const item=document.createElement('li');
+  item.append(argumentExternalLink(argumentPublisherURL(url),title||'Published article'));
+  const edges=outgoing.get(url)||[];
+  if(!edges.length){const msg=document.createElement('p');msg.className='ac-note';msg.textContent='No further published reply documented in the index.';item.append(msg);}
+  else{
+   const children=document.createElement('ol');
+   for(const edge of edges){
+    const child=document.createElement('li');
+    if(nextPath.has(edge.url)){child.textContent='Repeated source — chain ends here.';}
+    else{
+     const status=document.createElement('span');status.textContent='Documented direct response: ';child.append(status,argumentExternalLink(argumentPublisherURL(edge.url),edge.title||'Published reply'));
+     if(edge.why){const why=document.createElement('p');why.className='ac-note';why.textContent=edge.why;child.append(why);}
+     const later=outgoing.get(edge.url)||[];
+     if(later.length){
+      const nested=document.createElement('ol');
+      for(const more of later){
+       const node=document.createElement('li');node.append(argumentExternalLink(argumentPublisherURL(more.url),more.title||'Further reply'));
+       if(more.why){const note=document.createElement('p');note.className='ac-note';note.textContent=more.why;node.append(note);}
+       nested.append(node);
+      }
+      child.append(nested);
+     }else{const msg=document.createElement('p');msg.className='ac-note';msg.textContent='No counter-rebuttal documented yet.';child.append(msg);}
+    }
+    children.append(child);
+   }
+   item.append(children);
+  }
+  list.append(item);
+ };
+ const rootTitle=(direct.find(x=>x.christian_url===start)||{}).christian_title||'Original publication';
+ follow(start,rootTitle,0,new Set());
+ section.append(list);
+ const note=document.createElement('p');note.className='ac-note';note.textContent='Only explicitly documented direct-response relationships appear here. Shared-topic links are excluded. A missing reply means not indexed, not that none exists.';section.append(note);
+ card.append(section);
+}
+
 function renderArgumentWorkspace(section,reference,citations,exchanges){
  if(!citations.length)return;
  const wrap=document.createElement('section');wrap.className='ac-workspace';wrap.setAttribute('aria-label','Passage comparison workspace');
@@ -551,6 +611,7 @@ function renderArgumentWorkspace(section,reference,citations,exchanges){
    }
    node.append(details);
   }
+  appendDocumentedResponseChain(node,item.source_url,exchanges);
   panel.append(node);cards.push({node,side});
  });
  wrap.append(controls,panel);
@@ -561,13 +622,14 @@ async function loadArgumentCatalog(query,version){
  const host=$('argumentSourceResults');if(!host)return;
  try{
   const exactPassage=argumentExactPassageQuery(query);
-  const [rows,claims,works,exchanges,comparisons,passages]=await Promise.all([
+  const [rows,claims,works,exchanges,comparisons,passages,graphLinks]=await Promise.all([
     rpc('qh_argument_sources_search',{p_query:query,p_limit:40}),
     rpc('qh_argument_claims_search_v2',{p_query:query,p_limit:40}).catch(()=>[]),
     rpc('qh_argument_works_search',{p_query:query,p_limit:12}).catch(()=>[]),
     rpc('qh_argument_exchange_search',{p_query:query,p_limit:10}).catch(()=>[]),
     rpc('qh_argument_comparative_search',{p_query:query,p_limit:14}).catch(()=>[]),
-    exactPassage?rpc('qh_argument_passage_search',{p_reference:exactPassage,p_limit:60}).catch(()=>[]):Promise.resolve([])
+    exactPassage?rpc('qh_argument_passage_search',{p_reference:exactPassage,p_limit:60}).catch(()=>[]):Promise.resolve([]),
+    exactPassage?rpc('qh_argument_exchange_graph',{p_limit:100}).catch(()=>[]):Promise.resolve([])
   ]);
   if(version!==searchVersion)return;
   const section=$('argumentSourceResults');if(!section)return;
@@ -590,7 +652,7 @@ async function loadArgumentCatalog(query,version){
   const notice=document.createElement('p');notice.className='ac-note';
   notice.textContent='Sources are grouped by their authors’ perspectives—Christian, Muslim, Jewish, secular and historical-critical. QuranHikma indexes the material without endorsing, rejecting or independently validating each argument. Open the original source to read the author’s full context.';
   section.append(notice);
-  if(citationUnique.length)renderArgumentWorkspace(section,exactPassage,citationUnique,exchangeRows);
+  if(citationUnique.length)renderArgumentWorkspace(section,exactPassage,citationUnique,Array.isArray(graphLinks)?graphLinks.filter(x=>argumentPublisherURL(x.christian_url)&&argumentPublisherURL(x.muslim_url)):exchangeRows);
   if(citationUnique.length){
     const title=document.createElement('h3');title.textContent='Arguments citing '+exactPassage;section.append(title);
     const explanation=document.createElement('p');explanation.className='ac-note';
