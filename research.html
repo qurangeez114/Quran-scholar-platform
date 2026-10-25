@@ -145,6 +145,17 @@ section.src h2{font-size:25px;font-weight:600;margin-top:34px}
 .argument-catalog .ac-entry a{font-size:18px;font-weight:600;overflow-wrap:anywhere}
 .argument-catalog .ac-entry p{margin:6px 0;line-height:1.55;font-size:15px}
 .argument-catalog .ac-note{font-size:13px;color:#745e36}
+
+/* Passage comparison workspace: accessible mobile-first filters and cards */
+.ac-workspace{margin:18px 0 26px;padding:16px;border:1px solid var(--goldline);border-radius:12px;background:var(--goldbg)}
+.ac-workspace h3{margin:0 0 6px}.ac-workspace-controls{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0}
+.ac-workspace-controls button{border:1px solid var(--line);background:white;border-radius:20px;padding:6px 12px;font:inherit;cursor:pointer;color:var(--ink)}
+.ac-workspace-controls button[aria-pressed=true]{background:var(--ink);color:white;border-color:var(--ink)}
+.ac-workspace-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,290px),1fr));gap:10px}
+.ac-workspace-card{background:white;margin:0;min-width:0;overflow-wrap:anywhere}.ac-workspace-card[hidden]{display:none}
+.ac-workspace-card p{margin:6px 0 10px}.ac-workspace-card details{margin-top:10px;border-top:1px solid var(--line);padding-top:8px}
+.ac-workspace-card summary{cursor:pointer;font-weight:600}.ac-workspace-card details p{font-size:15px}
+@media(max-width:520px){.ac-workspace{padding:10px}.ac-workspace-controls button{font-size:14px;padding:6px 10px}}
 </style>
   <script src="site-motion.js" defer></script>
 <script src="/site-chrome.js" defer></script>
@@ -504,6 +515,48 @@ function argumentExactPassageQuery(query){
  return null;
 }
 
+function renderArgumentWorkspace(section,reference,citations,exchanges){
+ if(!citations.length)return;
+ const wrap=document.createElement('section');wrap.className='ac-workspace';wrap.setAttribute('aria-label','Passage comparison workspace');
+ const title=document.createElement('h3');title.textContent='Compare perspectives · '+reference;wrap.append(title);
+ const intro=document.createElement('p');intro.className='ac-note';intro.textContent='Compare attributed arguments and trace recorded replies. A shared topic is not evidence of a direct response. Source metadata alone is not a verified argument summary.';wrap.append(intro);
+ const controls=document.createElement('div');controls.className='ac-workspace-controls';controls.setAttribute('role','group');controls.setAttribute('aria-label','Filter by perspective');
+ const panel=document.createElement('div');panel.className='ac-workspace-grid';
+ const available=['All','Christian','Muslim','Jewish','Historical-critical','Secular','Other'];
+ let active='All';
+ const cards=[];
+ for(const side of available){
+  const button=document.createElement('button');button.type='button';button.textContent=side;button.setAttribute('aria-pressed',String(side===active));
+  button.onclick=()=>{active=side;for(const b of controls.children)b.setAttribute('aria-pressed',String(b===button));for(const card of cards)card.node.hidden=active!=='All'&&card.side!==active;};
+  controls.append(button);
+ }
+ citations.forEach(item=>{
+  const side=argumentPerspective(item.perspective);
+  const node=document.createElement('article');node.className='ac-entry ac-workspace-card';
+  const heading=document.createElement('strong');heading.textContent=side+' · '+item.title;node.append(heading);
+  const detail=document.createElement('p');detail.className='ac-note';detail.textContent=[item.author,item.publisher,item.passage_reference].filter(Boolean).join(' · ');node.append(detail);
+  const summary=document.createElement('p');summary.textContent=item.claim_statement||'Passage indexed in this article; no argument outline has been recorded for this passage.';node.append(summary);
+  if(item.claim_statement){const level=document.createElement('small');level.textContent='Attributed argument outline — not a QuranHikma conclusion';node.append(level);}
+  node.append(argumentExternalLink(argumentPublisherURL(item.source_url),'Read original article ↗'));
+  const related=exchanges.filter(x=>x.christian_url===item.source_url||x.muslim_url===item.source_url);
+  if(related.length){
+   const details=document.createElement('details');const caption=document.createElement('summary');caption.textContent='Response connections ('+related.length+')';details.append(caption);
+   for(const link of related){
+    const counterpart=link.christian_url===item.source_url?link.muslim_url:link.christian_url;
+    const peerTitle=link.christian_url===item.source_url?link.muslim_title:link.christian_title;
+    const p=document.createElement('p');p.append(document.createTextNode(link.link_kind==='direct_response'?'Documented published response: ':'Related article (not a documented direct reply): '));
+    p.append(argumentExternalLink(argumentPublisherURL(counterpart),peerTitle||'Open counterpart'));
+    if(link.explanation){const note=document.createElement('span');note.textContent=' — '+link.explanation;p.append(note);}
+    details.append(p);
+   }
+   node.append(details);
+  }
+  panel.append(node);cards.push({node,side});
+ });
+ wrap.append(controls,panel);
+ section.append(wrap);
+}
+
 async function loadArgumentCatalog(query,version){
  const host=$('argumentSourceResults');if(!host)return;
  try{
@@ -537,6 +590,7 @@ async function loadArgumentCatalog(query,version){
   const notice=document.createElement('p');notice.className='ac-note';
   notice.textContent='Sources are grouped by their authors’ perspectives—Christian, Muslim, Jewish, secular and historical-critical. QuranHikma indexes the material without endorsing, rejecting or independently validating each argument. Open the original source to read the author’s full context.';
   section.append(notice);
+  if(citationUnique.length)renderArgumentWorkspace(section,exactPassage,citationUnique,exchangeRows);
   if(citationUnique.length){
     const title=document.createElement('h3');title.textContent='Arguments citing '+exactPassage;section.append(title);
     const explanation=document.createElement('p');explanation.className='ac-note';
