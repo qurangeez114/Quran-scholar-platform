@@ -499,10 +499,11 @@ function argumentGroup(section,title,items,renderRow,visibleCount){
 async function loadArgumentCatalog(query,version){
  const host=$('argumentSourceResults');if(!host)return;
  try{
-  const [rows,claims,works]=await Promise.all([
+  const [rows,claims,works,exchanges]=await Promise.all([
     rpc('qh_argument_sources_search',{p_query:query,p_limit:40}),
-    rpc('qh_argument_claims_search',{p_query:query,p_limit:20}).catch(()=>[]),
-    rpc('qh_argument_works_search',{p_query:query,p_limit:12}).catch(()=>[])
+    rpc('qh_argument_claims_search_v2',{p_query:query,p_limit:40}).catch(()=>[]),
+    rpc('qh_argument_works_search',{p_query:query,p_limit:12}).catch(()=>[]),
+    rpc('qh_argument_exchange_search',{p_query:query,p_limit:10}).catch(()=>[])
   ]);
   if(version!==searchVersion)return;
   const section=$('argumentSourceResults');if(!section)return;
@@ -510,13 +511,25 @@ async function loadArgumentCatalog(query,version){
   const sourceRows=Array.isArray(rows)?rows.filter(r=>argumentPublisherURL(r.source_url)):[];
   const claimRows=Array.isArray(claims)?claims.filter(r=>argumentPublisherURL(r.source_url)):[];
   const workRows=Array.isArray(works)?works.filter(r=>argumentPublisherURL(r.catalog_url)):[];
-  if(!sourceRows.length&&!claimRows.length&&!workRows.length){section.remove();return;}
+  const exchangeRows=Array.isArray(exchanges)?exchanges.filter(r=>argumentPublisherURL(r.christian_url)&&argumentPublisherURL(r.muslim_url)):[];
+  if(!sourceRows.length&&!claimRows.length&&!workRows.length&&!exchangeRows.length){section.remove();return;}
   const h=document.createElement('h2');h.textContent='Apologetic, polemical and comparative perspectives';section.append(h);
   const notice=document.createElement('p');notice.className='ac-note';
   notice.textContent='These are the arguments of their authors or publishers. QuranHikma provides a searchable index and identifies the perspective; listing a claim does not mean QuranHikma endorses it, rejects it, or has independently established it. Open the original article to read the argument in its full context.';
   section.append(notice);
+  argumentGroup(section,'Christian–Muslim article connections',exchangeRows,ex=>{
+   const item=document.createElement('article');item.className='ac-entry';
+   const meta=document.createElement('p');meta.className='ac-note';
+   meta.textContent=ex.link_kind==='direct_response'?'Direct published response':'Two perspectives on a shared subject';item.append(meta);
+   const christian=document.createElement('p');christian.append(document.createTextNode('Christian perspective: '));
+   christian.append(argumentExternalLink(argumentPublisherURL(ex.christian_url),ex.christian_title));item.append(christian);
+   const muslim=document.createElement('p');muslim.append(document.createTextNode('Muslim perspective: '));
+   muslim.append(argumentExternalLink(argumentPublisherURL(ex.muslim_url),ex.muslim_title));item.append(muslim);
+   if(ex.explanation){const note=document.createElement('div');note.className='ac-note';note.textContent=ex.explanation;item.append(note);}
+   return item;
+  },4);
   for(const side of ['Muslim','Christian','Other']){
-    const selectedClaims=claimRows.filter(r=>argumentPerspective(r.source_url.includes('answering-islam.org')?'Christian':'Muslim')===side);
+    const selectedClaims=claimRows.filter(r=>argumentPerspective(r.perspective)===side);
     argumentGroup(section,side+' argument outlines',selectedClaims,claim=>{
       const item=document.createElement('article');item.className='ac-entry';
       const name=document.createElement('strong');name.textContent=claim.claim_statement;item.append(name);
