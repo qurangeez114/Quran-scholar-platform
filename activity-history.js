@@ -285,13 +285,18 @@
   function renderHistoryTab() {
     historyData = loadHistory();
     const listContainer = document.getElementById('qhikma-history-list');
+    const searchTerm=(document.getElementById('qhikma-history-search')?.value||'').trim().toLowerCase();
+    const filtered=historyData.filter(item=>[item.label,item.title,item.sub,item.subtitle,item.url].some(x=>String(x||'').toLowerCase().includes(searchTerm)));
 
+    if (!document.getElementById('qhikma-history-search')) {
+      const input=document.createElement('input');input.id='qhikma-history-search';input.type='search';input.placeholder='Search visited pages…';input.setAttribute('aria-label','Search visited pages');input.autocomplete='off';input.style.cssText='display:block;width:calc(100% - 24px);margin:10px 12px;padding:12px 14px;border:1px solid #cfc5b5;border-radius:10px;font-size:15px;background:#fff;color:#241e18';input.addEventListener('input',()=>renderHistoryTab());listContainer.parentElement.insertBefore(input,listContainer);
+    }
     if (historyData.length === 0) {
       listContainer.innerHTML = '<div class="qhikma-empty">No history yet</div>';
       return;
     }
 
-    const items = historyData.map((item, idx) => {
+    const items = filtered.map((item, idx) => {
       const title = item.label || item.title || 'Page';
       const subtitle = item.sub || item.subtitle || '';
       const ts = item.time || item.timestamp || Date.now();
@@ -313,7 +318,7 @@
     `;
     }).join('');
 
-    listContainer.innerHTML = items;
+    listContainer.innerHTML = items || '<div class="qhikma-empty">No matching pages found.</div>';
   }
 
   function renderResearchTab() {
