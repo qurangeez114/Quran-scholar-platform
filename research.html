@@ -138,6 +138,13 @@ section.src h2{font-size:25px;font-weight:600;margin-top:34px}
 .ref-other summary{font-size:17px;font-weight:600;cursor:pointer;min-height:44px;display:list-item}
 .ref-other p{font-size:14px;color:#675637}
 @media(max-width:600px){.ref-banner{padding:12px 14px}.ref-other{padding:10px 12px}}
+
+.argument-catalog{margin:20px 0;padding:16px;background:#fff;border:1px solid #d7dfd8;border-radius:12px}
+.argument-catalog h2{font-size:23px;margin:0 0 8px}
+.argument-catalog .ac-entry{border-top:1px solid #e6e5dd;padding:12px 0}
+.argument-catalog .ac-entry a{font-size:18px;font-weight:600;overflow-wrap:anywhere}
+.argument-catalog .ac-entry p{margin:6px 0;line-height:1.55;font-size:15px}
+.argument-catalog .ac-note{font-size:13px;color:#745e36}
 </style>
   <script src="site-motion.js" defer></script>
 <script src="/site-chrome.js" defer></script>
@@ -438,9 +445,41 @@ function render(results,vars,q,dg){
     h+=`<details class="ref-other"><summary>${n(exactReference.conflicting_local_count)} additional local record(s) share this number — unverified</summary><p>These local records are preserved for scholarship, but they have NOT been established as the requested publisher citation. Different wording, numbering systems, and reported grades must be checked individually.</p>${others.map(r=>card('hadith',r,vars)).join('')}${exactReference.conflicting_local_count>others.length?'<p>Only the first eight candidates are shown.</p>':''}</details>`;
   }
   h+=`<div class="note">Results come straight from the site\u2019s own database. Some sources, especially hadith linked to the later suras, were assembled automatically and have not yet been reviewed verse by verse; each source above says what it contains so you can judge how much weight to give it.</div>`;
+  h+='<section class="argument-catalog" id="argumentSourceResults" aria-label="External argument and apologetic sources"><h2>Arguments and outside perspectives</h2><p class="what">Checking indexed source articles…</p></section>';
   $('out').innerHTML=h;
+  loadArgumentCatalog(q,searchVersion);
 }
 
+async function loadArgumentCatalog(query,version){
+ const host=$('argumentSourceResults');if(!host)return;
+ try{
+  const rows=await rpc('qh_argument_sources_search',{p_query:query,p_limit:12});
+  if(version!==searchVersion)return;
+  const section=$('argumentSourceResults');if(!section)return;
+  section.replaceChildren();
+  if(!Array.isArray(rows)||!rows.length){section.remove();return;}
+  const header=document.createElement('h2');header.textContent='Outside arguments and perspectives';section.append(header);
+  const intro=document.createElement('p');intro.className='ac-note';
+  intro.textContent='External Christian apologetic articles — attributed perspectives, not authenticated source quotations. Titles, links and independently prepared research summaries are indexed; articles remain at their original sites.';
+  section.append(intro);
+  for(const record of rows){
+   let url;try{url=new URL(record.source_url);if(url.protocol!=='https:'||url.hostname!=='www.answering-islam.org')continue;}catch(_){continue;}
+   const article=document.createElement('article');article.className='ac-entry';
+   const title=document.createElement('a');title.href=url.href;title.target='_blank';title.rel='noopener noreferrer';title.textContent=record.title;article.append(title);
+   const attribution=document.createElement('div');attribution.className='ac-note';
+   attribution.textContent=[record.author,record.publisher,record.perspective,'Verification: '+(record.review_status||'pending')].filter(Boolean).join(' · ');
+   article.append(attribution);
+   if(record.research_summary){const summary=document.createElement('p');summary.textContent=record.research_summary;article.append(summary);}
+   if(Array.isArray(record.cited_passages)&&record.cited_passages.length){const refs=document.createElement('p');refs.className='ac-note';refs.textContent='References to examine: '+record.cited_passages.join('; ');article.append(refs);}
+   section.append(article);
+  }
+ }catch(error){
+  if(version!==searchVersion)return;
+  const section=$('argumentSourceResults');if(!section)return;
+  section.replaceChildren();
+  const note=document.createElement('p');note.className='ac-note';note.textContent='External argument index could not load. The QuranHikma source results above are still available.';section.append(note);
+ }
+}
 
 /* ---- Choose where to look: per-book picker ---- */
 let PICK={sb:[],q:'',cur:null,off:0};
