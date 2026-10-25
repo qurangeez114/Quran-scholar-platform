@@ -1,0 +1,42 @@
+#!/usr/bin/env python3
+"""Read-only preservation guard; anonymous provenance remains unresolved."""
+import argparse,copy,hashlib,json
+from pathlib import Path
+F="ibn-kathir-108-i05-a03-bounded-draft-2026-10-24.json"
+EXPECTED="{\"candidate\":{\"propositions\":[{\"staging_key\":\"108-I05-A03-INTERP-P\",\"claim_type_id\":14,\"statement_en\":\"Ibn Kathir records an unnamed interpretation of wanhar as facing the qibla with one's upper chest.\",\"source_type\":\"tafsir_entry\",\"tafsir_entry_id\":48458,\"speaker_type\":\"unspecified\",\"speaker_name\":null,\"assertion_mode\":\"explicit\",\"status\":\"active\",\"mufassir_own_position\":\"reported_only\",\"verification_state\":\"source_language_located\",\"extraction_validity\":\"pending_source_verification\",\"attribution_fidelity\":\"accurate_paraphrase\",\"quranic_textual_support\":\"not_stated\",\"normative_polarity\":null,\"scope_generality\":null,\"extracted_by\":\"work-surah108-v1:i05-a03-draft\"},{\"staging_key\":\"108-I05-A03-REPORTING-P\",\"claim_type_id\":17,\"statement_en\":\"Ibn Kathir states that Ibn Jarir mentioned these three interpretations.\",\"source_type\":\"tafsir_entry\",\"tafsir_entry_id\":48458,\"speaker_type\":\"unspecified\",\"speaker_name\":\"Ibn Kathir\",\"assertion_mode\":\"narrator_commentary\",\"status\":\"active\",\"mufassir_own_position\":\"preferred\",\"verification_state\":\"source_language_located\",\"extraction_validity\":\"pending_source_verification\",\"attribution_fidelity\":\"accurate_paraphrase\",\"quranic_textual_support\":\"not_stated\",\"normative_polarity\":null,\"scope_generality\":null,\"extracted_by\":\"work-surah108-v1:i05-a03-draft\"}],\"voices\":[{\"proposition_ref\":\"108-I05-A03-REPORTING-P\",\"originating_voice_type\":\"exegete_own_view\",\"originating_voice_name\":null,\"reporting_work_id\":2,\"quoted_collection\":null}],\"evidence_units\":[{\"staging_key\":\"108-I05-A03-INTERP-E\",\"unit_type\":\"unattributed_assertion\",\"attributed_authority_name\":null,\"content_summary\":\"Ibn Kathir records an unnamed interpretation of wanhar as facing the qibla with one's upper chest.\",\"independence_state\":\"unknown\",\"independence_justification\":\"Scoped projections from one captured context; independent witnesses not established.\",\"source_locator\":{\"captured_entry_id\":48457,\"canonical_entry_id\":48458,\"start\":13894,\"end\":14013,\"offsets\":\"zero-based Unicode code points, half-open, unnormalized\",\"text\":\"وَقِيلَ: ﴿وَانْحَرْ﴾ أَيْ: اسْتَقْبِلْ بِنَحْرِكَ الْقِبْلَةَ. ذَكَرَ هَذِهِ الْأَقْوَالَ الثَّلَاثَةَ ابْنُ جَرِيرٍ.\\n\\n\",\"sha256\":\"bf65c4f4aa6d3501a1de6ec1eafed518e242d672f0ef813aaf0a8d52e7de6657\"},\"clause_keys\":[\"anonymous_marker\",\"interpretation\"]},{\"staging_key\":\"108-I05-A03-REPORTING-E\",\"unit_type\":\"single_named_attribution\",\"attributed_authority_name\":\"Ibn Kathir\",\"content_summary\":\"Ibn Kathir states that Ibn Jarir mentioned these three interpretations.\",\"independence_state\":\"unknown\",\"independence_justification\":\"Scoped projections from one captured context; independent witnesses not established.\",\"source_locator\":{\"captured_entry_id\":48457,\"canonical_entry_id\":48458,\"start\":13894,\"end\":14013,\"offsets\":\"zero-based Unicode code points, half-open, unnormalized\",\"text\":\"وَقِيلَ: ﴿وَانْحَرْ﴾ أَيْ: اسْتَقْبِلْ بِنَحْرِكَ الْقِبْلَةَ. ذَكَرَ هَذِهِ الْأَقْوَالَ الثَّلَاثَةَ ابْنُ جَرِيرٍ.\\n\\n\",\"sha256\":\"bf65c4f4aa6d3501a1de6ec1eafed518e242d672f0ef813aaf0a8d52e7de6657\"},\"clause_keys\":[\"reporting\"]}],\"links\":[{\"proposition_ref\":\"108-I05-A03-INTERP-P\",\"evidence_unit_ref\":\"108-I05-A03-INTERP-E\",\"semantic_link_note\":\"Anonymous qila originator remains unnamed and unquantified; no Ibn Jarir endorsement inferred.\",\"linked_by\":\"work-surah108-v1:i05-a03-draft\"},{\"proposition_ref\":\"108-I05-A03-REPORTING-P\",\"evidence_unit_ref\":\"108-I05-A03-REPORTING-E\",\"semantic_link_note\":\"Ibn Kathir reports Ibn Jarir mentioned three preceding views; origination and endorsement not inferred.\",\"linked_by\":\"work-surah108-v1:i05-a03-draft\"}],\"routes\":[]},\"holds\":[{\"proposition_ref\":\"108-I05-A03-INTERP-P\",\"reason\":\"No precise current enum for anonymous originator of unspecified number; do not fabricate group or named originator.\",\"required_before_publication\":true}],\"metadata\":{\"clause_locators\":[{\"key\":\"anonymous_marker\",\"start\":13894,\"end\":13902,\"text\":\"وَقِيلَ:\",\"sha256\":\"3604139e520f446c72a953392e6d460d0ab0a70bc0fc3f3777a4f1cdcc8be23f\",\"captured_entry_id\":48457,\"canonical_entry_id\":48458,\"offsets\":\"zero-based Unicode code points, half-open, unnormalized\"},{\"key\":\"interpretation\",\"start\":13921,\"end\":13956,\"text\":\"اسْتَقْبِلْ بِنَحْرِكَ الْقِبْلَةَ.\",\"sha256\":\"f93becd7177f51beee1fed71b610b8dba807917add69438bb5ef8d27ffb03d37\",\"captured_entry_id\":48457,\"canonical_entry_id\":48458,\"offsets\":\"zero-based Unicode code points, half-open, unnormalized\"},{\"key\":\"reporting\",\"start\":13957,\"end\":14011,\"text\":\"ذَكَرَ هَذِهِ الْأَقْوَالَ الثَّلَاثَةَ ابْنُ جَرِيرٍ.\",\"sha256\":\"2c59276a023761295b34ff3804ebb8660464e1bec50a66e15ade2aa2b5f8de32\",\"captured_entry_id\":48457,\"canonical_entry_id\":48458,\"offsets\":\"zero-based Unicode code points, half-open, unnormalized\"}],\"english_state\":\"absent_in_corresponding_bounded_transition_per_scope_audit\",\"nonphysical_fields\":[\"staging_key\",\"proposition_ref\",\"evidence_unit_ref\",\"source_locator\",\"clause_keys\"],\"limits\":\"Two propositions but only one mapped voice intentionally; not a complete physical payload.\",\"remaining\":[\"Negative validation must enforce explicit missing-voice hold and forbid fabricated originator\",\"Fresh schema and duplicate preflight before integration\",\"Ten adjacent coverage holds remain unfinished\"]}}"
+def validate(d):
+    e=json.loads(EXPECTED)
+    if d['candidate']!=e['candidate'] or d['unresolved_voice_mappings']!=e['holds'] or d['metadata']!=e['metadata']:raise ValueError('reviewed draft or mandatory hold changed')
+    c=d['candidate']
+    if len(c['propositions'])!=2 or len(c['voices'])!=1 or len(d['unresolved_voice_mappings'])!=1:raise ValueError('partial inventory')
+    if d['unresolved_voice_mappings'][0]['proposition_ref']!=c['propositions'][0]['staging_key']:raise ValueError('hold reference')
+    for p,u,l in zip(c['propositions'],c['evidence_units'],c['links']):
+        if l['proposition_ref']!=p['staging_key'] or l['evidence_unit_ref']!=u['staging_key']:raise ValueError('links')
+        loc=u['source_locator']
+        if hashlib.sha256(loc['text'].encode()).hexdigest()!=loc['sha256']:raise ValueError('hash')
+        for x in d['metadata']['clause_locators']:
+            if loc['text'][x['start']-loc['start']:x['end']-loc['start']]!=x['text']:raise ValueError('slice')
+    if any(d[k] is not False for k in ['database_written','publication_ready','chapter_complete']):raise ValueError('completion')
+def main():
+    ap=argparse.ArgumentParser();ap.add_argument('--root',default='data/tafsir/staging');ap.add_argument('--self-test',action='store_true');a=ap.parse_args()
+    d=json.loads((Path(a.root)/F).read_text());validate(d);cases=[]
+    def bad(fn):
+        b=copy.deepcopy(d);fn(b);cases.append(b)
+    bad(lambda b:b['unresolved_voice_mappings'].clear())
+    bad(lambda b:b['unresolved_voice_mappings'][0].update(required_before_publication=False))
+    bad(lambda b:b['candidate']['propositions'][0].update(speaker_name='Ibn Jarir'))
+    bad(lambda b:b['candidate']['voices'].append(dict(proposition_ref='108-I05-A03-INTERP-P',originating_voice_type='unattributed_group')))
+    bad(lambda b:b['candidate']['propositions'][1].update(statement_en='Ibn Jarir endorsed all three views.'))
+    bad(lambda b:b['candidate']['links'][0].update(evidence_unit_ref='crossed'))
+    bad(lambda b:b['candidate']['evidence_units'][0].pop('content_summary'))
+    bad(lambda b:b['metadata'].update(english_state='present'))
+    bad(lambda b:b['metadata']['clause_locators'][0].update(end=14013))
+    bad(lambda b:b['candidate']['routes'].append({'invented':True}))
+    bad(lambda b:b.update(publication_ready=True))
+    if a.self_test:
+        for b in cases:
+            try:validate(b)
+            except ValueError:continue
+            raise ValueError('unsafe mutation accepted')
+    print(json.dumps(dict(status='PASS',rejected_cases=len(cases) if a.self_test else 0,anonymous_voice_resolved=False,database_written=False)))
+if __name__=='__main__':main()
