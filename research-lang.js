@@ -86,9 +86,9 @@ export async function fetchText(kind, ref, lang, fallback = '') {
     const { data } = await supabase.from('tafsir_entries').select('scholar_name,language,content')
       .eq('sura', Number(s)).eq('aya', Number(a)).in('language', langs).limit(40);
     const rows = data || [];
-    // Prefer the same scholar (chosen language, then English, then Arabic), then any scholar in that order.
+    // Chosen language first (same scholar, then any scholar), then English, then Arabic.
     const order = [];
-    for (const same of [true, false]) for (const l of langs) order.push([same, l]);
+    for (const l of langs) for (const same of [true, false]) order.push([same, l]);
     for (const [same, l] of order) {
       const r = rows.find(x => x.language === l && (!same || x.scholar_name === scholar));
       if (r) { const o = res(r.content, '', l); if (r.scholar_name !== scholar) o.note = (o.note ? o.note + ' ' : '') + `From ${r.scholar_name}.`; return o; }
