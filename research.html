@@ -496,15 +496,25 @@ function argumentGroup(section,title,items,renderRow,visibleCount){
  }
  section.append(group);
 }
+function argumentExactPassageQuery(query){
+ const value=String(query||'').trim();
+ if(/^(?:qur['’]?an|quran|surah?)\s+[0-9]{1,3}:[0-9]{1,3}(?:-[0-9]{1,3})?$/i.test(value))return value;
+ if(/^[0-9]{1,3}:[0-9]{1,3}$/.test(value))return value;
+ if(/^(?:[1-3]\s*)?[a-z]+(?:\s+[a-z]+){0,3}\s+[0-9]{1,3}:[0-9]{1,3}(?:-[0-9]{1,3})?$/i.test(value))return value;
+ return null;
+}
+
 async function loadArgumentCatalog(query,version){
  const host=$('argumentSourceResults');if(!host)return;
  try{
-  const [rows,claims,works,exchanges,comparisons]=await Promise.all([
+  const exactPassage=argumentExactPassageQuery(query);
+  const [rows,claims,works,exchanges,comparisons,passages]=await Promise.all([
     rpc('qh_argument_sources_search',{p_query:query,p_limit:40}),
     rpc('qh_argument_claims_search_v2',{p_query:query,p_limit:40}).catch(()=>[]),
     rpc('qh_argument_works_search',{p_query:query,p_limit:12}).catch(()=>[]),
     rpc('qh_argument_exchange_search',{p_query:query,p_limit:10}).catch(()=>[]),
-    rpc('qh_argument_comparative_search',{p_query:query,p_limit:14}).catch(()=>[])
+    rpc('qh_argument_comparative_search',{p_query:query,p_limit:14}).catch(()=>[]),
+    exactPassage?rpc('qh_argument_passage_search',{p_reference:exactPassage,p_limit:60}).catch(()=>[]):Promise.resolve([])
   ]);
   if(version!==searchVersion)return;
   const section=$('argumentSourceResults');if(!section)return;
@@ -514,11 +524,30 @@ async function loadArgumentCatalog(query,version){
   const workRows=Array.isArray(works)?works.filter(r=>argumentPublisherURL(r.catalog_url)):[];
   const exchangeRows=Array.isArray(exchanges)?exchanges.filter(r=>argumentPublisherURL(r.christian_url)&&argumentPublisherURL(r.muslim_url)):[];
   const comparisonRows=Array.isArray(comparisons)?comparisons.filter(r=>argumentPublisherURL(r.a_url)&&argumentPublisherURL(r.b_url)):[];
-  if(!sourceRows.length&&!claimRows.length&&!workRows.length&&!exchangeRows.length&&!comparisonRows.length){section.remove();return;}
+  const citationRows=Array.isArray(passages)?passages.filter(r=>argumentPublisherURL(r.source_url)):[];
+  const citationUnique=[...new Map(citationRows.map(r=>[r.source_url,r])).values()];
+
+  if(!sourceRows.length&&!claimRows.length&&!workRows.length&&!exchangeRows.length&&!comparisonRows.length&&!citationUnique.length){section.remove();return;}
   const h=document.createElement('h2');h.textContent='Religious arguments and historical perspectives';section.append(h);
   const notice=document.createElement('p');notice.className='ac-note';
   notice.textContent='Sources are grouped by their authors’ perspectives—Christian, Muslim, Jewish, secular and historical-critical. QuranHikma indexes the material without endorsing, rejecting or independently validating each argument. Open the original source to read the author’s full context.';
   section.append(notice);
+  if(citationUnique.length){
+    const title=document.createElement('h3');title.textContent='Arguments citing '+exactPassage;section.append(title);
+    const explanation=document.createElement('p');explanation.className='ac-note';
+    explanation.textContent='These are indexed links between a passage and externally published arguments, not verified interpretations of the passage. One entry per article is shown. Open the publisher’s original text for context.';
+    section.append(explanation);
+    for(const side of ['Muslim','Christian','Jewish','Historical-critical','Secular','Other']){
+      argumentGroup(section,side+' sources citing this passage',citationUnique.filter(r=>argumentPerspective(r.perspective)===side),row=>{
+        const article=document.createElement('article');article.className='ac-entry';
+        article.append(argumentExternalLink(argumentPublisherURL(row.source_url),row.title));
+        const meta=document.createElement('div');meta.className='ac-note';
+        meta.textContent=[row.publisher,row.author,row.passage_reference].filter(Boolean).join(' · ');article.append(meta);
+        if(row.claim_statement){const t=document.createElement('p');t.textContent=row.claim_statement;article.append(t);}
+        return article;
+      },6);
+    }
+  }
   argumentGroup(section,'Christian–Muslim article connections',exchangeRows,ex=>{
    const item=document.createElement('article');item.className='ac-entry';
    const meta=document.createElement('p');meta.className='ac-note';
