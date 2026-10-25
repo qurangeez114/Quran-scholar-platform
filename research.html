@@ -141,7 +141,7 @@ section.src h2{font-size:25px;font-weight:600;margin-top:34px}
 
 .argument-catalog{margin:20px 0;padding:16px;background:#fff;border:1px solid #d7dfd8;border-radius:12px}
 .argument-catalog h2{font-size:23px;margin:0 0 8px}
-.argument-catalog .ac-entry{border-top:1px solid #e6e5dd;padding:12px 0}
+.argument-catalog .ac-entry{border-top:1px solid #e6e5dd;padding:12px 0}.argument-catalog .ac-entry[hidden]{display:none}.argument-catalog .ac-group{margin-top:20px}.argument-catalog .ac-group h3{font-size:20px;margin:0 0 8px}
 .argument-catalog .ac-entry a{font-size:18px;font-weight:600;overflow-wrap:anywhere}
 .argument-catalog .ac-entry p{margin:6px 0;line-height:1.55;font-size:15px}
 .argument-catalog .ac-note{font-size:13px;color:#745e36}
@@ -465,63 +465,92 @@ function appendArgumentReferences(parent,refs,label){
  parent.append(box);
 }
 
+function argumentPublisherURL(value){
+ try{
+  const url=new URL(String(value));
+  if(url.protocol!=='https:' || url.username || url.password)return null;
+  const allowed=['www.answering-islam.org','www.answering-christianity.com','www.islamic-awareness.org','yaqeeninstitute.org','muslimdebate.org','www.injil.org','www.isaalmasih.net','the-good-way.com','islaminstitut.de'];
+  return allowed.includes(url.hostname)?url.href:null;
+ }catch(_){return null;}
+}
+function argumentPerspective(value){
+ const p=String(value||'').toLowerCase();
+ return p.startsWith('muslim')?'Muslim':p.startsWith('christian')?'Christian':'Other';
+}
+function argumentExternalLink(href,label){
+ const a=document.createElement('a');a.href=href;a.target='_blank';a.rel='noopener noreferrer';a.textContent=label;return a;
+}
+function argumentGroup(section,title,items,renderRow,visibleCount){
+ if(!items.length)return;
+ const group=document.createElement('div');group.className='ac-group';
+ const heading=document.createElement('h3');heading.textContent=title+' ('+items.length+')';group.append(heading);
+ const content=document.createElement('div');group.append(content);
+ const count=Math.min(visibleCount,items.length);
+ items.forEach((item,i)=>{const node=renderRow(item);if(!node)return;if(i>=count)node.hidden=true;content.append(node);});
+ if(items.length>count){
+   const button=document.createElement('button');button.type='button';button.className='spell-choice';
+   button.textContent='Show all '+items.length+' results';
+   let expanded=false;
+   button.onclick=()=>{expanded=!expanded;[...content.children].forEach((el,i)=>el.hidden=!expanded&&i>=count);button.textContent=expanded?'Show fewer':'Show all '+items.length+' results';};
+   group.append(button);
+ }
+ section.append(group);
+}
 async function loadArgumentCatalog(query,version){
  const host=$('argumentSourceResults');if(!host)return;
  try{
-  const [rows,claims,works]=await Promise.all([rpc('qh_argument_sources_search',{p_query:query,p_limit:12}),rpc('qh_argument_claims_search',{p_query:query,p_limit:6}).catch(()=>[]),rpc('qh_argument_works_search',{p_query:query,p_limit:8}).catch(()=>[])]);
+  const [rows,claims,works]=await Promise.all([
+    rpc('qh_argument_sources_search',{p_query:query,p_limit:40}),
+    rpc('qh_argument_claims_search',{p_query:query,p_limit:20}).catch(()=>[]),
+    rpc('qh_argument_works_search',{p_query:query,p_limit:12}).catch(()=>[])
+  ]);
   if(version!==searchVersion)return;
   const section=$('argumentSourceResults');if(!section)return;
   section.replaceChildren();
-  if((!Array.isArray(rows)||!rows.length) && (!Array.isArray(claims)||!claims.length) && (!Array.isArray(works)||!works.length)){section.remove();return;}
-  const header=document.createElement('h2');header.textContent='Outside arguments and perspectives';section.append(header);
-  const intro=document.createElement('p');intro.className='ac-note';
-  intro.textContent='Externally published Christian apologetic and comparative-religion sources — attributed perspectives, not authenticated primary-source quotations. Titles, links and independently prepared summaries are indexed; full articles remain with their publishers.';
-  section.append(intro);
-  if(Array.isArray(claims)&&claims.length){
-   const subtitle=document.createElement('h3');subtitle.textContent='Extracted argument outlines';section.append(subtitle);
-   for(const claim of claims){
-    let source;try{source=new URL(claim.source_url);if(source.protocol!=='https:' || source.hostname!=='www.answering-islam.org')continue;}catch(_){continue;}
+  const sourceRows=Array.isArray(rows)?rows.filter(r=>argumentPublisherURL(r.source_url)):[];
+  const claimRows=Array.isArray(claims)?claims.filter(r=>argumentPublisherURL(r.source_url)):[];
+  const workRows=Array.isArray(works)?works.filter(r=>argumentPublisherURL(r.catalog_url)):[];
+  if(!sourceRows.length&&!claimRows.length&&!workRows.length){section.remove();return;}
+  const h=document.createElement('h2');h.textContent='Apologetic, polemical and comparative perspectives';section.append(h);
+  const notice=document.createElement('p');notice.className='ac-note';
+  notice.textContent='These are the arguments of their authors or publishers. QuranHikma provides a searchable index and identifies the perspective; listing a claim does not mean QuranHikma endorses it, rejects it, or has independently established it. Open the original article to read the argument in its full context.';
+  section.append(notice);
+  for(const side of ['Muslim','Christian','Other']){
+    const selectedClaims=claimRows.filter(r=>argumentPerspective(r.source_url.includes('answering-islam.org')?'Christian':'Muslim')===side);
+    argumentGroup(section,side+' argument outlines',selectedClaims,claim=>{
+      const item=document.createElement('article');item.className='ac-entry';
+      const name=document.createElement('strong');name.textContent=claim.claim_statement;item.append(name);
+      if(claim.reasoning_summary){const p=document.createElement('p');p.textContent=claim.reasoning_summary;item.append(p);}
+      const meta=document.createElement('div');meta.className='ac-note';
+      meta.textContent=[claim.title,claim.author,claim.claim_type].filter(Boolean).join(' · ');item.append(meta);
+      if(Array.isArray(claim.cited_passages)&&claim.cited_passages.length)appendArgumentReferences(item,claim.cited_passages,'Passages cited by the author: ');
+      item.append(argumentExternalLink(argumentPublisherURL(claim.source_url),'Read original argument ↗'));
+      return item;
+    },5);
+    const selectedSources=sourceRows.filter(r=>argumentPerspective(r.perspective)===side);
+    argumentGroup(section,side+' source articles and indexes',selectedSources,record=>{
+      const item=document.createElement('article');item.className='ac-entry';
+      item.append(argumentExternalLink(argumentPublisherURL(record.source_url),record.title));
+      const meta=document.createElement('div');meta.className='ac-note';
+      meta.textContent=[record.author,record.publisher,record.perspective].filter(Boolean).join(' · ');item.append(meta);
+      if(record.research_summary){const summary=document.createElement('p');summary.textContent=record.research_summary;item.append(summary);}
+      if(Array.isArray(record.cited_passages)&&record.cited_passages.length)appendArgumentReferences(item,record.cited_passages,'Referenced passages: ');
+      return item;
+    },6);
+  }
+  argumentGroup(section,'Related books in external catalogs',workRows,work=>{
     const item=document.createElement('article');item.className='ac-entry';
-    const name=document.createElement('strong');name.textContent=claim.claim_statement;item.append(name);
-    const info=document.createElement('p');info.textContent=claim.reasoning_summary;item.append(info);
-    const note=document.createElement('div');note.className='ac-note';note.textContent='Attributed '+(claim.claim_type||'argument')+' · Review '+(claim.review_status||'pending')+' · '+(claim.author||'Answering Islam contributor');item.append(note);
-    if(Array.isArray(claim.cited_passages)&&claim.cited_passages.length)appendArgumentReferences(item,claim.cited_passages,'Citations to inspect: ');
-    const link=document.createElement('a');link.href=source.href;link.target='_blank';link.rel='noopener noreferrer';link.textContent="Read the author's original argument ↗";item.append(link);
-    section.append(item);
-   }
-  }
-  const sub2=document.createElement('h3');sub2.textContent='Indexed articles and source catalogs';section.append(sub2);
-  for(const record of rows){
-   let url;try{url=new URL(record.source_url);if(url.protocol!=='https:'||!['www.answering-islam.org','www.injil.org','www.isaalmasih.net','the-good-way.com','islaminstitut.de'].includes(url.hostname))continue;}catch(_){continue;}
-   const article=document.createElement('article');article.className='ac-entry';
-   const title=document.createElement('a');title.href=url.href;title.target='_blank';title.rel='noopener noreferrer';title.textContent=record.title;article.append(title);
-   const attribution=document.createElement('div');attribution.className='ac-note';
-   attribution.textContent=[record.author,record.publisher,record.perspective,'Verification: '+(record.review_status||'pending')].filter(Boolean).join(' · ');
-   article.append(attribution);
-   if(record.research_summary){const summary=document.createElement('p');summary.textContent=record.research_summary;article.append(summary);}
-   if(Array.isArray(record.cited_passages)&&record.cited_passages.length)appendArgumentReferences(article,record.cited_passages,'References to examine: ');
-   section.append(article);
-  }
-
-  if(Array.isArray(works)&&works.length){
-   const heading=document.createElement('h3');heading.textContent='Related books in external catalogs';section.append(heading);
-   const caution=document.createElement('p');caution.className='ac-note';caution.textContent='Bibliographic listings only. Full books are not stored on QuranHikma; linked pages are publisher catalogs, not necessarily direct reading pages.';section.append(caution);
-   for(const work of works){
-    let url;try{url=new URL(work.catalog_url);if(url.protocol!=='https:' || url.hostname!=='the-good-way.com')continue;}catch(_){continue;}
-    const article=document.createElement('article');article.className='ac-entry';
-    const title=document.createElement('strong');title.textContent=work.title;article.append(title);
-    const info=document.createElement('div');info.className='ac-note';info.textContent=[work.author,work.publisher,'Review: '+(work.review_status||'pending')].filter(Boolean).join(' · ');article.append(info);
-    const text=document.createElement('p');text.textContent=work.research_summary;article.append(text);
-    const link=document.createElement('a');link.href=url.href;link.target='_blank';link.rel='noopener noreferrer';link.textContent='View the publisher’s book catalog ↗';article.append(link);
-    section.append(article);
-   }
-  }
-
+    const title=document.createElement('strong');title.textContent=work.title;item.append(title);
+    const meta=document.createElement('div');meta.className='ac-note';meta.textContent=[work.author,work.publisher,'Publisher listing only'].filter(Boolean).join(' · ');item.append(meta);
+    const p=document.createElement('p');p.textContent=work.research_summary;item.append(p);
+    item.append(argumentExternalLink(argumentPublisherURL(work.catalog_url),'View publisher’s catalog ↗'));
+    return item;
+  },5);
  }catch(error){
   if(version!==searchVersion)return;
   const section=$('argumentSourceResults');if(!section)return;
   section.replaceChildren();
-  const note=document.createElement('p');note.className='ac-note';note.textContent='External argument index could not load. The QuranHikma source results above are still available.';section.append(note);
+  const p=document.createElement('p');p.className='ac-note';p.textContent='Outside-source index temporarily unavailable; QuranHikma internal search results remain above.';section.append(p);
  }
 }
 
