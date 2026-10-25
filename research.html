@@ -453,15 +453,29 @@ function render(results,vars,q,dg){
 async function loadArgumentCatalog(query,version){
  const host=$('argumentSourceResults');if(!host)return;
  try{
-  const rows=await rpc('qh_argument_sources_search',{p_query:query,p_limit:12});
+  const [rows,claims]=await Promise.all([rpc('qh_argument_sources_search',{p_query:query,p_limit:12}),rpc('qh_argument_claims_search',{p_query:query,p_limit:6}).catch(()=>[])]);
   if(version!==searchVersion)return;
   const section=$('argumentSourceResults');if(!section)return;
   section.replaceChildren();
-  if(!Array.isArray(rows)||!rows.length){section.remove();return;}
+  if((!Array.isArray(rows)||!rows.length) && (!Array.isArray(claims)||!claims.length)){section.remove();return;}
   const header=document.createElement('h2');header.textContent='Outside arguments and perspectives';section.append(header);
   const intro=document.createElement('p');intro.className='ac-note';
   intro.textContent='Externally published Christian apologetic and comparative-religion sources — attributed perspectives, not authenticated primary-source quotations. Titles, links and independently prepared summaries are indexed; full articles remain with their publishers.';
   section.append(intro);
+  if(Array.isArray(claims)&&claims.length){
+   const subtitle=document.createElement('h3');subtitle.textContent='Extracted argument outlines';section.append(subtitle);
+   for(const claim of claims){
+    let source;try{source=new URL(claim.source_url);if(source.protocol!=='https:' || source.hostname!=='www.answering-islam.org')continue;}catch(_){continue;}
+    const item=document.createElement('article');item.className='ac-entry';
+    const name=document.createElement('strong');name.textContent=claim.claim_statement;item.append(name);
+    const info=document.createElement('p');info.textContent=claim.reasoning_summary;item.append(info);
+    const note=document.createElement('div');note.className='ac-note';note.textContent='Attributed '+(claim.claim_type||'argument')+' · Review '+(claim.review_status||'pending')+' · '+(claim.author||'Answering Islam contributor');item.append(note);
+    if(Array.isArray(claim.cited_passages)&&claim.cited_passages.length){const refs=document.createElement('div');refs.className='ac-note';refs.textContent='Citations to inspect: '+claim.cited_passages.join('; ');item.append(refs);}
+    const link=document.createElement('a');link.href=source.href;link.target='_blank';link.rel='noopener noreferrer';link.textContent="Read the author's original argument ↗";item.append(link);
+    section.append(item);
+   }
+  }
+  const sub2=document.createElement('h3');sub2.textContent='Indexed articles and source catalogs';section.append(sub2);
   for(const record of rows){
    let url;try{url=new URL(record.source_url);if(url.protocol!=='https:'||!['www.answering-islam.org','www.injil.org','www.isaalmasih.net','the-good-way.com','islaminstitut.de'].includes(url.hostname))continue;}catch(_){continue;}
    const article=document.createElement('article');article.className='ac-entry';
