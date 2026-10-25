@@ -10,6 +10,7 @@ function requestedFatwaReturn(){
 
 function accountEmailRedirect(){const back=requestedFatwaReturn();return location.origin+'/account.html'+(back?'?returnTo='+encodeURIComponent(back):'');}
 
+function signupEmailRedirect(){const back=requestedFatwaReturn();return location.origin+'/account.html?mode=login&confirmed=1'+(back?'&returnTo='+encodeURIComponent(back):'');}
 function message(text,error=false){
  const node=$('status');
  node.classList.toggle('auth-error',error);
@@ -66,7 +67,7 @@ db.auth.onAuthStateChange(event=>{if(event==='PASSWORD_RECOVERY')recovering=true
 $('auth-form').onsubmit=async e=>{e.preventDefault();message(mode==='login'?'Signing in…':'Submitting…');$('submit').disabled=true;try{
 const email=$('email').value.trim(),password=$('password').value;let result;
 if(mode==='signup'){if(password.length<12)return message('Password must be at least 12 characters.');if(password!==$('password-confirm').value)return message('Passwords do not match.');}
-if(mode==='signup'){const firstName=$('firstName').value.trim(),lastName=$('lastName').value.trim();result=await db.auth.signUp({email,password,options:{emailRedirectTo:accountEmailRedirect(),data:{display_name:`${firstName} ${lastName}`.trim()}}});}
+if(mode==='signup'){const firstName=$('firstName').value.trim(),lastName=$('lastName').value.trim();result=await db.auth.signUp({email,password,options:{emailRedirectTo:signupEmailRedirect(),data:{display_name:`${firstName} ${lastName}`.trim()}}});}
 else if(mode==='recover')result=await db.auth.resetPasswordForEmail(email,{redirectTo:accountEmailRedirect()});
 else result=await db.auth.signInWithPassword({email,password});
 if(mode==='signup'&&!result.error&&result.data.user&&result.data.user.identities?.length===0)return message('This email is already taken.');
@@ -77,6 +78,11 @@ $('logout').onclick=async()=>{const {error}=await db.auth.signOut();if(error)ret
 $('export').onclick=()=>exportResearch().catch(e=>message(e.message));
 document.querySelectorAll('.pw-toggle').forEach(b=>b.onclick=()=>{const input=$(b.dataset.target);const show=input.type==='password';input.type=show?'text':'password';b.setAttribute('aria-pressed',String(show));b.setAttribute('aria-label',show?'Hide password':'Show password');});
 choose((()=>{const m=new URLSearchParams(location.search).get('mode');return m==='signup'||m==='recover'?m:'login';})());
+async function handleConfirmReturn(){const q=new URLSearchParams(location.search),h=new URLSearchParams(location.hash.replace(/^#/,''));
+ const err=h.get('error_description')||q.get('error_description');
+ if(err){choose('login');message(err.replace(/\+/g,' '),true);history.replaceState(null,'',location.pathname+'?mode=login');return true;}
+ if(q.get('confirmed')==='1'||h.get('type')==='signup'){choose('login');const {data}=await db.auth.getSession();if(data.session)await db.auth.signOut();history.replaceState(null,'',location.pathname+'?mode=login'+(q.get('returnTo')?'&returnTo='+encodeURIComponent(q.get('returnTo')):''));message('Email confirmed. Please log in.');return true;}
+ return false;}
 $('delete-account').onclick=()=>{$('delete-error').textContent='';$('delete-dialog').showModal();};
 $('cancel-delete').onclick=()=>$('delete-dialog').close();
 $('confirm-delete').onclick=async()=>{
@@ -95,5 +101,5 @@ $('restore-account').onclick=async()=>{
  finally{$('restore-account').disabled=false;}
 };
 $('keep-deleted').onclick=async()=>{await db.auth.signOut();message('Your account remains deactivated.');await render();};
-render().catch(e=>message(e.message));
+handleConfirmReturn().then(render).catch(e=>message(e.message));
 
