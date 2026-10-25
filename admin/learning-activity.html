@@ -1,0 +1,36 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Learning Activity · QuranHikma Administration</title><script src="/site-chrome.js" defer></script><style>
+:root{color-scheme:light}*{box-sizing:border-box}body{background:#f6f8f8;color:#253b42;font:16px system-ui,sans-serif;margin:0}main{max-width:1150px;margin:auto;padding:28px 16px}h1{font-size:30px;margin:5px 0}p{line-height:1.55}.muted{color:#61757a}.head{margin-bottom:24px}.panel{background:#fff;border:1px solid #d9e3e3;border-radius:12px;padding:20px;margin:16px 0}#status{padding:10px 0}.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}.kpis div{background:#f6f9f9;padding:16px;border-radius:10px}.kpis strong{display:block;font-size:28px;color:#104e53}.tablewrap{overflow:auto}table{border-collapse:collapse;width:100%;min-width:570px}th,td{text-align:left;border-bottom:1px solid #e2e9e9;padding:11px 9px}th{font-size:13px;color:#667c83}select,button{font:inherit;padding:8px 11px;border-radius:7px;border:1px solid #b9c9cc}button{background:#175e61;color:#fff;cursor:pointer}nav a{color:#176b65;margin-right:16px}@media(max-width:600px){main{padding:18px 12px}h1{font-size:23px}}
+</style></head><body><main><header class="head"><p class="muted">QuranHikma / Administration</p><h1>Class activity and study time</h1><p class="muted">Estimated time with the page visible and recently used. This is not verified attendance or proof of learning.</p><nav><a href="/admin/lms.html">Admin dashboard</a><a href="/courses.html">Courses</a></nav></header><div id="status" role="status">Checking administrator permissions…</div><div id="report" hidden><div class="kpis" id="stats"></div><section class="panel"><label>Reporting period <select id="period"><option value="7">Past 7 days</option><option value="30" selected>Past 30 days</option></select></label> <button id="refresh">Refresh</button><p class="muted">This report covers recorded visits only. Earlier activity is not backfilled. Inactive tabs and unsigned visits are excluded.</p></section><section class="panel"><h2>Activity by account and page</h2><div class="tablewrap"><table><thead><tr><th>Account identifier</th><th>Page</th><th>Visits / intervals</th><th>Estimated active minutes</th></tr></thead><tbody id="rows"></tbody></table></div></section></div></main>
+<script type="module">
+import {supabase} from '/accounts/client.js';
+const status=document.getElementById('status'),report=document.getElementById('report');
+const period=document.getElementById('period'),rows=document.getElementById('rows'),stats=document.getElementById('stats');
+const duration=n=>String(Math.round(n/60*10)/10);
+async function load(){
+ const {data:{user},error:userError}=await supabase.auth.getUser();
+ if(userError||!user){status.textContent='Please sign in with an administrator account.';return;}
+ // This is a visual gate; database RLS independently authorizes all returned rows.
+ if(user.app_metadata?.role!=='admin'){status.textContent='Administrator access required.';return;}
+ status.textContent='Loading recorded activity…';
+ const start=new Date(Date.now()-Number(period.value)*86400000).toISOString();
+ const {data,error}=await supabase.from('qh_learning_activity').select('user_id,course_id,page_path,active_seconds,visited_at').gte('visited_at',start).order('visited_at',{ascending:false}).limit(5000);
+ if(error){status.textContent='Unable to load authorized activity: '+error.message;return;}
+ const group=new Map(),people=new Set();let total=0;
+ for(const item of data||[]){
+  people.add(item.user_id);total+=item.active_seconds||0;
+  const key=item.user_id+'|'+(item.course_id||'')+'|'+item.page_path;
+  const rec=group.get(key)||{id:item.user_id,page:item.page_path,course:item.course_id,visits:0,seconds:0};
+  rec.visits++;rec.seconds+=item.active_seconds||0;group.set(key,rec);
+ }
+ const items=[['Accounts observed',people.size],['Engagement intervals',(data||[]).length],['Active hours',Math.round(total/3600*10)/10]];
+ stats.replaceChildren();for(const [name,value] of items){const d=document.createElement('div'),b=document.createElement('strong'),s=document.createElement('span');b.textContent=String(value);s.textContent=name;d.append(b,s);stats.append(d);}
+ rows.replaceChildren();
+ for(const rec of [...group.values()].sort((a,b)=>b.seconds-a.seconds)){
+  const tr=document.createElement('tr');for(const val of [rec.id.slice(0,8)+'…',rec.page+(rec.course?' · '+rec.course.slice(0,8):''),rec.visits,duration(rec.seconds)]){
+   const td=document.createElement('td');td.textContent=String(val);tr.append(td);
+  }rows.append(tr);
+ }
+ report.hidden=false;status.textContent=(data||[]).length===5000?'Showing the latest 5,000 activity intervals; totals may be incomplete.':'Authorized report loaded.';
+}
+document.getElementById('refresh').addEventListener('click',load);period.addEventListener('change',load);load();
+</script></body></html>
