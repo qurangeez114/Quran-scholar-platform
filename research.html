@@ -153,7 +153,7 @@ section.src h2{font-size:25px;font-weight:600;margin-top:34px}
     <button type="submit">Search</button>
   </form>
   <div id="spellingChoices" class="spelling-choices" role="status" aria-live="polite" hidden></div>
-  <div class="external-option"><label><input id="externalEnabled" type="checkbox" checked> Check external sources when local results are missing</label><p>Your search is sent to reference providers. Attributed excerpts and source details are saved for reuse; imported records are marked for review.</p><button id="externalSearchNow" type="button" class="spell-choice">Search external sources</button></div>
+  <div class="external-option"><label><input id="externalEnabled" type="checkbox"> Check external sources when local results are missing</label><p>Your search is sent to reference providers. Attributed excerpts and source details are saved for reuse; imported records are marked for review.</p><button id="externalSearchNow" type="button" class="spell-choice">Search external sources</button> <a id="googleSearch" class="spell-choice" href="https://www.google.com/" target="_blank" rel="noopener noreferrer" hidden>Search Google ↗</a><p>Google opens separately using your search words. Its results are not automatically imported or verified.</p></div>
   <div class="where">
     <button type="button" id="whereBtn" onclick="toggleWhere()" aria-expanded="false">Search in: All sources &#9662;</button>
     <div id="wherePanel" hidden>
@@ -272,7 +272,10 @@ const CQ=/contradict|tension|inconsisten|conflict|discrepan|disagree/i;
 
 
 const $=id=>document.getElementById(id);
-const discovery=typeof QHDiscovery==='undefined'?{cancel(){},refresh(){},discover(){ $('externalResults').hidden=false;$('externalResults').textContent='External discovery is unavailable. Refresh the page to retry.';}}:QHDiscovery.init({input:$('q'),box:$('spellingChoices'),external:$('externalResults'),enabled:$('externalEnabled'),onChoose:q=>search(q),supabaseURL:SB,headers:H});
+function updateGoogleSearch(){const link=$('googleSearch');if(!link)return;const q=String($('q')?.value||'').trim();link.hidden=q.length<3;link.href='https://www.google.com/search?'+new URLSearchParams({q});}
+$('q').addEventListener?.('input',updateGoogleSearch);
+updateGoogleSearch();
+const discovery=typeof QHDiscovery==='undefined'?{cancel(){},refresh(){},discover(){ $('externalResults').hidden=false;$('externalResults').textContent='External discovery is unavailable. Refresh the page to retry.';}}:QHDiscovery.init({input:$('q'),box:$('spellingChoices'),external:$('externalResults'),enabled:$('externalEnabled'),onChoose:q=>{updateGoogleSearch();search(q)},supabaseURL:SB,headers:H});
 $('externalSearchNow').onclick=()=>{const q=$('q').value.trim();if(q.length<3){$('q').focus();return;}$('externalEnabled').checked=true;discovery.discover(q,{manual:true});};
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const n=x=>Number(x||0).toLocaleString('en-US');
@@ -583,6 +586,7 @@ async function search(q){
   const only=SCT.length?srcSel:null;
   $('out').innerHTML='<div class="empty"><span class="spin"></span>Searching every source…</div>';
   try{
+    updateGoogleSearch();
     const reference=hadithReference(q);
     // A collection + number is an exact lookup, not a search of passage words.
     if(reference){
@@ -594,13 +598,14 @@ async function search(q){
       if(!result||!result.reference_match)throw new Error('Reference lookup unavailable');
       render([result],[q,reference],q,{});
       const firstConnections=document.querySelector('#out .hadith-connections');if(firstConnections){firstConnections.open=true;loadHadithConnections(firstConnections.querySelector('.hc-content'));}
-      $('out').insertAdjacentHTML('afterbegin','<p class="what">Exact hadith reference: '+esc(reference)+(result.edition_alias?'. Matched to an existing corpus report using the verified publisher-to-local numbering map. The same hadith has a different local catalogue number.':'. Collection spelling normalized from your query. Records use the numbering stored in each edition.')+'</p>');
+      $('out').insertAdjacentHTML('afterbegin','<p class="what">Exact hadith reference: '+esc(reference)+(result.edition_alias?'. Matched to an existing corpus report using the verified publisher-to-local numbering map. Publisher and local catalogue numbers are shown on the result.':'. Collection spelling normalized from your query. Records use the numbering stored in each edition.')+'</p>');
       if(!result.count || result.ambiguous || result.conflicting_local_count>0)discovery.discover(q,{weak:!!result.count});
       return;
     }
     const res=(await Promise.all((only?only:ORDER).map(k=>rpc(k==='sira'?'qh_sira_search':'site_search_src',k==='sira'?{q,lim:12}:{src:k,q,lim:6},signal).then(r=>{if(!r)throw new Error('No source response');return r;}).catch(()=>({key:k,count:0,rows:[],variants:[q],failed:true})))));
     if(version!==searchVersion)return;
-    if(q.split(/\s+/).length>4)res.sort((a,b)=>(b.key==='sira'&&b.count>0?1:0)-(a.key==='sira'&&a.count>0?1:0));
+    // Keep the source order: a long question does not automatically imply Sira.
+    if(res.some(r=>r.topic_match)){const priority=['quran','hadith','tafsir','madhhab','sira'];res.sort((a,b)=>{const rank=k=>priority.includes(k)?priority.indexOf(k):priority.length;return rank(a.key)-rank(b.key);});}
     const topicSearch=res.some(r=>r.topic_match);
     const vars=[...new Set(res.flatMap(r=>r.variants||[q]))];
     // Show source results before optional summaries and book counts finish.

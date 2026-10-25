@@ -54,7 +54,7 @@
     external.replaceChildren(heading);
     if(!response.ok)throw Error(data.error||'External search is temporarily unavailable.');
     const rows=Array.isArray(data.results)?data.results:[];
-    message(rows.length?(data.saved?(data.cached?'Previously saved external sources.':'Source records saved to QuranHikma for future searches.'):'Sources found; saving is temporarily unavailable.'):'No external references found for this search. Try a spelling suggestion or a shorter query.');
+    message(rows.some(r=>r.link_only)?'Publisher retrieval failed. A direct reference link is provided for checking; no source text was imported.':rows.length?(data.saved?(data.cached?'Previously saved external sources.':'Source records saved to QuranHikma for future searches.'):'Sources found; saving is temporarily unavailable.'):'No external references found for this search. Try a spelling suggestion or a shorter query.');
     rows.forEach(row=>{
      let url;try{url=new URL(row.source_url);if(url.protocol!=='https:'||!['en.wikipedia.org','doi.org','sunnah.com'].includes(url.hostname)||url.username||url.password)return;}catch(_){return;}
      const article=document.createElement('article');article.className='external-card';

@@ -103,3 +103,17 @@ test('Sira cards retain full text and escape untrusted source metadata',()=>{
  assert.ok(!rendered.includes('<script>bad()'));
  assert.ok(!vm.runInContext(`card('sira',{text:'Example',source_ref:'https://evil.test/'},[])`,context).includes('href="https://evil'));
 });
+
+test('publisher outage offers an unverified direct link without saving a false import',async()=>{
+ const state=fakeBackend();const body=JSON.parse((await server.handler(event('Abu Dawud 3052'))).body);
+ assert.equal(body.saved,false);assert.equal(body.results[0].link_only,true);
+ assert.equal(body.results[0].source_url,'https://sunnah.com/abudawud:3052');
+ assert.ok(!state.calls.some(x=>x.includes('qh_external_sources?')));
+});
+test('Google navigation encodes the query and topic searches do not force Sira first',()=>{
+ const html=fs.readFileSync('research.html','utf8');
+ assert.ok(html.includes("new URLSearchParams({q})"));
+ assert.ok(html.includes('Google opens separately'));
+ assert.ok(!html.includes("(b.key==='sira'&&b.count>0?1:0)"));
+ assert.ok(!html.includes('type="checkbox" checked> Check external sources'));
+});

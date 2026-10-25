@@ -23,3 +23,11 @@ External search has bounded provider requests, a shared database budget of 120 f
 ## Validation
 
 Run `node --test tests/research-discovery.test.cjs`. It covers corrections, reference preservation, URL validation, provenance, persistence success/failure, reuse, provider failure, missing references, request budget, and Research integration. Provider HTTP and persistence calls are mocked in that suite; production RLS and vocabulary were separately checked with SQL.
+
+## Search quality update — 2026-10-25
+
+Long questions no longer automatically promote Sira. Recognized topic searches lead with Quran, hadith, tafsir and legal sources. Unassessed word-overlap hadith suggestions remain accessible behind their own disclosure rather than appearing as established related narrations.
+
+External reference lookup is opt-in. A publisher outage offers an explicitly unverified direct reference link; it never stores that failed retrieval as a successful import. A separate Search Google link URL-encodes only the current search, opens Google in another tab, and imports nothing. It requires no API key or paid account.
+
+Embedded Gemini Search grounding is NOT activated. Before adding it, resolve eligibility for a school service accessible to minors under Google's current API terms, select the suitable Google service/account, configure server-only credentials and budgets, and implement the required citation and search-suggestion display. Never label the outbound Google link as embedded Google search or automatically ingest Google result pages.

@@ -15,3 +15,9 @@ test('lookup is lazy and repeated opens reuse one request',async()=>{
 test('recorded grading objects display assessors rather than object placeholders',()=>{const html=ui.grading([{name:'Assessor A',grade:'Sahih'},{name:'Assessor B',grade:'Hasan'}]);assert.match(html,/Assessor A: Sahih/);assert.match(html,/Assessor B: Hasan/);assert.doesNotMatch(html,/object Object/);});
 
 test('comparison extracts preserve the recorded quotation form',()=>{const html=ui.render({found:true,similar:[],comparisons:[{involves_current:false,points:[{a_en:'Report A evidence',b_en:'Report B evidence',a_form:'verbatim',b_form:'condensed'}]}]});assert.match(html,/Report A evidence/);assert.match(html,/Report B evidence/);assert.match(html,/Extract B · condensed/);assert.match(html,/not verbatim quotations/);});
+
+test('word overlaps stay behind a disclosure instead of leading the related list',()=>{
+ const html=require('../hadith-connections.js').render({found:true,similar:[{id:91,match_type:'word_overlap',text:'Weak lexical suggestion'}]});
+ assert.match(html,/<details[^>]*><summary>Explore unverified word matches<\/summary>/);
+ assert.ok(html.indexOf('Explore unverified word matches')<html.indexOf('Weak lexical suggestion'));
+});

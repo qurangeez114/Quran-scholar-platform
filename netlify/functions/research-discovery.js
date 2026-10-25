@@ -28,7 +28,7 @@ async function hadith(q){
  const url=refURL(q);if(!url)return [];
  let html;
  try{html=await request(url,{headers:{'User-Agent':UA},raw:true},6000);}
- catch(error){if(error.status===404)return [];throw error;}
+ catch(error){if(error.status===404)return [];return [{source_url:url,title:'Check publisher reference '+q,excerpt:'The publisher could not be retrieved. Open the link to check the text and numbering directly.',provider:'Sunnah.com',source_kind:'hadith_reference',attribution:'Reference link only — publisher content was not retrieved or verified.',rights_note:'No publisher text copied.',revision_id:null,link_only:true}];}
  const title=plain((html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)||[])[1]);
  const number=url.split(':').pop();
  if(!title.includes(number)||!/Sunan|Sahih|Jami|Hadith/i.test(title)||/not found|access denied|verify|just a moment/i.test(title))return [];
@@ -73,6 +73,7 @@ exports.handler=async event=>{
   const attempts=await Promise.allSettled(exact?[hadith(q)]:[wikipedia(q),crossref(q)]);
   const failed=attempts.flatMap((r,i)=>r.status==='rejected'?[names[i]]:[]);
   const rows=[...new Map(attempts.flatMap(r=>r.status==='fulfilled'?r.value:[]).filter(r=>safeURL(r.source_url)).map(r=>[r.source_url,{...r,review_status:'pending',retrieved_at:new Date().toISOString()}])).values()].slice(0,6);
+  if(rows.some(r=>r.link_only))return response(200,{results:rows,saved:false,providers_failed:['Sunnah.com']});
   if(!rows.length)return response(failed.length===names.length?502:200,{results:[],saved:false,providers_failed:failed,error:failed.length===names.length?'External sources are temporarily unavailable.':undefined});
   try{
    await db('qh_external_sources?on_conflict=source_url',{method:'POST',headers:{Prefer:'resolution=ignore-duplicates,return=representation'},body:JSON.stringify(rows)});

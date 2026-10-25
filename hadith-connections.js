@@ -51,8 +51,11 @@
   if(data.groups?.length)html+='<p class="hc-meta">Narration group: '+data.groups.map(g=>esc(g.title)+' ('+esc(g.review_status||'unreviewed')+')').join('; ')+'</p>';
   html+=`<section class="hc-section"><h3>Related and similar Hadith <span>${similar.length}</span></h3>`;
   if(!similar.length)html+='<p>No related reports have been linked or found by this lookup yet.</p>';
-  similar.forEach((row,i)=>{if(i===3)html+='<details class="hc-more"><summary>Show more related reports</summary>';html+=(row.match_type==='word_overlap'?'<p class="hc-caution">Automatic word match — relevance and agreement need checking.</p>':'')+report(row);});
-  if(similar.length>3)html+='</details>';html+='</section>';
+  const linked=similar.filter(row=>row.match_type!=='word_overlap'),automatic=similar.filter(row=>row.match_type==='word_overlap');
+  if(automatic.length)html+='<p class="hc-caution">'+automatic.length+' Automatic word matches are available below; they have not been established as related narrations.</p>';
+  linked.forEach((row,i)=>{if(i===3)html+='<details class="hc-more"><summary>Show more related reports</summary>';html+=(row.match_type==='word_overlap'?'<p class="hc-caution">Automatic word match — relevance and agreement need checking.</p>':'')+report(row);});
+  if(linked.length>3)html+='</details>';
+  if(automatic.length)html+='<details class="hc-more"><summary>Explore unverified word matches</summary>'+automatic.map(report).join('')+'</details>';html+='</section>';
   html+='<section class="hc-section hc-contrasts"><h3>Contrasting reports and apparent contradictions</h3>';
   if(direct.length)html+='<h4>Comparisons involving this exact report</h4>'+direct.map(pair).join('');
   else html+='<p>No direct contradictory comparison is linked to this exact report yet. This does not establish that none exists.</p>';
