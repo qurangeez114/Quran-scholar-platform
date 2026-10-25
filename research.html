@@ -525,7 +525,12 @@ async function loadArgumentCatalog(query,version){
   const exchangeRows=Array.isArray(exchanges)?exchanges.filter(r=>argumentPublisherURL(r.christian_url)&&argumentPublisherURL(r.muslim_url)):[];
   const comparisonRows=Array.isArray(comparisons)?comparisons.filter(r=>argumentPublisherURL(r.a_url)&&argumentPublisherURL(r.b_url)):[];
   const citationRows=Array.isArray(passages)?passages.filter(r=>argumentPublisherURL(r.source_url)):[];
-  const citationUnique=[...new Map(citationRows.map(r=>[r.source_url,r])).values()];
+  const citationBySource=new Map();
+  for(const item of citationRows){
+    const prior=citationBySource.get(item.source_url);
+    if(!prior || (!prior.claim_statement && item.claim_statement))citationBySource.set(item.source_url,item);
+  }
+  const citationUnique=[...citationBySource.values()];
 
   if(!sourceRows.length&&!claimRows.length&&!workRows.length&&!exchangeRows.length&&!comparisonRows.length&&!citationUnique.length){section.remove();return;}
   const h=document.createElement('h2');h.textContent='Religious arguments and historical perspectives';section.append(h);
