@@ -112,14 +112,31 @@ async function addSelected() {
     instructor_note: note, added_by: addedBy,
   })));
   status.textContent = 'Adding…';
-  const { error } = await supabase.from('qh_lesson_resources')
-    .upsert(rows, { onConflict: 'lesson_id,resource_kind,resource_ref', ignoreDuplicates: true });
-  if (error) {
-    console.error('Add resources failed', error);
-    status.textContent = 'Could not add: ' + error.message;
-    return;
+  // Find which of these are already attached so we can report added vs. already-there accurately.
+  const { data: existing, error: exErr } = await supabase.from('qh_lesson_resources')
+    .select('id,lesson_id,resource_kind,resource_ref').in('lesson_id', lessonIds);
+  if (exErr) { status.textContent = 'Could not add: ' + exErr.message; return; }
+  const key = r => `${r.lesson_id}|${r.resource_kind}|${r.resource_ref}`;
+  const have = new Map((existing || []).map(r => [key(r), r.id]));
+  const fresh = rows.filter(r => !have.has(key(r)));
+  const dupIds = rows.filter(r => have.has(key(r))).map(r => have.get(key(r)));
+  if (fresh.length) {
+    const { error } = await supabase.from('qh_lesson_resources')
+      .upsert(fresh, { onConflict: 'lesson_id,resource_kind,resource_ref', ignoreDuplicates: true });
+    if (error) {
+      console.error('Add resources failed', error);
+      status.textContent = 'Could not add: ' + error.message;
+      return;
+    }
   }
-  status.textContent = `Added ${picked.length} item(s) to ${lessonIds.length} lesson(s).`;
+  // Re-adding an item with a note replaces its note; a blank note leaves the old one alone.
+  if (note && dupIds.length) {
+    const { error } = await supabase.from('qh_lesson_resources').update({ instructor_note: note }).in('id', dupIds);
+    if (error) { status.textContent = 'Added new items, but could not update notes: ' + error.message; loadAttached(); return; }
+  }
+  const parts = [`Added ${fresh.length} new item(s)`];
+  if (dupIds.length) parts.push(`${dupIds.length} already attached${note ? ' (note updated)' : ' (skipped)'}`);
+  status.textContent = parts.join('; ') + '.';
   document.querySelectorAll('#resResults input:checked').forEach(i => { i.checked = false; });
   loadAttached();
 }

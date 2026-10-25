@@ -20,27 +20,25 @@ create index if not exists qh_lesson_resources_course_idx on public.qh_lesson_re
 
 alter table public.qh_lesson_resources enable row level security;
 
--- Anyone who can see the course can read its resources.
+-- Read: only people who can learn in the course (enrolled students, faculty-inclusion hosts),
+-- plus the course's instructor and staff. Same rule the lessons table uses (can_learn).
+drop policy if exists qh_lesson_resources_read on public.qh_lesson_resources;
 create policy qh_lesson_resources_read on public.qh_lesson_resources
-  for select to anon, authenticated
-  using (exists (select 1 from public.qh_courses c where c.id = qh_lesson_resources.course_id));
+  for select to authenticated
+  using (qh_lms_private.can_learn(course_id));
 
--- Only the course's instructor can write, and only for a lesson in the same course.
+-- Write: the course's instructor (creator) or staff, via can_manage_course; lesson must belong to the course.
+drop policy if exists qh_lesson_resources_instructor_write on public.qh_lesson_resources;
 create policy qh_lesson_resources_instructor_write on public.qh_lesson_resources
   for all to authenticated
-  using (
-    exists (select 1 from public.qh_courses c
-            where c.id = qh_lesson_resources.course_id and c.created_by = (select auth.uid()))
-    and qh_lms_private.is_instructor()
-  )
+  using (qh_lms_private.can_manage_course(course_id))
   with check (
-    exists (select 1 from public.qh_courses c
-            where c.id = qh_lesson_resources.course_id and c.created_by = (select auth.uid()))
-    and qh_lms_private.is_instructor()
+    qh_lms_private.can_manage_course(course_id)
     and exists (select 1 from public.qh_lessons l
                 where l.id = qh_lesson_resources.lesson_id and l.course_id = qh_lesson_resources.course_id)
   );
 
-grant select on public.qh_lesson_resources to anon, authenticated;
+revoke all on public.qh_lesson_resources from anon;
+grant select on public.qh_lesson_resources to authenticated;
 grant insert, update, delete on public.qh_lesson_resources to authenticated;
 grant usage, select on sequence public.qh_lesson_resources_id_seq to authenticated;

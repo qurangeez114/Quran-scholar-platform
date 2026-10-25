@@ -682,11 +682,18 @@
         for (const r of data) {
           const li = document.createElement('li');
           let href = '';
-          if (r.resource_kind === 'verse') {
-            const [s, a] = String(r.resource_ref).split(':');
-            if (/^\d+$/.test(s) && /^\d+$/.test(a)) href = `/?sura=${s}&aya=${a}`;
-          } else if (r.resource_kind === 'hadith' && /^\d+$/.test(r.resource_ref)) {
-            href = `research.html?hadith=${r.resource_ref}`;
+          const ref = String(r.resource_ref);
+          const verseHref = (su, ay) => (/^\d+$/.test(su) && /^\d+$/.test(ay)) ? `/?sura=${su}&aya=${ay}` : '';
+          if (r.resource_kind === 'verse' || r.resource_kind === 'tafsir') {
+            const [s, a] = ref.split(':');
+            href = verseHref(s, a);
+          } else if (r.resource_kind === 'hadith' && /^\d+$/.test(ref)) {
+            href = `research.html?hadith=${ref}`;
+          } else if (r.resource_kind === 'source' && ref.startsWith('asbab:')) {
+            const [, s, a] = ref.split(':');
+            href = verseHref(s, a);
+          } else if (r.resource_kind === 'source' && ref.startsWith('library:')) {
+            href = 'books.html';
           }
           const label = r.resource_title || r.resource_kind;
           if (href) {
