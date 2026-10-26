@@ -6,7 +6,7 @@
 })(typeof window==='undefined'?this:window,function(){
   'use strict';
   const FOCUS=['all','people','places','nature','objects','events'];
-  const STOP=new Set('a an the of in on at by from for with to into under over around about and or is are was were be been being has have had do did does who whose that this these those what when where why how which there their they them he she it its i me my his her our your we someone something person persons people one ones a few several many very really once used use said say tell show find looking search passage verse hadith narration story text mentioned mention describes description according reported report'.split(' '));
+  const STOP=new Set('a an the of in on at by from for with to into under over around about and or is are was were be been being has have had do did does who whose that this these those what when where why how which there their they them he she it its i me my his her our your we someone something person persons people one ones a few several many very really once used use said say tell show find looking search passage verse hadith narration story text mentioned mention describes description according reported report later afterward afterwards eventually became become becomes brought bringing'.split(' '));
   // Conservative glossary; an expansion is a retrieval hint, not a translation or
   // a claim that two historical or legal concepts are identical.
   const WORD={
@@ -25,7 +25,7 @@
     sky:'sky',clouds:'cloud',
     stonework:'stone',
     praying:'prayer',prayers:'prayer',
-    prophet:'muhammad'
+    prophet:'prophet'
   };
   function plan(raw){
     const original=String(raw||'').trim().slice(0,180);
@@ -42,6 +42,7 @@
       .replace(/\bused to (?:clean|sweep)\b/g,'sweep');
     const parts=(phrase.match(/[a-z0-9]+/g)||[]).filter(t=>t.length>=3&&!STOP.has(t));
     const changes=[];
+    if(/\\b(?:clean|cleaned|cleaning)\\b/i.test(original))changes.push('clean → sweep (approximate)');
     const terms=[];
     for(const word of parts){
       const mapped=WORD[word]||word;
