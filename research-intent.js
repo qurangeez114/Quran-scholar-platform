@@ -42,7 +42,7 @@
       .replace(/\bused to (?:clean|sweep)\b/g,'sweep');
     const parts=(phrase.match(/[a-z0-9]+/g)||[]).filter(t=>t.length>=3&&!STOP.has(t));
     const changes=[];
-    if(/\\b(?:clean|cleaned|cleaning)\\b/i.test(original))changes.push('clean → sweep (approximate)');
+    if(/\b(?:clean|cleaned|cleaning)\b/i.test(original))changes.push('clean → sweep (approximate)');
     const terms=[];
     for(const word of parts){
       const mapped=WORD[word]||word;
