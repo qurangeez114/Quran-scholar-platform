@@ -168,6 +168,7 @@ section.src h2{font-size:25px;font-weight:600;margin-top:34px}
 .smart-controls p{margin:0;font-size:13px;color:#6B6358}
 .smart-notice{background:#eef5f0;border-left:3px solid #3e7a68;padding:12px 14px;margin:14px 0;font-size:15px;line-height:1.5}
 @media(max-width:600px){.smart-controls{margin:10px 0}.smart-actions{gap:5px}.smart-actions button{padding:7px 10px}}
+.result-actions{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0}.result-actions button{font:inherit;font-size:14px;padding:7px 10px;border:1px solid #d6c69f;border-radius:7px;background:#fffaf0;color:#315c56;cursor:pointer}.result-full{white-space:pre-wrap;border-top:1px solid var(--line);margin-top:10px;padding-top:4px}.result-status{font-size:14px;color:var(--ink2)}
 </style>
   <script src="site-motion.js" defer></script>
 <script src="/site-chrome.js" defer></script>
@@ -404,17 +405,82 @@ function snip(text,vars){
 }
 function esc2(t){return (t||'').toString();}
 function fullText(a){ const f=a.nextElementSibling; f.hidden=!f.hidden; a.textContent=f.hidden?'Read in full \u2193':'Show less \u2191'; return false; }
+
+function resultData(el){try{return JSON.parse(el.closest('.card').dataset.result)}catch(_){return null}}
+function resultLink(key,r){
+ if(key==='quran'&&Number(r.sura)>0&&Number(r.aya)>0)return '/?sura='+Number(r.sura)+'&aya='+Number(r.aya);
+ if(key==='hadith'&&/^[1-9]\d*$/.test(String(r.id)))return '/research.html?hadith='+encodeURIComponent(r.id);
+ return '/research.html?q='+encodeURIComponent(CUR);
+}
 function card(key,r,vars){
-  const cfg=SRC[key];
-  const ref=cfg.ref(r);
-  const ttl=r.title?`<div class="ttl">${highlight(r.title,vars)}</div>`:'';
-  const href=cfg.link(r);
-  const sourceURL=key==='sira'?(r.source_ref||'').match(/https:\/\/hadithunlocked\.com\/ibnhisham\/[0-9]+\/[0-9]+/):null;
-  const citation=sourceURL?`<p class="what"><a href="${esc(sourceURL[0])}" target="_blank" rel="noopener noreferrer">Read the cited source ↗</a></p>`:'';
-  const verifiedPublisher=key==='hadith'&&/^https:\/\/sunnah\.com\/(?:abudawud|bukhari|muslim|tirmidhi|ibnmajah|nasai):[0-9]+[a-z]?$/.test(r.publisher_url||'')?`<p class="what"><a href="${esc(r.publisher_url)}" target="_blank" rel="noopener noreferrer">Verify this reference at Sunnah.com ↗</a> · Locally catalogued as #${esc(r.catalogue_number||'')}</p>`:'';
-  const refBadge=key==='hadith'&&r.reference_status?(r.reference_status==='verified_publisher_mapping'?'<span class="ref-badge">Curated publisher reference mapping</span>':`<span class="ref-badge caution">Unverified local catalogue candidate · record ${Number(r.id)}</span>`):'';
-  const related=key==='hadith'&&/^[1-9][0-9]*$/.test(String(r.id))?`<details class="hadith-connections" ontoggle="if(this.open)loadHadithConnections(this.querySelector('.hc-content'))"><summary>Related and contrasting Hadith</summary><div class="hc-content" data-hadith-id="${Number(r.id)}"></div></details>`:'';
-  return `<div class="card"><div class="meta">${esc(ref)}</div>${refBadge}${ttl}${r.arabic?`<div class="txt" dir="rtl" lang="ar" style="font-size:1.25em;line-height:1.9">${highlight(snip(r.arabic,vars),vars)}</div>`:''}<div class="txt">${highlight(snip(r.text,vars),vars)}</div><div class="more">${['propositions','tensions','topics','sira'].includes(key)?`<a href="#" onclick="return fullText(this)">Read in full \u2193</a><div class="full" hidden>${highlight(esc2(r.text),vars)}</div>`:`<a href="${href}">Open \u2192</a>`}</div>${citation}${verifiedPublisher}${related}</div>`;
+ const cfg=SRC[key], ref=cfg.ref(r);
+ const payload=esc(JSON.stringify({key,r,ref,query:CUR}));
+ const sourceURL=key==='sira'?(r.source_ref||'').match(/https:\/\/hadithunlocked\.com\/ibnhisham\/[0-9]+\/[0-9]+/):null;
+ const citation=sourceURL?'<p class="what"><a href="'+esc(sourceURL[0])+'" target="_blank" rel="noopener noreferrer">Read cited source ↗</a></p>':'';
+ const verified=key==='hadith'&&/^https:\/\/sunnah\.com\/(?:abudawud|bukhari|muslim|tirmidhi|ibnmajah|nasai):[0-9]+[a-z]?$/.test(r.publisher_url||'')?'<p class="what"><a href="'+esc(r.publisher_url)+'" target="_blank" rel="noopener noreferrer">Verify at Sunnah.com ↗</a></p>':'';
+ const related=key==='hadith'&&/^[1-9][0-9]*$/.test(String(r.id))?'<details class="hadith-connections" ontoggle="if(this.open)loadHadithConnections(this.querySelector(\'.hc-content\'))"><summary>Related and contrasting Hadith</summary><div class="hc-content" data-hadith-id="'+Number(r.id)+'"></div></details>':'';
+ const badge=key==='hadith'&&r.reference_status?(r.reference_status==='verified_publisher_mapping'?'<span class="ref-badge">Curated publisher reference mapping</span>':'<span class="ref-badge caution">Unverified local catalogue candidate</span>'):'';
+ const context=(key==='tafsir'||key==='asbab')&&Number(r.sura)>0&&Number(r.aya)>0?'<a href="/?sura='+Number(r.sura)+'&amp;aya='+Number(r.aya)+'">Open associated verse</a>':'';
+ const source=key==='quran'||key==='hadith'?'<a href="'+esc(resultLink(key,r))+'">Open '+(key==='quran'?'verse':'hadith')+' →</a>':context;
+ return '<div class="card" data-result="'+payload+'"'+(key==='quran'?' data-sura="'+Number(r.sura)+'" data-aya="'+Number(r.aya)+'"':'')+'><div class="meta">'+esc(ref)+'</div>'+badge+(r.title?'<div class="ttl">'+highlight(r.title,vars)+'</div>':'')+(r.arabic?'<div class="txt" dir="rtl" lang="ar" style="font-size:1.25em;line-height:1.9">'+highlight(snip(r.arabic,vars),vars)+'</div>':'')+'<div class="txt">'+highlight(snip(r.text,vars),vars)+'</div><div class="more">'+source+'</div><div class="result-actions"><button type="button" onclick="resultAction(this,\'read\')">Read passage</button><button type="button" onclick="resultAction(this,\'copy\')">Copy</button><button type="button" onclick="resultAction(this,\'share\')">Share</button><button type="button" onclick="resultAction(this,\'save\')">Save to research</button><button type="button" onclick="resultAction(this,\'listen\')">Listen to text</button><button type="button" onclick="resultAction(this,\'related\')">Find related verses & stories</button></div><div class="result-full" hidden></div><p class="result-status" role="status" aria-live="polite"></p>'+citation+verified+related+'</div>';
+}
+function resultNormalize(v){return String(v||'').replace(/…/g,'').replace(/\s+/g,' ').trim();}
+async function resultPassage(data){
+ const {key,r}=data;
+ let text=r.text||'',arabic=r.arabic||'',complete=key==='quran'||(!/^…|…$/.test(String(text).trim())&&String(text).length<900);
+ let path='';
+ if(key==='hadith'&&/^[1-9]\d*$/.test(String(r.id)))path='hadith_corpus?id=eq.'+encodeURIComponent(r.id)+'&select=text_english,text_arabic&limit=1';
+ if(key==='quran'&&Number(r.sura)>0&&Number(r.aya)>0)path='ayas?sura_id=eq.'+Number(r.sura)+'&aya_number=eq.'+Number(r.aya)+'&select=english,arabic&limit=1';
+ if(key==='tafsir'&&Number(r.sura)>0&&Number(r.aya)>0&&r.title)path='tafsir_entries?sura=eq.'+Number(r.sura)+'&aya=eq.'+Number(r.aya)+'&scholar_name=eq.'+encodeURIComponent(r.title)+'&language=eq.en&select=content,tradition&limit=100';
+ if(path){
+  try{
+   const response=await fetch(SB+'/rest/v1/'+path,{headers:H});if(!response.ok)throw Error('unavailable');
+   const rows=await response.json();let found=null;
+   if(key==='tafsir'){
+    const needle=resultNormalize(text);
+    const matches=rows.filter(x=>(!r.tradition||x.tradition===r.tradition)&&needle&&resultNormalize(x.content).includes(needle));
+    if(matches.length===1)found=matches[0];
+   } else if(rows.length===1)found=rows[0];
+   if(found){text=found.content||found.text_english||found.english||text;arabic=found.text_arabic||found.arabic||arabic;complete=true;}
+  }catch(_){}
+ }
+ // The search service can truncate at 1,000 characters without an ellipsis.
+ if(!path && (String(text).length>=900 || key==='library'))complete=false;
+ return {text:String(text),arabic:String(arabic),complete};
+}
+async function resultAction(button,action){
+ const data=resultData(button);if(!data)return;
+ const host=button.closest('.card'),status=host.querySelector('.result-status'),view=host.querySelector('.result-full');
+ const {key,r,ref,query}=data;
+ if(action==='related'){
+  const url=new URL('/research.html',location.origin);url.searchParams.set('q',query);url.searchParams.set('scope','src:quran|src:stories');location.href=url.href;return;
+ }
+ if(action==='share'){
+  const url=new URL(resultLink(key,r),location.origin).href;
+  try{if(navigator.share)await navigator.share({title:r.title||ref||'Quran Hikma research',url});else{await navigator.clipboard.writeText(url);status.textContent='Link copied.';}if(key!=='quran'&&key!=='hadith')status.textContent='Shared link opens the search results; an exact source link is unavailable.';}catch(e){if(e.name!=='AbortError')status.textContent='Could not share the link.';}return;
+ }
+ button.disabled=true;status.textContent='Loading passage…';
+ const passage=await resultPassage(data);button.disabled=false;
+ const body=[passage.arabic,passage.text].filter(Boolean).join('\n\n');
+ const label=passage.complete?'':'Only the available search excerpt is shown; full source text could not be confirmed.';
+ if(action==='read'){
+  if(!view.hidden){view.hidden=true;button.textContent='Read passage';status.textContent='';return;}
+  view.replaceChildren();
+  if(passage.arabic){const a=document.createElement('p');a.dir='rtl';a.lang='ar';a.textContent=passage.arabic;view.append(a);}
+  if(passage.text){const p=document.createElement('p');p.textContent=passage.text;view.append(p);}
+  view.hidden=false;button.textContent='Close passage';status.textContent=label;return;
+ }
+ if(action==='copy'){
+  try{await navigator.clipboard.writeText([r.title,ref,body,passage.complete?'':'[Search excerpt; full text unavailable]'].filter(Boolean).join('\n\n'));status.textContent=label||'Passage copied.';}catch(_){status.textContent='Copy failed; select the passage and copy it manually.';}return;
+ }
+ if(action==='save'){
+  try{sessionStorage.setItem('qh_research_pending',JSON.stringify({item_type:key==='quran'?'verse':key==='hadith'?'hadith':'source',reference:ref||r.title||query,title:r.title||ref||'Search result',content:(body+(passage.complete?'':'\n\n[Search excerpt; full text unavailable]')).slice(0,10000)}));location.href='/my-research.html?pending=1';}catch(_){status.textContent='Could not prepare the passage for saving.';}return;
+ }
+ if(action==='listen'){
+  if(!('speechSynthesis' in window)){status.textContent='Text-to-speech is unavailable on this device.';return;}
+  if(!body){status.textContent='No text is available to read aloud.';return;}
+  speechSynthesis.cancel();const utterance=new SpeechSynthesisUtterance(passage.text||passage.arabic);utterance.lang=passage.text?'en':'ar';speechSynthesis.speak(utterance);status.textContent='Playing device-generated speech. '+label;
+ }
 }
 
 function cut(t){ t=t||''; if(t.length<238) return t; const i=t.lastIndexOf(' '); return (i>150?t.slice(0,i):t)+'\u2026'; }
@@ -478,7 +544,7 @@ function render(results,vars,q,dg){
     h+=`<section class="src" id="src-${r.key}"><h2>${esc(LABEL[r.key])} <small>${r.count?(r.capped?'more than 1,000 matches':n(r.count)+' match'+(r.count==1?'':'es')):'no matches'}</small></h2><p class="what">${esc(SRC[r.key].what)}</p>${r.relaxed?'<p class="what"><i>No passage has every word you typed, so these are the closest matches: they contain most of your words.</i></p>':''}`;
     if(r.count){
       h+=r.rows.map(x=>card(r.key,x,vars)).join('');
-      if(r.count>r.rows.length) h+=`<div class="more"><a href="research.html?q=${encodeURIComponent(q)}${['hadith','tafsir'].includes(r.key)?'&source='+r.key:''}">See all ${r.capped?'1,000+':n(r.count)} in the full search →</a></div>`;
+      if(r.count>r.rows.length) h+=`<p class="what">Showing ${n(r.rows.length)} of ${r.capped?'1,000+':n(r.count)} matches. Narrow your search to see more relevant passages.</p>`;
     } else h+=r.failed?'<div class="none">This source is temporarily unavailable. Please retry.</div>':'<div class="none">Nothing in this source for this search.</div>';
     h+='</section>';
   });
