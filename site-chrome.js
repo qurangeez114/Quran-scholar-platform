@@ -124,6 +124,11 @@
   }
 
   function init() { loadModal(); addSchoolNav(); addNav(); setTimeout(addClock, 400); setTimeout(addAccount, 400);
+    // Legacy Research buttons and book pickers must share the private My Research
+    // destination instead of continuing anonymous writes to ownerless tables.
+    if (!document.getElementById('qh-research-bridge') && ['research-classic.html','sira.html','stories.html','madhhab.html','books.html'].includes(file())) {
+      var bridge=document.createElement('script');bridge.id='qh-research-bridge';bridge.src='/research-workspace-bridge.js';document.body.appendChild(bridge);
+    }
     if (['/course.html','/lesson.html','/student-dashboard.html','/instructor-dashboard.html','/academic-hub.html'].includes(location.pathname) && !document.getElementById('qh-learning-activity-script')) {
       var tracker=document.createElement('script');tracker.id='qh-learning-activity-script';tracker.type='module';tracker.src='/accounts/learning-activity.js';document.head.appendChild(tracker);
     }
