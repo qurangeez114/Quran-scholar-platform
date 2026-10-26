@@ -515,11 +515,17 @@ body { padding-bottom: 60px !important; }
     /* 3. Sīra link — find events mentioning this sura:aya */
     if (currentPage !== 'sira' && sura) {
       var ref = sura + (aya ? ':'+aya : '');
-      var siraRows = await sbGet('sira_events', {
-        select: 'id,title_en',
-        or: '(quran_verses.ilike.*' + ref + '*,hadith_ref.ilike.*' + ref + '*,tafsir_ref.ilike.*' + ref + '*)',
-        limit: 3
-      });
+      // quran_verses is a jsonb array of {sura, aya}; text ilike is invalid on jsonb, so match by containment.
+      var verseKey = aya ? {sura: Number(sura), aya: Number(aya)} : {sura: Number(sura)};
+      var siraLists = await Promise.all([
+        sbGet('sira_events', { select: 'id,title_en', quran_verses: 'cs.' + JSON.stringify([verseKey]), limit: 3 }),
+        sbGet('sira_events', { select: 'id,title_en', or: '(hadith_ref.ilike.*' + ref + '*,tafsir_ref.ilike.*' + ref + '*)', limit: 3 })
+      ]);
+      var seenSira = {};
+      var siraRows = siraLists[0].concat(siraLists[1]).filter(function(ev){
+        if (!ev || !ev.id || !ev.title_en || seenSira[ev.id]) return false;
+        seenSira[ev.id] = true; return true;
+      }).slice(0, 3);
       siraRows.forEach(function(ev) {
         var sUrl = 'sira.html?event=' + encodeURIComponent(ev.id) + '&from=' + currentPage;
         chips.push(chip('xweb-sira', '📜', ev.title_en.substring(0,28), sUrl, fromLabel, fromIcon));
@@ -1137,7 +1143,7 @@ async function fetchDBContext(query) {
         fetch(`${SB_URL}/rest/v1/ayas?sura_id=eq.${s}&aya_number=eq.${a}&select=arabic,english,aya_text,amharic,oromo,somali`, {headers:hdrs}).then(r=>r.json()),
         fetch(`${SB_URL}/rest/v1/cross_references?sura_id=eq.${s}&aya_number=eq.${a}&select=ref_sura,ref_aya,theme&limit=8`, {headers:hdrs}).then(r=>r.json()),
         fetch(`${SB_URL}/rest/v1/word_analysis?sura_id=eq.${s}&aya_number=eq.${a}&select=word_arabic,root,meaning_english,language_origin&limit=15`, {headers:hdrs}).then(r=>r.json()),
-        fetch(`${SB_URL}/rest/v1/hadith_connections?sura_id=eq.${s}&aya_number=eq.${a}&select=hadith_text,source,narrator,relevance&limit=5`, {headers:hdrs}).then(r=>r.json()),
+        fetch(`${SB_URL}/rest/v1/hadith_connections?sura_id=eq.${s}&aya_number=eq.${a}&select=hadith_text,narrator,collection,reference,hadith_grade&limit=5`, {headers:hdrs}).then(r=>r.json()),
         fetch(`${SB_URL}/rest/v1/tafsir_entries?sura=eq.${s}&aya=eq.${a}&select=scholar_name,content,tradition&limit=5`, {headers:hdrs}).then(r=>r.json()),
         fetch(`${SB_URL}/rest/v1/asbab_al_nuzul?sura_id=eq.${s}&aya_number=eq.${a}&select=*&limit=3`, {headers:hdrs}).then(r=>r.json()),
       ]);
@@ -1499,7 +1505,9 @@ function quickSearch(term) {
 }
 
 // ── SUPABASE FETCH ───────────────────────────────────────────────
-async function sbFetch(table, params) {
+// Callers use sbFetch(table, selectString, filters); a plain params object is also accepted.
+async function sbFetch(table, select, extra) {
+  const params = typeof select === 'string' ? { select, ...(extra || {}) } : (select || {});
   const url = new URL(`${SB_URL}/rest/v1/${table}`);
   Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
   const r = await fetch(url, { headers: HDRS });

@@ -392,11 +392,17 @@ body { padding-bottom: 60px !important; }
     /* 3. Sīra link — find events mentioning this sura:aya */
     if (currentPage !== 'sira' && sura) {
       var ref = sura + (aya ? ':'+aya : '');
-      var siraRows = await sbGet('sira_events', {
-        select: 'id,title_en',
-        or: '(quran_verses.ilike.*' + ref + '*,hadith_ref.ilike.*' + ref + '*,tafsir_ref.ilike.*' + ref + '*)',
-        limit: 3
-      });
+      // quran_verses is a jsonb array of {sura, aya}; text ilike is invalid on jsonb, so match by containment.
+      var verseKey = aya ? {sura: Number(sura), aya: Number(aya)} : {sura: Number(sura)};
+      var siraLists = await Promise.all([
+        sbGet('sira_events', { select: 'id,title_en', quran_verses: 'cs.' + JSON.stringify([verseKey]), limit: 3 }),
+        sbGet('sira_events', { select: 'id,title_en', or: '(hadith_ref.ilike.*' + ref + '*,tafsir_ref.ilike.*' + ref + '*)', limit: 3 })
+      ]);
+      var seenSira = {};
+      var siraRows = siraLists[0].concat(siraLists[1]).filter(function(ev){
+        if (!ev || !ev.id || !ev.title_en || seenSira[ev.id]) return false;
+        seenSira[ev.id] = true; return true;
+      }).slice(0, 3);
       siraRows.forEach(function(ev) {
         var sUrl = 'sira.html?event=' + encodeURIComponent(ev.id) + '&from=' + currentPage;
         chips.push(chip('xweb-sira', '📜', ev.title_en.substring(0,28), sUrl, fromLabel, fromIcon));
