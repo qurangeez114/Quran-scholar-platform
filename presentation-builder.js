@@ -122,8 +122,8 @@
 
   const css = `
 /* PRESENTATION BUILDER START — injected styles */
-.pb-add-btn{display:inline-flex;align-items:center;gap:6px;padding:7px 13px;border:1.5px solid #B8902A;border-radius:999px;background:#FDF5DE;color:#7a581d;font-size:12px;font-weight:800;font-family:Georgia,serif;cursor:pointer;transition:.18s;white-space:nowrap;box-shadow:0 1px 8px rgba(0,0,0,.06)}
-.pb-add-btn:hover{background:#B8902A;color:white;transform:translateY(-1px)}
+.pb-add-btn{display:inline-flex;align-items:center;gap:6px;padding:7px 13px;border:1.5px solid #886a1f;border-radius:999px;background:#FDF5DE;color:#7a581d;font-size:12px;font-weight:800;font-family:Georgia,serif;cursor:pointer;transition:.18s;white-space:nowrap;box-shadow:0 1px 8px rgba(0,0,0,.06)}
+.pb-add-btn:hover{background:#7d5f14;color:white;transform:translateY(-1px)}
 .pb-add-btn.added{background:#2E7D32;border-color:#2E7D32;color:white}
 .pb-inject-row{display:flex;justify-content:flex-end;gap:8px;padding:8px 12px;border-top:1px solid rgba(184,144,42,.18);margin-top:6px}
 #pb-float-btn{position:fixed;right:18px;bottom:72px;z-index:9000;display:flex;align-items:center;gap:8px;padding:12px 16px;border:0;border-radius:999px;background:linear-gradient(135deg,#5f4318,#a67d32);color:#fff7df;font-size:14px;font-weight:800;font-family:Georgia,serif;box-shadow:0 6px 24px rgba(95,67,24,.42);cursor:pointer}

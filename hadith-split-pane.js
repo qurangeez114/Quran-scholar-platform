@@ -127,7 +127,7 @@ function renderHadithSplitPane(entry, idx = 0, showButtons = true) {
  */
 function renderHadithSplitPaneList(entries, showButtons = true) {
   if (!Array.isArray(entries) || entries.length === 0) {
-    return '<div style="padding:16px;color:#999;font-style:italic;">No hadith to display</div>';
+    return '<div style="padding:16px;color:#595959;font-style:italic;">No hadith to display</div>';
   }
 
   return entries.map((entry, idx) => renderHadithSplitPane(entry, idx, showButtons)).join('');
@@ -274,7 +274,7 @@ function shareHadith(id, collection = 'Hadith') {
       <input type="text" value="${url}" readonly
         style="padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px;" />
       <button onclick="navigator.clipboard.writeText('${url}'); this.textContent='Copied!'; setTimeout(() => this.textContent='Copy Link', 2000);"
-        style="padding: 8px; background: #B8902A; color: white; border: none; border-radius: 4px; cursor: pointer;">
+        style="padding: 8px; background: #7d5f14; color: white; border: none; border-radius: 4px; cursor: pointer;">
         Copy Link
       </button>
     </div>

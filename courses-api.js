@@ -991,7 +991,7 @@ function generateCertificateHTML(data) {
     }
     .certificate-subtitle {
       font-size: 14px;
-      color: #999;
+      color: #595959;
       text-transform: uppercase;
       letter-spacing: 1px;
     }
@@ -1036,7 +1036,7 @@ function generateCertificateHTML(data) {
     .certificate-code {
       text-align: left;
       font-size: 12px;
-      color: #999;
+      color: #595959;
     }
     .certificate-code-label {
       display: block;
@@ -1047,12 +1047,12 @@ function generateCertificateHTML(data) {
     .certificate-date {
       text-align: center;
       font-size: 12px;
-      color: #999;
+      color: #595959;
     }
     .certificate-signature {
       text-align: right;
       font-size: 12px;
-      color: #999;
+      color: #595959;
     }
     .certificate-seal {
       position: absolute;
