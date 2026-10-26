@@ -35,6 +35,7 @@ export default async (_request: Request, context: any) => {
   injectScript('/account-gate.js');
   injectScript('/behavior-collector.js');
   injectScript('/save-selection.js');
+  injectScript('/research-fab-global.js');
 
   const headers = new Headers(response.headers);
   headers.delete("content-length");
