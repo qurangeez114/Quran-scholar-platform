@@ -5,7 +5,7 @@ const $=id=>document.getElementById(id);
 function requestedFatwaReturn(){
  const value=new URLSearchParams(location.search).get('returnTo');
  if(!value || !value.startsWith('/') || value.startsWith('//') || value.includes('\\'))return '';
- try{const target=new URL(value,location.origin);return target.origin===location.origin && target.pathname==='/fatwas.html'?target.pathname+target.search+target.hash:'';}catch(_){return '';}
+ try{const target=new URL(value,location.origin);return target.origin===location.origin && /^\/[A-Za-z0-9_\/-]+\.html$/.test(target.pathname)?target.pathname+target.search+target.hash:'';}catch(_){return '';}
 }
 
 function accountEmailRedirect(){const back=requestedFatwaReturn();return location.origin+'/account.html'+(back?'?returnTo='+encodeURIComponent(back):'');}
