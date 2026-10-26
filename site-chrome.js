@@ -4,8 +4,8 @@
 (function () {
   'use strict';
   // Site-wide motion layer (site-motion.js). Idempotent; respects reduced motion.
-  if (!document.querySelector('script[src="site-motion.js"]') && !window.__qhMotion) {
-    var __m = document.createElement('script'); __m.src = 'site-motion.js'; __m.defer = true;
+  if (!document.querySelector('script[src$="site-motion.js"]') && !window.__qhMotion) {
+    var __m = document.createElement('script'); __m.src = '/site-motion.js'; __m.defer = true;
     document.head.appendChild(__m);
   }
   var NAV = [
@@ -19,9 +19,9 @@
 
   function loadModal() {
     if (typeof window.qhikmaOpenModal === 'function' || document.getElementById('qh-modal-js')) return;
-    var s = document.createElement('script'); s.id = 'qh-modal-js'; s.src = 'activity-history.js'; document.head.appendChild(s);
-    if (!document.querySelector('link[href="activity-history.css"]')) {
-      var l = document.createElement('link'); l.rel = 'stylesheet'; l.href = 'activity-history.css'; document.head.appendChild(l);
+    var s = document.createElement('script'); s.id = 'qh-modal-js'; s.src = '/activity-history.js'; document.head.appendChild(s);
+    if (!document.querySelector('link[href$="activity-history.css"]')) {
+      var l = document.createElement('link'); l.rel = 'stylesheet'; l.href = '/activity-history.css'; document.head.appendChild(l);
     }
   }
 
@@ -44,7 +44,7 @@
         '#bottom-nav::-webkit-scrollbar{display:none!important}' +
         '#bottom-nav .bnav-btn{box-sizing:border-box!important;flex:0 0 54px!important;min-width:54px!important;max-width:54px!important;width:54px!important;height:42px!important;min-height:42px!important;display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;gap:1px!important;padding:2px 1px!important;margin:0!important;background:transparent!important;border:0!important;border-right:1px solid #EEE5D7!important;border-radius:0!important;color:#524a3b!important;font:600 8px/1.1 Arial,sans-serif!important;letter-spacing:0!important;text-transform:none!important;text-decoration:none!important;text-align:center!important;overflow:hidden!important;white-space:nowrap!important;cursor:pointer!important;}' +
         '#bottom-nav .bnav-btn .bni{font-size:14px!important;line-height:16px!important;display:block!important;margin:0!important}' +
-        '#bottom-nav .bnav-btn.active{background:#F3E8CF!important;color:#754e0c!important;box-shadow:inset 0 3px #B8902A!important}' +
+        '#bottom-nav .bnav-btn.active{background:#F3E8CF!important;color:#754e0c!important;box-shadow:inset 0 3px #886a1f!important}' +
         '#bottom-nav .bnav-btn:focus-visible{outline:2px solid #9c742a!important;outline-offset:-3px!important}' +
         'body{padding-bottom:max(49px,env(safe-area-inset-bottom))!important}' +
         '#bnav,.fatwa-bottom-nav{display:none!important}' +
@@ -92,7 +92,7 @@
     var s = document.createElement('style');
     s.id='qh-school-topnav-css';
     s.textContent =
-      '#qh-school-topnav{position:sticky;top:0;z-index:10001;background:#fbf8f0;border-bottom:1px solid #d9cdb7;box-shadow:0 2px 7px #1c211914;font:500 13px/1.4 Arial,sans-serif;color:#382f24}' +
+      '#qh-school-topnav{min-width:0;max-width:100%;box-sizing:border-box;position:sticky;top:0;z-index:10001;background:#fbf8f0;border-bottom:1px solid #d9cdb7;box-shadow:0 2px 7px #1c211914;font:500 13px/1.4 Arial,sans-serif;color:#382f24}' +
       '#qh-school-topnav .qh-school-inner{max-width:1400px;margin:auto;display:flex;align-items:center;gap:4px;padding:6px 14px;overflow-x:auto;scrollbar-width:thin}' +
       '#qh-school-topnav .qh-school-brand{font-weight:750;color:#694a20;text-decoration:none;white-space:nowrap;padding:8px 11px;margin-right:12px;border-right:1px solid #ddd0b7}' +
       '#qh-school-topnav details{position:relative;flex:0 0 auto}' +

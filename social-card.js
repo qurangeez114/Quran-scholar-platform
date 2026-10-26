@@ -89,7 +89,7 @@
       + '<button id="scNavPrev" onclick="scNavigate(-1)" style="background:none;border:none;font-size:20px;color:#C9A84C;cursor:pointer;padding:4px 8px;opacity:0.7;hover:{opacity:1};">◀</button>'
       + '<div style="font-size:14px;font-weight:700;color:#C9A84C;flex:1;text-align:center;">📱 Social Media Card</div>'
       + '<button id="scNavNext" onclick="scNavigate(1)" style="background:none;border:none;font-size:20px;color:#C9A84C;cursor:pointer;padding:4px 8px;opacity:0.7;hover:{opacity:1};">▶</button>'
-      + '<button onclick="closeSocialCard()" style="background:none;border:none;font-size:18px;color:#999;cursor:pointer;">✕</button>'
+      + '<button onclick="closeSocialCard()" style="background:none;border:none;font-size:18px;color:#595959;cursor:pointer;">✕</button>'
       + '</div>'
       + '<div style="display:flex;gap:6px;margin-bottom:12px;">'
       + '<button id="scFmtTiktok" onclick="scSetFormat(\'tiktok\')" style="flex:1;padding:8px;border:1.5px solid #E8C97B;border-radius:8px;background:#C9A84C;color:#fff;font-size:12px;font-weight:700;cursor:pointer;">🎵 TikTok<br><span style="font-weight:400;font-size:10px;">Full-screen 9:16</span></button>'
@@ -98,7 +98,7 @@
       + '<button id="scFmtWide" onclick="scSetFormat(\'wide\')" style="flex:1;padding:8px;border:1.5px solid #E8C97B;border-radius:8px;background:#fff;color:#1a1a1a;font-size:12px;font-weight:700;cursor:pointer;">▭ Wide<br><span style="font-weight:400;font-size:10px;">X/Twitter card</span></button>'
       + '</div>'
       + '<div style="margin:2px 0 12px;">'
-      + '<div style="font-size:11px;font-weight:700;color:#B8902A;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Card design</div>'
+      + '<div style="font-size:11px;font-weight:700;color:#7d5f14;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Card design</div>'
       + '<div id="scStyles" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">'
       + '<button id="scStyleMidnight" onclick="scSetStyle(\'midnight\')" style="padding:7px;border:1.5px solid #C9A84C;border-radius:8px;background:#0B2149;color:#FFE97A;font-size:11px;font-weight:700;cursor:pointer;">✦ Midnight Gold</button>'
       + '<button id="scStyleEmerald" onclick="scSetStyle(\'emerald\')" style="padding:7px;border:1.5px solid #D4C9A8;border-radius:8px;background:#0B5A4C;color:#FFF0B4;font-size:11px;font-weight:700;cursor:pointer;">✦ Emerald Garden</button>'
@@ -107,15 +107,15 @@
       + '</div></div>'
       + '<div id="scLangsWrap" style="margin-bottom:12px;display:none;">'
       + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">'
-      + '<div style="font-size:11px;font-weight:700;color:#B8902A;text-transform:uppercase;letter-spacing:0.5px;">Languages on card</div>'
-      + '<button onclick="scResetLangs()" style="background:none;border:none;font-size:11px;color:#7A8FA6;cursor:pointer;text-decoration:underline;padding:0;">Reset</button>'
+      + '<div style="font-size:11px;font-weight:700;color:#7d5f14;text-transform:uppercase;letter-spacing:0.5px;">Languages on card</div>'
+      + '<button onclick="scResetLangs()" style="background:none;border:none;font-size:11px;color:#5f6f81;cursor:pointer;text-decoration:underline;padding:0;">Reset</button>'
       + '</div>'
       + '<div id="scLangs" style="display:flex;flex-wrap:wrap;gap:6px;"></div>'
-      + '<div id="scLangsNote" style="font-size:11px;color:#999;margin-top:6px;display:none;">Keep at least one language selected.</div>'
+      + '<div id="scLangsNote" style="font-size:11px;color:#595959;margin-top:6px;display:none;">Keep at least one language selected.</div>'
       + '</div>'
       + '<div style="text-align:center;background:#F0EDE6;border-radius:8px;padding:10px;margin-bottom:12px;min-height:120px;">'
       + '<canvas id="scCanvas" style="max-width:100%;height:auto;border-radius:6px;box-shadow:0 2px 10px rgba(0,0,0,0.15);"></canvas>'
-      + '<div id="scLoading" style="color:#999;font-size:13px;padding:30px 0;">Loading verse…</div>'
+      + '<div id="scLoading" style="color:#595959;font-size:13px;padding:30px 0;">Loading verse…</div>'
       + '</div>'
       + '<div style="display:flex;gap:8px;">'
       + '<button onclick="scDownload()" style="flex:1;padding:10px;background:#C9A84C;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">⬇️ Download Image</button>'
@@ -157,7 +157,7 @@
       return '<button onclick="scToggleLang(\'' + k + '\')" aria-pressed="' + (on ? 'true' : 'false') + '"'
         + ' style="padding:5px 11px;border-radius:20px;cursor:pointer;font-size:12px;font-weight:700;'
         + 'border:1.5px solid ' + (on ? '#C9A84C' : '#D4C9A8') + ';background:' + (on ? '#C9A84C' : '#fff')
-        + ';color:' + (on ? '#fff' : '#7A8FA6') + ';">' + scEsc(SC_LANGS[k].label) + '</button>';
+        + ';color:' + (on ? '#fff' : '#5f6f81') + ';">' + scEsc(SC_LANGS[k].label) + '</button>';
     }).join('');
   }
 

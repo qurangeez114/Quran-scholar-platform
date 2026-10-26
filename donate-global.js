@@ -23,7 +23,7 @@
       'right:14px',
       'bottom:116px',
       'z-index:8999',
-      'background:#B8902A',
+      'background:#7d5f14',
       'color:#fff',
       'text-decoration:none',
       'font:700 12px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif',

@@ -4,9 +4,7 @@
    ═══════════════════════════════════════════════════════════ */
 (function(){
 const SB_URL = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
-const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4end' +
-               'mem9qcGFlaiIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzc2MTQ2NTI3LCJleHAiOjIwOTE3MjI1Mjd9.' +
-               'yqigL9ILlXkQ7zi37rX3AUs7vjQB';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
 
 function esc(s){ return String(s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
@@ -31,7 +29,7 @@ async function loadAd(){
   if(qsIsSupporter()){ slot.style.display='none'; return; }
   const today = new Date().toISOString().slice(0,10);
   try{
-    const url = SB_URL + '/rest/v1/ads?select=*&status=eq.active&limit=50';
+    const url = SB_URL + '/rest/v1/ads?select=id,business_name,ad_text,link_url,image_url,status,starts_at,ends_at&status=eq.active&limit=50';
     const r = await fetch(url, { headers:{ apikey:SB_KEY, Authorization:'Bearer '+SB_KEY } });
     if(!r.ok) return;
     let ads = await r.json();
@@ -53,10 +51,10 @@ function render(slot, ad){
        font-family:'Inter',sans-serif;max-width:480px;margin:10px auto;">
       ${ad.image_url ? `<img src="${esc(ad.image_url)}" alt="" style="width:48px;height:48px;border-radius:8px;object-fit:cover;flex-shrink:0;">` : ''}
       <div style="flex:1;min-width:0;">
-        <div style="font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#a47b32;margin-bottom:2px;">Sponsored · ${esc(ad.business_name)}</div>
+        <div style="font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#8d692a;margin-bottom:2px;">Sponsored · ${esc(ad.business_name)}</div>
         <div style="font-size:13px;line-height:1.4;color:#5a4f3a;">${esc(ad.ad_text)}</div>
       </div>
-      <div style="font-size:18px;color:#a47b32;flex-shrink:0;">→</div>
+      <div style="font-size:18px;color:#8d692a;flex-shrink:0;">→</div>
     </a>`;
 }
 

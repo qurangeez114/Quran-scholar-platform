@@ -107,11 +107,11 @@ function injectStyles(){
   #qs-support-card .row input{flex:1;}
   .qs-btn{display:block;width:100%;padding:12px;border:none;border-radius:10px;font:800 14px Inter,sans-serif;
     cursor:pointer;margin-bottom:8px;text-align:center;text-decoration:none;}
-  .qs-btn-primary{background:linear-gradient(135deg,#6b4f1e,#a47b32);color:#fff7df;}
+  .qs-btn-primary{background:linear-gradient(135deg,#6b4f1e,#8d692a);color:#fff7df;}
   .qs-btn-secondary{background:#17623a;color:#fff;}
-  .qs-btn-text{background:none;color:#999;font-weight:600;text-decoration:underline;padding:6px;}
+  .qs-btn-text{background:none;color:#595959;font-weight:600;text-decoration:underline;padding:6px;}
   #qs-support-close{position:absolute;top:12px;right:14px;background:none;border:none;font-size:18px;
-    color:#999;cursor:pointer;}
+    color:#595959;cursor:pointer;}
   `;
   document.head.appendChild(style);
 }
@@ -126,10 +126,10 @@ function showSupportModal(){
       <h2>🌙 Enjoying the platform?</h2>
       <p>You've spent some time exploring with us. Before continuing, could we get to know you a little?</p>
       <div class="row">
-        <input id="qs-fname" placeholder="First name">
-        <input id="qs-lname" placeholder="Last name">
+        <input aria-label="First name" id="qs-fname" placeholder="First name">
+        <input aria-label="Last name" id="qs-lname" placeholder="Last name">
       </div>
-      <input id="qs-location" placeholder="Detecting location...">
+      <input aria-label="Detecting location" id="qs-location" placeholder="Detecting location...">
       <p style="margin-top:14px;">If this project has been helpful, consider supporting it:</p>
       <button class="qs-btn qs-btn-primary" id="qs-donate-btn">💛 Donate</button>
       <button class="qs-btn qs-btn-secondary" id="qs-subscribe-btn">✨ Subscribe (Premium)</button>

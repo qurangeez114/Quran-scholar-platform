@@ -97,7 +97,7 @@ function injectUpgradeModal() {
     <div style="background:#fffdf5;border-radius:18px;padding:32px 28px;max-width:380px;width:90%;
       box-shadow:0 8px 48px rgba(0,0,0,.22);font-family:'Inter',sans-serif;position:relative;">
       <button onclick="closeUpgradeModal()" style="position:absolute;top:14px;right:16px;background:none;
-        border:none;font-size:20px;cursor:pointer;color:#999;">✕</button>
+        border:none;font-size:20px;cursor:pointer;color:#595959;">✕</button>
       <div style="font-size:28px;margin-bottom:8px;">✨</div>
       <div id="qs-modal-title" style="font:800 20px Inter,sans-serif;color:#17130c;margin-bottom:8px;">
         Premium Feature</div>
@@ -113,13 +113,13 @@ function injectUpgradeModal() {
           ✅ Priority access to new features
         </div>
       </div>
-      <button onclick="handleUpgradeClick()" style="width:100%;padding:14px;background:linear-gradient(135deg,#6b4f1e,#a47b32);
+      <button onclick="handleUpgradeClick()" style="width:100%;padding:14px;background:linear-gradient(135deg,#6b4f1e,#8d692a);
         color:#fff7df;border:none;border-radius:12px;font:800 15px Inter,sans-serif;cursor:pointer;letter-spacing:.03em;">
         Upgrade to Premium →</button>
-      <div style="text-align:center;margin-top:10px;font-size:12px;color:#999;">
+      <div style="text-align:center;margin-top:10px;font-size:12px;color:#595959;">
         Payment coming soon — join the waitlist</div>
       <div style="margin-top:10px;">
-        <input id="qs-waitlist-email" type="email" placeholder="your@email.com"
+        <input aria-label="your@email.com" id="qs-waitlist-email" type="email" placeholder="your@email.com"
           style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:8px;
           font-size:13px;box-sizing:border-box;margin-bottom:6px;">
         <button onclick="joinWaitlist()" style="width:100%;padding:9px;background:#17623a;color:#fff;
@@ -204,7 +204,7 @@ function renderReportBadge(containerId) {
         border-radius:999px;padding:3px 10px;font:700 11px Inter,sans-serif;">
         ${rem} free report${rem !== 1 ? 's' : ''} left today</span>
         <button onclick="showUpgradeModal('limit')" style="background:none;border:none;
-        color:#a47b32;font:700 11px Inter,sans-serif;cursor:pointer;text-decoration:underline;">
+        color:inherit;font:700 11px Inter,sans-serif;cursor:pointer;text-decoration:underline;">
         Upgrade</button>`;
     }
   });

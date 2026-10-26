@@ -70,7 +70,7 @@
         saved: new Date().toISOString()
       }));
       if (btn) btn.textContent = '\u{1F516}';
-      showToastMsg('Bookmarked', '#B8902A');
+      showToastMsg('Bookmarked', '#886a1f');
     }
     if (typeof global.renderSavedList === 'function') { try { global.renderSavedList(); } catch (e) {} }
   }
@@ -90,7 +90,7 @@
       '<div class="verse-actions" style="display:flex;gap:4px;justify-content:flex-end;margin-bottom:10px;flex-wrap:wrap;">' +
         '<button onclick="event.stopPropagation();toggleAudioPanel(' + a + ',' + s + ',this)" title="Listen to real recitation (Husary, Alafasy and others)" style="' + btn + '">\u{1F3A7}</button>' +
         '<button onclick="event.stopPropagation();speakVerseSelected(' + a + ',' + s + ',this)" class="verse-tts-btn" title="Listen in selected language (synthesized speech)">\u{1F50A}</button>' +
-        '<select id="tts-lang-' + a + '" onclick="event.stopPropagation()" title="Select language" style="padding:3px 6px;border:1px solid #E8C97B;border-radius:8px;font-size:11px;background:#FDF8EE;color:#B8902A;outline:none;max-width:90px;">' +
+        '<select id="tts-lang-' + a + '" onclick="event.stopPropagation()" title="Select language" style="padding:3px 6px;border:1px solid #E8C97B;border-radius:8px;font-size:11px;background:#FDF8EE;color:#7d5f14;outline:none;max-width:90px;">' +
           '<option value="english">English</option><option value="arabic">Arabic</option>' +
           '<option value="tigrinya">Tigrinya</option><option value="tigrinya2">ትግርኛ ተፍሲር</option><option value="amharic">Amharic</option>' +
           '<option value="swedish">Svenska</option><option value="norwegian">Norsk</option>' +
@@ -176,7 +176,7 @@
     ).join('');
     return `
     <div class="audio-player-wrap">
-      <div style="font-size:11px;font-weight:700;letter-spacing:1px;color:#B8902A;text-transform:uppercase;margin-bottom:10px;">🎧 Reciter</div>
+      <div style="font-size:11px;font-weight:700;letter-spacing:1px;color:#7d5f14;text-transform:uppercase;margin-bottom:10px;">🎧 Reciter</div>
       <div class="audio-reciter-row">${reciters}</div>
       <div id="audio-loading-${ayaNum}" class="audio-loading-msg"><span class="spinner"></span> Loading audio...</div>
       <div id="audio-main-${ayaNum}" style="display:none">
@@ -192,7 +192,7 @@
           <select class="audio-speed-select" id="audio-speed-${ayaNum}" onchange="setAudioSpeed(${ayaNum}, this.value)">
             <option value="0.75">×0.75</option><option value="1.0" selected>×1.0</option><option value="1.25">×1.25</option>
           </select>
-          <label class="audio-autoplay-label"><input type="checkbox" id="audio-auto-${ayaNum}" onchange="toggleAutoplay(${ayaNum}, this.checked)" style="accent-color:#B8902A"> Auto-next</label>
+          <label class="audio-autoplay-label"><input type="checkbox" id="audio-auto-${ayaNum}" onchange="toggleAutoplay(${ayaNum}, this.checked)" style="accent-color:#886a1f"> Auto-next</label>
           <button class="audio-nav-btn" onclick="nextVerseAudio(${ayaNum})">Next ⏭</button>
         </div>
       </div>
@@ -716,7 +716,7 @@
         + ' style="padding:5px 11px;border-radius:20px;cursor:pointer;font-size:12px;font-weight:700;'
         + 'border:1.5px solid ' + (on ? '#C9A84C' : '#D4C9A8') + ';'
         + 'background:' + (on ? '#C9A84C' : '#fff') + ';'
-        + 'color:' + (on ? '#fff' : '#7A8FA6') + ';">'
+        + 'color:' + (on ? '#fff' : '#5f6f81') + ';">'
         + escapeHtml(ALL_LANGS[k].label) + '</button>';
     }).join('');
   }

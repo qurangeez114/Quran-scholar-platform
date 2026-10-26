@@ -15,7 +15,7 @@ const emailTemplates = {
       <a href="${window.location.origin}/course.html?course={courseId}" style="display: inline-block; padding: 10px 20px; background: #667eea; color: white; text-decoration: none; border-radius: 6px; margin-top: 1rem;">
         Go to Course
       </a>
-      <p style="margin-top: 2rem; font-size: 0.9rem; color: #999;">
+      <p style="margin-top: 2rem; font-size: 0.9rem; color: #595959;">
         © QuranHikma Learning Platform
       </p>
     `
@@ -31,7 +31,7 @@ const emailTemplates = {
       <a href="${window.location.origin}/student-dashboard.html" style="display: inline-block; padding: 10px 20px; background: #667eea; color: white; text-decoration: none; border-radius: 6px; margin-top: 1rem;">
         View Dashboard
       </a>
-      <p style="margin-top: 2rem; font-size: 0.9rem; color: #999;">
+      <p style="margin-top: 2rem; font-size: 0.9rem; color: #595959;">
         © QuranHikma Learning Platform
       </p>
     `
@@ -47,7 +47,7 @@ const emailTemplates = {
       <a href="${window.location.origin}/student-dashboard.html" style="display: inline-block; padding: 10px 20px; background: #4CAF50; color: white; text-decoration: none; border-radius: 6px; margin-top: 1rem;">
         Download Certificate
       </a>
-      <p style="margin-top: 2rem; font-size: 0.9rem; color: #999;">
+      <p style="margin-top: 2rem; font-size: 0.9rem; color: #595959;">
         © QuranHikma Learning Platform
       </p>
     `
@@ -64,7 +64,7 @@ const emailTemplates = {
       <a href="${window.location.origin}/student-dashboard.html" style="display: inline-block; padding: 10px 20px; background: #667eea; color: white; text-decoration: none; border-radius: 6px; margin-top: 1rem;">
         View Assignment
       </a>
-      <p style="margin-top: 2rem; font-size: 0.9rem; color: #999;">
+      <p style="margin-top: 2rem; font-size: 0.9rem; color: #595959;">
         © QuranHikma Learning Platform
       </p>
     `
@@ -82,7 +82,7 @@ const emailTemplates = {
       <a href="${window.location.origin}/student-dashboard.html" style="display: inline-block; padding: 10px 20px; background: #667eea; color: white; text-decoration: none; border-radius: 6px; margin-top: 1rem;">
         View Results
       </a>
-      <p style="margin-top: 2rem; font-size: 0.9rem; color: #999;">
+      <p style="margin-top: 2rem; font-size: 0.9rem; color: #595959;">
         © QuranHikma Learning Platform
       </p>
     `
