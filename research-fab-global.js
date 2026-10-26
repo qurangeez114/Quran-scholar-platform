@@ -54,18 +54,6 @@
     });
   }
 
-  // 📚 floating button (skipped on pages that already have their own workspace button)
-  if (!document.getElementById('openResearchWorkspaceBtn')) {
-    var fab = document.createElement('button');
-    fab.id = 'qh-research-fab';
-    fab.type = 'button';
-    fab.title = 'My Research';
-    fab.setAttribute('aria-label', 'Open My Research');
-    fab.textContent = '📚';
-    fab.onclick = openResearch;
-    document.body.appendChild(fab);
-  }
-
   // Save selected text from any page
   var selBtn = null;
   function removeSelBtn() { if (selBtn) { selBtn.remove(); selBtn = null; } }
