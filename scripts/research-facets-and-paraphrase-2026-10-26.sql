@@ -1,7 +1,9 @@
 -- QuranHikma Research subject & paraphrase retrieval, production snapshot 2026-10-26
--- Tested against ylosytbxpzxzwfzjpaej. Read-only; SECURITY INVOKER.
--- Requires scripts/fix-research-search-excerpt-context-2026-10-26.sql first.
--- Query term expansions are editorial retrieval hints, not interpretation.
+-- Verified against ylosytbxpzxzwfzjpaej. Bounded, read-only, SECURITY INVOKER.
+-- Prerequisite: scripts/fix-research-search-excerpt-context-2026-10-26.sql
+-- First rollout uses terms and a small curated synonym table, not semantic embeddings.
+-- The full-text/trigram indexes already on hadith and tafsir are used to cap
+-- candidate scoring. These suggestions do not verify scholarly interpretations.
 
 CREATE OR REPLACE FUNCTION public.qh_research_facet_check(p_excerpt text, p_focus text, p_query text)
  RETURNS boolean
@@ -118,6 +120,24 @@ BEGIN
   ELSIF src='asbab' THEN
     row_expr := replace(row_expr,'left(reason_text,1000)',format('public.qh_research_context(reason_text,%L,1000)',q));
   END IF;
+
+  IF src='sira' THEN
+    row_expr:=replace(row_expr,'left(story_en,1000)',format('public.qh_research_context(story_en,%L,1000)',q));
+  ELSIF src='campaigns' OR src='stories' THEN
+    row_expr:=replace(row_expr,'left(summary,1000)',format('public.qh_research_context(summary,%L,1000)',q));
+  ELSIF src='themes' OR src='tensions' THEN
+    row_expr:=replace(row_expr,'left(description,1000)',format('public.qh_research_context(description,%L,1000)',q));
+  ELSIF src='madhhab' THEN
+    row_expr:=replace(row_expr,'left(brief_description,1000)',format('public.qh_research_context(brief_description,%L,1000)',q));
+  ELSIF src='propositions' THEN
+    row_expr:=replace(row_expr,'left(statement_en,1000)',format('public.qh_research_context(statement_en,%L,1000)',q));
+  ELSIF src='topics' THEN
+    row_expr:=replace(row_expr,'left(consensus,1000)',format('public.qh_research_context(consensus,%L,1000)',q));
+  END IF;
+
+  IF src='hadith' AND trim(q) ~ '^[a-zA-Z]{3,24}$' THEN
+    reg.extra_where := '('||reg.extra_where||') AND to_tsvector(''english'',text_english) @@ plainto_tsquery(''english'','||quote_literal(q)||')';
+  END IF;
   EXECUTE format($query$
     WITH candidates AS MATERIALIZED (
       SELECT %s AS evidence, %s AS doc FROM %I
@@ -186,6 +206,33 @@ BEGIN
     row_expr:=replace(row_expr,'left(summary,1000)',format('public.qh_research_context(summary,%L,1000)',anchor));
   ELSIF src='topics' THEN
     row_expr:=replace(row_expr,'left(consensus,1000)',format('public.qh_research_context(consensus,%L,1000)',anchor));
+  END IF;
+
+  IF src='sira' THEN
+    row_expr:=replace(row_expr,'left(story_en,1000)',format('public.qh_research_context(story_en,%L,1000)',anchor));
+  ELSIF src='campaigns' THEN
+    row_expr:=replace(row_expr,'left(summary,1000)',format('public.qh_research_context(summary,%L,1000)',anchor));
+  ELSIF src='themes' OR src='tensions' THEN
+    row_expr:=replace(row_expr,'left(description,1000)',format('public.qh_research_context(description,%L,1000)',anchor));
+  ELSIF src='madhhab' THEN
+    row_expr:=replace(row_expr,'left(brief_description,1000)',format('public.qh_research_context(brief_description,%L,1000)',anchor));
+  ELSIF src='propositions' THEN
+    row_expr:=replace(row_expr,'left(statement_en,1000)',format('public.qh_research_context(statement_en,%L,1000)',anchor));
+  END IF;
+
+  -- Use the existing hadith_corpus GIN English-text index to bound
+  -- candidate discovery before running the more expensive overlap scorer.
+  -- Terms have already been validated as simple alphanumeric tokens.
+  IF src='hadith' THEN
+    reg.extra_where := '('||reg.extra_where||') AND to_tsvector(''english'',text_english) @@ to_tsquery(''english'','||quote_literal((SELECT w FROM unnest(words) w ORDER BY CASE w WHEN 'sweep' THEN 0 WHEN 'black' THEN 1 WHEN 'mosque' THEN 2 WHEN 'cloud' THEN 3 WHEN 'stone' THEN 4 WHEN 'judgment' THEN 5 ELSE 40-length(w) END, w LIMIT 1))||')';
+  END IF;
+
+  IF src='tafsir' THEN
+    reg.extra_where := '('||reg.extra_where||') AND content ILIKE '||
+      quote_literal('%'||(SELECT w FROM unnest(words) w ORDER BY
+        CASE w WHEN 'sweep' THEN 0 WHEN 'black' THEN 1 WHEN 'mosque' THEN 2
+          WHEN 'cloud' THEN 3 WHEN 'stone' THEN 4 WHEN 'judgment' THEN 5
+          ELSE 40-length(w) END, w LIMIT 1)||'%');
   END IF;
   EXECUTE format($q$
     WITH candidates AS MATERIALIZED (
