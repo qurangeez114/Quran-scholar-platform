@@ -117,6 +117,33 @@
   html.floating-ui-hidden body { padding-bottom: 0; }
 }
 
+/* The Qur'an home page has a fixed-height reader with its own scroll area.
+   Its content does NOT scroll on body, so the global floating-stack body
+   spacer creates an enormous blank strip below the verse. Give the reader
+   exactly the available mobile viewport, reserving the fixed nav once. */
+@media (max-width: 768px) {
+  body:has(> .app #verseArea) {
+    padding-bottom: 0 !important;
+    overflow-y: hidden !important;
+  }
+  body > .app:has(#verseArea) {
+    height: calc(100vh - var(--qh-home-header-height, 0px) - 42px) !important;
+    height: calc(100dvh - var(--qh-home-header-height, 0px) - 42px) !important;
+    max-height: calc(100dvh - var(--qh-home-header-height, 0px) - 42px) !important;
+    min-height: 0 !important;
+  }
+  body > .app:has(#verseArea) > .main {
+    min-height: 0 !important;
+  }
+  body > .app #verseArea.verse-area {
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: max(64px, env(safe-area-inset-bottom)) !important;
+    scroll-padding-bottom: 64px;
+  }
+}
+
 /* Minimise control. index.html shipped its own #floatingUIToggle; every
    other page had no way to clear the stack at all, which is why the
    floating controls kept covering content on themes / stories / tensions.
@@ -157,6 +184,27 @@
       document.documentElement.classList.add('floating-ui-hidden');
     }
   } catch (e) { /* private mode: fall through un-hidden */ }
+
+  // Keep the home reader's height in sync with the optional school header.
+  // Its height can change when the narrow navigation wraps or fonts load.
+  function syncHomeReaderHeight() {
+    if (!document.querySelector('body > .app #verseArea')) return;
+    var header = document.getElementById('qh-school-topnav');
+    var setHeight = function () {
+      var px = header ? Math.ceil(header.getBoundingClientRect().height) : 0;
+      document.documentElement.style.setProperty('--qh-home-header-height', px + 'px');
+    };
+    setHeight();
+    if (header && typeof ResizeObserver !== 'undefined') {
+      new ResizeObserver(setHeight).observe(header);
+    }
+    window.addEventListener('resize', setHeight, { passive: true });
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', syncHomeReaderHeight, { once: true });
+  } else {
+    syncHomeReaderHeight();
+  }
 
   function addToggle() {
     // index.html already ships its own control; do not stack two.
