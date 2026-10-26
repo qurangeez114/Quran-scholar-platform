@@ -1,9 +1,8 @@
--- QuranHikma Research subject & paraphrase retrieval, production snapshot 2026-10-26
--- Verified against ylosytbxpzxzwfzjpaej. Bounded, read-only, SECURITY INVOKER.
--- Prerequisite: scripts/fix-research-search-excerpt-context-2026-10-26.sql
--- First rollout uses terms and a small curated synonym table, not semantic embeddings.
--- The full-text/trigram indexes already on hadith and tafsir are used to cap
--- candidate scoring. These suggestions do not verify scholarly interpretations.
+-- QuranHikma Research subject & paraphrase retrieval, production snapshot 2026-10-26.
+-- Read-only, SEC INVOKER. Depends on fix-research-search-excerpt-context-2026-10-26.sql.
+-- Paraphrase mode is conservative indexed lexical retrieval with a curated browser glossary,
+-- not vector embeddings, and returned passages are suggestions not verified interpretations.
+-- Existing hadith full-text GIN and tafsir trigram indexes bound expensive overlap scans.
 
 CREATE OR REPLACE FUNCTION public.qh_research_facet_check(p_excerpt text, p_focus text, p_query text)
  RETURNS boolean
