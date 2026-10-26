@@ -51,17 +51,18 @@ async function allRows(table,order='created_at'){
 async function refreshCollections(){
  auth();
  const {data,error}=await db.from('research_collections')
-  .select('id,title,description,visibility,created_at,user_id')
+  .select('id,title,description,visibility,created_at,user_id,is_default')
   .order('created_at',{ascending:false}).limit(500);
  if(error)throw error;
- state.collections=data||[];
+ state.collections=(data||[]).sort((a,b)=>Number(Boolean(b.is_default))-Number(Boolean(a.is_default)) || new Date(b.created_at)-new Date(a.created_at));
  const box=$('collectionList');box.replaceChildren();
  if(!state.collections.length)box.append(elem('p','No private collections yet. Create your first collection below.','research-muted'));
  for(const c of state.collections){
   const b=elem('button',undefined,'research-collection');b.type='button';
+  b.dataset.collectionId=c.id;
   b.setAttribute('aria-pressed',String(c.id===state.active));
-  b.append(elem('span',c.title));
-  b.append(elem('small',fmt(c.created_at)||''));
+  b.append(elem('span',c.title+(c.is_default?' · Starter':'')));
+  b.append(elem('small','Private · '+(fmt(c.created_at)||'')));
   b.onclick=()=>openCollection(c.id).catch(e=>setStatus(errorText(e),true));
   box.append(b);
  }
@@ -79,7 +80,7 @@ async function openCollection(id){
  $('activeDescription').textContent=c.description||'Private collection';
  $('activeTools').hidden=false;
  $('collectionList').querySelectorAll('button').forEach(b=>
-   b.setAttribute('aria-pressed',String(b.querySelector('span')?.textContent===c.title)));
+   b.setAttribute('aria-pressed',String(b.dataset.collectionId===c.id)));
  await refreshCollectionItems();
 }
 async function refreshCollectionItems(){
@@ -262,7 +263,8 @@ async function boot(){
   state.user=u.data.user;$('guest').hidden=true;$('workspace-app').hidden=false;
   await Promise.all([refreshCollections(),refreshQuick()]);
   const id=new URLSearchParams(location.search).get('collection');
-  if(id&&state.collections.some(c=>c.id===id))await openCollection(id);
+  const selected=id&&state.collections.some(c=>c.id===id)?id:(state.collections.find(c=>c.is_default)||state.collections[0])?.id;
+  if(selected)await openCollection(selected);
   if(!fillStagedPassage())setStatus('Your account-owned research is ready.');
  }catch(e){
   $('workspace-app').hidden=true;$('guest').hidden=false;
