@@ -13,7 +13,7 @@
     ['themes.html','🗂️','Themes'],['madhhab.html','⚖️','Madhhab'],['sira.html','🕌','Sīra'],
     ['stories.html','📚','Stories'],['books.html','📕','Books'],['fatwas.html','🧾','Fatwa'],['narrations.html','🧵','Narrations'],
     ['marketplace.html','🛒','Market'],['muhammad.html','☪️','Muhammad'],['contradiction.html','⚡','Tensions'],
-    ['knowledge-graph.html','🕸️','Graph'],['my-research.html','🗂️','Saved']
+    ['knowledge-graph.html','🕸️','Graph'],['my-research.html','🔖','Saved']
   ];
   function file() { var f = location.pathname.split('/').pop(); return f || 'index.html'; }
 
