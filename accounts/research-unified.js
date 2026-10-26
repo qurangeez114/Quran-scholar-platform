@@ -138,6 +138,18 @@ $('noteForm').onsubmit=async event=>{
   $('noteForm').reset();await refreshCollectionItems();setStatus('Note saved privately.');
  }catch(e){setStatus(errorText(e),true);}
 };
+function fillStagedPassage(){
+  let pending=null;
+  try{pending=JSON.parse(sessionStorage.getItem('qh_research_pending')||'null');}catch{}
+  if(!pending)return false;
+  const kind=['verse','hadith','source'].includes(pending.item_type)?pending.item_type:'source';
+  $('passageType').value=kind;
+  $('passageReference').value=String(pending.reference||'').slice(0,160);
+  $('passageTitle').value=String(pending.title||'').slice(0,200);
+  $('passageText').value=String(pending.content||'').slice(0,10000);
+  setStatus('Unsaved passage staged. Choose or create a private collection, then press Save passage. Nothing has been saved yet.');
+  return true;
+}
 $('passageForm').onsubmit=async event=>{
  event.preventDefault();try{
   const u=auth();if(!state.active)throw Error('Choose a collection first.');
@@ -158,7 +170,9 @@ $('passageForm').onsubmit=async event=>{
     source_id:reference
   });
   if(error)throw error;
-  $('passageForm').reset();await refreshCollectionItems();setStatus('Passage saved privately.');
+  $('passageForm').reset();
+  try{sessionStorage.removeItem('qh_research_pending');}catch{}
+  await refreshCollectionItems();setStatus('Passage saved privately.');
  }catch(e){setStatus(errorText(e),true);}
 };
 async function refreshQuick(){
@@ -249,7 +263,7 @@ async function boot(){
   await Promise.all([refreshCollections(),refreshQuick()]);
   const id=new URLSearchParams(location.search).get('collection');
   if(id&&state.collections.some(c=>c.id===id))await openCollection(id);
-  setStatus('Your account-owned research is ready.');
+  if(!fillStagedPassage())setStatus('Your account-owned research is ready.');
  }catch(e){
   $('workspace-app').hidden=true;$('guest').hidden=false;
   setStatus(errorText(e),false);
