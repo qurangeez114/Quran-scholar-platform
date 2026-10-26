@@ -73,11 +73,9 @@
         const limit=document.createElement('div');limit.textContent='The description exceeded the supported length or language range. Shorter English descriptions may work better.';banner.append(limit);
       }
     }
-    if(focus!=='all'){
-      const caveat=document.createElement('small');
-      caveat.textContent=' Facet counts are limited to the first 1,200 qualifying passages inspected per source, not complete totals.';
-      banner.append(caveat);
-    }
+    const caveat=document.createElement('small');
+    caveat.textContent=' Counts describe a bounded search of up to 1,200 candidate passages per source, not necessarily the entire corpus.';
+    banner.append(caveat);
     host.prepend(banner);
     // Avoid a misleading "See all" link that would lose the filter or rerun
     // a different search on the same page.
@@ -100,7 +98,7 @@
     searchController=new AbortController();
     const signal=searchController.signal;
     discovery.cancel();discovery.refresh();
-    CUR=q;keepURL(q);
+    CUR=q;keepURL(q);updateGoogleSearch();
     document.querySelectorAll('#scope,.areas').forEach(e=>e.style.display='none');
     const host=document.getElementById('out');
     const sources=SEL.filter(x=>x.startsWith('src:')).map(x=>x.slice(4));
