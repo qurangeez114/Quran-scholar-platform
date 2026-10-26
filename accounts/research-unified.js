@@ -253,7 +253,7 @@ $('createPresentation').onclick=async()=>{
   for(const entry of entries)if(!seen.has(entry.id)){basket.push(entry);seen.add(entry.id);}
   localStorage.setItem('presentationBasket',JSON.stringify(basket));
   localStorage.setItem('qs_presentation_slides',JSON.stringify(basket));
-  location.href='/presentation.html?topic='+encodeURIComponent(collection.title);
+  location.href='/presentation.html?from=collection&topic='+encodeURIComponent(collection.title);
  }catch(e){setStatus(errorText(e),true);}
 };
 async function boot(){
