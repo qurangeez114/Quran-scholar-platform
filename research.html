@@ -412,6 +412,16 @@ function resultLink(key,r){
  if(key==='hadith'&&/^[1-9]\d*$/.test(String(r.id)))return '/research.html?hadith='+encodeURIComponent(r.id);
  return '/research.html?q='+encodeURIComponent(CUR);
 }
+function researchTradition(r){
+ const v=String(r.tradition||'').trim().toLowerCase();
+ if(/^sunni(?:$|[-_\s])/.test(v))return 'Sunni';
+ if(/^shi(?:a|i|ite)(?:$|[-_\s])/.test(v))return 'Shia';
+ return v ? 'Other tradition: '+String(r.tradition).trim() : 'Tradition not specified';
+}
+function researchTraditionRank(r){const t=researchTradition(r);return t==='Sunni'?0:t==='Shia'?1:2;}
+function sortResearchTraditions(rows,key){
+ return (key==='hadith'||key==='tafsir')?[...rows].sort((a,b)=>researchTraditionRank(a)-researchTraditionRank(b)):rows;
+}
 function card(key,r,vars){
  const cfg=SRC[key], ref=cfg.ref(r);
  const payload=esc(JSON.stringify({key,r,ref,query:CUR}));
@@ -419,10 +429,11 @@ function card(key,r,vars){
  const citation=sourceURL?'<p class="what"><a href="'+esc(sourceURL[0])+'" target="_blank" rel="noopener noreferrer">Read cited source ↗</a></p>':'';
  const verified=key==='hadith'&&/^https:\/\/sunnah\.com\/(?:abudawud|bukhari|muslim|tirmidhi|ibnmajah|nasai):[0-9]+[a-z]?$/.test(r.publisher_url||'')?'<p class="what"><a href="'+esc(r.publisher_url)+'" target="_blank" rel="noopener noreferrer">Verify at Sunnah.com ↗</a></p>':'';
  const related=key==='hadith'&&/^[1-9][0-9]*$/.test(String(r.id))?'<details class="hadith-connections" ontoggle="if(this.open)loadHadithConnections(this.querySelector(\'.hc-content\'))"><summary>Related and contrasting Hadith</summary><div class="hc-content" data-hadith-id="'+Number(r.id)+'"></div></details>':'';
+ const tradition=(key==='hadith'||key==='tafsir')?'<span class="ref-badge">'+esc(researchTradition(r))+'</span>':'';
  const badge=key==='hadith'&&r.reference_status?(r.reference_status==='verified_publisher_mapping'?'<span class="ref-badge">Curated publisher reference mapping</span>':'<span class="ref-badge caution">Unverified local catalogue candidate</span>'):'';
  const context=(key==='tafsir'||key==='asbab')&&Number(r.sura)>0&&Number(r.aya)>0?'<a href="/?sura='+Number(r.sura)+'&amp;aya='+Number(r.aya)+'">Open associated verse</a>':'';
  const source=key==='quran'||key==='hadith'?'<a href="'+esc(resultLink(key,r))+'">Open '+(key==='quran'?'verse':'hadith')+' →</a>':context;
- return '<div class="card" data-result="'+payload+'"'+(key==='quran'?' data-sura="'+Number(r.sura)+'" data-aya="'+Number(r.aya)+'"':'')+'><div class="meta">'+esc(ref)+'</div>'+badge+(r.title?'<div class="ttl">'+highlight(r.title,vars)+'</div>':'')+(r.arabic?'<div class="txt" dir="rtl" lang="ar" style="font-size:1.25em;line-height:1.9">'+highlight(snip(r.arabic,vars),vars)+'</div>':'')+'<div class="txt">'+highlight(snip(r.text,vars),vars)+'</div><div class="more">'+source+'</div><div class="result-actions"><button type="button" onclick="resultAction(this,\'read\')">Read passage</button><button type="button" onclick="resultAction(this,\'copy\')">Copy</button><button type="button" onclick="resultAction(this,\'share\')">Share</button><button type="button" onclick="resultAction(this,\'save\')">Save to research</button><button type="button" onclick="resultAction(this,\'listen\')">Listen to text</button><button type="button" onclick="resultAction(this,\'related\')">Find related verses & stories</button></div><div class="result-full" hidden></div><p class="result-status" role="status" aria-live="polite"></p>'+citation+verified+related+'</div>';
+ return '<div class="card" data-result="'+payload+'"'+(key==='quran'?' data-sura="'+Number(r.sura)+'" data-aya="'+Number(r.aya)+'"':'')+'><div class="meta">'+esc(ref)+'</div>'+tradition+badge+(r.title?'<div class="ttl">'+highlight(r.title,vars)+'</div>':'')+(r.arabic?'<div class="txt" dir="rtl" lang="ar" style="font-size:1.25em;line-height:1.9">'+highlight(snip(r.arabic,vars),vars)+'</div>':'')+'<div class="txt">'+highlight(snip(r.text,vars),vars)+'</div><div class="more">'+source+'</div><div class="result-actions"><button type="button" onclick="resultAction(this,\'read\')">Read passage</button><button type="button" onclick="resultAction(this,\'copy\')">Copy</button><button type="button" onclick="resultAction(this,\'share\')">Share</button><button type="button" onclick="resultAction(this,\'save\')">Save to research</button><button type="button" onclick="resultAction(this,\'listen\')">Listen to text</button><button type="button" onclick="resultAction(this,\'related\')">Find related verses & stories</button></div><div class="result-full" hidden></div><p class="result-status" role="status" aria-live="polite"></p>'+citation+verified+related+'</div>';
 }
 function resultNormalize(v){return String(v||'').replace(/…/g,'').replace(/\s+/g,' ').trim();}
 async function resultPassage(data){
@@ -543,7 +554,7 @@ function render(results,vars,q,dg){
   results.filter(r=>total||r.failed).forEach(r=>{
     h+=`<section class="src" id="src-${r.key}"><h2>${esc(LABEL[r.key])} <small>${r.count?(r.capped?'more than 1,000 matches':n(r.count)+' match'+(r.count==1?'':'es')):'no matches'}</small></h2><p class="what">${esc(SRC[r.key].what)}</p>${r.relaxed?'<p class="what"><i>No passage has every word you typed, so these are the closest matches: they contain most of your words.</i></p>':''}`;
     if(r.count){
-      h+=r.rows.map(x=>card(r.key,x,vars)).join('');
+      h+=sortResearchTraditions(r.rows,r.key).map(x=>card(r.key,x,vars)).join('');
       if(r.count>r.rows.length) h+=`<p class="what">Showing ${n(r.rows.length)} of ${r.capped?'1,000+':n(r.count)} matches. Narrow your search to see more relevant passages.</p>`;
     } else h+=r.failed?'<div class="none">This source is temporarily unavailable. Please retry.</div>':'<div class="none">Nothing in this source for this search.</div>';
     h+='</section>';
@@ -896,13 +907,13 @@ async function booksSection(books,q){
   const parts=await Promise.all(BK.map(b=>rpc('book_rows',{kind:b.kind,name:b.name,q:q,lim:6,off:0}).catch(()=>[])));
   let h='<h2>Your selected books</h2><p class="what">Passages for this search in each book you chose. A book with nothing listed has no passage that matches.</p>';
   BK.forEach((b,i)=>{ const rows=parts[i]; b.off=rows.length;
-    h+=`<h3 class="bvh">${esc(b.name)}</h3><div id="bk-${i}">${rows.length?rows.map(r=>card(b.kind,r,vars)).join(''):'<div class="none">Nothing in this book for this search.</div>'}</div><div id="bkm-${i}">${rows.length===6?`<div class="more"><a href="#" onclick="moreBook(${i});return false">Show more from ${esc(b.name)} \u2192</a></div>`:''}</div>`;
+    h+=`<h3 class="bvh">${esc(b.name)}</h3><div id="bk-${i}">${rows.length?sortResearchTraditions(rows,b.kind).map(r=>card(b.kind,r,vars)).join(''):'<div class="none">Nothing in this book for this search.</div>'}</div><div id="bkm-${i}">${rows.length===6?`<div class="more"><a href="#" onclick="moreBook(${i});return false">Show more from ${esc(b.name)} \u2192</a></div>`:''}</div>`;
   });
   const el=document.createElement('section'); el.className='src'; el.id='src-books'; el.innerHTML=h; return el;
 }
 async function moreBook(i){
   const b=BK[i]; const rows=await rpc('book_rows',{kind:b.kind,name:b.name,q:CUR,lim:10,off:b.off}).catch(()=>[]);
-  $('bk-'+i).insertAdjacentHTML('beforeend',rows.map(r=>card(b.kind,r,b.vars)).join(''));
+  $('bk-'+i).insertAdjacentHTML('beforeend',sortResearchTraditions(rows,b.kind).map(r=>card(b.kind,r,b.vars)).join(''));
   b.off+=rows.length; $('bkm-'+i).innerHTML=rows.length===10?`<div class="more"><a href="#" onclick="moreBook(${i});return false">Show more \u2192</a></div>`:'';
 }
 
