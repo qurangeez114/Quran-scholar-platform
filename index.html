@@ -6534,7 +6534,7 @@ async function loadTafsirPanel(sura, aya) {
       if (current !== 'all' && !traditionMatchesTab(s.tradition, current)) return;
       const idx = speakStore.length;
       speakStore.push({ ar: s.ar || '', en: s.en || '', ti: s.ti || '' });
-      html += `<div class="scholar-entry">`;
+      html += `<div class="scholar-entry" data-tafsir-verse="${sura}:${aya}" data-tafsir-index="${idx}" data-tafsir-lang="${escapeHtml(lang)}">`;
       html += `<div class="scholar-name" style="display:flex;align-items:center;justify-content:space-between;gap:8px;"><span>${escapeHtml(s.name || key)}</span><button onclick="speakTafsirEntry('${sura}:${aya}',${idx})" title="Listen" style="flex-shrink:0;border:1px solid #D4C9A8;background:#FAF6EA;border-radius:50%;width:28px;height:28px;font-size:13px;cursor:pointer;">🔊</button></div>`;
       html += '<div class="tafsir-language-pair' + (lang === 'both' ? ' bilingual' : '') + '">';
       if (lang === 'en' || lang === 'both') {
@@ -12245,17 +12245,37 @@ window.loadHadithPanel = async function(sura, aya) {
     copyBtn.title = 'Copy hadith text';
     copyBtn.style.cssText = 'padding:6px 10px;border:1.5px solid #C9A94E;border-radius:8px;background:#FFF;color:#7d5f14;font-size:12px;cursor:pointer;font-weight:700;font-family:inherit;display:inline-flex;align-items:center;gap:4px';
     copyBtn.innerHTML = '<span style="font-size:14px">📋</span> Copy';
-    copyBtn.onclick = function() { 
-      // Only copy the .scholar-body content, not the entire entry (which includes toolbar)
-      const bodyElement = entry.querySelector('.scholar-body');
-      const textContent = bodyElement ? bodyElement.innerText : entry.innerText;
-      navigator.clipboard?.writeText(textContent).then(() => {
-        const origText = copyBtn.innerHTML;
+    copyBtn.onclick = async function() {
+      let textContent = '';
+      const verse = entry.dataset.tafsirVerse;
+      if (verse) {
+        const record = window._tafsirSpeakData?.[verse]?.[Number(entry.dataset.tafsirIndex)];
+        const lang = entry.dataset.tafsirLang;
+        const clean = value => typeof value === 'string' ? value.trim() : '';
+        if (record) {
+          const selected = lang === 'both' ? [record.ar, record.en, record.ti] :
+            lang === 'ar' ? [record.ar] : lang === 'ti' ? [record.ti] : [record.en];
+          const available = selected.map(clean).filter(Boolean);
+          textContent = (available.length ? available : [record.ar, record.en, record.ti].map(clean).filter(Boolean)).join('\n\n');
+        }
+      } else {
+        textContent = entry.querySelector('.scholar-body')?.innerText?.trim() || '';
+      }
+      if (!textContent) {
+        copyBtn.textContent = 'No text to copy';
+        setTimeout(() => { copyBtn.innerHTML = '<span style="font-size:14px">📋</span> Copy'; }, 2000);
+        return;
+      }
+      try {
+        if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable');
+        await navigator.clipboard.writeText(textContent);
         copyBtn.innerHTML = '<span style="font-size:14px">✓</span> Copied!';
-        setTimeout(() => { copyBtn.innerHTML = origText; }, 2000);
-      });
+      } catch (_) {
+        copyBtn.textContent = 'Copy failed';
+      }
+      setTimeout(() => { copyBtn.innerHTML = '<span style="font-size:14px">📋</span> Copy'; }, 2000);
     };
-    
+
     // Document button
     const docBtn = document.createElement('button');
     docBtn.className = 'hadith-toolbar-btn document-btn';
