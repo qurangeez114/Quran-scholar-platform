@@ -172,7 +172,14 @@ section.src h2{font-size:25px;font-weight:600;margin-top:34px}
 </style>
   <script src="site-motion.js" defer></script>
 <script src="/site-chrome.js" defer></script>
-</head>
+<style>
+#comparePanel{margin:18px 0;padding:16px;border:1px solid #d7cab0;border-radius:14px;background:#fffdf8}
+#comparePanel h2{margin:0 0 8px} #comparePanel .compare-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+#comparePanel .compare-side{border:1px solid #e5dcc9;border-radius:10px;padding:12px;min-width:0;overflow-wrap:anywhere}
+#comparePanel button{margin:8px 4px 0 0;padding:8px 10px;border:1px solid #bca66b;border-radius:8px;background:white;color:#254b3d}
+#comparePanel .compare-text{white-space:pre-wrap;line-height:1.65}
+@media(max-width:600px){#comparePanel .compare-grid{grid-template-columns:1fr}}
+</style></head>
 <body>
 <div class="top"><a href="/">← Quran Hikma</a><a href="research-classic.html">AI analysis (classic)</a></div>
 
@@ -226,6 +233,7 @@ section.src h2{font-size:25px;font-weight:600;margin-top:34px}
 </div>
 
 <main>
+  <section id="comparePanel" aria-live="polite" hidden></section>
   <div id="out"></div>
   <section id="externalResults" class="external-results" aria-live="polite" hidden></section>
 </main>
@@ -433,7 +441,7 @@ function card(key,r,vars){
  const badge=key==='hadith'&&r.reference_status?(r.reference_status==='verified_publisher_mapping'?'<span class="ref-badge">Curated publisher reference mapping</span>':'<span class="ref-badge caution">Unverified local catalogue candidate</span>'):'';
  const context=(key==='tafsir'||key==='asbab')&&Number(r.sura)>0&&Number(r.aya)>0?'<a href="/?sura='+Number(r.sura)+'&amp;aya='+Number(r.aya)+'">Open associated verse</a>':'';
  const source=key==='quran'||key==='hadith'?'<a href="'+esc(resultLink(key,r))+'">Open '+(key==='quran'?'verse':'hadith')+' →</a>':context;
- return '<div class="card" data-result="'+payload+'"'+(key==='quran'?' data-sura="'+Number(r.sura)+'" data-aya="'+Number(r.aya)+'"':'')+'><div class="meta">'+esc(ref)+'</div>'+tradition+badge+(r.title?'<div class="ttl">'+highlight(r.title,vars)+'</div>':'')+(r.arabic?'<div class="txt" dir="rtl" lang="ar" style="font-size:1.25em;line-height:1.9">'+highlight(snip(r.arabic,vars),vars)+'</div>':'')+'<div class="txt">'+highlight(snip(r.text,vars),vars)+'</div><div class="more">'+source+'</div><div class="result-actions"><button type="button" onclick="resultAction(this,\'read\')">Read passage</button><button type="button" onclick="resultAction(this,\'copy\')">Copy</button><button type="button" onclick="resultAction(this,\'share\')">Share</button><button type="button" onclick="resultAction(this,\'save\')">Save to research</button><button type="button" onclick="resultAction(this,\'listen\')">Listen to text</button><button type="button" onclick="resultAction(this,\'related\')">Find related verses & stories</button></div><div class="result-full" hidden></div><p class="result-status" role="status" aria-live="polite"></p>'+citation+verified+related+'</div>';
+ return '<div class="card" data-result="'+payload+'"'+(key==='quran'?' data-sura="'+Number(r.sura)+'" data-aya="'+Number(r.aya)+'"':'')+'><div class="meta">'+esc(ref)+'</div>'+tradition+badge+(r.title?'<div class="ttl">'+highlight(r.title,vars)+'</div>':'')+(r.arabic?'<div class="txt" dir="rtl" lang="ar" style="font-size:1.25em;line-height:1.9">'+highlight(snip(r.arabic,vars),vars)+'</div>':'')+'<div class="txt">'+highlight(snip(r.text,vars),vars)+'</div><div class="more">'+source+'</div><div class="result-actions"><button type="button" onclick="resultAction(this,\'read\')">Read passage</button><button type="button" onclick="addResearchComparison(this)">Compare passage</button><button type="button" onclick="resultAction(this,\'copy\')">Copy</button><button type="button" onclick="resultAction(this,\'share\')">Share</button><button type="button" onclick="resultAction(this,\'save\')">Save to research</button><button type="button" onclick="resultAction(this,\'listen\')">Listen to text</button><button type="button" onclick="resultAction(this,\'related\')">Find related verses & stories</button></div><div class="result-full" hidden></div><p class="result-status" role="status" aria-live="polite"></p>'+citation+verified+related+'</div>';
 }
 function resultNormalize(v){return String(v||'').replace(/…/g,'').replace(/\s+/g,' ').trim();}
 async function resultPassage(data){
@@ -459,6 +467,23 @@ async function resultPassage(data){
  if(!path && (String(text).length>=900 || key==='library'))complete=false;
  return {text:String(text),arabic:String(arabic),complete};
 }
+let researchComparison=[];
+function drawResearchComparison(){
+ const panel=document.getElementById('comparePanel'); if(!panel)return;
+ panel.hidden=researchComparison.length===0;if(panel.hidden){panel.replaceChildren();return;}
+ panel.innerHTML='<h2>Compare source passages</h2><p>Choose up to two passages from your results. Similarity, difference or contradiction must be assessed from the texts and their context; placement together does not establish a relationship.</p><div class="compare-grid">'+researchComparison.map((d,i)=>'<article class="compare-side"><strong>'+esc((d.key==='hadith'||d.key==='tafsir')?researchTradition(d.r):'Source')+'</strong><p>'+esc(d.ref||d.r.title||'Source')+'</p>'+(d.r.title?'<p>'+esc(d.r.title)+'</p>':'')+'<div class="compare-text">'+esc(d.passage||d.r.text||'Passage unavailable')+'</div>'+(d.complete?'':'<p>Search excerpt; full text could not be confirmed.</p>')+(d.key==='hadith'?'<p><a href="'+esc(resultLink(d.key,d.r))+'">Open hadith and related comparisons</a></p>':d.key==='tafsir'&&Number(d.r.sura)>0&&Number(d.r.aya)>0?'<p><a href="/?sura='+Number(d.r.sura)+'&amp;aya='+Number(d.r.aya)+'">Open associated verse</a></p>':'')+'<button type="button" onclick="removeResearchComparison('+i+')">Remove</button></article>').join('')+'</div><button type="button" onclick="clearResearchComparison()">Clear comparison</button>'+(researchComparison.length<2?'<p>Select another passage to compare.</p>':'');
+}
+async function addResearchComparison(button){
+ const d=resultData(button);if(!d)return;
+ if(researchComparison.length>=2){const status=button.closest('.card').querySelector('.result-status');status.textContent='Remove a passage from the comparison before adding another.';document.getElementById('comparePanel').scrollIntoView({behavior:'smooth'});return;}
+ button.disabled=true;
+ try{const passage=await resultPassage(d);d.passage=[passage.arabic,passage.text].filter(Boolean).join('\n\n');d.complete=passage.complete;researchComparison.push(d);drawResearchComparison();document.getElementById('comparePanel').scrollIntoView({behavior:'smooth'});}
+ catch(_){button.closest('.card').querySelector('.result-status').textContent='The passage could not be added. Please try again.';}
+ finally{button.disabled=false;}
+}
+function removeResearchComparison(i){researchComparison.splice(i,1);drawResearchComparison();}
+function clearResearchComparison(){researchComparison=[];drawResearchComparison();}
+
 async function resultAction(button,action){
  const data=resultData(button);if(!data)return;
  const host=button.closest('.card'),status=host.querySelector('.result-status'),view=host.querySelector('.result-full');
