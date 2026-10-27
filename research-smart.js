@@ -103,10 +103,6 @@
     const host=document.getElementById('out');
     const sources=SEL.filter(x=>x.startsWith('src:')).map(x=>x.slice(4));
     const books=SEL.filter(x=>!x.startsWith('src:'));
-    if(books.length){
-      host.innerHTML='<div class="empty" role="status">Subject and paraphrase filtering currently applies to source types, not individual selected books. Choose All sources or one of the Hadith, Tafsir, Quran and other source types, then search again.</div>';
-      return;
-    }
     const plan=mode==='meaning'?intent.plan(q):null;
     const hasArabic=mode==='meaning'&&/[\u0600-\u06ff]/.test(q);
     if(mode==='meaning'&&(hasArabic||!plan?.terms?.length)){
@@ -114,13 +110,14 @@
       return;
     }
     host.innerHTML='<div class="empty"><span class="spin"></span>Finding relevant passages and checking subject matches…</div>';
-    const selected=SEL.length?sources:ORDER;
+    const selected=SEL.length ? [...new Set([...sources, ...books.map(b=>b.slice(0,b.indexOf(':')))])] : ORDER;
     const responses=await Promise.all(selected.map(async k=>{
       try{
-        const fn=mode==='meaning'?'qh_research_meaning_search':'qh_research_focus_search';
+        const chosenBooks = sources.includes(k) ? [] : books.filter(b=>b.startsWith(k+':')).map(b=>b.slice(k.length+1));
+        const fn=mode==='meaning'?'qh_research_meaning_books':'qh_research_focus_books';
         const args=mode==='meaning'
-          ?{src:k,q,terms:plan.terms,focus,lim:8}
-          :{src:k,q,focus,lim:8};
+          ?{src:k,q,terms:plan.terms,focus,lim:8,p_books:chosenBooks}
+          :{src:k,q,focus,lim:8,p_books:chosenBooks};
         const r=await rpc(fn,args,signal);
         if(!r||r.failed)throw Error('Unavailable source');
         return r;
