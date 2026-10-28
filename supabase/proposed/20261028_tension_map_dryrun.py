@@ -12,5 +12,5 @@ print('rows in SQL:',len(vals),' unordered pairs:',len({tuple(sorted([(a,b),(c,d
 print('theme rows already live:',q(f"select count(*) c from thematic_cross_references_v2 where theme='{TH}'")[0]['c'])
 vl=','.join(f"({a},{b})" for a,b in {(a,b) for a,b,*_ in vals})
 print('referenced verses present in ayas:',q(f"select count(*) c from ayas where (sura_id,aya_number) in ({vl})")[0]['c'],'of',len({(a,b) for a,b,*_ in vals}))
-for s in ['Torah; explicit','Torah; contextual','Gospel','Zabur']:
+for s in ['Torah;','Gospel;','Zabur;','; textual)','; meaning-based)','; concealment)','; ambiguous)']:
     print(s,sum(s in r for *_,r in vals))
