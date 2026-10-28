@@ -929,15 +929,16 @@ let BK=[];
 async function booksSection(books,q){
   const vars=await wordVars(q);
   BK=books.map(b=>({kind:b.slice(0,b.indexOf(':')),name:b.slice(b.indexOf(':')+1),off:0,vars:vars}));
-  const parts=await Promise.all(BK.map(b=>rpc('book_rows',{kind:b.kind,name:b.name,q:q,lim:6,off:0}).catch(()=>[])));
-  let h='<h2>Your selected books</h2><p class="what">Passages for this search in each book you chose. A book with nothing listed has no passage that matches.</p>';
-  BK.forEach((b,i)=>{ const rows=parts[i]; b.off=rows.length;
-    h+=`<h3 class="bvh">${esc(b.name)}</h3><div id="bk-${i}">${rows.length?sortResearchTraditions(rows,b.kind).map(r=>card(b.kind,r,vars)).join(''):'<div class="none">Nothing in this book for this search.</div>'}</div><div id="bkm-${i}">${rows.length===6?`<div class="more"><a href="#" onclick="moreBook(${i});return false">Show more from ${esc(b.name)} \u2192</a></div>`:''}</div>`;
+  const parts=await Promise.all(BK.map(b=>rpc('book_rows',{kind:b.kind,name:b.name,q:q,lim:6,off:0}).catch(()=>null)));
+  let h='<h2>Your selected books</h2><p class="what">Passages matching the search in the books you chose.</p>'; if (/^terroris(?:e|ed|es|ing|ation)$/i.test(q.trim())) h+='<p class="note">These books may use different wording. <button type="button" onclick="document.getElementById(\'q\').value=\'terror\';search(\'terror\')">Search for “terror” instead</button> Results may refer to different situations.</p>';
+  BK.forEach((b,i)=>{ const rows=parts[i]; b.off=rows?.length||0;
+    h+=`<h3 class="bvh">${esc(b.name)}</h3><div id="bk-${i}">${rows===null?'<div class="none">This book could not be searched. Please retry.</div>':rows.length?sortResearchTraditions(rows,b.kind).map(r=>card(b.kind,r,vars)).join(''):'<div class="none">No match for this wording in this book.</div>'}</div><div id="bkm-${i}">${rows?.length===6?`<div class="more"><a href="#" onclick="moreBook(${i});return false">Show more from ${esc(b.name)} \u2192</a></div>`:''}</div>`;
   });
   const el=document.createElement('section'); el.className='src'; el.id='src-books'; el.innerHTML=h; return el;
 }
 async function moreBook(i){
-  const b=BK[i]; const rows=await rpc('book_rows',{kind:b.kind,name:b.name,q:CUR,lim:10,off:b.off}).catch(()=>[]);
+  const b=BK[i]; const rows=await rpc('book_rows',{kind:b.kind,name:b.name,q:CUR,lim:10,off:b.off}).catch(()=>null);
+  if(!rows){$('bkm-'+i).textContent='Could not load more passages. Try the search again.';return;}
   $('bk-'+i).insertAdjacentHTML('beforeend',sortResearchTraditions(rows,b.kind).map(r=>card(b.kind,r,b.vars)).join(''));
   b.off+=rows.length; $('bkm-'+i).innerHTML=rows.length===10?`<div class="more"><a href="#" onclick="moreBook(${i});return false">Show more \u2192</a></div>`:'';
 }
