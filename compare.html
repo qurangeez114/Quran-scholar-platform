@@ -44,6 +44,7 @@
   .verse-card.hl { background:#FFF6CC; }
   .vk { font-size:10px; font-weight:700; color:#7d5f14; }
   .diff-tag { font-size:9.5px; font-weight:700; padding:1px 6px; border-radius:8px; color:#fff; margin-left:6px; }
+  .trans.rtl { font-family:'Amiri',serif; font-size:17px; line-height:1.9; text-align:right }
   .arabic { font-family:'Amiri',serif; font-size:19px; line-height:1.9; direction:rtl; text-align:right; margin:8px 0; }
   .trans { font-size:13px; line-height:1.6; color:#333; }
   .trans.eth { font-family:'Noto Sans Ethiopic',sans-serif; }
@@ -217,8 +218,10 @@
 
   <link rel="stylesheet" href="activity-history.css">
   <script src="site-motion.js" defer></script>
+<link rel="stylesheet" href="verse-suite.css">
+<script src="verse-suite.js" defer></script>
 </head>
-<body>
+<body data-vs-page>
 <div id="socialOverlayCompare" onclick="if(event.target===this)closeSocialCardCompare()" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:99999998;align-items:flex-start;justify-content:center;padding:12px;overflow-y:auto;">
   <div style="background:#fff;border-radius:14px;padding:16px;width:100%;max-width:480px;">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
@@ -247,8 +250,8 @@
   </div>
 
   <div class="controls">
-    <label>Languages</label>
-    <span id="langchips"></span>
+    <label id="langchips-l">Languages</label>
+    <span id="langchips" role="group" aria-labelledby="langchips-l"></span>
     <label>Order</label>
     <button class="toggle active" id="tgl-nuzul" onclick="setOrder('nuzul')">Revelation</button>
     <button class="toggle" id="tgl-mushaf" onclick="setOrder('mushaf')">Mushaf</button>
@@ -328,7 +331,22 @@ const params = new URLSearchParams(location.search);
 const STORY = params.get('story') || 'creation_adam';
 const LANG_NAMES = { en:'English', ur:'اردو', am:'አማርኛ', ti:'ትግርኛ', tr:'Türkçe', fr:'Français', id:'Indonesia', fa:'فارسی', so:'Somali', om:'Oromoo', de:'Deutsch' };
 const ETH = new Set(['am','ti']);
-let ROWS = [], SUMMARY=null, EVALS=[], order='nuzul', langs=new Set(['en']), qira='arabic', showTranslit=false;
+const RTL_L = new Set(['ar','ur','fa']);
+/* Shared verse-language preference (verse-suite, localStorage 'vs_lang').
+   Arabic is always shown, so choosing Arabic shows English as the translation. */
+function prefLang(){ let l=null; try{ l=params.get('lang')||localStorage.getItem('vs_lang'); }catch(e){} return l||'en'; }
+function trFor(l){ return l==='ar'?'en':l; }
+function allLangs(){ const set=new Set(); ROWS.forEach(r=>Object.keys(r.translations||{}).forEach(k=>set.add(k)));
+  (window.VerseSuite?VerseSuite.languages():[]).forEach(l=>{ if(l!=='ar') set.add(l); }); return [...set]; }
+function lname(l){ return window.VerseSuite?VerseSuite.native(l):(LANG_NAMES[l]||l); }
+/* translation of one verse: story_comparison.translations first, then verse_translations via verse-suite */
+function trText(v,l){ const t=(v.translations||{})[l]; if(t) return t; return window.VerseSuite?(VerseSuite.textOf(v.sura,v.aya,l)||''):''; }
+async function ensureLangs(){ if(!window.VerseSuite||!ROWS.length) return; const keys=ROWS.map(r=>r.sura+':'+r.aya);
+  await Promise.all([...langs].filter(l=>ROWS.some(r=>!(r.translations||{})[l])).map(l=>VerseSuite.fetchTexts(keys,l))); }
+let ignoreLangEvt=false;
+window.addEventListener('verse-suite-lang',async e=>{ if(ignoreLangEvt) return; langs=new Set([trFor(e.detail.lang)]); buildLangMenu(); await ensureLangs(); renderCols(); });
+window.addEventListener('verse-suite-ready',async ()=>{ if(!ROWS.length) return; buildLangMenu(); await ensureLangs(); renderCols(); });
+let ROWS = [], SUMMARY=null, EVALS=[], order='nuzul', langs=new Set([trFor(prefLang())]), qira='arabic', showTranslit=false;
 function transliterateArabic(text){
   if(!text)return'';
   const map={};
@@ -474,7 +492,7 @@ async function load(){
   document.getElementById('title').textContent = prettyName(STORY)+' — '+suraCount()+' tellings';
   window.QNAV_PAGE_LABEL=prettyName(STORY);window.QNAV_PAGE_ICON='📚';
   if(window.qhistRecord)qhistRecord(prettyName(STORY),location.href,'📚',suraCount()+' tellings compared');
-  buildLangMenu(); render();
+  buildLangMenu(); await ensureLangs(); render();
   window.QH_STORY_CONFIG={url:SB_URL,key:SB_KEY,story:STORY,rows:ROWS};
   if(window.QHStorySources)window.QHStorySources.init(window.QH_STORY_CONFIG);
 }
@@ -482,10 +500,11 @@ function prettyName(s){ return s.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperC
 function suraCount(){ return new Set(ROWS.map(r=>r.sura)).size; }
 
 function buildLangMenu(){
-  const set=new Set(); ROWS.forEach(r=>Object.keys(r.translations||{}).forEach(k=>set.add(k)));
   const c=document.getElementById('langchips'); c.innerHTML='';
-  [...set].sort().forEach(l=>{ const b=document.createElement('button'); b.className='qbtn'+(langs.has(l)?' active':''); b.textContent=LANG_NAMES[l]||l;
-    b.onclick=()=>{ if(langs.has(l)){ if(langs.size>1) langs.delete(l); } else langs.add(l); b.classList.toggle('active',langs.has(l)); renderCols(); };
+  allLangs().forEach(l=>{ const b=document.createElement('button'); b.type='button'; b.className='qbtn lchip'+(langs.has(l)?' active':''); b.textContent=lname(l); b.lang=l; b.dataset.lang=l;
+    b.setAttribute('aria-pressed',langs.has(l));
+    b.onclick=async()=>{ if(langs.has(l)){ if(langs.size>1) langs.delete(l); } else { langs.add(l); if(window.VerseSuite){ ignoreLangEvt=true; try{ await VerseSuite.setLang(l,{silent:true}); }finally{ ignoreLangEvt=false; } } }
+      b.classList.toggle('active',langs.has(l)); b.setAttribute('aria-pressed',langs.has(l)); await ensureLangs(); renderCols(); };
     c.appendChild(b); });
   const tBtn=document.createElement('button'); tBtn.className='qbtn'+(showTranslit?' active':''); tBtn.textContent='Aa Transliteration';
   tBtn.onclick=()=>{ showTranslit=!showTranslit; tBtn.classList.toggle('active',showTranslit); renderCols(); };
@@ -495,7 +514,7 @@ function setOrder(o){ order=o;
   document.getElementById('tgl-nuzul').classList.toggle('active',o==='nuzul');
   document.getElementById('tgl-mushaf').classList.toggle('active',o==='mushaf'); render();
 }
-function setQira(q,btn){ qira=q; document.querySelectorAll('.qbtn').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); renderCols(); }
+function setQira(q,btn){ qira=q; document.querySelectorAll('.qbtn[data-q]').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); renderCols(); }
 function surasOrdered(){
   const map={}; ROWS.forEach(r=>{ map[r.sura]=map[r.sura]||(order==='nuzul'?r.revelation_order:r.mushaf_order); });
   return [...new Set(ROWS.map(r=>r.sura))].sort((a,b)=>map[a]-map[b]);
@@ -548,7 +567,7 @@ function renderCols(){
       const key=su+':'+v.aya;
       const color=v.highlight_color||'#6B6B6B';
       const ar=v[qira]||v.arabic||'';
-      const tblock=[...langs].map(function(l){ var tt=(v.translations||{})[l]; return tt===undefined?'':'<div class="trans'+(ETH.has(l)?' eth':'')+(v.diff_category==='unique_here'?' unique':'')+'">'+(tt||'<em style="color:#B99">—</em>')+'</div>'; }).join('');
+      const tblock=[...langs].map(function(l){ var tt=trText(v,l); return '<div class="trans'+(ETH.has(l)?' eth':'')+(RTL_L.has(l)?' rtl':'')+(v.diff_category==='unique_here'?' unique':'')+'" lang="'+l+'" dir="'+(RTL_L.has(l)?'rtl':'ltr')+'" data-tr-lang="'+l+'">'+(tt||'<em style="color:#8a5a5a">No '+lname(l)+' text</em>')+'</div>'; }).join('');
       const isSaved=saved.has(key), isHl=hl.has(key);
       h+='<div class="verse-card'+(isHl?' hl':'')+'" id="story-ref-'+key.replace(':','-')+'" style="border-left-color:'+color+'">'+
            '<span class="vk">'+key+'</span>'+
@@ -576,7 +595,7 @@ function renderCols(){
 function verseText(key){
   const [s,a]=key.split(':').map(Number);
   const v=ROWS.find(r=>r.sura===s&&r.aya===a); if(!v) return '';
-  const ar=v[qira]||v.arabic||''; const t=[...langs].map(l=>(v.translations||{})[l]||'').filter(Boolean).join(' / ');
+  const ar=v[qira]||v.arabic||''; const t=[...langs].map(l=>trText(v,l)).filter(Boolean).join(' / ');
   return key+'\n'+ar+'\n'+t+'\n— quranhikma.com';
 }
 function copyVerse(key){ navigator.clipboard.writeText(verseText(key)).then(()=>toast('Copied '+key)); }

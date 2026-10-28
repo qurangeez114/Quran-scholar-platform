@@ -19,16 +19,30 @@
     li { list-style: none; margin: 0 0 6px; }
     ul { padding: 0; }
     a { color: #e2c98a; }
+    .mp-lang, .mp-verses { grid-column: 1 / -1; }
+    .mp-lang .vs-inline-label { color: #f3ead8; }
+    .mp-verses h2 { font-size: 16px; margin: 0 0 4px; }
+    .mpv-note { font-size: 13px; color: #cbbfa8; margin: 0 0 8px; }
+    .mpv-item { border-top: 1px solid #3d3428; padding: 6px 0; }
+    .mpv-ref { font-size: 12px; color: #e2c98a; font-family: monospace; }
+    .mpv-text { line-height: 1.6; }
+    .mpv-empty { color: #cbbfa8; font-style: italic; }
     @media (max-width: 800px) { main { grid-template-columns: 1fr; } }
   </style>
   <script src="site-motion.js" defer></script>
 <script src="/site-chrome.js" defer></script>
+<link rel="stylesheet" href="verse-suite.css">
+<script src="verse-suite.js" defer></script>
 </head>
-<body>
+<body data-vs-page>
   <main>
     <h1>My pages</h1>
     <p class="note">Create a page by file name. Edit it, paste outside material, or import the presentation basket from this site. Only your confirmed account can see these pages.</p>
     <p id="status">Checking sign-in…</p>
+    <div class="mp-lang" data-vs-langselect></div>
+    <section class="mp-verses" aria-labelledby="mpv-h"><h2 id="mpv-h">Verses on this page and in my decks</h2>
+      <p class="mpv-note">Verse references written in the page (e.g. 2:255) and verses saved with "Add to Presentation" are shown here in the selected verse language. Your own text is never translated.</p>
+      <ul id="mp-verses"></ul></section>
     <aside>
       <input aria-label="File name, e.g. badr-notes" id="filename" placeholder="File name, e.g. badr-notes">
       <button id="create" type="button">Create page</button>
@@ -86,6 +100,7 @@
       document.getElementById('title').value = page.title;
       document.getElementById('body').value = page.body || '';
       status.textContent = 'Editing ' + page.slug;
+      if (typeof renderVerses === 'function') renderVerses();
     }
     async function load() {
       const { data, error } = await sb.from('user_pages').select('*').order('sort_order');
@@ -153,6 +168,26 @@
         document.getElementById('body').value += (document.getElementById('body').value ? '\n\n' : '') + text;
       } catch (e) { status.textContent = 'Clipboard permission was blocked. Paste into the editor with the keyboard.'; }
     };
+    /* Verse panel: refs found in the open page + verses in the local decks
+       (vs_decks), rendered by verse-suite in the shared language. */
+    function renderVerses() {
+      var refs = [], seen = {};
+      function push(k, from) { if (!seen[k]) { seen[k] = 1; refs.push([k, from]); } }
+      var body = document.getElementById('body').value || '';
+      (body.match(/\b(\d{1,3}):(\d{1,3})\b/g) || []).forEach(function (k) { var x = k.split(':'); if (+x[0] >= 1 && +x[0] <= 114 && +x[1] >= 1) push(k, 'page'); });
+      try { var d = JSON.parse(localStorage.getItem('vs_decks') || 'null'); if (d && d.decks) Object.keys(d.decks).forEach(function (id) { (d.decks[id].items || []).forEach(function (it) { push(it.sura + ':' + it.aya, 'deck: ' + d.decks[id].name); }); }); } catch (e) {}
+      var ul = document.getElementById('mp-verses'); ul.innerHTML = '';
+      if (!refs.length) { ul.innerHTML = '<li class="mpv-empty">No verse references yet.</li>'; return; }
+      refs.slice(0, 60).forEach(function (r) {
+        var li = document.createElement('li'); li.className = 'mpv-item';
+        var h = document.createElement('div'); h.className = 'mpv-ref'; h.textContent = 'Quran ' + r[0] + ' · ' + r[1]; h.setAttribute('data-vs-ref', r[0]);
+        var t = document.createElement('div'); t.className = 'mpv-text'; t.setAttribute('data-vs-text', r[0]); t.textContent = '…';
+        li.appendChild(h); li.appendChild(t); ul.appendChild(li);
+      });
+      if (window.VerseSuite) VerseSuite.paintText(ul);
+    }
+    document.getElementById('body').addEventListener('input', function () { clearTimeout(renderVerses._t); renderVerses._t = setTimeout(renderVerses, 600); });
+    renderVerses();
     sb.auth.getSession().then(async function ({ data }) {
       user = data.session && data.session.user;
       if (!user || !(user.email_confirmed_at || user.confirmed_at)) {

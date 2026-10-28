@@ -186,7 +186,8 @@
     syncRadiogroups();
     var fab = document.getElementById('vs-langfab'); if (fab) fab.textContent = '🌐 ' + native(l);
     if (!(opts && opts.silent)) announce('Showing ' + label(l));
-    return renderAll();
+    try { W.dispatchEvent(new CustomEvent('verse-suite-lang', { detail: { lang: l } })); } catch (e) {}
+    return Promise.all([renderAll(), paintVsText(document)]);
   }
 
   /* ---------------- per-verse bar ---------------- */
@@ -257,6 +258,29 @@
     var els = [].slice.call(document.querySelectorAll('.vs-text[id^="vs-text-"]'));
     var keys = els.map(function (el) { return el.id.slice(8).replace('-', ':'); });
     return fetchTexts(keys, curLang).then(function () { els.forEach(function (el) { var x = el.id.slice(8).split('-'); paintText(el, x[0], x[1]); }); });
+  }
+
+  /* Generic hook: any element with data-vs-text="s:a" shows that verse in the
+     shared language. data-vs-text-hide="en,ar" hides it when the current
+     language is one already shown elsewhere on the card. Pages that render
+     their own markup can instead listen for the 'verse-suite-lang' event. */
+  function paintVsText(root) {
+    var els = [].slice.call((root.querySelectorAll ? root : document).querySelectorAll('[data-vs-text]'));
+    if (!els.length) return Promise.resolve();
+    var lang = curLang, keys = els.map(function (el) { return el.getAttribute('data-vs-text'); });
+    return fetchTexts(keys, lang).then(function () {
+      if (lang !== curLang) return;
+      els.forEach(function (el) {
+        var k = el.getAttribute('data-vs-text'), x = k.split(':');
+        var hide = (el.getAttribute('data-vs-text-hide') || '').split(',').indexOf(lang) >= 0;
+        el.hidden = hide; if (hide) return;
+        var t = textOf(x[0], x[1], lang);
+        el.setAttribute('dir', RTL[lang] ? 'rtl' : 'ltr'); el.setAttribute('lang', lang);
+        el.classList.toggle('vs-eth', !!ETH[lang]); el.classList.toggle('vs-rtl', !!RTL[lang]);
+        el.setAttribute('data-vs-lang', lang);
+        if (t) el.textContent = t; else el.innerHTML = '<span class="vs-muted">No ' + esc(label(lang)) + ' text for this verse.</span>';
+      });
+    });
   }
 
   function scan(root) {
@@ -657,7 +681,17 @@
   }
 
   /* ---------------- global language control ---------------- */
+  /* Inline selector: <div data-vs-langselect></div> anywhere on a page. */
+  function mountInlineSelectors() {
+    document.querySelectorAll('[data-vs-langselect]:not([data-vs-mounted])').forEach(function (el, i) {
+      el.setAttribute('data-vs-mounted', '1');
+      el.innerHTML = '<span class="vs-inline-label" id="vs-inl-l' + i + '">Verse language</span>' + radiogroupHTML('vs-rg-inline-' + i, curLang);
+      var g = el.querySelector('.vs-radiogroup'); g.removeAttribute('aria-label'); g.setAttribute('aria-labelledby', 'vs-inl-l' + i);
+      wireRadiogroup(g, function (l) { setLang(l); });
+    });
+  }
   function mountLangControl() {
+    mountInlineSelectors();
     if (document.getElementById('vs-langfab')) return;
     var fab = document.createElement('button'); fab.type = 'button'; fab.id = 'vs-langfab'; fab.className = 'vs-langfab';
     fab.setAttribute('aria-expanded', 'false'); fab.setAttribute('aria-controls', 'vs-langpop'); fab.setAttribute('aria-label', 'Verse display language');
@@ -679,17 +713,17 @@
     Promise.all([discoverLangs(), loadSurahs()]).then(function () {
       if (langs.indexOf(curLang) < 0) curLang = 'ar';
       var hasVerses = document.querySelector('.verse-card,.xref-item,.xref-card,[data-vs-ref]') || document.body.hasAttribute('data-vs-page');
-      scan(document);
-      if (hasVerses || document.body.hasAttribute('data-vs-page')) mountLangControl();
-      var mo = new MutationObserver(function () { clearTimeout(mo._t); mo._t = setTimeout(function () { scan(document); if (document.querySelector('.vs-bar,.vs-xref-tools')) mountLangControl(); }, 60); });
+      scan(document); paintVsText(document);
+      if (hasVerses || document.body.hasAttribute('data-vs-page') || document.querySelector('[data-vs-langselect]')) mountLangControl();
+      var mo = new MutationObserver(function () { clearTimeout(mo._t); mo._t = setTimeout(function () { scan(document); if (document.querySelector('[data-vs-text]:not([data-vs-lang="' + curLang + '"])')) paintVsText(document); if (document.querySelector('.vs-bar,.vs-xref-tools')) mountLangControl(); }, 60); });
       mo.observe(document.body, { childList: true, subtree: true });
-      W.dispatchEvent(new Event('verse-suite-ready'));
+      W.dispatchEvent(new CustomEvent('verse-suite-ready', { detail: { lang: curLang } }));
     });
   }
 
   W.VerseSuite = {
     setLang: setLang, getLang: function () { return curLang; }, languages: function () { return langs.slice(); },
-    label: label, fetchTexts: fetchTexts, provideTexts: provideTexts, textOf: textOf, copy: doCopy, share: doShare, deepLink: deepLink,
+    label: label, native: native, isRTL: function (l) { return !!RTL[l]; }, paintText: paintVsText, fetchTexts: fetchTexts, provideTexts: provideTexts, textOf: textOf, copy: doCopy, share: doShare, deepLink: deepLink,
     openCard: openCard, drawCard: drawCard, ensureFonts: ensureFonts, openResearch: openResearch, openPanel: openPanel,
     deck: Deck, audio: Audio, surahName: surahName, loadSurahs: loadSurahs, scan: scan,
     registerAudioProvider: function (p, makeDefault) { if (makeDefault) { Audio.stop(true); Audio.provider = p; } }
