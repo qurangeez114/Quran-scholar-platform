@@ -482,6 +482,26 @@ function transliterateArabic(arabicText) {
 // VERSE LOADING & RENDERING
 // ============================================================================
 
+// Distinct sura:aya members of a v2 cross-reference theme (source or target).
+async function qhV2ThemeVerses(theme) {
+  const seen = new Map(), PAGE = 1000;
+  for (let from = 0; from < 50000; from += PAGE) {
+    const r = await fetch(
+      `${SB_URL}/rest/v1/thematic_cross_references_v2?theme=eq.${encodeURIComponent(theme)}` +
+      `&select=sura,aya,related_sura,related_aya&order=id`,
+      { headers: { ...HDR, Range: `${from}-${from + PAGE - 1}`, 'Range-Unit': 'items' } }
+    );
+    if (!r.ok) break;
+    const rows = await r.json();
+    rows.forEach(x => {
+      seen.set(x.sura + ':' + x.aya, { sura: x.sura, aya: x.aya });
+      seen.set(x.related_sura + ':' + x.related_aya, { sura: x.related_sura, aya: x.related_aya });
+    });
+    if (rows.length < PAGE) break;
+  }
+  return [...seen.values()].sort((a, b) => a.sura - b.sura || a.aya - b.aya);
+}
+
 async function loadVerses() {
   try {
     // theme_verses says WHICH verses belong to the theme
@@ -489,7 +509,12 @@ async function loadVerses() {
       `${SB_URL}/rest/v1/theme_verses?theme=eq.${encodeURIComponent(currentTheme)}&select=sura,aya&order=sura,aya&limit=10000`,
       { headers: HDR }
     );
-    const refs = await refRes.json();
+    let refs = await refRes.json();
+
+    // Fallback: themes that exist only as cross-reference groups (e.g. the
+    // scripture-confirmation themes) have no theme_verses rows. Build the verse
+    // list from thematic_cross_references_v2 instead (paged; deduped).
+    if (!Array.isArray(refs) || !refs.length) refs = await qhV2ThemeVerses(currentTheme);
 
     if (!refs || !refs.length) {
       currentVerses = [];
