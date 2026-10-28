@@ -10,9 +10,8 @@ v AS (SELECT x.sura, x.aya FROM thematic_cross_references_v2 x, t WHERE x.theme=
       UNION SELECT x.related_sura, x.related_aya FROM thematic_cross_references_v2 x, t WHERE x.theme=t.theme),
 todo AS (SELECT v.* FROM v, t WHERE NOT EXISTS (SELECT 1 FROM theme_verses tv WHERE tv.theme=t.theme AND tv.sura=v.sura AND tv.aya=v.aya)),
 ins AS (
-  INSERT INTO theme_verses (id, theme, sura, aya, arabic, arabic_transliteration, english, tigrinya, amharic)
-  SELECT (SELECT coalesce(max(id),0) FROM theme_verses) + row_number() OVER (ORDER BY d.sura, d.aya),
-         (SELECT theme FROM t), d.sura, d.aya, a.arabic, a.arabic, a.english, a.tigrinya, a.amharic
+  INSERT INTO theme_verses (theme, sura, aya, arabic, arabic_transliteration, english, tigrinya, amharic)
+  SELECT (SELECT theme FROM t), d.sura, d.aya, a.arabic, a.arabic, a.english, a.tigrinya, a.amharic
   FROM todo d LEFT JOIN ayas a ON a.sura_id=d.sura AND a.aya_number=d.aya
   ON CONFLICT (theme, sura, aya) DO NOTHING
   RETURNING id)

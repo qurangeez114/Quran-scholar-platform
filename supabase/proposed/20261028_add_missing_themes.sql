@@ -1,6 +1,7 @@
 -- PROPOSED — NOT APPLIED. Adds 3 cross-reference themes to themes + theme_verses so they appear on themes.html
 -- and theme-reader.html, then refreshes the theme_summary materialized view.
 -- Expected: themes +3 (85 -> 88), theme_verses +55 (33 + 17 + 5), theme_summary 85 -> 88 rows.
+-- Fix: theme_verses.id is an identity column (GENERATED ALWAYS); it is no longer set explicitly.
 -- Idempotent (NOT EXISTS + existing unique keys themes_name_key / uq_theme_verses). Rollback: 20261028_add_missing_themes_ROLLBACK.sql
 
 -- ===== PRE-CHECK (read-only) =====
@@ -35,7 +36,7 @@ INSERT INTO public._fix_20261028_themes_inserted SELECT id FROM ins ON CONFLICT 
 
 -- 2) theme_verses: distinct verses of each theme in thematic_cross_references_v2 (source or related),
 --    text copied from ayas like existing rows (arabic_transliteration = arabic, as in existing data).
---    theme_verses.id has no default, so ids continue from max(id).
+--    theme_verses.id is an identity column (GENERATED ALWAYS), so it is left to the database.
 LOCK TABLE theme_verses IN SHARE ROW EXCLUSIVE MODE;
 WITH th(theme) AS (VALUES ('Confirmation of Previous Scripture'),('Believe in All Scripture'),
        ('Believe in Part of the Scripture and Disbelieve in Part')),
@@ -45,9 +46,8 @@ v AS (
 todo AS (
   SELECT v.* FROM v WHERE NOT EXISTS (SELECT 1 FROM theme_verses t WHERE t.theme=v.theme AND t.sura=v.sura AND t.aya=v.aya)),
 ins AS (
-  INSERT INTO theme_verses (id, theme, sura, aya, arabic, arabic_transliteration, english, tigrinya, amharic)
-  SELECT (SELECT coalesce(max(id),0) FROM theme_verses) + row_number() OVER (ORDER BY d.theme, d.sura, d.aya),
-         d.theme, d.sura, d.aya, a.arabic, a.arabic, a.english, a.tigrinya, a.amharic
+  INSERT INTO theme_verses (theme, sura, aya, arabic, arabic_transliteration, english, tigrinya, amharic)
+  SELECT d.theme, d.sura, d.aya, a.arabic, a.arabic, a.english, a.tigrinya, a.amharic
   FROM todo d LEFT JOIN ayas a ON a.sura_id = d.sura AND a.aya_number = d.aya
   ON CONFLICT (theme, sura, aya) DO NOTHING
   RETURNING id)
