@@ -149,7 +149,12 @@
     if(!active())return legacySearch(q);
     return smartSearch(q);
   };
-  root.QHSmart={setFocus,setMode,getState:()=>({focus,mode})};
+  root.QHSmart={setFocus,setMode,getState:()=>({focus,mode}),moreSource:(key,q,lim,signal)=>{
+    const sources=SEL.filter(x=>x.startsWith('src:')).map(x=>x.slice(4));
+    const p_books=sources.includes(key)?[]:SEL.filter(x=>x.startsWith(key+':')).map(x=>x.slice(key.length+1));
+    return rpc(mode==='meaning'?'qh_research_meaning_books':'qh_research_focus_books',
+      mode==='meaning'?{src:key,q,terms:intent.plan(q).terms,focus,lim,p_books}:{src:key,q,focus,lim,p_books},signal);
+  }};
   updateControls();
 })(window);
 

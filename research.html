@@ -407,7 +407,7 @@ function highlight(text,vars){
   const vs=(vars||[]).filter(v=>v&&v.length>=2).sort((a,b)=>b.length-a.length);
   const lat=vs.filter(v=>!/[\u0600-\u06FF]/.test(v)&&v.length>=3), arb=vs.filter(v=>/[\u0600-\u06FF]/.test(v));
   const E=v=>v.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
-  try{ if(lat.length) t=t.replace(new RegExp('('+lat.map(E).join('|')+')','gi'),'<mark>$1</mark>'); }catch(e){}
+  try{ if(lat.length) t=t.replace(new RegExp('(^|[^\\p{L}\\p{N}_])('+lat.map(E).join('|')+')(?=$|[^\\p{L}\\p{N}_])','giu'),'$1<mark>$2</mark>'); }catch(e){}
   try{ if(arb.length) t=t.replace(new RegExp('('+arb.map(v=>[...v].map(c=>E(c)).join(DIA)).join('|')+')','g'),'<mark>$1</mark>'); }catch(e){}
   return t;
 }
@@ -571,7 +571,9 @@ function overview(dg,results,q){
   if(!P.length && !mh) return '';
   return `<div class="ov"><div class="kicker">Summary</div><h2>${esc(q.charAt(0).toUpperCase()+q.slice(1))}</h2><p class="sub">Compiled directly from the site’s database, not written by AI.</p>${P.join('')}${mh}</div>`;
 }
+let renderedSearch=null;
 function render(results,vars,q,dg){
+  renderedSearch={results,vars,q,dg,version:searchVersion};
   const total=results.reduce((a,r)=>a+(r.count||0),0);
   let h=results.some(r=>r.topic_match)?'<div class="note" style="margin-top:12px"><b>Related-topic search: rights and legal status of non-Muslims.</b> Includes protections, obligations and restrictions. Quran and tafsir passages are selected by related verse references; other sources match related terminology. These results do not imply that every source takes the same position.</div>':'';
   const exactReference=results.find(r=>r.reference_match);
@@ -594,7 +596,7 @@ function render(results,vars,q,dg){
     h+=`<section class="src" id="src-${r.key}"><h2>${esc(LABEL[r.key])} <small>${r.failed?'unavailable':r.count?(r.capped?'more than 1,000 matches':n(r.count)+' match'+(r.count==1?'':'es')):'no matches'}</small></h2><p class="what">${esc(SRC[r.key].what)}</p>${r.relaxed?'<p class="what"><i>No passage has every word you typed, so these are the closest matches: they contain most of your words.</i></p>':''}`;
     if(r.count){
       h+=sortResearchTraditions(r.rows,r.key).map(x=>card(r.key,x,vars)).join('');
-      if(r.count>r.rows.length) h+=`<p class="what">Showing ${n(r.rows.length)} of ${r.capped?'1,000+':n(r.count)} matches. Narrow your search to see more relevant passages.</p>`;
+      if(r.count>r.rows.length) h+=`<p class="what source-count">Showing ${n(r.rows.length)} of ${r.capped?'1,000+':n(r.count)} matches.</p><button type="button" onclick="moreSource('${r.key}',this)">Show more passages</button>`;
     } else h+=r.failed?'<div class="none">This source is temporarily unavailable. Please retry.</div>':'<div class="none">Nothing in this source for this search.</div>';
     h+='</section>';
   });
@@ -606,6 +608,31 @@ function render(results,vars,q,dg){
   h+='<section class="argument-catalog" id="argumentSourceResults" aria-label="External argument and apologetic sources"><h2>Arguments and outside perspectives</h2><p class="what">Checking indexed source articles…</p></section>';
   $('out').innerHTML=h;
   if(!SEL.length)loadArgumentCatalog(q,searchVersion);else{const outside=$('argumentSourceResults');if(outside)outside.remove();}
+}
+
+async function moreSource(key,button){
+ const state=renderedSearch;
+ if(!state||state.version!==searchVersion)return;
+ const prior=state.results.find(r=>r.key===key);if(!prior)return;
+ button.disabled=true;button.textContent='Loading more passages…';
+ try{
+  const limit=Math.min(1000,Math.max(20,prior.rows.length*2));
+  const fresh=typeof QHSmart!=='undefined'&&(QHSmart.getState().focus!=='all'||QHSmart.getState().mode==='meaning')
+   ?await QHSmart.moreSource(key,state.q,limit,searchController?.signal)
+   :await rpc(key==='sira'?'qh_sira_search':'site_search_src',key==='sira'?{q:state.q,lim:limit}:{src:key,q:state.q,lim:limit},searchController?.signal);
+  if(state.version!==searchVersion)return;
+  if(!fresh||fresh.failed)throw Error('Source unavailable');
+  if(fresh.rows.length<=prior.rows.length){button.textContent='No additional passages available in this search. Refine your query.';return;}
+  const section=$('src-'+key);
+  section.querySelectorAll('.card').forEach(el=>el.remove());
+  button.insertAdjacentHTML('beforebegin',sortResearchTraditions(fresh.rows,key).map(r=>card(key,r,state.vars)).join(''));
+  Object.assign(prior,fresh);
+  section.querySelector('.source-count').textContent='Showing '+n(fresh.rows.length)+' of '+(fresh.capped?'1,000+':n(fresh.count))+' matches.';
+  // The count is reported by the source, independently of the displayed page size.
+  section.querySelector('h2 small').textContent=(fresh.capped?'1,000+':n(fresh.count))+' matches';
+  button.disabled=fresh.rows.length>=fresh.count;
+  button.textContent=button.disabled?'All returned matches shown':'Show more passages';
+ }catch(_){if(state.version===searchVersion){button.disabled=false;button.textContent='Could not load more. Retry';}}
 }
 
 function appendArgumentReferences(parent,refs,label){
