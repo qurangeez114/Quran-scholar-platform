@@ -226,3 +226,5 @@ BEGIN
 END $function$
 
 ;
+-- Apply tradition priority before limiting rows, not only to a displayed subset.
+update public.search_registry set order_expr = 'case when lower(tradition) = ''sunni'' then 0 when lower(tradition) in (''shia'',''shiite'') then 1 else 2 end, ' || order_expr where key in ('hadith','tafsir') and order_expr not like 'case when lower(tradition)%';
