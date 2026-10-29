@@ -134,14 +134,14 @@
   root.search=function(q){
     // Never route a numbered hadith reference through approximate matching.
     // This preserves trusted publisher/edition reconciliation and collisions.
-    if(hadithReference(String(q||''))){
+    if(hadithReference(String(q||''))||quranReference(String(q||''))){
       referenceLookup=true;
       return Promise.resolve(legacySearch(q)).finally(()=>{
         referenceLookup=false;
         if(active()){
           const host=document.getElementById('out');
           const alert=document.createElement('p');alert.className='smart-notice';
-          alert.textContent='Exact hadith citation lookup overrides subject and paraphrase filters so the requested report number remains unchanged.';
+          alert.textContent='Exact citation lookup overrides subject and paraphrase filters so the requested reference remains unchanged.';
           host?.prepend(alert);
         }
       });
@@ -152,3 +152,4 @@
   root.QHSmart={setFocus,setMode,getState:()=>({focus,mode})};
   updateControls();
 })(window);
+
