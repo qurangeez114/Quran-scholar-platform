@@ -103,7 +103,26 @@
 
   /* Batch-fetch text for a list of 's:a' keys in one language. Arabic comes
      from ayas.arabic (canonical Hafs), everything else from verse_translations. */
+  /* Host-provided text. A page that already has a verse's text can hand it
+     over so no request is made for it:
+       window.VerseSuiteTexts = { en: { '2:62': '…' } }   (fill any time, before or after load)
+       VerseSuite.provideTexts('en', { '2:62': '…' })
+       <el data-sura="2" data-aya="62" data-vs-text-en="…">
+     Blank values are ignored, so missing text still falls through to a fetch. */
+  function provideTexts(lang, map) {
+    if (!lang || !map) return;
+    Object.keys(map).forEach(function (k) { var t = map[k]; if (typeof t === 'string' && t.trim() && !((lang + '|' + k) in cache && cache[lang + '|' + k])) cache[lang + '|' + k] = clean(t); });
+  }
+  function harvest(keys, lang) {
+    var shared = W.VerseSuiteTexts && W.VerseSuiteTexts[lang];
+    if (shared) provideTexts(lang, shared);
+    if (!/^[a-z]{2,3}$/.test(lang)) return;
+    var attr = 'data-vs-text-' + lang, m = {};
+    document.querySelectorAll('[data-sura][data-aya][' + attr + ']').forEach(function (el) { m[el.getAttribute('data-sura') + ':' + el.getAttribute('data-aya')] = el.getAttribute(attr); });
+    provideTexts(lang, m);
+  }
   function fetchTexts(keys, lang) {
+    harvest(keys, lang);
     var need = keys.filter(function (k) { return !((lang + '|' + k) in cache); });
     need = need.filter(function (k, i) { return need.indexOf(k) === i; });
     if (!need.length) return Promise.resolve();
@@ -670,7 +689,7 @@
 
   W.VerseSuite = {
     setLang: setLang, getLang: function () { return curLang; }, languages: function () { return langs.slice(); },
-    label: label, fetchTexts: fetchTexts, textOf: textOf, copy: doCopy, share: doShare, deepLink: deepLink,
+    label: label, fetchTexts: fetchTexts, provideTexts: provideTexts, textOf: textOf, copy: doCopy, share: doShare, deepLink: deepLink,
     openCard: openCard, drawCard: drawCard, ensureFonts: ensureFonts, openResearch: openResearch, openPanel: openPanel,
     deck: Deck, audio: Audio, surahName: surahName, loadSurahs: loadSurahs, scan: scan,
     registerAudioProvider: function (p, makeDefault) { if (makeDefault) { Audio.stop(true); Audio.provider = p; } }
