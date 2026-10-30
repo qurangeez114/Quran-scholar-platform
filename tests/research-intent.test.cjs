@@ -36,8 +36,13 @@ test('search page wires controls without changing the original keyword reference
  assert.match(html,/data-mode="meaning"/);
  assert.match(html,/research-intent\.js/);
  assert.match(html,/research-smart\.js/);
- assert.match(smart,/qh_research_focus_search/);
- assert.match(smart,/qh_research_meaning_search/);
+ assert.match(smart,/qh_research_focus_books/);
+ assert.match(smart,/qh_research_meaning_books/);
  assert.match(smart,/legacySearch\(q\)/);
  assert.match(smart,/hadithReference\(/);
 });
+test('legal topic detection preserves the non-Muslim qualifier',()=>{
+ for(const q of ['rights of non Muslim in Islamic country','protection of non-Muslims','status of religious minorities','freedom of People of the Book'])assert.equal(intent.topic(q),'non-muslim-rights');
+ for(const q of ['Muslim country','rights of women','country where Muhammad lived','non Muslim merchant'])assert.equal(intent.topic(q),null);
+});
+

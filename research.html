@@ -465,17 +465,25 @@ async function resultPassage(data){
  if(key==='hadith'&&/^[1-9]\d*$/.test(String(r.id)))path='hadith_corpus?id=eq.'+encodeURIComponent(r.id)+'&select=text_english,text_arabic&limit=1';
  if(key==='quran'&&Number(r.sura)>0&&Number(r.aya)>0)path='ayas?sura_id=eq.'+Number(r.sura)+'&aya_number=eq.'+Number(r.aya)+'&select=english,arabic&limit=1';
  if(key==='tafsir'&&Number(r.sura)>0&&Number(r.aya)>0&&r.title)path='tafsir_entries?sura=eq.'+Number(r.sura)+'&aya=eq.'+Number(r.aya)+'&scholar_name=eq.'+encodeURIComponent(r.title)+'&language=eq.en&select=content,tradition&limit=100';
+ if(key==='sira'){
+  complete=false;
+  const id=String(r.id||'');
+  if(id.startsWith('event:'))path='sira_events?id=eq.'+encodeURIComponent(id.slice(6))+'&select=story_en,story_ar&limit=1';
+  else if(id.startsWith('campaign:'))path='campaign_sirah?id=eq.'+encodeURIComponent(id.slice(9))+'&select=english_text,arabic_text&limit=1';
+ }
  if(path){
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),15000);
   try{
-   const response=await fetch(SB+'/rest/v1/'+path,{headers:H});if(!response.ok)throw Error('unavailable');
+   const response=await fetch(SB+'/rest/v1/'+path,{headers:H,signal:controller.signal});if(!response.ok)throw Error('unavailable');
    const rows=await response.json();let found=null;
    if(key==='tafsir'){
     const needle=resultNormalize(text);
     const matches=rows.filter(x=>(!r.tradition||x.tradition===r.tradition)&&needle&&resultNormalize(x.content).includes(needle));
     if(matches.length===1)found=matches[0];
    } else if(rows.length===1)found=rows[0];
-   if(found){text=found.content||found.text_english||found.english||text;arabic=found.text_arabic||found.arabic||arabic;complete=true;}
-  }catch(_){}
+   if(found){text=found.content||found.text_english||found.english||found.story_en||found.english_text||text;arabic=found.text_arabic||found.arabic||found.story_ar||found.arabic_text||arabic;complete=true;}
+  }catch(_){}finally{clearTimeout(timer);}
  }
  // The search service can truncate at 1,000 characters without an ellipsis.
  if(!path && (String(text).length>=900 || key==='library'))complete=false;
@@ -512,7 +520,7 @@ async function resultAction(button,action){
  button.disabled=true;status.textContent='Loading passage…';
  const passage=await resultPassage(data);button.disabled=false;
  const body=[passage.arabic,passage.text].filter(Boolean).join('\n\n');
- const label=passage.complete?'':'Only the available search excerpt is shown; full source text could not be confirmed.';
+ const label=passage.complete?(key==='sira'?'Complete stored Sīrah entry. Editorial summaries remain distinct from the cited original source.':''):'Only the available search excerpt is shown; full source text could not be confirmed.';
  if(action==='read'){
   if(!view.hidden){view.hidden=true;button.textContent='Read passage';status.textContent='';return;}
   view.replaceChildren();
@@ -585,21 +593,14 @@ function render(results,vars,q,dg){
   }
   const uniqVars=[...new Set(vars)].filter(v=>v.toLowerCase()!==q.toLowerCase());
   if(uniqVars.length) h+=`<div class="variants">Also searched as: ${uniqVars.map(v=>`<span>${esc(v)}</span>`).join(' ')}</div>`;
-  h+='<div class="tabs">'+results.map(r=>`<button class="tab ${r.count?'':'off'}" onclick="jump('${r.key}')">${esc(LABEL[r.key])} <b>${r.failed?'Unavailable':r.capped?'1000+':n(r.count)}</b></button>`).join('')+(!SEL.length?'<button class="tab" type="button" onclick="document.getElementById(\'argumentSourceResults\')?.scrollIntoView({behavior:\'smooth\',block:\'start\'})">Arguments &amp; perspectives</button>':'')+'</div>';
+  h+='<div class="tabs">'+results.map(r=>`<button data-source-tab="${r.key}" class="tab ${r.count?'':'off'}" onclick="jump('${r.key}')">${esc(LABEL[r.key])} <b>${r.failed?'Unavailable':r.capped?'1000+':n(r.count)}</b></button>`).join('')+(!SEL.length?'<button class="tab" type="button" onclick="document.getElementById(\'argumentSourceResults\')?.scrollIntoView({behavior:\'smooth\',block:\'start\'})">Arguments &amp; perspectives</button>':'')+'</div>';
   h+='<div id="pickerslot"></div>';
   if(!results.some(r=>r.topic_match)) h+=overview(dg,results,q);
-  if(results.some(r=>r.failed)) h+='<div class="note" role="status">Some sources could not be searched in time. Available results are shown below; please retry to check the unavailable sources.</div>';
+  if(results.some(r=>r.failed)) h+='<div class="note" id="sourceFailureNotice" role="status">Some sources could not be searched in time. Available results are shown below; please retry to check the unavailable sources.</div>';
   if(!total&&!results.some(r=>r.failed)){
     h+=`<div class="empty">Nothing found for \u201c${esc(q)}\u201d in any source.<br>Try another spelling, an Arabic form, or a simpler word. If the subject is real and missing, that is a gap in the site\u2019s coverage, not a sign that nothing was written about it.</div>`;
   }
-  results.filter(r=>total||r.failed).forEach(r=>{
-    h+=`<section class="src" id="src-${r.key}"><h2>${esc(LABEL[r.key])} <small>${r.failed?'unavailable':r.count?(r.capped?'more than 1,000 matches':n(r.count)+' match'+(r.count==1?'':'es')):'no matches'}</small></h2><p class="what">${esc(SRC[r.key].what)}</p>${r.relaxed?'<p class="what"><i>No passage has every word you typed, so these are the closest matches: they contain most of your words.</i></p>':''}`;
-    if(r.count){
-      h+=sortResearchTraditions(r.rows,r.key).map(x=>card(r.key,x,vars)).join('');
-      if(r.count>r.rows.length) h+=`<p class="what source-count">Showing ${n(r.rows.length)} of ${r.capped?'1,000+':n(r.count)} matches.</p><button type="button" onclick="moreSource('${r.key}',this)">Show more passages</button>`;
-    } else h+=r.failed?'<div class="none">This source is temporarily unavailable. Please retry.</div>':'<div class="none">Nothing in this source for this search.</div>';
-    h+='</section>';
-  });
+  results.filter(r=>total||r.failed).forEach(r=>{h+=sourceSection(r,vars);});
   if(exactReference?.conflicting_local_count>0){
     const others=exactReference.conflicting_local_rows||[];
     h+=`<details class="ref-other"><summary>${n(exactReference.conflicting_local_count)} additional local record(s) share this number — unverified</summary><p>These local records are preserved for scholarship, but they have NOT been established as the requested publisher citation. Different wording, numbering systems, and reported grades must be checked individually.</p>${others.map(r=>card('hadith',r,vars)).join('')}${exactReference.conflicting_local_count>others.length?'<p>Only the first eight candidates are shown.</p>':''}</details>`;
@@ -608,6 +609,37 @@ function render(results,vars,q,dg){
   h+='<section class="argument-catalog" id="argumentSourceResults" aria-label="External argument and apologetic sources"><h2>Arguments and outside perspectives</h2><p class="what">Checking indexed source articles…</p></section>';
   $('out').innerHTML=h;
   if(!SEL.length)loadArgumentCatalog(q,searchVersion);else{const outside=$('argumentSourceResults');if(outside)outside.remove();}
+}
+
+function sourceSection(r,vars){
+ let h='';
+    h+=`<section class="src" id="src-${r.key}"><h2>${esc(LABEL[r.key])} <small>${r.failed?'unavailable':r.count?(r.capped?'more than 1,000 matches':n(r.count)+' match'+(r.count==1?'':'es')):'no matches'}</small></h2><p class="what">${esc(SRC[r.key].what)}</p>${r.relaxed?'<p class="what"><i>No passage has every word you typed, so these are the closest matches: they contain most of your words.</i></p>':''}`;
+    if(r.count){
+      h+=sortResearchTraditions(r.rows,r.key).map(x=>card(r.key,x,vars)).join('');
+      if(r.count>r.rows.length) h+=`<p class="what source-count">Showing ${n(r.rows.length)} of ${r.capped?'1,000+':n(r.count)} matches.</p><button type="button" onclick="moreSource('${r.key}',this)">Show more passages</button>`;
+    } else h+=r.failed?`<div class="none" role="status">This source is temporarily unavailable.</div><button type="button" onclick="retrySource('${r.key}',this)">Retry this source</button>`:'<div class="none">Nothing in this source for this search.</div>';
+    h+='</section>';
+ return h;
+}
+async function retrySource(key,button){
+ const state=renderedSearch;
+ if(!state||state.version!==searchVersion)return;
+ const prior=state.results.find(r=>r.key===key);if(!prior||!prior.failed)return;
+ button.disabled=true;button.textContent='Retrying this source…';
+ try{
+  const fresh=typeof QHSmart!=='undefined'&&(QHSmart.getState().focus!=='all'||QHSmart.getState().mode==='meaning')
+   ?await QHSmart.moreSource(key,state.q,8,searchController?.signal)
+   :await rpc(key==='sira'?'qh_sira_search':'site_search_src',key==='sira'?{q:state.q,lim:8}:{src:key,q:state.q,lim:8},searchController?.signal);
+  if(state.version!==searchVersion||searchController?.signal.aborted)return;
+  if(!fresh||fresh.failed||!Array.isArray(fresh.rows))throw Error('Source unavailable');
+  Object.assign(prior,fresh,{failed:false});
+  const section=$('src-'+key);if(section)section.outerHTML=sourceSection(prior,state.vars);
+  const tab=document.querySelector('[data-source-tab="'+key+'"]');
+  if(tab){tab.classList.toggle('off',!prior.count);tab.querySelector('b').textContent=prior.capped?'1000+':n(prior.count);}
+  const notice=$('sourceFailureNotice');if(notice)notice.hidden=!state.results.some(r=>r.failed);
+ }catch(_){
+  if(state.version===searchVersion){button.disabled=false;button.textContent='Still unavailable. Retry this source';}
+ }
 }
 
 async function moreSource(key,button){
@@ -1127,6 +1159,7 @@ loadWhere().then(()=>{ if(hid&&!p){ showHadith(hid,new URLSearchParams(location.
 <script src="/quran-verse-audio.js" defer></script>
 </body>
 </html>
+
 
 
 

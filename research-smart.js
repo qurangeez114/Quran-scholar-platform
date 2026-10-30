@@ -14,6 +14,9 @@
   let mode=intent.modeAllowed(params.get('mode'));
   let referenceLookup=false;
   const active=()=>focus!=='all'||mode==='meaning';
+  // Topic retrieval includes cited verses and legal vocabulary that a literal
+  // overlap of "rights", "Muslim" and "country" cannot reliably recover.
+  const topicSearch=q=>focus==='all'&&!SEL.some(x=>!x.startsWith('src:'))&&!!intent.topic(q);
   const qLabel=f=>({all:'All subjects',people:'People',places:'Places',nature:'Nature',objects:'Objects',events:'Events'})[f]||'All subjects';
 
   function updateControls(){
@@ -49,7 +52,7 @@
   // The former page renderer is reused for citation-safe cards and highlights.
   root.render=function(results,variants,query,digest){
     legacyRender(results,variants,query,digest);
-    if(!active()||referenceLookup)return;
+    if(!active()||referenceLookup||results.some(r=>r.topic_match))return;
     const host=document.getElementById('out');if(!host)return;
     document.getElementById('argumentSourceResults')?.remove();
     const banner=document.createElement('div');banner.className='smart-notice';banner.setAttribute('role','status');
@@ -86,7 +89,7 @@
     });
   };
   root.loadArgumentCatalog=async function(q,version){
-    if(active()&&!referenceLookup)return;
+    if(active()&&!referenceLookup&&!topicSearch(q))return;
     return legacyCatalog(q,version);
   };
 
@@ -114,9 +117,10 @@
     const responses=await Promise.all(selected.map(async k=>{
       try{
         const chosenBooks = sources.includes(k) ? [] : books.filter(b=>b.startsWith(k+':')).map(b=>b.slice(k.length+1));
-        const fn=mode==='meaning'?'qh_research_meaning_books':'qh_research_focus_books';
+        const topical=mode==='meaning'&&topicSearch(q);
+        const fn=topical?'site_search_src':mode==='meaning'?'qh_research_meaning_books':'qh_research_focus_books';
         const args=mode==='meaning'
-          ?{src:k,q,terms:plan.terms,focus,lim:8,p_books:chosenBooks}
+          ?topical?{src:k,q,lim:8}:{src:k,q,terms:plan.terms,focus,lim:8,p_books:chosenBooks}
           :{src:k,q,focus,lim:8,p_books:chosenBooks};
         const r=await rpc(fn,args,signal);
         if(!r||r.failed)throw Error('Unavailable source');
@@ -152,9 +156,11 @@
   root.QHSmart={setFocus,setMode,getState:()=>({focus,mode}),moreSource:(key,q,lim,signal)=>{
     const sources=SEL.filter(x=>x.startsWith('src:')).map(x=>x.slice(4));
     const p_books=sources.includes(key)?[]:SEL.filter(x=>x.startsWith(key+':')).map(x=>x.slice(key.length+1));
+    if(mode==='meaning'&&topicSearch(q))return rpc('site_search_src',{src:key,q,lim},signal);
     return rpc(mode==='meaning'?'qh_research_meaning_books':'qh_research_focus_books',
       mode==='meaning'?{src:key,q,terms:intent.plan(q).terms,focus,lim,p_books}:{src:key,q,focus,lim,p_books},signal);
   }};
   updateControls();
 })(window);
+
 

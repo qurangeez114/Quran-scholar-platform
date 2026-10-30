@@ -56,6 +56,12 @@
       limited:terms.length>7,original};
   }
   function focusAllowed(value){return FOCUS.includes(value)?value:'all';}
+  function topic(value){
+    const q=String(value||'').toLowerCase();
+    return /(non[ -]?muslims?|dhimm|religious minorit|people of the book)/.test(q)
+      && /(rights?|protect|treat|status|freedom|islamic countr|muslim countr)/.test(q)
+      ? 'non-muslim-rights' : null;
+  }
   function modeAllowed(value){return value==='meaning'?'meaning':'keyword';}
-  return {plan,focusAllowed,modeAllowed,FOCUS};
+  return {plan,topic,focusAllowed,modeAllowed,FOCUS};
 });
