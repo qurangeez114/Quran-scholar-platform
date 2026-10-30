@@ -4,12 +4,14 @@
 -- Only two blocks change; everything else (reference lookup, topic expansion, registry, ACLs) is identical.
 --   1. Main path: one pass over at most 1000 matches instead of a count pass + a second pass that
 --      regex-checked and sorted EVERY match (e.g. "prayer": 9.3 s / 5.8 s measured).
---   2. Relaxed fallback: scores at most 20000 (relax_cap) index-matched candidates once, instead of regex-scoring
+--   1b (20261030). Prefilter is now one trigram-indexable ILIKE clause per query word, ANDed (was: ANY word).
+--   2. Relaxed fallback: probes each word with the index, returns empty at once if too few words occur
+--      anywhere, else scores at most 1000 (relax_cap) candidates that contain enough of the words, instead of regex-scoring
 --      every row containing any query word up to twice ("zzqx nonexistent words here": HTTP 500 after 15.6 s).
 -- Already true today, no change needed: Arabic queries only search Arabic columns and Latin queries only
 --   non-Arabic columns (the existing "(col like '%arabic%') = ar" filter).
 -- Behaviour trade-offs: ranking happens within the first 1000 matches (the UI already reports >=1000 as
---   "capped"); relaxed results come ONLY from the first 20000
+--   "capped"); relaxed results come ONLY from the first 1000
 --   candidates: rows beyond the cap are never returned (this limits which results appear, not just
 --   their order). The result carries 'relaxed_capped': true when the cap was hit.
 -- NOT EXECUTED ANYWHERE: only parsed. Test on a staging copy / Supabase branch before production.
@@ -25,7 +27,8 @@ CREATE OR REPLACE FUNCTION public.site_search_src(src text, q text, lim integer 
  LANGUAGE plpgsql
  STABLE
 AS $function$
-declare vs text[]; wr text[]; pats text[]; reg record; w text; c int := 0; r jsonb; ar boolean := q ~ '[؀-ۿ]'; cols text[]; cat text; strip boolean; n int; thr int; relaxed boolean := false; c2 int; r2 jsonb; sc text; base text; relax_cap constant int := 20000; relax_hit_cap boolean := false;
+declare vs text[]; wr text[]; pats text[]; reg record; w text; c int := 0; r jsonb; ar boolean := q ~ '[؀-ۿ]'; cols text[]; cat text; strip boolean; n int; thr int; relaxed boolean := false; c2 int; r2 jsonb; sc text; base text; relax_cap constant int := 1000; relax_hit_cap boolean := false;
+        wcl text[] := '{}'; wp text[]; wl text; hit text[] := '{}'; hb boolean; thr_min int; pre text;
 begin
 
   -- Resolve a collection and reference number before searching passage words.
@@ -146,9 +149,30 @@ begin
   n := coalesce(array_length(wr,1),0);
   if cols is null or n=0 then return jsonb_build_object('key',reg.key,'label',reg.label,'count',0,'rows','[]'::jsonb,'variants',to_jsonb(vs)); end if;
   strip := ar and reg.key in ('quran','library');
-  select string_agg(case when strip and col like '%arabic%' then format('regexp_replace(%I,''[ً-ْٰـ]'','''',''g'') ilike any($1)', col) else format('%I ilike any($1)', col) end, ' or ') into w from unnest(cols) col;
+  select string_agg(case when strip and col like '%arabic%' then format('regexp_replace(%I,''[ً-ْٰـ]'','''',''g'') ilike any($1)', col) else format('%I ilike any($1)', col) end, ' or ') into pre from unnest(cols) col;
   select string_agg(case when strip and col like '%arabic%' then format('regexp_replace(coalesce(%I,''''),''[ً-ْٰـ]'','''',''g'')', col) else format('coalesce(%I::text,'''')', col) end, '||'' ''||') into cat from unnest(cols) col;
-  base := '(' || w || ') and (' || reg.extra_where || ')';
+  -- PERF (20261030): one indexable clause PER QUERY WORD, ANDed. words_match() below
+  -- requires every word anyway, and each word's regex ('\y<stem>[a-z]{0,5}\y', or the
+  -- literal Arabic word) implies the row contains '<stem>' as a substring, so
+  -- "col ILIKE ANY('{%stem%,...}')" per word is a necessary condition: no result is lost.
+  -- Before, the prefilter was "ANY word", so a query with one common word ("here") made
+  -- words_match regex-check ~29k rows even when another word ("zzqx") occurs nowhere.
+  -- Now the trigram index intersects the words and a word with no hits ends the scan at once.
+  -- The column expression is the same as before (plain column, or the diacritic-stripped
+  -- expression for quran/library Arabic), so the trigram indexes (incl. file 1's
+  -- idx_hadith_corpus_text_arabic_trgm on hadith_corpus.text_arabic) still apply.
+  for w in select x from unnest(regexp_split_to_array(trim(q),'\s+')) x where x <> '' and lower(x) not in ('the','in','of','a','an','and','or','to','for','on','at','is','are','was','by','with','from','that','this','about') loop
+    select array_agg(distinct '%'||replace(replace(replace(
+             case when length(v)>=3 and v ~ '^[A-Za-z]+$' then regexp_replace(v,'(ing|ed|es|s)$','') else v end,
+             '\','\\'),'%','\%'),'_','\_')||'%') into wp from unnest(search_variants(w)) v;
+    select string_agg(case when strip and col like '%arabic%' then format('regexp_replace(%I,''[ً-ْٰـ]'','''',''g'') ilike any(%L::text[])', col, wp) else format('%I ilike any(%L::text[])', col, wp) end, ' or ') into wl from unnest(cols) col;
+    wcl := wcl || ('(' || wl || ')');
+  end loop;
+  if coalesce(array_length(wcl,1),0) = n then
+    base := '(' || array_to_string(wcl, ' and ') || ') and (' || reg.extra_where || ')';
+  else
+    base := '(' || pre || ') and (' || reg.extra_where || ')';  -- defensive: same prefilter as before
+  end if;
   -- PERF (20261029): one pass instead of two. The first <=1000 matching rows are
   -- collected once (same cap the count already used), then sorted and rendered.
   -- Before, the second query re-ran the regex on EVERY match (e.g. ~16k rows for
@@ -159,17 +183,41 @@ begin
                  reg.tbl, base, cat, reg.row_expr, reg.order_expr, lim) into c, r using pats, wr;
   if c > 0 then
     null; -- rows already collected above
-  elsif n >= 2 then
+  elsif n >= 2 and array_length(wcl,1) = n then
+    -- PERF (20261030): relaxed results need a score >= thr_min = greatest(1,(n+1)/2) words.
+    -- 1. Index-only probe per word: which words occur anywhere at all?
+    --    A word with no trigram hit can never add to a score.
+    for i in 1..n loop
+      execute format('select exists(select 1 from %I where %s and (%s))', reg.tbl, wcl[i], reg.extra_where) into hb;
+      if hb then hit := hit || wcl[i]; end if;
+    end loop;
+    thr_min := greatest(1,(n+1)/2);
+    -- 2. Fewer hitting words than thr_min: no row can qualify, so return empty now
+    --    (e.g. "zzqx qqxv": two index probes, milliseconds, instead of a 15 s scan).
+    if coalesce(array_length(hit,1),0) >= thr_min then
+      -- 3. Candidates must contain at least thr_min of the hitting words: OR of the
+      --    AND-combinations (BitmapOr of BitmapAnd on the trigram index), not "any word".
+      if array_length(hit,1) <= 8 then
+        with recursive cmb(last, parts, sz) as (
+          select gi, array[gi], 1 from generate_subscripts(hit,1) gi
+          union all
+          select gj, parts || gj, sz + 1 from cmb, generate_subscripts(hit,1) gj where gj > last and sz < thr_min)
+        select string_agg('(' || (select string_agg(hit[p], ' and ') from unnest(parts) p) || ')', ' or ') into pre
+          from cmb where sz = thr_min;
+      else
+        pre := array_to_string(hit, ' or ');  -- very long query: fall back to "any word"
+      end if;
+      base := '(' || pre || ') and (' || reg.extra_where || ')';
     sc := format('(select count(*) from unnest($2) wd where (%s) ~* any(string_to_array(wd,''¦'')))', cat);
     -- PERF (20261029): the relaxed (partial-word) fallback used to regex-score every
     -- row that contained ANY query word, twice, which exceeded the 15s anon
     -- statement_timeout (HTTP 500) when nothing matched. It now scores at most
-    -- relax_cap (20000) index-matched candidates, once, and picks the best threshold.
-    -- NOTE: the cap limits WHICH rows can appear, not only their order: a row outside
-    -- the first relax_cap candidates is never scored or returned. 20000 is above the
-    -- ~16-19k index matches measured for very common words ("prayer"), so in practice
-    -- almost nothing is excluded; when the cap IS reached the result says so via
-    -- 'relaxed_capped': true so the UI can tell the user results may be incomplete.
+    -- relax_cap (1000) candidates, once, and picks the best threshold. 1000, not 20000:
+    -- measured 2026-10-30, fetching + rechecking a hadith candidate costs ~2 ms (cold), so
+    -- 20000 candidates alone would take ~40 s. Candidates are pre-narrowed to rows holding
+    -- >= thr_min of the words (step 3 above), so the cap is reached far less often.
+    -- NOTE: the cap limits WHICH rows can appear, not only their order; when it is hit the
+    -- result says 'relaxed_capped': true so the UI can tell the user results may be incomplete.
     execute format('with cand as materialized (select * from %I where %s limit %s),
                     s as materialized (
                       select row_number() over (order by _score desc, %s) as _rn, *
@@ -186,6 +234,7 @@ begin
       relaxed := true;
     elsif c2 > 0 then
       relaxed := true; c := c2; r := r2;
+    end if;
     end if;
   end if;
   return jsonb_build_object('key',reg.key,'label',reg.label,'count',c,'capped',c>=1000,'rows',coalesce(r,'[]'::jsonb),'variants',to_jsonb(vs),'relaxed',relaxed,'relaxed_capped',relaxed and relax_hit_cap);

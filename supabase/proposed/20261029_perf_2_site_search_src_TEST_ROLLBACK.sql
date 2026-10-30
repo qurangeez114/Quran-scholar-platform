@@ -1,13 +1,22 @@
--- PR #61 TEST — revised site_search_src (file 2) — SELF-ROLLING-BACK. NOTHING PERSISTS.
--- Paste the WHOLE file into the Supabase SQL Editor (production) and click Run once.
--- What it does: BEGIN -> install revised function inside the transaction -> run 8 timed searches
+-- PR #61 TEST (rev 2026-10-30) — revised site_search_src (file 2) — SELF-ROLLING-BACK. NOTHING PERSISTS.
+-- ORDER (do not skip):
+--   1. Apply file 1 (20261029_perf_1_hadith_arabic_trgm_index.sql) FIRST: run its CREATE INDEX CONCURRENTLY
+--      statement ON ITS OWN, outside any transaction, and confirm its post-check says indisvalid = true.
+--   2. Then paste the WHOLE of this file into the Supabase SQL Editor and click Run.
+--   3. Only if every row passes, apply file 2.
+-- Row 3 (Arabic) needs file 1's index: without it the Arabic search is a sequential scan of hadith_corpus
+--   (measured 22 s on 2026-10-30) and times out. If the index is missing, row 3 is NOT run and shows
+--   "SKIPPED - apply file 1 first" instead, so the rest of the test is still valid.
+-- What it does: BEGIN -> install revised function inside the transaction -> run timed searches
 --   (same args the site sends from research.html: {src, q, lim:6}) -> show one result table -> ROLLBACK.
--- The CREATE OR REPLACE and the temp table are discarded by ROLLBACK; the live function is unchanged.
--- PASS: every row has error-free output, elapsed_s under ~3 s, and count > 0 for rows 1,2,3,5,7,8
---   (rows 4 and 6 should return count 0 quickly). relaxed_capped = true means the 20000 cap was hit.
--- Each search is its own statement with a 15 s limit (same as anonymous site visitors).
--- If any search exceeds 15 s it errors with "canceling statement due to statement timeout";
---   the transaction is then aborted and NOTHING is kept (that is a FAIL for that query).
+-- PASS: no error, speed = ok (under ~3 s) on every row, and:
+--   rows 1,2,3,5,7,8 count > 0;  row 4 and row 9 count 0;
+--   row 6 ('zzqx nonexistent words here') may return RELAXED results (relaxed = true: hadith containing
+--   2-3 of the 4 words, e.g. "words" + "here") — that is the intended partial-match behaviour; it must
+--   just be fast. relaxed_capped = true means the 1000-candidate relaxed cap was hit.
+-- If you only see "Success. No rows returned", delete the final ROLLBACK; line, run again to see the table,
+--   then run ROLLBACK; on its own immediately.
+-- Each search has a 15 s limit (same as anonymous visitors); a timeout aborts the run and NOTHING is kept.
 -- AFTER RUNNING, verify the live function is untouched (should still be 5a80601ce832e42993eb64822662fab0):
 --   SELECT md5(pg_get_functiondef('public.site_search_src'::regproc));
 
@@ -20,7 +29,8 @@ CREATE OR REPLACE FUNCTION public.site_search_src(src text, q text, lim integer 
  LANGUAGE plpgsql
  STABLE
 AS $function$
-declare vs text[]; wr text[]; pats text[]; reg record; w text; c int := 0; r jsonb; ar boolean := q ~ '[؀-ۿ]'; cols text[]; cat text; strip boolean; n int; thr int; relaxed boolean := false; c2 int; r2 jsonb; sc text; base text; relax_cap constant int := 20000; relax_hit_cap boolean := false;
+declare vs text[]; wr text[]; pats text[]; reg record; w text; c int := 0; r jsonb; ar boolean := q ~ '[؀-ۿ]'; cols text[]; cat text; strip boolean; n int; thr int; relaxed boolean := false; c2 int; r2 jsonb; sc text; base text; relax_cap constant int := 1000; relax_hit_cap boolean := false;
+        wcl text[] := '{}'; wp text[]; wl text; hit text[] := '{}'; hb boolean; thr_min int; pre text;
 begin
 
   -- Resolve a collection and reference number before searching passage words.
@@ -141,9 +151,30 @@ begin
   n := coalesce(array_length(wr,1),0);
   if cols is null or n=0 then return jsonb_build_object('key',reg.key,'label',reg.label,'count',0,'rows','[]'::jsonb,'variants',to_jsonb(vs)); end if;
   strip := ar and reg.key in ('quran','library');
-  select string_agg(case when strip and col like '%arabic%' then format('regexp_replace(%I,''[ً-ْٰـ]'','''',''g'') ilike any($1)', col) else format('%I ilike any($1)', col) end, ' or ') into w from unnest(cols) col;
+  select string_agg(case when strip and col like '%arabic%' then format('regexp_replace(%I,''[ً-ْٰـ]'','''',''g'') ilike any($1)', col) else format('%I ilike any($1)', col) end, ' or ') into pre from unnest(cols) col;
   select string_agg(case when strip and col like '%arabic%' then format('regexp_replace(coalesce(%I,''''),''[ً-ْٰـ]'','''',''g'')', col) else format('coalesce(%I::text,'''')', col) end, '||'' ''||') into cat from unnest(cols) col;
-  base := '(' || w || ') and (' || reg.extra_where || ')';
+  -- PERF (20261030): one indexable clause PER QUERY WORD, ANDed. words_match() below
+  -- requires every word anyway, and each word's regex ('\y<stem>[a-z]{0,5}\y', or the
+  -- literal Arabic word) implies the row contains '<stem>' as a substring, so
+  -- "col ILIKE ANY('{%stem%,...}')" per word is a necessary condition: no result is lost.
+  -- Before, the prefilter was "ANY word", so a query with one common word ("here") made
+  -- words_match regex-check ~29k rows even when another word ("zzqx") occurs nowhere.
+  -- Now the trigram index intersects the words and a word with no hits ends the scan at once.
+  -- The column expression is the same as before (plain column, or the diacritic-stripped
+  -- expression for quran/library Arabic), so the trigram indexes (incl. file 1's
+  -- idx_hadith_corpus_text_arabic_trgm on hadith_corpus.text_arabic) still apply.
+  for w in select x from unnest(regexp_split_to_array(trim(q),'\s+')) x where x <> '' and lower(x) not in ('the','in','of','a','an','and','or','to','for','on','at','is','are','was','by','with','from','that','this','about') loop
+    select array_agg(distinct '%'||replace(replace(replace(
+             case when length(v)>=3 and v ~ '^[A-Za-z]+$' then regexp_replace(v,'(ing|ed|es|s)$','') else v end,
+             '\','\\'),'%','\%'),'_','\_')||'%') into wp from unnest(search_variants(w)) v;
+    select string_agg(case when strip and col like '%arabic%' then format('regexp_replace(%I,''[ً-ْٰـ]'','''',''g'') ilike any(%L::text[])', col, wp) else format('%I ilike any(%L::text[])', col, wp) end, ' or ') into wl from unnest(cols) col;
+    wcl := wcl || ('(' || wl || ')');
+  end loop;
+  if coalesce(array_length(wcl,1),0) = n then
+    base := '(' || array_to_string(wcl, ' and ') || ') and (' || reg.extra_where || ')';
+  else
+    base := '(' || pre || ') and (' || reg.extra_where || ')';  -- defensive: same prefilter as before
+  end if;
   -- PERF (20261029): one pass instead of two. The first <=1000 matching rows are
   -- collected once (same cap the count already used), then sorted and rendered.
   -- Before, the second query re-ran the regex on EVERY match (e.g. ~16k rows for
@@ -154,17 +185,41 @@ begin
                  reg.tbl, base, cat, reg.row_expr, reg.order_expr, lim) into c, r using pats, wr;
   if c > 0 then
     null; -- rows already collected above
-  elsif n >= 2 then
+  elsif n >= 2 and array_length(wcl,1) = n then
+    -- PERF (20261030): relaxed results need a score >= thr_min = greatest(1,(n+1)/2) words.
+    -- 1. Index-only probe per word: which words occur anywhere at all?
+    --    A word with no trigram hit can never add to a score.
+    for i in 1..n loop
+      execute format('select exists(select 1 from %I where %s and (%s))', reg.tbl, wcl[i], reg.extra_where) into hb;
+      if hb then hit := hit || wcl[i]; end if;
+    end loop;
+    thr_min := greatest(1,(n+1)/2);
+    -- 2. Fewer hitting words than thr_min: no row can qualify, so return empty now
+    --    (e.g. "zzqx qqxv": two index probes, milliseconds, instead of a 15 s scan).
+    if coalesce(array_length(hit,1),0) >= thr_min then
+      -- 3. Candidates must contain at least thr_min of the hitting words: OR of the
+      --    AND-combinations (BitmapOr of BitmapAnd on the trigram index), not "any word".
+      if array_length(hit,1) <= 8 then
+        with recursive cmb(last, parts, sz) as (
+          select gi, array[gi], 1 from generate_subscripts(hit,1) gi
+          union all
+          select gj, parts || gj, sz + 1 from cmb, generate_subscripts(hit,1) gj where gj > last and sz < thr_min)
+        select string_agg('(' || (select string_agg(hit[p], ' and ') from unnest(parts) p) || ')', ' or ') into pre
+          from cmb where sz = thr_min;
+      else
+        pre := array_to_string(hit, ' or ');  -- very long query: fall back to "any word"
+      end if;
+      base := '(' || pre || ') and (' || reg.extra_where || ')';
     sc := format('(select count(*) from unnest($2) wd where (%s) ~* any(string_to_array(wd,''¦'')))', cat);
     -- PERF (20261029): the relaxed (partial-word) fallback used to regex-score every
     -- row that contained ANY query word, twice, which exceeded the 15s anon
     -- statement_timeout (HTTP 500) when nothing matched. It now scores at most
-    -- relax_cap (20000) index-matched candidates, once, and picks the best threshold.
-    -- NOTE: the cap limits WHICH rows can appear, not only their order: a row outside
-    -- the first relax_cap candidates is never scored or returned. 20000 is above the
-    -- ~16-19k index matches measured for very common words ("prayer"), so in practice
-    -- almost nothing is excluded; when the cap IS reached the result says so via
-    -- 'relaxed_capped': true so the UI can tell the user results may be incomplete.
+    -- relax_cap (1000) candidates, once, and picks the best threshold. 1000, not 20000:
+    -- measured 2026-10-30, fetching + rechecking a hadith candidate costs ~2 ms (cold), so
+    -- 20000 candidates alone would take ~40 s. Candidates are pre-narrowed to rows holding
+    -- >= thr_min of the words (step 3 above), so the cap is reached far less often.
+    -- NOTE: the cap limits WHICH rows can appear, not only their order; when it is hit the
+    -- result says 'relaxed_capped': true so the UI can tell the user results may be incomplete.
     execute format('with cand as materialized (select * from %I where %s limit %s),
                     s as materialized (
                       select row_number() over (order by _score desc, %s) as _rn, *
@@ -181,6 +236,7 @@ begin
       relaxed := true;
     elsif c2 > 0 then
       relaxed := true; c := c2; r := r2;
+    end if;
     end if;
   end if;
   return jsonb_build_object('key',reg.key,'label',reg.label,'count',c,'capped',c>=1000,'rows',coalesce(r,'[]'::jsonb),'variants',to_jsonb(vs),'relaxed',relaxed,'relaxed_capped',relaxed and relax_hit_cap);
@@ -207,7 +263,8 @@ SELECT '2 English rare', 'hadith', 'circumambulation', (r.j->>'count')::int, jso
 FROM r, t0;
 
 INSERT INTO pg_temp.pr61_results
-WITH t0 AS MATERIALIZED (SELECT clock_timestamp() AS s),
+WITH t0 AS MATERIALIZED (SELECT clock_timestamp() AS s
+                         WHERE to_regclass('public.idx_hadith_corpus_text_arabic_trgm') IS NOT NULL),
      r  AS MATERIALIZED (SELECT public.site_search_src('hadith', 'الصلاة', 6) AS j FROM t0)
 SELECT '3 Arabic common', 'hadith', 'الصلاة', (r.j->>'count')::int, jsonb_array_length(coalesce(r.j->'rows','[]'::jsonb)),
        (r.j->>'capped')::boolean, (r.j->>'relaxed')::boolean, (r.j->>'relaxed_capped')::boolean,
@@ -254,8 +311,21 @@ SELECT '8 Reference lookup', 'hadith', 'bukhari 1', (r.j->>'count')::int, jsonb_
        round(extract(epoch FROM clock_timestamp() - t0.s)::numeric, 3)
 FROM r, t0;
 
+-- Row 3 placeholder when file 1's index is missing (the Arabic search above was not run).
+INSERT INTO pg_temp.pr61_results (label, src, q)
+SELECT '3 Arabic common — SKIPPED - apply file 1 first', 'hadith', 'الصلاة'
+WHERE to_regclass('public.idx_hadith_corpus_text_arabic_trgm') IS NULL;
+
+INSERT INTO pg_temp.pr61_results
+WITH t0 AS MATERIALIZED (SELECT clock_timestamp() AS s),
+     r  AS MATERIALIZED (SELECT public.site_search_src('hadith', 'zzqx qqxv', 6) AS j FROM t0)
+SELECT '9 No-match, no word occurs', 'hadith', 'zzqx qqxv', (r.j->>'count')::int, jsonb_array_length(coalesce(r.j->'rows','[]'::jsonb)),
+       (r.j->>'capped')::boolean, (r.j->>'relaxed')::boolean, (r.j->>'relaxed_capped')::boolean,
+       round(extract(epoch FROM clock_timestamp() - t0.s)::numeric, 3)
+FROM r, t0;
+
 SELECT label, q, result_count, rows_returned, capped, relaxed, relaxed_capped, elapsed_s,
-       CASE WHEN elapsed_s < 3 THEN 'ok' ELSE 'SLOW' END AS speed
+       CASE WHEN elapsed_s IS NULL THEN 'skipped' WHEN elapsed_s < 3 THEN 'ok' ELSE 'SLOW' END AS speed
 FROM pg_temp.pr61_results ORDER BY label;
 
 ROLLBACK;

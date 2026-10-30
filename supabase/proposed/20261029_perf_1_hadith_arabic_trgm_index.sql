@@ -8,6 +8,9 @@
 --   plain CREATE INDEX. If it fails part-way it leaves an INVALID index: drop it (see ROLLBACK) and retry.
 -- Estimated: size 130-250 MB (text_english trgm index is 136 MB for 47 MB of text; text_arabic is 82 MB),
 --   build roughly 3-15 min with maintenance_work_mem=32MB. Both are estimates, not measured.
+-- APPLY THIS BEFORE FILE 2, then re-run 20261029_perf_2_site_search_src_TEST_ROLLBACK.sql (its Arabic row is skipped until
+--   this index exists). File 2 searches hadith Arabic with the plain column "text_arabic ILIKE ANY(...)", which this
+--   gin_trgm_ops index supports directly (checked 2026-10-30; no expression or normalisation in the way).
 -- Rollback: 20261029_perf_ROLLBACK.sql  Report: 20261029_perf_REPORT.md
 
 -- ===== PRE-CHECK (read-only) =====
