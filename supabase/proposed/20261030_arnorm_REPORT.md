@@ -71,6 +71,34 @@ write overhead for nothing in this path. The only other `text_arabic ILIKE` user
 from #61, because #61 is mid-test and file 1 is still what makes #61 file 2 fast on its own. Recommendation: if this
 stack is approved, **skip file 1** (or drop it with #61's rollback line if already built).
 
+## Revision 2026-10-30b: relaxed-path speed (test row 8 failed at 3.716 s)
+
+Owner's run: everything passed except row 8, `zzqx nonexistent words here` (3.716 s, 169 partial matches, target < 3 s).
+
+**Root cause: the candidate fetch, not the scoring.** Read-only reproduction of file 4's relaxed path
+(`hadith_corpus_canonical`, thr_min = 2, hitting words = nonexistent / word / here; `zzqx` has no trigram hit):
+- Trigram BitmapOr of the 2-word AND-combinations: ~8 ms warm. `word AND here` alone yields 4,347 bitmap rows.
+- Bitmap heap scan for `LIMIT 1000`: 2,326 heap blocks, 1,615 rows rechecked plus 983 removed by recheck
+  (`%here%` also matches "there"/"where"), with ILIKE rechecks on long TOASTed texts: **288 ms warm, 1,274 ms on the first run**.
+- Regex scoring of 1,000 candidates: ~90 ms (≈0.09 ms/row), not ~2 ms/row.
+- Word-presence probes (`exists`) and the strict AND pass: < 10 ms each.
+- Whole relaxed path, original file 4 (run as an inline read-only DO block): 586 / 457 / 442 ms warm.
+  The owner's 3.7 s is the same work on a cold cache straight after the backfill, VACUUM and index build.
+
+**Fix (file 4 and the inlined copy in the TEST file, which stay identical):**
+1. `relax_cap` 1000 → 300: about 3× fewer heap blocks and rechecks.
+2. Preferred tier first: when n ≥ 4, rows containing ≥ n-1 of the words are collected first (own capped pass),
+   then the ≥ thr_min rows fill the rest, deduplicated by id. A lower cap can therefore never crowd out the best rows.
+3. `relaxed_capped` is true when either pass reached the cap, so it stays accurate.
+The strict path, the Arabic normalisation and the pairs are unchanged.
+
+**After:** the same DO-block reproduction gives 502 / 178 / 174 ms (first / warm). That's about 2.5× faster warm, and the
+cold cost should shrink by about the same factor (~1.3–1.5 s estimated from 3.7 s; a cold cache could not be reproduced read-only).
+`zzqx qqxv` still returns 0 in 17 ms. A 4-word real query (`fasting ramadan night forgiven sins`) still finds results on the strict path (56 ms).
+
+**Behaviour change:** for row 8 the relaxed count drops from 169 to 61 (`relaxed_capped` true, as before).
+In general, relaxed results come from at most 300 candidate rows instead of 1,000.
+
 ## Caveats
 - Never executed; parsed only. The test script is the first real run.
 - Estimates above are not measured writes.

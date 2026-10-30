@@ -55,8 +55,8 @@ CREATE OR REPLACE FUNCTION public.site_search_src(src text, q text, lim integer 
  LANGUAGE plpgsql
  STABLE
 AS $function$
-declare vs text[]; wr text[]; pats text[]; reg record; w text; c int := 0; r jsonb; ar boolean := q ~ '[؀-ۿ]'; cols text[]; cat text; strip boolean; n int; thr int; relaxed boolean := false; c2 int; r2 jsonb; sc text; base text; relax_cap constant int := 1000; relax_hit_cap boolean := false;
-        wcl text[] := '{}'; wp text[]; wl text; hit text[] := '{}'; hb boolean; thr_min int; pre text;
+declare vs text[]; wr text[]; pats text[]; reg record; w text; c int := 0; r jsonb; ar boolean := q ~ '[؀-ۿ]'; cols text[]; cat text; strip boolean; n int; thr int; relaxed boolean := false; c2 int; r2 jsonb; sc text; base text; relax_cap constant int := 300; relax_hit_cap boolean := false;
+        wcl text[] := '{}'; wp text[]; wl text; hit text[] := '{}'; hb boolean; thr_min int; pre text; pre_hi text;
         nq text := q; ar_norm boolean := false;  -- ARNORM (20261030): diacritic-insensitive hadith Arabic
 begin
 
@@ -240,6 +240,16 @@ begin
           select gj, parts || gj, sz + 1 from cmb, generate_subscripts(hit,1) gj where gj > last and sz < thr_min)
         select string_agg('(' || (select string_agg(hit[p], ' and ') from unnest(parts) p) || ')', ' or ') into pre
           from cmb where sz = thr_min;
+        -- PERF (20261030b): rows holding >= n-1 words (the preferred tier) are collected
+        -- FIRST, so the candidate cap can never crowd them out with weaker 2-word rows.
+        if n - 1 > thr_min and array_length(hit,1) >= n - 1 then
+          with recursive cmb(last, parts, sz) as (
+            select gi, array[gi], 1 from generate_subscripts(hit,1) gi
+            union all
+            select gj, parts || gj, sz + 1 from cmb, generate_subscripts(hit,1) gj where gj > last and sz < n - 1)
+          select string_agg('(' || (select string_agg(hit[p], ' and ') from unnest(parts) p) || ')', ' or ') into pre_hi
+            from cmb where sz = n - 1;
+        end if;
       else
         pre := array_to_string(hit, ' or ');  -- very long query: fall back to "any word"
       end if;
@@ -248,13 +258,21 @@ begin
     -- PERF (20261029): the relaxed (partial-word) fallback used to regex-score every
     -- row that contained ANY query word, twice, which exceeded the 15s anon
     -- statement_timeout (HTTP 500) when nothing matched. It now scores at most
-    -- relax_cap (1000) candidates, once, and picks the best threshold. 1000, not 20000:
+    -- relax_cap candidates, once, and picks the best threshold. 1000, not 20000:
     -- measured 2026-10-30, fetching + rechecking a hadith candidate costs ~2 ms (cold), so
     -- 20000 candidates alone would take ~40 s. Candidates are pre-narrowed to rows holding
     -- >= thr_min of the words (step 3 above), so the cap is reached far less often.
     -- NOTE: the cap limits WHICH rows can appear, not only their order; when it is hit the
     -- result says 'relaxed_capped': true so the UI can tell the user results may be incomplete.
-    execute format('with cand as materialized (select * from %I where %s limit %s),
+    -- PERF (20261030b): relax_cap lowered 1000 -> 300. 'zzqx nonexistent words here' took
+    -- 3.7 s in the owner's test (cold cache). Profiling (REPORT.md) showed the cost is the
+    -- candidate fetch: a bitmap heap scan that rechecks ILIKE on long, TOASTed hadith texts
+    -- (common words like 'here' also hit 'there'/'where', so ~40% of fetched rows fail the
+    -- recheck), ~2,600 rows examined for 1,000 candidates. Regex scoring is ~0.09 ms/row.
+    -- 300 cuts the fetch ~3x; relaxed_capped stays true whenever a tier reached the cap.
+    execute format('with cand0 as materialized ((select t.*, 0 as _p from %I t where (%s) and (%s) limit %s)
+                                          union all (select t.*, 1 as _p from %I t where %s limit %s)),
+                    cand as materialized (select * from (select distinct on (id) * from cand0 order by id, _p) d order by _p, id limit %s),
                     s as materialized (
                       select row_number() over (order by _score desc, %s) as _rn, *
                       from (select %s as _score, t.* from cand t) t2
@@ -263,8 +281,9 @@ begin
                            (select coalesce(jsonb_agg(x order by _rn),''[]''::jsonb) from (select %s as x, _rn from s where _score >= $3 order by _rn limit %s) a),
                            (select count(*) from s)::int,
                            (select coalesce(jsonb_agg(x order by _rn),''[]''::jsonb) from (select %s as x, _rn from s order by _rn limit %s) b),
-                           (select count(*) from cand) >= %s',
-                   reg.tbl, base, relax_cap, reg.order_expr, sc, reg.row_expr, lim, reg.row_expr, lim, relax_cap)
+                           ((select count(*) from cand0 where _p = 0) >= %s or (select count(*) from cand0 where _p = 1) >= %s)',
+                   reg.tbl, coalesce(pre_hi, 'false'), reg.extra_where, relax_cap, reg.tbl, base, relax_cap, relax_cap,
+                   reg.order_expr, sc, reg.row_expr, lim, reg.row_expr, lim, relax_cap, relax_cap)
       into c, r, c2, r2, relax_hit_cap using pats, wr, n-1, greatest(1,(n+1)/2);
     if c > 0 then
       relaxed := true;
