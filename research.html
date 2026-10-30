@@ -580,6 +580,8 @@ function overview(dg,results,q){
   return `<div class="ov"><div class="kicker">Summary</div><h2>${esc(q.charAt(0).toUpperCase()+q.slice(1))}</h2><p class="sub">Compiled directly from the site’s database, not written by AI.</p>${P.join('')}${mh}</div>`;
 }
 let renderedSearch=null;
+// Only sent by site_search_src after the proposed perf SQL (PR #61); absent or false means no notice.
+const CAPPED_NOTE='<p class="what capped-note" role="note"><i>This word is very common, so only part of the matching passages could be searched. Add another word or choose a narrower source to refine the results.</i></p>';
 function render(results,vars,q,dg){
   renderedSearch={results,vars,q,dg,version:searchVersion};
   const total=results.reduce((a,r)=>a+(r.count||0),0);
@@ -613,7 +615,7 @@ function render(results,vars,q,dg){
 
 function sourceSection(r,vars){
  let h='';
-    h+=`<section class="src" id="src-${r.key}"><h2>${esc(LABEL[r.key])} <small>${r.failed?'unavailable':r.count?(r.capped?'more than 1,000 matches':n(r.count)+' match'+(r.count==1?'':'es')):'no matches'}</small></h2><p class="what">${esc(SRC[r.key].what)}</p>${r.relaxed?'<p class="what"><i>No passage has every word you typed, so these are the closest matches: they contain most of your words.</i></p>':''}`;
+    h+=`<section class="src" id="src-${r.key}"><h2>${esc(LABEL[r.key])} <small>${r.failed?'unavailable':r.count?(r.capped?'more than 1,000 matches':n(r.count)+' match'+(r.count==1?'':'es')):'no matches'}</small></h2><p class="what">${esc(SRC[r.key].what)}</p>${r.relaxed?'<p class="what"><i>No passage has every word you typed, so these are the closest matches: they contain most of your words.</i></p>':''}${r.relaxed_capped===true?CAPPED_NOTE:''}`;
     if(r.count){
       h+=sortResearchTraditions(r.rows,r.key).map(x=>card(r.key,x,vars)).join('');
       if(r.count>r.rows.length) h+=`<p class="what source-count">Showing ${n(r.rows.length)} of ${r.capped?'1,000+':n(r.count)} matches.</p><button type="button" onclick="moreSource('${r.key}',this)">Show more passages</button>`;
@@ -659,6 +661,7 @@ async function moreSource(key,button){
   section.querySelectorAll('.card').forEach(el=>el.remove());
   button.insertAdjacentHTML('beforebegin',sortResearchTraditions(fresh.rows,key).map(r=>card(key,r,state.vars)).join(''));
   Object.assign(prior,fresh);
+  if(fresh.relaxed_capped===true&&!section.querySelector('.capped-note'))section.querySelector('.what')?.insertAdjacentHTML('afterend',CAPPED_NOTE);
   section.querySelector('.source-count').textContent='Showing '+n(fresh.rows.length)+' of '+(fresh.capped?'1,000+':n(fresh.count))+' matches.';
   // The count is reported by the source, independently of the displayed page size.
   section.querySelector('h2 small').textContent=(fresh.capped?'1,000+':n(fresh.count))+' matches';
