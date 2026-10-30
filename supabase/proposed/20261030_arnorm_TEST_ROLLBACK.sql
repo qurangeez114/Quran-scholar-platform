@@ -2,11 +2,14 @@
 -- Needs steps 1-3 applied first (column filled, index valid). If not, the first statement stops the run with a message.
 -- Paste the WHOLE file into the SQL Editor and click Run. It installs the new view + function inside a transaction,
 --   runs timed searches (same args as the site: src, q, lim 6), shows one table, then ROLLBACK.
--- PASS:
---   * no error; speed = ok (< 3 s) on every row;
---   * same_as_pair = true on 1b, 2b, 3b: the word WITH tashkeel / hamza finds exactly the same count and rows as without;
---   * 1a count far above today's (live: 'الصلاة' times out; on ids 20001-40000 only 95 raw vs 1,120 normalised rows);
---   * 4 and 5 count > 0 (English path and reference lookup unchanged); 6 and 7 count 0.
+-- PASS (owner's criteria, 2026-10-30) — read the pass column and the final SUMMARY row (ALL PASS / N FAILED):
+--   * no error (a 15 s timeout aborts the run = FAIL); every row under 3 s;
+--   * 1b, 2b, 3b: same_as_pair = true (WITH tashkeel / hamza finds exactly the same count and rows as without);
+--   * 1a, 2a, 3a, 4, 5: result_count > 0 (4/5 = English path and reference lookup unchanged);
+--   * 6 'ظظظظظ' and 7 'zzqx qqxv': exactly 0 results;
+--   * 8 'zzqx nonexistent words here': only needs < 3 s; partial matches are allowed (relaxed search) and
+--     are labelled note = 'partial matches (relaxed)'.
+--   Run file 4 only if SUMMARY = ALL PASS and the md5 check below is unchanged.
 -- If you only see "Success. No rows returned", delete the final ROLLBACK; line, run again, then run ROLLBACK; alone.
 -- Afterwards: SELECT md5(pg_get_functiondef('public.site_search_src'::regproc));  -> unchanged (5a80601ce832e42993eb64822662fab0 if file 2 not applied)
 
@@ -347,11 +350,46 @@ SELECT '7 No-match Latin', 'zzqx qqxv', (r.j->>'count')::int, (r.j->>'capped')::
        round(extract(epoch FROM clock_timestamp() - t0.s)::numeric, 3)
 FROM r, t0;
 
-SELECT a.label, a.q, a.result_count, a.capped, a.relaxed, a.elapsed_s,
-       CASE WHEN a.elapsed_s < 3 THEN 'ok' ELSE 'SLOW' END AS speed,
-       CASE WHEN a.label ~ '^[123]b' THEN (a.result_count = p.result_count AND a.ids IS NOT DISTINCT FROM p.ids) END AS same_as_pair
-FROM pg_temp.arnorm_results a
-LEFT JOIN pg_temp.arnorm_results p ON a.label ~ '^[123]b' AND p.label LIKE left(a.label,1) || 'a %'
-ORDER BY a.label;
+INSERT INTO pg_temp.arnorm_results
+WITH t0 AS MATERIALIZED (SELECT clock_timestamp() AS s),
+     r  AS MATERIALIZED (SELECT public.site_search_src('hadith', 'zzqx nonexistent words here', 6) AS j FROM t0)
+SELECT '8 Nonsense + real words', 'zzqx nonexistent words here', (r.j->>'count')::int, (r.j->>'capped')::boolean, (r.j->>'relaxed')::boolean,
+       (SELECT array_agg((x->>'id')::bigint ORDER BY (x->>'id')::bigint) FROM jsonb_array_elements(coalesce(r.j->'rows','[]'::jsonb)) x),
+       round(extract(epoch FROM clock_timestamp() - t0.s)::numeric, 3)
+FROM r, t0;
+
+-- One verdict: each row has pass = true/false; the last row reads ALL PASS or N FAILED.
+WITH chk AS (
+  SELECT a.label, a.q, a.result_count, a.capped, a.relaxed, a.elapsed_s,
+         CASE WHEN a.elapsed_s < 3 THEN 'ok' ELSE 'SLOW' END AS speed,
+         CASE WHEN a.label ~ '^[123]b' THEN (a.result_count = p.result_count AND a.ids IS NOT DISTINCT FROM p.ids) END AS same_as_pair
+  FROM pg_temp.arnorm_results a
+  LEFT JOIN pg_temp.arnorm_results p ON a.label ~ '^[123]b' AND p.label LIKE left(a.label,1) || 'a %'
+), judged AS (
+  SELECT c.*,
+         coalesce(CASE
+           WHEN c.label ~ '^[123]b' THEN c.same_as_pair AND c.elapsed_s < 3          -- paired spelling matches its plain twin
+           WHEN c.label ~ '^[67] '  THEN c.result_count = 0 AND c.elapsed_s < 3       -- must find nothing, fast
+           WHEN c.label ~ '^8 '     THEN c.elapsed_s < 3                              -- relaxed: partial matches allowed
+           ELSE c.result_count > 0 AND c.elapsed_s < 3                                -- 1a, 2a, 3a, 4, 5: real results expected
+         END, false) AS pass,
+         CASE
+           WHEN c.label ~ '^8 ' AND c.result_count > 0 THEN 'partial matches (relaxed)'
+           WHEN c.label ~ '^8 ' THEN 'no matches'
+           WHEN c.label ~ '^[67] ' THEN 'must be 0 results'
+           WHEN c.label ~ '^[123]b' THEN 'must equal its "a" row'
+           ELSE 'must find results'
+         END AS note
+  FROM chk c
+)
+SELECT label, q, result_count, capped, relaxed, elapsed_s, speed, same_as_pair, note, pass::text AS pass, 0 AS ord
+FROM judged
+UNION ALL
+SELECT 'SUMMARY', NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+       CASE WHEN count(*) FILTER (WHERE NOT pass) = 0 THEN 'ALL PASS'
+            ELSE (count(*) FILTER (WHERE NOT pass))::text || ' FAILED' END,
+       (count(*) FILTER (WHERE NOT pass) = 0)::text, 1
+FROM judged
+ORDER BY ord, label;
 
 ROLLBACK;

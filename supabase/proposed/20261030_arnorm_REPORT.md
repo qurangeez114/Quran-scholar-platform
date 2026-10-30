@@ -42,7 +42,12 @@ About 93% of `hadith_corpus.text_arabic` carries tashkeel. Site search does a li
 2. `20261030_arnorm_2_backfill.sql` — group A, then `VACUUM (ANALYZE) public.hadith_corpus;` alone; same for B, C, D.
    Post-check: `missing = 0`, `stale = 0`.
 3. `20261030_arnorm_3_index.sql` — the `CREATE INDEX CONCURRENTLY` statement alone. Post-check `indisvalid = true`.
-4. `20261030_arnorm_TEST_ROLLBACK.sql` — whole file; self-rolling-back. Must pass (see its header).
+4. `20261030_arnorm_TEST_ROLLBACK.sql` — whole file; self-rolling-back. Must pass. Each row has a `pass` column and
+   the last row, `SUMMARY`, reads `ALL PASS` or `N FAILED`. Criteria (owner, 2026-10-30): every row < 3 s with no error;
+   1b/2b/3b `same_as_pair = true`; 1a/2a/3a/4/5 results > 0; 6 `ظظظظظ` and 7 `zzqx qqxv` exactly 0 results;
+   8 `zzqx nonexistent words here` only < 3 s — partial matches are allowed (relaxed search) and labelled
+   `note = 'partial matches (relaxed)'`. Run file 4 only on `ALL PASS` and an unchanged
+   `md5(pg_get_functiondef('public.site_search_src'::regproc))` = `5a80601ce832e42993eb64822662fab0` afterwards.
 5. `20261030_arnorm_4_view_and_search.sql` — whole file, one transaction. **Apply this instead of #61 file 2.**
 6. #61 file 3 (tafsir index) at a quiet time, as before.
 
