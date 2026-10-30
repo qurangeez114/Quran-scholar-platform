@@ -77,20 +77,11 @@
     }, 10);
   });
 
-  function loadSdk() {
-    return new Promise(function (resolve) {
-      if (window.supabase && window.supabase.createClient) return resolve();
-      var s = document.createElement('script');
-      s.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
-      s.onload = resolve;
-      s.onerror = resolve;
-      document.head.appendChild(s);
-    });
-  }
-
-  loadSdk().then(async function () {
-    if (!window.supabase) return;
-    var sb = window.supabase.createClient(SB_URL, SB_ANON);
+  // Perf: reuse the site's single shared Supabase client (accounts/client.js,
+  // already imported by account-gate.js) instead of downloading a second copy
+  // of supabase-js from jsDelivr.
+  import('/accounts/client.js').then(function (m) { return m.db; }).catch(function () { return null; }).then(async function (sb) {
+    if (!sb) return;
     var { data } = await sb.auth.getSession();
     if (!data.session) return;
     chip('qh-my-pages', 'My pages').onclick = function () { location.href = '/my-pages.html'; };

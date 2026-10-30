@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <script src="track-page-visits.js"></script>
-  <script src="site-chrome.js" defer></script>
+  <script src="/v/bfbc912390/track-page-visits.js" defer></script>
+  <script src="/v/4ac67052a4/site-chrome.js" defer></script>
 
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -452,8 +452,8 @@
             }
         }
     </style>
-  <link rel="stylesheet" href="activity-history.css">
-  <script src="site-motion.js" defer></script>
+  <link rel="stylesheet" href="/v/39f6ffea06/activity-history.css">
+  <script src="/v/a59621f184/site-motion.js" defer></script>
 </head>
 <body>
     <div class="container">
@@ -612,57 +612,49 @@
                     throw new Error('API returned invalid data (not an array)');
                 }
 
-                // For each group, fetch verification status
-                const comparisonsData = await Promise.all(
-                    groups.map(async (group) => {
-                        const narrResponse = await fetch(
-                            `${SUPABASE_URL}/rest/v1/narrative_versions?narrative_group_id=eq.${group.id}&select=id,source_collection`,
-                            {
-                                headers: {
-                                    'apikey': SUPABASE_ANON_KEY,
-                                    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
-                                }
-                            }
+                // Perf: two batched requests instead of 1-2 requests per group.
+                const H = { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` };
+                const groupIds = groups.map(g => g.id).filter(id => id !== null && id !== undefined);
+                let allNarrations = [];
+                let versionsOk = true;
+                if (groupIds.length) {
+                    const nvRes = await fetch(
+                        `${SUPABASE_URL}/rest/v1/narrative_versions?narrative_group_id=in.(${groupIds.join(',')})&select=id,source_collection,narrative_group_id&limit=10000`,
+                        { headers: H }
+                    );
+                    if (nvRes.ok) allNarrations = await nvRes.json(); else versionsOk = false;
+                }
+                const linksByNarration = {};
+                const allIds = allNarrations.map(n => n.id);
+                if (allIds.length) {
+                    try {
+                        const linkResponse = await fetch(
+                            `${SUPABASE_URL}/rest/v1/external_narration_link?narration_id=in.(${allIds.join(',')})&select=narration_id,verification_status&limit=100000`,
+                            { headers: H }
                         );
-                        if (!narrResponse.ok) {
-                            return { ...group, narrationCount: 0, collectionCount: 0, verifiedLinksCount: 0, totalLinksCount: 0 };
+                        if (linkResponse.ok) {
+                            (await linkResponse.json()).forEach(l => { (linksByNarration[l.narration_id] ||= []).push(l); });
                         }
-                        const narrations = await narrResponse.json();
-
-                        const narrationIds = narrations.map(n => n.id);
-                        let verifiedCount = 0;
-                        let totalLinks = 0;
-
-                        if (narrationIds.length > 0) {
-                            try {
-                                const linkResponse = await fetch(
-                                    `${SUPABASE_URL}/rest/v1/external_narration_link?narration_id=in.(${narrationIds.join(',')})&select=verification_status`,
-                                    {
-                                        headers: {
-                                            'apikey': SUPABASE_ANON_KEY,
-                                            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
-                                        }
-                                    }
-                                );
-                                if (linkResponse.ok) {
-                                    const links = await linkResponse.json();
-                                    totalLinks = links.length;
-                                    verifiedCount = links.filter(l => l.verification_status === 'verified').length;
-                                }
-                            } catch (linkError) {
-                                // Continue without link counts
-                            }
-                        }
-
-                        return {
-                            ...group,
-                            narrationCount: narrations.length,
-                            collectionCount: new Set(narrations.map(n => n.source_collection)).size,
-                            verifiedLinksCount: verifiedCount,
-                            totalLinksCount: totalLinks
-                        };
-                    })
-                );
+                    } catch (linkError) {
+                        // Continue without link counts
+                    }
+                }
+                const narrByGroup = {};
+                allNarrations.forEach(n => { (narrByGroup[n.narrative_group_id] ||= []).push(n); });
+                const comparisonsData = groups.map(group => {
+                    if (!versionsOk) {
+                        return { ...group, narrationCount: 0, collectionCount: 0, verifiedLinksCount: 0, totalLinksCount: 0 };
+                    }
+                    const narrations = narrByGroup[group.id] || [];
+                    const links = narrations.flatMap(n => linksByNarration[n.id] || []);
+                    return {
+                        ...group,
+                        narrationCount: narrations.length,
+                        collectionCount: new Set(narrations.map(n => n.source_collection)).size,
+                        verifiedLinksCount: links.filter(l => l.verification_status === 'verified').length,
+                        totalLinksCount: links.length
+                    };
+                });
 
                 displayComparisons(comparisonsData);
             } catch (error) {
@@ -834,6 +826,6 @@
             console.warn('Error setting up home button:', e);
         }
     </script>
-<script src="/quran-verse-audio.js" defer></script>
+<script src="/v/c07369561f/quran-verse-audio.js" defer></script>
 </body>
 </html>

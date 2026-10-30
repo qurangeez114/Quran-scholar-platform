@@ -4,6 +4,15 @@
 [build.environment]
   NODE_VERSION = "18"
 
+# Perf: content-hashed asset URLs (/v/<hash>/file.js, written by
+# scripts/version-assets.py) are immutable and cached for a year. Plain paths
+# such as /site-chrome.js keep their revalidating cache below, so anything
+# loaded without a hash can never go stale.
+[[headers]]
+  for = "/v/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
 [[headers]]
   for = "/site-chrome.js"
   [headers.values]
@@ -19,6 +28,12 @@
   [headers.values]
     Cache-Control = "public, max-age=0, must-revalidate"
 
+
+# Perf: serve /v/<hash>/<path> from the real file (see scripts/version-assets.py).
+[[redirects]]
+  from = "/v/:hash/*"
+  to = "/:splat"
+  status = 200
 
 [[redirects]]
   from = "/claude"
