@@ -4,12 +4,15 @@
 -- Only two blocks change; everything else (reference lookup, topic expansion, registry, ACLs) is identical.
 --   1. Main path: one pass over at most 1000 matches instead of a count pass + a second pass that
 --      regex-checked and sorted EVERY match (e.g. "prayer": 9.3 s / 5.8 s measured).
---   2. Relaxed fallback: scores at most 3000 index-matched candidates once, instead of regex-scoring
+--   2. Relaxed fallback: scores at most 20000 (relax_cap) index-matched candidates once, instead of regex-scoring
 --      every row containing any query word up to twice ("zzqx nonexistent words here": HTTP 500 after 15.6 s).
 -- Already true today, no change needed: Arabic queries only search Arabic columns and Latin queries only
 --   non-Arabic columns (the existing "(col like '%arabic%') = ar" filter).
 -- Behaviour trade-offs: ranking happens within the first 1000 matches (the UI already reports >=1000 as
---   "capped"); relaxed results come from the first 3000 candidates.
+--   "capped"); relaxed results come ONLY from the first 20000
+--   candidates: rows beyond the cap are never returned (this limits which results appear, not just
+--   their order). The result carries 'relaxed_capped': true when the cap was hit.
+-- NOT EXECUTED ANYWHERE: only parsed. Test on a staging copy / Supabase branch before production.
 -- CREATE OR REPLACE keeps the existing grants (anon/authenticated EXECUTE). Runs in a transaction.
 
 -- ===== PRE-CHECK (read-only) =====
@@ -22,7 +25,7 @@ CREATE OR REPLACE FUNCTION public.site_search_src(src text, q text, lim integer 
  LANGUAGE plpgsql
  STABLE
 AS $function$
-declare vs text[]; wr text[]; pats text[]; reg record; w text; c int := 0; r jsonb; ar boolean := q ~ '[؀-ۿ]'; cols text[]; cat text; strip boolean; n int; thr int; relaxed boolean := false; c2 int; r2 jsonb; sc text; base text;
+declare vs text[]; wr text[]; pats text[]; reg record; w text; c int := 0; r jsonb; ar boolean := q ~ '[؀-ۿ]'; cols text[]; cat text; strip boolean; n int; thr int; relaxed boolean := false; c2 int; r2 jsonb; sc text; base text; relax_cap constant int := 20000; relax_hit_cap boolean := false;
 begin
 
   -- Resolve a collection and reference number before searching passage words.
@@ -161,24 +164,31 @@ begin
     -- PERF (20261029): the relaxed (partial-word) fallback used to regex-score every
     -- row that contained ANY query word, twice, which exceeded the 15s anon
     -- statement_timeout (HTTP 500) when nothing matched. It now scores at most
-    -- 3000 index-matched candidates, once, and picks the best threshold from them.
-    execute format('with s as materialized (
+    -- relax_cap (20000) index-matched candidates, once, and picks the best threshold.
+    -- NOTE: the cap limits WHICH rows can appear, not only their order: a row outside
+    -- the first relax_cap candidates is never scored or returned. 20000 is above the
+    -- ~16-19k index matches measured for very common words ("prayer"), so in practice
+    -- almost nothing is excluded; when the cap IS reached the result says so via
+    -- 'relaxed_capped': true so the UI can tell the user results may be incomplete.
+    execute format('with cand as materialized (select * from %I where %s limit %s),
+                    s as materialized (
                       select row_number() over (order by _score desc, %s) as _rn, *
-                      from (select %s as _score, t.* from (select * from %I where %s limit 3000) t) t2
+                      from (select %s as _score, t.* from cand t) t2
                       where _score >= $4)
                     select (select count(*) from s where _score >= $3)::int,
                            (select coalesce(jsonb_agg(x order by _rn),''[]''::jsonb) from (select %s as x, _rn from s where _score >= $3 order by _rn limit %s) a),
                            (select count(*) from s)::int,
-                           (select coalesce(jsonb_agg(x order by _rn),''[]''::jsonb) from (select %s as x, _rn from s order by _rn limit %s) b)',
-                   reg.order_expr, sc, reg.tbl, base, reg.row_expr, lim, reg.row_expr, lim)
-      into c, r, c2, r2 using pats, wr, n-1, greatest(1,(n+1)/2);
+                           (select coalesce(jsonb_agg(x order by _rn),''[]''::jsonb) from (select %s as x, _rn from s order by _rn limit %s) b),
+                           (select count(*) from cand) >= %s',
+                   reg.tbl, base, relax_cap, reg.order_expr, sc, reg.row_expr, lim, reg.row_expr, lim, relax_cap)
+      into c, r, c2, r2, relax_hit_cap using pats, wr, n-1, greatest(1,(n+1)/2);
     if c > 0 then
       relaxed := true;
     elsif c2 > 0 then
       relaxed := true; c := c2; r := r2;
     end if;
   end if;
-  return jsonb_build_object('key',reg.key,'label',reg.label,'count',c,'capped',c>=1000,'rows',coalesce(r,'[]'::jsonb),'variants',to_jsonb(vs),'relaxed',relaxed);
+  return jsonb_build_object('key',reg.key,'label',reg.label,'count',c,'capped',c>=1000,'rows',coalesce(r,'[]'::jsonb),'variants',to_jsonb(vs),'relaxed',relaxed,'relaxed_capped',relaxed and relax_hit_cap);
 end $function$
 ;
 COMMIT;
