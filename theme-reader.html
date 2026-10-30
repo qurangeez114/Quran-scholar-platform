@@ -261,19 +261,19 @@ let currentTheme = '';
 const LANGS = [
   { key:'arabic',   label:'🕌 Arabic',      col:'arabic',                 cls:'verse-arabic',          def:true  },
   { key:'translit', label:'🔤 Translit',    col:'arabic_transliteration', cls:'verse-transliteration', def:false },
-  { key:'english',  label:'🇬🇧 English',    col:'english',                cls:'verse-english',         def:true  },
-  { key:'tigrinya', label:'🇪🇷 Tigrinya',   col:'tigrinya',               cls:'verse-tigrinya',        def:false },
-  { key:'tigrinya2',label:'🇪🇷 ትግርኛ ተፍሲር',  col:'tigrinya2',              cls:'verse-tigrinya2',       def:false },
-  { key:'amharic',  label:'🇪🇹 Amharic',    col:'amharic',                cls:'verse-amharic',         def:false },
-  { key:'oromo',    label:'🇪🇹 Oromo',      col:'oromo',                  cls:'verse-oromo',           def:false },
-  { key:'somali',   label:'🇸🇴 Somali',     col:'somali',                 cls:'verse-somali',          def:false },
-  { key:'german',   label:'🇩🇪 Deutsch',    col:'german',                 cls:'verse-german',          def:false },
-  { key:'urdu',     label:'🇵🇰 اردو',       col:'urdu',                   cls:'verse-urdu',            def:false },
+  { key:'english',  label:'🇬🇧 English',    col:'english',                cls:'verse-english',         def:true  , vt:'en' },
+  { key:'tigrinya', label:'🇪🇷 Tigrinya',   col:'tigrinya',               cls:'verse-tigrinya',        def:false , vt:'ti' },
+  { key:'tigrinya2',label:'🇪🇷 ትግርኛ ተፍሲር',  col:'tigrinya2',              cls:'verse-tigrinya2',       def:false , vt:'ti2' },
+  { key:'amharic',  label:'🇪🇹 Amharic',    col:'amharic',                cls:'verse-amharic',         def:false , vt:'am' },
+  { key:'oromo',    label:'🇪🇹 Oromo',      col:'oromo',                  cls:'verse-oromo',           def:false , vt:'om' },
+  { key:'somali',   label:'🇸🇴 Somali',     col:'somali',                 cls:'verse-somali',          def:false , vt:'so' },
+  { key:'german',   label:'🇩🇪 Deutsch',    col:'german',                 cls:'verse-german',          def:false , vt:'de' },
+  { key:'urdu',     label:'🇵🇰 اردو',       col:'urdu',                   cls:'verse-urdu',            def:false , vt:'ur' },
   { key:'warsh',    label:'📜 Warsh',       col:'arabic_warsh',           cls:'verse-arabic',          def:false },
   { key:'qalun',    label:'📜 Qālūn',       col:'arabic_qalun',           cls:'verse-arabic',          def:false },
   { key:'duri',     label:'📜 Dūrī',        col:'arabic_duri',            cls:'verse-arabic',          def:false },
-  { key:'swedish',   label:'🇸🇪Svenska',    col:'swedish',                cls:'verse-swedish',         def:false },
-  { key:'norwegian', label:'🇳🇴Norsk',       col:'norwegian',              cls:'verse-norwegian',       def:false }
+  { key:'swedish',   label:'🇸🇪Svenska',    col:'swedish',                cls:'verse-swedish',         def:false , vt:'sv' },
+  { key:'norwegian', label:'🇳🇴Norsk',       col:'norwegian',              cls:'verse-norwegian',       def:false , vt:'no' }
 ];
 const LANG_KEYS = LANGS.map(l => l.key);
 /* Two controls, two roles: the "Show Languages" bar picks which columns this
@@ -505,6 +505,28 @@ function transliterateArabic(arabicText) {
 // VERSE LOADING & RENDERING
 // ============================================================================
 
+// Fallback: some ayas language columns are blank for a few verses (e.g. 31
+// rows of ayas.urdu, incl. 5:44) while verse_translations has the text. For
+// every language with a `vt` code, fetch the blanks in batches (60 keys per
+// request) and fill them in. Only verses that are still empty are requested.
+async function fillFromTranslations(verses, langs) {
+  const jobs = [];
+  langs.filter(l => l.vt).forEach(l => {
+    const keys = [...new Set(verses.filter(v => !String(v[l.key] || '').trim()).map(v => v.sura + ':' + v.aya))];
+    for (let i = 0; i < keys.length; i += 60) {
+      const ch = keys.slice(i, i + 60);
+      jobs.push(fetch(`${SB_URL}/rest/v1/verse_translations?select=verse_key,text&lang=eq.${l.vt}&verse_key=in.(${ch.map(encodeURIComponent).join(',')})`, { headers: HDR })
+        .then(r => r.ok ? r.json() : [])
+        .then(rows => {
+          const t = {}; rows.forEach(r => { if (r.text) t[r.verse_key] = r.text; });
+          verses.forEach(v => { const x = t[v.sura + ':' + v.aya]; if (x && !String(v[l.key] || '').trim()) v[l.key] = x; });
+        })
+        .catch(e => console.warn('verse_translations fallback failed for', l.vt, e)));
+    }
+  });
+  await Promise.all(jobs);
+}
+
 async function loadVerses() {
   try {
     // theme_verses says WHICH verses belong to the theme
@@ -543,6 +565,7 @@ async function loadVerses() {
       v.arabic = v.arabic || a.aya_text || '';
       return v;
     });
+    await fillFromTranslations(currentVerses, LANGS);
 
     const bySura = {};
     currentVerses.forEach(v => { (bySura[v.sura] ||= []).push(v); });
