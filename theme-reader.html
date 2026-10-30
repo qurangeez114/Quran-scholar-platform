@@ -60,6 +60,7 @@ body { font-family: 'Georgia', serif; background: #FDFAF4; color: #1A1A1A; }
 .verse-num { font-size: 10px; font-weight: 800; color: #7d5f14; letter-spacing: 0.5px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
 .verse-arabic { font-family: 'Times New Roman', serif; font-size: 20px; line-height: 1.8; direction: rtl; text-align: right; color: #1A1A1A; margin-bottom: 10px; font-weight: bold; }
 .verse-english { font-size: 14px; line-height: 1.75; color: #2C2C2C; font-weight: bold; }
+.verse-sitelang { font-size: 14px; line-height: 1.75; color: #2C2C2C; margin-top: 4px; border-left: 3px solid #E8C97B; padding-left: 8px; }
 .verse-tigrinya { font-family: 'Noto Sans Ethiopic', sans-serif; font-size: 14px; line-height: 1.8; color: #1A1A1A; font-weight: 600; margin-top: 8px; }
 .verse-tigrinya2 { font-family: 'Noto Sans Ethiopic', sans-serif; font-size: 14px; line-height: 1.9; color: #333; margin-top: 8px; }
 .verse-amharic { font-family: 'Noto Sans Ethiopic', sans-serif; font-size: 14px; line-height: 1.8; color: #1A1A1A; margin-top: 8px; }
@@ -166,7 +167,7 @@ body { font-family: 'Georgia', serif; background: #FDFAF4; color: #1A1A1A; }
 
 <!-- LANGUAGE CONTROLS (Only for All Verses tab) -->
 <div class="controls" id="lang-controls">
-  <div class="section-label" style="margin-bottom:6px;">Show Languages</div>
+  <div class="section-label" style="margin-bottom:6px;">Show Languages <span style="font-weight:400;text-transform:none;letter-spacing:0;color:#595959;">(columns on this page; the 🌐 site language is added here automatically)</span></div>
   <div class="controls-row" id="lang-btn-row"></div>
 </div>
 
@@ -275,6 +276,21 @@ const LANGS = [
   { key:'norwegian', label:'🇳🇴Norsk',       col:'norwegian',              cls:'verse-norwegian',       def:false }
 ];
 const LANG_KEYS = LANGS.map(l => l.key);
+/* Two controls, two roles: the "Show Languages" bar picks which columns this
+   page shows (several at once); the site-wide 🌐 button picks ONE language
+   shared across the site. Picking a language with 🌐 switches its column on
+   here (it never switches others off); a language with no column here is shown
+   as an extra line under each verse instead. */
+const SITE_TO_COL = { ar:'arabic', en:'english', ti:'tigrinya', am:'amharic', om:'oromo', so:'somali', de:'german', ur:'urdu', sv:'swedish', no:'norwegian' };
+const SITE_LANG_HIDE = Object.keys(SITE_TO_COL).join(',');
+window.addEventListener('verse-suite-lang', e => {
+  const col = SITE_TO_COL[e.detail && e.detail.lang];
+  const btn = col && document.getElementById('btn-' + col);
+  if (!btn || btn.classList.contains('active')) return;
+  btn.classList.add('active');
+  try { localStorage.setItem('activeLangs', JSON.stringify(activeLangMap())); } catch (_) {}
+  renderVerses(); if (typeof renderComparisons === 'function') renderComparisons();
+});
 function activeLangMap() {
   const m = {};
   LANGS.forEach(l => {
@@ -584,6 +600,9 @@ function renderVerses() {
         if (!txt) return;
         html += `<div class="${l.cls} lang-${l.key}">${txt}</div>`;
       });
+      // Site-wide 🌐 language when this page has no column for it (French,
+      // Turkish, Persian...): verse-suite fills it from verse_translations.
+      html += `<div class="verse-sitelang" data-vs-text="${v.sura}:${v.aya}" data-vs-text-hide="${SITE_LANG_HIDE}" hidden></div>`;
 
       parallelsForVerse(v.sura, v.aya).forEach(r => { html += parallelCard(r); });
 

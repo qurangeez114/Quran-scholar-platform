@@ -45,7 +45,7 @@
   var langs = FALLBACK_LANGS.slice();
   var cache = {};          // 'lang|s:a' -> text
   var surahs = null;       // id -> {ar, en}
-  var curLang = 'ar';
+  var curLang = 'en', defLang = 'en';
 
   /* ---------------- utilities ---------------- */
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -708,10 +708,15 @@
   function boot() {
     var qp = new URLSearchParams(location.search).get('lang');
     var saved = null; try { saved = localStorage.getItem(LS_LANG); } catch (e) {}
-    curLang = (qp && (LABELS[qp] || qp)) ? qp : (saved || 'ar');
+    /* Nothing saved: use the page's own language (<html lang>, normally
+       English) rather than Arabic, so the 🌐 label matches what is shown. */
+    var pageLang = (document.documentElement.getAttribute('lang') || 'en').toLowerCase().split('-')[0];
+    if (!LABELS[pageLang]) pageLang = 'en';
+    defLang = pageLang;
+    curLang = (qp && (LABELS[qp] || qp)) ? qp : (saved || pageLang);
     if (qp) try { localStorage.setItem(LS_LANG, qp); } catch (e) {}
     Promise.all([discoverLangs(), loadSurahs()]).then(function () {
-      if (langs.indexOf(curLang) < 0) curLang = 'ar';
+      if (langs.indexOf(curLang) < 0) curLang = langs.indexOf(defLang) >= 0 ? defLang : langs[0];
       var hasVerses = document.querySelector('.verse-card,.xref-item,.xref-card,[data-vs-ref]') || document.body.hasAttribute('data-vs-page');
       scan(document); paintVsText(document);
       if (hasVerses || document.body.hasAttribute('data-vs-page') || document.querySelector('[data-vs-langselect]')) mountLangControl();
