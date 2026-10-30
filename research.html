@@ -179,8 +179,10 @@ section.src h2{font-size:25px;font-weight:600;margin-top:34px}
 #comparePanel button{margin:8px 4px 0 0;padding:8px 10px;border:1px solid #bca66b;border-radius:8px;background:white;color:#254b3d}
 #comparePanel .compare-text{white-space:pre-wrap;line-height:1.65}
 @media(max-width:600px){#comparePanel .compare-grid{grid-template-columns:1fr}}
-</style></head>
-<body>
+</style><link rel="stylesheet" href="verse-suite.css">
+<script src="verse-suite.js" defer></script>
+</head>
+<body data-vs-page>
 <div class="top"><a href="/">← Quran Hikma</a><a href="research-classic.html">AI analysis (classic)</a></div>
 
 <div class="hero">
@@ -190,6 +192,7 @@ section.src h2{font-size:25px;font-weight:600;margin-top:34px}
     <input aria-label="e.g. jizya, apostasy, Khaybar, inheritance, جزية" id="q" type="search" maxlength="180" placeholder="e.g. jizya, apostasy, Khaybar, inheritance, جزية" autocomplete="off" autofocus>
     <button type="submit">Search</button>
   </form>
+  <div data-vs-langselect class="research-lang"></div>
 
   <div class="smart-controls" aria-label="Research search refinement">
     <h2>Filter by subject</h2>
@@ -455,7 +458,7 @@ function card(key,r,vars){
  const badge=key==='hadith'&&r.reference_status?(r.reference_status==='verified_publisher_mapping'?'<span class="ref-badge">Curated publisher reference mapping</span>':'<span class="ref-badge caution">Unverified local catalogue candidate</span>'):'';
  const context=(key==='tafsir'||key==='asbab')&&Number(r.sura)>0&&Number(r.aya)>0?'<a href="/?sura='+Number(r.sura)+'&amp;aya='+Number(r.aya)+'">Open associated verse</a>':'';
  const source=key==='quran'||key==='hadith'?'<a href="'+esc(resultLink(key,r))+'">Open '+(key==='quran'?'verse':'hadith')+' →</a>':context;
- return '<div class="card" data-result="'+payload+'"'+(key==='quran'?' data-sura="'+Number(r.sura)+'" data-aya="'+Number(r.aya)+'"':'')+'><div class="meta">'+esc(ref)+'</div>'+tradition+badge+(r.title?'<div class="ttl">'+highlight(r.title,vars)+'</div>':'')+(r.arabic?'<div class="txt" dir="rtl" lang="ar" style="font-size:1.25em;line-height:1.9">'+highlight(snip(r.arabic,vars),vars)+'</div>':'')+'<div class="txt">'+highlight(snip(r.text,vars),vars)+'</div><div class="more">'+source+'</div><div class="result-actions"><button type="button" onclick="resultAction(this,\'read\')">Read passage</button><button type="button" onclick="addResearchComparison(this)">Compare passage</button><button type="button" onclick="resultAction(this,\'copy\')">Copy</button><button type="button" onclick="resultAction(this,\'share\')">Share</button><button type="button" onclick="resultAction(this,\'save\')">Save to research</button><button type="button" onclick="resultAction(this,\'listen\')">Listen to text</button><button type="button" onclick="resultAction(this,\'related\')">Find related verses & stories</button></div><div class="result-full" hidden></div><p class="result-status" role="status" aria-live="polite"></p>'+citation+verified+related+'</div>';
+ return '<div class="card" data-result="'+payload+'"'+(key==='quran'?' data-sura="'+Number(r.sura)+'" data-aya="'+Number(r.aya)+'"':'')+'><div class="meta">'+esc(ref)+'</div>'+tradition+badge+(r.title?'<div class="ttl">'+highlight(r.title,vars)+'</div>':'')+(r.arabic?'<div class="txt" dir="rtl" lang="ar" style="font-size:1.25em;line-height:1.9">'+highlight(snip(r.arabic,vars),vars)+'</div>':'')+'<div class="txt">'+highlight(snip(r.text,vars),vars)+'</div>'+(key==='quran'&&Number(r.sura)>0&&Number(r.aya)>0?'<div class="txt vs-tr" data-vs-text="'+Number(r.sura)+':'+Number(r.aya)+'" data-vs-text-hide="en,ar" hidden></div>':'')+'<div class="more">'+source+'</div><div class="result-actions"><button type="button" onclick="resultAction(this,\'read\')">Read passage</button><button type="button" onclick="addResearchComparison(this)">Compare passage</button><button type="button" onclick="resultAction(this,\'copy\')">Copy</button><button type="button" onclick="resultAction(this,\'share\')">Share</button><button type="button" onclick="resultAction(this,\'save\')">Save to research</button><button type="button" onclick="resultAction(this,\'listen\')">Listen to text</button><button type="button" onclick="resultAction(this,\'related\')">Find related verses & stories</button></div><div class="result-full" hidden></div><p class="result-status" role="status" aria-live="polite"></p>'+citation+verified+related+'</div>';
 }
 function resultNormalize(v){return String(v||'').replace(/…/g,'').replace(/\s+/g,' ').trim();}
 async function resultPassage(data){

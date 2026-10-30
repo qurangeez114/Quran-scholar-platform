@@ -60,6 +60,7 @@ body { font-family: 'Georgia', serif; background: #FDFAF4; color: #1A1A1A; }
 .verse-num { font-size: 10px; font-weight: 800; color: #7d5f14; letter-spacing: 0.5px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
 .verse-arabic { font-family: 'Times New Roman', serif; font-size: 20px; line-height: 1.8; direction: rtl; text-align: right; color: #1A1A1A; margin-bottom: 10px; font-weight: bold; }
 .verse-english { font-size: 14px; line-height: 1.75; color: #2C2C2C; font-weight: bold; }
+.verse-sitelang { font-size: 14px; line-height: 1.75; color: #2C2C2C; margin-top: 4px; border-left: 3px solid #E8C97B; padding-left: 8px; }
 .verse-tigrinya { font-family: 'Noto Sans Ethiopic', sans-serif; font-size: 14px; line-height: 1.8; color: #1A1A1A; font-weight: 600; margin-top: 8px; }
 .verse-tigrinya2 { font-family: 'Noto Sans Ethiopic', sans-serif; font-size: 14px; line-height: 1.9; color: #333; margin-top: 8px; }
 .verse-amharic { font-family: 'Noto Sans Ethiopic', sans-serif; font-size: 14px; line-height: 1.8; color: #1A1A1A; margin-top: 8px; }
@@ -150,20 +151,23 @@ body { font-family: 'Georgia', serif; background: #FDFAF4; color: #1A1A1A; }
 <script src="activity-history.js"></script>
   <link rel="stylesheet" href="activity-history.css">
   <script src="site-motion.js" defer></script>
-<style>:where(h1.qh-h1){margin:0;font-size:inherit;font-weight:inherit;line-height:inherit;font-family:inherit;min-width:0;overflow-wrap:anywhere}</style></head>
+<style>:where(h1.qh-h1){margin:0;font-size:inherit;font-weight:inherit;line-height:inherit;font-family:inherit;min-width:0;overflow-wrap:anywhere}</style><link rel="stylesheet" href="verse-suite.css">
+<script src="verse-suite.js" defer></script>
+</head>
 <body>
 
 <!-- TOP BAR -->
 <div class="topbar">
   <a href="javascript:history.back()">← Back</a>
   <h1 class="topbar-title qh-h1" id="pageTitle">Loading...</h1>
+  <a id="tensionsLink" href="theme-tensions.html" hidden style="font-size:12px">⚖️ Categories &amp; Tensions</a>
   <button class="btn-outline" onclick="openGuide()">❓ Guide</button>
   <button class="btn-gold" onclick="openAbout()">ℹ️ About</button>
 </div>
 
 <!-- LANGUAGE CONTROLS (Only for All Verses tab) -->
 <div class="controls" id="lang-controls">
-  <div class="section-label" style="margin-bottom:6px;">Show Languages</div>
+  <div class="section-label" style="margin-bottom:6px;">Show Languages <span style="font-weight:400;text-transform:none;letter-spacing:0;color:#595959;">(columns on this page; the 🌐 site language is added here automatically)</span></div>
   <div class="controls-row" id="lang-btn-row"></div>
 </div>
 
@@ -257,21 +261,39 @@ let currentTheme = '';
 const LANGS = [
   { key:'arabic',   label:'🕌 Arabic',      col:'arabic',                 cls:'verse-arabic',          def:true  },
   { key:'translit', label:'🔤 Translit',    col:'arabic_transliteration', cls:'verse-transliteration', def:false },
-  { key:'english',  label:'🇬🇧 English',    col:'english',                cls:'verse-english',         def:true  },
-  { key:'tigrinya', label:'🇪🇷 Tigrinya',   col:'tigrinya',               cls:'verse-tigrinya',        def:false },
-  { key:'tigrinya2',label:'🇪🇷 ትግርኛ ተፍሲር',  col:'tigrinya2',              cls:'verse-tigrinya2',       def:false },
-  { key:'amharic',  label:'🇪🇹 Amharic',    col:'amharic',                cls:'verse-amharic',         def:false },
-  { key:'oromo',    label:'🇪🇹 Oromo',      col:'oromo',                  cls:'verse-oromo',           def:false },
-  { key:'somali',   label:'🇸🇴 Somali',     col:'somali',                 cls:'verse-somali',          def:false },
-  { key:'german',   label:'🇩🇪 Deutsch',    col:'german',                 cls:'verse-german',          def:false },
-  { key:'urdu',     label:'🇵🇰 اردو',       col:'urdu',                   cls:'verse-urdu',            def:false },
+  { key:'english',  label:'🇬🇧 English',    col:'english',                cls:'verse-english',         def:true  , vt:'en' },
+  { key:'tigrinya', label:'🇪🇷 Tigrinya',   col:'tigrinya',               cls:'verse-tigrinya',        def:false , vt:'ti' },
+  { key:'tigrinya2',label:'🇪🇷 ትግርኛ ተፍሲር',  col:'tigrinya2',              cls:'verse-tigrinya2',       def:false , vt:'ti2' },
+  { key:'amharic',  label:'🇪🇹 Amharic',    col:'amharic',                cls:'verse-amharic',         def:false , vt:'am' },
+  { key:'oromo',    label:'🇪🇹 Oromo',      col:'oromo',                  cls:'verse-oromo',           def:false , vt:'om' },
+  { key:'somali',   label:'🇸🇴 Somali',     col:'somali',                 cls:'verse-somali',          def:false , vt:'so' },
+  { key:'german',   label:'🇩🇪 Deutsch',    col:'german',                 cls:'verse-german',          def:false , vt:'de' },
+  { key:'urdu',     label:'🇵🇰 اردو',       col:'urdu',                   cls:'verse-urdu',            def:false , vt:'ur' },
   { key:'warsh',    label:'📜 Warsh',       col:'arabic_warsh',           cls:'verse-arabic',          def:false },
   { key:'qalun',    label:'📜 Qālūn',       col:'arabic_qalun',           cls:'verse-arabic',          def:false },
   { key:'duri',     label:'📜 Dūrī',        col:'arabic_duri',            cls:'verse-arabic',          def:false },
-  { key:'swedish',   label:'🇸🇪Svenska',    col:'swedish',                cls:'verse-swedish',         def:false },
-  { key:'norwegian', label:'🇳🇴Norsk',       col:'norwegian',              cls:'verse-norwegian',       def:false }
+  { key:'swedish',   label:'🇸🇪Svenska',    col:'swedish',                cls:'verse-swedish',         def:false , vt:'sv' },
+  { key:'norwegian', label:'🇳🇴Norsk',       col:'norwegian',              cls:'verse-norwegian',       def:false , vt:'no' }
 ];
 const LANG_KEYS = LANGS.map(l => l.key);
+/* Two controls, two roles: the "Show Languages" bar picks which columns this
+   page shows (several at once); the site-wide 🌐 button picks ONE language
+   shared across the site. Picking a language with 🌐 switches its column on
+   here (it never switches others off); a language with no column here is shown
+   as an extra line under each verse instead. */
+const SITE_TO_COL = { ar:'arabic', en:'english', ti:'tigrinya', am:'amharic', om:'oromo', so:'somali', de:'german', ur:'urdu', sv:'swedish', no:'norwegian' };
+const SITE_LANG_HIDE = Object.keys(SITE_TO_COL).join(',');
+window.addEventListener('verse-suite-lang', e => {
+  const col = SITE_TO_COL[e.detail && e.detail.lang];
+  const btn = col && document.getElementById('btn-' + col);
+  if (!btn || btn.classList.contains('active')) return;
+  btn.classList.add('active');
+  try { localStorage.setItem('activeLangs', JSON.stringify(activeLangMap())); } catch (_) {}
+  const rerender = () => { renderVerses(); if (typeof renderComparisons === 'function') renderComparisons(); };
+  rerender();
+  // If the page loads language columns on demand, fetch the new one, then redraw.
+  if (typeof ensureLangColumns === 'function') ensureLangColumns().then(rerender).catch(() => {});
+});
 function activeLangMap() {
   const m = {};
   LANGS.forEach(l => {
@@ -322,6 +344,7 @@ window.VERSE_TOOLBAR_SOURCE = function (suraId, ayaNum) {
 window.addEventListener('load', async () => {
   const params = new URLSearchParams(window.location.search);
   currentTheme = params.get('theme') || 'Satan and Iblis';
+  { const tl = document.getElementById('tensionsLink'); if (tl && currentTheme === 'Quran Torah Gospel: Confirmation of Previous Scripture') tl.hidden = false; }
   document.getElementById('pageTitle').textContent = currentTheme;
   
   // Build the language buttons and apply stored prefs BEFORE the first render:
@@ -482,6 +505,28 @@ function transliterateArabic(arabicText) {
 // VERSE LOADING & RENDERING
 // ============================================================================
 
+// Fallback: some ayas language columns are blank for a few verses (e.g. 31
+// rows of ayas.urdu, incl. 5:44) while verse_translations has the text. For
+// every language with a `vt` code, fetch the blanks in batches (60 keys per
+// request) and fill them in. Only verses that are still empty are requested.
+async function fillFromTranslations(verses, langs) {
+  const jobs = [];
+  langs.filter(l => l.vt).forEach(l => {
+    const keys = [...new Set(verses.filter(v => !String(v[l.key] || '').trim()).map(v => v.sura + ':' + v.aya))];
+    for (let i = 0; i < keys.length; i += 60) {
+      const ch = keys.slice(i, i + 60);
+      jobs.push(fetch(`${SB_URL}/rest/v1/verse_translations?select=verse_key,text&lang=eq.${l.vt}&verse_key=in.(${ch.map(encodeURIComponent).join(',')})`, { headers: HDR })
+        .then(r => r.ok ? r.json() : [])
+        .then(rows => {
+          const t = {}; rows.forEach(r => { if (r.text) t[r.verse_key] = r.text; });
+          verses.forEach(v => { const x = t[v.sura + ':' + v.aya]; if (x && !String(v[l.key] || '').trim()) v[l.key] = x; });
+        })
+        .catch(e => console.warn('verse_translations fallback failed for', l.vt, e)));
+    }
+  });
+  await Promise.all(jobs);
+}
+
 async function loadVerses() {
   try {
     // theme_verses says WHICH verses belong to the theme
@@ -516,9 +561,11 @@ async function loadVerses() {
       const a = byRef[r.sura + ':' + r.aya] || {};
       const v = { sura: r.sura, aya: r.aya };
       LANGS.forEach(l => { v[l.key] = a[l.col] || ''; });
+      if (v.english) ((window.VerseSuiteTexts = window.VerseSuiteTexts || {}).en = window.VerseSuiteTexts.en || {})[v.sura + ':' + v.aya] = v.english; // verse-suite reuses it, no extra fetch
       v.arabic = v.arabic || a.aya_text || '';
       return v;
     });
+    await fillFromTranslations(currentVerses, LANGS);
 
     const bySura = {};
     currentVerses.forEach(v => { (bySura[v.sura] ||= []).push(v); });
@@ -579,6 +626,9 @@ function renderVerses() {
         if (!txt) return;
         html += `<div class="${l.cls} lang-${l.key}">${txt}</div>`;
       });
+      // Site-wide 🌐 language when this page has no column for it (French,
+      // Turkish, Persian...): verse-suite fills it from verse_translations.
+      html += `<div class="verse-sitelang" data-vs-text="${v.sura}:${v.aya}" data-vs-text-hide="${SITE_LANG_HIDE}" hidden></div>`;
 
       parallelsForVerse(v.sura, v.aya).forEach(r => { html += parallelCard(r); });
 

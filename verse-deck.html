@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>My Verse Decks — QuranHikma</title>
+<link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=EB+Garamond:wght@400;600&family=Lato:wght@400;700&family=Noto+Sans+Ethiopic:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="verse-suite.css">
+<script src="verse-suite.js" defer></script>
+<style>
+body{margin:0;background:#FDF8EE;color:#2a2418;font-family:Lato,sans-serif}
+main{max-width:860px;margin:0 auto;padding:20px}
+h1{font:600 28px 'EB Garamond',serif;color:#1A3A2A;margin:0 0 12px}
+.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:8px 0}
+input,select{border:1px solid #E8C97B;border-radius:6px;padding:6px 8px;font:14px Lato,sans-serif;background:#fff}
+#list{list-style:none;padding:0;margin:12px 0}
+#list li{background:#fff;border:1px solid #EEDDB0;border-radius:10px;padding:10px 12px;margin:6px 0;display:flex;gap:10px;align-items:flex-start}
+#list li.drag{opacity:.4}
+#list li:focus{outline:3px solid #1A3A2A}
+.handle{cursor:grab;color:#8a7a5a;font-size:18px;user-select:none}
+.it{flex:1}.it .ref{font-weight:700;color:#1A3A2A}.it .t{margin-top:4px;line-height:1.6}
+.it .t[dir=rtl]{font-family:Amiri,serif;font-size:20px}
+#present{position:fixed;inset:0;z-index:10000;background:linear-gradient(135deg,#061229,#12356E);color:#FFE97A;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:6vh 8vw;text-align:center}
+#present[hidden]{display:none}
+#present .st{font-size:clamp(22px,4.2vw,56px);line-height:1.55;max-height:68vh;overflow:auto}
+#present .st[dir=rtl]{font-family:Amiri,serif;line-height:1.9}
+#present .sr{color:#FFD640;font:700 clamp(14px,2vw,26px) Lato,sans-serif;margin-top:4vh}
+#present .nav{position:absolute;bottom:16px;display:flex;gap:8px}
+#present .vs-btn{background:transparent;color:#FFD640;border-color:#FFD640}
+@media print{.noprint{display:none!important}#list li{break-inside:avoid;border:none;border-bottom:1px solid #ccc}.handle{display:none}}
+</style>
+</head>
+<body data-vs-page>
+<main>
+  <h1>My Verse Decks</h1>
+  <p class="noprint vs-muted">Saved in this browser only (no login). Add verses with “＋ Presentation” on any verse.</p>
+  <div class="row noprint">
+    <label for="deckSel">Deck</label><select id="deckSel"></select>
+    <label for="deckName" class="vs-sr">Deck name</label><input id="deckName" aria-label="Deck name">
+    <button class="vs-btn" id="rename">Rename</button>
+    <button class="vs-btn" id="newDeck">＋ New deck</button>
+    <button class="vs-btn" id="delDeck">Delete deck</button>
+  </div>
+  <div class="row noprint">
+    <button class="vs-btn" id="presentBtn">▶ Present</button>
+    <button class="vs-btn" id="exportJson">⬇ Export JSON</button>
+    <button class="vs-btn" id="printBtn">🖨 Print</button>
+    <button class="vs-btn" id="clear">Clear deck</button>
+  </div>
+  <div class="row noprint" data-vs-langselect title="Shows every verse in this language (site-wide setting). Verses with no text in it keep the language they were saved in."></div>
+  <p id="summary" class="vs-muted"></p>
+  <p class="vs-sr" id="kbhelp">Focus an item and press Alt+Up or Alt+Down to move it, Delete to remove it.</p>
+  <ol id="list" aria-describedby="kbhelp" aria-label="Verses in deck"></ol>
+</main>
+<div id="present" hidden role="dialog" aria-modal="true" aria-label="Presentation" tabindex="-1">
+  <div class="st" id="pText"></div><div class="sr" id="pRef"></div>
+  <div class="nav"><button class="vs-btn" id="pPrev" aria-label="Previous slide">←</button><span id="pPos" aria-live="polite"></span><button class="vs-btn" id="pNext" aria-label="Next slide">→</button><button class="vs-btn" id="pExit">Exit (Esc)</button></div>
+</div>
+<div id="vs-live2" class="vs-sr" aria-live="polite" role="status"></div>
+
+<script>
+(function(){
+  var KEY='vs_decks', RTL={ar:1,ur:1,fa:1};
+  function load(){var d;try{d=JSON.parse(localStorage.getItem(KEY)||'')}catch(e){} if(!d||!d.decks)d={active:'d1',decks:{d1:{name:'My Verses',items:[]}}}; if(!d.decks[d.active])d.active=Object.keys(d.decks)[0]; return d;}
+  function save(d){localStorage.setItem(KEY,JSON.stringify(d));}
+  function say(m){var l=document.getElementById('vs-live2');l.textContent='';setTimeout(function(){l.textContent=m},30);}
+  function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+  var $=function(id){return document.getElementById(id)}, dragFrom=null;
+  /* Show each verse in the site-wide language (🌐 / selector above) when that
+     text is available; otherwise keep the text saved with the item. */
+  var VS=function(){return window.VerseSuite&&window.VerseSuite.textOf?window.VerseSuite:null;};
+  function shown(it){var vs=VS(); if(vs){var l=vs.getLang(); if(l===it.lang)return {text:it.text,lang:it.lang,label:it.langLabel||it.lang}; var t=vs.textOf(it.sura,it.aya,l); if(t)return {text:t,lang:l,label:vs.label(l)};} return {text:it.text,lang:it.lang,label:it.langLabel||it.lang};}
+  function prefetch(){var vs=VS(); if(!vs)return; var l=vs.getLang(), it=load().decks[load().active].items; var keys=it.filter(function(x){return x.sura&&x.aya&&x.lang!==l}).map(function(x){return x.sura+':'+x.aya}); if(!keys.length)return; vs.fetchTexts(keys,l).then(function(){if(vs.getLang()===l){render(); if(!$('present').hidden)slide();}});}
+  function render(focusIdx){
+    var d=load(), dk=d.decks[d.active];
+    $('deckSel').innerHTML=Object.keys(d.decks).map(function(k){return '<option value="'+k+'"'+(k===d.active?' selected':'')+'>'+esc(d.decks[k].name)+' ('+d.decks[k].items.length+')</option>'}).join('');
+    $('deckName').value=dk.name;
+    $('summary').textContent=dk.items.length+' verse'+(dk.items.length===1?'':'s')+' in “'+dk.name+'”';
+    $('list').innerHTML=dk.items.map(function(it,i){
+      var sh=shown(it);
+      return '<li tabindex="0" draggable="true" data-i="'+i+'" aria-label="'+esc(it.reference)+', '+esc(sh.label)+', item '+(i+1)+' of '+dk.items.length+'">'+
+      '<span class="handle" aria-hidden="true">⠿</span><div class="it"><div class="ref">'+esc(it.reference)+' · '+esc(it.surah||'')+' <span class="vs-muted">['+esc(sh.label)+']</span></div>'+
+      '<div class="t" dir="'+(RTL[sh.lang]?'rtl':'ltr')+'" lang="'+esc(sh.lang)+'">'+esc(sh.text)+'</div></div>'+
+      '<span class="noprint"><button class="vs-btn" data-up="'+i+'" aria-label="Move '+esc(it.reference)+' up">↑</button> <button class="vs-btn" data-down="'+i+'" aria-label="Move '+esc(it.reference)+' down">↓</button> <button class="vs-btn" data-rm="'+i+'" aria-label="Remove '+esc(it.reference)+'">✕</button></span></li>';
+    }).join('');
+    if(focusIdx!=null){var li=$('list').children[focusIdx]; if(li)li.focus();}
+  }
+  function move(i,j){var d=load(),it=d.decks[d.active].items; if(j<0||j>=it.length)return; it.splice(j,0,it.splice(i,1)[0]); save(d); render(j); say('Moved to position '+(j+1));}
+  function rm(i){var d=load(),it=d.decks[d.active].items,r=it.splice(i,1)[0]; save(d); render(Math.min(i,it.length-1)); say('Removed '+r.reference);}
+  $('list').addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return; if(b.dataset.up)move(+b.dataset.up,+b.dataset.up-1); else if(b.dataset.down)move(+b.dataset.down,+b.dataset.down+1); else if(b.dataset.rm)rm(+b.dataset.rm);});
+  $('list').addEventListener('keydown',function(e){var li=e.target.closest('li');if(!li||e.target!==li)return;var i=+li.dataset.i;
+    if(e.altKey&&e.key==='ArrowUp'){e.preventDefault();move(i,i-1)} else if(e.altKey&&e.key==='ArrowDown'){e.preventDefault();move(i,i+1)}
+    else if(e.key==='ArrowUp'&&li.previousElementSibling){e.preventDefault();li.previousElementSibling.focus()} else if(e.key==='ArrowDown'&&li.nextElementSibling){e.preventDefault();li.nextElementSibling.focus()}
+    else if(e.key==='Delete'){e.preventDefault();rm(i)}});
+  $('list').addEventListener('dragstart',function(e){var li=e.target.closest('li');dragFrom=+li.dataset.i;li.classList.add('drag');e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',dragFrom);});
+  $('list').addEventListener('dragover',function(e){e.preventDefault();});
+  $('list').addEventListener('drop',function(e){e.preventDefault();var li=e.target.closest('li');if(li&&dragFrom!=null)move(dragFrom,+li.dataset.i);dragFrom=null;});
+  $('list').addEventListener('dragend',function(){dragFrom=null;render();});
+  $('deckSel').onchange=function(){var d=load();d.active=this.value;save(d);render();say('Switched deck');};
+  $('rename').onclick=function(){var d=load(),n=$('deckName').value.trim();if(!n)return;d.decks[d.active].name=n;save(d);render();say('Renamed to '+n);};
+  $('newDeck').onclick=function(){var d=load(),id='d'+Date.now();d.decks[id]={name:'Deck '+(Object.keys(d.decks).length+1),items:[]};d.active=id;save(d);render();$('deckName').focus();say('New deck created');};
+  $('delDeck').onclick=function(){var d=load();if(Object.keys(d.decks).length<2){say('Cannot delete the only deck; use Clear');return;} if(!confirm('Delete deck “'+d.decks[d.active].name+'”?'))return; delete d.decks[d.active]; d.active=Object.keys(d.decks)[0]; save(d); render(); say('Deck deleted');};
+  $('clear').onclick=function(){var d=load();if(!d.decks[d.active].items.length||!confirm('Remove all verses from this deck?'))return;d.decks[d.active].items=[];save(d);render();say('Deck cleared');};
+  $('exportJson').onclick=function(){var d=load(),dk=d.decks[d.active];var a=document.createElement('a');a.download=(dk.name.replace(/[^\w-]+/g,'_')||'deck')+'.json';a.href=URL.createObjectURL(new Blob([JSON.stringify({format:'quranhikma-verse-deck',version:1,exported:new Date().toISOString(),deck:dk},null,2)],{type:'application/json'}));document.body.appendChild(a);a.click();a.remove();say('Exported');};
+  $('printBtn').onclick=function(){window.print();};
+  var pi=0, opener=null;
+  function slide(){var it=load().decks[load().active].items; var x=it[pi], sh=shown(x); $('pText').textContent=sh.text; $('pText').dir=RTL[sh.lang]?'rtl':'ltr'; $('pText').lang=sh.lang; $('pRef').textContent=(x.surah||'')+' · '+x.sura+':'+x.aya+'  —  QuranHikma'; $('pPos').textContent=(pi+1)+' / '+it.length;}
+  function present(){var it=load().decks[load().active].items;if(!it.length){say('Deck is empty');return;} opener=document.activeElement;pi=0;$('present').hidden=false;slide();$('present').focus(); if($('present').requestFullscreen)$('present').requestFullscreen().catch(function(){});}
+  function exit(){$('present').hidden=true;if(document.fullscreenElement)document.exitFullscreen().catch(function(){});if(opener)opener.focus();}
+  function go(n){var len=load().decks[load().active].items.length;pi=Math.max(0,Math.min(len-1,pi+n));slide();}
+  $('presentBtn').onclick=present; $('pPrev').onclick=function(){go(-1)}; $('pNext').onclick=function(){go(1)}; $('pExit').onclick=exit;
+  $('present').addEventListener('keydown',function(e){if(e.key==='ArrowRight'||e.key==='PageDown'||e.key===' '){e.preventDefault();go(1)}else if(e.key==='ArrowLeft'||e.key==='PageUp'){e.preventDefault();go(-1)}else if(e.key==='Escape'){exit()}else if(e.key==='Tab'){var f=[$('pPrev'),$('pNext'),$('pExit')];var i=f.indexOf(document.activeElement);e.preventDefault();f[(i+(e.shiftKey?-1:1)+f.length)%f.length].focus();}});
+  window.addEventListener('storage',function(e){if(e.key===KEY)render();});
+  window.addEventListener('verse-suite-ready',function(){render();prefetch();});
+  window.addEventListener('verse-suite-lang',function(){render();prefetch();});
+  $('deckSel').addEventListener('change',prefetch);
+  render();
+})();
+</script>
+</body>
+</html>
