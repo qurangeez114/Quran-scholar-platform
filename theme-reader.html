@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="en" dir="ltr">
 <head>
-  <script src="track-page-visits.js"></script>
-  <script src="site-chrome.js" defer></script>
+  <script src="/v/bfbc912390/track-page-visits.js" defer></script>
+  <script src="/v/4ac67052a4/site-chrome.js" defer></script>
 
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -141,18 +141,17 @@ body { font-family: 'Georgia', serif; background: #FDFAF4; color: #1A1A1A; }
   .comparison-col:last-child { border-bottom: none; }
 }
 </style>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Ethiopic:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="/v/e7978b752e/font-loader.js" defer></script>
 
 <!-- React & Babel for Proposition Drill Component -->
 
-<script src="verse-toolbar.js"></script>
+<script src="/v/adbd620c39/verse-toolbar.js" defer></script>
 <!-- Supabase Client for Propositions API -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="activity-history.js"></script>
-  <link rel="stylesheet" href="activity-history.css">
-  <script src="site-motion.js" defer></script>
-<style>:where(h1.qh-h1){margin:0;font-size:inherit;font-weight:inherit;line-height:inherit;font-family:inherit;min-width:0;overflow-wrap:anywhere}</style><link rel="stylesheet" href="verse-suite.css">
-<script src="verse-suite.js" defer></script>
+<script src="/v/a240dd0e6e/activity-history.js" defer></script>
+  <link rel="stylesheet" href="/v/39f6ffea06/activity-history.css">
+  <script src="/v/a59621f184/site-motion.js" defer></script>
+<style>:where(h1.qh-h1){margin:0;font-size:inherit;font-weight:inherit;line-height:inherit;font-family:inherit;min-width:0;overflow-wrap:anywhere}</style><link rel="stylesheet" href="/v/923d192ad0/verse-suite.css">
+<script src="/v/5c3502bfb3/verse-suite.js" defer></script>
 </head>
 <body>
 
@@ -391,6 +390,7 @@ function setupLanguageButtons() {
         localStorage.setItem('activeLangs', JSON.stringify(newPrefs));
         renderVerses();
         renderComparisons();
+        ensureLangColumns().then(() => { renderVerses(); renderComparisons(); }).catch(() => {});
       });
     }
   });
@@ -505,6 +505,42 @@ function transliterateArabic(arabicText) {
 // VERSE LOADING & RENDERING
 // ============================================================================
 
+// --- Perf: on-demand language columns for theme verses -----------------------
+let loadedRefs = [];
+const loadedLangCols = new Set();
+function wantedLangCols() {
+  let prefs = {};
+  try { prefs = JSON.parse(localStorage.getItem('activeLangs') || '{}') || {}; } catch (e) {}
+  const btnState = activeLangMap();
+  return LANGS.filter(l => l.key === 'arabic' || l.key === 'english' ||
+      btnState[l.key] || (prefs[l.key] === undefined ? l.def : prefs[l.key]))
+    .map(l => l.col);
+}
+async function fetchAyaCols(refs, langCols) {
+  const cols = ['sura_id','aya_number','aya_text'].concat(langCols);
+  const or = refs.map(r => `and(sura_id.eq.${r.sura},aya_number.eq.${r.aya})`).join(',');
+  const res = await fetch(
+    `${SB_URL}/rest/v1/ayas?or=(${or})&select=${[...new Set(cols)].join(',')}&limit=10000`,
+    { headers: HDR }
+  );
+  return res.ok ? await res.json() : [];
+}
+async function ensureLangColumns() {
+  if (!loadedRefs.length || !currentVerses.length) return;
+  const active = activeLangMap();
+  const missing = LANGS.filter(l => active[l.key] && !loadedLangCols.has(l.col));
+  if (!missing.length) return;
+  missing.forEach(l => loadedLangCols.add(l.col));
+  const rows = await fetchAyaCols(loadedRefs, missing.map(l => l.col));
+  const byRef = {};
+  rows.forEach(a => { byRef[a.sura_id + ':' + a.aya_number] = a; });
+  currentVerses.forEach(v => {
+    const a = byRef[v.sura + ':' + v.aya] || {};
+    missing.forEach(l => { v[l.key] = a[l.col] || ''; });
+  });
+  await fillFromTranslations(currentVerses, missing);
+}
+
 // Fallback: some ayas language columns are blank for a few verses (e.g. 31
 // rows of ayas.urdu, incl. 5:44) while verse_translations has the text. For
 // every language with a `vt` code, fetch the blanks in batches (60 keys per
@@ -546,13 +582,13 @@ async function loadVerses() {
 
     // `ayas` supplies the TEXT, in every language it holds, so new languages
     // become available without touching theme_verses.
-    const cols = ['sura_id','aya_number','aya_text'].concat(LANGS.map(l => l.col));
-    const or = refs.map(r => `and(sura_id.eq.${r.sura},aya_number.eq.${r.aya})`).join(',');
-    const ayaRes = await fetch(
-      `${SB_URL}/rest/v1/ayas?or=(${or})&select=${[...new Set(cols)].join(',')}&limit=10000`,
-      { headers: HDR }
-    );
-    const ayas = ayaRes.ok ? await ayaRes.json() : [];
+    // Perf: only request the columns that are displayed (Arabic, English and
+    // the languages switched on). Other languages are fetched on demand when
+    // their button is turned on (see ensureLangColumns).
+    loadedRefs = refs;
+    const wanted = wantedLangCols();
+    const ayas = await fetchAyaCols(refs, wanted);
+    wanted.forEach(c => loadedLangCols.add(c));
 
     const byRef = {};
     ayas.forEach(a => { byRef[a.sura_id + ':' + a.aya_number] = a; });
@@ -565,7 +601,7 @@ async function loadVerses() {
       v.arabic = v.arabic || a.aya_text || '';
       return v;
     });
-    await fillFromTranslations(currentVerses, LANGS);
+    await fillFromTranslations(currentVerses, LANGS.filter(l => wanted.includes(l.col)));
 
     const bySura = {};
     currentVerses.forEach(v => { (bySura[v.sura] ||= []).push(v); });
@@ -1163,7 +1199,7 @@ document.addEventListener('DOMContentLoaded', () => {
 </script>
 
 <!-- Verse Navigation: Swipe, Arrow Keys, Modal Management -->
-<script src="verse-swipe-nav.js" defer></script>
+<script src="/v/eaafcdfa1b/verse-swipe-nav.js" defer></script>
 
 <!-- Social Media Card Generator -->
 <div id="socialOverlayMain" onclick="if(event.target===this)closeSocialCardMain()" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:99999998;align-items:flex-start;justify-content:center;padding:12px;overflow-y:auto;">
@@ -1207,9 +1243,9 @@ document.addEventListener('DOMContentLoaded', () => {
   </div>
 </div>
 
-<script src="social-card.js" defer></script>
+<script src="/v/05a24f0e74/social-card.js" defer></script>
 
 <!-- Proposition Drill Component (inline) -->
-<script src="/quran-verse-audio.js" defer></script>
+<script src="/v/c07369561f/quran-verse-audio.js" defer></script>
 </body>
 </html>
