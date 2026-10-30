@@ -121,11 +121,16 @@
     document.querySelectorAll('[data-sura][data-aya][' + attr + ']').forEach(function (el) { m[el.getAttribute('data-sura') + ':' + el.getAttribute('data-aya')] = el.getAttribute(attr); });
     provideTexts(lang, m);
   }
+  var inflight = {};
   function fetchTexts(keys, lang) {
     harvest(keys, lang);
     var need = keys.filter(function (k) { return !((lang + '|' + k) in cache); });
     need = need.filter(function (k, i) { return need.indexOf(k) === i; });
-    if (!need.length) return Promise.resolve();
+    // Reuse requests already in flight for the same keys (avoids duplicate
+    // fetches when several renders fire before the first one resolves).
+    var waits = [];
+    need = need.filter(function (k) { var p = inflight[lang + '|' + k]; if (p) waits.push(p); return !p; });
+    if (!need.length) return Promise.all(waits);
     var chunks = []; for (var i = 0; i < need.length; i += 60) chunks.push(need.slice(i, i + 60));
     return Promise.all(chunks.map(function (ch) {
       var p;
@@ -141,8 +146,11 @@
           rows.forEach(function (r) { cache[lang + '|' + r.verse_key] = clean(r.text); });
         });
       }
-      return p.then(function () { ch.forEach(function (k) { if (!((lang + '|' + k) in cache)) cache[lang + '|' + k] = ''; }); });
-    }));
+      p = p.then(function () { ch.forEach(function (k) { if (!((lang + '|' + k) in cache)) cache[lang + '|' + k] = ''; }); },
+                 function () {}).then(function () { ch.forEach(function (k) { delete inflight[lang + '|' + k]; }); });
+      ch.forEach(function (k) { inflight[lang + '|' + k] = p; });
+      return p;
+    }).concat(waits));
   }
   function textOf(s, a, lang) { return cache[(lang || curLang) + '|' + s + ':' + a] || ''; }
 
@@ -267,7 +275,16 @@
   function paintVsText(root) {
     var els = [].slice.call((root.querySelectorAll ? root : document).querySelectorAll('[data-vs-text]'));
     if (!els.length) return Promise.resolve();
-    var lang = curLang, keys = els.map(function (el) { return el.getAttribute('data-vs-text'); });
+    var lang = curLang;
+    // Elements whose page already shows this language (data-vs-text-hide) are
+    // just hidden: no verse_translations request for them.
+    els = els.filter(function (el) {
+      var hide = (el.getAttribute('data-vs-text-hide') || '').split(',').indexOf(lang) >= 0;
+      if (hide) el.hidden = true;
+      return !hide;
+    });
+    if (!els.length) return Promise.resolve();
+    var keys = els.map(function (el) { return el.getAttribute('data-vs-text'); });
     return fetchTexts(keys, lang).then(function () {
       if (lang !== curLang) return;
       els.forEach(function (el) {
