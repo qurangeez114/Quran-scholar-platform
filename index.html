@@ -1996,6 +1996,8 @@ function toggleWordByWord(sura, aya, btn) {
     }
     return;
   }
+  // Pause signs are not spoken words and must not consume audio positions.
+  const isSpokenQuranWord = value => /[\u0621-\u063A\u0641-\u064A\u066E-\u066F\u0671-\u06D3\u06FA-\u06FC]/.test(String(value || ''));
   const words = raw.split(/\s+/).filter(Boolean);
   div.dataset.wbw = 'on';
   div.classList.add('wbw-grid', 'study');
@@ -2005,20 +2007,28 @@ function toggleWordByWord(sura, aya, btn) {
   var qwords = (QURAN_WORDS_READY && QURAN_WORDS && QURAN_WORDS[verseKey]) ? QURAN_WORDS[verseKey] : null;
 
   if (qwords && qwords.length) {
-    // Use pre-built word data with Arabic, transliteration, and English
-    div.innerHTML = qwords.map(function(w, i) {
-      var safe = (w.a || '').replace(/'/g,"&#39;").replace(/"/g,'&quot;');
-      var tSpan = w.t ? '<span class="wbw-translit">' + w.t + '</span>' : '';
-      var eSpan = w.e ? '<span class="wbw-english">' + w.e + '</span>' : '<span class="wbw-english"></span>';
-      return '<span class="wbw-word" data-pos="' + (i+1) + '" data-aya="' + Number(aya) + '" data-word="' + (w.a||'').replace(/"/g,'&quot;') + '" data-sura="' + Number(sura) + '" onclick="event.stopPropagation();wbwTap(this)">'
-        + '<span class="wbw-arabic">' + (w.a || '') + '</span>'
+    var speechPos = 0;
+    div.innerHTML = qwords.map(function(w) {
+      const arabic = w.a || '';
+      if (!isSpokenQuranWord(arabic)) {
+        return '<span class="wbw-pause-mark" aria-hidden="true">' + escapeHtml(arabic) + '</span>';
+      }
+      const pos = ++speechPos;
+      const tSpan = w.t ? '<span class="wbw-translit">' + escapeHtml(w.t) + '</span>' : '';
+      const eSpan = w.e ? '<span class="wbw-english">' + escapeHtml(w.e) + '</span>' : '<span class="wbw-english"></span>';
+      return '<span class="wbw-word" data-pos="' + pos + '" data-aya="' + Number(aya) + '" data-word="' + escapeHtml(arabic) + '" data-sura="' + Number(sura) + '" onclick="event.stopPropagation();wbwTap(this)">'
+        + '<span class="wbw-arabic">' + escapeHtml(arabic) + '</span>'
         + tSpan + eSpan
         + '</span>';
     }).join('');
   } else {
-    // Fallback: split Arabic by spaces, fetch meanings async
-    div.innerHTML = words.map(function(w, i) {
-      var pos = i + 1; // natural order, CSS direction:rtl handles display
+    // Fallback source: retain standalone waqf signs as non-clickable punctuation.
+    var speechPos = 0;
+    div.innerHTML = words.map(function(w) {
+      if (!isSpokenQuranWord(w)) {
+        return '<span class="wbw-pause-mark" aria-hidden="true">' + escapeHtml(w) + '</span>';
+      }
+      const pos = ++speechPos;
       return '<span class="wbw-word" data-pos="' + pos + '" data-word="' + escapeHtml(w) + '" data-sura="' + Number(sura) + '" data-aya="' + Number(aya) + '" onclick="event.stopPropagation();wbwTap(this)">'
         + '<span class="wbw-arabic">' + escapeHtml(w) + '</span>'
         + '<span class="wbw-translit" style="font-size:9px;color:#7d5f14;text-align:center;display:block;"></span>'
@@ -2053,9 +2063,9 @@ function toggleWordByWord(sura, aya, btn) {
       if (div.dataset.wbw === 'on') {
         var curKey = Number(sura) + ':' + Number(aya);
         if (QURAN_WORDS && QURAN_WORDS[curKey]) {
-          var qw = QURAN_WORDS[curKey];
-          div.querySelectorAll('.wbw-word').forEach(function(span, i) {
-            var w = qw[i];
+          var qw = QURAN_WORDS[curKey].filter(function(w) { return isSpokenQuranWord(w.a); });
+          div.querySelectorAll('.wbw-word').forEach(function(span) {
+            var w = qw[Number(span.dataset.pos) - 1];
             if (!w) return;
             var tEl = span.querySelector('.wbw-translit');
             var eEl = span.querySelector('.wbw-english');
