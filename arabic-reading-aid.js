@@ -9,6 +9,45 @@ const MARKS={
  '\u064b':['Tanwīn fatḥ','#813f9b'], '\u064c':['Tanwīn ḍamm','#813f9b'], '\u064d':['Tanwīn kasr','#813f9b'],
  '\u0653':['Madd','#087f83'], '\u0670':['Dagger alif','#087f83']
 };
+
+// Restore word-level dictionary access in NORMAL verse view.
+// Preserve Arabic codepoints and orthographic marks; do not alter shaping inside words.
+function makeNormalWordsTappable(){
+ document.querySelectorAll('.verse-arabic.lang-arabic[data-wbw="off"][id^="arabic-"]').forEach(verse=>{
+  if(verse.querySelector('.qh-tappable-word'))return;
+  const match=/^arabic-(\\d+)-(\\d+)$/.exec(verse.id);
+  if(!match)return;
+  const sura=Number(match[1]),aya=Number(match[2]);
+  const raw=verse.dataset.rawArabic || verse.textContent;
+  if(!raw.trim())return;
+  const fragment=document.createDocumentFragment();
+  const tokens=raw.split(/(\\s+)/);
+  let index=0;
+  tokens.forEach(token=>{
+   if(!token)return;
+   if(/^\\s+$/.test(token)){fragment.append(document.createTextNode(token));return;}
+   index++;
+   const word=document.createElement('span');
+   word.className='qh-tappable-word';
+   word.textContent=token;
+   word.setAttribute('role','button');
+   word.tabIndex=0;
+   word.setAttribute('aria-label','Study and pronounce '+token);
+   const position=index;
+   const open=event=>{
+    event.stopPropagation();
+    if(typeof window.openWordStudy==='function')window.openWordStudy(token,sura,aya,position);
+   };
+   word.addEventListener('click',open);
+   word.addEventListener('keydown',event=>{
+    if(event.key==='Enter'||event.key===' '){event.preventDefault();open(event);}
+   });
+   fragment.append(word);
+  });
+  verse.replaceChildren(fragment);
+ });
+}
+
 let active=false;
 try{active=localStorage.getItem(KEY)==='1';}catch(_){}
 function guides(){
@@ -40,6 +79,7 @@ function render(){
  if(active)guides();
 }
 function addButtons(){
+ makeNormalWordsTappable();
  document.querySelectorAll('.wbw-toggle-btn').forEach(wordButton=>{
   if(wordButton.parentNode.querySelector('.qh-reading-aid-btn'))return;
   const button=document.createElement('button');
