@@ -133,13 +133,21 @@ function init(){
    });
   },{rootMargin:'200px 0px'});
  }
- // Load the current stylesheet's web font before rasterizing.
- const load=document.fonts
-  ?Promise.all([
-    document.fonts.load('400 36px "Noto Naskh Arabic"'),
-    document.fonts.load('700 36px "Noto Naskh Arabic"')
-   ]):Promise.resolve();
- load.catch(()=>{}).finally(()=>{fontReady=true;update();});
+ // Wait for the dynamically inserted stylesheet and both Naskh weights.
+ // Drawing before this point could lock in a fallback font on mobile.
+ const prepareFont=()=>{
+  const load=document.fonts
+   ?Promise.all([
+     document.fonts.load('400 36px "Noto Naskh Arabic"'),
+     document.fonts.load('700 36px "Noto Naskh Arabic"')
+    ]):Promise.resolve();
+  load.catch(()=>{}).finally(()=>{fontReady=true;update();});
+ };
+ const sheet=document.querySelector('link[href*="arabic-reading-aid.css"]');
+ if(sheet&&!sheet.sheet){
+  sheet.addEventListener('load',prepareFont,{once:true});
+  sheet.addEventListener('error',prepareFont,{once:true});
+ }else{prepareFont();}
  new MutationObserver(update).observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['class']});
  window.addEventListener('resize',()=>{
   if(!enabled())return;
