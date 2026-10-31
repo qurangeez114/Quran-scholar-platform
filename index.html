@@ -7631,6 +7631,61 @@ async function shareNote() {
 // ─── Per-verse copy & share ────────────────────────────────────────
 // Reads only the language lines that are currently visible (lang-* classes
 // honor the user's toggle state), so what gets copied = what's on screen.
+// Copy Arabic independently of its interactive display. This preserves the source
+// Qur'an codepoints, vowels, and waqf marks while removing layout-only line breaks.
+function qhNormalizeArabicPaste(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim();
+}
+function qhPlainArabicFromVerse(el) {
+  if (!el) return '';
+  if (el.dataset && el.dataset.rawArabic) {
+    return qhNormalizeArabicPaste(el.dataset.rawArabic);
+  }
+  const clone = el.cloneNode(true);
+  clone.querySelectorAll(
+    '.wbw-translit,.wbw-english,.qh-harakat-guide,.qh-vowel-overlay,' +
+    '.qh-mobile-word-speaker,.qh-mobile-word-dictionary,.qh-word-actions-popover'
+  ).forEach(node => node.remove());
+  clone.querySelectorAll('.wbw-word,.qh-tappable-word,.wbw-pause-mark').forEach(node => {
+    const ar = node.querySelector('.wbw-arabic');
+    const text = ar ? ar.textContent : Array.from(node.childNodes)
+      .filter(child => child.nodeType === 3).map(child => child.textContent).join('');
+    node.replaceWith(document.createTextNode(' ' + text + ' '));
+  });
+  return qhNormalizeArabicPaste(clone.textContent);
+}
+// Used by the selection toolbar AND native Ctrl+C / Copy from mobile browsers.
+// Only adapt a selection that is entirely inside one Arabic verse; other languages
+// and mixed-language research selections keep their normal browser behavior.
+function qhCleanArabicSelectionText(range) {
+  if (!range) return null;
+  const start = range.startContainer.nodeType === 1 ? range.startContainer : range.startContainer.parentElement;
+  const end = range.endContainer.nodeType === 1 ? range.endContainer : range.endContainer.parentElement;
+  const arabic = start && start.closest && start.closest('.verse-arabic.lang-arabic');
+  if (!arabic || !end || !arabic.contains(end)) return null;
+  const fragment = range.cloneContents();
+  fragment.querySelectorAll(
+    '.wbw-translit,.wbw-english,.qh-harakat-guide,.qh-vowel-overlay,' +
+    '.qh-mobile-word-speaker,.qh-mobile-word-dictionary,.qh-word-actions-popover'
+  ).forEach(node => node.remove());
+  fragment.querySelectorAll('.wbw-word,.qh-tappable-word,.wbw-pause-mark').forEach(node => {
+    const ar = node.querySelector('.wbw-arabic');
+    const word = ar ? ar.textContent : Array.from(node.childNodes)
+      .filter(child => child.nodeType === 3).map(child => child.textContent).join('');
+    node.replaceWith(document.createTextNode(' ' + word + ' '));
+  });
+  const clean = qhNormalizeArabicPaste(fragment.textContent);
+  return clean || null;
+}
+document.addEventListener('copy', function(event) {
+  const selection = window.getSelection && window.getSelection();
+  if (!selection || selection.isCollapsed || !selection.rangeCount || !event.clipboardData) return;
+  const clean = qhCleanArabicSelectionText(selection.getRangeAt(0));
+  if (clean === null) return;
+  event.clipboardData.setData('text/plain', clean);
+  event.preventDefault();
+});
+
 function buildVerseShareText(ayaNum, suraId, cardEl) {
   // If a specific card element is provided, use it (for search-result cards
   // which don't have the standard vc-{n} ID). Otherwise fall back to the
@@ -7656,7 +7711,11 @@ function buildVerseShareText(ayaNum, suraId, cardEl) {
     const el = body.querySelector('.' + cls);
     if (!el) continue;
     if (el.offsetParent === null) continue; // hidden via display:none
-    const text = (el.innerText || '').trim();
+    // Arabic must paste as a normal continuous verse even in word-by-word
+    // study mode, where innerText includes card breaks and transliterations.
+    const text = cls === 'lang-arabic'
+      ? qhPlainArabicFromVerse(el)
+      : (el.innerText || '').trim();
     if (!text) continue;
     lines.push(`[${labels[cls]}]`);
     lines.push(text);
@@ -7765,7 +7824,7 @@ function selectionInsideAllowedArea() {
   const sel = window.getSelection();
   if (!sel || sel.isCollapsed || !sel.rangeCount) return null;
   const range = sel.getRangeAt(0);
-  const text = sel.toString().trim();
+  const text = qhCleanArabicSelectionText(range) || sel.toString().trim();
   if (text.length < 2) return null;
   // Only show inside verse area, search results, or concordance
   let node = range.commonAncestorContainer;
