@@ -26,6 +26,12 @@ function makeNormalWordsTappable(){
   tokens.forEach(token=>{
    if(!token)return;
    if(/^\s+$/.test(token)){fragment.append(document.createTextNode(token));return;}
+   // Standalone waqf/pause signs (e.g. ۚ ۗ) are not spoken words.
+   // They stay visible but MUST NOT consume an audio position.
+   if(!/[\u0621-\u063A\u0641-\u064A\u066E-\u066F\u0671-\u06D3\u06FA-\u06FC]/.test(token)){
+    fragment.append(document.createTextNode(token));
+    return;
+   }
    index++;
    const word=document.createElement('span');
    word.className='qh-tappable-word';
