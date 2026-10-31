@@ -33,7 +33,7 @@ function makeNormalWordsTappable(){
    word.textContent=token;
    word.setAttribute('role','button');
    word.tabIndex=0;
-   word.setAttribute('aria-label','Study and pronounce '+token);
+   word.setAttribute('aria-label','Pronounce '+token+' or open its dictionary');
    const position=index;
    const open=event=>{
     event.stopPropagation();
@@ -103,41 +103,72 @@ function wireHover(){
 }
 
 
-function addMobileSpeakers(){
+// On touch devices the Arabic word itself is the pronunciation control.
+// The separate book button preserves one-tap access to the dictionary.
+function mobilePointer(){return !!(window.matchMedia&&window.matchMedia('(pointer: coarse), (hover: none)').matches);}
+function playWordPronunciation(el,sura,aya,pos){
+ stopHoverSound();
+ if(window.speechSynthesis)window.speechSynthesis.cancel();
+ document.querySelectorAll('.qh-audio-playing').forEach(node=>node.classList.remove('qh-audio-playing'));
+ const speaker=el.querySelector('.qh-mobile-word-speaker');
+ el.classList.add('qh-audio-playing');
+ if(speaker)speaker.classList.add('qh-audio-playing');
+ const reset=()=>{el.classList.remove('qh-audio-playing');if(speaker)speaker.classList.remove('qh-audio-playing');};
+ const word=el.dataset.qhWordText||el.dataset.word||(el.querySelector('.wbw-arabic')||el).textContent.trim();
+ let fallbackDone=false;
+ const fallback=()=>{
+  if(fallbackDone)return;
+  fallbackDone=true;reset();
+  if(!('speechSynthesis' in window)||typeof SpeechSynthesisUtterance==='undefined')return;
+  const utterance=new SpeechSynthesisUtterance(word);
+  utterance.lang='ar-SA';utterance.rate=0.8;
+  utterance.onerror=reset;utterance.onend=reset;
+  try{window.speechSynthesis.cancel();window.speechSynthesis.speak(utterance);}catch(_){reset();}
+ };
+ const file=[sura,aya,pos].map(n=>String(n).padStart(3,'0')).join('_')+'.mp3';
+ const audio=new Audio('https://audio.qurancdn.com/wbw/'+file);
+ hoverAudio=audio;
+ audio.addEventListener('ended',reset,{once:true});
+ audio.addEventListener('error',fallback,{once:true});
+ const promise=audio.play();
+ if(promise&&typeof promise.catch==='function')promise.catch(fallback);
+}
+function addMobileWordActions(){
  document.querySelectorAll('.qh-tappable-word,.wbw-word').forEach(el=>{
-  if(el.dataset.qhMobileSpeaker)return;
+  if(el.dataset.qhMobileActions)return;
   const card=el.closest('.verse-arabic');
   const match=card&&/^arabic-(\d+)-(\d+)$/.exec(card.id);
   const sura=Number(el.dataset.sura||(match&&match[1]));
   const aya=Number(el.dataset.aya||(match&&match[2]));
   const pos=Number(el.dataset.pos||el.dataset.qhWordPos);
   if(!(sura>0&&aya>0&&pos>0))return;
-  el.dataset.qhMobileSpeaker='1';
-  const btn=document.createElement('button');
-  btn.type='button';btn.className='qh-mobile-word-speaker';
-  btn.textContent='🔊';btn.title='Pronounce this Arabic word';
-  btn.setAttribute('aria-label','Pronounce word '+pos);
-  btn.addEventListener('click',event=>{
-   event.preventDefault();event.stopPropagation();
-   stopHoverSound();
-   const filename=[sura,aya,pos].map(n=>String(n).padStart(3,'0')).join('_')+'.mp3';
-   const audio=new Audio('https://audio.qurancdn.com/wbw/'+filename);
-   hoverAudio=audio;
-   btn.classList.add('qh-audio-playing');
-   const reset=()=>btn.classList.remove('qh-audio-playing');
-   audio.addEventListener('ended',reset,{once:true});
-   audio.addEventListener('error',reset,{once:true});
-   audio.play().catch(()=>{
-    reset();
-    if(window.speechSynthesis&&typeof SpeechSynthesisUtterance!=='undefined'){
-     const word=(el.querySelector('.wbw-arabic')||el).textContent.trim();
-     const utterance=new SpeechSynthesisUtterance(word);
-     utterance.lang='ar-SA';utterance.rate=0.8;
-     window.speechSynthesis.cancel();window.speechSynthesis.speak(utterance);
-    }
-   });
+  el.dataset.qhMobileActions='1';
+  const word=el.dataset.word||(el.querySelector('.wbw-arabic')||el).textContent.trim();
+  el.dataset.qhWordText=word;
+  const sound=document.createElement('button');
+  sound.type='button';sound.className='qh-mobile-word-speaker';
+  sound.textContent='🔊';sound.title='Pronounce this Arabic word';
+  sound.setAttribute('aria-label','Pronounce '+word);
+  sound.addEventListener('click',event=>{
+   event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();
+   playWordPronunciation(el,sura,aya,pos);
   });
-  el.appendChild(btn);
+  const dictionary=document.createElement('button');
+  dictionary.type='button';dictionary.className='qh-mobile-word-dictionary';
+  dictionary.textContent='📖';dictionary.title='Open word dictionary';
+  dictionary.setAttribute('aria-label','Open dictionary for '+word);
+  dictionary.addEventListener('click',event=>{
+   event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();
+   if(typeof window.openWordStudy==='function')window.openWordStudy(word,sura,aya,pos);
+  });
+  el.append(sound,dictionary);
+  // Capture before the existing normal-word and inline wbwTap dictionary handlers.
+  el.addEventListener('click',event=>{
+   if(!mobilePointer())return; // Preserve click-to-dictionary on desktop.
+   if(event.target.closest('.qh-mobile-word-speaker,.qh-mobile-word-dictionary'))return;
+   event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();
+   playWordPronunciation(el,sura,aya,pos);
+  },true);
  });
 }
 
@@ -175,7 +206,7 @@ function addButtons(){
  makeNormalWordsTappable();
  addHoverControls();
  wireHover();
- addMobileSpeakers();
+ addMobileWordActions();
  document.querySelectorAll('.wbw-toggle-btn').forEach(wordButton=>{
   if(wordButton.parentNode.querySelector('.qh-reading-aid-btn'))return;
   const button=document.createElement('button');
