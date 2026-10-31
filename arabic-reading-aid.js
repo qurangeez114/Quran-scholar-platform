@@ -15,17 +15,17 @@ const MARKS={
 function makeNormalWordsTappable(){
  document.querySelectorAll('.verse-arabic.lang-arabic[data-wbw="off"][id^="arabic-"]').forEach(verse=>{
   if(verse.querySelector('.qh-tappable-word'))return;
-  const match=/^arabic-(\\d+)-(\\d+)$/.exec(verse.id);
+  const match=/^arabic-(\d+)-(\d+)$/.exec(verse.id);
   if(!match)return;
   const sura=Number(match[1]),aya=Number(match[2]);
   const raw=verse.dataset.rawArabic || verse.textContent;
   if(!raw.trim())return;
   const fragment=document.createDocumentFragment();
-  const tokens=raw.split(/(\\s+)/);
+  const tokens=raw.split(/(\s+)/);
   let index=0;
   tokens.forEach(token=>{
    if(!token)return;
-   if(/^\\s+$/.test(token)){fragment.append(document.createTextNode(token));return;}
+   if(/^\s+$/.test(token)){fragment.append(document.createTextNode(token));return;}
    index++;
    const word=document.createElement('span');
    word.className='qh-tappable-word';
