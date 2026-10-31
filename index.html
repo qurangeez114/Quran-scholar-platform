@@ -10175,57 +10175,63 @@ function speakVerseSelected(ayaNum, suraId, btn) {
 }
 
 let wsWordAudio = null;
+let wsWordPlaybackTimer = null;
 function wsSpeak() {
-  const wordEl = document.getElementById('ws-word');
-  const btn = document.getElementById('ws-speak-btn');
-  if (!wordEl || !wordEl.textContent.trim()) return;
-  const word = wordEl.textContent.trim();
-  const sura = Number(wordStudySura || 0);
-  const aya = Number(wordStudyAya || 0);
-  const pos = Number(wordEl.dataset.pos || 0);
-  if (wsWordAudio) { wsWordAudio.pause(); wsWordAudio.src = ''; wsWordAudio = null; }
-  if (window.speechSynthesis) window.speechSynthesis.cancel();
-  const reset = () => { if (btn) { btn.disabled = false; btn.textContent = '🔊 Pronounce'; } };
-  if (!(sura > 0 && aya > 0 && pos > 0)) { trySpeechSynthesis(word, btn); return; }
-  // Quran.com word audio: wbw/001_001_001.mp3 (not wbw/1/1/1.mp3)
-  const file = [sura, aya, pos].map(n => String(n).padStart(3,'0')).join('_');
-  const audio = new Audio('https://audio.qurancdn.com/wbw/' + file + '.mp3');
-  wsWordAudio = audio;
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Loading...'; }
-  let finished = false;
-  const fallback = () => {
-    if (finished || wsWordAudio !== audio) return;
-    finished = true;
-    audio.pause();
-    reset();
-    trySpeechSynthesis(word, btn);
-  };
-  audio.onerror = fallback;
-  audio.onended = reset;
-  audio.play().then(() => { finished = true; reset(); }).catch(fallback);
+ const element=document.getElementById('ws-word'),button=document.getElementById('ws-speak-btn');
+ if(!element||!element.textContent.trim())return;
+ const word=element.textContent.trim(),sura=Number(wordStudySura),aya=Number(wordStudyAya),pos=Number(element.dataset.pos);
+ if(wsWordPlaybackTimer){clearTimeout(wsWordPlaybackTimer);wsWordPlaybackTimer=null;}
+ if(wsWordAudio){wsWordAudio.pause();wsWordAudio.removeAttribute('src');wsWordAudio=null;}
+ if(window.speechSynthesis)window.speechSynthesis.cancel();
+ const status=(label,disabled=false)=>{if(button){button.textContent=label;button.disabled=disabled;}};
+ if(!(sura>0&&aya>0&&pos>0)){trySpeechSynthesis(word,button);return;}
+ const filename=[sura,aya,pos].map(v=>String(v).padStart(3,'0')).join('_')+'.mp3';
+ const url='https://audio.qurancdn.com/wbw/'+filename;
+ const audio=new Audio();
+ wsWordAudio=audio;
+ audio.preload='auto';
+ status('⏳ Loading...',true);
+ let started=false,fallen=false;
+ const fallback=()=>{
+   if(fallen||started||wsWordAudio!==audio)return;
+   fallen=true;
+   if(wsWordPlaybackTimer)clearTimeout(wsWordPlaybackTimer);
+   audio.pause();audio.removeAttribute('src');
+   status('🔊 Pronounce');
+   trySpeechSynthesis(word,button);
+ };
+ audio.addEventListener('playing',()=>{
+   if(wsWordAudio!==audio)return;
+   started=true;if(wsWordPlaybackTimer)clearTimeout(wsWordPlaybackTimer);
+   status('🔊 Playing...');
+ });
+ audio.addEventListener('ended',()=>{if(wsWordAudio===audio)status('🔊 Pronounce');});
+ audio.addEventListener('error',fallback);
+ audio.src=url;
+ wsWordPlaybackTimer=setTimeout(fallback,6000);
+ const promise=audio.play();
+ if(promise&&typeof promise.catch==='function')promise.catch(fallback);
 }
-function trySpeechSynthesis(word, btn) {
-  if (!window.speechSynthesis || typeof SpeechSynthesisUtterance === 'undefined') {
-    if (btn) { btn.textContent = 'Audio unavailable'; btn.disabled = false; }
-    return;
-  }
-  window.speechSynthesis.cancel();
-  const voices = window.speechSynthesis.getVoices();
-  const arVoice = voices.find(v => /^ar(-|$)/i.test(v.lang));
-  if (!arVoice) {
-    if (btn) { btn.textContent = 'Arabic audio unavailable'; btn.disabled = false; }
-    return;
-  }
-  const utterance = new SpeechSynthesisUtterance(word);
-  utterance.lang = arVoice.lang;
-  utterance.voice = arVoice;
-  utterance.rate = 0.75;
-  utterance.onerror = () => { if (btn) { btn.textContent = 'Audio unavailable'; btn.disabled = false; } };
-  utterance.onend = () => { if (btn) { btn.textContent = '🔊 Pronounce'; btn.disabled = false; } };
-  if (btn) { btn.textContent = '🔊 Speaking...'; btn.disabled = true; }
-  window.speechSynthesis.speak(utterance);
+function trySpeechSynthesis(word,button){
+ const status=(label,disabled=false)=>{if(button){button.textContent=label;button.disabled=disabled;}};
+ if(!('speechSynthesis' in window)||typeof SpeechSynthesisUtterance==='undefined'){
+  status('⚠️ Audio unavailable');return;
+ }
+ const synth=window.speechSynthesis;
+ synth.cancel();
+ const voices=synth.getVoices();
+ const voice=voices.find(v=>/^ar(?:-|$)/i.test(v.lang));
+ const utterance=new SpeechSynthesisUtterance(word);
+ utterance.lang=voice?voice.lang:'ar-SA';
+ if(voice)utterance.voice=voice;
+ utterance.rate=0.8;
+ utterance.onstart=()=>status('🔊 Speaking...');
+ utterance.onerror=()=>status('⚠️ Arabic voice unavailable');
+ utterance.onend=()=>status('🔊 Pronounce');
+ status('⏳ Speaking...',true);
+ try{synth.speak(utterance);}
+ catch(e){console.warn('Word speech error',e);status('⚠️ Audio unavailable');}
 }
-
 function wsReadMeaning() {
   // Build full reading text from stored word data
   var parts = [];
