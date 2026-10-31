@@ -50,59 +50,158 @@ function makeNormalWordsTappable(){
 }
 
 
-// Hover-to-pronounce: desktop only, with a short dwell and one audio at a time.
-// Browsers may require a first user interaction before allowing sound.
+// Desktop hover pronunciation: delegated events survive verse re-rendering.
+// A single reusable player plus explicit click-to-enable addresses browser autoplay rules.
 const HOVER_KEY='qh_hover_pronunciation';
 let hoverEnabled=true;
 try{hoverEnabled=localStorage.getItem(HOVER_KEY)!=='0';}catch(_){}
-let hoverTimer=null,hoverAudio=null,hoverLast='',hoverLastAt=0;
-function stopHoverSound(){
- if(hoverTimer){clearTimeout(hoverTimer);hoverTimer=null;}
- if(hoverAudio){hoverAudio.pause();hoverAudio.removeAttribute('src');hoverAudio=null;}
+let hoverTimer=null,hoverErrorTimer=null,hoverAudio=null,hoverPlayer=null;
+let hoverTarget=null,hoverSequence=0,hoverArmed=false,hoverBlocked=false;
+let hoverListenersInstalled=false,hoverLastError='';
+function hoverWordInfo(el){
+ if(!el)return null;
+ const card=el.closest('.verse-arabic');
+ const found=card&&/^arabic-(\d+)-(\d+)$/.exec(card.id);
+ const sura=Number(el.dataset.sura||(found&&found[1]));
+ const aya=Number(el.dataset.aya||(found&&found[2]));
+ const pos=Number(el.dataset.pos||el.dataset.qhWordPos);
+ const word=el.dataset.word||el.dataset.qhWordText||(el.querySelector('.wbw-arabic')||el).textContent.trim();
+ if(!(sura>0&&aya>0&&pos>0&&word))return null;
+ return {el,sura,aya,pos,word};
 }
-function pronounceHover(el,sura,aya,pos){
+function showHoverState(){
+ document.querySelectorAll('.qh-hover-audio-btn').forEach(btn=>{
+  let label;
+  if(!hoverEnabled)label='🔇 Hover: Off';
+  else if(hoverBlocked||!hoverArmed)label='🔈 Enable hover sound';
+  else if(hoverLastError)label='⚠️ Audio unavailable · Retry';
+  else label='🔊 Hover: On';
+  if(btn.textContent!==label)btn.textContent=label;
+  btn.setAttribute('aria-pressed',String(hoverEnabled&&hoverArmed&&!hoverBlocked));
+  btn.title=hoverEnabled&&!hoverArmed
+   ?'Click once to enable browser audio. A test word will play.'
+   :'Hover an Arabic word to hear it; click to turn off or retry.';
+ });
+}
+function getHoverPlayer(){
+ if(!hoverPlayer){hoverPlayer=new Audio();hoverPlayer.preload='auto';}
+ return hoverPlayer;
+}
+function stopHoverSound(){
+ hoverSequence++;
+ if(hoverTimer){clearTimeout(hoverTimer);hoverTimer=null;}
+ if(hoverErrorTimer){clearTimeout(hoverErrorTimer);hoverErrorTimer=null;}
+ if(hoverPlayer){try{hoverPlayer.pause();}catch(_){}}
+ // Mobile uses a separate player, sharing the existing cancellation entrypoint.
+ if(hoverAudio){try{hoverAudio.pause();hoverAudio.removeAttribute('src');}catch(_){}hoverAudio=null;}
+}
+function speakHoverFallback(word,request){
+ if(request!==hoverSequence)return;
+ if(!('speechSynthesis' in window)||typeof SpeechSynthesisUtterance==='undefined'){
+  hoverLastError='no-audio';showHoverState();return;
+ }
+ try{
+  window.speechSynthesis.cancel();
+  const utterance=new SpeechSynthesisUtterance(word);
+  const voice=window.speechSynthesis.getVoices().find(v=>/^ar(?:-|$)/i.test(v.lang));
+  if(voice)utterance.voice=voice;
+  utterance.lang=voice?voice.lang:'ar-SA';utterance.rate=0.8;
+  utterance.onerror=()=>{if(request===hoverSequence){hoverLastError='speech-failed';showHoverState();}};
+  window.speechSynthesis.speak(utterance);
+  hoverLastError='';showHoverState();
+ }catch(_){hoverLastError='speech-failed';showHoverState();}
+}
+function playHoverWord(info){
+ if(!hoverEnabled)return;
+ const request=++hoverSequence;
+ if(hoverErrorTimer){clearTimeout(hoverErrorTimer);hoverErrorTimer=null;}
+ const player=getHoverPlayer();
+ try{player.pause();}catch(_){}
+ hoverLastError='';hoverBlocked=false;
+ const file=[info.sura,info.aya,info.pos].map(n=>String(n).padStart(3,'0')).join('_')+'.mp3';
+ const url='https://audio.qurancdn.com/wbw/'+file;
+ let failed=false,playing=false;
+ const fallback=(error)=>{
+  if(failed||request!==hoverSequence||playing)return;
+  failed=true;
+  if(hoverErrorTimer){clearTimeout(hoverErrorTimer);hoverErrorTimer=null;}
+  if(error&&error.name==='NotAllowedError'){
+   hoverBlocked=true;hoverArmed=false;showHoverState();
+   return;
+  }
+  speakHoverFallback(info.word,request);
+ };
+ player.onerror=()=>fallback(new Error('audio-load-failed'));
+ player.onplaying=()=>{
+  if(request!==hoverSequence)return;
+  playing=true;hoverArmed=true;hoverBlocked=false;hoverLastError='';
+  if(hoverErrorTimer){clearTimeout(hoverErrorTimer);hoverErrorTimer=null;}
+  showHoverState();
+ };
+ player.onended=()=>{if(request===hoverSequence)showHoverState();};
+ player.src=url;
+ hoverErrorTimer=setTimeout(()=>fallback(new Error('audio-timeout')),5500);
+ try{
+  const result=player.play();
+  if(result&&typeof result.catch==='function')result.catch(fallback);
+ }catch(error){fallback(error);}
+}
+function pronounceHover(info){
  if(!hoverEnabled||!window.matchMedia('(hover: hover) and (pointer: fine)').matches)return;
- if(!Number.isInteger(pos)||pos<1)return;
- if(hoverTimer)clearTimeout(hoverTimer);
+ if(hoverTimer){clearTimeout(hoverTimer);hoverTimer=null;}
  hoverTimer=setTimeout(()=>{
   hoverTimer=null;
-  const identifier=sura+':'+aya+':'+pos;
-  if(identifier===hoverLast&&Date.now()-hoverLastAt<1100)return;
-  stopHoverSound();
-  hoverLast=identifier;hoverLastAt=Date.now();
-  const file=[sura,aya,pos].map(n=>String(n).padStart(3,'0')).join('_')+'.mp3';
-  const audio=new Audio('https://audio.qurancdn.com/wbw/'+file);
-  hoverAudio=audio;audio.preload='auto';
-  audio.play().catch(()=>{if(hoverAudio===audio)hoverAudio=null;});
-  audio.addEventListener('ended',()=>{if(hoverAudio===audio)hoverAudio=null;},{once:true});
- },280);
+  if(hoverTarget!==info.el||!info.el.isConnected)return;
+  playHoverWord(info);
+ },180);
 }
 function addHoverControls(){
  document.querySelectorAll('.wbw-toggle-btn').forEach(wordButton=>{
   if(wordButton.parentNode.querySelector('.qh-hover-audio-btn'))return;
-  const button=document.createElement('button');button.type='button';
-  button.className='qh-hover-audio-btn';button.setAttribute('aria-pressed',String(hoverEnabled));
-  const refresh=()=>{button.textContent=hoverEnabled?'🔊 Hover sound: On':'🔇 Hover sound: Off';button.setAttribute('aria-pressed',String(hoverEnabled));};
-  button.addEventListener('click',()=>{hoverEnabled=!hoverEnabled;try{localStorage.setItem(HOVER_KEY,hoverEnabled?'1':'0');}catch(_){}if(!hoverEnabled)stopHoverSound();refresh();});
-  refresh();wordButton.insertAdjacentElement('afterend',button);
+  const btn=document.createElement('button');
+  btn.type='button';btn.className='qh-hover-audio-btn';
+  btn.addEventListener('click',()=>{
+   // First click explicitly primes the same media element used by hover.
+   if(!hoverEnabled||!hoverArmed||hoverBlocked||hoverLastError){
+    hoverEnabled=true;hoverBlocked=false;hoverLastError='';
+    try{localStorage.setItem(HOVER_KEY,'1');}catch(_){}
+    playHoverWord(hoverWordInfo(hoverTarget)||{sura:1,aya:1,pos:1,word:'بِسْمِ'});
+   }else{
+    hoverEnabled=false;hoverArmed=false;hoverBlocked=false;
+    try{localStorage.setItem(HOVER_KEY,'0');}catch(_){}
+    stopHoverSound();
+   }
+   showHoverState();
+  });
+  wordButton.insertAdjacentElement('afterend',btn);
  });
+ showHoverState();
 }
 function wireHover(){
- document.querySelectorAll('.qh-tappable-word,.wbw-word').forEach(el=>{
-  if(el.dataset.qhHoverAudio)return;
-  const card=el.closest('.verse-arabic');
-  const found=card&&/^arabic-(\d+)-(\d+)$/.exec(card.id);
-  const sura=Number(el.dataset.sura||(found&&found[1]));
-  const aya=Number(el.dataset.aya||(found&&found[2]));
-  const pos=Number(el.dataset.pos||el.dataset.qhWordPos);
-  if(!(sura>0&&aya>0&&pos>0))return;
-  el.dataset.qhHoverAudio='1';
-  el.addEventListener('mouseenter',()=>pronounceHover(el,sura,aya,pos));
-  el.addEventListener('mouseleave',()=>{if(hoverTimer){clearTimeout(hoverTimer);hoverTimer=null;}});
+ if(hoverListenersInstalled)return;
+ hoverListenersInstalled=true;
+ document.addEventListener('pointerover',event=>{
+  if(event.pointerType&&event.pointerType!=='mouse')return;
+  const el=event.target.closest&&event.target.closest('.qh-tappable-word,.wbw-word');
+  if(!el||!el.closest('.verse-arabic'))return;
+  if(event.relatedTarget&&el.contains(event.relatedTarget))return;
+  const info=hoverWordInfo(el);
+  if(!info)return;
+  hoverTarget=el;
+  pronounceHover(info);
+ },true);
+ document.addEventListener('pointerout',event=>{
+  if(event.pointerType&&event.pointerType!=='mouse')return;
+  const el=event.target.closest&&event.target.closest('.qh-tappable-word,.wbw-word');
+  if(!el||hoverTarget!==el)return;
+  if(event.relatedTarget&&el.contains(event.relatedTarget))return;
+  hoverTarget=null;
+  if(hoverTimer){clearTimeout(hoverTimer);hoverTimer=null;}
+ },true);
+ document.addEventListener('visibilitychange',()=>{
+  if(document.hidden){hoverTarget=null;stopHoverSound();}
  });
 }
-
-
 // Touch interaction: the Arabic text stays continuous and uncluttered.
 // A tap pronounces that word; a long press (or a temporary action) opens its dictionary.
 // Desktop hover and keyboard access are deliberately preserved.
