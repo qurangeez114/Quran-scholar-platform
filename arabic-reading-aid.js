@@ -33,7 +33,8 @@ function guides(){
 function render(){
  document.body.classList.toggle('qh-reading-aid',active);
  document.querySelectorAll('.qh-reading-aid-btn').forEach(btn=>{
-  btn.textContent=active?'🎨 Vowels: On':'🎨 Vowels: Off';
+  const label=active?'🎨 Vowels: On':'🎨 Vowels: Off';
+  if(btn.textContent!==label)btn.textContent=label;
   btn.setAttribute('aria-pressed',String(active));
  });
  if(active)guides();
