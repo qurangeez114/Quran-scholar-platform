@@ -91,7 +91,7 @@ function wireHover(){
  document.querySelectorAll('.qh-tappable-word,.wbw-word').forEach(el=>{
   if(el.dataset.qhHoverAudio)return;
   const card=el.closest('.verse-arabic');
-  const found=card&&/^arabic-(\\d+)-(\\d+)$/.exec(card.id);
+  const found=card&&/^arabic-(\d+)-(\d+)$/.exec(card.id);
   const sura=Number(el.dataset.sura||(found&&found[1]));
   const aya=Number(el.dataset.aya||(found&&found[2]));
   const pos=Number(el.dataset.pos||el.dataset.qhWordPos);
