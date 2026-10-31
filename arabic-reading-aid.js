@@ -103,41 +103,87 @@ function wireHover(){
 }
 
 
-// On touch devices the Arabic word itself is the pronunciation control.
-// The separate book button preserves one-tap access to the dictionary.
-function mobilePointer(){return !!(window.matchMedia&&window.matchMedia('(pointer: coarse), (hover: none)').matches);}
+// Touch interaction: the Arabic text stays continuous and uncluttered.
+// A tap pronounces that word; a long press (or a temporary action) opens its dictionary.
+// Desktop hover and keyboard access are deliberately preserved.
+function mobilePointer(){
+ return !!(window.matchMedia&&window.matchMedia('(pointer: coarse), (hover: none)').matches);
+}
+let mobilePlaybackId=0;
+let mobileActionPopover=null;
+function hideMobileWordActions(){
+ if(mobileActionPopover){mobileActionPopover.remove();mobileActionPopover=null;}
+}
+function showMobileWordActions(el,word,sura,aya,pos){
+ hideMobileWordActions();
+ const menu=document.createElement('div');
+ menu.className='qh-word-actions-popover';
+ menu.setAttribute('role','group');
+ menu.setAttribute('aria-label','Actions for '+word);
+ const dictionary=document.createElement('button');
+ dictionary.type='button';
+ dictionary.className='qh-word-dictionary-action';
+ dictionary.textContent='📖 Dictionary';
+ dictionary.setAttribute('aria-label','Open dictionary for '+word);
+ dictionary.addEventListener('click',event=>{
+  event.preventDefault();event.stopPropagation();
+  hideMobileWordActions();
+  if(typeof window.openWordStudy==='function')window.openWordStudy(word,sura,aya,pos);
+ });
+ menu.append(dictionary);
+ document.body.append(menu);
+ mobileActionPopover=menu;
+ const bounds=el.getBoundingClientRect();
+ const width=menu.offsetWidth||136;
+ const height=menu.offsetHeight||40;
+ const left=Math.max(8,Math.min(bounds.left+bounds.width/2-width/2,window.innerWidth-width-8));
+ const top=bounds.top-height-8>8?bounds.top-height-8:Math.min(window.innerHeight-height-8,bounds.bottom+8);
+ menu.style.left=left+'px';
+ menu.style.top=Math.max(8,top)+'px';
+}
+document.addEventListener('pointerdown',event=>{
+ if(mobileActionPopover&&!mobileActionPopover.contains(event.target)&&!event.target.closest('.qh-tappable-word,.wbw-word'))hideMobileWordActions();
+},true);
+document.addEventListener('scroll',hideMobileWordActions,true);
 function playWordPronunciation(el,sura,aya,pos){
+ const request=++mobilePlaybackId;
  stopHoverSound();
  if(window.speechSynthesis)window.speechSynthesis.cancel();
  document.querySelectorAll('.qh-audio-playing').forEach(node=>node.classList.remove('qh-audio-playing'));
- const speaker=el.querySelector('.qh-mobile-word-speaker');
  el.classList.add('qh-audio-playing');
- if(speaker)speaker.classList.add('qh-audio-playing');
- const reset=()=>{el.classList.remove('qh-audio-playing');if(speaker)speaker.classList.remove('qh-audio-playing');};
+ const reset=()=>{if(request===mobilePlaybackId)el.classList.remove('qh-audio-playing');};
  const word=el.dataset.qhWordText||el.dataset.word||(el.querySelector('.wbw-arabic')||el).textContent.trim();
- let fallbackDone=false;
- const fallback=()=>{
-  if(fallbackDone)return;
-  fallbackDone=true;reset();
-  if(!('speechSynthesis' in window)||typeof SpeechSynthesisUtterance==='undefined')return;
-  const utterance=new SpeechSynthesisUtterance(word);
-  utterance.lang='ar-SA';utterance.rate=0.8;
-  utterance.onerror=reset;utterance.onend=reset;
-  try{window.speechSynthesis.cancel();window.speechSynthesis.speak(utterance);}catch(_){reset();}
- };
  const file=[sura,aya,pos].map(n=>String(n).padStart(3,'0')).join('_')+'.mp3';
  const audio=new Audio('https://audio.qurancdn.com/wbw/'+file);
  hoverAudio=audio;
+ let started=false,failed=false;
+ let timeout=null;
+ const fallback=()=>{
+  if(request!==mobilePlaybackId||failed||started)return;
+  failed=true;
+  if(timeout)clearTimeout(timeout);
+  audio.pause();audio.removeAttribute('src');
+  if(hoverAudio===audio)hoverAudio=null;
+  if(!('speechSynthesis' in window)||typeof SpeechSynthesisUtterance==='undefined'){reset();return;}
+  const utterance=new SpeechSynthesisUtterance(word);
+  const voice=window.speechSynthesis.getVoices().find(v=>/^ar(?:-|$)/i.test(v.lang));
+  if(voice)utterance.voice=voice;
+  utterance.lang=voice?voice.lang:'ar-SA';utterance.rate=0.8;
+  utterance.onend=reset;utterance.onerror=reset;
+  try{window.speechSynthesis.speak(utterance);}catch(_){reset();}
+ };
+ audio.addEventListener('playing',()=>{started=true;if(timeout)clearTimeout(timeout);},{once:true});
  audio.addEventListener('ended',reset,{once:true});
  audio.addEventListener('error',fallback,{once:true});
- const promise=audio.play();
- if(promise&&typeof promise.catch==='function')promise.catch(fallback);
+ timeout=setTimeout(fallback,6000);
+ try{const promise=audio.play();if(promise&&typeof promise.catch==='function')promise.catch(fallback);}
+ catch(_){fallback();}
 }
 function addMobileWordActions(){
  document.querySelectorAll('.qh-tappable-word,.wbw-word').forEach(el=>{
   if(el.dataset.qhMobileActions)return;
-  const card=el.closest('.verse-arabic');
-  const match=card&&/^arabic-(\d+)-(\d+)$/.exec(card.id);
+  const verse=el.closest('.verse-arabic');
+  const match=verse&&/^arabic-(\d+)-(\d+)$/.exec(verse.id);
   const sura=Number(el.dataset.sura||(match&&match[1]));
   const aya=Number(el.dataset.aya||(match&&match[2]));
   const pos=Number(el.dataset.pos||el.dataset.qhWordPos);
@@ -145,29 +191,38 @@ function addMobileWordActions(){
   el.dataset.qhMobileActions='1';
   const word=el.dataset.word||(el.querySelector('.wbw-arabic')||el).textContent.trim();
   el.dataset.qhWordText=word;
-  const sound=document.createElement('button');
-  sound.type='button';sound.className='qh-mobile-word-speaker';
-  sound.textContent='🔊';sound.title='Pronounce this Arabic word';
-  sound.setAttribute('aria-label','Pronounce '+word);
-  sound.addEventListener('click',event=>{
-   event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();
-   playWordPronunciation(el,sura,aya,pos);
-  });
-  const dictionary=document.createElement('button');
-  dictionary.type='button';dictionary.className='qh-mobile-word-dictionary';
-  dictionary.textContent='📖';dictionary.title='Open word dictionary';
-  dictionary.setAttribute('aria-label','Open dictionary for '+word);
-  dictionary.addEventListener('click',event=>{
-   event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();
+  el.setAttribute('aria-label','Arabic '+word+'. Tap to pronounce, hold for dictionary.');
+  let holdTimer=null,held=false,startX=0,startY=0;
+  const cancelHold=()=>{if(holdTimer){clearTimeout(holdTimer);holdTimer=null;}};
+  const dictionary=()=>{
+   hideMobileWordActions();
    if(typeof window.openWordStudy==='function')window.openWordStudy(word,sura,aya,pos);
+  };
+  el.addEventListener('pointerdown',event=>{
+   if(!mobilePointer()||event.button>0)return;
+   cancelHold();held=false;
+   startX=event.clientX;startY=event.clientY;
+   holdTimer=setTimeout(()=>{holdTimer=null;held=true;dictionary();},520);
   });
-  el.append(sound,dictionary);
-  // Capture before the existing normal-word and inline wbwTap dictionary handlers.
+  el.addEventListener('pointermove',event=>{
+   if(Math.abs(event.clientX-startX)>12||Math.abs(event.clientY-startY)>12)cancelHold();
+  });
+  el.addEventListener('pointerup',cancelHold);
+  el.addEventListener('pointercancel',cancelHold);
+  el.addEventListener('pointerleave',cancelHold);
+  el.addEventListener('contextmenu',event=>{
+   if(!mobilePointer())return;
+   event.preventDefault();event.stopPropagation();
+   cancelHold();
+   if(!held){held=true;dictionary();}
+  });
+  // Capture prevents the existing inline dictionary handlers from also firing on mobile.
   el.addEventListener('click',event=>{
-   if(!mobilePointer())return; // Preserve click-to-dictionary on desktop.
-   if(event.target.closest('.qh-mobile-word-speaker,.qh-mobile-word-dictionary'))return;
+   if(!mobilePointer())return;
    event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();
+   if(held){held=false;return;}
    playWordPronunciation(el,sura,aya,pos);
+   showMobileWordActions(el,word,sura,aya,pos);
   },true);
  });
 }
@@ -223,7 +278,7 @@ function addButtons(){
 let pending=false;
 const update=()=>{if(pending)return;pending=true;requestAnimationFrame(()=>{pending=false;addButtons();render();});};
 function init(){
- const stylesheet=document.createElement('link');stylesheet.rel='stylesheet';stylesheet.href='/arabic-reading-aid.css?v=mobile-tap-2';
+ const stylesheet=document.createElement('link');stylesheet.rel='stylesheet';stylesheet.href='/arabic-reading-aid.css?v=mobile-flow-3';
  document.head.append(stylesheet);
  update();
  const observer=new MutationObserver(update);
