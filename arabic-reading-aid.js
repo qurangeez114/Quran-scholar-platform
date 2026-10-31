@@ -383,7 +383,7 @@ function addButtons(){
 let pending=false;
 const update=()=>{if(pending)return;pending=true;requestAnimationFrame(()=>{pending=false;addButtons();render();});};
 function init(){
- const stylesheet=document.createElement('link');stylesheet.rel='stylesheet';stylesheet.href='/arabic-reading-aid.css?v=colored-vowels-v3';
+ const stylesheet=document.createElement('link');stylesheet.rel='stylesheet';stylesheet.href='/arabic-reading-aid.css?v=word-alignment-5-1-v5';
  document.head.append(stylesheet);
  update();
  const observer=new MutationObserver(update);
