@@ -2,7 +2,7 @@
  * Harakat guides are separate annotations; never split sacred text into spans. */
 (function(){
 'use strict';
-const KEY='qh_arabic_reading_aid';
+const KEY='qh_colored_harakat_v2';
 const MARKS={
  '\u064e':['Fatḥa','#c43839'], '\u064f':['Ḍamma','#246ec2'], '\u0650':['Kasra','#238348'],
  '\u0652':['Sukūn','#66717c'], '\u0651':['Shadda','#b75a19'],
@@ -227,8 +227,8 @@ function addMobileWordActions(){
  });
 }
 
-let active=false;
-try{active=localStorage.getItem(KEY)==='1';}catch(_){}
+let active=true;
+try{const stored=localStorage.getItem(KEY);if(stored!==null)active=stored==='1';}catch(_){}
 function guides(){
  if(!active)return;
  document.querySelectorAll('.wbw-word').forEach(card=>{
@@ -255,7 +255,7 @@ function render(){
   if(btn.textContent!==label)btn.textContent=label;
   btn.setAttribute('aria-pressed',String(active));
  });
- if(active)guides();
+ // No detached harakat rows: color accents appear on actual rendered words.
 }
 function addButtons(){
  makeNormalWordsTappable();
@@ -266,7 +266,7 @@ function addButtons(){
   if(wordButton.parentNode.querySelector('.qh-reading-aid-btn'))return;
   const button=document.createElement('button');
   button.type='button';button.className='qh-reading-aid-btn';
-  button.title='Show color-coded vowel mark guides without modifying Arabic letters';
+  button.title='Show colored fatḥa, ḍamma, kasra, sukūn, shadda, tanwīn and madd directly on Arabic words';
   button.addEventListener('click',()=>{
    active=!active;
    try{localStorage.setItem(KEY,active?'1':'0');}catch(_){}
@@ -278,7 +278,7 @@ function addButtons(){
 let pending=false;
 const update=()=>{if(pending)return;pending=true;requestAnimationFrame(()=>{pending=false;addButtons();render();});};
 function init(){
- const stylesheet=document.createElement('link');stylesheet.rel='stylesheet';stylesheet.href='/arabic-reading-aid.css?v=mobile-flow-3';
+ const stylesheet=document.createElement('link');stylesheet.rel='stylesheet';stylesheet.href='/arabic-reading-aid.css?v=colored-vowels-v2';
  document.head.append(stylesheet);
  update();
  const observer=new MutationObserver(update);
