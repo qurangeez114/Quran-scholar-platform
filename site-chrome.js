@@ -3,6 +3,15 @@
    page didn't. Safe to include on every page (idempotent). */
 (function () {
   'use strict';
+  // Load the shared handwritten English reading style on all supported pages.
+  // Keep the navigation UI and non-Latin scripts in their established fonts.
+  if (!document.getElementById('qh-english-handwriting-css')) {
+    var englishFontStyle = document.createElement('link');
+    englishFontStyle.id = 'qh-english-handwriting-css';
+    englishFontStyle.rel = 'stylesheet';
+    englishFontStyle.href = '/english-handwriting.css?v=1';
+    document.head.appendChild(englishFontStyle);
+  }
   // Site-wide motion layer (site-motion.js). Idempotent; respects reduced motion.
   if (!document.querySelector('script[src$="site-motion.js"]') && !window.__qhMotion) {
     var __m = document.createElement('script'); __m.src = '/site-motion.js'; __m.defer = true;
