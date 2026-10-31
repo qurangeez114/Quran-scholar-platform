@@ -29,6 +29,7 @@ function makeNormalWordsTappable(){
    index++;
    const word=document.createElement('span');
    word.className='qh-tappable-word';
+   word.dataset.qhWordPos=String(index);
    word.textContent=token;
    word.setAttribute('role','button');
    word.tabIndex=0;
@@ -45,6 +46,59 @@ function makeNormalWordsTappable(){
    fragment.append(word);
   });
   verse.replaceChildren(fragment);
+ });
+}
+
+
+// Hover-to-pronounce: desktop only, with a short dwell and one audio at a time.
+// Browsers may require a first user interaction before allowing sound.
+const HOVER_KEY='qh_hover_pronunciation';
+let hoverEnabled=true;
+try{hoverEnabled=localStorage.getItem(HOVER_KEY)!=='0';}catch(_){}
+let hoverTimer=null,hoverAudio=null,hoverLast='',hoverLastAt=0;
+function stopHoverSound(){
+ if(hoverTimer){clearTimeout(hoverTimer);hoverTimer=null;}
+ if(hoverAudio){hoverAudio.pause();hoverAudio.removeAttribute('src');hoverAudio=null;}
+}
+function pronounceHover(el,sura,aya,pos){
+ if(!hoverEnabled||!window.matchMedia('(hover: hover) and (pointer: fine)').matches)return;
+ if(!Number.isInteger(pos)||pos<1)return;
+ if(hoverTimer)clearTimeout(hoverTimer);
+ hoverTimer=setTimeout(()=>{
+  hoverTimer=null;
+  const identifier=sura+':'+aya+':'+pos;
+  if(identifier===hoverLast&&Date.now()-hoverLastAt<1100)return;
+  stopHoverSound();
+  hoverLast=identifier;hoverLastAt=Date.now();
+  const file=[sura,aya,pos].map(n=>String(n).padStart(3,'0')).join('_')+'.mp3';
+  const audio=new Audio('https://audio.qurancdn.com/wbw/'+file);
+  hoverAudio=audio;audio.preload='auto';
+  audio.play().catch(()=>{if(hoverAudio===audio)hoverAudio=null;});
+  audio.addEventListener('ended',()=>{if(hoverAudio===audio)hoverAudio=null;},{once:true});
+ },280);
+}
+function addHoverControls(){
+ document.querySelectorAll('.wbw-toggle-btn').forEach(wordButton=>{
+  if(wordButton.parentNode.querySelector('.qh-hover-audio-btn'))return;
+  const button=document.createElement('button');button.type='button';
+  button.className='qh-hover-audio-btn';button.setAttribute('aria-pressed',String(hoverEnabled));
+  const refresh=()=>{button.textContent=hoverEnabled?'🔊 Hover sound: On':'🔇 Hover sound: Off';button.setAttribute('aria-pressed',String(hoverEnabled));};
+  button.addEventListener('click',()=>{hoverEnabled=!hoverEnabled;try{localStorage.setItem(HOVER_KEY,hoverEnabled?'1':'0');}catch(_){}if(!hoverEnabled)stopHoverSound();refresh();});
+  refresh();wordButton.insertAdjacentElement('afterend',button);
+ });
+}
+function wireHover(){
+ document.querySelectorAll('.qh-tappable-word,.wbw-word').forEach(el=>{
+  if(el.dataset.qhHoverAudio)return;
+  const card=el.closest('.verse-arabic');
+  const found=card&&/^arabic-(\\d+)-(\\d+)$/.exec(card.id);
+  const sura=Number(el.dataset.sura||(found&&found[1]));
+  const aya=Number(el.dataset.aya||(found&&found[2]));
+  const pos=Number(el.dataset.pos||el.dataset.qhWordPos);
+  if(!(sura>0&&aya>0&&pos>0))return;
+  el.dataset.qhHoverAudio='1';
+  el.addEventListener('mouseenter',()=>pronounceHover(el,sura,aya,pos));
+  el.addEventListener('mouseleave',()=>{if(hoverTimer){clearTimeout(hoverTimer);hoverTimer=null;}});
  });
 }
 
@@ -80,6 +134,8 @@ function render(){
 }
 function addButtons(){
  makeNormalWordsTappable();
+ addHoverControls();
+ wireHover();
  document.querySelectorAll('.wbw-toggle-btn').forEach(wordButton=>{
   if(wordButton.parentNode.querySelector('.qh-reading-aid-btn'))return;
   const button=document.createElement('button');
