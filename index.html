@@ -10174,66 +10174,56 @@ function speakVerseSelected(ayaNum, suraId, btn) {
   qgSpeakText(textEl.innerText.trim(), btn, langMap[lang] || 'en-US');
 }
 
+let wsWordAudio = null;
 function wsSpeak() {
   const wordEl = document.getElementById('ws-word');
+  const btn = document.getElementById('ws-speak-btn');
   if (!wordEl || !wordEl.textContent.trim()) return;
   const word = wordEl.textContent.trim();
-
-  // Try Quran audio CDN for word-by-word pronunciation
-  // Use wordStudySura and wordStudyAya to build the audio URL
-  const sura = wordStudySura || 0;
-  const aya  = wordStudyAya  || 0;
-  const pos  = Number(wordEl.dataset.pos || 0);
-
-  // Method 1: EveryAyah word-by-word audio (most reliable for Arabic)
-  // Format: https://audio.qurancdn.com/wbw/{sura}/{aya}/{word_position}.mp3
-  if (sura && aya && pos > 0) {
-    const btn = document.getElementById('ws-speak-btn');
-    if (btn) { btn.textContent = '⏳ Loading...'; btn.disabled = true; }
-
-    // Try to find word position from the active word card
-    const wPos = pos;
-
-    const urls = [
-      `https://audio.qurancdn.com/wbw/${sura}/${aya}/${wPos}.mp3`,
-      `https://dl.salamquran.com/wbw/${String(sura).padStart(3,'0')}_${String(aya).padStart(3,'0')}_${String(wPos).padStart(3,'0')}.mp3`,
-    ];
-
-    let activeWordAudio = null;
-    function tryUrl(index) {
-      if (index >= urls.length) {
-        // Fallback to Web Speech API
-        if (btn) { btn.textContent = '🔊 Pronounce'; btn.disabled = false; }
-        trySpeechSynthesis(word);
-        return;
-      }
-      const audio = new Audio(urls[index]);
-      activeWordAudio = audio;
-      audio.oncanplaythrough = function() {
-        if (btn) { btn.textContent = '🔊 Pronounce'; btn.disabled = false; }
-        audio.play().catch(() => tryUrl(index + 1));
-      };
-      audio.onerror = function() { tryUrl(index + 1); };
-      audio.load();
-    }
-    tryUrl(0);
-  } else {
-    trySpeechSynthesis(word);
-  }
+  const sura = Number(wordStudySura || 0);
+  const aya = Number(wordStudyAya || 0);
+  const pos = Number(wordEl.dataset.pos || 0);
+  if (wsWordAudio) { wsWordAudio.pause(); wsWordAudio.src = ''; wsWordAudio = null; }
+  if (window.speechSynthesis) window.speechSynthesis.cancel();
+  const reset = () => { if (btn) { btn.disabled = false; btn.textContent = '🔊 Pronounce'; } };
+  if (!(sura > 0 && aya > 0 && pos > 0)) { trySpeechSynthesis(word, btn); return; }
+  // Quran.com word audio: wbw/001_001_001.mp3 (not wbw/1/1/1.mp3)
+  const file = [sura, aya, pos].map(n => String(n).padStart(3,'0')).join('_');
+  const audio = new Audio('https://audio.qurancdn.com/wbw/' + file + '.mp3');
+  wsWordAudio = audio;
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Loading...'; }
+  let finished = false;
+  const fallback = () => {
+    if (finished || wsWordAudio !== audio) return;
+    finished = true;
+    audio.pause();
+    reset();
+    trySpeechSynthesis(word, btn);
+  };
+  audio.onerror = fallback;
+  audio.onended = reset;
+  audio.play().then(() => { finished = true; reset(); }).catch(fallback);
 }
-
-function trySpeechSynthesis(word) {
-  if (!window.speechSynthesis) return;
+function trySpeechSynthesis(word, btn) {
+  if (!window.speechSynthesis || typeof SpeechSynthesisUtterance === 'undefined') {
+    if (btn) { btn.textContent = 'Audio unavailable'; btn.disabled = false; }
+    return;
+  }
   window.speechSynthesis.cancel();
-  // Try to find Arabic voice
   const voices = window.speechSynthesis.getVoices();
-  const arVoice = voices.find(v => v.lang.startsWith('ar')) || null;
-  const u = new SpeechSynthesisUtterance(word);
-  u.lang = 'ar-SA';
-  u.rate = 0.6;
-  u.pitch = 1;
-  if (arVoice) u.voice = arVoice;
-  window.speechSynthesis.speak(u);
+  const arVoice = voices.find(v => /^ar(-|$)/i.test(v.lang));
+  if (!arVoice) {
+    if (btn) { btn.textContent = 'Arabic audio unavailable'; btn.disabled = false; }
+    return;
+  }
+  const utterance = new SpeechSynthesisUtterance(word);
+  utterance.lang = arVoice.lang;
+  utterance.voice = arVoice;
+  utterance.rate = 0.75;
+  utterance.onerror = () => { if (btn) { btn.textContent = 'Audio unavailable'; btn.disabled = false; } };
+  utterance.onend = () => { if (btn) { btn.textContent = '🔊 Pronounce'; btn.disabled = false; } };
+  if (btn) { btn.textContent = '🔊 Speaking...'; btn.disabled = true; }
+  window.speechSynthesis.speak(utterance);
 }
 
 function wsReadMeaning() {
