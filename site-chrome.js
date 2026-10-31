@@ -3,13 +3,13 @@
    page didn't. Safe to include on every page (idempotent). */
 (function () {
   'use strict';
-  // Load the shared handwritten English reading style on all supported pages.
-  // Keep the navigation UI and non-Latin scripts in their established fonts.
-  if (!document.getElementById('qh-english-handwriting-css')) {
+  // Professional English reading typography for translations and research passages.
+  // All other scripts and navigation keep their existing typefaces.
+  if (!document.getElementById('qh-english-reading-css')) {
     var englishFontStyle = document.createElement('link');
-    englishFontStyle.id = 'qh-english-handwriting-css';
+    englishFontStyle.id = 'qh-english-reading-css';
     englishFontStyle.rel = 'stylesheet';
-    englishFontStyle.href = '/english-handwriting.css?v=1';
+    englishFontStyle.href = '/english-reading.css?v=2';
     document.head.appendChild(englishFontStyle);
   }
   // Site-wide motion layer (site-motion.js). Idempotent; respects reduced motion.
