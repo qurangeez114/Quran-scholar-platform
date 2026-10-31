@@ -102,6 +102,45 @@ function wireHover(){
  });
 }
 
+
+function addMobileSpeakers(){
+ document.querySelectorAll('.qh-tappable-word,.wbw-word').forEach(el=>{
+  if(el.dataset.qhMobileSpeaker)return;
+  const card=el.closest('.verse-arabic');
+  const match=card&&/^arabic-(\d+)-(\d+)$/.exec(card.id);
+  const sura=Number(el.dataset.sura||(match&&match[1]));
+  const aya=Number(el.dataset.aya||(match&&match[2]));
+  const pos=Number(el.dataset.pos||el.dataset.qhWordPos);
+  if(!(sura>0&&aya>0&&pos>0))return;
+  el.dataset.qhMobileSpeaker='1';
+  const btn=document.createElement('button');
+  btn.type='button';btn.className='qh-mobile-word-speaker';
+  btn.textContent='🔊';btn.title='Pronounce this Arabic word';
+  btn.setAttribute('aria-label','Pronounce word '+pos);
+  btn.addEventListener('click',event=>{
+   event.preventDefault();event.stopPropagation();
+   stopHoverSound();
+   const filename=[sura,aya,pos].map(n=>String(n).padStart(3,'0')).join('_')+'.mp3';
+   const audio=new Audio('https://audio.qurancdn.com/wbw/'+filename);
+   hoverAudio=audio;
+   btn.classList.add('qh-audio-playing');
+   const reset=()=>btn.classList.remove('qh-audio-playing');
+   audio.addEventListener('ended',reset,{once:true});
+   audio.addEventListener('error',reset,{once:true});
+   audio.play().catch(()=>{
+    reset();
+    if(window.speechSynthesis&&typeof SpeechSynthesisUtterance!=='undefined'){
+     const word=(el.querySelector('.wbw-arabic')||el).textContent.trim();
+     const utterance=new SpeechSynthesisUtterance(word);
+     utterance.lang='ar-SA';utterance.rate=0.8;
+     window.speechSynthesis.cancel();window.speechSynthesis.speak(utterance);
+    }
+   });
+  });
+  el.appendChild(btn);
+ });
+}
+
 let active=false;
 try{active=localStorage.getItem(KEY)==='1';}catch(_){}
 function guides(){
@@ -136,6 +175,7 @@ function addButtons(){
  makeNormalWordsTappable();
  addHoverControls();
  wireHover();
+ addMobileSpeakers();
  document.querySelectorAll('.wbw-toggle-btn').forEach(wordButton=>{
   if(wordButton.parentNode.querySelector('.qh-reading-aid-btn'))return;
   const button=document.createElement('button');
