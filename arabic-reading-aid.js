@@ -223,7 +223,7 @@ function addButtons(){
 let pending=false;
 const update=()=>{if(pending)return;pending=true;requestAnimationFrame(()=>{pending=false;addButtons();render();});};
 function init(){
- const stylesheet=document.createElement('link');stylesheet.rel='stylesheet';stylesheet.href='/arabic-reading-aid.css';
+ const stylesheet=document.createElement('link');stylesheet.rel='stylesheet';stylesheet.href='/arabic-reading-aid.css?v=mobile-tap-2';
  document.head.append(stylesheet);
  update();
  const observer=new MutationObserver(update);
