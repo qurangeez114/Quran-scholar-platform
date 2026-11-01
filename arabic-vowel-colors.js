@@ -99,7 +99,8 @@ function scan(){
  document.querySelectorAll(
   '.verse-arabic.lang-arabic[data-wbw="off"] .qh-tappable-word,'+
   '.verse-arabic.lang-arabic[data-wbw="on"] .wbw-arabic,'+
-  '.qh-xref-flow-text:not([hidden]) .qh-xref-ar-word'
+  '.qh-xref-flow-text:not([hidden]) .qh-xref-ar-word,'+
+  '.qh-crossref-flow:not([hidden]) .qh-xref-ar-word'
  ).forEach(el=>{
   if(el.dataset.qhColorized==='1'||watched.has(el))return;
   if(!Array.from(wordText(el)).some(c=>TYPES[c]))return;
