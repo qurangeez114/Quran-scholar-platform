@@ -1275,7 +1275,61 @@ body.qh-home-mode #qh-home-directory{display:block}
 .qh-home-shortcuts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin:18px 0 12px}.qh-home-shortcuts a,.qh-home-shortcuts button{font:700 13px system-ui,sans-serif;text-decoration:none;text-align:center;color:#7d5f14;background:#fffaf0;border:1px solid #dccca3;border-radius:9px;padding:11px 5px;min-height:44px;cursor:pointer}.qh-home-shortcuts a:focus-visible,.qh-home-shortcuts button:focus-visible{outline:2px solid #886a1f}.qh-quick-jump{display:grid;grid-template-columns:85px minmax(0,1fr);gap:9px 12px;align-items:center;border:1px solid #e5d6af;border-radius:14px;padding:15px;background:#fffdf6;margin:0 0 16px}.qh-quick-chapter-wrap{display:grid;grid-template-columns:74px minmax(0,1fr);gap:8px;min-width:0}.qh-quick-jump label{font-size:14px;color:#6b5230;font-weight:700}.qh-quick-jump select,.qh-quick-jump input{width:100%;min-width:0;min-height:44px;box-sizing:border-box;padding:9px 12px;border:1px solid #d4c9a8;border-radius:9px;background:white;color:#322b1e;font-size:16px}.qh-quick-aya-wrap{display:flex;align-items:center;gap:10px}.qh-quick-aya-wrap input{flex:1}.qh-quick-aya-wrap span{white-space:nowrap;color:#756548;font-size:13px}.qh-quick-jump-actions{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}.qh-quick-jump-actions button{min-height:44px;border:1px solid #d4c9a8;border-radius:9px;background:#f0e7d1;color:#5a4314;font-weight:750;font-size:14px;cursor:pointer}.qh-quick-jump-actions .qh-quick-go{background:#886a1f;color:white;border-color:#886a1f}#qh-quick-error{grid-column:1/-1;margin:0;color:#9b3225;font-size:13px}#qh-quick-error:empty{display:none}@media(max-width:570px){.qh-home-shortcuts{gap:5px}.qh-home-shortcuts a,.qh-home-shortcuts button{font-size:11px;padding:11px 2px}.qh-quick-jump{grid-template-columns:62px minmax(0,1fr);padding:12px;gap:8px}.qh-quick-jump-actions{gap:6px}}
 </style>
 <script>if(!new URLSearchParams(location.search).has('sura')&&!new URLSearchParams(location.search).has('aya'))document.addEventListener('DOMContentLoaded',function(){document.body.classList.add('qh-home-mode')});</script>
-</head>
+<style id="qh-single-style">
+.qh-single-entry{margin:12px 0}.qh-single-entry a{display:inline-block;padding:12px 16px;border:1px solid #d4c9a8;border-radius:10px;background:#fdf8ee;color:#7d5f14;text-decoration:none;font-weight:700}
+.qh-single-toolbar{display:flex;flex-wrap:wrap;gap:9px;align-items:center;padding:13px;background:#fdf8ee;border:1px solid #e8c97b;border-radius:12px;margin:0 0 18px}
+.qh-single-toolbar select,.qh-single-toolbar button{font:inherit;font-size:14px;padding:9px 12px;border:1px solid #d4c9a8;border-radius:8px;background:white;min-height:40px}
+.qh-single-toolbar button{background:#846e32;color:white;cursor:pointer}.qh-single-toolbar label{display:flex;align-items:center;gap:6px;font-size:13px;color:#59451c}
+.qh-single-page{max-width:790px;margin:0 auto;padding:12px 4px 45px;color:#30291d}.qh-single-page h2{text-align:center;color:#846e32;margin:12px 0 18px}.qh-single-verse{display:flex;gap:11px;align-items:baseline;padding:13px 4px;border-bottom:1px solid #eee7db;font-size:19px;line-height:2;white-space:pre-wrap;overflow-wrap:anywhere}.qh-single-ref{font-size:12px;color:#896f37;flex:0 0 39px}.qh-single-verse-text{flex:1;min-width:0}.qh-single-topic{padding:10px 13px;background:#f8f0df;border-left:3px solid #b89b57;border-radius:5px;margin:20px 0 3px;color:#735823;font-size:13px}
+@media(max-width:570px){.qh-single-verse{font-size:18px;line-height:1.85}.qh-single-toolbar{gap:6px;padding:10px}}
+</style>
+<script id="qh-single-script">
+(function(){
+const langs={ti:['Tigrinya','tigrinya'],en:['English','english'],am:['Amharic','amharic'],om:['Oromo','oromo'],so:['Somali','somali'],de:['German','german'],ur:['Urdu','urdu'],bn:['Bengali','bengali'],ms:['Malay','malay'],es:['Spanish','spanish'],zh:['Chinese','chinese'],sw:['Swahili','swahili'],ha:['Hausa','hausa'],sv:['Swedish','swedish'],no:['Norwegian','norwegian']};
+const flags={active:false,lang:'ti',markers:true};
+window.qhSingleMode=flags;
+flags.render=function(){
+ const area=document.getElementById('verseArea');
+ if(!area||!Array.isArray(window.CURRENT_AYAS)||!window.CURRENT_AYAS.length||!flags.active)return;
+ area.replaceChildren();
+ const bar=document.createElement('div');bar.className='qh-single-toolbar';
+ const label=document.createElement('label');label.textContent='Language ';
+ const select=document.createElement('select');select.setAttribute('aria-label','Single reading language');
+ for(const [code,desc] of Object.entries(langs)){const o=new Option(desc[0],code);select.add(o);}
+ select.value=flags.lang;
+ const markers=document.createElement('label');const check=document.createElement('input');check.type='checkbox';check.checked=flags.markers;markers.append(check,document.createTextNode(' Topic markers'));
+ const close=document.createElement('button');close.type='button';close.textContent='Standard reader';
+ const notice=document.createElement('small');notice.textContent='Editorial topic markers appear only where verse-level annotations are available.';
+ label.append(select);bar.append(label,markers,close,notice);area.append(bar);
+ const page=document.createElement('article');page.className='qh-single-page';const h=document.createElement('h2');h.textContent=(typeof SURA_DISPLAY_NAMES!=='undefined'&&SURA_DISPLAY_NAMES[currentSura])||'Surah '+currentSura;page.append(h);
+ let available=0,missing=0;const field=langs[flags.lang][1];
+ for(const aya of window.CURRENT_AYAS){
+  const num=Number(aya.aya_number);const content=String(aya[field]||'').trim();
+  // Only display actual verse-level topic metadata; never invent topic boundaries.
+  const topic=aya.topic_start||aya.topic_transition||aya.section_heading;
+  if(flags.markers&&topic){const m=document.createElement('div');m.className='qh-single-topic';m.textContent='◆ '+String(topic);page.append(m);}
+  const verse=document.createElement('div');verse.className='qh-single-verse';verse.id='single-verse-'+num;
+  const ref=document.createElement('span');ref.className='qh-single-ref';ref.textContent=currentSura+':'+num;
+  const body=document.createElement('span');body.className='qh-single-verse-text';body.textContent=content||'Translation unavailable for this verse';if(content)available++;else missing++;
+  verse.append(ref,body);page.append(verse);
+ }
+ if(!available){const p=document.createElement('p');p.textContent='No '+langs[flags.lang][0]+' translation is available for this Surah in the current database.';p.style.color='#9a412f';bar.append(p);}
+ else if(missing){const p=document.createElement('p');p.textContent=missing+' verses have no stored '+langs[flags.lang][0]+' translation.';p.style.color='#9a412f';bar.append(p);}
+ area.append(page);
+ select.addEventListener('change',()=>{flags.lang=select.value;flags.render();});
+ check.addEventListener('change',()=>{flags.markers=check.checked;flags.render();});
+ close.addEventListener('click',()=>{flags.active=false;renderVerses(window.CURRENT_AYAS,currentSura);if(typeof applyLangState==='function')applyLangState();});
+};
+const params=new URLSearchParams(location.search);
+if(params.has('single')){flags.active=true;flags.lang=langs[params.get('single')]?params.get('single'):'ti';}
+document.addEventListener('DOMContentLoaded',()=>{
+ const target=document.getElementById('readModeBtn');if(!target)return;
+ const button=document.createElement('button');button.type='button';button.textContent='📖 Single Language';button.title='Read the full Surah in one language';button.style.cssText='padding:7px 10px;margin:4px;border:1px solid #E8C97B;border-radius:8px;background:#FDF8EE;color:#846e32;cursor:pointer;font-weight:700';
+ button.addEventListener('click',()=>{flags.active=true;flags.render();});
+ target.insertAdjacentElement('afterend',button);
+});
+})();
+</script></head>
 <body>
 <section id="qh-home-directory" aria-label="Quran chapter directory">
   <div class="qh-home-heading"><div><div class="qh-home-brand">Quran Hikma</div><div class="qh-home-sub">Read · Compare · Research</div></div><a href="research.html" style="color:#245f51;font-weight:700;text-decoration:none">Research ↗</a></div>
@@ -1289,6 +1343,7 @@ body.qh-home-mode #qh-home-directory{display:block}
     <div class="qh-quick-jump-actions"><button type="button" id="qh-quick-prev">« Prev</button><button type="submit" class="qh-quick-go">Go</button><button type="button" id="qh-quick-next">Next »</button></div>
     <p id="qh-quick-error" role="status" aria-live="polite"></p>
   </form>
+  <div class="qh-single-entry"><a href="index.html?sura=1&single=ti" aria-label="Read full Surah in Tigrinya">📖 Read Full Surah · Single Language</a></div>
   <div class="qh-home-tools"><button class="active" type="button" aria-current="true">114 Surahs</button><button type="button" id="qh-home-chrono">Chronological order</button><a href="themes.html">Topics</a><span id="qh-home-count"></span></div>
   <div id="qh-home-status" role="status">Loading 114 Surahs…</div><div id="qh-home-grid"></div>
 </section>
@@ -3107,6 +3162,7 @@ async function loadSura(id) {
     document.getElementById('topMeta').innerHTML = `<span>${simpleRecitationChapterCount} verses</span> <button type="button" class="simple-recitation-chapter-btn" data-sura-id="${id}" onclick="playSimpleRecitationChapter(${id}, this)" title="Play all verses continuously" style="margin-left:8px;padding:4px 10px;border:1px solid #E8C97B;border-radius:6px;background:#FDF8EE;color:#7d5f14;cursor:pointer;font:inherit;font-size:13px;">▶ Play ${simpleRecitationChapterName}</button>`;
     _simpleRecitationResetPlaylist();
     renderVerses(ayas, id);
+    if (window.qhSingleMode && window.qhSingleMode.active) window.qhSingleMode.render();
     applyLangState();
     setTimeout(restoreVerseHighlights, 100);
     // Keep the Activity History entry for this sura pointed at whichever
