@@ -1,13 +1,17 @@
 /* Quran Hikma community: verse-scoped, account-authenticated discussions. */
 (function(){
 'use strict';
+// This file is a separate classic script: lexical consts in other scripts
+// are not guaranteed to be visible here. Use an independent public client.
+const COMMUNITY_SB_URL = "https://ylosytbxpzxzwfzjpaej.supabase.co";
+const COMMUNITY_SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs";
 let client=null,user=null;
 const active=new Set();
 const css=document.createElement('style');
 css.textContent=`.qh-discussion{margin:12px 0 22px;border:1px solid #dfd4bf;border-radius:10px;background:#fffdf8;padding:12px;direction:ltr;text-align:left}.qh-discussion button{border:1px solid #c9b895;background:white;border-radius:7px;padding:8px 10px;cursor:pointer;color:#453721}.qh-discussion button:disabled{opacity:.5}.qh-discussion-tools{display:flex;gap:7px;align-items:center;flex-wrap:wrap}.qh-discussion-list{display:grid;gap:10px;margin:12px 0}.qh-discussion-post{padding:10px;border:1px solid #eee6d9;border-radius:8px;background:white;overflow-wrap:anywhere}.qh-discussion-post[data-reply="1"]{margin-left:18px;border-left:3px solid #cab98e}.qh-discussion-meta{font:12px system-ui;color:#6c6254;margin-bottom:7px}.qh-discussion-content{white-space:pre-wrap;font:15px/1.65 system-ui;color:#292622}.qh-discussion-form{display:grid;gap:8px;margin-top:12px}.qh-discussion-form textarea,.qh-discussion-form input{box-sizing:border-box;width:100%;font:15px system-ui;padding:9px;border:1px solid #c9b895;border-radius:7px}.qh-discussion-note{font:13px system-ui;color:#64543f}.qh-discussion-post img{max-width:min(100%,420px);max-height:280px;object-fit:contain}.qh-discussion-post a{color:#695021}`;
 document.head.appendChild(css);
 function el(tag,props={},parent){let n=document.createElement(tag);for(const [k,v] of Object.entries(props)){if(k==='text')n.textContent=v;else if(k==='class')n.className=v;else n.setAttribute(k,v);}if(parent)parent.append(n);return n;}
-async function init(){if(client)return true;if(!window.supabase){await new Promise((resolve,reject)=>{const s=el('script',{src:'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2'},document.head);s.onload=resolve;s.onerror=reject;});}client=window.supabase.createClient(SB_URL,SB_KEY);const r=await client.auth.getUser();user=r.data.user||null;return true;}
+async function init(){if(client)return true;if(!window.supabase){await new Promise((resolve,reject)=>{const s=el('script',{src:'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2'},document.head);s.onload=resolve;s.onerror=reject;});}client=window.supabase.createClient(COMMUNITY_SB_URL,COMMUNITY_SB_KEY);const r=await client.auth.getUser();user=r.data.user||null;return true;}
 function isUrl(s){try{const x=new URL(s);return x.protocol==='https:';}catch{return false;}}
 async function show(key,host){if(active.has(key)){host.hidden=false;return;}active.add(key);host.hidden=false;host.replaceChildren();const state=el('p',{class:'qh-discussion-note',text:'Loading discussion…'},host);try{await init();await render(key,host);}catch(e){state.textContent='Discussion unavailable: '+e.message;active.delete(key);}}
 async function render(key,host){host.replaceChildren();const [sura,aya]=key.split(':').map(Number);el('h4',{text:'Community discussion · Quran '+key},host);el('p',{class:'qh-discussion-note',text:'Member contributions are independent opinions, not Quran Hikma editorial conclusions.'},host);
