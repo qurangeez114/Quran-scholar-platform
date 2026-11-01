@@ -3280,6 +3280,7 @@ async function loadSura(id) {
     renderVerses(ayas, id);
     if (window.qhSingleMode && window.qhSingleMode.active) window.qhSingleMode.render();
     applyLangState();
+    setTimeout(qhObserveTabCounts, 200);
     setTimeout(restoreVerseHighlights, 100);
     // Keep the Activity History entry for this sura pointed at whichever
     // verse the user is actually reading, not frozen on wherever they
@@ -3378,6 +3379,55 @@ function getSafeArabicText(aya) {
 }
 
 let CURRENT_AYAS = [];
+
+// Populate visible tab counts without opening their large research panels.
+const qhCountCache=new Map();
+async function qhPrefetchTabCounts(card) {
+ const sura=Number(card.dataset.sura),aya=Number(card.dataset.aya),key=sura+':'+aya;
+ if(qhCountCache.has(key)) { const data=qhCountCache.get(key);if(data&&typeof data.then!=='function')qhApplyTabCounts(card,data);return; }
+ const work=(async()=>{
+  const tests=[
+   ['tafsir','tafsir_entries',{sura:'eq.'+sura,aya:'eq.'+aya}],
+   ['asbab','asbab_al_nuzul',{sura:'eq.'+sura,aya:'eq.'+aya}],
+   ['hadith','hadith_connections',{sura_id:'eq.'+sura,aya_number:'eq.'+aya}],
+   ['xref','thematic_cross_references_v2',{sura:'eq.'+sura,aya:'eq.'+aya}]
+  ];
+  const result={};
+  await Promise.all(tests.map(async ([name,table,where])=>{
+   try {
+    const url=new URL(SUPABASE_URL+'/rest/v1/'+table);
+    url.searchParams.set('select','*');
+    for(const [k,v] of Object.entries(where))url.searchParams.set(k,v);
+    const response=await fetch(url,{method:'HEAD',headers:{...HEADERS,Prefer:'count=exact'}});
+    if(!response.ok)return;
+    const range=response.headers.get('content-range')||'';
+    const count=Number(range.split('/')[1]);
+    if(Number.isFinite(count))result[name]=count;
+   }catch(e){console.warn('Research count unavailable',name,e);}
+  }));
+  return result;
+ })();
+ qhCountCache.set(key,work);
+ try{const data=await work;qhCountCache.set(key,data);if(card.isConnected)qhApplyTabCounts(card,data);}
+ catch(e){qhCountCache.delete(key);}
+}
+function qhApplyTabCounts(card,data){
+ const names={tafsir:'Tafsir',asbab:'Asbāb',hadith:'Hadith',xref:'Cross-Refs'};
+ for(const [key,label] of Object.entries(names)){
+  if(!Number.isInteger(data[key]))continue;
+  const id=(key==='xref'?'xref':key)+'-tab-'+card.dataset.aya;
+  const tab=card.querySelector('[id="'+id+'"]');
+  // Once a full panel loads, its own count is authoritative.
+  if(tab && !card.classList.contains('open'))tab.textContent=label+' ('+data[key]+')';
+ }
+}
+function qhObserveTabCounts(){
+ if(!('IntersectionObserver' in window))return;
+ if(window.qhResearchCountObserver)window.qhResearchCountObserver.disconnect();
+ const observer=new IntersectionObserver(entries=>{entries.forEach(entry=>{if(entry.isIntersecting){observer.unobserve(entry.target);qhPrefetchTabCounts(entry.target);}})},{root:document.getElementById('verseArea'),rootMargin:'180px 0px'});
+ window.qhResearchCountObserver=observer;
+ document.querySelectorAll('#verseArea .verse-card[data-sura][data-aya]').forEach(card=>observer.observe(card));
+}
 
 function renderVerses(ayas, suraId) {
   CURRENT_AYAS = ayas;
