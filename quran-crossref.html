@@ -8,6 +8,23 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Confirmation of Previous Scripture — Quranic Cross-Reference</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Almendra+SC&family=IBM+Plex+Mono:wght@300;400&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Naskh+Arabic:wght@400;600&family=Noto+Sans+Ethiopic:wght@400;500&display=swap" rel="stylesheet">
+<script>window.QH_CROSSREF_PUBLIC_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs";</script><script src="/arabic-vowel-colors.js?v=top-crossref-vowels" defer></script>
+<style id="qh-top-crossref-reader">
+.vcard .vtext{font-family:'Noto Sans Ethiopic',system-ui,sans-serif!important;font-size:17px!important;font-weight:400!important;font-style:normal!important;line-height:1.9!important;color:#2e2b26!important}
+.xref-theme{font-weight:500!important;color:#806b3d!important}
+.qh-crossref-controls{display:flex;align-items:center;flex-wrap:wrap;gap:9px;padding:12px;margin:8px 0 14px;background:#fffaf0;border:1px solid #dcc99f;border-radius:10px;font:14px system-ui}
+.qh-crossref-controls select,.qh-crossref-controls button{min-height:42px;padding:8px 12px;border:1px solid #d4c9a8;border-radius:8px;background:white;font:14px system-ui}
+.qh-crossref-controls button{background:#846e32;color:#fff;cursor:pointer}
+.qh-crossref-flow{padding:12px 16px;background:#fffef9;border-radius:9px;border:1px solid #e8ddca;margin-bottom:18px}
+.qh-crossref-flow[hidden]{display:none}
+.qh-crossref-line{display:flex;gap:12px;align-items:baseline;border-bottom:1px solid #e9e3d6;padding:13px 0;font:400 17px/1.95 'Noto Sans Ethiopic',system-ui,sans-serif;color:#2e2b26}
+.qh-crossref-line>a{flex:0 0 54px;font:600 13px/2 system-ui;color:#856624;text-decoration:none}
+.qh-crossref-line>span{flex:1;min-width:0;white-space:pre-wrap;overflow-wrap:anywhere}
+.qh-crossref-line .qh-crossref-arabic{font:400 clamp(24px,2.7vw,32px)/2.15 'Noto Naskh Arabic',serif;direction:rtl;text-align:right;color:#202320}
+.qh-crossref-arabic .qh-xref-ar-word{display:inline-block;position:relative;white-space:nowrap}
+@media(max-width:600px){.qh-crossref-flow{padding:8px 10px}.qh-crossref-line{font-size:16px}.qh-crossref-line .qh-crossref-arabic{font-size:26px}}
+</style>
 <style>
 :root {
   --ink: #1a1209; --parchment: #f5edd8; --parchment-dark: #ede0c4;
@@ -251,6 +268,51 @@ async function fetchTranslation(verse) {
   } catch(e){return null;}
 }
 
+
+async function qhCrossrefReadAll(verse){
+ const refs=PAIRS[verse] && PAIRS[verse].length ? PAIRS[verse] : [...PRIMARY,...SUPPORTING].filter(v=>v!==verse).slice(0,8);
+ const lang=document.getElementById('qhCrossrefLang').value,box=document.getElementById('qhCrossrefFlow');
+ if(!box.hidden && box.dataset.lang===lang){box.hidden=true;return;}
+ box.dataset.lang=lang;box.hidden=false;box.textContent='Loading referenced passages…';
+ const fields={ar:'arabic',en:'english',ti:'tigrinya',am:'amharic',om:'oromo',so:'somali',ur:'urdu',de:'german'};
+ const content=new Map();
+ try{
+  for(let i=0;i<refs.length;i+=25){
+   const batch=refs.slice(i,i+25);
+   const table=fields[lang]?'ayas':'verse_translations';
+   const query=new URL('https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/'+table);
+   if(fields[lang]){
+    query.searchParams.set('select','sura_id,aya_number,'+fields[lang]);
+    query.searchParams.set('or','('+batch.map(ref=>{const p=ref.split(':');return 'and(sura_id.eq.'+p[0]+',aya_number.eq.'+p[1]+')';}).join(',')+')');
+   }else{
+    query.searchParams.set('select','verse_key,text');query.searchParams.set('lang','eq.'+lang);
+    query.searchParams.set('verse_key','in.('+batch.map(ref=>'"'+ref+'"').join(',')+')');
+   }
+   const key=window.QH_CROSSREF_PUBLIC_KEY;
+   const response=await fetch(query,{headers:{apikey:key,Authorization:'Bearer '+key}});
+   if(!response.ok)throw Error('Translation service returned '+response.status);
+   for(const item of await response.json())content.set(fields[lang]?item.sura_id+':'+item.aya_number:item.verse_key,fields[lang]?item[fields[lang]]:item.text);
+  }
+  box.replaceChildren();let missing=0;
+  for(const ref of refs){
+   const row=document.createElement('div');row.className='qh-crossref-line';
+   const anchor=document.createElement('a'),p=ref.split(':');anchor.href='index.html?sura='+p[0]+'&aya='+p[1];anchor.textContent=ref;
+   const text=document.createElement('span'),value=String(content.get(ref)||'').trim();
+   if(!value)missing++;
+   if(lang==='ar' && value){
+    text.className='qh-crossref-arabic';text.lang='ar';text.dir='rtl';
+    for(const w of value.split(/(\s+)/)){
+     if(!w)continue;
+     if(/^\s+$/.test(w))text.append(document.createTextNode(w));
+     else{const span=document.createElement('span');span.className='qh-xref-ar-word';span.textContent=w;text.append(span);}
+    }
+   }else{text.textContent=value||'Translation unavailable for this verse.';}
+   row.append(anchor,text);box.append(row);
+  }
+  if(missing){const p=document.createElement('p');p.textContent=missing+' references do not have stored translations in this language.';box.prepend(p);}
+ }catch(err){box.textContent='Unable to load referenced translations: '+err.message;}
+}
+
 function openVerse(verse) {
   currentVerse = verse;
   setActive(verse);
@@ -277,6 +339,7 @@ function openVerse(verse) {
     </div>
 
     <div class="tab-panel active" id="xref_${verse.replace(':','_')}">
+    <div class="qh-crossref-controls"><label for="qhCrossrefLang">Related verses in:</label><select id="qhCrossrefLang"><option value="en">English</option><option value="ar">Arabic — colored vowels</option><option value="ti">Tigrinya</option><option value="am">Amharic</option><option value="om">Oromo</option><option value="so">Somali</option><option value="ur">Urdu</option><option value="de">German</option><option value="sv">Swedish</option><option value="no">Norwegian</option></select><button type="button" id="qhCrossrefReadBtn">Read related verses</button></div><div id="qhCrossrefFlow" class="qh-crossref-flow" hidden></div>
       <div id="xrefList_${verse.replace(':','_')}">
         ${displayRefs.map(v=>{
           const t=XREF_THEMES[v]||{theme:'Confirmation Theme',reason:'Related verse in the Confirmation of Previous Scripture theme.'};
@@ -321,6 +384,8 @@ function openVerse(verse) {
         </div>
       </div>
     </div>`;
+
+  document.getElementById('qhCrossrefReadBtn').addEventListener('click',function(){qhCrossrefReadAll(verse);});
 
   // Load translation
   fetchTranslation(verse).then(t=>{
