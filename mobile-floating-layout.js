@@ -145,6 +145,73 @@
   }
 }
 
+
+/* Unified phone reading geometry: standard and single-language readers share
+   document scrolling. Border-box prevents 100%-wide cards plus padding from
+   extending beyond the viewport on pages without a global box-sizing reset. */
+@media (max-width: 768px) {
+  :root { --bottom-nav-height:60px; }
+  body { overflow-wrap:break-word; }
+  body > .app:has(#verseArea),
+  body > .app:has(#verseArea) > .main,
+  body > .app #verseArea,
+  body > .app #verseArea .verse-card,
+  body > .app #verseArea .verse-top,
+  body > .app #verseArea .verse-body {
+    box-sizing:border-box !important; min-width:0 !important;
+    max-width:100% !important;
+  }
+  body > .app:has(#verseArea) { width:100% !important; }
+  body > .app #verseArea .verse-top {
+    padding:10px 12px !important;
+    grid-template-columns:minmax(0,1fr) auto !important;
+    grid-template-areas:"num expand" "tools tools" "body body" !important;
+  }
+  body > .app #verseArea .verse-num {
+    min-width:0 !important; width:auto !important;
+    justify-content:flex-start !important; padding:0 !important;
+    height:auto !important; min-height:36px !important;
+  }
+  body > .app #verseArea .verse-body {
+    width:100% !important; grid-area:body !important;
+  }
+  body > .app #verseArea .qh-single-verse {
+    display:grid !important; width:100% !important;
+    grid-template-columns:minmax(0,1fr) auto !important;
+    gap:6px 10px !important; padding:0 !important;
+  }
+  body > .app #verseArea .qh-single-ref {
+    grid-column:1 !important; grid-row:1 !important;
+  }
+  body > .app #verseArea .qh-single-verse > .expand-btn {
+    grid-area:auto !important; grid-column:2 !important;
+    grid-row:1 !important; min-height:40px !important;
+  }
+  body > .app #verseArea .qh-single-verse-text {
+    grid-column:1 / -1 !important; grid-row:2 !important;
+    min-width:0 !important; width:100% !important;
+    white-space:pre-wrap !important; overflow-wrap:break-word !important;
+  }
+  body > .app .main > .top-bar {
+    flex-wrap:wrap !important; padding:8px 10px !important; gap:8px !important;
+  }
+  body > .app .main > .top-bar input { min-width:0 !important; max-width:100% !important; }
+  .qh-single-toolbar { box-sizing:border-box; max-width:100%; }
+  .qh-single-toolbar select { min-width:0; max-width:100%; }
+  /* Wide research panels must not force the entire phone page sideways. */
+  .qh-xref-flow-text {
+    box-sizing:border-box !important; width:auto !important;
+    margin:8px !important; padding:12px !important;
+    max-height:none !important; overflow:visible !important;
+  }
+  /* Keep horizontal swiping and pinch zoom available in both reader modes. */
+  body.qh-home-mode, body.qh-home-mode #qh-home-directory,
+  body.qh-home-mode #qh-home-grid,
+  body.qh-home-mode .qh-home-card-wrap, body.qh-home-mode .qh-home-item {
+    touch-action:auto !important;
+  }
+}
+
 /* Minimise control. index.html shipped its own #floatingUIToggle; every
    other page had no way to clear the stack at all, which is why the
    floating controls kept covering content on themes / stories / tensions.
