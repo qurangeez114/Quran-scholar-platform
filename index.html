@@ -1355,6 +1355,66 @@ document.addEventListener('DOMContentLoaded',()=>{
  target.insertAdjacentElement('afterend',button);
 });
 })();
+</script>
+<style id="qh-selection-lecture-style">
+#qh-selection-lecture{position:fixed;bottom:85px;left:50%;transform:translateX(-50%);z-index:999990;display:none;max-width:min(96vw,550px);width:max-content;background:#fffdf7;border:1px solid #d4b568;box-shadow:0 8px 30px #35270d40;border-radius:12px;padding:12px;color:#352b1b}
+#qh-selection-lecture .qh-selection-buttons{display:flex;flex-wrap:wrap;gap:7px;margin-top:8px}
+#qh-selection-lecture button{padding:9px 12px;min-height:40px;border:1px solid #c9a94e;border-radius:8px;background:#fdf5df;color:#654a18;font-weight:700;cursor:pointer}
+#qh-selection-lecture .qh-selected-preview{font-size:12px;max-height:60px;overflow:hidden;max-width:480px}
+@media(max-width:600px){#qh-selection-lecture{bottom:75px;width:calc(100vw - 28px);box-sizing:border-box}}
+</style>
+<script id="qh-selection-lecture-script">
+(function(){
+let chosen=null;
+function toolbar(){
+ let el=document.getElementById('qh-selection-lecture');
+ if(el)return el;
+ el=document.createElement('section');el.id='qh-selection-lecture';el.setAttribute('aria-label','Selected verse text actions');
+ const desc=document.createElement('div');desc.className='qh-selected-preview';
+ const buttons=document.createElement('div');buttons.className='qh-selection-buttons';
+ for(const [label,action] of [['Save to Research','research'],['Add to Presentation','presentation'],['Lecture Preparation','lecture'],['Close','close']]){
+   const b=document.createElement('button');b.type='button';b.textContent=label;b.dataset.action=action;buttons.append(b);
+ }
+ el.append(desc,buttons);document.body.append(el);
+ el.addEventListener('click',event=>{
+  const b=event.target.closest('button[data-action]');if(!b)return;
+  const action=b.dataset.action;if(action==='close'){hide();return;}
+  if(!chosen)return;
+  const item={...chosen};
+  if(action==='research'){
+    if(typeof window.saveVerseToResearch==='function')window.saveVerseToResearch(item.sura,item.aya,item.text+' ['+item.ref+']','Selected passage · '+item.ref+' · '+item.language);
+    else alert('Research Workspace is not available on this page.');
+  } else if(action==='presentation'||action==='lecture'){
+    let basket=[];try{basket=JSON.parse(localStorage.getItem('presentationBasket')||'[]');if(!Array.isArray(basket))basket=[];}catch(e){}
+    basket.push({type:'quran',id:'selected_'+Date.now(),title:(action==='lecture'?'Lecture quotation · ':'Selected quotation · ')+item.ref,reference:'Quran '+item.ref,
+      text:item.text,selectedText:item.text,language:item.language,sourceUrl:'index.html?sura='+item.sura+'&aya='+item.aya,lecturePreparation:action==='lecture'});
+    try{localStorage.setItem('presentationBasket',JSON.stringify(basket));}catch(e){alert('Could not save selection to presentation on this device.');return;}
+    if(typeof showToastMsg==='function')showToastMsg(action==='lecture'?'✓ Quotation saved for lecture preparation':'✓ Selected text added to presentation');
+    if(action==='lecture'&&confirm('Quotation saved. Open the presentation workspace?'))location.href='presentation.html';
+  }
+  hide();
+ });
+ return el;
+}
+function hide(){const el=document.getElementById('qh-selection-lecture');if(el)el.style.display='none';}
+function capture(){
+ if(!window.qhSingleMode?.active){hide();return;}
+ const sel=window.getSelection();if(!sel||sel.isCollapsed||!sel.rangeCount){hide();return;}
+ const content=sel.toString().trim();if(!content||content.length>12000){hide();return;}
+ const range=sel.getRangeAt(0);
+ const start=(range.startContainer.nodeType===1?range.startContainer:range.startContainer.parentElement)?.closest('.qh-single-verse-text');
+ const finish=(range.endContainer.nodeType===1?range.endContainer:range.endContainer.parentElement)?.closest('.qh-single-verse-text');
+ if(!start||!finish||!start.closest('#verseArea')||!finish.closest('#verseArea')){hide();return;}
+ const s=start.closest('.verse-card'),e=finish.closest('.verse-card');
+ if(!s||!e||s.dataset.sura!==e.dataset.sura){hide();return;}
+ const sura=Number(s.dataset.sura),aya=Number(s.dataset.aya),last=Number(e.dataset.aya);
+ chosen={sura,aya,ref:sura+':'+aya+(last!==aya?'–'+last:''),text:content,language:window.qhSingleMode.languages[window.qhSingleMode.lang]?.[0]||window.qhSingleMode.lang};
+ const el=toolbar();el.querySelector('.qh-selected-preview').textContent=chosen.ref+' · '+chosen.language+' · '+content.slice(0,160)+(content.length>160?'…':'');el.style.display='block';
+}
+document.addEventListener('mouseup',()=>setTimeout(capture,0));
+document.addEventListener('touchend',()=>setTimeout(capture,250));
+document.addEventListener('keyup',event=>{if(event.key==='Escape')hide();else if(event.shiftKey||event.key==='ArrowLeft'||event.key==='ArrowRight')capture();});
+})();
 </script><style id="qh-xref-flow-style">
 .qh-xref-flow-tools{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:10px 12px;padding:12px;background:#fdf8ee;border:1px solid #e8c97b;border-radius:10px}
 .qh-xref-flow-tools select,.qh-xref-flow-tools button{padding:9px 11px;min-height:40px;border-radius:7px;border:1px solid #d4c9a8;font-size:14px;background:white;color:#5a451d}
