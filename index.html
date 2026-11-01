@@ -3124,11 +3124,23 @@ async function loadSura(id) {
     // their own column on `ayas`. Fetched separately and merged in below.
     const VT_LANGS = { bn: 'bengali', ms: 'malay', es: 'spanish', zh: 'chinese', sw: 'swahili', ha: 'hausa', ti2: 'tigrinya2', sv: 'swedish', no: 'norwegian' };
     try {
-      const vtRows = await sbFetch('verse_translations', {
-        select: 'verse_key,lang,text',
-        verse_key: `like.${id}:*`,
-        lang: `in.(${Object.keys(VT_LANGS).join(',')})`
-      });
+      // A long Surah can contain > 1,000 rows across the supported languages.
+      // Supabase/PostgREST often caps one response at 1,000 rows: paginate
+      // deterministically so Swedish and other later rows are not lost.
+      const vtRows = [];
+      const pageSize = 500;
+      for (let offset = 0; ; offset += pageSize) {
+        const page = await sbFetch('verse_translations', {
+          select: 'verse_key,lang,text',
+          verse_key: `like.${id}:*`,
+          lang: `in.(${Object.keys(VT_LANGS).join(',')})`,
+          order: 'verse_key.asc,lang.asc',
+          limit: pageSize,
+          offset
+        });
+        vtRows.push(...page);
+        if (page.length < pageSize) break;
+      }
       const vtMap = {}; // aya_number -> { bengali: '...', malay: '...', ... }
       vtRows.forEach(r => {
         const parts = r.verse_key.split(':');
