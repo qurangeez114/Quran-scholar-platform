@@ -1295,11 +1295,12 @@ body.qh-home-mode #qh-home-directory{display:block}
 .qh-single-card .qh-single-verse{border-bottom:0;align-items:flex-start}
 .qh-single-availability{width:100%;color:#9a412f;font-size:13px;margin:3px}
 @media(max-width:570px){.qh-single-card .tab-bar{padding:8px 0}.qh-single-card .tab-bar .tab-btn{font-size:12px}}
+.qh-single-card.qh-single-text-only .qh-single-verse{padding:10px 4px}.qh-single-card.qh-single-text-only{border-bottom:1px solid #eee7db}.qh-single-card.qh-single-text-only .verse-detail{display:none!important}
 </style>
 <script id="qh-single-script">
 (function(){
 const langs={ti:['Tigrinya','tigrinya'],en:['English','english'],am:['Amharic','amharic'],om:['Oromo','oromo'],so:['Somali','somali'],de:['German','german'],ur:['Urdu','urdu'],bn:['Bengali','bengali'],ms:['Malay','malay'],es:['Spanish','spanish'],zh:['Chinese','chinese'],sw:['Swahili','swahili'],ha:['Hausa','hausa'],sv:['Swedish','swedish'],no:['Norwegian','norwegian']};
-const flags={active:false,lang:'ti',markers:true};
+const flags={active:false,lang:'ti',markers:true,showResearch:true};
 window.qhSingleMode=flags;flags.languages=langs;
 flags.render=function(){
  const area=document.getElementById('verseArea');
@@ -1313,8 +1314,9 @@ flags.render=function(){
  for(const [code,desc] of Object.entries(langs))select.add(new Option(desc[0],code));
  select.value=flags.lang;
  const markers=document.createElement('label');const check=document.createElement('input');check.type='checkbox';check.checked=flags.markers;markers.append(check,document.createTextNode(' Topic markers'));
+ const view=document.createElement('label');const researchCheck=document.createElement('input');researchCheck.type='checkbox';researchCheck.checked=flags.showResearch;view.append(researchCheck,document.createTextNode(' Show research tabs'));
  const close=document.createElement('button');close.type='button';close.textContent='Standard reader';
- label.append(select);bar.append(label,markers,close);area.prepend(bar);
+ label.append(select);bar.append(label,view,markers,close);area.prepend(bar);
  let available=0,missing=0;const field=langs[flags.lang][1];
  for(const aya of CURRENT_AYAS){
    const num=Number(aya.aya_number),card=document.getElementById('vc-'+num);
@@ -1340,15 +1342,17 @@ flags.render=function(){
      },true);
    }
    card.classList.add('qh-single-card');
+   if(!flags.showResearch){const detail=card.querySelector('.verse-detail');if(detail)detail.remove();expand.remove();card.classList.add('qh-single-text-only');}
  }
  if(missing){const msg=document.createElement('p');msg.className='qh-single-availability';msg.textContent=available?missing+' verses have no '+langs[flags.lang][0]+' translation.':'No '+langs[flags.lang][0]+' translation is currently stored for this Surah.';bar.append(msg);}
  select.addEventListener('change',()=>{flags.lang=select.value;flags.render();});
  check.addEventListener('change',()=>{flags.markers=check.checked;flags.render();});
+ researchCheck.addEventListener('change',()=>{flags.showResearch=researchCheck.checked;flags.render();});
  close.addEventListener('click',()=>{flags.active=false;renderVerses(CURRENT_AYAS,currentSura);if(typeof applyLangState==='function')applyLangState();});
 };
 
 const params=new URLSearchParams(location.search);
-if(params.has('single')){flags.active=true;flags.lang=langs[params.get('single')]?params.get('single'):'ti';}
+if(params.has('single')){flags.active=true;flags.lang=langs[params.get('single')]?params.get('single'):'ti';flags.showResearch=params.get('research')!=='0';}
 document.addEventListener('DOMContentLoaded',()=>{
  const target=document.getElementById('readModeBtn');if(!target)return;
  const button=document.createElement('button');button.type='button';button.textContent='📖 Single Language';button.title='Read the full Surah in one language';button.style.cssText='padding:7px 10px;margin:4px;border:1px solid #E8C97B;border-radius:8px;background:#FDF8EE;color:#846e32;cursor:pointer;font-weight:700';
@@ -3612,10 +3616,25 @@ async function toggleVerse(num, suraId, el) {
 
 function switchTab(num, tab, btn) {
   const card = document.getElementById('vc-' + num);
+  if (!card) return;
+  const panel = document.getElementById(`tp-${num}-${tab}`);
+  if (!panel) return;
+  const wasOpen = card.classList.contains('open') && panel.classList.contains('active') && btn.classList.contains('active');
   card.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   card.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  if (wasOpen) {
+    card.classList.remove('open');
+    const expand = card.querySelector('.expand-btn');
+    if (expand) expand.textContent = '▼ Study';
+    return;
+  }
   btn.classList.add('active');
-  document.getElementById(`tp-${num}-${tab}`).classList.add('active');
+  panel.classList.add('active');
+  if (card.classList.contains('qh-single-card')) {
+    card.classList.add('open');
+    const expand = card.querySelector('.expand-btn');
+    if (expand) expand.textContent = '▲ Close';
+  }
 }
 
 // ============================================================
