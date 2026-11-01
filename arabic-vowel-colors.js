@@ -71,6 +71,10 @@ function renderWord(el){
   if(!draw)return;
   draw.putImageData(full,0,0);
   el.appendChild(overlay);
+  // The canvas is the single visible glyph layer. Inline important styles
+  // override page-specific Arabic rules that otherwise show duplicate words.
+  el.style.setProperty('color','transparent','important');
+  el.style.setProperty('-webkit-text-fill-color','transparent','important');
   el.dataset.qhColorized='1';
   el.classList.add('qh-colorized-word');
  }catch(err){
@@ -116,6 +120,8 @@ function clear(){
  document.querySelectorAll('.qh-colorized-word').forEach(el=>{
   el.querySelectorAll(':scope > .qh-vowel-overlay').forEach(node=>node.remove());
   el.classList.remove('qh-colorized-word');
+  el.style.removeProperty('color');
+  el.style.removeProperty('-webkit-text-fill-color');
   delete el.dataset.qhColorized;
  });
 }
