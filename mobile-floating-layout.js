@@ -120,22 +120,25 @@
 /* The Qur'an home page has a fixed-height reader with its own scroll area.
    Its content does NOT scroll on body, so the global floating-stack body
    spacer creates an enormous blank strip below the verse. Give the reader
-   exactly the available mobile viewport, reserving the fixed nav once. */
+   exactly the available mobile viewport, reserving the fixed nav once.
+   Single-language reading uses document scrolling instead: applying this
+   height cap and body lock there clips the expanded passages and freezes
+   scrolling. Keep these constraints exclusive to the standard reader. */
 @media (max-width: 768px) {
-  body:has(> .app #verseArea) {
+  body:has(> .app #verseArea):not(:has(.qh-single-card)) {
     padding-bottom: 0 !important;
     overflow-y: hidden !important;
   }
-  body > .app:has(#verseArea) {
+  body > .app:has(#verseArea):not(:has(.qh-single-card)) {
     height: calc(100vh - var(--qh-home-header-height, 0px) - 42px) !important;
     height: calc(100dvh - var(--qh-home-header-height, 0px) - 42px) !important;
     max-height: calc(100dvh - var(--qh-home-header-height, 0px) - 42px) !important;
     min-height: 0 !important;
   }
-  body > .app:has(#verseArea) > .main {
+  body > .app:has(#verseArea):not(:has(.qh-single-card)) > .main {
     min-height: 0 !important;
   }
-  body > .app #verseArea.verse-area {
+  body > .app:not(:has(.qh-single-card)) #verseArea.verse-area {
     min-height: 0 !important;
     overflow-y: auto !important;
     -webkit-overflow-scrolling: touch;
