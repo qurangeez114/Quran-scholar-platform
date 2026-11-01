@@ -1018,7 +1018,16 @@ function qhThemeExport(where) {
   localStorage.setItem('qh_theme_export_draft',JSON.stringify({theme:THEME,verses:picked.map(v=>v.sura_id+':'+v.aya_number),content,sourceUrl:url,createdAt:new Date().toISOString()}));
  } catch(err){showToast('Could not stage selection: '+err.message);return;}
  if(where==='presentation') {location.href='presentation.html';return;}
- if(where==='pages') {location.href='my-pages.html';return;}
+ if(where==='pages') {
+  // Hand off the actual selected passages, not just their presentation slides.
+  // The destination creates a personal page with this body populated.
+  try {
+   sessionStorage.setItem('qh_page_capture',JSON.stringify({
+    title:THEME+' — Quran Research',body:content,sourceUrl:url
+   }));
+  } catch(err){showToast('Unable to transfer selected verses: '+err.message);return;}
+  location.href='my-pages.html?import=theme';return;
+ }
  // Research and lesson editors have no confirmed import endpoint.
  // Copy the source-labeled text before navigating; never claim account save.
  const target=where==='research'?'my-research.html':'courses.html';
