@@ -1419,6 +1419,15 @@ document.addEventListener('keyup',event=>{if(event.key==='Escape')hide();else if
 .qh-xref-flow-tools{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:10px 12px;padding:12px;background:#fdf8ee;border:1px solid #e8c97b;border-radius:10px}
 .qh-xref-flow-tools select,.qh-xref-flow-tools button{padding:9px 11px;min-height:40px;border-radius:7px;border:1px solid #d4c9a8;font-size:14px;background:white;color:#5a451d}
 .qh-xref-flow-tools button{background:#846e32;color:white;cursor:pointer}.qh-xref-flow-text{margin:12px;max-height:70vh;overflow:auto;padding:12px 16px;background:#fffdf8;border:1px solid #ece3d1;border-radius:10px}.qh-xref-flow-line{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid #ece9e0;line-height:1.9;font-size:17px;align-items:baseline}.qh-xref-flow-ref{min-width:50px;flex:0 0 auto;color:#846e32;font-weight:700;font-size:13px;text-decoration:none}.qh-xref-flow-line span{flex:1;min-width:0;white-space:pre-wrap;overflow-wrap:anywhere}.qh-xref-flow-note{font-size:12px;color:#756548;margin:0}
+/* Match the Quran Hikma Surah reader rather than bold cross-reference chips. */
+.qh-xref-flow-text{max-width:900px;margin:16px auto;padding:16px 22px;background:#fffef9}
+.qh-xref-flow-line{font-weight:400;color:#29251e;line-height:1.9;font-size:18px;align-items:flex-start;padding:16px 2px}
+.qh-xref-flow-line>span{font-weight:400;font-family:'Noto Sans Ethiopic','Noto Sans',system-ui,sans-serif;letter-spacing:0}
+.qh-xref-flow-ref{color:#846e32;font-weight:600;min-width:52px;padding-top:5px}
+.qh-xref-flow-line .qh-xref-arabic{font-family:'Noto Naskh Arabic','Amiri',serif;font-size:clamp(24px,2.6vw,32px);font-weight:400;line-height:2.15;text-align:right;direction:rtl;color:#202320}
+.qh-xref-ar-word{position:relative;display:inline-block;font:inherit;white-space:nowrap}
+@media(max-width:600px){.qh-xref-flow-text{padding:10px 12px}.qh-xref-flow-line{font-size:16px}.qh-xref-flow-line .qh-xref-arabic{font-size:26px;line-height:2.1}}
+
 @media(max-width:600px){.qh-xref-flow-text{padding:8px 12px}.qh-xref-flow-line{font-size:16px}}
 </style><style id="qh-visible-research-heading">
 /* The research choices are always discoverable. Only their content collapses. */
@@ -2428,7 +2437,7 @@ function qhXrefToggle(id, btn) {
 
 
 const QH_XREF_LANGS={
- ti:['Tigrinya','tigrinya'],en:['English','english'],am:['Amharic','amharic'],
+ ar:['Arabic','arabic'],ti:['Tigrinya','tigrinya'],en:['English','english'],am:['Amharic','amharic'],
  om:['Oromo','oromo'],so:['Somali','somali'],de:['German','german'],ur:['Urdu','urdu'],
  bn:['Bengali','bn'],ms:['Malay','ms'],es:['Spanish','es'],zh:['Chinese','zh'],
  sw:['Swahili','sw'],ha:['Hausa','ha'],sv:['Swedish','sv'],no:['Norwegian','no']
@@ -2467,7 +2476,19 @@ function qhAddXrefFlowControl(panel){
       const line=document.createElement('div');line.className='qh-xref-flow-line';
       const link=document.createElement('a');link.className='qh-xref-flow-ref';link.href='index.html?sura='+ref.split(':')[0]+'&aya='+ref.split(':')[1];link.textContent=ref;
       const text=document.createElement('span');const value=String(results.get(ref)||'').trim();
-      if(!value)missing++;text.textContent=value||'Translation not available for this verse.';
+      if(!value)missing++;
+      if(code==='ar'&&value){
+        text.classList.add('qh-xref-arabic');
+        text.lang='ar';text.dir='rtl';
+        // Keep Arabic words as real text for selection and copying, while
+        // reusing Quran Hikma's existing non-destructive harakat overlay.
+        for(const word of value.split(/(\\s+)/)){
+          if(!word)continue;
+          if(/^\\s+$/.test(word)){text.append(document.createTextNode(word));continue;}
+          const part=document.createElement('span');part.className='qh-tappable-word qh-xref-ar-word';
+          part.textContent=word;text.append(part);
+        }
+      }else{text.textContent=value||'Translation not available for this verse.';}
       line.append(link,text);output.append(line);
     }
     if(missing){const note=document.createElement('p');note.className='qh-xref-flow-note';note.textContent=missing+' of '+refs.length+' verses do not have stored translations in this language.';output.prepend(note);}
