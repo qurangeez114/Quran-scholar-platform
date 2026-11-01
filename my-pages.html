@@ -53,6 +53,7 @@
     let user = null;
     let pages = [];
     let current = null;
+    let pendingCapture = null;
 
     function slug(name) {
       return String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
@@ -102,13 +103,18 @@
         user_id: user.id,
         title: name,
         slug: file,
-        body: '',
+        body: pendingCapture ? pendingCapture.body : '',
         sort_order: pages.length
       }).select().single();
       if (error) { status.textContent = error.message; return; }
       pages.push(data);
       renderList();
       openPage(data);
+      if (pendingCapture) {
+        pendingCapture = null;
+        sessionStorage.removeItem('qh_page_capture');
+        status.textContent = 'Page created with selected verses and saved to your account.';
+      }
     };
     document.getElementById('save').onclick = async () => {
       if (!current) return;
@@ -165,10 +171,11 @@
       try {
         const captured = JSON.parse(sessionStorage.getItem('qh_page_capture') || 'null');
         if (captured && captured.body) {
+          pendingCapture = captured;
           document.getElementById('filename').value = captured.title || 'saved-material';
           document.getElementById('body').value = captured.body;
-          sessionStorage.removeItem('qh_page_capture');
-          status.textContent = 'Captured material is in the editor. Create a page, then save.';
+          status.textContent = 'Selected verses ready. Give the page a name and click Create page to save the verses directly.';
+          document.getElementById('filename').focus();
         }
       } catch (e) {}
     });
