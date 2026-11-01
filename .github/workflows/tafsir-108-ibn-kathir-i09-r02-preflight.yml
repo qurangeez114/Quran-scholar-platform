@@ -2,6 +2,8 @@ name: Preflight Surah 108 Ibn Kathir I09 R02 source review
 on:
   push:
     paths:
+      - 'scripts/validate-ibn-kathir-i09-grading-boundaries.py'
+      - 'data/tafsir/staging/ibn-kathir-108-i09-grading-boundaries-2026-11-01.json'
       - '.github/workflows/tafsir-108-ibn-kathir-i09-r02-preflight.yml'
       - 'data/tafsir/staging/ibn-kathir-108-i09-r02-source-review-2026-10-15.json'
       - 'data/tafsir/staging/ibn-kathir-108-route-extraction-2026-10-12.json'
@@ -12,6 +14,20 @@ concurrency:
   group: tafsir-108-ibn-kathir-i09-r02-preflight
   cancel-in-progress: false
 jobs:
+  grading-boundaries:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate distinct grading units and reject unsafe mutations
+        run: python scripts/validate-ibn-kathir-i09-grading-boundaries.py
+      - name: Confirm read-only validation
+        run: git diff --exit-code
   preflight:
     runs-on: ubuntu-latest
     timeout-minutes: 10
