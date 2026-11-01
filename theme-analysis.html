@@ -275,6 +275,10 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 <script src="/arabic-vowel-colors.js?v=single-glyph-v4" defer></script>
 <style id="qh-theme-unified-type">
 /* One authoritative reading design for the theme page reached from Cross-Refs. */
+/* Inline words keep continuous RTL layout; the existing canvas colorizer
+   paints vowel marks without introducing inline-block sizing gaps. */
+.verse-card .arabic-text .qh-theme-ar-word{display:inline!important;position:relative!important;white-space:nowrap!important;vertical-align:baseline!important}
+.verse-card .arabic-text .qh-theme-ar-word .qh-vowel-overlay{pointer-events:none!important}
 /* Native connected Arabic shaping, no canvas fragments or justified spacing. */
 .verse-card .verse-body .arabic-text{
  display:block!important;direction:rtl!important;unicode-bidi:plaintext!important;
@@ -295,7 +299,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
  font-size:clamp(29px,2.35vw,35px)!important;line-height:2.15!important;letter-spacing:normal!important;
  word-spacing:0!important;white-space:normal!important;margin:0 0 22px!important;padding:0!important;
 }
-.verse-card .qh-theme-ar-word{display:inline-block!important;position:relative!important;vertical-align:baseline!important;white-space:nowrap!important;letter-spacing:0!important;word-spacing:0!important;margin:0!important;padding:0!important}
+.verse-card .qh-theme-ar-word{display:inline!important;position:relative!important;vertical-align:baseline!important;white-space:nowrap!important;letter-spacing:0!important;word-spacing:0!important;margin:0!important;padding:0!important}
 .verse-card .qh-theme-ar-word.qh-colorized-word{color:transparent!important;-webkit-text-fill-color:transparent!important}
 .verse-card .verse-body .english-text,
 .verse-card .verse-body .tigrinya-text,
@@ -916,10 +920,13 @@ function taSocialCard(idx) {
 }
 
 function qhThemeArabicWords(input){
- // Render one uninterrupted Arabic text run. Per-word canvas wrappers created
- // unnatural spacing and positioning in long ayat on desktop and Android.
- // Preserve the original diacritics as selectable Unicode text.
- return esc(String(input||'').replace(/\s+/g,' ').trim());
+ // Preserve natural whitespace between inline Arabic words while giving the
+ // vowel-color renderer each complete shaped word to paint.
+ return String(input||'').replace(/\s+/g,' ').trim().split(/(\s+)/).map(part=>{
+  if(!part)return '';
+  if(/^\s+$/.test(part))return esc(part);
+  return '<span class="qh-theme-ar-word">'+esc(part)+'</span>';
+ }).join('');
 }
 
 function renderVerseCard(v, idx) {
