@@ -12,6 +12,36 @@
     englishFontStyle.href = '/english-reading.css?v=2';
     document.head.appendChild(englishFontStyle);
   }
+  // Shared verse typography. Target scripture content only, never Arabic labels,
+  // menus, search fields, or word-study controls. Load on every page using chrome.
+  if (!document.getElementById('qh-global-verse-reading')) {
+    var verseStyle = document.createElement('style');
+    verseStyle.id = 'qh-global-verse-reading';
+    verseStyle.textContent = [
+      '.verse-card .arabic-text,.verse-card .verse-body .arabic-text,',
+      '.verse-card .verse-arabic,.qh-xref-flow-line .qh-xref-arabic,',
+      '.qh-crossref-flow .qh-xref-arabic{',
+      "font-family:'Noto Naskh Arabic','Amiri',serif!important;",
+      'font-weight:400!important;font-style:normal!important;',
+      'direction:rtl!important;text-align:right!important;text-align-last:auto!important;',
+      'word-spacing:normal!important;letter-spacing:normal!important;',
+      'white-space:normal!important;line-height:2.1!important;}',
+      '.verse-card .arabic-text .qh-theme-ar-word,',
+      '.qh-xref-flow-line .qh-xref-ar-word,',
+      '.qh-crossref-flow .qh-xref-ar-word{',
+      'display:inline!important;position:relative!important;',
+      'font-style:normal!important;white-space:nowrap!important;',
+      'word-spacing:normal!important;letter-spacing:normal!important;',
+      'margin:0!important;padding:0!important;vertical-align:baseline!important;}',
+      '.verse-card .verse-body .english-text,',
+      '.verse-card .verse-body .tigrinya-text,',
+      '.verse-card .verse-body .amharic-text,',
+      '.qh-xref-flow-line>span:not(.qh-xref-arabic){',
+      'font-style:normal!important;font-weight:400!important;',
+      'white-space:normal!important;text-shadow:none!important;}'
+    ].join('');
+    document.head.appendChild(verseStyle);
+  }
   // Site-wide motion layer (site-motion.js). Idempotent; respects reduced motion.
   if (!document.querySelector('script[src$="site-motion.js"]') && !window.__qhMotion) {
     var __m = document.createElement('script'); __m.src = '/site-motion.js'; __m.defer = true;
