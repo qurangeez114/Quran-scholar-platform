@@ -47,6 +47,15 @@
     var __m = document.createElement('script'); __m.src = '/site-motion.js'; __m.defer = true;
     document.head.appendChild(__m);
   }
+
+  // Load phone geometry even when an HTML response bypasses edge injection.
+  // The mobile script is idempotent when the edge also supplies it.
+  if (!document.querySelector('script[src*="mobile-floating-layout.js"]')) {
+    var mobileLayout = document.createElement('script');
+    mobileLayout.src = '/mobile-floating-layout.js?v=20261101-phone-flow';
+    mobileLayout.defer = true;
+    document.head.appendChild(mobileLayout);
+  }
   var NAV = [
     ['index.html','📖','Quran'],['my-pages.html','🗃️','My Page'],['campaigns.html','⚔️','Campaigns'],['research.html','🔬','Research'],
     ['themes.html','🗂️','Themes'],['madhhab.html','⚖️','Madhhab'],['sira.html','🕌','Sīra'],
