@@ -352,6 +352,13 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 }
 @media(max-width:600px){.verse-card .verse-body .arabic-text{line-height:2.1!important}}
 </style>
+<style id="qh-theme-workflow-style">
+.qh-theme-selection-tools{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin:12px 0;padding:14px;border:1px solid #d8cba9;border-radius:10px;background:#fffaf0;color:#332e25}
+.qh-theme-selection-tools button,.qh-theme-work-link{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:8px 11px;border-radius:7px;border:1px solid #cabd9c;background:#fff;color:#382f1d;font:500 14px system-ui,sans-serif;cursor:pointer;text-decoration:none}
+.qh-theme-selection-tools button:hover,.qh-theme-work-link:hover{background:#f3e9d2}
+.qh-theme-pick{display:inline-flex;gap:5px;align-items:center;min-height:36px;font:500 14px system-ui,sans-serif;cursor:pointer}
+.qh-theme-pick input{width:18px;height:18px;accent-color:#725c30}
+</style>
 </head>
 <body>
 
@@ -360,6 +367,9 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
   <button class="back-btn" onclick="if(window.qnavBack){qnavBack();}else{history.back();}">← Back</button>
   <h1 class="theme-title-bar qh-h1" id="pageThemeTitle">Loading theme...</h1>
   <button class="add-presentation-btn" onclick="addThemeToPresentation()">🎞 Add to Deck</button>
+  <a class="qh-theme-work-link" href="my-pages.html">📄 My Pages</a>
+  <a class="qh-theme-work-link" href="my-research.html">🔬 My Research</a>
+  <a class="qh-theme-work-link" href="courses.html">🎓 Classes</a>
 </div>
 
 <!-- LANGUAGE SELECTOR -->
@@ -641,6 +651,16 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 
 <!-- TAB: ALL VERSES -->
 <div id="tab-verses" class="tab-content active">
+  <div id="qh-theme-selection-tools" class="qh-theme-selection-tools">
+    <strong>Use these verses in your work</strong>
+    <span id="qh-theme-selection-count" aria-live="polite">All verses</span>
+    <button type="button" onclick="qhThemeSelectAll(true)">Select all</button>
+    <button type="button" onclick="qhThemeSelectAll(false)">Clear</button>
+    <button type="button" onclick="qhThemeExport('presentation')">🎞 Presentation</button>
+    <button type="button" onclick="qhThemeExport('pages')">📄 My Page</button>
+    <button type="button" onclick="qhThemeExport('research')">🔬 Research</button>
+    <button type="button" onclick="qhThemeExport('lesson')">🎓 Prepare lesson</button>
+  </div>
   <div id="verses-container" class="loading-msg"><span class="spinner"></span> Loading verses...</div>
 </div>
 
@@ -952,6 +972,64 @@ function qhThemeArabicWords(input){
  }).join('');
 }
 
+const QH_THEME_SELECTED = new Set();
+function qhThemeToggleVerse(key, checked) {
+ if (checked) QH_THEME_SELECTED.add(key); else QH_THEME_SELECTED.delete(key);
+ qhThemeSelectionCount();
+}
+function qhThemeSelectionCount() {
+ const el = document.getElementById('qh-theme-selection-count');
+ if (el) el.textContent = QH_THEME_SELECTED.size ? QH_THEME_SELECTED.size + ' selected' : 'All verses';
+}
+function qhThemeSelectAll(yes) {
+ QH_THEME_SELECTED.clear();
+ if (yes) VERSES.forEach(v=>QH_THEME_SELECTED.add(v.sura_id+':'+v.aya_number));
+ document.querySelectorAll('.qh-theme-pick input').forEach(input=>{input.checked=yes;});
+ qhThemeSelectionCount();
+}
+function qhThemeExport(where) {
+ const picked = QH_THEME_SELECTED.size ?
+  VERSES.filter(v=>QH_THEME_SELECTED.has(v.sura_id+':'+v.aya_number)) : VERSES;
+ if (!picked.length) { showToast('No verses loaded'); return; }
+ const url = location.href.split('#')[0];
+ const lines = ['Theme: '+THEME,'Source: '+url,'Verses: '+picked.length,''];
+ picked.forEach(v=>{
+  lines.push('Quran '+v.sura_id+':'+v.aya_number);
+  if(v.arabic) lines.push(v.arabic);
+  if(v.english) lines.push(v.english);
+  if(v.tigrinya) lines.push(v.tigrinya);
+  if(v.amharic) lines.push(v.amharic);
+  lines.push('Source: '+location.origin+'/index.html?sura='+v.sura_id+'&aya='+v.aya_number,'');
+ });
+ const content = lines.join('\\n');
+ const stamp = Date.now();
+ const slides = picked.map(v=>({
+  type:'quran',id:'qh_t_'+v.sura_id+'_'+v.aya_number+'_'+stamp,
+  title:'Quran '+v.sura_id+':'+v.aya_number,
+  reference:'Quran '+v.sura_id+':'+v.aya_number,
+  text:v.english||v.tigrinya||'',arabic:v.arabic||'',
+  sourceUrl:'index.html?sura='+v.sura_id+'&aya='+v.aya_number
+ }));
+ try {
+  const existing=JSON.parse(localStorage.getItem('presentationBasket')||'[]');
+  const merged=[...(Array.isArray(existing)?existing:[]),...slides];
+  localStorage.setItem('presentationBasket',JSON.stringify(merged));
+  localStorage.setItem('qs_presentation_slides',JSON.stringify(merged));
+  localStorage.setItem('qh_theme_export_draft',JSON.stringify({theme:THEME,verses:picked.map(v=>v.sura_id+':'+v.aya_number),content,sourceUrl:url,createdAt:new Date().toISOString()}));
+ } catch(err){showToast('Could not stage selection: '+err.message);return;}
+ if(where==='presentation') {location.href='presentation.html';return;}
+ if(where==='pages') {location.href='my-pages.html';return;}
+ // Research and lesson editors have no confirmed import endpoint.
+ // Copy the source-labeled text before navigating; never claim account save.
+ const target=where==='research'?'my-research.html':'courses.html';
+ if(navigator.clipboard&&navigator.clipboard.writeText){
+  navigator.clipboard.writeText(content).then(()=>{
+   if(confirm(picked.length+' verses copied with sources. Open '+(where==='research'?'My Research':'Classes')+' to paste them?'))location.href=target;
+  }).catch(()=>{showToast('Draft staged locally; clipboard permission denied.');});
+ } else {
+  showToast('Draft staged locally. Copy is unavailable in this browser.');
+ }
+}
 function renderVerseCard(v, idx) {
   const L = getLang();
   const sn = SURAS[v.sura_id] || 'Surah ' + v.sura_id;
@@ -963,6 +1041,7 @@ function renderVerseCard(v, idx) {
     + '<div class="verse-card-header">'
       + '<div><span class="verse-ref" onclick="event.stopPropagation();openInMain('+v.sura_id+','+v.aya_number+')" style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;">' + v.sura_id + ':' + v.aya_number + '</span><span class="verse-sura">' + esc(sn) + '</span></div>'
       + '<div class="verse-actions" style="position:relative;">'
+        + '<label class="qh-theme-pick" onclick="event.stopPropagation()"><input type="checkbox" aria-label="Select Quran '+key+'" onchange="qhThemeToggleVerse(\''+key+'\',this.checked)" '+(QH_THEME_SELECTED.has(key)?'checked':'')+'> Select</label>'
         + '<button class="action-btn" onclick="event.stopPropagation();taRead('+idx+')">🔊</button>'
         + '<button class="action-btn" onclick="event.stopPropagation();taCopy('+idx+')">📋</button>'
         + '<button class="action-btn" onclick="event.stopPropagation();taShare('+idx+')">📤</button>'
