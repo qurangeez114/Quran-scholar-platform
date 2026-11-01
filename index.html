@@ -1271,6 +1271,7 @@ body.qh-home-mode #qh-home-directory{display:block}
 #qh-home-status{padding:20px 0;color:#756850}
 @media(max-width:850px){#qh-home-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:570px){#qh-home-directory{padding:16px 12px 100px}.qh-home-hero{padding:20px 15px}.qh-home-heading{margin-bottom:15px}#qh-home-grid{grid-template-columns:1fr;gap:8px}.qh-home-item{min-height:77px;padding:11px}.qh-home-ar{font-size:20px}.qh-home-tools{gap:7px}#qh-home-count{width:100%;margin:4px 0 0}.qh-home-brand{font-size:20px}}
+.qh-home-shortcuts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin:18px 0 12px}.qh-home-shortcuts a,.qh-home-shortcuts button{font:700 13px system-ui,sans-serif;text-decoration:none;text-align:center;color:#7d5f14;background:#fffaf0;border:1px solid #dccca3;border-radius:9px;padding:11px 5px;min-height:44px;cursor:pointer}.qh-home-shortcuts a:focus-visible,.qh-home-shortcuts button:focus-visible{outline:2px solid #886a1f}.qh-quick-jump{display:grid;grid-template-columns:85px minmax(0,1fr);gap:9px 12px;align-items:center;border:1px solid #e5d6af;border-radius:14px;padding:15px;background:#fffdf6;margin:0 0 16px}.qh-quick-jump label{font-size:14px;color:#6b5230;font-weight:700}.qh-quick-jump select,.qh-quick-jump input{width:100%;min-width:0;min-height:44px;box-sizing:border-box;padding:9px 12px;border:1px solid #d4c9a8;border-radius:9px;background:white;color:#322b1e;font-size:16px}.qh-quick-aya-wrap{display:flex;align-items:center;gap:10px}.qh-quick-aya-wrap input{flex:1}.qh-quick-aya-wrap span{white-space:nowrap;color:#756548;font-size:13px}.qh-quick-jump-actions{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}.qh-quick-jump-actions button{min-height:44px;border:1px solid #d4c9a8;border-radius:9px;background:#f0e7d1;color:#5a4314;font-weight:750;font-size:14px;cursor:pointer}.qh-quick-jump-actions .qh-quick-go{background:#886a1f;color:white;border-color:#886a1f}#qh-quick-error{grid-column:1/-1;margin:0;color:#9b3225;font-size:13px}#qh-quick-error:empty{display:none}@media(max-width:570px){.qh-home-shortcuts{gap:5px}.qh-home-shortcuts a,.qh-home-shortcuts button{font-size:11px;padding:11px 2px}.qh-quick-jump{grid-template-columns:62px minmax(0,1fr);padding:12px;gap:8px}.qh-quick-jump-actions{gap:6px}}
 </style>
 <script>if(!new URLSearchParams(location.search).has('sura')&&!new URLSearchParams(location.search).has('aya'))document.addEventListener('DOMContentLoaded',function(){document.body.classList.add('qh-home-mode')});</script>
 </head>
@@ -1278,6 +1279,15 @@ body.qh-home-mode #qh-home-directory{display:block}
 <section id="qh-home-directory" aria-label="Quran chapter directory">
   <div class="qh-home-heading"><div><div class="qh-home-brand">Quran Hikma</div><div class="qh-home-sub">Read · Compare · Research</div></div><a href="research.html" style="color:#245f51;font-weight:700;text-decoration:none">Research ↗</a></div>
   <div class="qh-home-hero"><h1>Explore the Qur'an</h1><p>Select a Surah to open the complete Quran Hikma reader with the left-side chapter list, translations, audio, tafsir and research tools.</p><input id="qh-home-search" type="search" aria-label="Find a Surah" placeholder="Search by Surah name or chapter number…"></div>
+  <nav class="qh-home-shortcuts" aria-label="Quran research sections">
+    <a href="index.html?sura=1">Suras</a><button type="button" id="qh-quick-chrono">Chrono</button><a href="index.html?sura=1&tab=topics">Topics</a><a href="qiraat-comparison.html">Qira'at</a><a href="index.html?sura=1&tab=lexicon">Lexicon</a><a href="index.html?sura=1&tab=variants">Variants</a><a href="my-research.html">Saved</a><a href="themes.html">Themes</a>
+  </nav>
+  <form id="qh-quick-jump" class="qh-quick-jump" aria-label="Jump directly to Quran verse">
+    <label for="qh-quick-sura">Chapter</label><select id="qh-quick-sura" required aria-label="Select chapter"><option value="">Select Surah…</option></select>
+    <label for="qh-quick-aya">Verse</label><div class="qh-quick-aya-wrap"><input id="qh-quick-aya" type="number" inputmode="numeric" min="1" value="1" required aria-label="Verse number"><span id="qh-quick-max"></span></div>
+    <div class="qh-quick-jump-actions"><button type="button" id="qh-quick-prev">« Prev</button><button type="submit" class="qh-quick-go">Go</button><button type="button" id="qh-quick-next">Next »</button></div>
+    <p id="qh-quick-error" role="status" aria-live="polite"></p>
+  </form>
   <div class="qh-home-tools"><button class="active" type="button" aria-current="true">114 Surahs</button><button type="button" id="qh-home-chrono">Chronological order</button><a href="themes.html">Topics</a><span id="qh-home-count"></span></div>
   <div id="qh-home-status" role="status">Loading 114 Surahs…</div><div id="qh-home-grid"></div>
 </section>
@@ -12237,8 +12247,16 @@ window.QNAV_PAGE_LABEL='Quran Reader';window.QNAV_PAGE_ICON='📖';
   }
   count.textContent=found.length+' of '+rows.length+' Surahs';status.textContent=found.length?'':'No matching Surahs found.';
  }
+ const chooser=document.getElementById('qh-quick-sura'),aya=document.getElementById('qh-quick-aya'),maxEl=document.getElementById('qh-quick-max'),error=document.getElementById('qh-quick-error');
+ function maxAya(){const s=rows.find(x=>Number(x.sura_id||x.id)===Number(chooser.value));return Number(s?.number_of_ayas||s?.ayah_count||0);}
+ function updateMax(){const max=maxAya();aya.max=max||999;maxEl.textContent=max?'of '+max:'';if(Number(aya.value)>max&&max)aya.value=max;return max;}
+ function jump(){const s=Number(chooser.value),v=Number(aya.value),max=updateMax();if(!Number.isInteger(s)||s<1||s>114||!Number.isInteger(v)||v<1||(max&&v>max)){error.textContent='Choose a valid chapter and verse.';return;}location.href='index.html?sura='+s+'&aya='+v;}
+ document.getElementById('qh-quick-jump').addEventListener('submit',e=>{e.preventDefault();jump();});
+ chooser.addEventListener('change',()=>{aya.value=1;updateMax();error.textContent='';});
+ for(const [id,step] of [['qh-quick-prev',-1],['qh-quick-next',1]])document.getElementById(id).addEventListener('click',()=>{if(!chooser.value){error.textContent='Select a chapter first.';return;}const max=updateMax();aya.value=Math.max(1,Math.min(max||999,(Number(aya.value)||1)+step));jump();});
+ document.getElementById('qh-quick-chrono').addEventListener('click',()=>document.getElementById('qh-home-chrono').click());
  search.addEventListener('input',draw);
- window.qhRenderHomeDirectory=function(suras){rows=Array.isArray(suras)?suras.slice():[];status.textContent='';draw();};
+ window.qhRenderHomeDirectory=function(suras){rows=Array.isArray(suras)?suras.slice():[];status.textContent='';chooser.replaceChildren(new Option('Select Surah…',''));for(const s of rows){const id=Number(s.sura_id||s.id);if(id>=1&&id<=114)chooser.add(new Option(id+' · '+text(s.sura_name_english||s.sura_name||'Surah '+id),String(id)));}if(rows.length){chooser.value='1';updateMax();}draw();};
  document.getElementById('qh-home-chrono').addEventListener('click',function(){
   document.body.classList.remove('qh-home-mode');
   if(typeof switchSidebarTab==='function')switchSidebarTab('chrono');
