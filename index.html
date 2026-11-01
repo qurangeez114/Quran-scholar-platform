@@ -1354,7 +1354,12 @@ document.addEventListener('DOMContentLoaded',()=>{
  target.insertAdjacentElement('afterend',button);
 });
 })();
-</script></head>
+</script><style id="qh-xref-flow-style">
+.qh-xref-flow-tools{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:10px 12px;padding:12px;background:#fdf8ee;border:1px solid #e8c97b;border-radius:10px}
+.qh-xref-flow-tools select,.qh-xref-flow-tools button{padding:9px 11px;min-height:40px;border-radius:7px;border:1px solid #d4c9a8;font-size:14px;background:white;color:#5a451d}
+.qh-xref-flow-tools button{background:#846e32;color:white;cursor:pointer}.qh-xref-flow-text{margin:12px;max-height:70vh;overflow:auto;padding:12px 16px;background:#fffdf8;border:1px solid #ece3d1;border-radius:10px}.qh-xref-flow-line{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid #ece9e0;line-height:1.9;font-size:17px;align-items:baseline}.qh-xref-flow-ref{min-width:50px;flex:0 0 auto;color:#846e32;font-weight:700;font-size:13px;text-decoration:none}.qh-xref-flow-line span{flex:1;min-width:0;white-space:pre-wrap;overflow-wrap:anywhere}.qh-xref-flow-note{font-size:12px;color:#756548;margin:0}
+@media(max-width:600px){.qh-xref-flow-text{padding:8px 12px}.qh-xref-flow-line{font-size:16px}}
+</style></head>
 <body>
 <section id="qh-home-directory" aria-label="Quran chapter directory">
   <div class="qh-home-heading"><div><div class="qh-home-brand">Quran Hikma</div><div class="qh-home-sub">Read · Compare · Research</div></div><a href="research.html" style="color:#245f51;font-weight:700;text-decoration:none">Research ↗</a></div>
@@ -2344,6 +2349,57 @@ function qhXrefToggle(id, btn) {
   btn.textContent = open ? btn.getAttribute('data-more') : 'Show fewer';
 }
 
+
+const QH_XREF_LANGS={
+ ti:['Tigrinya','tigrinya'],en:['English','english'],am:['Amharic','amharic'],
+ om:['Oromo','oromo'],so:['Somali','somali'],de:['German','german'],ur:['Urdu','urdu'],
+ bn:['Bengali','bn'],ms:['Malay','ms'],es:['Spanish','es'],zh:['Chinese','zh'],
+ sw:['Swahili','sw'],ha:['Hausa','ha'],sv:['Swedish','sv'],no:['Norwegian','no']
+};
+function qhAddXrefFlowControl(panel){
+ if(!panel || panel.querySelector('.qh-xref-flow-tools'))return;
+ const refs=[...new Set([...panel.querySelectorAll('.xref-chip-btn')].map(x=>x.textContent.trim()).filter(x=>/^\d+:\d+$/.test(x)))];
+ if(!refs.length)return;
+ const tools=document.createElement('div');tools.className='qh-xref-flow-tools';
+ const label=document.createElement('label');label.textContent='Read cross-references in one language: ';
+ const select=document.createElement('select');select.setAttribute('aria-label','Cross-reference reading language');
+ for(const [code,item] of Object.entries(QH_XREF_LANGS))select.add(new Option(item[0],code));
+ select.value='ti';
+ const button=document.createElement('button');button.type='button';button.textContent='Read as flowing text';
+ const output=document.createElement('div');output.className='qh-xref-flow-text';output.hidden=true;
+ const message=document.createElement('p');message.className='qh-xref-flow-note';message.textContent='References are shown once each in the order listed above. Each number opens its original verse.';
+ tools.append(label,select,button,message);panel.prepend(tools);tools.after(output);
+ button.addEventListener('click',async()=>{
+   if(!output.hidden){output.hidden=true;button.textContent='Read as flowing text';return;}
+   button.disabled=true;button.textContent='Loading verses…';output.hidden=false;output.replaceChildren();
+   try{
+    const code=select.value,field=QH_XREF_LANGS[code][1],results=new Map();
+    for(let i=0;i<refs.length;i+=35){
+      const batch=refs.slice(i,i+35);
+      if(['bn','ms','es','zh','sw','ha','sv','no'].includes(field)){
+        const rows=await sbFetch('verse_translations',{select:'verse_key,text',lang:'eq.'+field,verse_key:'in.('+batch.map(x=>'"'+x+'"').join(',')+')',limit:50});
+        rows.forEach(v=>results.set(v.verse_key,v.text||''));
+      }else{
+        const rows=await sbFetch('ayas',{select:'sura_id,aya_number,'+field,
+          or:'('+batch.map(x=>{const parts=x.split(':');return 'and(sura_id.eq.'+parts[0]+',aya_number.eq.'+parts[1]+')';}).join(',')+')',limit:50});
+        rows.forEach(v=>results.set(v.sura_id+':'+v.aya_number,v[field]||''));
+      }
+    }
+    let missing=0;
+    for(const ref of refs){
+      const line=document.createElement('div');line.className='qh-xref-flow-line';
+      const link=document.createElement('a');link.className='qh-xref-flow-ref';link.href='index.html?sura='+ref.split(':')[0]+'&aya='+ref.split(':')[1];link.textContent=ref;
+      const text=document.createElement('span');const value=String(results.get(ref)||'').trim();
+      if(!value)missing++;text.textContent=value||'Translation not available for this verse.';
+      line.append(link,text);output.append(line);
+    }
+    if(missing){const note=document.createElement('p');note.className='qh-xref-flow-note';note.textContent=missing+' of '+refs.length+' verses do not have stored translations in this language.';output.prepend(note);}
+    button.textContent='Hide flowing text';
+   }catch(err){output.textContent='Unable to retrieve the selected translation: '+err.message;button.textContent='Retry flowing text';output.hidden=false;}
+   finally{button.disabled=false;}
+ });
+}
+
 async function loadCrossReferences(sura, aya) {
   const panel = document.getElementById('tp-' + aya + '-xrefs');
   const tab   = document.getElementById('xref-tab-' + aya);
@@ -2483,6 +2539,7 @@ async function loadCrossReferences(sura, aya) {
     });
 
     panel.innerHTML = html;
+    qhAddXrefFlowControl(panel);
 
 // Global cache of cross-ref verse lists by theme
 window._crossRefThemeLists = {};
