@@ -117,33 +117,31 @@
   html.floating-ui-hidden body { padding-bottom: 0; }
 }
 
-/* The Qur'an home page has a fixed-height reader with its own scroll area.
-   Its content does NOT scroll on body, so the global floating-stack body
-   spacer creates an enormous blank strip below the verse. Give the reader
-   exactly the available mobile viewport, reserving the fixed nav once.
-   Single-language reading uses document scrolling instead: applying this
-   height cap and body lock there clips the expanded passages and freezes
-   scrolling. Keep these constraints exclusive to the standard reader. */
+/* Mobile reader uses document scrolling so controls leave the viewport.
+   Apply to both translation cards and single-language passages. */
 @media (max-width: 768px) {
-  body:has(> .app #verseArea):not(:has(.qh-single-card)) {
-    padding-bottom: 0 !important;
-    overflow-y: hidden !important;
+  html:has(body > .app #verseArea) {
+    height:auto !important; max-height:none !important;
+    overflow-y:auto !important; overflow-x:hidden !important;
   }
-  body > .app:has(#verseArea):not(:has(.qh-single-card)) {
-    height: calc(100vh - var(--qh-home-header-height, 0px) - 42px) !important;
-    height: calc(100dvh - var(--qh-home-header-height, 0px) - 42px) !important;
-    max-height: calc(100dvh - var(--qh-home-header-height, 0px) - 42px) !important;
-    min-height: 0 !important;
+  body:has(> .app #verseArea) {
+    height:auto !important; max-height:none !important;
+    position:static !important; overflow-y:visible !important;
+    padding-bottom:0 !important;
   }
-  body > .app:has(#verseArea):not(:has(.qh-single-card)) > .main {
-    min-height: 0 !important;
+  body > .app:has(#verseArea),
+  body > .app:has(#verseArea) > .main {
+    height:auto !important; max-height:none !important;
+    min-height:0 !important; overflow:visible !important;
   }
-  body > .app:not(:has(.qh-single-card)) #verseArea.verse-area {
-    min-height: 0 !important;
-    overflow-y: auto !important;
-    -webkit-overflow-scrolling: touch;
-    padding-bottom: max(64px, env(safe-area-inset-bottom)) !important;
-    scroll-padding-bottom: 64px;
+  body > .app #verseArea.verse-area {
+    flex:none !important; height:auto !important; max-height:none !important;
+    min-height:0 !important; overflow:visible !important;
+    padding:10px 10px calc(76px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+  body:has(> .app #verseArea) #qh-school-topnav,
+  body > .app .main > .top-bar {
+    position:static !important;
   }
 }
 
