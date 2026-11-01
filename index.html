@@ -1292,35 +1292,49 @@ window.qhSingleMode=flags;flags.languages=langs;
 flags.render=function(){
  const area=document.getElementById('verseArea');
  if(!area||!Array.isArray(CURRENT_AYAS)||!CURRENT_AYAS.length||!flags.active)return;
- area.replaceChildren();
+ // Build the ORIGINAL research controls first, so IDs, counts, event handlers,
+ // loaders and scholar panels remain the same as the standard reader.
+ renderVerses(CURRENT_AYAS,currentSura);
  const bar=document.createElement('div');bar.className='qh-single-toolbar';
  const label=document.createElement('label');label.textContent='Language ';
  const select=document.createElement('select');select.setAttribute('aria-label','Single reading language');
- for(const [code,desc] of Object.entries(langs)){const o=new Option(desc[0],code);select.add(o);}
+ for(const [code,desc] of Object.entries(langs))select.add(new Option(desc[0],code));
  select.value=flags.lang;
  const markers=document.createElement('label');const check=document.createElement('input');check.type='checkbox';check.checked=flags.markers;markers.append(check,document.createTextNode(' Topic markers'));
  const close=document.createElement('button');close.type='button';close.textContent='Standard reader';
- const notice=document.createElement('small');notice.textContent='Editorial topic markers appear only where verse-level annotations are available.';
- label.append(select);bar.append(label,markers,close,notice);area.append(bar);
- const page=document.createElement('article');page.className='qh-single-page';const h=document.createElement('h2');h.textContent=(typeof SURA_DISPLAY_NAMES!=='undefined'&&SURA_DISPLAY_NAMES[currentSura])||'Surah '+currentSura;page.append(h);
+ label.append(select);bar.append(label,markers,close);area.prepend(bar);
  let available=0,missing=0;const field=langs[flags.lang][1];
  for(const aya of CURRENT_AYAS){
-  const num=Number(aya.aya_number);const content=String(aya[field]||'').trim();
-  // Only display actual verse-level topic metadata; never invent topic boundaries.
-  const topic=aya.topic_start||aya.topic_transition||aya.section_heading;
-  if(flags.markers&&topic){const m=document.createElement('div');m.className='qh-single-topic';m.textContent='◆ '+String(topic);page.append(m);}
-  const verse=document.createElement('div');verse.className='qh-single-verse';verse.id='single-verse-'+num;
-  const ref=document.createElement('span');ref.className='qh-single-ref';ref.textContent=currentSura+':'+num;
-  const body=document.createElement('span');body.className='qh-single-verse-text';body.textContent=content||'Translation unavailable for this verse';if(content)available++;else missing++;
-  verse.append(ref,body);page.append(verse);
+   const num=Number(aya.aya_number),card=document.getElementById('vc-'+num);
+   if(!card)continue;
+   const content=String(aya[field]||'').trim();
+   const topic=aya.topic_start||aya.topic_transition||aya.section_heading;
+   if(flags.markers&&topic){const heading=document.createElement('div');heading.className='qh-single-topic';heading.textContent='◆ '+String(topic);card.before(heading);}
+   const top=card.querySelector('.verse-top');if(!top)continue;
+   top.replaceChildren();
+   top.removeAttribute('onclick');
+   const row=document.createElement('div');row.className='qh-single-verse';
+   const ref=document.createElement('span');ref.className='qh-single-ref';ref.textContent=currentSura+':'+num;
+   const body=document.createElement('span');body.className='qh-single-verse-text';body.textContent=content||'Translation unavailable for this verse';if(content)available++;else missing++;
+   const expand=document.createElement('button');expand.type='button';expand.className='expand-btn';expand.textContent='▼ Study';expand.setAttribute('aria-label','Expand research for verse '+num);
+   row.append(ref,body,expand);top.append(row);
+   expand.addEventListener('click',()=>toggleVerse(num,currentSura,top));
+   const detail=card.querySelector('.verse-detail');
+   if(detail){
+     // Tabs remain visible without making every lengthy panel expanded.
+     detail.addEventListener('click',event=>{
+       const button=event.target.closest('.tab-btn');
+       if(button&&!card.classList.contains('open'))toggleVerse(num,currentSura,top);
+     },true);
+   }
+   card.classList.add('qh-single-card');
  }
- if(!available){const p=document.createElement('p');p.textContent='No '+langs[flags.lang][0]+' translation is available for this Surah in the current database.';p.style.color='#9a412f';bar.append(p);}
- else if(missing){const p=document.createElement('p');p.textContent=missing+' verses have no stored '+langs[flags.lang][0]+' translation.';p.style.color='#9a412f';bar.append(p);}
- area.append(page);
+ if(missing){const msg=document.createElement('p');msg.className='qh-single-availability';msg.textContent=available?missing+' verses have no '+langs[flags.lang][0]+' translation.':'No '+langs[flags.lang][0]+' translation is currently stored for this Surah.';bar.append(msg);}
  select.addEventListener('change',()=>{flags.lang=select.value;flags.render();});
  check.addEventListener('change',()=>{flags.markers=check.checked;flags.render();});
  close.addEventListener('click',()=>{flags.active=false;renderVerses(CURRENT_AYAS,currentSura);if(typeof applyLangState==='function')applyLangState();});
 };
+
 const params=new URLSearchParams(location.search);
 if(params.has('single')){flags.active=true;flags.lang=langs[params.get('single')]?params.get('single'):'ti';}
 document.addEventListener('DOMContentLoaded',()=>{
