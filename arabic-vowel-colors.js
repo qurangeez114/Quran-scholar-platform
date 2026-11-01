@@ -14,7 +14,7 @@ const COLORS={
  shadda:'#cf681b',tanwin:'#813e99',madd:'#007b85'
 };
 let fontReady=false,watch=null,watched=new WeakSet(),jobs=new Set(),tick=null;
-const enabled=()=>document.body.classList.contains('qh-reading-aid')||!!document.querySelector('.qh-xref-ar-word');
+const enabled=()=>document.body.classList.contains('qh-reading-aid')||!!document.querySelector('.qh-xref-ar-word,.qh-theme-ar-word');
 const wordText=el=>Array.from(el.childNodes).filter(n=>n.nodeType===3).map(n=>n.textContent).join('');
 function renderWord(el){
  if(!enabled()||!fontReady||!el.isConnected||el.dataset.qhColorized==='1')return;
@@ -100,7 +100,8 @@ function scan(){
   '.verse-arabic.lang-arabic[data-wbw="off"] .qh-tappable-word,'+
   '.verse-arabic.lang-arabic[data-wbw="on"] .wbw-arabic,'+
   '.qh-xref-flow-text:not([hidden]) .qh-xref-ar-word,'+
-  '.qh-crossref-flow:not([hidden]) .qh-xref-ar-word'
+  '.qh-crossref-flow:not([hidden]) .qh-xref-ar-word,'+
+  '.verse-card .arabic-text .qh-theme-ar-word'
  ).forEach(el=>{
   if(el.dataset.qhColorized==='1'||watched.has(el))return;
   if(!Array.from(wordText(el)).some(c=>TYPES[c]))return;
