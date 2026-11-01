@@ -1296,6 +1296,7 @@ body.qh-home-mode #qh-home-directory{display:block}
 .qh-single-availability{width:100%;color:#9a412f;font-size:13px;margin:3px}
 @media(max-width:570px){.qh-single-card .tab-bar{padding:8px 0}.qh-single-card .tab-bar .tab-btn{font-size:12px}}
 .qh-single-card.qh-single-text-only .qh-single-verse{padding:10px 4px}.qh-single-card.qh-single-text-only{border-bottom:1px solid #eee7db}.qh-single-card.qh-single-text-only .verse-detail{display:none!important}
+.qh-single-card .verse-detail .tab-bar{display:flex!important}.verse-card:not(.open) .tab-panel{display:none!important}
 </style>
 <script id="qh-single-script">
 (function(){
@@ -3687,6 +3688,8 @@ function switchTab(num, tab, btn) {
   const panel = document.getElementById('tp-' + num + '-' + tab);
   if (!panel) return;
   const sameOpenTab = card.classList.contains('open') && panel.classList.contains('active') && btn.classList.contains('active');
+  // The first Summary is highlighted by default, but must not count as open
+  // until the asynchronous content loading has been started.
   if (sameOpenTab) {
     card.classList.remove('open');
     const expand = card.querySelector('.expand-btn');
@@ -3697,7 +3700,10 @@ function switchTab(num, tab, btn) {
   // loaders as clicking Study, not merely reveal a loading placeholder.
   if (!card.classList.contains('open')) {
     const top = card.querySelector('.verse-top');
-    if (top && typeof toggleVerse === 'function') toggleVerse(num, Number(card.dataset.sura) || currentSura, top);
+    if (top && typeof toggleVerse === 'function') {
+      const load = toggleVerse(num, Number(card.dataset.sura) || currentSura, top);
+      if (load && typeof load.catch === 'function') load.catch(err => { console.error('Verse research load failed', err); panel.textContent = 'Unable to load research. Tap again to retry.'; });
+    }
     else card.classList.add('open');
   }
   card.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
