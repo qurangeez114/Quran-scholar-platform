@@ -1369,6 +1369,12 @@ document.addEventListener('DOMContentLoaded',()=>{
 /* Explicit text-only single-language choice remains intentionally clean. */
 .verse-card.qh-single-text-only .verse-detail{display:none!important}
 .read-mode .verse-card:not(.qh-single-text-only) .verse-detail{display:block!important}
+</style><style id="qh-persistent-research-nav">
+.verse-card:not(.qh-single-text-only) .verse-detail{display:block!important}
+.verse-card:not(.qh-single-text-only) .verse-detail .tab-bar{display:flex!important;flex-wrap:wrap;gap:5px;align-items:center}
+.verse-card:not(.qh-single-text-only) .verse-detail .tab-panel{display:none!important}
+.verse-card:not(.qh-single-text-only).open .verse-detail .tab-panel.active{display:block!important}
+@media(max-width:600px){.verse-card:not(.qh-single-text-only) .verse-detail .tab-bar{flex-wrap:nowrap!important;overflow-x:auto}.verse-card:not(.qh-single-text-only) .tab-bar .tab-btn{white-space:nowrap;flex:0 0 auto;min-height:42px}}
 </style></head>
 <body>
 <section id="qh-home-directory" aria-label="Quran chapter directory">
@@ -3678,20 +3684,26 @@ async function toggleVerse(num, suraId, el) {
 function switchTab(num, tab, btn) {
   const card = document.getElementById('vc-' + num);
   if (!card) return;
-  const panel = document.getElementById(`tp-${num}-${tab}`);
+  const panel = document.getElementById('tp-' + num + '-' + tab);
   if (!panel) return;
-  const wasOpen = card.classList.contains('open') && panel.classList.contains('active') && btn.classList.contains('active');
-  card.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-  card.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-  if (wasOpen) {
+  const sameOpenTab = card.classList.contains('open') && panel.classList.contains('active') && btn.classList.contains('active');
+  if (sameOpenTab) {
     card.classList.remove('open');
     const expand = card.querySelector('.expand-btn');
     if (expand) expand.textContent = '▼ Study';
     return;
   }
+  // Opening from the always-visible tab bar must run the SAME data
+  // loaders as clicking Study, not merely reveal a loading placeholder.
+  if (!card.classList.contains('open')) {
+    const top = card.querySelector('.verse-top');
+    if (top && typeof toggleVerse === 'function') toggleVerse(num, Number(card.dataset.sura) || currentSura, top);
+    else card.classList.add('open');
+  }
+  card.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  card.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   btn.classList.add('active');
   panel.classList.add('active');
-  card.classList.add('open');
   const expand = card.querySelector('.expand-btn');
   if (expand) expand.textContent = '▲ Close';
 }
