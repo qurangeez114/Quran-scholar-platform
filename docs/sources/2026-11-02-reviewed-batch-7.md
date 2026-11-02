@@ -26,18 +26,25 @@
 
 ## Database and reader state
 
-- **23 rows total:** 17 verified (17 distinct verses), 3 unverified, 0 disputed, 3 rejected.
-- Regenerated `qh-sources-verified-snapshot.json` from all 17 `public.ancient_sources` verified records, preserving exact references and HTTPS links.
-- Bumped `qh-sources-panel.js` snapshot query version to b7 and the script cache version in `index.html` to v7.
+- **23 rows total:** 18 verified (17 distinct verses), 2 unverified, 0 disputed, 3 rejected.
+- Regenerated `qh-sources-verified-snapshot.json` from all 18 `public.ancient_sources` verified records, preserving exact references and HTTPS links.
+- Bumped `qh-sources-panel.js` snapshot query version to b8 and the script cache version in `index.html` to v8.
 - "Verified" denotes a checked *textual relationship*, including a contrast, not demonstrated direct dependence, composition before Islam, or historical truth.
 - No unverified or rejected row was promoted into the fallback.
 
 ## Remaining leads
 
 - `id=7` Qur’an 18:83 / Syriac Alexander material: requires a precise passage rather than citing the whole Alexander cycle.
-- `id=11` Qur’an 7:11 / *Cave of Treasures*: requires exact text showing refusal to bow, not merely an Adam/Satan narrative.
 - `id=19` Qur’an 31:12 / *Ahiqar*: generic wisdom sayings do not justify a verse-specific verified link without a distinctive matched passage.
 
 ## Required production verification
 
-Open Qur’an 4:157 in the live reader and click Sources. Confirm exact `Gospel of Peter §§4–6` contrast, link and dating note; check Qur’an 2:34 shows no verified `Pirkei de-Rabbi Eliezer` association. Inspect browser console/network for the actual request, stale JS/cache, Supabase errors and the fallback warning. Repeat on phone and in a private browser. Do not claim the production loading issue fixed until this succeeds.
+Open Qur’an 4:157 and 7:11 in the live reader and click Sources. Confirm exact `Gospel of Peter §§4–6` contrast, link and dating note; check Qur’an 2:34 shows no verified `Pirkei de-Rabbi Eliezer` association. Inspect browser console/network for the actual request, stale JS/cache, Supabase errors and the fallback warning. Repeat on phone and in a private browser. Do not claim the production loading issue fixed until this succeeds.
+
+## Additional verified parallel: Qur’an 7:11–12 / Cave of Treasures, First Thousand Years, part 7
+
+- **Source and exact passage:** Anonymous Syriac *Cave of Treasures*, "The First Thousand Years" (Adam to Yared), part 7, "The Revolt of Satan, and the Battle in Heaven," opening paragraph, Syriac manuscript fol. 5b col. 2 in E. A. Wallis Budge's 1927 English translation: https://www.wisdomlib.org/christianity/book/the-book-of-the-cave-of-treasures/d/doc1561883.html .
+- **Verified in the main narrative, not an editor's comparative footnote:** Satan refuses to honor Adam and argues that he is fire and spirit while Adam is dust; he subsequently falls from heaven. This matches the specific motif of Iblis's refusal in Qur’an 7:11 and the fire/clay justification in Qur’an 7:12. The Christian account includes additional narrative details absent from the Qur’an.
+- **Date and witness caution:** Sergey Minov argues for composition between the mid-sixth century and early seventh century, with scholarly uncertainty; this proposed period may overlap the Qur’anic period. It is **not** the date of the extant manuscript or the 1927 translation. Minov, "Date and Provenance of the Syriac Cave of Treasures: A Reappraisal," *Hugoye* 20.1 (2017), 129–229: https://ora.ox.ac.uk/objects/uuid:4d0383ed-4d93-467d-a6f2-7d97988aeb94 .
+- **Database:** Existing row id 11 moved from `unverified` to `verified` as a specific narrative parallel only, with folio, edition, link, comparative notes and dating caution. Qur’an 7:11 already had a different verified source, so **18 verified associations cover 17 distinct verses**.
+- **No claim** of direct literary dependence or assured pre-Qur’anic circulation of this particular recension.
