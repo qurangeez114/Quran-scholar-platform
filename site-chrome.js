@@ -9,7 +9,7 @@
     var englishFontStyle = document.createElement('link');
     englishFontStyle.id = 'qh-english-reading-css';
     englishFontStyle.rel = 'stylesheet';
-    englishFontStyle.href = '/english-reading.css?v=4';
+    englishFontStyle.href = '/english-reading.css?v=5';
     document.head.appendChild(englishFontStyle);
   }
   // Shared verse typography. Target scripture content only, never Arabic labels,
