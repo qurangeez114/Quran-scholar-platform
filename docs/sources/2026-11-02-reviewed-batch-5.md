@@ -20,6 +20,7 @@ The update was conditional on row 8 being `disputed`; it corrected the title, au
 - `public.get_ancient_sources_grouped(18,94)` returned the corrected Syriac Alexander Legend with the reference URL and comparison notes.
 - Rebuilt `qh-sources-verified-snapshot.json` from the 15 verified SQL rows that have HTTPS links, exact locators and review notes; the fallback is dated and does not claim live freshness.
 - Bumped reader script and snapshot cache version from `v4/b4` to `v5/b5` so older cached data does not hide the newly verified row.
+- Simulated DOM smoke tests using the actual branch JavaScript and 15-row snapshot: (1) a successful live API response for 18:94 and (2) a synchronous PostgREST exception with dated-snapshot fallback. Both rendered the corrected source, showed `Sources (1)` and reset `aria-busy=false`; the fallback displayed a dated-snapshot warning. These tests do not establish live-browser behavior.
 - PR #78 (previous loader timing and API-error safeguards) had a **successful Netlify deploy-preview status** and was merged into `main` at `a1eb560959dc9165b842f240b0fc74c905c552af` before this batch.
 
 ## Deployment and limits
