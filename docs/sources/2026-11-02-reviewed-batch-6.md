@@ -14,3 +14,13 @@
 - Previous PR #79 passed Netlify deploy-preview status and was merged at commit `194f0c62f0009a0cc6bbc2ccbaa3c51265bb4afc`.
 - Production and preview HTTP browser checks remain unavailable from this environment (container DNS resolution failed). **No production success is claimed**.
 - The remaining unverified, disputed and rejected records are excluded from verified results. No tafsir data was modified.
+
+## Rejected inaccurate association: Qur'an 21:96 — 1 Enoch 56:5–8
+
+- Inspected the actual passage in R. H. Charles's translation: https://en.wikisource.org/wiki/The_Book_of_Enoch_(Charles)/Chapter_56 . The armies are specifically **Parthians and Medes** (1 Enoch 56:5–8), not Gog and Magog. The passage describes an end-time invasion and destruction, but not the named release of Gog and Magog in Qur'an 21:96.
+- Existing row id 9 was moved from **unverified** to **rejected** as a *specific* textual parallel, with exact source locator, link, comparison and rejection rationale. A generic apocalyptic invasion motif is insufficient to justify a verse-specific verified citation.
+- This row remains excluded from the verified-only Sources panel and snapshot.
+
+## Updated database tally
+
+- **23 total:** **16 verified** (16 distinct verses), **3 unverified**, **2 disputed**, **2 rejected**.
