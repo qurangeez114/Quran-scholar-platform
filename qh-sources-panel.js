@@ -44,7 +44,7 @@
           if (!response.ok) throw new Error('Snapshot HTTP ' + response.status);
           const snapshot = await response.json();
           if (snapshot.schema_version !== 1 || !Array.isArray(snapshot.records) ||
-              !/^\\d{4}-\\d{2}-\\d{2}$/.test(snapshot.as_of || '')) {
+              !/^\d{4}-\d{2}-\d{2}$/.test(snapshot.as_of || '')) {
             throw new Error('Invalid Sources snapshot');
           }
           return snapshot;
