@@ -5,7 +5,7 @@
   const SELECT = 'source_title,tradition,approx_date,source_type,source_locator,relationship_kind,parallel_summary,similarity_note,difference_note,reference_link,source_edition,verification_note,verification_status';
   // A checked, dated snapshot keeps citations available during transient PostgREST failures.
   // Never promote unreviewed rows or pretend a cached snapshot is current live data.
-  const SNAPSHOT_URL = '/qh-sources-verified-snapshot.json?v=20261102-b2';
+  const SNAPSHOT_URL = '/qh-sources-verified-snapshot.json?v=20261102-b3';
   let snapshotPromise = null;
 
   function el(tag, text, css) {
@@ -101,11 +101,12 @@
     const tab = document.getElementById('ancient-tab-' + num);
     let timeoutId;
     try {
-      if (typeof sbFetch !== 'function') throw new Error('Sources API unavailable');
-      const request = sbFetch('ancient_sources', {
-        select: SELECT, sura: 'eq.' + suraId, aya: 'eq.' + num,
-        verification_status: 'eq.verified', order: 'source_title.asc', limit: '50'
-      });
+      const request = typeof sbFetch === 'function'
+        ? sbFetch('ancient_sources', {
+          select: SELECT, sura: 'eq.' + suraId, aya: 'eq.' + num,
+          verification_status: 'eq.verified', order: 'source_title.asc', limit: '50'
+        })
+        : Promise.reject(new Error('Sources API unavailable'));
       const timeout = new Promise((_, reject) => {
         timeoutId = setTimeout(() => reject(new Error('Source request timed out')), 6000);
       });
@@ -127,6 +128,14 @@
       if (snapshotAsOf) {
         wrap.appendChild(el('p', 'Live source service unavailable. Showing the last published verified-reference snapshot (' + snapshotAsOf + '); newer references may be missing.',
           'font:600 14px/1.6 system-ui,sans-serif;color:#805c20;margin:0 0 12px;'));
+        const refresh = el('button', 'Try live Sources again',
+          'padding:8px 11px;border:1px solid #c9b895;border-radius:8px;background:#fffaf0;color:#51411e;cursor:pointer;font:600 14px system-ui;margin-bottom:10px;');
+        refresh.type = 'button';
+        refresh.addEventListener('click', () => {
+          delete box.dataset.loadedKey;
+          window.loadAncientPanel(num, suraId);
+        });
+        wrap.appendChild(refresh);
       }
       if (rows.length === 0) {
         wrap.appendChild(el('p', snapshotAsOf
@@ -164,5 +173,5 @@
       }
     }
   };
-  window.qhSourcesPanelVersion = '2026-11-02-verified-v2-snapshot';
+  window.qhSourcesPanelVersion = '2026-11-02-verified-v3-snapshot';
 })();
