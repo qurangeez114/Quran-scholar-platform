@@ -154,11 +154,14 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 
 /* ── HADITH CARD ── */
 .hadith-card {
-  background: #FFF8F0; border: 1px solid #E8C97B; border-radius: 8px;
-  padding: 10px 12px; margin-bottom: 8px;
+  background: #FFF8F0; border: 1px solid #E8C97B; border-radius: 10px;
+  padding: 14px 16px; margin-bottom: 10px;
 }
-.hadith-meta { font-size: 10px; font-weight: 700; color: #7d5f14; margin-bottom: 4px; }
-.hadith-text { font-size: 12px; color: #333; line-height: 1.7; }
+.hadith-meta { font-size: 12px; font-weight: 700; color: #5b4a12; margin-bottom: 6px; line-height: 1.5; }
+.hadith-text { font-size: 16px; color: #2b2b2b; line-height: 1.75; max-width: 72ch; }
+.hadith-arabic { font-family: 'Noto Naskh Arabic', 'Amiri', serif; direction: rtl; text-align: right; font-size: 22px; line-height: 2; color: #1a1a1a; margin: 0 0 10px; }
+.hadith-narrator { font-size: 12px; color: #555; margin-top: 8px; }
+.hadith-verse-head { font-size: 14px; font-weight: 800; color: #7d5f14; margin: 18px 0 8px; }
 
 /* ── FIQH CARD ── */
 .fiqh-card {
@@ -1112,7 +1115,7 @@ async function loadThemeHadith() {
 
     for (const [sid, ayas] of Object.entries(bySura)) {
       const rows = await sbGet('hadith_connections', {
-        select: 'sura_id,aya_number,hadith_text,collection,narrator,hadith_grade,reference,tradition',
+        select: 'sura_id,aya_number,hadith_text,arabic_text,collection,narrator,hadith_grade,reference,tradition',
         sura_id: 'eq.' + sid,
         aya_number: 'in.(' + ayas.join(',') + ')'
       });
@@ -1143,12 +1146,13 @@ function renderHadith() {
 
   let html = '<div style="padding:4px 0 12px;font-size:12px;color:#5f6f81;"><b>'+HADITH.length+'</b> hadith connected to verses in this theme.</div>';
   Object.entries(byVerse).forEach(([ref, hadiths]) => {
-    html += '<div style="font-size:12px;font-weight:800;color:#7d5f14;margin:14px 0 6px;">Verse ' + esc(ref) + '</div>';
+    html += '<div class="hadith-verse-head">Verse ' + esc(ref) + '</div>';
     hadiths.forEach(h => {
       html += '<div class="hadith-card">'
         + '<div class="hadith-meta">' + esc(h.collection||'') + (h.reference?' · '+esc(h.reference):'') + (h.hadith_grade?' · <span style="color:'+(h.hadith_grade==='Sahih'?'#2E7D32':'#886a1f')+'">'+esc(h.hadith_grade)+'</span>':'') + '</div>'
-        + '<div class="hadith-text">' + esc(h.hadith_text||'') + '</div>'
-        + (h.narrator ? '<div style="font-size:10px;color:#595959;margin-top:4px;">Narrated by: ' + esc(h.narrator) + '</div>' : '')
+        + (h.arabic_text ? '<div class="hadith-arabic" lang="ar" dir="rtl">' + esc(h.arabic_text) + '</div>' : '')
+        + (h.hadith_text ? '<div class="hadith-text">' + esc(h.hadith_text) + '</div>' : '')
+        + (h.narrator ? '<div class="hadith-narrator">Narrated by: ' + esc(h.narrator) + '</div>' : '')
         + '</div>';
     });
   });
