@@ -536,15 +536,19 @@ async function openStory(story){
   let sources=[];
   try{sources=await sb('story_sources','story_id=eq.'+story.id+'&select=*&order=tradition.asc')}
   catch(error){console.warn('Story comparisons unavailable:',error)}
-  // Fetch ancient_sources (verse-level sources for suras in this story)
+  // Read only evidence linked to verses belonging to this specific story.
+  // Never import all references from the same surah: unrelated narratives may share a surah.
   let ancientSources=[];
-  try{
-    if(story.primary_suras&&story.primary_suras.length){
-      const suraFilter=story.primary_suras.map(s=>'sura.eq.'+s).join(',');
-      ancientSources=await sb('ancient_sources','or=('+suraFilter+')&verification_status=eq.verified&select=*&order=tradition.asc&limit=20');
-      ancientSources=ancientSources.filter(a=>a.source_locator&&a.verification_note&&/^https:\/\//i.test(a.reference_link||''));
-    }
-  }catch(e){}
+  try {
+    ancientSources=await sb('qh_verified_verse_story_sources',
+      'story_id=eq.'+encodeURIComponent(story.id)
+      +'&select=ancient_source_id,sura,aya,source_title,tradition,approx_date,source_locator,source_edition,reference_link,relationship_kind,parallel_summary,similarity_note,difference_note,verification_note'
+      +'&order=sura.asc,aya.asc&limit=100');
+    ancientSources=ancientSources.filter(a=>a.source_locator&&a.verification_note&&/^https:\\/\\//i.test(a.reference_link||''));
+    ancientSources=ancientSources.filter((a,i,arr)=>arr.findIndex(b=>b.ancient_source_id===a.ancient_source_id)===i);
+  } catch(error) {
+    console.warn('Verified story evidence unavailable',error);
+  }
   // Fetch verses
   let verses=[];
   try{
