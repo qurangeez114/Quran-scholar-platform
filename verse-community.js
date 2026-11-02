@@ -28,7 +28,7 @@ if(user){const reply=el('button',{type:'button',text:'Reply'},tools);reply.oncli
 const report=el('button',{type:'button',text:'Report'},tools);report.onclick=async()=>{const reason=prompt('Reason for reporting (minimum 3 characters):');if(!reason||reason.trim().length<3)return;const x=await client.from('qh_discussion_reports').insert({discussion_id:post.id,reporter_id:user.id,reason:reason.trim().slice(0,300)});alert(x.error?'Unable to submit report: '+x.error.message:'Report submitted for review.');};
 if(post.author_id===user.id){const remove=el('button',{type:'button',text:'Delete'},tools);remove.onclick=async()=>{if(!confirm('Delete your post?'))return;const x=await client.from('qh_verse_discussions').delete().eq('id',post.id).eq('author_id',user.id);if(x.error)alert(x.error.message);else render(key,host);};}}
 }
-if(!user){const login=el('a',{href:'login.html',text:'Sign in to post, reply, or share sources.'},host);return;}
+if(!user){const login=el('a',{href:'account.html',text:'Sign in to post, reply, or share sources.'},host);return;}
 const form=el('form',{class:'qh-discussion-form'},host);form.dataset.parent='';
 el('div',{class:'qh-discussion-note qh-discussion-reply',text:'Write a comment or research question.'},form);
 const body=el('textarea',{maxlength:'4000',rows:'3',required:'',placeholder:'Discuss this verse respectfully; cite evidence when possible.'},form);
