@@ -2,7 +2,7 @@
 
 Scope: `public.ancient_sources` in Supabase project `ylosytbxpzxzwfzjpaej`. These are **checked textual associations**, not proofs of literary borrowing, historicity, or priority.
 
-## Verified associations (6 records / 6 distinct verses)
+## Verified associations (9 records / 9 distinct verses)
 
 | Qur'an | Source and precise locator | Relation | Reference | Qualification |
 |---|---|---|---|---|
@@ -12,13 +12,17 @@ Scope: `public.ancient_sources` in Supabase project `ylosytbxpzxzwfzjpaej`. Thes
 | 7:11 | Latin Life of Adam and Eve §§12–16, especially §§13–15 | parallel | https://sacred-texts.com/chr/apo/adamnev.htm | Refusal appears at Qur'an 7:12; Vita cites seniority, not fire/clay. Composition and surviving recensions must be distinguished |
 | 27:22 | Targum Sheni on Esther 1:2:8 (bird reports Sheba) | parallel | https://www.sefaria.org/Targum_Sheni_on_Esther.1.2.8 | Dating relative to the Qur'an disputed; do **not** label as definitely pre-Islamic |
 | 28:9 | Babylonian Talmud, Sotah 12b:4–10 (Pharaoh's daughter) | contrast | https://www.sefaria.org/Sotah.12b.4 | Qur'an says Pharaoh's wife, Talmud says his daughter |
+| 19:23 | Gospel of Pseudo-Matthew ch. 20 (Mary at palm) | parallel | https://en.wikisource.org/wiki/Ante-Nicene_Fathers/Volume_VIII/Apocrypha_of_the_New_Testament/The_Gospel_of_Pseudo-Matthew/Chapter_20 | In Pseudo-Matthew this occurs during the flight to Egypt, not birth; composition date disputed |
+| 19:24 | Gospel of Pseudo-Matthew ch. 20 (water spring) | parallel | same primary link as 19:23 | Spring commanded by child Jesus in Pseudo-Matthew; Qur'an speaks of a stream provided to Mary |
+| 19:25 | Gospel of Pseudo-Matthew ch. 20 (palm fruit) | parallel | same primary link as 19:23 | Palm bends at Jesus' command versus Mary shaking trunk; dating disputed |
 
 Each verified database row has `source_locator`, `source_edition`, `reference_link`, `relationship_kind`, `verification_note`, and `verified_at`. The database constraint prevents setting status `verified` without a title, locator, link, relationship label, and review note. This is a **metadata completeness** guard; human review of the passage is still essential.
 
 ## Quarantine audit
 
-Of 19 preexisting rows: **6 verified**, **9 unverified**, **3 disputed**, **1 rejected**.
+Of 21 current rows (19 preexisting, 2 new): **9 verified**, **8 unverified**, **3 disputed**, **1 rejected**.
 
+- **Corrected** 19:23: the previous entry incorrectly attributed the palm-tree episode to the Protoevangelium of James. The closer documented motif is in Gospel of Pseudo-Matthew chapter 20; the episode there occurs during the flight to Egypt, not childbirth. Added verse-specific entries for 19:24 and 19:25. See https://corpuscoranicum.de/en/verse-navigator/sura/19/verse/23/intertexts/459 and https://en.wikisource.org/wiki/Ante-Nicene_Fathers/Volume_VIII/Apocrypha_of_the_New_Testament/The_Gospel_of_Pseudo-Matthew/Chapter_20. Dating and direct dependence remain uncertain.
 - **Disputed** 2:34 / Pirkei de-Rabbi Eliezer: post-Qur'anic composition; asserted angel-bowing wording needs exact verification.
 - **Disputed** 4:157 / Gospel of Peter: docetic associations do not equal an explicit denial of crucifixion.
 - **Disputed** 18:94 / Syriac Alexander / Pseudo-Methodius: two distinct works conflated; chronology and source locator need correction.
@@ -36,4 +40,4 @@ Unverified/disputed/rejected rows remain in the database for audit but are **exc
 
 ## Next batch
 
-Review the 9 unverified entries one by one with exact primary passages and URLs; prioritize 19:16, 18:9, 11:42, 18:83. Do not auto-promote rows because a source title exists or a link resolves. Investigate Netlify production deploy and test the reader on a real phone and desktop.
+Review the 8 unverified entries one by one with exact primary passages and URLs; prioritize 19:16, 18:9, 11:42, 18:83. Do not auto-promote rows because a source title exists or a link resolves. Investigate Netlify production deploy and test the reader on a real phone and desktop.
