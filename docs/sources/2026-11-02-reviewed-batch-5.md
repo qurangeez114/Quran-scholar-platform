@@ -27,4 +27,5 @@ The update was conditional on row 8 being `disputed`; it corrected the title, au
 
 - Attempts to fetch `https://quranhikma.com` timed out, and the preview URL was inaccessible through web and container DNS in this environment. **Production loading and browser rendering remain unverified**.
 - A successful Netlify build is not proof that the public site serves the latest script or that live PostgREST works.
+- Supabase reports project `ACTIVE_HEALTHY`, but the preceding 24-hour PostgREST log window contained **2,487 exact** `Warp server error: Thread killed by timeout manager` events (plus variants). These are server reliability warnings, **not proof** that any particular Sources request failed. A filtered edge-log query returned no `ancient_sources` request paths in that window, so there is no direct Sources-request status evidence from these logs.
 - Do not promote the remaining five unverified or two disputed rows without checking exact primary passages. The other tafsir automation owns tafsir ingestion; no tafsir records were changed in this batch.
