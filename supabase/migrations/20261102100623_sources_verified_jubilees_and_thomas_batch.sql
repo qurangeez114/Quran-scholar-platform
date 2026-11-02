@@ -19,14 +19,13 @@ SET
   verification_note = 'Checked Jubilees 5:19 and 5:23 in the R. H. Charles 1917 translation (Sefaria and the Charles text) against Qur’an 11:42–43. Classified as a textual contrast, not borrowing. The composition date is distinct from extant manuscripts and the English translation.',
   verification_status = 'verified',
   verified_at = now()
-WHERE id = 13 AND sura = 11 AND aya = 42 AND verification_status = 'unverified';
+WHERE sura = 11 AND aya = 42 AND source_title = 'Book of Jubilees' AND verification_status = 'unverified';
 
 DO $$
 BEGIN
- IF NOT FOUND THEN NULL; END IF;
  IF NOT EXISTS (
    SELECT 1 FROM public.ancient_sources
-   WHERE id = 13 AND sura = 11 AND aya = 42 AND verification_status = 'verified'
+   WHERE sura = 11 AND aya = 42 AND source_title = 'Book of Jubilees' AND verification_status = 'verified'
  ) THEN
    RAISE EXCEPTION 'Jubilees source lead was not in expected state; stop migration';
  END IF;
