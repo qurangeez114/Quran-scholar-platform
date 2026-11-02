@@ -107,7 +107,7 @@
         verification_status: 'eq.verified', order: 'source_title.asc', limit: '50'
       });
       const timeout = new Promise((_, reject) => {
-        timeoutId = setTimeout(() => reject(new Error('Source request timed out')), 9000);
+        timeoutId = setTimeout(() => reject(new Error('Source request timed out')), 6000);
       });
       let results;
       let snapshotAsOf = null;
