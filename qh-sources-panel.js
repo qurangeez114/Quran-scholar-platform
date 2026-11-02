@@ -5,7 +5,7 @@
   const SELECT = 'source_title,tradition,approx_date,source_type,source_locator,relationship_kind,parallel_summary,similarity_note,difference_note,reference_link,source_edition,verification_note,verification_status';
   // A checked, dated snapshot keeps citations available during transient PostgREST failures.
   // Never promote unreviewed rows or pretend a cached snapshot is current live data.
-  const SNAPSHOT_URL = '/qh-sources-verified-snapshot.json?v=20261102-b3';
+  const SNAPSHOT_URL = '/qh-sources-verified-snapshot.json?v=20261102-b4';
   let snapshotPromise = null;
 
   function el(tag, text, css) {
@@ -91,7 +91,8 @@
       box.textContent = 'Could not identify this verse. Reload the chapter and try again.';
       return;
     }
-    if (!card.classList.contains('open')) return;
+    // The Sources button may be activated while the Study panel is still opening.
+    // Never leave its initial Loading placeholder behind because of UI timing.
     const key = suraId + ':' + num;
     if (box.dataset.loadedKey === key || box.dataset.loadingKey === key) return;
     box.dataset.loadingKey = key;
@@ -101,12 +102,15 @@
     const tab = document.getElementById('ancient-tab-' + num);
     let timeoutId;
     try {
-      const request = typeof sbFetch === 'function'
-        ? sbFetch('ancient_sources', {
+      // Defer the API call so even a synchronous sbFetch/configuration exception
+      // becomes a rejected promise and reaches the verified-snapshot fallback.
+      const request = Promise.resolve().then(() => {
+        if (typeof sbFetch !== 'function') throw new Error('Sources API unavailable');
+        return sbFetch('ancient_sources', {
           select: SELECT, sura: 'eq.' + suraId, aya: 'eq.' + num,
           verification_status: 'eq.verified', order: 'source_title.asc', limit: '50'
-        })
-        : Promise.reject(new Error('Sources API unavailable'));
+        });
+      });
       const timeout = new Promise((_, reject) => {
         timeoutId = setTimeout(() => reject(new Error('Source request timed out')), 6000);
       });
@@ -114,6 +118,7 @@
       let snapshotAsOf = null;
       try {
         results = await Promise.race([request, timeout]);
+        if (!Array.isArray(results)) throw new Error('Unexpected Sources API response');
       } catch (apiError) {
         console.warn('Live Sources request failed; checking dated verified snapshot:', apiError);
         const fallback = await readVerifiedSnapshot(suraId, num);
@@ -173,5 +178,5 @@
       }
     }
   };
-  window.qhSourcesPanelVersion = '2026-11-02-verified-v3-snapshot';
+  window.qhSourcesPanelVersion = '2026-11-02-verified-v4-snapshot';
 })();
