@@ -26,6 +26,15 @@ Scope: Supabase project `ylosytbxpzxzwfzjpaej`, table `public.ancient_sources`. 
 - Supabase project API reports `ACTIVE_HEALTHY`, but PostgREST logs for the preceding 24-hour window included **2,519** entries exactly reading `Warp server error: Thread killed by timeout manager`, plus variations. This is a project-level reliability warning, not proof that Sources requests specifically caused or encountered those errors. Investigate PostgREST resource/connection pressure, request logs, and Netlify production deploy status. Do not confuse database SQL success with successful browser/API fetch.
 - GitHub PR #76 preview head reported `netlify/fascinating-sunburst-516df8/deploy-preview: success`; that does **not** verify the production deployment.
 
+
+## Read-only resilience fallback
+
+- Added `qh-sources-verified-snapshot.json`, generated from **only the 11 currently verified database rows** with exact locators and HTTPS references.
+- `qh-sources-panel.js` first requests the live verified-only table. If that request fails or times out, it attempts the dated same-origin snapshot, prominently labels it as potentially stale, and never treats missing snapshot records as proof that no source exists.
+- `index.html` now requests `qh-sources-panel.js?v=20261102-verified-v2-snapshot` to avoid the old cached script.
+- Verified JavaScript parses successfully, snapshot JSON has 11 distinct verified verses and no unverified entries, and a simulated DOM test with a rejected live API request displayed the `5:110` Thomas citation, the offline warning, and a `Sources (1)` tab count.
+- This is a **graceful-degradation fix**, not proof that the live site has published the script or that PostgREST is healthy. The snapshot must be refreshed as verified references grow.
+
 ## Next audit candidates
 
 Keep 18:9 (Seven Sleepers), 19:16 (Protoevangelium), 18:83 (Alexander), and other leads **unverified** until a named work, exact passage, original/critical edition or traceable translation, and an appropriately qualified verse relationship are established. A secondary summary alone is not sufficient to mark a primary passage checked.
