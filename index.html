@@ -3858,36 +3858,91 @@ async function toggleVerse(num, suraId, el) {
 
 /* Sources tab: fail clearly when a verse has no verified ancient-source index.
    Related scholarly materials remain accessible through the existing tabs. */
-function loadAncientPanel(num,suraId) {
-  const box=document.getElementById('ancient-panel-'+num);
-  if(!box)return;
-  const card=document.getElementById('vc-'+num);
-  if(!card||Number(card.dataset.sura)!==Number(suraId))return;
+async function loadAncientPanel(num, suraId) {
+  const box = document.getElementById('ancient-panel-' + num);
+  const card = document.getElementById('vc-' + num);
+  if (!box || !card || Number(card.dataset.sura) !== Number(suraId)) return;
+  if (box.dataset.loaded === 'true' || box.dataset.loading === 'true') return;
+  box.dataset.loading = 'true';
   box.replaceChildren();
-  const wrap=document.createElement('div');
-  wrap.style.cssText='max-width:70ch;margin:0 auto;font:400 18px/1.7 Georgia,serif;color:#292721;';
-  const h=document.createElement('h3');
-  h.textContent='Sources for Qur’an '+suraId+':'+num;
-  h.style.cssText='font:600 20px/1.45 system-ui,sans-serif;margin:0 0 12px;';
-  wrap.appendChild(h);
-  const p=document.createElement('p');
-  p.textContent='A verified ancient-text source catalogue has not yet been linked to this verse. No external source is asserted without a documented reference.';
-  p.style.cssText='margin:0 0 12px;';
-  wrap.appendChild(p);
-  const links=document.createElement('div');
-  links.style.cssText='display:flex;gap:10px;flex-wrap:wrap;margin-top:14px';
-  [['Read Tafsir','tafsir'],['View Cross-References','xrefs']].forEach(([label,tab])=>{
-    const btn=document.createElement('button');
-    btn.type='button';btn.textContent=label;
-    btn.style.cssText='padding:9px 12px;border-radius:7px;border:1px solid #c9b895;background:#fffaf0;color:#51411e;cursor:pointer;font:600 14px system-ui';
-    btn.onclick=()=>{
-      const target=Array.from(card.querySelectorAll('.tab-btn')).find(b => (b.getAttribute('onclick')||'').includes("'"+tab+"'"));
-      if(target)target.click();
-    };
-    links.appendChild(btn);
-  });
-  wrap.appendChild(links);
+
+  const wrap = document.createElement('section');
+  wrap.style.cssText = 'max-width:70ch;margin:0 auto;font:400 clamp(17px,1.2vw,20px)/1.75 Georgia,serif;color:inherit;text-align:left';
+  const add = (parent, tag, value, css) => {
+    const node = document.createElement(tag);
+    node.textContent = value;
+    if (css) node.style.cssText = css;
+    parent.appendChild(node);
+    return node;
+  };
+  add(wrap, 'h3', 'Historical sources — Qur’an ' + suraId + ':' + num,
+    'font:600 21px/1.4 system-ui,sans-serif;margin:0 0 12px');
+  const status = add(wrap, 'p', 'Retrieving verified primary-source references…',
+    'margin:0 0 16px;color:inherit');
   box.appendChild(wrap);
+
+  try {
+    const rows = await sbFetch('qh_verified_verse_story_sources', {
+      select: 'ancient_source_id,sura,aya,source_title,tradition,approx_date,source_locator,source_edition,reference_link,relationship_kind,parallel_summary,similarity_note,difference_note,verification_note,story_id',
+      sura: 'eq.' + Number(suraId), aya: 'eq.' + Number(num), order: 'ancient_source_id', limit: '60'
+    });
+    if (!Array.isArray(rows)) throw new Error('Unexpected sources response');
+    status.remove();
+    const seen = new Set();
+    const unique = rows.filter(item => {
+      const key = item.ancient_source_id + ':' + (item.story_id ?? '');
+      if (seen.has(key)) return false;
+      seen.add(key); return true;
+    });
+    if (!unique.length) add(wrap, 'p',
+      'No independently verified earlier-text association is currently catalogued for this āyah. This is a gap in the catalogue, not evidence that no historical parallels exist.',
+      'margin:0 0 15px');
+
+    unique.forEach(item => {
+      const entry = document.createElement('article');
+      entry.style.cssText = 'padding:16px 0;border-top:1px solid #b8b8b855';
+      add(entry, 'h4', item.source_title || 'Untitled historical witness',
+        'font:600 19px/1.45 system-ui,sans-serif;margin:0 0 6px');
+      const meta = [item.tradition, item.approx_date, item.source_locator].filter(Boolean).join(' · ');
+      if (meta) add(entry, 'p', meta, 'font:400 14px/1.6 system-ui,sans-serif;opacity:.85;margin:0 0 8px');
+      if (item.relationship_kind) add(entry, 'p', 'Relationship: ' + item.relationship_kind,
+        'font:600 15px/1.6 system-ui,sans-serif;margin:0 0 8px');
+      if (item.parallel_summary) add(entry, 'p', item.parallel_summary, 'margin:0 0 10px');
+      if (item.similarity_note) add(entry, 'p', 'Parallel: ' + item.similarity_note, 'margin:0 0 10px');
+      if (item.difference_note) add(entry, 'p', 'Difference: ' + item.difference_note, 'margin:0 0 10px');
+      if (item.source_edition) add(entry, 'p', 'Edition: ' + item.source_edition,
+        'font:400 14px/1.6 system-ui,sans-serif;margin:0 0 8px');
+      if (item.reference_link) {
+        try {
+          const url = new URL(item.reference_link);
+          if (url.protocol === 'https:' || url.protocol === 'http:') {
+            const link = add(entry, 'a', 'Examine the referenced source',
+              'font:600 15px/1.6 system-ui,sans-serif;text-decoration:underline');
+            link.href = url.href; link.target = '_blank'; link.rel = 'noopener noreferrer';
+          }
+        } catch (_) { /* Never render malformed external links. */ }
+      }
+      if (item.story_id != null) {
+        const story = add(entry, 'a', 'Explore related story dossier',
+          'display:block;font:600 15px/1.7 system-ui,sans-serif;text-decoration:underline;margin-top:8px');
+        story.href = '/stories.html?story=' + encodeURIComponent(item.story_id);
+      }
+      wrap.appendChild(entry);
+    });
+    add(wrap, 'p',
+      'Source associations represent documented textual relationships, not proof of direct literary dependence.',
+      'font:400 14px/1.7 system-ui,sans-serif;opacity:.8;margin:18px 0');
+    box.dataset.loaded = 'true';
+  } catch (error) {
+    status.textContent = 'Historical sources could not be retrieved. Please retry.';
+    console.error('Sources catalogue retrieval failed', error);
+    const retry = add(wrap, 'button', 'Retry Sources',
+      'border:1px solid currentColor;background:transparent;color:inherit;padding:8px 12px;border-radius:6px;cursor:pointer');
+    retry.type = 'button';
+    retry.onclick = () => { retry.remove(); box.dataset.loading = ''; loadAncientPanel(num, suraId); };
+  } finally {
+    box.dataset.loading = '';
+  }
 }
 
 function switchTab(num, tab, btn) {
