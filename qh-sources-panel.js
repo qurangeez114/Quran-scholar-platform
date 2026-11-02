@@ -3,6 +3,10 @@
 (function () {
   'use strict';
   const SELECT = 'source_title,tradition,approx_date,source_type,source_locator,relationship_kind,parallel_summary,similarity_note,difference_note,reference_link,source_edition,verification_note,verification_status';
+  // A checked, dated snapshot keeps citations available during transient PostgREST failures.
+  // Never promote unreviewed rows or pretend a cached snapshot is current live data.
+  const SNAPSHOT_URL = '/qh-sources-verified-snapshot.json?v=20261102-b3';
+  let snapshotPromise = null;
 
   function el(tag, text, css) {
     const node = document.createElement(tag);
@@ -29,6 +33,32 @@
         !row.source_locator || !row.verification_note || !row.reference_link) return false;
     try { return new URL(row.reference_link).protocol === 'https:'; }
     catch (_) { return false; }
+  }
+  async function readVerifiedSnapshot(suraId, num) {
+    if (!snapshotPromise) {
+      snapshotPromise = (async () => {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 4000);
+        try {
+          const response = await fetch(SNAPSHOT_URL, { signal: controller.signal, cache: 'no-cache' });
+          if (!response.ok) throw new Error('Snapshot HTTP ' + response.status);
+          const snapshot = await response.json();
+          if (snapshot.schema_version !== 1 || !Array.isArray(snapshot.records) ||
+              !/^\d{4}-\d{2}-\d{2}$/.test(snapshot.as_of || '')) {
+            throw new Error('Invalid Sources snapshot');
+          }
+          return snapshot;
+        } finally {
+          clearTimeout(timer);
+        }
+      })().catch(error => { snapshotPromise = null; throw error; });
+    }
+    const snapshot = await snapshotPromise;
+    return {
+      asOf: snapshot.as_of,
+      rows: snapshot.records.filter(row =>
+        Number(row.sura) === suraId && Number(row.aya) === num && validReference(row))
+    };
   }
   function renderSource(row) {
     const card = el('article', null, 'padding:16px 0;border-top:1px solid #e1d6bc;');
@@ -71,22 +101,46 @@
     const tab = document.getElementById('ancient-tab-' + num);
     let timeoutId;
     try {
-      if (typeof sbFetch !== 'function') throw new Error('Sources API unavailable');
-      const request = sbFetch('ancient_sources', {
-        select: SELECT, sura: 'eq.' + suraId, aya: 'eq.' + num,
-        verification_status: 'eq.verified', order: 'source_title.asc', limit: '50'
-      });
+      const request = typeof sbFetch === 'function'
+        ? sbFetch('ancient_sources', {
+          select: SELECT, sura: 'eq.' + suraId, aya: 'eq.' + num,
+          verification_status: 'eq.verified', order: 'source_title.asc', limit: '50'
+        })
+        : Promise.reject(new Error('Sources API unavailable'));
       const timeout = new Promise((_, reject) => {
-        timeoutId = setTimeout(() => reject(new Error('Source request timed out')), 9000);
+        timeoutId = setTimeout(() => reject(new Error('Source request timed out')), 6000);
       });
-      const results = await Promise.race([request, timeout]);
+      let results;
+      let snapshotAsOf = null;
+      try {
+        results = await Promise.race([request, timeout]);
+      } catch (apiError) {
+        console.warn('Live Sources request failed; checking dated verified snapshot:', apiError);
+        const fallback = await readVerifiedSnapshot(suraId, num);
+        results = fallback.rows;
+        snapshotAsOf = fallback.asOf;
+      }
       if (document.getElementById('vc-' + num) !== card) return;
       const rows = Array.isArray(results) ? results.filter(validReference) : [];
       const wrap = el('section', null, 'max-width:74ch;margin:0 auto;color:#292721;');
       wrap.appendChild(el('h3', 'Sources for Qur’an ' + key,
         'font:600 21px/1.4 system-ui,sans-serif;margin:0 0 10px;'));
+      if (snapshotAsOf) {
+        wrap.appendChild(el('p', 'Live source service unavailable. Showing the last published verified-reference snapshot (' + snapshotAsOf + '); newer references may be missing.',
+          'font:600 14px/1.6 system-ui,sans-serif;color:#805c20;margin:0 0 12px;'));
+        const refresh = el('button', 'Try live Sources again',
+          'padding:8px 11px;border:1px solid #c9b895;border-radius:8px;background:#fffaf0;color:#51411e;cursor:pointer;font:600 14px system-ui;margin-bottom:10px;');
+        refresh.type = 'button';
+        refresh.addEventListener('click', () => {
+          delete box.dataset.loadedKey;
+          window.loadAncientPanel(num, suraId);
+        });
+        wrap.appendChild(refresh);
+      }
       if (rows.length === 0) {
-        wrap.appendChild(el('p', 'No independently checked historical source association has been published for this verse yet. This does not mean that no relevant historical literature exists.',
+        wrap.appendChild(el('p', snapshotAsOf
+          ? 'No checked historical source is present in this dated snapshot for this verse. This is not a complete live catalogue.'
+          : 'No independently checked historical source association has been published for this verse yet. This does not mean that no relevant historical literature exists.',
           'font:400 17px/1.7 Georgia,serif;margin:0 0 12px;'));
       } else {
         wrap.appendChild(el('p', rows.length + ' traceable reference' + (rows.length === 1 ? '' : 's') +
@@ -119,5 +173,5 @@
       }
     }
   };
-  window.qhSourcesPanelVersion = '2026-11-02-verified-v1';
+  window.qhSourcesPanelVersion = '2026-11-02-verified-v3-snapshot';
 })();
