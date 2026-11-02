@@ -60,7 +60,6 @@ const form=el('form',{class:'qh-discussion-form'},host);form.dataset.parent='';
 el('div',{class:'qh-discussion-note qh-discussion-reply',text:'Write a comment or research question.'},form);
 const body=el('textarea',{maxlength:'4000',rows:'3',required:'',placeholder:'Discuss this verse respectfully; cite evidence when possible.'},form);
 const src=el('input',{type:'url',placeholder:'Optional source URL (https://)'},form);
-const media=el('input',{type:'url',placeholder:'Optional image or video URL (https://)'},form);
 const attach=el('div',{class:'qh-discussion-tools'},form);
 const picLabel=el('label',{class:'qh-discussion-attach'},attach);picLabel.append('📷 Attach picture');const picIn=el('input',{type:'file',accept:'image/jpeg,image/png,image/webp,image/gif'},picLabel);picIn.style.display='none';
 const vidLabel=el('label',{class:'qh-discussion-attach'},attach);vidLabel.append('🎬 Attach video');const vidIn=el('input',{type:'file',accept:'video/mp4,video/webm,video/quicktime'},vidLabel);vidIn.style.display='none';
@@ -69,15 +68,14 @@ let picked=null;
 const showPicked=(file,kind)=>{preview.replaceChildren();picked=file?{file,kind}:null;if(!file)return;const node=document.createElement(kind==='video'?'video':'img');node.src=URL.createObjectURL(file);node.className='qh-discussion-media';if(kind==='video'){node.controls=true;node.playsInline=true;node.preload='metadata';}else node.alt='Selected picture';preview.append(node);const rm=el('button',{type:'button',text:'Remove attachment'},preview);rm.onclick=()=>{picIn.value='';vidIn.value='';showPicked(null);};};
 picIn.onchange=()=>{vidIn.value='';showPicked(picIn.files[0]||null,'image');};
 vidIn.onchange=()=>{picIn.value='';showPicked(vidIn.files[0]||null,'video');};
-const choose=el('select',{},form);for(const [value,label] of [['','Media type (optional)'],['image','Image'],['video','Video']])el('option',{value,text:label},choose);
 const row=el('div',{class:'qh-discussion-tools'},form);const submit=el('button',{type:'submit',text:'Publish contribution'},row);
 const cancel=el('button',{type:'button',text:'Cancel reply'},row);cancel.onclick=()=>{form.dataset.parent='';form.querySelector('.qh-discussion-reply').textContent='Write a comment or research question.';};
 const status=el('span',{class:'qh-discussion-note'},row);
-form.onsubmit=async e=>{e.preventDefault();if(!body.value.trim())return;if(src.value&&!isUrl(src.value)||media.value&&!isUrl(media.value)){status.textContent='Links must start with https://';return;}if(media.value&&!choose.value){status.textContent='Choose an image or video media type.';return;}if(picked&&media.value){status.textContent='Use either an attachment or a media link, not both.';return;}
-submit.disabled=true;status.textContent='Publishing…';let mediaPath=null,mediaType=media.value?choose.value:null;
+form.onsubmit=async e=>{e.preventDefault();if(!body.value.trim())return;if(src.value&&!isUrl(src.value)){status.textContent='Source link must start with https://';return;}
+submit.disabled=true;status.textContent='Publishing…';let mediaPath=null,mediaType=null;
 try{if(picked){const prepared=await prepareUpload(picked.file,picked.kind);if(prepared.error)throw new Error(prepared.error);const ext=(prepared.blob.type.split('/')[1]||'bin').replace('jpeg','jpg').replace('quicktime','mov');mediaPath=user.id+'/'+sura+'/'+aya+'/'+Date.now()+'-'+Math.random().toString(36).slice(2,8)+'.'+ext;const up=await client.storage.from('qh-verse-media').upload(mediaPath,prepared.blob,{contentType:prepared.blob.type,upsert:false});if(up.error)throw new Error(up.error.message);mediaType=picked.kind;}}
 catch(err){submit.disabled=false;status.textContent='Upload failed: '+err.message;return;}
-const row={author_id:user.id,sura_id:sura,aya_number:aya,parent_id:form.dataset.parent||null,body:body.value.trim(),source_url:src.value||null,media_url:media.value||null,media_path:mediaPath,media_type:mediaType};const result=await client.from('qh_verse_discussions').insert(row);submit.disabled=false;if(result.error){if(mediaPath)await client.storage.from('qh-verse-media').remove([mediaPath]);status.textContent=result.error.message;return;}picked=null;await render(key,host);};
+const row={author_id:user.id,sura_id:sura,aya_number:aya,parent_id:form.dataset.parent||null,body:body.value.trim(),source_url:src.value||null,media_url:null,media_path:mediaPath,media_type:mediaType};const result=await client.from('qh_verse_discussions').insert(row);submit.disabled=false;if(result.error){if(mediaPath)await client.storage.from('qh-verse-media').remove([mediaPath]);status.textContent=result.error.message;return;}picked=null;await render(key,host);};
 }
 window.qhOpenVerseDiscussion=function(sura,aya){const key=sura+':'+aya;const card=document.getElementById('vc-ta-'+sura+'-'+aya)||document.querySelector('#verseArea .verse-card[data-sura="'+sura+'"][data-aya="'+aya+'"]');if(!card)return;let host=card.querySelector('.qh-discussion');if(!host){const mount=card.querySelector('#tp-'+aya+'-discussion .qh-discussion-mount')||card;host=el('section',{class:'qh-discussion'},mount);host.hidden=true;host.addEventListener('click',e=>e.stopPropagation());}show(key,host);};
 function returnHere(key){const u=new URL(location.href);u.hash='';u.searchParams.set('discuss',key);return u.pathname+u.search;}
