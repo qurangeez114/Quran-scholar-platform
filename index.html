@@ -1464,6 +1464,11 @@ document.addEventListener('keyup',event=>{if(event.key==='Escape')hide();else if
   body:has(.qh-single-card) #verseArea { flex:none!important;height:auto!important;max-height:none!important;overflow:visible!important;padding:8px 10px calc(76px + env(safe-area-inset-bottom))!important; }
   body:has(.qh-single-card) #qh-membership { display:none!important; }
   body:has(.qh-single-card) .top-bar { position:static!important;padding:8px 10px!important;gap:8px!important; }
+  /* Phone single-language reading: header and filters stay out of the reading area.
+     A downward pull at the top of the page reveals them again. */
+  html.qh-phone-header-hidden .top-bar,
+  html.qh-phone-header-hidden .qh-phone-filters,
+  html.qh-phone-header-hidden .qh-single-toolbar { display:none!important; }
   body:has(.qh-single-card) .top-arabic { font-size:27px!important; }
   body:has(.qh-single-card) .qh-explore-classes { display:none!important; }
   body:has(.qh-single-card) #activeLangPills { display:none!important; }
@@ -1645,13 +1650,13 @@ document.addEventListener('keyup',event=>{if(event.key==='Escape')hide();else if
     <!-- Optional membership and visit-day reminders are handled by account-gate.js. -->
 
 
-    <div style="background:#F8F6F0;border-bottom:1px solid #E8E4DC;padding:8px 24px;display:flex;gap:8px;align-items:center;flex-shrink:0;">
+    <div class="qh-phone-filters" style="background:#F8F6F0;border-bottom:1px solid #E8E4DC;padding:8px 24px;display:flex;gap:8px;align-items:center;flex-shrink:0;">
       <input aria-label="🔍 Search any word in all verses" id="globalSearch" placeholder="🔍 Search any word in all verses..." oninput="onSearchInput(this.value)"
         style="flex:1;padding:7px 12px;border:1px solid #E8C97B;border-radius:20px;font-size:13px;background:#fff;outline:none;color:#1a1a1a;">
       <button onclick="document.getElementById('searchResultsPanel').style.display='none';document.getElementById('globalSearch').value=''" 
         id="clearSearch" style="display:none;padding:5px 12px;border:1px solid #E8E4DC;border-radius:20px;background:#fff;font-size:12px;color:#595959;cursor:pointer;">✕ Clear</button>
     </div>
-    <div style="background:#F8F6F0;border-bottom:1px solid #E8E4DC;padding:8px 16px;display:flex;gap:8px;align-items:center;flex-shrink:0;">
+    <div class="qh-phone-filters" style="background:#F8F6F0;border-bottom:1px solid #E8E4DC;padding:8px 16px;display:flex;gap:8px;align-items:center;flex-shrink:0;">
       <button onclick="toggleLangPicker()" id="langPickerBtn" style="display:flex;align-items:center;gap:6px;padding:7px 14px;border:2px solid #D4A830;border-radius:20px;background:#FDF5DE;color:#7d5f14;font-size:13px;font-weight:700;cursor:pointer;flex-shrink:0;">
         🌐 Languages <span id="langCount" style="background:#7d5f14;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:2px;">9</span> <span style="font-size:10px;">▾</span>
       </button>
@@ -12918,5 +12923,30 @@ function exportHadithAsDoc(hadithId) {
 }
 </script>
 
+<script>
+/* Phone single-language reading: hide the header while reading; pull down at the top to reveal it. */
+(function(){
+  var mq = window.matchMedia('(max-width: 600px)');
+  var root = document.documentElement;
+  var lastY = 0, startY = null;
+  function single(){ return !!document.querySelector('.qh-single-card'); }
+  function setHidden(hidden){ root.classList.toggle('qh-phone-header-hidden', !!hidden); }
+  window.addEventListener('scroll', function(){
+    if (!mq.matches || !single()) { setHidden(false); lastY = window.scrollY; return; }
+    var y = window.scrollY;
+    if (y > lastY + 6 && y > 120) setHidden(true);
+    lastY = y;
+  }, { passive: true });
+  window.addEventListener('touchstart', function(e){ startY = e.touches[0].clientY; }, { passive: true });
+  window.addEventListener('touchmove', function(e){
+    if (startY === null || !mq.matches || !single()) return;
+    if (window.scrollY <= 2 && e.touches[0].clientY - startY > 30) setHidden(false);
+  }, { passive: true });
+  var hideOnEnter = new MutationObserver(function(){
+    if (mq.matches && single() && window.scrollY <= 2 && !root.classList.contains('qh-phone-header-hidden')) setHidden(true);
+  });
+  hideOnEnter.observe(document.body, { childList: true, subtree: true });
+})();
+</script>
 </body>
 </html>
