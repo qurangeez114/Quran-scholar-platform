@@ -419,6 +419,38 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid #f2d9
   #browse .sec-t{font-size:15px}
 }
 </style>
+<style id="stories-interactive-research-v2">
+/* Follow-up: visible story navigation, compact overview and progressive reading. */
+#sb-list .si{display:flex!important;cursor:pointer;position:relative;z-index:1;text-decoration:none;color:var(--text)}
+#sb-list .si[aria-current="page"]{background:#304864;border-left-color:#f2d99b;box-shadow:inset 0 0 0 1px rgba(242,217,155,.15)}
+#sb-list .si:hover{color:#fff;background:#354b69}
+#sb-list .si::after{content:'›';font-size:23px;line-height:1;color:#e0bb69;margin:auto 0 auto 4px}
+#sb-list .si:focus-visible{outline:3px solid #f2d99b;outline-offset:-3px}
+#storyMain .s-hdr{padding:22px 28px 24px!important;margin:14px 0 14px!important}
+#storyMain .s-ar{font-size:clamp(26px,2.4vw,34px)}
+#storyMain .s-en{font-size:clamp(23px,2.2vw,31px)}
+#storyMain .s-sum{font-size:17px;line-height:1.7;max-width:68ch}
+#storyMain .story-toc{display:flex;gap:10px;flex-wrap:wrap;margin:4px 0 26px}
+#storyMain .story-toc a{color:#f2d99b;background:#243550;border:1px solid #526480;border-radius:9px;padding:10px 15px;font-size:15px;font-weight:650;text-decoration:none}
+#storyMain .story-toc a:hover,#storyMain .story-toc a:focus-visible{background:#385573;border-color:#f2d99b}
+#storyMain .story-more-verses{border:1px solid #536683;background:#1d2d44;border-radius:11px;margin:14px 0 24px;overflow:hidden}
+#storyMain .story-more-verses summary{cursor:pointer;padding:17px 20px;color:#f2d99b;font-size:16px;font-weight:700;line-height:1.5}
+#storyMain .story-more-verses summary:hover{background:#293d57}
+#storyMain .story-more-content{padding:4px 14px 16px}
+#storyMain .v-card{border-left-width:4px;padding:19px 20px;margin-bottom:14px}
+#storyMain .v-ar{font-size:clamp(24px,2.2vw,31px)}
+#storyMain .v-en{font-size:18px;color:#f2f4fa;line-height:1.82}
+#storyMain .src-name{font-size:18px}
+#storyMain .src-sum,#storyMain .ct{font-size:17px;line-height:1.78}
+#story-verses,#story-sources,#story-analysis,#story-introduction{scroll-margin-top:16px}
+@media(max-width:640px){
+  #storyMain .s-hdr{padding:17px!important}
+  #storyMain .story-toc{gap:8px}
+  #storyMain .story-toc a{padding:10px 12px;font-size:14px}
+  #storyMain .v-en{font-size:17px}
+  #storyMain .story-more-content{padding:3px 9px 12px}
+}
+</style>
 </head>
 <body>
 <div style="position:sticky;top:0;z-index:9999;display:flex;justify-content:flex-end;padding:6px 12px;background:#FDF8EE;border-bottom:1px solid #E8D8A0;"></div>
@@ -529,7 +561,10 @@ async function init(){
   allStories=await sb('quranic_stories','select=*&order=total_mentions.desc');
   buildSidebar();
   // Render the first story immediately. Optional hadith catalogue must not block navigation.
-  if(allStories.length) openStory(allStories[0]);
+  if(allStories.length) {
+    const requested = new URLSearchParams(location.search).get('story');
+    openStory(allStories.find(s => s.slug === requested) || allStories[0], false);
+  }
   else document.getElementById('storyMain').innerHTML='<div class="stories-status">No stories are published yet.</div>';
   void loadHadithNavigation();
 }
@@ -572,15 +607,17 @@ function buildSidebar(){
     label.textContent=c+'s';
     list.appendChild(label);
     cats[c].forEach(s=>{
-      const div=document.createElement('button');
-      div.type='button';
+      // A real URL works even if an optional script or API request fails.
+      const div=document.createElement('a');
+      div.href='stories.html?story='+encodeURIComponent(s.slug);
       div.className='si';
       div.id='si-'+s.slug;
       div.setAttribute('aria-controls','storyMain');
-      div.setAttribute('aria-pressed','false');
       div.setAttribute('aria-label','Read story: '+s.name_english);
       div.innerHTML=`<span class="si-icon" style="background:rgba(201,168,76,.15);">${ICONS[s.category]||'📖'}</span><span class="si-text"><span class="si-ar">${s.name_arabic||''}</span><span class="si-en">${s.name_english}</span></span>`;
-      div.addEventListener('click',()=>{
+      div.addEventListener('click',(event)=>{
+        if(event.button!==0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey)return;
+        event.preventDefault();
         // Close sidebar on mobile (any width) so story is visible
         const sb=document.getElementById('sb');
         const ov=document.getElementById('overlay');
@@ -588,10 +625,7 @@ function buildSidebar(){
           sb.classList.remove('open');
           if(ov) ov.classList.remove('open');
         }
-        openStory(s).then(()=>{
-          const m=document.getElementById('main');
-          if(m) m.scrollTop=0;
-        });
+        openStory(s, true);
       });
       list.appendChild(div);
     });
@@ -599,19 +633,23 @@ function buildSidebar(){
 }
 
 let activeStoryRequest = 0;
-async function openStory(story){
+async function openStory(story, updateAddress = false){
   const requestId = ++activeStoryRequest;
   if(!story || !story.slug) return;
   // Highlight
   document.querySelectorAll('#sb-list .si').forEach(e=>{
     e.classList.remove('on');
-    if(e.hasAttribute('aria-pressed'))e.setAttribute('aria-pressed','false');
+    e.removeAttribute('aria-current');
   });
   const el=document.getElementById('si-'+story.slug);
   if(el){
     el.classList.add('on');
-    el.setAttribute('aria-pressed','true');
-    el.scrollIntoView({block:'nearest'});
+    el.setAttribute('aria-current','page');
+  }
+  if(updateAddress){
+    const url = new URL(location.href);
+    url.searchParams.set('story',story.slug);
+    history.pushState({story:story.slug},'',url.pathname+url.search+url.hash);
   }
   // Show browse area
   document.getElementById('browse').style.display='block';
@@ -647,7 +685,7 @@ async function openStory(story){
 
   if(requestId !== activeStoryRequest)return; // Old click must not replace newer selection.
   const suras=story.primary_suras||[];
-  const vHTML=verses.length?verses.map(v=>`
+  const verseCard = v=>`
     <div class="v-card">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
         <span style="color:var(--gold);font-weight:700;font-size:12px;">📖 ${v.sura_id}:${v.aya_number}</span>
@@ -657,8 +695,13 @@ async function openStory(story){
       </div>
       <div class="v-ar">${v.arabic||''}</div>
       <div class="v-en">${v.english||''}</div>
-    </div>`).join(''):
-    suras.map(s=>`<a href="index.html?sura=${s}&from=stories" style="display:inline-flex;align-items:center;gap:4px;background:var(--surface2);border:1px solid var(--border);border-radius:16px;padding:4px 10px;margin:3px;font-size:12px;color:var(--text);text-decoration:none;">📖 ${s}. ${SNAMES[s]||'Surah '+s}</a>`).join('');
+    </div>`;
+  const vHTML=verses.length
+    ? verses.slice(0,3).map(verseCard).join('')
+      + (verses.length>3
+        ? `<details class="story-more-verses"><summary>Explore ${verses.length-3} additional Qur’anic passages</summary><div class="story-more-content">${verses.slice(3).map(verseCard).join('')}</div></details>`
+        : '')
+    : suras.map(s=>`<a href="index.html?sura=${s}&from=stories" style="display:inline-flex;align-items:center;gap:4px;background:var(--surface2);border:1px solid var(--border);border-radius:16px;padding:4px 10px;margin:3px;font-size:12px;color:var(--text);text-decoration:none;">📖 ${s}. ${SNAMES[s]||'Surah '+s}</a>`).join('');
 
   const srcHTML=sources.length?sources.map(s=>`
     <div class="src-card">
@@ -708,7 +751,7 @@ async function openStory(story){
 
   if(requestId !== activeStoryRequest)return;
   main.innerHTML=`
-    <div class="s-hdr">
+    <div class="s-hdr" id="story-introduction">
       <div class="s-ar">${story.name_arabic||''}</div>
       <div class="s-en">${story.name_english}</div>
       ${story.name_tigrinya?`<div class="s-ti">${story.name_tigrinya}</div>`:''}
@@ -720,16 +763,22 @@ async function openStory(story){
       </div>
       <p class="s-sum">${story.summary||''}</p>
     </div>
-    <div class="sec">
-      <div class="sec-t">📖 Key Quranic Verses</div>
+    <nav class="story-toc" aria-label="Sections of this story">
+      <a href="#story-introduction">Overview</a>
+      <a href="#story-verses">Qur’anic passages</a>
+      <a href="#story-sources">Comparative sources</a>
+      <a href="#story-analysis">Analysis</a>
+    </nav>
+    <div class="sec" id="story-verses">
+      <div class="sec-t">📖 Key Qur’anic Passages</div>
       ${vHTML}
     </div>
-    <div class="sec">
+    <div class="sec" id="story-sources">
       <div class="sec-t">📚 Comparative Sources</div>
       ${srcHTML}
       ${ancientHTML}
     </div>
-    <div class="ai-box">
+    <div class="ai-box" id="story-analysis">
       <div class="sec-t" style="border:none;margin:0 0 10px;">🤖 AI Deep Analysis</div>
       <div id="ai-out" class="ai-out"></div>
       <button class="ai-btn" id="ai-btn" onclick="genAI()">✨ Generate Scholarly Analysis</button>
@@ -933,6 +982,11 @@ async function genAI(){
   btn.textContent='🔄 Regenerate';btn.disabled=false;
 }
 
+window.addEventListener('popstate',()=>{
+  const slug=new URLSearchParams(location.search).get('story');
+  const selected=allStories.find(s=>s.slug===slug);
+  if(selected)openStory(selected,false);
+});
 init().catch(error=>{
  console.error('Stories initialization failed',error);
  document.getElementById('sb-list').innerHTML='<p class="stories-status">Story navigation unavailable.</p>';
