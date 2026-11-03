@@ -1007,7 +1007,7 @@ from (values
 (86850,'bukhari:1439','https://sunnah.com/bukhari:1439',0.97,'source_checked'),
 (86851,'bukhari:1440','https://sunnah.com/bukhari:1440',0.96,'source_checked')
 ) as v(id,ref,url,ratio,st)
-join public.hadith_corpus_canonical c on c.id = v.id
+join public.hadith_corpus c on c.id = v.id
 on conflict (hadith_corpus_canonical_id, edition, reference) do nothing;
 insert into public.hadith_variants (hadith_corpus_canonical_id, edition, reference, url, match_method, match_ratio, verified_at, verification_status)
 select v.id, 'sunnah.com', v.ref, v.url, 'full_text_normalised', v.ratio, case when v.st='source_checked' then timestamptz '2026-11-03 21:00:00+00' end, v.st::public.hadith_verification_status
@@ -2013,7 +2013,7 @@ from (values
 (87860,'bukhari:2496','https://sunnah.com/bukhari:2496',0.977,'source_checked'),
 (87861,'bukhari:2497','https://sunnah.com/bukhari:2497',0.975,'source_checked')
 ) as v(id,ref,url,ratio,st)
-join public.hadith_corpus_canonical c on c.id = v.id
+join public.hadith_corpus c on c.id = v.id
 on conflict (hadith_corpus_canonical_id, edition, reference) do nothing;
 insert into public.hadith_variants (hadith_corpus_canonical_id, edition, reference, url, match_method, match_ratio, verified_at, verification_status)
 select v.id, 'sunnah.com', v.ref, v.url, 'full_text_normalised', v.ratio, case when v.st='source_checked' then timestamptz '2026-11-03 21:00:00+00' end, v.st::public.hadith_verification_status
@@ -3019,7 +3019,7 @@ from (values
 (88871,'bukhari:3561','https://sunnah.com/bukhari:3561',0.982,'source_checked'),
 (88872,'bukhari:3562','https://sunnah.com/bukhari:3562',0.975,'source_checked')
 ) as v(id,ref,url,ratio,st)
-join public.hadith_corpus_canonical c on c.id = v.id
+join public.hadith_corpus c on c.id = v.id
 on conflict (hadith_corpus_canonical_id, edition, reference) do nothing;
 insert into public.hadith_variants (hadith_corpus_canonical_id, edition, reference, url, match_method, match_ratio, verified_at, verification_status)
 select v.id, 'sunnah.com', v.ref, v.url, 'full_text_normalised', v.ratio, case when v.st='source_checked' then timestamptz '2026-11-03 21:00:00+00' end, v.st::public.hadith_verification_status
@@ -4025,7 +4025,7 @@ from (values
 (89931,'bukhari:4677','https://sunnah.com/bukhari:4677',0.986,'source_checked'),
 (89932,'bukhari:4678','https://sunnah.com/bukhari:4678',0.982,'source_checked')
 ) as v(id,ref,url,ratio,st)
-join public.hadith_corpus_canonical c on c.id = v.id
+join public.hadith_corpus c on c.id = v.id
 on conflict (hadith_corpus_canonical_id, edition, reference) do nothing;
 insert into public.hadith_variants (hadith_corpus_canonical_id, edition, reference, url, match_method, match_ratio, verified_at, verification_status)
 select v.id, 'sunnah.com', v.ref, v.url, 'full_text_normalised', v.ratio, case when v.st='source_checked' then timestamptz '2026-11-03 21:00:00+00' end, v.st::public.hadith_verification_status
@@ -5031,7 +5031,7 @@ from (values
 (91013,'bukhari:5778','https://sunnah.com/bukhari:5778',0.973,'source_checked'),
 (91014,'bukhari:5779','https://sunnah.com/bukhari:5779',0.972,'source_checked')
 ) as v(id,ref,url,ratio,st)
-join public.hadith_corpus_canonical c on c.id = v.id
+join public.hadith_corpus c on c.id = v.id
 on conflict (hadith_corpus_canonical_id, edition, reference) do nothing;
 insert into public.hadith_variants (hadith_corpus_canonical_id, edition, reference, url, match_method, match_ratio, verified_at, verification_status)
 select v.id, 'sunnah.com', v.ref, v.url, 'full_text_normalised', v.ratio, case when v.st='source_checked' then timestamptz '2026-11-03 21:00:00+00' end, v.st::public.hadith_verification_status
@@ -6037,7 +6037,7 @@ from (values
 (92030,'bukhari:6817','https://sunnah.com/bukhari:6817',0.96,'source_checked'),
 (92032,'bukhari:6819','https://sunnah.com/bukhari:6819',0.98,'source_checked')
 ) as v(id,ref,url,ratio,st)
-join public.hadith_corpus_canonical c on c.id = v.id
+join public.hadith_corpus c on c.id = v.id
 on conflict (hadith_corpus_canonical_id, edition, reference) do nothing;
 insert into public.hadith_variants (hadith_corpus_canonical_id, edition, reference, url, match_method, match_ratio, verified_at, verification_status)
 select v.id, 'sunnah.com', v.ref, v.url, 'full_text_normalised', v.ratio, case when v.st='source_checked' then timestamptz '2026-11-03 21:00:00+00' end, v.st::public.hadith_verification_status
@@ -7043,7 +7043,7 @@ from (values
 (102946,'muslim:240b','https://sunnah.com/muslim:240b',0.978,'source_checked'),
 (102947,'muslim:240c','https://sunnah.com/muslim:240c',0.977,'source_checked')
 ) as v(id,ref,url,ratio,st)
-join public.hadith_corpus_canonical c on c.id = v.id
+join public.hadith_corpus c on c.id = v.id
 on conflict (hadith_corpus_canonical_id, edition, reference) do nothing;
 insert into public.hadith_variants (hadith_corpus_canonical_id, edition, reference, url, match_method, match_ratio, verified_at, verification_status)
 select v.id, 'sunnah.com', v.ref, v.url, 'full_text_normalised', v.ratio, case when v.st='source_checked' then timestamptz '2026-11-03 21:00:00+00' end, v.st::public.hadith_verification_status
@@ -8049,7 +8049,7 @@ from (values
 (104507,'muslim:927f','https://sunnah.com/muslim:927f',0.98,'source_checked'),
 (104508,'muslim:927g','https://sunnah.com/muslim:927g',0.965,'source_checked')
 ) as v(id,ref,url,ratio,st)
-join public.hadith_corpus_canonical c on c.id = v.id
+join public.hadith_corpus c on c.id = v.id
 on conflict (hadith_corpus_canonical_id, edition, reference) do nothing;
 insert into public.hadith_variants (hadith_corpus_canonical_id, edition, reference, url, match_method, match_ratio, verified_at, verification_status)
 select v.id, 'sunnah.com', v.ref, v.url, 'full_text_normalised', v.ratio, case when v.st='source_checked' then timestamptz '2026-11-03 21:00:00+00' end, v.st::public.hadith_verification_status
@@ -9055,7 +9055,7 @@ from (values
 (106049,'muslim:1480d','https://sunnah.com/muslim:1480d',0.977,'candidate'),
 (106050,'muslim:1480e','https://sunnah.com/muslim:1480e',0.969,'source_checked')
 ) as v(id,ref,url,ratio,st)
-join public.hadith_corpus_canonical c on c.id = v.id
+join public.hadith_corpus c on c.id = v.id
 on conflict (hadith_corpus_canonical_id, edition, reference) do nothing;
 insert into public.hadith_variants (hadith_corpus_canonical_id, edition, reference, url, match_method, match_ratio, verified_at, verification_status)
 select v.id, 'sunnah.com', v.ref, v.url, 'full_text_normalised', v.ratio, case when v.st='source_checked' then timestamptz '2026-11-03 21:00:00+00' end, v.st::public.hadith_verification_status
@@ -10061,7 +10061,7 @@ from (values
 (107153,'muslim:1856h','https://sunnah.com/muslim:1856h',0.976,'source_checked'),
 (107154,'muslim:1857a','https://sunnah.com/muslim:1857a',0.965,'source_checked')
 ) as v(id,ref,url,ratio,st)
-join public.hadith_corpus_canonical c on c.id = v.id
+join public.hadith_corpus c on c.id = v.id
 on conflict (hadith_corpus_canonical_id, edition, reference) do nothing;
 insert into public.hadith_variants (hadith_corpus_canonical_id, edition, reference, url, match_method, match_ratio, verified_at, verification_status)
 select v.id, 'sunnah.com', v.ref, v.url, 'full_text_normalised', v.ratio, case when v.st='source_checked' then timestamptz '2026-11-03 21:00:00+00' end, v.st::public.hadith_verification_status
@@ -11067,7 +11067,7 @@ from (values
 (108249,'muslim:2268e','https://sunnah.com/muslim:2268e',0.962,'source_checked'),
 (108250,'muslim:2269a','https://sunnah.com/muslim:2269a',0.977,'source_checked')
 ) as v(id,ref,url,ratio,st)
-join public.hadith_corpus_canonical c on c.id = v.id
+join public.hadith_corpus c on c.id = v.id
 on conflict (hadith_corpus_canonical_id, edition, reference) do nothing;
 insert into public.hadith_variants (hadith_corpus_canonical_id, edition, reference, url, match_method, match_ratio, verified_at, verification_status)
 select v.id, 'sunnah.com', v.ref, v.url, 'full_text_normalised', v.ratio, case when v.st='source_checked' then timestamptz '2026-11-03 21:00:00+00' end, v.st::public.hadith_verification_status
@@ -12073,7 +12073,7 @@ from (values
 (109341,'muslim:2783','https://sunnah.com/muslim:2783',0.966,'source_checked'),
 (109342,'muslim:2784a','https://sunnah.com/muslim:2784a',0.954,'source_checked')
 ) as v(id,ref,url,ratio,st)
-join public.hadith_corpus_canonical c on c.id = v.id
+join public.hadith_corpus c on c.id = v.id
 on conflict (hadith_corpus_canonical_id, edition, reference) do nothing;
 insert into public.hadith_variants (hadith_corpus_canonical_id, edition, reference, url, match_method, match_ratio, verified_at, verification_status)
 select v.id, 'sunnah.com', v.ref, v.url, 'full_text_normalised', v.ratio, case when v.st='source_checked' then timestamptz '2026-11-03 21:00:00+00' end, v.st::public.hadith_verification_status
@@ -13079,7 +13079,7 @@ from (values
 (110647,'nasai:713','https://sunnah.com/nasai:713',0.978,'candidate'),
 (110648,'nasai:714','https://sunnah.com/nasai:714',0.979,'source_checked')
 ) as v(id,ref,url,ratio,st)
-join public.hadith_corpus_canonical c on c.id = v.id
+join public.hadith_corpus c on c.id = v.id
 on conflict (hadith_corpus_canonical_id, edition, reference) do nothing;
 insert into public.hadith_variants (hadith_corpus_canonical_id, edition, reference, url, match_method, match_ratio, verified_at, verification_status)
 select v.id, 'sunnah.com', v.ref, v.url, 'full_text_normalised', v.ratio, case when v.st='source_checked' then timestamptz '2026-11-03 21:00:00+00' end, v.st::public.hadith_verification_status
@@ -14085,7 +14085,7 @@ from (values
 (111655,'nasai:1718','https://sunnah.com/nasai:1718',0.981,'source_checked'),
 (111656,'nasai:1719','https://sunnah.com/nasai:1719',0.989,'source_checked')
 ) as v(id,ref,url,ratio,st)
-join public.hadith_corpus_canonical c on c.id = v.id
+join public.hadith_corpus c on c.id = v.id
 on conflict (hadith_corpus_canonical_id, edition, reference) do nothing;
 insert into public.hadith_variants (hadith_corpus_canonical_id, edition, reference, url, match_method, match_ratio, verified_at, verification_status)
 select v.id, 'sunnah.com', v.ref, v.url, 'full_text_normalised', v.ratio, case when v.st='source_checked' then timestamptz '2026-11-03 21:00:00+00' end, v.st::public.hadith_verification_status
@@ -15091,7 +15091,7 @@ from (values
 (113179,'nasai:3241','https://sunnah.com/nasai:3241',0.967,'source_checked'),
 (113180,'nasai:3242','https://sunnah.com/nasai:3242',0.951,'source_checked')
 ) as v(id,ref,url,ratio,st)
-join public.hadith_corpus_canonical c on c.id = v.id
+join public.hadith_corpus c on c.id = v.id
 on conflict (hadith_corpus_canonical_id, edition, reference) do nothing;
 insert into public.hadith_variants (hadith_corpus_canonical_id, edition, reference, url, match_method, match_ratio, verified_at, verification_status)
 select v.id, 'sunnah.com', v.ref, v.url, 'full_text_normalised', v.ratio, case when v.st='source_checked' then timestamptz '2026-11-03 21:00:00+00' end, v.st::public.hadith_verification_status
@@ -16097,7 +16097,7 @@ from (values
 (114192,'nasai:4250','https://sunnah.com/nasai:4250',0.965,'source_checked'),
 (114193,'nasai:4251','https://sunnah.com/nasai:4251',0.978,'source_checked')
 ) as v(id,ref,url,ratio,st)
-join public.hadith_corpus_canonical c on c.id = v.id
+join public.hadith_corpus c on c.id = v.id
 on conflict (hadith_corpus_canonical_id, edition, reference) do nothing;
 insert into public.hadith_variants (hadith_corpus_canonical_id, edition, reference, url, match_method, match_ratio, verified_at, verification_status)
 select v.id, 'sunnah.com', v.ref, v.url, 'full_text_normalised', v.ratio, case when v.st='source_checked' then timestamptz '2026-11-03 21:00:00+00' end, v.st::public.hadith_verification_status
@@ -17103,7 +17103,7 @@ from (values
 (115320,'nasai:5379','https://sunnah.com/nasai:5379',0.972,'source_checked'),
 (115321,'nasai:5380','https://sunnah.com/nasai:5380',0.987,'source_checked')
 ) as v(id,ref,url,ratio,st)
-join public.hadith_corpus_canonical c on c.id = v.id
+join public.hadith_corpus c on c.id = v.id
 on conflict (hadith_corpus_canonical_id, edition, reference) do nothing;
 insert into public.hadith_variants (hadith_corpus_canonical_id, edition, reference, url, match_method, match_ratio, verified_at, verification_status)
 select v.id, 'sunnah.com', v.ref, v.url, 'full_text_normalised', v.ratio, case when v.st='source_checked' then timestamptz '2026-11-03 21:00:00+00' end, v.st::public.hadith_verification_status
@@ -18109,7 +18109,7 @@ from (values
 (80595,'abudawud:1784','https://sunnah.com/abudawud:1784',0.965,'source_checked'),
 (80596,'abudawud:1785','https://sunnah.com/abudawud:1785',0.976,'source_checked')
 ) as v(id,ref,url,ratio,st)
-join public.hadith_corpus_canonical c on c.id = v.id
+join public.hadith_corpus c on c.id = v.id
 on conflict (hadith_corpus_canonical_id, edition, reference) do nothing;
 insert into public.hadith_variants (hadith_corpus_canonical_id, edition, reference, url, match_method, match_ratio, verified_at, verification_status)
 select v.id, 'sunnah.com', v.ref, v.url, 'full_text_normalised', v.ratio, case when v.st='source_checked' then timestamptz '2026-11-03 21:00:00+00' end, v.st::public.hadith_verification_status
@@ -19115,7 +19115,7 @@ from (values
 (81929,'abudawud:3118','https://sunnah.com/abudawud:3118',0.982,'source_checked'),
 (81930,'abudawud:3119','https://sunnah.com/abudawud:3119',0.967,'source_checked')
 ) as v(id,ref,url,ratio,st)
-join public.hadith_corpus_canonical c on c.id = v.id
+join public.hadith_corpus c on c.id = v.id
 on conflict (hadith_corpus_canonical_id, edition, reference) do nothing;
 insert into public.hadith_variants (hadith_corpus_canonical_id, edition, reference, url, match_method, match_ratio, verified_at, verification_status)
 select v.id, 'sunnah.com', v.ref, v.url, 'full_text_normalised', v.ratio, case when v.st='source_checked' then timestamptz '2026-11-03 21:00:00+00' end, v.st::public.hadith_verification_status
@@ -20121,7 +20121,7 @@ from (values
 (82946,'abudawud:4135','https://sunnah.com/abudawud:4135',0.979,'source_checked'),
 (82947,'abudawud:4136','https://sunnah.com/abudawud:4136',0.966,'source_checked')
 ) as v(id,ref,url,ratio,st)
-join public.hadith_corpus_canonical c on c.id = v.id
+join public.hadith_corpus c on c.id = v.id
 on conflict (hadith_corpus_canonical_id, edition, reference) do nothing;
 insert into public.hadith_variants (hadith_corpus_canonical_id, edition, reference, url, match_method, match_ratio, verified_at, verification_status)
 select v.id, 'sunnah.com', v.ref, v.url, 'full_text_normalised', v.ratio, case when v.st='source_checked' then timestamptz '2026-11-03 21:00:00+00' end, v.st::public.hadith_verification_status
@@ -21127,7 +21127,7 @@ from (values
 (96638,'ibnmajah:761','https://sunnah.com/ibnmajah:761',0.976,'source_checked'),
 (96639,'ibnmajah:762','https://sunnah.com/ibnmajah:762',0.967,'source_checked')
 ) as v(id,ref,url,ratio,st)
-join public.hadith_corpus_canonical c on c.id = v.id
+join public.hadith_corpus c on c.id = v.id
 on conflict (hadith_corpus_canonical_id, edition, reference) do nothing;
 insert into public.hadith_variants (hadith_corpus_canonical_id, edition, reference, url, match_method, match_ratio, verified_at, verification_status)
 select v.id, 'sunnah.com', v.ref, v.url, 'full_text_normalised', v.ratio, case when v.st='source_checked' then timestamptz '2026-11-03 21:00:00+00' end, v.st::public.hadith_verification_status
@@ -22133,7 +22133,7 @@ from (values
 (98107,'ibnmajah:2230','https://sunnah.com/ibnmajah:2230',0.97,'source_checked'),
 (98108,'ibnmajah:2231','https://sunnah.com/ibnmajah:2231',0.963,'source_checked')
 ) as v(id,ref,url,ratio,st)
-join public.hadith_corpus_canonical c on c.id = v.id
+join public.hadith_corpus c on c.id = v.id
 on conflict (hadith_corpus_canonical_id, edition, reference) do nothing;
 insert into public.hadith_variants (hadith_corpus_canonical_id, edition, reference, url, match_method, match_ratio, verified_at, verification_status)
 select v.id, 'sunnah.com', v.ref, v.url, 'full_text_normalised', v.ratio, case when v.st='source_checked' then timestamptz '2026-11-03 21:00:00+00' end, v.st::public.hadith_verification_status
@@ -23139,7 +23139,7 @@ from (values
 (99187,'ibnmajah:3308','https://sunnah.com/ibnmajah:3308',0.961,'source_checked'),
 (99188,'ibnmajah:3309','https://sunnah.com/ibnmajah:3309',0.972,'source_checked')
 ) as v(id,ref,url,ratio,st)
-join public.hadith_corpus_canonical c on c.id = v.id
+join public.hadith_corpus c on c.id = v.id
 on conflict (hadith_corpus_canonical_id, edition, reference) do nothing;
 insert into public.hadith_variants (hadith_corpus_canonical_id, edition, reference, url, match_method, match_ratio, verified_at, verification_status)
 select v.id, 'sunnah.com', v.ref, v.url, 'full_text_normalised', v.ratio, case when v.st='source_checked' then timestamptz '2026-11-03 21:00:00+00' end, v.st::public.hadith_verification_status
@@ -24145,7 +24145,7 @@ from (values
 (100274,'ibnmajah:52','https://sunnah.com/ibnmajah:52',0.977,'source_checked'),
 (100275,'ibnmajah:53','https://sunnah.com/ibnmajah:53',0.968,'source_checked')
 ) as v(id,ref,url,ratio,st)
-join public.hadith_corpus_canonical c on c.id = v.id
+join public.hadith_corpus c on c.id = v.id
 on conflict (hadith_corpus_canonical_id, edition, reference) do nothing;
 insert into public.hadith_variants (hadith_corpus_canonical_id, edition, reference, url, match_method, match_ratio, verified_at, verification_status)
 select v.id, 'sunnah.com', v.ref, v.url, 'full_text_normalised', v.ratio, case when v.st='source_checked' then timestamptz '2026-11-03 21:00:00+00' end, v.st::public.hadith_verification_status
@@ -25151,7 +25151,7 @@ from (values
 (117340,'tirmidhi:1595','https://sunnah.com/tirmidhi:1595',0.976,'source_checked'),
 (117341,'tirmidhi:1596','https://sunnah.com/tirmidhi:1596',0.977,'source_checked')
 ) as v(id,ref,url,ratio,st)
-join public.hadith_corpus_canonical c on c.id = v.id
+join public.hadith_corpus c on c.id = v.id
 on conflict (hadith_corpus_canonical_id, edition, reference) do nothing;
 insert into public.hadith_variants (hadith_corpus_canonical_id, edition, reference, url, match_method, match_ratio, verified_at, verification_status)
 select v.id, 'sunnah.com', v.ref, v.url, 'full_text_normalised', v.ratio, case when v.st='source_checked' then timestamptz '2026-11-03 21:00:00+00' end, v.st::public.hadith_verification_status
@@ -26157,7 +26157,7 @@ from (values
 (118361,'tirmidhi:2591','https://sunnah.com/tirmidhi:2591',0.973,'source_checked'),
 (118362,'tirmidhi:2592','https://sunnah.com/tirmidhi:2592',0.981,'source_checked')
 ) as v(id,ref,url,ratio,st)
-join public.hadith_corpus_canonical c on c.id = v.id
+join public.hadith_corpus c on c.id = v.id
 on conflict (hadith_corpus_canonical_id, edition, reference) do nothing;
 insert into public.hadith_variants (hadith_corpus_canonical_id, edition, reference, url, match_method, match_ratio, verified_at, verification_status)
 select v.id, 'sunnah.com', v.ref, v.url, 'full_text_normalised', v.ratio, case when v.st='source_checked' then timestamptz '2026-11-03 21:00:00+00' end, v.st::public.hadith_verification_status
@@ -27163,7 +27163,7 @@ from (values
 (101575,'malik/23/13','https://sunnah.com/malik/23/13',0.976,'source_checked'),
 (101576,'malik/24/1','https://sunnah.com/malik/24/1',0.976,'source_checked')
 ) as v(id,ref,url,ratio,st)
-join public.hadith_corpus_canonical c on c.id = v.id
+join public.hadith_corpus c on c.id = v.id
 on conflict (hadith_corpus_canonical_id, edition, reference) do nothing;
 insert into public.hadith_variants (hadith_corpus_canonical_id, edition, reference, url, match_method, match_ratio, verified_at, verification_status)
 select v.id, 'sunnah.com', v.ref, v.url, 'full_text_normalised', v.ratio, case when v.st='source_checked' then timestamptz '2026-11-03 21:00:00+00' end, v.st::public.hadith_verification_status
@@ -28169,7 +28169,7 @@ from (values
 (77377,'riyadussalihin:1544','https://sunnah.com/riyadussalihin:1544',0.971,'source_checked'),
 (77378,'riyadussalihin:1545','https://sunnah.com/riyadussalihin:1545',0.956,'source_checked')
 ) as v(id,ref,url,ratio,st)
-join public.hadith_corpus_canonical c on c.id = v.id
+join public.hadith_corpus c on c.id = v.id
 on conflict (hadith_corpus_canonical_id, edition, reference) do nothing;
 insert into public.hadith_variants (hadith_corpus_canonical_id, edition, reference, url, match_method, match_ratio, verified_at, verification_status)
 select v.id, 'sunnah.com', v.ref, v.url, 'full_text_normalised', v.ratio, case when v.st='source_checked' then timestamptz '2026-11-03 21:00:00+00' end, v.st::public.hadith_verification_status
@@ -28755,5 +28755,5 @@ from (values
 (76622,'riyadussalihin:789','https://sunnah.com/riyadussalihin:789',0.971,'source_checked'),
 (76623,'riyadussalihin:790','https://sunnah.com/riyadussalihin:790',0.971,'source_checked')
 ) as v(id,ref,url,ratio,st)
-join public.hadith_corpus_canonical c on c.id = v.id
+join public.hadith_corpus c on c.id = v.id
 on conflict (hadith_corpus_canonical_id, edition, reference) do nothing;

@@ -1,17 +1,20 @@
 -- ============================================================================================
 -- !!! APPROVAL REQUIRED — DO NOT RUN WITHOUT EXPLICIT SIGN-OFF FROM THE OWNER !!!
--- This UPDATES production rows in public.hadith_corpus_canonical (source_url, hadith_number).
+-- Targets the BASE TABLE public.hadith_corpus (hadith_corpus_canonical is a non-updatable view over it).
+-- Changes source_url ONLY. hadith_number is NOT changed here (dependent tables join on it; see the renumbering PR).
+-- STATUS: equivalent change was APPLIED to production 2026-11-03 via REST PATCH with owner approval (guarded on old URL);
+-- the per-row log is kept off-repo (applied_log.csv). Re-running is a no-op because of the old-URL guard.
 -- It is NOT a migration and is not picked up by `supabase db push`. Nobody has run it.
 -- Scope: 27513 rows: wrong_number, full-text ratio >= 0.95, target ref not claimed by another row.
 -- Excluded: 1067 lower-confidence/ambiguous rows (kept as hadith_variants candidates only).
 -- Muwatta + Muslim introduction (book/number refs): only source_url changes; hadith_number kept.
 -- Safety: runs in one transaction; backs up old values to hadith_numbering_backup_20261103; each UPDATE only
 -- touches a row whose source_url still equals the audited stored value.
--- Rollback: update public.hadith_corpus_canonical c set source_url=b.source_url, hadith_number=b.hadith_number
+-- Rollback: update public.hadith_corpus c set source_url=b.source_url, hadith_number=b.hadith_number
 --           from public.hadith_numbering_backup_20261103 b where b.id=c.id;
 -- ============================================================================================
 begin;
-create table public.hadith_numbering_backup_20261103 as select id, hadith_number, source_url from public.hadith_corpus_canonical where false;
+create table if not exists public.hadith_numbering_backup_20261103 as select id, hadith_number, source_url from public.hadith_corpus where false;
 create temp table fix(id bigint primary key, old_url text, new_url text, new_number text) on commit drop;
 insert into fix values
 (85733,'https://sunnah.com/bukhari:273','https://sunnah.com/bukhari:274','274'),
@@ -27554,8 +27557,8 @@ insert into fix values
 (76621,'https://sunnah.com/riyadussalihin:109','https://sunnah.com/riyadussalihin:788','788'),
 (76622,'https://sunnah.com/riyadussalihin:110','https://sunnah.com/riyadussalihin:789','789'),
 (76623,'https://sunnah.com/riyadussalihin:111','https://sunnah.com/riyadussalihin:790','790');
-insert into public.hadith_numbering_backup_20261103 select c.id, c.hadith_number, c.source_url from public.hadith_corpus_canonical c join fix using (id);
-update public.hadith_corpus_canonical c set source_url = f.new_url, hadith_number = coalesce(f.new_number, c.hadith_number)
+insert into public.hadith_numbering_backup_20261103 select c.id, c.hadith_number, c.source_url from public.hadith_corpus c join fix using (id);
+update public.hadith_corpus c set source_url = f.new_url
 from fix f where f.id = c.id and c.source_url is not distinct from f.old_url;
 -- Expect UPDATE count = 27513. If different, ROLLBACK and investigate.
 commit;
