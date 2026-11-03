@@ -3,7 +3,7 @@
 -- alters/updates/deletes hadith_corpus*, narrative_*, isnad_*, narrators, Sources/Stories/History.
 -- Aligns with existing tables via nullable foreign keys:
 --   hadith_families.narrative_group_id        -> narrative_groups(id)
---   hadith_family_members.hadith_corpus_canonical_id -> hadith_corpus_canonical(id)
+--   hadith_family_members.hadith_corpus_canonical_id -> hadith_corpus(id)  (hadith_corpus_canonical is a VIEW over hadith_corpus with the same ids; FKs cannot target a view)
 --   hadith_family_members.narrative_version_id -> narrative_versions(id)
 --   hadith_transmitters.narrator_id           -> narrators(id)
 --   hadith_isnads.isnad_occurrence_id         -> isnad_occurrences(id)
@@ -37,7 +37,7 @@ create table if not exists public.hadith_families (
 create table if not exists public.hadith_family_members (
   id bigint generated always as identity primary key,
   family_id bigint not null references public.hadith_families(id) on delete cascade,
-  hadith_corpus_canonical_id bigint not null references public.hadith_corpus_canonical(id) on delete restrict,
+  hadith_corpus_canonical_id bigint not null references public.hadith_corpus(id) on delete restrict,
   narrative_version_id bigint references public.narrative_versions(id) on delete set null,
   branch text,                             -- e.g. Companion-level branch key
   is_abridged boolean not null default false,
@@ -51,7 +51,7 @@ create table if not exists public.hadith_family_members (
 -- Edition-specific references: stable internal id (hadith_corpus_canonical.id) ↔ each numbering scheme.
 create table if not exists public.hadith_variants (
   id bigint generated always as identity primary key,
-  hadith_corpus_canonical_id bigint not null references public.hadith_corpus_canonical(id) on delete restrict,
+  hadith_corpus_canonical_id bigint not null references public.hadith_corpus(id) on delete restrict,
   edition text not null,                   -- 'sunnah.com', 'qh_stored_number', 'fuad_abd_al_baqi', …
   reference text not null,                 -- 'bukhari:4953', 'muslim:160a', …
   url text check (url is null or url ~ '^https://'),
