@@ -951,6 +951,23 @@ async function openHadith(slug,topic){
 
 function qs(q){document.getElementById('s-inp').value=q;doSearch();}
 
+// Search a prophet's known name directly instead of falling through to unrelated verses.
+// Unicode normalization supports transliteration spellings such as Ṣāliḥ / Salih.
+function normalizeStoryTerm(value){
+  return String(value||'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'')
+    .toLocaleLowerCase().replace(/[^a-z0-9\u0600-\u06ff]+/g,' ').trim()
+    .replace(/^prophet\s+/,'').replace(/^the story of\s+/,'');
+}
+function findNamedStory(query){
+  const term=normalizeStoryTerm(query);
+  if(!term)return null;
+  return allStories.find(story=>{
+    const candidates=[story.slug,story.name_english,story.name_arabic,story.name_tigrinya];
+    return candidates.some(value=>normalizeStoryTerm(value)===term);
+  })||null;
+}
+
+
 function switchTab(tab,el){
   if(tab==='results'&&!document.getElementById('s-inp').value.trim()){document.getElementById('s-inp').focus();return;}
   document.querySelectorAll('.s-tab').forEach(t=>t.classList.remove('on'));
@@ -969,6 +986,13 @@ function switchTab(tab,el){
 async function doSearch(){
   const q=document.getElementById('s-inp').value.trim();
   if(!q)return;
+  // A direct name search is an intention to read that story; use the same article
+  // rendered by the sidebar, with its table of contents and readable passage cards.
+  const namedStory=findNamedStory(q);
+  if(namedStory){
+    openStory(namedStory,true);
+    return;
+  }
   document.getElementById('s-res').style.display='block';
   document.getElementById('browse').style.display='none';
   document.querySelectorAll('.s-tab').forEach((t,i)=>t.classList.toggle('on',i===0));
@@ -986,11 +1010,23 @@ async function doSearch(){
   if(searchRequestId!==activeStoryRequest)return;
   const getRows=(result,label)=>{if(result.status==='fulfilled')return result.value; console.warn(label+' search failed',result.reason);return []};
   const sourceRows=getRows(stSrc,'Story sources'),hadithRows=getRows(hdSrc,'Hadith'),verseRows=getRows(verses,'Verses');
-  // Also check story names
-  const matchedStories=allStories.filter(s=>s.name_english.toLowerCase().includes(q.toLowerCase())||(s.summary||'').toLowerCase().includes(q.toLowerCase()));
+  // Prefer story titles over loose full-text matches, including accent normalization.
+  const key=normalizeStoryTerm(q);
+  const matchedStories=allStories.filter(s=>
+    [s.name_english,s.name_arabic,s.name_tigrinya,s.slug].some(t=>normalizeStoryTerm(t).includes(key)) ||
+    normalizeStoryTerm(s.summary).includes(key)
+  );
   const escapeText=value=>String(value??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   let html='';
   const resultsHeading='<div class="stories-search-heading"><h2>Research results</h2><p>Results for “'+escapeText(q)+'” · select a source to examine textual comparisons.</p></div>';
+  if(matchedStories.length){
+    html+=`<div style="font-size:15px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);padding:12px 0 8px;">Matching Stories</div>`;
+    matchedStories.forEach(s=>{
+      html+=`<a class="sr-card story-search-link" href="stories.html?story=${encodeURIComponent(s.slug)}" data-story-slug="${escapeText(s.slug)}">
+        <div class="sr-hdr"><span style="font-size:20px;">${ICONS[s.category]||'📖'}</span><div><div class="sr-title">${s.name_arabic||''} — ${s.name_english}</div><div class="sr-meta">${s.total_mentions} mentions · Tap to open</div></div></div>
+        <div class="sr-body"><p>${escapeText((s.summary||'').slice(0,200))}…</p><span class="story-cta">Explore this story →</span></div></a>`;
+    });
+  }
   // Comparative sources surfaced first — this is the core scholarly comparison content
   if(sourceRows.length){
     html+=`<div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);padding:0 0 8px;">📚 Source Comparisons</div>`;
@@ -1003,14 +1039,6 @@ async function doSearch(){
     html+=`<div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);padding:12px 0 8px;">⚖️ Hadith Practices</div>`;
     hadithRows.forEach(s=>{
       html+=`<div class="src-card"><div class="src-hdr" onclick="this.nextElementSibling.classList.toggle('open');this.querySelector('.arr').textContent=this.nextElementSibling.classList.contains('open')?'▲':'▼';"><span class="trad ${tradClass(s.tradition)}">${s.tradition}</span><div class="src-info"><div class="src-name">${s.topic}</div><div class="src-ref">${s.source_name}</div></div><span class="arr" style="color:var(--dim);">▼</span></div><div class="src-body"><div style="background:rgba(201,168,76,.08);border-left:3px solid var(--gold);border-radius:7px;padding:8px 11px;margin-bottom:8px;font-size:12px;">${s.hadith_text||''}</div><p class="src-sum">${s.summary||''}</p><div class="cg"><div class="cb cs"><div class="cl">✓ Similarities</div><div class="ct">${s.similarities||'—'}</div></div><div class="cb cd"><div class="cl">✕ Differences</div><div class="ct">${s.differences||'—'}</div></div></div><div class="cb cu" style="margin-top:8px;"><div class="cl">★ Unique to Islam</div><div class="ct">${s.unique_islam||'—'}</div></div>${s.url?`<div style="margin-top:8px;"><a href="${s.url}" target="_blank" class="src-link">📎 Read source →</a></div>`:''}</div></div>`;
-    });
-  }
-  if(matchedStories.length){
-    html+=`<div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);padding:12px 0 8px;">Related Stories</div>`;
-    matchedStories.forEach(s=>{
-      html+=`<a class="sr-card story-search-link" href="stories.html?story=${encodeURIComponent(s.slug)}" data-story-slug="${escapeText(s.slug)}">
-        <div class="sr-hdr"><span style="font-size:20px;">${ICONS[s.category]||'📖'}</span><div><div class="sr-title">${s.name_arabic||''} — ${s.name_english}</div><div class="sr-meta">${s.total_mentions} mentions · Tap to open</div></div></div>
-        <div class="sr-body"><p>${escapeText((s.summary||'').slice(0,200))}…</p><span class="story-cta">Explore this story →</span></div></a>`;
     });
   }
   if(verseRows.length){
