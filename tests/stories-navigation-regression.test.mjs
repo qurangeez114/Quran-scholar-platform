@@ -54,3 +54,27 @@ test('story offers readable section navigation and progressive verse disclosure'
   assert.match(html, /verses\.slice\(0,3\)\.map\(verseCard\)/);
   assert.match(html, /font-size:18px;color:#f2f4fa/);
 });
+
+test('sidebar, search results and hadith comparisons use one reading design', () => {
+  assert.match(html, /id="stories-unified-subviews-20261103"/);
+  assert.match(html, /#sb-list \.si-en\{font-size:17px!important/);
+  assert.match(html, /#s-content \.sr-title\{font-size:19px!important/);
+  assert.match(html, /#s-content \.v-en\{font-size:18px/);
+  assert.match(html, /#storyMain \.src-body div\[style\*="font-size:12px"\]/);
+});
+test('search story result is a real link with accessible selected-story fallback', () => {
+  assert.match(html, /class="sr-card story-search-link" href="stories\.html\?story=/);
+  assert.match(html, /content\.querySelectorAll\('\[data-story-slug\]'\)/);
+  assert.match(html, /openStory\(selected,true\)/);
+});
+test('search no-results flow still checks the empty results before header insertion', () => {
+  assert.match(html, /let html='';\s*const resultsHeading=/);
+  assert.match(html, /if\(!html\)\{/);
+  assert.match(html, /content\.innerHTML=resultsHeading\+html/);
+});
+test('hadith subview tracks latest selection and displays title immediately', () => {
+  assert.match(html, /async function openHadith\(slug,topic\)\{/);
+  assert.match(html, /const requestId=\+\+activeStoryRequest/);
+  assert.match(html, /main\.querySelector\('\.s-en'\)\.textContent=topic/);
+  assert.match(html, /if\(requestId!==activeStoryRequest\)return/);
+});
