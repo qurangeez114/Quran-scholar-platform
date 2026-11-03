@@ -79,3 +79,42 @@ test('pilot: conclusions cite only family members; no English translation text i
 test('rendered strings are escaped and unsafe URLs rejected',()=>{
   assert.equal(E.esc('<img onerror=x>'),'&lt;img onerror=x&gt;');assert.equal(E.safeURL('javascript:alert(1)'),null);assert.equal(E.safeURL('http://x.com'),null);
 });
+
+// ---- Additional pilot families (generic builder) ----
+const FAMS=['isra-wal-miraj','final-illness-abu-bakr-prayer'].map(s=>({s,fam:require('../hadith-engine/pilot/'+s+'.json'),an:require('../hadith-engine/pilot/'+s+'.analysis.json'),cc:require('../hadith-engine/pilot/'+s+'.conclusions.json')}));
+test('families: every member verified against sunnah.com (ratio>=0.95), evidence occurs in Arabic, no duplicates, no English',()=>{
+  for(const {s,fam,cc} of FAMS){
+    assert.ok(fam.members.length>=10,s);
+    for(const m of fam.members){
+      assert.ok(m.text_match_ratio>=0.95,s+' '+m.verified_reference);
+      assert.match(m.verified_url,/^https:\/\/sunnah\.com\/(bukhari|muslim|tirmidhi|nasai|abudawud|ibnmajah):\d+[a-z]?$/);
+      assert.ok(fam.branches[m.branch],m.verified_reference+' branch');
+      const n=E.normalizeArabic(m.text_arabic);
+      for(const [p,c] of Object.entries(m.claims)) assert.ok(n.includes(c.evidence),s+' '+m.verified_reference+' '+p);
+      assert.equal(m.text_english,undefined);
+    }
+    assert.equal(new Set(fam.members.map(m=>m.hadith_corpus_canonical_id)).size,fam.members.length,s+' duplicates');
+    const refs=new Set(fam.members.map(m=>m.verified_reference));
+    cc.conclusions.forEach(c=>{c.citations.forEach(x=>assert.ok(refs.has(x),s+' cites '+x));assert.equal(c.status,'candidate');});
+  }
+});
+test('families: all computed relationships are candidates and omission is never a contradiction',()=>{
+  for(const {an} of FAMS){
+    an.relationships.forEach(r=>{assert.equal(r.verification_status,'candidate');
+      r.differences.forEach(d=>{if(d.a==='absent'||d.b==='absent'||/^silent/.test(d.a)||/^silent/.test(d.b)) assert.ok(!/contradiction/.test(d.kind),r.a+' '+r.b+' '+d.proposition);});});
+  }
+});
+test('isra: Malik b. Sasaa branch converges on Qatada; heaven placements differ from Sharik (apparent contradiction)',()=>{
+  const {fam,an}=FAMS[0];
+  assert.equal(an.transmission.branches.malik_sasaa.common_link.transmitter,'قتاده');
+  const r=an.relationships.find(r=>(r.a==='bukhari:3887'&&r.b==='bukhari:7517'));
+  assert.ok(r.differences.some(d=>d.proposition==='i11_ibrahim'&&d.kind==='apparent_contradiction'));
+  const ad=fam.members.find(m=>m.verified_reference==='bukhari:349');
+  assert.equal(ad.claims.i08_idris,undefined,'Abu Dharr route leaves Idris unplaced (omission, not a claim)');
+});
+test('illness: objection wording asif/raqiq is a wording variant, not a contradiction',()=>{
+  const {an}=FAMS[1];
+  const r=an.relationships.find(r=>[r.a,r.b].includes('bukhari:712')&&[r.a,r.b].includes('bukhari:678'));
+  const d=r.differences.find(d=>d.proposition==='f02_objection');assert.equal(d.kind,'wording_variant');
+  assert.ok(!an.relationships.some(r=>/contradiction/.test(r.label)));
+});

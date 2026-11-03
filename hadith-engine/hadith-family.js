@@ -3,30 +3,41 @@
   'use strict';
   var E = window.HadithEngine, esc = E.esc, $ = function (id) { return document.getElementById(id); };
   var BASE = './hadith-engine/pilot/';
-  Promise.all(['beginning-of-revelation.json', 'analysis.json', 'conclusions.json'].map(function (f) {
+  var FAMILIES = { 'beginning-of-revelation': ['beginning-of-revelation.json', 'analysis.json', 'conclusions.json'],
+    'isra-wal-miraj': ['isra-wal-miraj.json', 'isra-wal-miraj.analysis.json', 'isra-wal-miraj.conclusions.json'],
+    'final-illness-abu-bakr-prayer': ['final-illness-abu-bakr-prayer.json', 'final-illness-abu-bakr-prayer.analysis.json', 'final-illness-abu-bakr-prayer.conclusions.json'] };
+  var LEGACY = { branches: { A: 'ʿĀʾisha branch', J: 'Jābir branch' }, companion_markers: { A: ['عائشه'], J: ['جابر بن عبد الله', 'جابر'] }, default_selection: ['bukhari:3', 'muslim:160a', 'bukhari:4953'] };
+  var slug = (new URLSearchParams(location.search).get('f') || 'beginning-of-revelation');
+  if (!FAMILIES.hasOwnProperty(slug)) slug = 'beginning-of-revelation';
+  var famNav = $('famNav');
+  if (famNav) famNav.innerHTML = Object.keys(FAMILIES).map(function (k) { return '<a href="?f=' + encodeURIComponent(k) + '"' + (k === slug ? ' aria-current="page"' : '') + '>' + esc(k.replace(/-/g, ' ')) + '</a>'; }).join('');
+  Promise.all(FAMILIES[slug].map(function (f) {
     return fetch(BASE + f).then(function (r) { if (!r.ok) throw new Error(f + ' ' + r.status); return r.json(); });
   })).then(function (d) { render(d[0], d[1], d[2]); })
     .catch(function (e) { $('coverage').innerHTML = '<p role="alert">Could not load pilot data: ' + esc(e.message) + '</p>'; });
 
   function words(m) {
     var raw = String(m.text_arabic || '').split(/\s+/).filter(Boolean);
-    var sp = E.splitIsnadMatn(m.text_arabic, m.companion === 'aisha' ? ['عائشه'] : ['جابر بن عبد الله', 'جابر']);
+    var sp = E.splitIsnadMatn(m.text_arabic, (m._fam.companion_markers || LEGACY.companion_markers)[m.branch] || []);
     var isnLen = E.tokens(sp.isnad).length, seen = 0;
     return raw.map(function (w) { var n = E.tokens(w).join(''); var isn = seen < isnLen; seen += E.tokens(w).length; return { raw: w, n: n, isn: isn }; });
   }
-  function ref(m) { return m.verified_reference.replace('bukhari:', 'Bukhārī ').replace('muslim:', 'Muslim ').replace('tirmidhi:', 'Tirmidhī '); }
+  var CODES = { bukhari: 'Bukhārī ', muslim: 'Muslim ', tirmidhi: 'Tirmidhī ', nasai: 'Nasāʾī ', abudawud: 'Abū Dāwūd ', ibnmajah: 'Ibn Mājah ', malik: 'Muwaṭṭaʾ ' };
+  function ref(m) { var r = m.verified_reference, c = r.split(/[:\/]/)[0]; return CODES[c] ? CODES[c] + r.slice(c.length + 1) : r; }
 
   function render(fam, an, cc) {
-    var mem = fam.members, byRef = {}; mem.forEach(function (m) { byRef[m.verified_reference] = m; m._w = words(m); });
+    var BR = fam.branches || LEGACY.branches, bk = Object.keys(BR).filter(function (b) { return fam.members.some(function (m) { return m.branch === b; }); });
+    if (fam.title) { var h = document.querySelector('h1'); h.innerHTML = esc(fam.title) + ((fam.title_ar || (slug === 'beginning-of-revelation' ? 'بدء الوحي' : '')) ? ' <span class="ar" lang="ar" dir="rtl">' + esc(fam.title_ar || 'بدء الوحي') + '</span>' : ''); document.title = 'Hadith Family: ' + fam.title + ' (pilot) — Quran Hikma'; }
+    var mem = fam.members, byRef = {}; mem.forEach(function (m) { m._fam = fam; byRef[m.verified_reference] = m; m._w = words(m); });
     var cols = {}; mem.forEach(function (m) { cols[m.collection] = (cols[m.collection] || 0) + 1; });
     var nRev = an.relationships.filter(function (r) { return r.verification_status !== 'candidate'; }).length;
     $('coverage').innerHTML = '<h2>Coverage report</h2><p><b>' + mem.length + '</b> indexed records in <b>' + Object.keys(cols).length + '</b> collections (' +
-      Object.keys(cols).map(function (c) { return esc(c) + ' ' + cols[c]; }).join(' · ') + ') form <b>2</b> narration branches (ʿĀʾisha, Jābir). There is <b>1</b> shared transmitter per branch, so these are not ' + mem.length + ' independent traditions. ' +
+      Object.keys(cols).map(function (c) { return esc(c) + ' ' + cols[c]; }).join(' · ') + ') form <b>' + bk.length + '</b> narration branches (' + bk.map(function (b) { return esc(BR[b]); }).join(', ') + '), so these are not ' + mem.length + ' independent traditions. ' +
       '<b>' + an.relationships.length + '</b> relationships are computed, and <b>' + nRev + '</b> of them have been reviewed. <span class="status">family: ' + esc(fam.verification_status) + '</span></p>' +
-      '<p class="hint">Excluded: ' + fam.excluded.map(function (x) { return 'record ' + x.hadith_corpus_canonical_id + ' (' + esc(x.relationship) + ': ' + esc(x.reason) + ')'; }).join('; ') + '</p>';
-    var pk = $('picker'), def = ['bukhari:3', 'muslim:160a', 'bukhari:4953'];
+      (fam.unverified && fam.unverified.length ? '<p class="hint">Not yet matched to sunnah.com (kept out, candidate): records ' + fam.unverified.join(', ') + '</p>' : '') + '<details class="hint"><summary>Excluded records (' + fam.excluded.length + ')</summary>' + fam.excluded.map(function (x) { return 'record ' + x.hadith_corpus_canonical_id + ' (' + esc(x.relationship) + ': ' + esc(x.reason) + ')'; }).join('; ') + '</details>';
+    var pk = $('picker'), def = fam.default_selection || LEGACY.default_selection;
     mem.forEach(function (m) {
-      var l = document.createElement('label'); l.className = m.branch;
+      var l = document.createElement('label'); l.className = 'br-' + bk.indexOf(m.branch);
       l.innerHTML = '<input type="checkbox" value="' + esc(m.verified_reference) + '"' + (def.indexOf(m.verified_reference) >= 0 ? ' checked' : '') + '> ' + esc(ref(m)) + (m.abridged ? ' <small>(abridged)</small>' : '');
       pk.appendChild(l);
     });
@@ -50,7 +61,7 @@
             g.slice(0, 6).map(function (x) { return '<span class="arabs" lang="ar">' + esc(x.split(' ').slice(0, 14).join(' ')) + (x.split(' ').length > 14 ? ' …' : '') + '</span>'; }).join('') + (g.length > 6 ? '<i>…and ' + (g.length - 6) + ' more</i>' : '') + '</div>';
         }
         var u = E.safeURL(m.verified_url);
-        return '<article class="col"><h3>' + esc(ref(m)) + ' <span class="status">' + (m.branch === 'A' ? 'ʿĀʾisha branch' : 'Jābir branch') + '</span></h3>' +
+        return '<article class="col"><h3>' + esc(ref(m)) + ' <span class="status">' + esc(BR[m.branch] || m.branch) + '</span></h3>' +
           '<div class="meta">' + esc(m.collection) + ' · ' + esc(m.grade || '') + ' · QuranHikma record ' + m.hadith_corpus_canonical_id + ' (stored no. ' + esc(m.db_hadith_number) + ')' +
           (u ? ' · <a href="' + esc(u) + '" rel="noopener" target="_blank">sunnah.com</a>' : '') + ' · text match ' + m.text_match_ratio + (m.url_mismatch ? ' · <b>stored link differs</b>' : '') + '</div>' +
           '<div class="arab" lang="ar" dir="rtl">' + html + '</div>' + miss + '<p class="meta">English: see the sunnah.com link. Translations are not republished here for copyright reasons.</p></article>';
@@ -65,9 +76,11 @@
 
     var sh = {}; an.transmission.all.shared.forEach(function (s) { sh[s.transmitter] = s.reports; });
     var nm = function (t) { return (fam.transmitters[t] || { name: t }).name; };
-    $('isnadBox').innerHTML = '<p>Shared transmitter (candidate common link), ʿĀʾisha branch: <b>' + esc(nm(an.transmission.aisha.common_link.transmitter)) + '</b>. Jābir branch: <b>' + esc(nm(an.transmission.jabir.common_link.transmitter)) + '</b>. No single transmitter is shared by every chain in the family.</p>' +
-      '<p class="hint">Chains run collector\'s teacher → … → Companion. Highlighted names appear in more than one report. Identities are name-pattern matches (status candidate).</p>' +
-      mem.map(function (m) { return '<div class="route"><b>' + esc(ref(m)) + ':</b> ' + m.isnad_routes.map(function (r) { return r.map(function (t) { return '<span class="chip' + (sh[t] > 1 ? ' shared' : '') + '">' + esc(nm(t)) + '</span>'; }).join(' → '); }).join(' <i>and</i> ') + (m.isnad_note ? ' <small>(' + esc(m.isnad_note) + ')</small>' : '') + '</div>'; }).join('');
+    var cl = function (x) { return x && x.common_link ? esc(nm(x.common_link.transmitter)) : 'none'; };
+    var brs = an.transmission.branches || { A: an.transmission.aisha, J: an.transmission.jabir };
+    $('isnadBox').innerHTML = '<p>Shared transmitter (candidate common link) by branch: ' + Object.keys(brs).filter(function (b) { return brs[b]; }).map(function (b) { return esc(BR[b] || b) + ': <b>' + cl(brs[b]) + '</b>' + (brs[b].reports === 1 ? ' <small>(single report, not meaningful)</small>' : ''); }).join(' · ') + '. Across the whole family: <b>' + cl(an.transmission.all) + '</b>.</p>' +
+      '<p class="hint">Chains run collector\'s teacher → … → Companion. Highlighted names appear in more than one report. ' + esc(fam.isnad_method || 'Identities are name-pattern matches') + ' (status candidate).</p>' +
+      mem.map(function (m) { return '<div class="route"><b>' + esc(ref(m)) + ':</b> ' + (m.isnad_routes.length ? m.isnad_routes.map(function (r) { return r.map(function (t) { return '<span class="chip' + (sh[t] > 1 ? ' shared' : '') + '">' + esc(nm(t)) + '</span>'; }).join(' → '); }).join(' <i>and</i> ') : '<i>not segmented</i>') + (m.isnad_note ? ' <small>(' + esc(m.isnad_note) + ')</small>' : '') + '</div>'; }).join('');
 
     $('relTable').innerHTML = '<thead><tr><th>A</th><th>B</th><th>Label</th><th>Similarity (matn)</th><th>Differences by claim</th><th>Status</th></tr></thead><tbody>' +
       an.relationships.map(function (r) { return '<tr><td>' + esc(r.a) + '</td><td>' + esc(r.b) + '</td><td><span class="lab ' + esc(r.label) + '">' + esc(r.label.replace(/_/g, ' ')) + '</span></td><td>' + r.similarity + '</td><td>' +
