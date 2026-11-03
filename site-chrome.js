@@ -172,6 +172,15 @@
   }
 
   function init() { loadModal(); addSchoolNav(); addNav(); setTimeout(addClock, 400); setTimeout(addAccount, 400);
+    // Desktop Quran reader: dedicate the right edge to the existing approved
+    // advertising slot while leaving phone and tablet layouts unchanged.
+    if (file() === 'index.html' && !document.getElementById('qh-desktop-reader-rail-js')) {
+      var readerRail = document.createElement('script');
+      readerRail.id = 'qh-desktop-reader-rail-js';
+      readerRail.src = '/desktop-reader-rail.js?v=20261103';
+      readerRail.defer = true;
+      document.head.appendChild(readerRail);
+    }
     // Legacy Research buttons and book pickers must share the private My Research
     // destination instead of continuing anonymous writes to ownerless tables.
     if (!document.getElementById('qh-research-bridge') && ['research-classic.html','sira.html','stories.html','madhhab.html','books.html'].includes(file())) {
