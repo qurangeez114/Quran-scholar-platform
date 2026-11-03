@@ -351,6 +351,74 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid #f2d9
 @media(max-width:640px){#hdr{padding:8px 10px}#hdr h1{font-size:16px}#menuBtn{min-width:42px;min-height:42px}#s-bar{display:flex;flex-wrap:wrap}#s-inp{min-width:0;flex:1 1 180px}.s-hdr{margin:12px;padding:16px}.sec{margin:0 12px 20px}.bn{font-size:11px}}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
 </style>
+<style id="stories-reading-a11y-20261103">
+/* Stories scholarly-reading and keyboard navigation: design parity on desktop and phone. */
+#sb{width:294px;min-width:294px}
+#sb-hdr{font-size:16px;line-height:1.4}
+#sb-list{scrollbar-width:thin}
+#sb-list .cat{font-size:12px;letter-spacing:.08em;padding:18px 16px 8px}
+#sb-list .si{
+  appearance:none;display:flex;width:100%;text-align:left;border:0;
+  border-left:4px solid transparent;border-bottom:1px solid rgba(255,255,255,.045);
+  border-radius:0;background:transparent;color:var(--text);
+  min-height:68px;padding:11px 15px;gap:12px;
+  font:inherit;cursor:pointer;white-space:normal
+}
+#sb-list .si:hover,#sb-list .si.on{background:#293b55;border-left-color:var(--gold)}
+#sb-list .si:focus-visible{outline:3px solid var(--gold2);outline-offset:-3px}
+#sb-list .si-icon{width:34px;height:34px;font-size:17px}
+#sb-list .si-en{font-size:16px;font-weight:600;line-height:1.5;white-space:normal}
+#sb-list .si-ar{font-size:22px;line-height:1.45}
+#main{padding:0 22px 72px;min-width:0}
+#main>#s-bar,#main>#chips,#main>#s-res,#main>#browse,#main>a{max-width:1030px;margin-left:auto;margin-right:auto}
+#s-bar{margin-top:14px;border:1px solid var(--border);border-radius:12px}
+#chips{padding-top:12px;padding-bottom:12px;border-bottom:0}
+#chips .chip{font-size:14px;min-height:36px;display:inline-flex;align-items:center}
+#browse .s-hdr{margin:20px 0 26px;padding:24px 32px;background:linear-gradient(130deg,#203350,#23443f);border:1px solid #526480}
+#browse .s-ar{font-size:clamp(29px,3vw,39px);margin-bottom:4px}
+#browse .s-en{font-size:clamp(25px,2.6vw,35px);line-height:1.35}
+#browse .s-ti{font-size:17px}
+#browse .s-meta{margin-top:16px;gap:10px}
+#browse .bdg{font-size:13px;padding:6px 11px}
+#browse .s-sum{max-width:72ch;margin:18px auto 0;font-size:17px;line-height:1.78;color:#e0e8ef;text-align:left}
+#browse .sec{margin:0 0 28px}
+#browse .sec-t{font-size:16px;line-height:1.5;letter-spacing:.035em;margin-bottom:14px;padding-bottom:10px}
+#browse .v-card{padding:18px 20px;margin-bottom:12px}
+#browse .v-ar{font-size:clamp(23px,2.4vw,30px);line-height:2.05}
+#browse .v-en{font-size:17px;line-height:1.8;color:#e1e8f1}
+#browse .v-ref{font-size:14px}
+#browse .src-card{margin-bottom:14px}
+#browse .src-hdr{padding:16px 18px;min-height:70px}
+#browse .src-name{font-size:17px;line-height:1.55}
+#browse .src-ref{font-size:14px;line-height:1.6}
+#browse .src-body{padding:18px}
+#browse .src-sum,#browse .ct{font-size:16px;line-height:1.75}
+#browse .cl{font-size:12px;line-height:1.6}
+#browse .cb{padding:14px}
+#browse .src-link,#browse .read-btn,#browse .ai-btn{font-size:14px}
+#browse .ai-box{margin:0 0 28px;padding:20px}
+#browse .ai-out{font-size:16px;line-height:1.8}
+#s-content{font-size:16px;line-height:1.7}
+#s-content .sr-title{font-size:18px}
+#s-content .sr-meta{font-size:14px}
+@media(min-width:1550px){#main{padding-right:clamp(100px,11vw,210px)}}
+@media(max-width:1200px){
+  #main{padding:0 16px 90px}
+  #sb{width:min(86vw,330px)!important;max-width:330px!important;min-width:0!important}
+}
+@media(max-width:640px){
+  #main{padding:0 10px 90px}
+  #browse .s-hdr{padding:18px;margin:12px 0 22px}
+  #browse .s-sum{font-size:16px}
+  #browse .v-card{padding:14px}
+  #browse .src-body{padding:14px}
+  #browse .cg{grid-template-columns:1fr}
+  #browse .s-meta{justify-content:flex-start}
+  #browse .s-en,#browse .s-ar{text-align:left}
+  #browse .s-ar{text-align:right}
+  #browse .sec-t{font-size:15px}
+}
+</style>
 </head>
 <body>
 <div style="position:sticky;top:0;z-index:9999;display:flex;justify-content:flex-end;padding:6px 12px;background:#FDF8EE;border-bottom:1px solid #E8D8A0;"></div>
@@ -460,7 +528,14 @@ function tradClass(t){
 async function init(){
   allStories=await sb('quranic_stories','select=*&order=total_mentions.desc');
   buildSidebar();
-  // Load hadith topics
+  // Render the first story immediately. Optional hadith catalogue must not block navigation.
+  if(allStories.length) openStory(allStories[0]);
+  else document.getElementById('storyMain').innerHTML='<div class="stories-status">No stories are published yet.</div>';
+  void loadHadithNavigation();
+}
+
+async function loadHadithNavigation(){
+  // Optional catalogue: it must not hold the first story hostage.
   let htopics=[];
   try{htopics=await sb('hadith_comparative','select=topic,slug,category&order=category.asc,topic.asc')}catch(error){console.warn('Optional topics unavailable',error)}
   const seen=new Set();
@@ -470,16 +545,15 @@ async function init(){
   if(list){
     list.innerHTML+=`<div class="cat" style="margin-top:8px;border-top:1px solid var(--border);padding-top:10px;">⚙️ HADITH PRACTICES</div>`;
     uniq.forEach(t=>{
-      const div=document.createElement('div');
+      const div=document.createElement('button');
+      div.type='button';
       div.className='si';
-      div.innerHTML=`<div class="si-icon" style="background:rgba(74,32,128,.2);">${catIcons[t.category]||'📖'}</div><div class="si-text"><span class="si-en">${t.topic}</span></div>`;
+      div.setAttribute('aria-label','Open hadith comparison: '+t.topic);
+      div.innerHTML=`<span class="si-icon" style="background:rgba(74,32,128,.2);">${catIcons[t.category]||'📖'}</span><span class="si-text"><span class="si-en">${t.topic}</span></span>`;
       div.addEventListener('click',()=>openHadith(t.slug,t.topic));
       list.appendChild(div);
     });
   }
-  // Open first story
-  if(allStories.length) await openStory(allStories[0]);
-  else document.getElementById('storyMain').innerHTML='<div class="stories-status">No stories are published yet.</div>';
 }
 
 function buildSidebar(){
@@ -498,10 +572,14 @@ function buildSidebar(){
     label.textContent=c+'s';
     list.appendChild(label);
     cats[c].forEach(s=>{
-      const div=document.createElement('div');
+      const div=document.createElement('button');
+      div.type='button';
       div.className='si';
       div.id='si-'+s.slug;
-      div.innerHTML=`<div class="si-icon" style="background:rgba(201,168,76,.15);">${ICONS[s.category]||'📖'}</div><div class="si-text"><span class="si-ar">${s.name_arabic||''}</span><span class="si-en">${s.name_english}</span></div>`;
+      div.setAttribute('aria-controls','storyMain');
+      div.setAttribute('aria-pressed','false');
+      div.setAttribute('aria-label','Read story: '+s.name_english);
+      div.innerHTML=`<span class="si-icon" style="background:rgba(201,168,76,.15);">${ICONS[s.category]||'📖'}</span><span class="si-text"><span class="si-ar">${s.name_arabic||''}</span><span class="si-en">${s.name_english}</span></span>`;
       div.addEventListener('click',()=>{
         // Close sidebar on mobile (any width) so story is visible
         const sb=document.getElementById('sb');
@@ -520,29 +598,43 @@ function buildSidebar(){
   });
 }
 
+let activeStoryRequest = 0;
 async function openStory(story){
+  const requestId = ++activeStoryRequest;
+  if(!story || !story.slug) return;
   // Highlight
-  document.querySelectorAll('#sb-list .si').forEach(e=>e.classList.remove('on'));
+  document.querySelectorAll('#sb-list .si').forEach(e=>{
+    e.classList.remove('on');
+    if(e.hasAttribute('aria-pressed'))e.setAttribute('aria-pressed','false');
+  });
   const el=document.getElementById('si-'+story.slug);
-  if(el){el.classList.add('on');el.scrollIntoView({block:'nearest'});}
+  if(el){
+    el.classList.add('on');
+    el.setAttribute('aria-pressed','true');
+    el.scrollIntoView({block:'nearest'});
+  }
   // Show browse area
   document.getElementById('browse').style.display='block';
   document.getElementById('s-res').style.display='none';
   const main=document.getElementById('storyMain');
-  main.innerHTML='<div class="loading" style="padding:40px;"><div class="spin"></div></div>';
-  // Fetch sources; show a useful partial view if optional comparisons are offline.
-  let sources=[];
-  try{sources=await sb('story_sources','story_id=eq.'+story.id+'&select=*&order=tradition.asc')}
-  catch(error){console.warn('Story comparisons unavailable:',error)}
-  // Fetch ancient_sources (verse-level sources for suras in this story)
-  let ancientSources=[];
-  try{
-    if(story.primary_suras&&story.primary_suras.length){
-      const suraFilter=story.primary_suras.map(s=>'sura.eq.'+s).join(',');
-      ancientSources=await sb('ancient_sources','or=('+suraFilter+')&verification_status=eq.verified&select=*&order=tradition.asc&limit=20');
-      ancientSources=ancientSources.filter(a=>a.source_locator&&a.verification_note&&/^https:\/\//i.test(a.reference_link||''));
-    }
-  }catch(e){}
+  // Give an immediate visible response to a sidebar click, even on a slow database.
+  main.innerHTML = '<div class="s-hdr" role="status" aria-live="polite"><div class="s-en"></div><p class="s-sum">Loading verses and historical comparisons…</p></div>';
+  main.querySelector('.s-en').textContent = story.name_english || 'Selected story';
+  const scroller=document.getElementById('main');
+  if(scroller)scroller.scrollTop=0;
+  // Fetch independent sources concurrently rather than serially waiting for timeouts.
+  const sourcesPromise = sb('story_sources','story_id=eq.'+story.id+'&select=*&order=tradition.asc')
+    .catch(error=>{console.warn('Story comparisons unavailable:',error);return []});
+  const ancientPromise = (async()=>{
+    if(!Array.isArray(story.primary_suras)||!story.primary_suras.length)return [];
+    const suraFilter=story.primary_suras.map(s=>'sura.eq.'+s).join(',');
+    const rows=await sb('ancient_sources','or=('+suraFilter+')&verification_status=eq.verified&select=*&order=tradition.asc&limit=20');
+    return rows.filter(a=>a.source_locator&&a.verification_note&&/^https:\/\//i.test(a.reference_link||''));
+  })().catch(error=>{console.warn('Verified historical links unavailable:',error);return []});
+  // Avoid serial waits: source and historical-reference requests are already in flight.
+  const [sourceRows, ancientSources] = await Promise.all([sourcesPromise,ancientPromise]);
+  sources = sourceRows;
+  if(requestId !== activeStoryRequest)return;
   // Fetch verses
   let verses=[];
   try{
@@ -553,6 +645,7 @@ async function openStory(story){
     }
   }catch(e){}
 
+  if(requestId !== activeStoryRequest)return; // Old click must not replace newer selection.
   const suras=story.primary_suras||[];
   const vHTML=verses.length?verses.map(v=>`
     <div class="v-card">
@@ -613,6 +706,7 @@ async function openStory(story){
         + '<div style="margin-top:8px;">' + link + '</div></div></article>';
     }).join('') + '</div>' : '';
 
+  if(requestId !== activeStoryRequest)return;
   main.innerHTML=`
     <div class="s-hdr">
       <div class="s-ar">${story.name_arabic||''}</div>
