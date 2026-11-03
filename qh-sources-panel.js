@@ -60,24 +60,74 @@
         Number(row.sura) === suraId && Number(row.aya) === num && validReference(row))
     };
   }
+  const KIND_LABEL = {parallel:'Textual parallel', contrast:'Textual contrast', context:'Historical context', interpretation:'Interpretation'};
+  function ensureSourcesStyle() {
+    if (document.getElementById('qh-sources-style')) return;
+    const style = document.createElement('style');
+    style.id = 'qh-sources-style';
+    style.textContent = [
+      '.qhs-card{background:#fffdf8;border:1px solid #e6dcc6;border-left:4px solid #846e32;border-radius:12px;padding:18px 20px;margin:0 0 14px;color:#241d12;font-family:Georgia,"Times New Roman",serif;}',
+      '.qhs-card.qhs-contrast{border-left-color:#7a3e2e;}',
+      '.qhs-title{font:700 19px/1.4 system-ui,-apple-system,sans-serif;margin:0 0 8px;color:#1f1a12;}',
+      '.qhs-meta{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px;font:600 12px/1.4 system-ui,sans-serif;}',
+      '.qhs-pill{padding:3px 9px;border-radius:999px;background:#f3ecd9;color:#5b4716;}',
+      '.qhs-pill.qhs-date{background:#eef1f5;color:#34465c;}',
+      '.qhs-locator{font:600 14px/1.5 system-ui,sans-serif;color:#3a301d;margin:0 0 12px;padding:8px 10px;background:#faf6ec;border-radius:8px;}',
+      '.qhs-locator span{display:block;font:600 11px/1.4 system-ui,sans-serif;text-transform:uppercase;letter-spacing:.06em;color:#8a7440;margin-bottom:2px;}',
+      '.qhs-compare{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:0 0 12px;}',
+      '.qhs-col h5{font:700 11px/1.4 system-ui,sans-serif;text-transform:uppercase;letter-spacing:.07em;color:#8a7440;margin:0 0 4px;}',
+      '.qhs-col p{margin:0;font:400 16px/1.65 Georgia,serif;color:#2b2418;}',
+      '.qhs-note{margin:0 0 10px;font:400 14px/1.6 system-ui,sans-serif;color:#5e5648;}',
+      '.qhs-foot{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;border-top:1px solid #efe6d2;padding-top:10px;}',
+      '.qhs-link{color:#6d4f12;font:600 14px system-ui,sans-serif;text-decoration:underline;text-underline-offset:3px;}',
+      '@media(max-width:620px){.qhs-compare{grid-template-columns:1fr;}.qhs-card{padding:15px 15px;}.qhs-title{font-size:17px;}}'
+    ].join('');
+    document.head.appendChild(style);
+  }
   function renderSource(row) {
-    const card = el('article', null, 'padding:16px 0;border-top:1px solid #e1d6bc;');
-    card.appendChild(el('h4', row.source_title, 'font:600 19px/1.45 system-ui,sans-serif;margin:0 0 6px;color:#33291a;'));
-    const kind = ({parallel:'Textual parallel',contrast:'Textual contrast',context:'Historical context',interpretation:'Interpretation'})[row.relationship_kind] || 'Documented relationship';
-    card.appendChild(el('div', kind + ' · Reference checked', 'font:600 12px/1.6 system-ui,sans-serif;color:#7a5a17;margin-bottom:7px;'));
-    card.appendChild(el('div', row.source_locator, 'font:600 15px/1.6 system-ui,sans-serif;color:#433724;margin-bottom:4px;'));
-    if (row.source_edition) card.appendChild(el('p', 'Edition: ' + row.source_edition, 'font:400 14px/1.6 system-ui,sans-serif;color:#655b4b;margin:0 0 4px;'));
-    if (row.approx_date) card.appendChild(el('p', 'Dating note: ' + row.approx_date, 'font:400 14px/1.6 system-ui,sans-serif;color:#655b4b;margin:0 0 8px;'));
-    if (row.parallel_summary) card.appendChild(el('p', row.parallel_summary, 'margin:8px 0;font:400 17px/1.65 Georgia,serif;'));
-    if (row.similarity_note) card.appendChild(el('p', 'Connection: ' + row.similarity_note, 'margin:8px 0;font:400 16px/1.65 Georgia,serif;'));
-    if (row.difference_note) card.appendChild(el('p', 'Difference: ' + row.difference_note, 'margin:8px 0;font:400 16px/1.65 Georgia,serif;'));
-    card.appendChild(el('p', 'Review note: ' + row.verification_note, 'margin:9px 0;font:400 14px/1.65 system-ui,sans-serif;color:#5e5648;'));
-    const link = el('a', 'Open referenced source');
+    ensureSourcesStyle();
+    const isContrast = row.relationship_kind === 'contrast';
+    const card = el('article', null, '');
+    card.className = 'qhs-card' + (isContrast ? ' qhs-contrast' : '');
+    card.appendChild(el('h4', row.source_title, '')).className = 'qhs-title';
+    const meta = el('div', null, '');
+    meta.className = 'qhs-meta';
+    const kind = KIND_LABEL[row.relationship_kind] || 'Documented relationship';
+    const kindPill = el('span', kind, ''); kindPill.className = 'qhs-pill';
+    meta.appendChild(kindPill);
+    if (row.approx_date) { const d = el('span', row.approx_date, ''); d.className = 'qhs-pill qhs-date'; meta.appendChild(d); }
+    if (row.tradition) { const t = el('span', row.tradition, ''); t.className = 'qhs-pill'; meta.appendChild(t); }
+    card.appendChild(meta);
+    const loc = el('div', null, ''); loc.className = 'qhs-locator';
+    loc.appendChild(el('span', 'Passage checked', ''));
+    loc.appendChild(document.createTextNode(row.source_locator));
+    if (row.source_edition) loc.appendChild(el('div', row.source_edition, 'font-weight:400;color:#5e5648;margin-top:3px;'));
+    card.appendChild(loc);
+    if (row.parallel_summary || row.similarity_note || row.difference_note) {
+      const grid = el('div', null, ''); grid.className = 'qhs-compare';
+      const shared = el('div', null, ''); shared.className = 'qhs-col';
+      shared.appendChild(el('h5', isContrast ? 'Where they diverge' : 'What is shared', ''));
+      shared.appendChild(el('p', row.parallel_summary || row.similarity_note || '', ''));
+      grid.appendChild(shared);
+      if (row.difference_note) {
+        const diff = el('div', null, ''); diff.className = 'qhs-col';
+        diff.appendChild(el('h5', 'What differs', ''));
+        diff.appendChild(el('p', row.difference_note, ''));
+        grid.appendChild(diff);
+      }
+      card.appendChild(grid);
+    }
+    if (row.similarity_note && row.parallel_summary) card.appendChild(el('p', 'Connection: ' + row.similarity_note, 'margin:0 0 8px;font:400 15px/1.6 Georgia,serif;color:#3d3426;'));
+    card.appendChild(el('p', 'Review note: ' + row.verification_note, '')).className = 'qhs-note';
+    const foot = el('div', null, ''); foot.className = 'qhs-foot';
+    foot.appendChild(el('span', 'Similarity is not proof of literary dependence.', 'font:400 13px/1.5 system-ui,sans-serif;color:#7a705e;'));
+    const link = el('a', 'Open referenced source ↗');
     link.href = row.reference_link;
     link.target = '_blank';
     link.rel = 'noopener noreferrer';
-    link.style.cssText = 'display:inline-block;margin-top:5px;color:#775313;text-decoration:underline;font:600 15px system-ui,sans-serif;';
-    card.appendChild(link);
+    link.className = 'qhs-link';
+    foot.appendChild(link);
+    card.appendChild(foot);
     return card;
   }
 
@@ -178,5 +228,5 @@
       }
     }
   };
-  window.qhSourcesPanelVersion = '2026-11-02-verified-v6-snapshot';
+  window.qhSourcesPanelVersion = '2026-11-02-verified-v7-scholarly-layout';
 })();
