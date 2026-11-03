@@ -7,7 +7,7 @@ Persist a truthful starting point for the nightly research automation. This is a
 - `public.ancient_sources`: **18 verified**, **2 unverified**, **3 rejected** rows (23 total) at time of query.
 - The site's `qh-sources-verified-snapshot.json` (as of 2026-11-02): **16 verified** fallback records; **stale versus live DB by two**. Do not replace the snapshot until full verified text fields, locators, links, and safety checks have been revalidated.
 - `data/sources/staging/pending-research-2026-11-02.json`: **8 candidates** with statuses such as pending and reference_checked. They are **not** public verified evidence.
-- The existing two newer verified live records absent from the 16-row snapshot include `7:11` ↔ *Latin Life of Adam and Eve* §§12–16 and an additional *Cave of Treasures* parallel at `7:11`. Verify fields and original edition/citation again before updating fallback.
+- The two verified live records absent from the 16-row snapshot are `4:157` ↔ *Gospel of Peter* (Akhmim passion fragment §§4–6) and `7:11` ↔ *Cave of Treasures* (Budge 1927, First Thousand Years, part 7). The snapshot **already contains** `7:11` ↔ *Latin Life of Adam and Eve* §§12–16. Verify text, editions, dating cautions and working links before updating fallback.
 - The verified database entries currently touch the following **17 unique ayat** (18 records because 7:11 has two sources): `3:35`, `3:37`, `3:49`, `4:157`, `5:110`, `7:11`, `11:42`, `18:9`, `18:94`, `19:16`, `19:20`, `19:23`, `19:24`, `19:25`, `19:57`, `27:22`, `28:9`.
 
 ## Operating contract
