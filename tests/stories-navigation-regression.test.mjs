@@ -16,7 +16,7 @@ test('story navigation uses accessible real links with fallback URLs', () => {
   assert.match(html, /div\.setAttribute\('aria-controls','storyMain'\)/);
   assert.match(html, /div\.addEventListener\('click',\(event\)=>\{/);
   assert.match(html, /openStory\(s, true\)/);
-  assert.match(html, /e\.setAttribute\('aria-current','page'\)/);
+  assert.match(html, /el\.setAttribute\('aria-current','page'\)/);
 });
 test('selected story appears before optional async source queries', () => {
   const start = html.indexOf('async function openStory(story, updateAddress = false)');
