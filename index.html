@@ -1265,7 +1265,16 @@ body.qh-home-mode #qh-home-directory{display:block}
  .qh-home-hero{background:linear-gradient(135deg,#FDF0D0,#FFF9EA);border:1px solid #E8D8A0;border-radius:18px;padding:28px;margin-bottom:22px}
 .qh-home-hero h1{font-size:clamp(24px,4vw,36px);margin:0 0 6px}
 .qh-home-hero p{margin:0 0 18px;color:#6B5A3E;line-height:1.6}
-#qh-home-search{box-sizing:border-box;width:100%;padding:15px 17px;border-radius:12px;border:1px solid #D4C9A8;background:white;font-size:16px;min-height:50px}
+#qh-home-search{box-sizing:border-box;width:100%;padding:15px 17px;border-radius:12px;border:1px solid #D4C9A8;background:white;font-size:17px;min-height:52px;min-width:0}
+.qh-home-search-label{display:block;font-weight:700;font-size:15px;color:#554827;margin:0 0 9px}
+.qh-home-research-row{display:flex;align-items:stretch;gap:10px}
+.qh-home-research-go{min-height:52px;min-width:110px;padding:12px 20px;border:0;border-radius:11px;background:#7d5f14;color:#fff;font:700 16px system-ui,sans-serif;cursor:pointer}
+.qh-home-research-go:hover{background:#5d4710}
+.qh-home-research-go:focus-visible,#qh-home-search:focus-visible,#qh-home-sura-filter:focus-visible{outline:3px solid #957019;outline-offset:3px}
+.qh-home-sura-filter-wrap{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 18px}
+.qh-home-sura-filter-wrap label{font-size:15px;font-weight:650;color:#514735}
+#qh-home-sura-filter{flex:1 1 260px;min-width:0;min-height:46px;border:1px solid #D4C9A8;border-radius:10px;background:white;padding:10px 14px;font-size:16px}
+@media(max-width:530px){.qh-home-research-row{flex-direction:column}.qh-home-research-go{width:100%}}
 .qh-home-tools{display:flex;gap:9px;flex-wrap:wrap;align-items:center;margin:18px 0}
 .qh-home-tools button,.qh-home-tools a{font-size:14px;min-height:43px;padding:10px 16px;border:1px solid #D4C9A8;background:#fff;border-radius:10px;color:#7d5f14;text-decoration:none;cursor:pointer;font-weight:700}
 .qh-home-tools .active{background:#7d5f14;color:#fff;border-color:#7d5f14}
@@ -1524,7 +1533,12 @@ document.addEventListener('keyup',event=>{if(event.key==='Escape')hide();else if
 <body>
 <section id="qh-home-directory" aria-label="Quran chapter directory">
   <div class="qh-home-heading"><div><div class="qh-home-brand">Quran Hikma</div><div class="qh-home-sub">Read · Compare · Research</div></div><a href="research.html" style="color:#245f51;font-weight:700;text-decoration:none">Research ↗</a></div>
-  <div class="qh-home-hero"><h1>Explore the Qur'an</h1><p>Select a Surah to open the complete Quran Hikma reader with the left-side chapter list, translations, audio, tafsir and research tools.</p><input id="qh-home-search" type="search" aria-label="Find a Surah" placeholder="Search by Surah name or chapter number…"></div>
+  <div class="qh-home-hero"><h1>Explore the Qur'an</h1><p>Search Qur'an, Hadith, Sirah, people, events and research topics in one place. Or select a Surah below to read.</p>
+    <form id="qh-home-research-form" class="qh-home-research-form" action="research.html" method="get" role="search">
+      <label class="qh-home-search-label" for="qh-home-search">Search all QuranHikma research</label>
+      <div class="qh-home-research-row"><input id="qh-home-search" name="q" type="search" maxlength="180" required aria-label="Search Quran, Hadith, Sirah and research" placeholder="Search a word, person, event, verse or subject…" autocomplete="off"><button type="submit" class="qh-home-research-go">Search</button></div>
+    </form>
+  </div>
   <nav class="qh-home-shortcuts" aria-label="Quran research sections">
     <a href="index.html?sura=1">Suras</a><button type="button" id="qh-quick-chrono">Revelation Order</button><a href="index.html?sura=1&tab=topics">Topics</a><a href="qiraat-comparison.html">Qira'at</a><a href="index.html?sura=1&tab=lexicon">Lexicon</a><a href="index.html?sura=1&tab=variants">Variants</a><a href="index.html?sura=1&tab=saved">Saved</a><a href="index.html?sura=1&tab=themes">Themes</a>
   </nav>
@@ -1541,6 +1555,7 @@ document.addEventListener('keyup',event=>{if(event.key==='Escape')hide();else if
     <span id="qh-home-single-status" role="status"></span>
   </form>
   <div class="qh-home-tools"><button class="active" type="button" aria-current="true">114 Surahs</button><button type="button" id="qh-home-chrono">Revelation Order</button><a href="themes.html">Topics</a><span id="qh-home-count"></span></div>
+  <div class="qh-home-sura-filter-wrap"><label for="qh-home-sura-filter">Filter the chapter directory</label><input id="qh-home-sura-filter" type="search" aria-label="Filter surahs by name or chapter number" placeholder="Find a Surah by name or chapter number…" autocomplete="off"></div>
   <div id="qh-home-status" role="status">Loading 114 Surahs…</div><div id="qh-home-grid"></div>
 </section>
 
@@ -12669,7 +12684,15 @@ window.QNAV_PAGE_LABEL='Quran Reader';window.QNAV_PAGE_ICON='📖';
 
 <script id="qh-home-directory-script">
 (function(){
- const grid=document.getElementById('qh-home-grid'),search=document.getElementById('qh-home-search'),status=document.getElementById('qh-home-status'),count=document.getElementById('qh-home-count');
+ const grid=document.getElementById('qh-home-grid'),search=document.getElementById('qh-home-sura-filter'),status=document.getElementById('qh-home-status'),count=document.getElementById('qh-home-count');
+ const researchForm=document.getElementById('qh-home-research-form');
+ const researchInput=document.getElementById('qh-home-search');
+ researchForm.addEventListener('submit',event=>{
+  const q=researchInput.value.trim();
+  if(!q){event.preventDefault();researchInput.focus();return;}
+  event.preventDefault();
+  window.location.assign('research.html?q='+encodeURIComponent(q));
+ });
  if(!grid)return;
  let rows=[];
  function text(v){return String(v==null?'':v);}
