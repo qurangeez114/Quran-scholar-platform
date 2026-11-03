@@ -3888,12 +3888,18 @@ async function loadAncientPanel(num, suraId) {
     });
     if (!Array.isArray(rows)) throw new Error('Unexpected sources response');
     status.remove();
-    const seen = new Set();
-    const unique = rows.filter(item => {
-      const key = item.ancient_source_id + ':' + (item.story_id ?? '');
-      if (seen.has(key)) return false;
-      seen.add(key); return true;
+    // A single witness may appear in several story dossiers. Render the
+    // historical record once and provide all of its relevant dossier links.
+    const grouped = new Map();
+    rows.forEach(item => {
+      const key = String(item.ancient_source_id);
+      if (!grouped.has(key)) grouped.set(key, { ...item, story_ids: [] });
+      if (item.story_id != null) {
+        const ids = grouped.get(key).story_ids;
+        if (!ids.some(id => String(id) === String(item.story_id))) ids.push(item.story_id);
+      }
     });
+    const unique = Array.from(grouped.values());
     if (!unique.length) add(wrap, 'p',
       'No independently verified earlier-text association is currently catalogued for this āyah. This is a gap in the catalogue, not evidence that no historical parallels exist.',
       'margin:0 0 15px');
@@ -3922,11 +3928,13 @@ async function loadAncientPanel(num, suraId) {
           }
         } catch (_) { /* Never render malformed external links. */ }
       }
-      if (item.story_id != null) {
-        const story = add(entry, 'a', 'Explore related story dossier',
+      item.story_ids.forEach((storyId, index) => {
+        const story = add(entry, 'a', item.story_ids.length > 1
+          ? 'Explore related story dossier ' + (index + 1)
+          : 'Explore related story dossier',
           'display:block;font:600 15px/1.7 system-ui,sans-serif;text-decoration:underline;margin-top:8px');
-        story.href = '/stories.html?story=' + encodeURIComponent(item.story_id);
-      }
+        story.href = '/stories.html?story=' + encodeURIComponent(storyId);
+      });
       wrap.appendChild(entry);
     });
     add(wrap, 'p',
