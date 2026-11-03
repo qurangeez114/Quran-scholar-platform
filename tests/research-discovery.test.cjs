@@ -75,10 +75,10 @@ test('budget and request validation stop unrestricted external traffic',async()=
 test('Research page offers corrections and invokes fallback only after missing local matches',()=>{
  const html=fs.readFileSync('research.html','utf8');
  let script=html.match(/<script>\nconst SB=[\s\S]*?<\/script>/)[0].replace(/^<script>/,'').replace(/<\/script>$/,'').split('\nloadScope();')[0];
- const out={innerHTML:'',scrollIntoView(){},insertAdjacentHTML(_,s){this.innerHTML+=s}};
+ const out={innerHTML:'',hidden:false,scrollIntoView(){},replaceChildren(){this.innerHTML=''},append(){},insertAdjacentHTML(_,s){this.innerHTML+=s}};
  let fallbacks=[],renders=[];
  const discovery={cancel(){},refresh(){},discover(q){fallbacks.push(q)}};
- const context={AbortController,URLSearchParams,console,history:{replaceState(){}},document:{getElementById:()=>out,querySelectorAll:()=>[],querySelector:()=>null},location:{search:''},QHDiscovery:{init:()=>discovery},setTimeout,clearTimeout,fetch:async()=>({ok:true,json:async()=>({key:'hadith',count:0,rows:[],reference_match:true})})};
+ const context={AbortController,URLSearchParams,console,history:{replaceState(){}},document:{getElementById:()=>out,querySelectorAll:()=>[],querySelector:()=>null,createElement:()=>({...out,innerHTML:'',dataset:{},style:{},classList:{add(){},remove(){},toggle(){}},setAttribute(){},addEventListener(){},appendChild(){},querySelector:()=>null,querySelectorAll:()=>[]})},location:{search:''},QHDiscovery:{init:()=>discovery},setTimeout,clearTimeout,fetch:async()=>({ok:true,json:async()=>({key:'hadith',count:0,rows:[],reference_match:true})})};
  vm.createContext(context);vm.runInContext(script,context);
  return vm.runInContext("search('Abu Dawd 99999')",context).then(()=>assert.deepEqual(fallbacks,['Abu Dawd 99999']));
 });
@@ -97,9 +97,9 @@ test('Sira cards retain full text and escape untrusted source metadata',()=>{
  const context={AbortController,URLSearchParams,console,document:{getElementById:()=>out},location:{search:''},QHDiscovery:{init:()=>({})}};
  vm.createContext(context);vm.runInContext(script,context);
  const rendered=vm.runInContext(`card('sira',{title:'Tent report',text:'Beginning '+ 'word '.repeat(100)+'FULL END',source_ref:'Ibn Hisham <script>bad()</script> https://hadithunlocked.com/ibnhisham/74/6'},[])`,context);
- assert.ok(rendered.includes('Read in full'));
+ assert.ok(rendered.includes('Read passage'));
  assert.ok(rendered.includes('FULL END'));
- assert.ok(rendered.includes('Read the cited source'));
+ assert.ok(rendered.includes('Read cited source'));
  assert.ok(!rendered.includes('<script>bad()'));
  assert.ok(!vm.runInContext(`card('sira',{text:'Example',source_ref:'https://evil.test/'},[])`,context).includes('href="https://evil'));
 });
