@@ -14,4 +14,15 @@ describe("App routing", () => {
 
     expect(matches.at(-1)?.routeId).not.toBe(rootRouteId);
   });
+  it("matches the authenticated circle-details route after route generation", () => {
+    const router = createRouter({ routeTree, context: { queryClient: new QueryClient() } });
+    const matches = router.matchRoutes("/groups/11111111-1111-4111-8111-111111111111");
+    expect(matches.at(-1)?.routeId).toBe("/_authenticated/groups/$groupId");
+  });
+
+  it("matches the new-circle form independently from group details", () => {
+    const router = createRouter({ routeTree, context: { queryClient: new QueryClient() } });
+    const matches = router.matchRoutes("/groups/new");
+    expect(matches.at(-1)?.routeId).toBe("/_authenticated/groups/new");
+  });
 });

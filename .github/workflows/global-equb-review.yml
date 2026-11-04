@@ -1,0 +1,60 @@
+name: Global Equb review checks (no deployment)
+
+on:
+  push:
+    branches:
+      - 'ui/global-equb-group-detail-20261104'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund --package-lock=false
+      # Vite/TanStack generates src/routeTree.gen.ts during build. Build must
+      # happen before static type-checking and route tests for new file routes.
+      - name: Generate router tree and build (artifact only, no deploy)
+        run: npm run build
+      - name: TypeScript type-check
+        run: npx tsc --noEmit
+      - name: Vitest
+        run: npm test
+
+  database-lifecycle:
+    name: PostgreSQL 17 lifecycle regression (no deployment)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 54329:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      EQUB_PG_URL: postgres://postgres:postgres@localhost:54329
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install database test dependencies
+        run: npm install --prefix db-review --no-audit --no-fund
+      - name: Run 48 SQL authorization and lifecycle tests
+        run: npm --prefix db-review run test:review

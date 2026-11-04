@@ -3,7 +3,6 @@ import { ArrowRight, BookCheck, CalendarClock, ShieldCheck, Users, HandCoins, Ba
 import { PublicShell } from "@/components/public-shell";
 import { Button } from "@/components/ui/button";
 import { APP_CONFIG } from "@/config/app";
-import hero from "@/assets/hero-community.jpg";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -59,13 +58,24 @@ function Landing() {
           </p>
         </div>
         <div className="relative">
-          <img
-            src={hero}
-            alt="Members of an Equb circle reviewing their schedule over coffee"
-            width={1280}
-            height={960}
-            className="aspect-[4/3] w-full rounded-3xl object-cover shadow-card"
-          />
+          {/* Source handoff omitted the original hero asset; this lightweight
+              illustrative panel keeps builds working until the actual image is restored. */}
+          <div role="img" aria-label="Illustration of an Equb group with a schedule and contribution checklist"
+            className="relative flex aspect-[4/3] w-full items-center justify-center overflow-hidden rounded-3xl bg-gradient-to-br from-primary/20 via-primary-soft to-muted shadow-card">
+            <div className="absolute -top-14 -right-16 size-64 rounded-full bg-primary/15 blur-2xl" />
+            <div className="absolute -bottom-16 -left-10 size-56 rounded-full bg-primary/10 blur-2xl" />
+            <div className="relative w-3/4 max-w-sm rounded-2xl border bg-card/95 p-6 shadow-xl">
+              <div className="flex items-center gap-3">
+                <span className="flex size-12 items-center justify-center rounded-xl bg-primary-soft"><Users className="size-6 text-primary" /></span>
+                <div><p className="font-semibold">Our Equb Circle</p><p className="text-xs text-muted-foreground">5 members · Monthly</p></div>
+              </div>
+              <div className="mt-5 space-y-3 text-sm">
+                <div className="flex justify-between border-b pb-2"><span>Contribution</span><strong>Agreed amount</strong></div>
+                <div className="flex justify-between border-b pb-2"><span>Round schedule</span><CalendarClock className="size-5 text-primary" /></div>
+                <div className="flex justify-between"><span>Independent verification</span><ShieldCheck className="size-5 text-primary" /></div>
+              </div>
+            </div>
+          </div>
           <div className="absolute -bottom-6 left-4 right-4 rounded-2xl border bg-card p-4 shadow-card sm:left-auto sm:right-6 sm:w-72">
             <p className="text-xs font-medium text-muted-foreground">Round 4 of 10 · Monthly</p>
             <p className="mt-1 font-display text-lg font-semibold">Next recipient: Selam</p>
