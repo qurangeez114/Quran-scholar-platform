@@ -232,8 +232,14 @@ const $=id=>document.getElementById(id);
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const n=x=>Number(x||0).toLocaleString('en-US');
 
+// Every request is time-boxed so one slow source (very broad words) cannot
+// leave the page spinning; a timed-out source shows "timed out" and the others
+// still appear (partial results).
+const RPC_TIMEOUT_MS=20000;
 async function rpc(fn,body){
-  const r=await fetch(SB+'/rest/v1/rpc/'+fn,{method:'POST',headers:H,body:JSON.stringify(body)});
+  const ac=typeof AbortController!=='undefined'?new AbortController():null;
+  const t=ac?setTimeout(()=>ac.abort(),RPC_TIMEOUT_MS):null;
+  let r; try{ r=await fetch(SB+'/rest/v1/rpc/'+fn,{method:'POST',headers:H,body:JSON.stringify(body),signal:ac?ac.signal:undefined}); } finally { if(t) clearTimeout(t); }
   if(!r.ok) throw new Error(fn+' '+r.status);
   return r.json();
 }
@@ -498,6 +504,40 @@ function cleanQuery(q){
   const out=[...phrases,...kept].join(' ').trim();
   return out||raw.join(' ');
 }
+/* ---- Verse references: 2:255, 2 255, 2.255, 2:255-257, Al-Baqarah 255, Baqarah 2:255 ---- */
+const SURAS=['fatiha','baqarah','imran','nisa','maidah','anam','araf','anfal','tawbah','yunus','hud','yusuf','rad','ibrahim','hijr','nahl','isra','kahf','maryam','taha','anbiya','hajj','muminun','nur','furqan','shuara','naml','qasas','ankabut','rum','luqman','sajdah','ahzab','saba','fatir','yasin','saffat','sad','zumar','ghafir','fussilat','shura','zukhruf','dukhan','jathiyah','ahqaf','muhammad','fath','hujurat','qaf','dhariyat','tur','najm','qamar','rahman','waqiah','hadid','mujadilah','hashr','mumtahanah','saff','jumuah','munafiqun','taghabun','talaq','tahrim','mulk','qalam','haqqah','maarij','nuh','jinn','muzzammil','muddaththir','qiyamah','insan','mursalat','naba','naziat','abasa','takwir','infitar','mutaffifin','inshiqaq','buruj','tariq','ala','ghashiyah','fajr','balad','shams','layl','duha','sharh','tin','alaq','qadr','bayyinah','zalzalah','adiyat','qariah','takathur','asr','humazah','fil','quraysh','maun','kawthar','kafirun','nasr','masad','ikhlas','falaq','nas'];
+const SURA_ALIAS={fatihah:1,faatiha:1,opening:1,cow:2,imraan:3,women:4,table:5,maida:5,cattle:6,anaam:6,heights:7,spoils:8,tawba:9,repentance:9,taubah:9,bara:9,jonah:10,joseph:12,thunder:13,abraham:14,bee:16,bani:17,israel:17,cave:18,mary:19,tha:20,prophets:21,believers:23,light:24,criterion:25,poets:26,ant:27,ants:27,story:28,spider:29,romans:30,prostration:32,sajda:32,confederates:33,sheba:34,originator:35,yaseen:36,sin:36,zumur:39,forgiver:40,mumin:40,haamim:41,consultation:41,smoke:44,kneeling:45,dunes:46,victory:48,rooms:49,qaaf:50,mount:52,star:53,moon:54,ar:55,merciful:55,event:56,iron:57,exile:59,friday:62,hypocrites:63,divorce:65,dominion:67,pen:68,noah:71,jinn:72,man:76,dahr:76,news:78,yasin:36,kauthar:108,kausar:108,ikhlaas:112,dawn:89,night:92,morning:93,fig:95,clot:96,power:97,earthquake:99,time:103,elephant:105,quraish:106,disbelievers:109,help:110,lahab:111,sincerity:112,daybreak:113,mankind:114,people:114};
+function suraNum(name){
+  const k=name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/^(surah?|surat)\s+/,'').replace(/^(al|an|ar|as|at|ash|az|ad|adh|aal|ali|ali-)[-\s']+/,'').replace(/['\u2019\u02bf\u02be`-]/g,'').replace(/\s+/g,'');
+  if(!k) return 0; const i=SURAS.indexOf(k); if(i>=0) return i+1;
+  if(SURA_ALIAS[k]) return SURA_ALIAS[k];
+  const f=SURAS.findIndex(x=>x.replace(/(.)\1/g,'$1')===k.replace(/(.)\1/g,'$1').replace(/h$/,'')||x.replace(/h$/,'')===k.replace(/h$/,'')); return f>=0?f+1:0;
+}
+const SURA_LEN=[7,286,200,176,120,165,206,75,129,109,123,111,43,52,99,128,111,110,98,135,112,78,118,64,77,227,93,88,69,60,34,30,73,54,45,83,182,88,75,85,54,53,89,59,37,35,38,29,18,45,60,49,62,55,78,96,29,22,24,13,14,11,11,18,12,12,30,52,52,44,28,28,20,56,40,31,50,40,46,42,29,19,36,25,22,17,19,26,30,20,15,21,11,8,8,19,5,8,8,11,11,8,3,9,5,4,7,3,6,3,5,4,5,6];
+function parseVerseRef(q){
+  q=q.trim().replace(/^(q|quran|qur'?an|surah?|sura)\s*/i,'');
+  let m=q.match(/^(\d{1,3})\s*[:.\s]\s*(\d{1,3})(?:\s*[-\u2013]\s*(\d{1,3}))?$/);
+  let s,a,b;
+  if(m){ s=+m[1]; a=+m[2]; b=m[3]?+m[3]:a; }
+  else if((m=q.match(/^([A-Za-z\u00c0-\u024f'\u2019\u02bf\u02be` -]+?)\s*(?:(\d{1,3})\s*:\s*)?(\d{1,3})(?:\s*[-\u2013]\s*(\d{1,3}))?$/))){
+    s=suraNum(m[1]); if(!s) return null; if(m[2]&&+m[2]!==s) return null; a=+m[3]; b=m[4]?+m[4]:a;
+  } else return null;
+  if(s<1||s>114||a<1||a>SURA_LEN[s-1]) return null;
+  b=Math.min(Math.max(b,a),SURA_LEN[s-1],a+19);
+  return {s,a,b};
+}
+async function verseLookup(ref){
+  const url=SB+'/rest/v1/ayas?select=sura_id,aya_number,english,arabic,arabic_transliteration&sura_id=eq.'+ref.s+'&aya_number=gte.'+ref.a+'&aya_number=lte.'+ref.b+'&order=aya_number';
+  const r=await fetch(url,{headers:H}); if(!r.ok) throw new Error('ayas '+r.status);
+  return (await r.json()).map(x=>({sura:x.sura_id,aya:x.aya_number,text:x.english||'',arabic:x.arabic||'',translit:x.arabic_transliteration||''}));
+}
+/* ---- Names: common Arabic transliterations -> the English forms used in the translation ---- */
+const NAMES={musa:'Moses',moosa:'Moses',mousa:'Moses',maryam:'Mary',mariam:'Mary',maryem:'Mary',ibrahim:'Abraham',ebrahim:'Abraham',ibraheem:'Abraham',isa:'Jesus',eesa:'Jesus',issa:'Jesus',yusuf:'Joseph',yousuf:'Joseph',yusef:'Joseph',yousef:'Joseph',nuh:'Noah',nooh:'Noah',adam:'Adam',hawwa:'Eve',dawud:'David',dawood:'David',daud:'David',sulayman:'Solomon',sulaiman:'Solomon',suleiman:'Solomon',harun:'Aaron',haroon:'Aaron',ismail:'Ishmael',ismael:'Ishmael',ishaq:'Isaac',yaqub:'Jacob',yakub:'Jacob',yaqoob:'Jacob',ayyub:'Job',ayub:'Job',yunus:'Jonah',younus:'Jonah',zakariya:'Zechariah',zakariyya:'Zechariah',zakaria:'Zechariah',yahya:'John',ilyas:'Elias',alyasa:'Elisha',lut:'Lot',loot:'Lot',idris:'Idrees',shuayb:'Shu\'ayb',shuaib:'Shu\'ayb',jibril:'Gabriel',jibreel:'Gabriel',firawn:'Pharaoh',firaun:'Pharaoh',pharoah:'Pharaoh',iblis:'Iblees',shaytan:'Satan',shaitan:'Satan',jalut:'Goliath',talut:'Saul',luqman:'Luqman',dhulqarnayn:'Dhul-Qarnayn',uzayr:'Ezra',haman:'Haman',qarun:'Korah'};
+function mapNames(q){
+  const used=[];
+  const out=q.replace(/[A-Za-z'\u2019]+/g,w=>{ const k=w.toLowerCase().replace(/['\u2019]/g,''); const e=NAMES[k]; if(e&&e.toLowerCase()!==k){ used.push(w+' \u2192 '+e); return e; } return w; });
+  return {q:out,used};
+}
 function terms(q){ return q.replace(/"/g,'').split(/\s+/).filter(w=>w.length>1).map(w=>w.toLowerCase()); }
 // Server variants: drop truncated stems such as "alla" for "Allah" so they are
 // not highlighted or shown as "Also searched as".
@@ -538,9 +578,28 @@ async function search(q){
   q=q.trim();
   if(!q){ $('out').innerHTML='<div class="empty">Type a word or question in the box above, then press Search.</div>'; $('q').focus(); return; }
   if(q===CUR && SEQ && document.querySelector('#out .spin')) return; // same search already running
+  // Symbols or punctuation only: nothing to search for.
+  if(!/[\p{L}\p{N}]/u.test(q)){ ++SEQ; $('out').innerHTML='<div class="empty">That search has no letters or numbers in it. Type a word, a name, a question, or a verse number such as 2:255.</div>'; return; }
   CUR=q;
   const my=++SEQ;
-  const sq=cleanQuery(q); LASTQ=sq;
+  // Verse reference: show the verse itself instead of a text search.
+  const ref=parseVerseRef(q);
+  if(ref){
+    try{ history.replaceState(null,'','?q='+encodeURIComponent(q)); }catch(e){}
+    document.querySelectorAll('#scope,.areas').forEach(e=>e.style.display='none');
+    $('out').innerHTML=`<section class="src" id="src-quran"><h2>${esc(LABEL.quran)} <small><span class="spin"></span>looking up</small></h2></section>`;
+    let rows=[]; try{ rows=await verseLookup(ref); }catch(e){}
+    if(my!==SEQ) return;
+    const lbl=ref.s+':'+ref.a+(ref.b>ref.a?'\u2013'+ref.b:'');
+    const el=$('src-quran');
+    el.innerHTML=`<h2>${esc(LABEL.quran)} <small>${rows.length?'verse '+lbl:'not found'}</small></h2><p class="what">You searched for a verse number, so the verse is shown directly. <a href="/?sura=${ref.s}&aya=${ref.a}">Open it in the reader \u2192</a></p>`+(rows.length?rows.map(x=>card('quran',x,[])).join(''):'<div class="none">That verse could not be loaded. Please try again.</div>');
+    if(window.ResearchActions) ResearchActions.restore(el);
+    return;
+  }
+  const nm=mapNames(cleanQuery(q));
+  const sq=nm.q; LASTQ=sq;
+  // Only very common words ("the", "what is"): ask for something more specific.
+  if(!terms(sq).some(w=>!STOP.has(w))&&!/[\u0600-\u06FF\u1200-\u137F]/.test(sq)&&!/"/.test(q)){ $('out').innerHTML=`<div class="empty">\u201c${esc(q)}\u201d only has very common words, which appear almost everywhere. Add a more specific word, for example a subject, a name, or a verse number such as 2:255.</div>`; return; }
   document.querySelectorAll('#scope,.areas').forEach(e=>e.style.display='none');
   setTimeout(()=>$('out').scrollIntoView({behavior:'smooth',block:'start'}),50);
   const SCT=SEL.slice();
@@ -551,7 +610,7 @@ async function search(q){
   const keys=only?only:ORDER;
   // Progressive rendering: draw every section at once with a spinner and fill
   // each one in as its own request returns, instead of waiting for the slowest.
-  let h=sq!==q?`<div class="variants">Searching for the key words: <span>${esc(sq)}</span></div>`:'';
+  let h=sq!==q?`<div class="variants">Searching for the key words: <span>${esc(sq)}</span>${nm.used.length?' (names: '+nm.used.map(esc).join(', ')+')':''}</div>`:'';
   h+='<div class="tabs">'+keys.map(k=>`<button class="tab" id="tab-${k}" onclick="jump('${k}')">${esc(LABEL[k])} <b>\u2026</b></button>`).join('')+'</div><div id="dym"></div><div id="pickerslot"></div><div id="ovslot"></div>';
   h+=keys.map(k=>`<section class="src" id="src-${k}"><h2>${esc(LABEL[k])} <small><span class="spin"></span>searching</small></h2></section>`).join('');
   h+=`<div class="note">Results come straight from the site\u2019s own database. Some sources, especially hadith linked to the later suras, were assembled automatically and have not yet been reviewed verse by verse; each source above says what it contains so you can judge how much weight to give it.</div>`;
@@ -569,7 +628,11 @@ async function search(q){
     // automatically with its most specific word, instead of showing "0".
     if(r.failed && terms(sq).length>1) retrySrc(k).then(()=>{ if(my!==SEQ) return; const t2=$('tab-'+k), sec=$('src-'+k); if(t2&&sec){ const m=sec.querySelector('h2 small'); t2.querySelector('b').textContent=m&&/more than/.test(m.textContent)?'1000+':m&&/^[\d,]+/.test(m.textContent)?m.textContent.match(/^[\d,]+/)[0]:(sec.querySelector('.card')?'\u2713':'0'); } });
   };
-  const srcP=Promise.all(keys.map(k=>rpc('site_search_src',{src:k,q:sq,lim:6}).catch(()=>({key:k,count:0,rows:[],variants:[sq],failed:true})).then(r=>{fill(k,r);return r;})));
+  // Names: the database matches inside words ("Moses" also hits "mosquito"),
+  // so for mapped names fetch more Quran rows and keep whole-word matches.
+  const nameRe=nm.used.length?new RegExp('\\b('+nm.used.map(u=>u.split(' \u2192 ')[1].replace(/[^A-Za-z' -]/g,'')).join('|')+')\\b','i'):null;
+  const wholeWord=(k,r)=>{ if(!nameRe||k!=='quran'||!r||!r.rows) return r; const keep=r.rows.filter(x=>nameRe.test(x.text||'')); return Object.assign({},r,{rows:(keep.length?keep:r.rows).slice(0,6)}); };
+  const srcP=Promise.all(keys.map(k=>rpc('site_search_src',{src:k,q:sq,lim:(nameRe&&k==='quran')?40:6}).then(r=>wholeWord(k,r)).catch(()=>({key:k,count:0,rows:[],variants:[sq],failed:true})).then(r=>{fill(k,r);return r;})));
   // Side panels load in parallel with the sources, each on its own.
   if(!only){
     Promise.all([rpc('digest_hadith',{q:sq}),rpc('digest_madhhab',{q:sq}),rpc('digest_tafsir',{q:sq})]).then(async([hd,m,t])=>{
