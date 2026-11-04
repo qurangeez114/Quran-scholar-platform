@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, Copy, Plus, Users } from "lucide-react";
+import { ArrowLeft, Copy, Plus, ShieldCheck, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader, Card, Loading, ErrorBox } from "@/components/page";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,10 @@ function CircleDetails() {
   const [payoutNote, setPayoutNote] = useState("");
   const [inviteCode, setInviteCode] = useState("");
   const [showTerms, setShowTerms] = useState(false);
+  const [disputeContribution, setDisputeContribution] = useState("");
+  const [disputeReason, setDisputeReason] = useState("");
+  const [resolutions, setResolutions] = useState<Record<string, string>>({});
+  const [terminationReason, setTerminationReason] = useState("");
 
   async function act(label: string, fn: () => PromiseLike<{ error: { message: string } | null; data?: unknown }>) {
     if (working) return;
@@ -56,7 +60,7 @@ function CircleDetails() {
   if (q.error) return <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
   if (!q.data) return <Card><h2 className="font-semibold">Circle unavailable</h2><p className="mt-2 text-sm text-muted-foreground">You may not belong to this circle, or it no longer exists.</p><Button asChild variant="outline" className="mt-4"><Link to="/dashboard">Back to your circles</Link></Button></Card>;
 
-  const { uid, group: g, members, rounds, contributions, activity, isOrganizer } = q.data;
+  const { uid, group: g, members, rounds, contributions, activity, isOrganizer, consentIds, missed, disputes, terminations, termConsentIds, reconciliation } = q.data;
   const ordered = [...rounds].sort((a, b) => a.round_number - b.round_number);
   const memberIds = members.map((m) => m.user_id);
   const byId = new Map(members.map((m) => [m.user_id, m.display_name]));
@@ -64,6 +68,16 @@ function CircleDetails() {
   const today = todayInTimeZone(g.timezone);
   const amount = toNumber(g.contribution_amount);
   const openInvites = iq.data?.filter((i) => !i.revoked && i.uses < i.max_uses && new Date(i.expires_at).getTime() > Date.now()) ?? [];
+
+  // Server re-checks every rule; these flags only decide which controls to show.
+  const isVerifier = isOrganizer || consentIds.has(uid);
+  const isActive = g.status === "active";
+  const contributionById = new Map(contributions.map((c) => [c.id, c]));
+  const roundById = new Map(rounds.map((r) => [r.id, r]));
+  const openMissed = missed.filter((m) => !m.resolved_at);
+  const openDisputes = disputes.filter((d) => d.status === "open");
+  const pendingTermination = terminations.find((t) => !t.effective_at);
+  const allPayoutsConfirmed = rounds.length > 0 && rounds.every((r) => r.recipient_confirmed_at);
 
   async function createInvite() {
     const data = await act("Invitation created", () => supabase.rpc("create_invite", { _group: groupId, _days: 7, _max_uses: 1 }));
@@ -80,6 +94,23 @@ function CircleDetails() {
     if (data !== undefined) { setReportRound(""); setReportPayer(""); setReportNote(""); }
   }
 
+  async function toggleVerifierConsent() {
+    if (consentIds.has(uid)) {
+      await act("Verifier consent withdrawn", () => supabase.rpc("withdraw_verifier_consent", { _group: groupId }));
+    } else {
+      await act("You are now an independent verifier", () => supabase.rpc("consent_to_verify", { _group: groupId }));
+    }
+  }
+
+  async function submitDispute() {
+    const c = contributionById.get(disputeContribution);
+    if (!c || !disputeReason.trim()) return toast.error("Explain the reason for the dispute.");
+    const data = await act("Dispute opened; payout is held for this round", () => supabase.rpc("open_dispute", {
+      _contribution: c.id, _reason: disputeReason.trim(),
+    }));
+    if (data !== undefined) { setDisputeContribution(""); setDisputeReason(""); }
+  }
+
   return (
     <div className="space-y-6">
       <Link to="/dashboard" className="inline-flex items-center gap-1 text-sm text-primary"><ArrowLeft className="size-4" /> Your circles</Link>
@@ -93,6 +124,23 @@ function CircleDetails() {
       </div>
 
       <Notice>Equb records contributions and payouts performed outside the app. A recorded payment is not verified until the required independent confirmations are complete. The recipient contributes in every round.</Notice>
+
+      {pendingTermination && (
+        <Notice tone="warning">
+          <strong>Early termination requested.</strong> Reason: {pendingTermination.reason}. The circle ends only when every member consents ({termConsentIds.size} of {memberIds.length} so far).
+        </Notice>
+      )}
+
+      {(g.status === "forming" || isActive) && (
+        <Card className="space-y-3">
+          <div className="flex items-center gap-2"><ShieldCheck className="size-5 text-primary" /><h2 className="font-semibold">Independent verification</h2></div>
+          <p className="text-sm text-muted-foreground">Other members confirm a payment only if they have agreed to act as verifiers. Nobody becomes a verifier without consenting. Organizers can verify other members' payments, but never their own.</p>
+          <div className="flex flex-wrap items-center gap-3">
+            <Pill tone={isVerifier ? "success" : "neutral"}>{isOrganizer ? "Organizer" : consentIds.has(uid) ? "Verifier" : "Not a verifier"}</Pill>
+            {!isOrganizer && <Button variant="outline" size="sm" disabled={working} onClick={() => { void toggleVerifierConsent(); }}>{consentIds.has(uid) ? "Withdraw as verifier" : "Agree to verify others"}</Button>}
+          </div>
+        </Card>
+      )}
 
       <Card className="space-y-4">
         <div className="flex items-center justify-between gap-3"><h2 className="font-semibold">Circle terms</h2><Button variant="outline" size="sm" onClick={() => setShowTerms(!showTerms)} aria-expanded={showTerms}>{showTerms ? "Hide" : "View"} terms</Button></div>
@@ -112,7 +160,10 @@ function CircleDetails() {
           {[...members].sort((a, b) => (a.payout_position ?? 999) - (b.payout_position ?? 999)).map((m) => (
             <li key={m.user_id} className="flex items-center justify-between gap-2 py-3">
               <span><span className="mr-2 text-muted-foreground">{m.payout_position ?? "—"}.</span>{m.display_name}{m.user_id === uid ? " (you)" : ""}</span>
-              <Pill tone={m.role === "organizer" ? "info" : "neutral"}>{m.role}</Pill>
+              <span className="flex flex-wrap justify-end gap-1">
+                <Pill tone={m.role === "organizer" ? "info" : "neutral"}>{m.role}</Pill>
+                {consentIds.has(m.user_id) && m.role !== "organizer" && <Pill tone="success">verifier</Pill>}
+              </span>
             </li>
           ))}
         </ol>
@@ -140,18 +191,38 @@ function CircleDetails() {
         </Card>
       )}
 
+      {isActive && (openMissed.length > 0 || isOrganizer) && (
+        <Card className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="font-semibold">Missed contributions</h2>
+            {isOrganizer && <Button variant="outline" size="sm" disabled={working} onClick={() => { void act("Missed contributions checked", () => supabase.rpc("refresh_missed_contributions", { _group: groupId })); }}>Check for missed payments</Button>}
+          </div>
+          {openMissed.length === 0 ? <p className="text-sm text-muted-foreground">No open missed contributions.</p> : (
+            <ul className="divide-y text-sm">
+              {openMissed.map((m) => (
+                <li key={m.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
+                  <span>Round {m.round_number} · {memberName(m.payer_id)}{m.payer_id === uid ? " (you)" : ""}</span>
+                  <span className="text-xs text-muted-foreground">Due {formatDate(m.due_date)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="text-xs text-muted-foreground">A missed-contribution flag records that a payment was not verified by its due date. It does not move money.</p>
+        </Card>
+      )}
+
       <section className="space-y-3">
         <h2 className="text-xl font-semibold">Contribution and payout rounds</h2>
         {ordered.length === 0 && <Card><p className="text-sm text-muted-foreground">The payout schedule has not been generated.</p></Card>}
         {ordered.map((r) => {
           const mine = contributions.find((c) => c.round_id === r.id && c.payer_id === uid);
-          const mineStatus = contributionStatus(mine);
           const rc = contributions.filter((c) => c.round_id === r.id);
           const totals = roundTotals(r, memberIds, amount, contributions);
           const allConfirmed = memberIds.length > 0 && memberIds.every((id) => {
             const entry = rc.find((c) => c.payer_id === id);
             return entry && contributionStatus(entry) === "confirmed";
           });
+          const roundDisputed = openDisputes.some((d) => d.round_id === r.id);
           return (
             <Card key={r.id} className="space-y-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -164,27 +235,125 @@ function CircleDetails() {
                 <div><p className="text-xs text-muted-foreground">Confirmed</p><p className="font-medium">{formatMoney(totals.confirmed, g.currency)}</p></div>
               </div>
               {r.due_date < today && totals.confirmed < totals.expected && <Notice tone="warning">Due date passed; some contributions remain unverified.</Notice>}
+              {roundDisputed && <Notice tone="warning">An open dispute holds the payout for this round.</Notice>}
               <div className="overflow-x-auto"><table className="w-full min-w-[320px] text-left text-sm"><thead><tr className="border-b text-xs text-muted-foreground"><th className="py-2 pr-2">Member</th><th className="py-2 pr-2">Status</th><th className="py-2">Action</th></tr></thead>
                 <tbody>{members.map((m) => {
                   const c = rc.find((x) => x.payer_id === m.user_id);
                   const cs = contributionStatus(c);
-                  const allowed = c && cs !== "confirmed" && (m.user_id === uid || isOrganizer);
-                  return <tr key={m.user_id} className="border-b last:border-0"><td className="py-3 pr-2">{m.display_name}{m.user_id === uid ? " (you)" : ""}</td><td className="py-3 pr-2"><ContributionPill status={cs} /></td><td className="py-3">{allowed && <Button variant="outline" size="sm" disabled={working} onClick={() => { void act("Confirmation submitted", () => supabase.rpc("confirm_contribution", { _contribution: c.id })); }}>Confirm</Button>}</td></tr>;
+                  const canPayerConfirm = !!c && c.payer_id === uid && !c.payer_confirmed_at;
+                  const canVerify = !!c && c.payer_id !== uid && isVerifier && !c.organizer_confirmed_at;
+                  const canDispute = !!c && !r.payout_recorded_at && (c.payer_id === uid || r.recipient_id === uid || isOrganizer)
+                    && !openDisputes.some((d) => d.contribution_id === c.id);
+                  return (
+                    <tr key={m.user_id} className="border-b last:border-0">
+                      <td className="py-3 pr-2">{m.display_name}{m.user_id === uid ? " (you)" : ""}</td>
+                      <td className="py-3 pr-2"><ContributionPill status={cs} /></td>
+                      <td className="py-3">
+                        <div className="flex flex-wrap gap-2">
+                          {(canPayerConfirm || canVerify) && <Button variant="outline" size="sm" disabled={working} onClick={() => { void act("Confirmation submitted", () => supabase.rpc("confirm_contribution", { _contribution: c!.id })); }}>{canPayerConfirm ? "Confirm my payment" : "Verify payment"}</Button>}
+                          {canDispute && <Button variant="ghost" size="sm" disabled={working} onClick={() => setDisputeContribution(c!.id)}>Dispute</Button>}
+                        </div>
+                      </td>
+                    </tr>
+                  );
                 })}</tbody>
               </table></div>
               <div className="flex flex-wrap gap-2 border-t pt-3">
-                {!mine && g.status === "active" && <Button variant="outline" size="sm" disabled={working} onClick={() => { setReportRound(r.id); setReportPayer(uid); }}>Report my contribution</Button>}
-                {isOrganizer && g.status === "active" && <Button variant="outline" size="sm" disabled={working} onClick={() => { setReportRound(r.id); setReportPayer(uid); }}>Record contribution</Button>}
-                {isOrganizer && g.status === "active" && !r.payout_recorded_at && <Button size="sm" disabled={working || !allConfirmed} onClick={() => {
+                {!mine && isActive && <Button variant="outline" size="sm" disabled={working} onClick={() => { setReportRound(r.id); setReportPayer(uid); }}>Report my contribution</Button>}
+                {isOrganizer && isActive && <Button variant="outline" size="sm" disabled={working} onClick={() => { setReportRound(r.id); setReportPayer(uid); }}>Record contribution</Button>}
+                {isOrganizer && isActive && !r.payout_recorded_at && <Button size="sm" disabled={working || !allConfirmed || roundDisputed} onClick={() => {
                   if (window.confirm("Record an off-platform payout for this round?")) void act("Payout reported; awaiting recipient", () => supabase.rpc("record_payout", { _round: r.id, _note: payoutNote.trim() }));
                 }}>Record off-platform payout</Button>}
                 {uid === r.recipient_id && r.payout_recorded_at && !r.recipient_confirmed_at && <Button size="sm" disabled={working} onClick={() => { void act("Payout receipt confirmed", () => supabase.rpc("confirm_payout", { _round: r.id })); }}>Confirm receipt</Button>}
               </div>
-              {isOrganizer && g.status === "active" && !r.payout_recorded_at && <div><label className="text-xs text-muted-foreground" htmlFor={"note-" + r.id}>Payout note (optional)</label><Input id={"note-" + r.id} value={payoutNote} onChange={(e) => setPayoutNote(e.target.value)} maxLength={500} placeholder="External transaction reference (no secrets)" /></div>}
+              {isOrganizer && isActive && !r.payout_recorded_at && <div><label className="text-xs text-muted-foreground" htmlFor={"note-" + r.id}>Payout note (optional)</label><Input id={"note-" + r.id} value={payoutNote} onChange={(e) => setPayoutNote(e.target.value)} maxLength={500} placeholder="External transaction reference (no secrets)" /></div>}
             </Card>
           );
         })}
       </section>
+
+      {disputeContribution && <Card className="space-y-3">
+        <h2 className="font-semibold">Open a dispute</h2>
+        <p className="text-sm text-muted-foreground">Disputing {memberName(contributionById.get(disputeContribution)?.payer_id ?? null)}'s contribution in round {roundById.get(contributionById.get(disputeContribution)?.round_id ?? "")?.round_number ?? "—"}. The round's payout is held until the dispute is resolved.</p>
+        <label className="block text-sm" htmlFor="dispute-reason">Reason</label>
+        <Textarea id="dispute-reason" value={disputeReason} onChange={(e) => setDisputeReason(e.target.value)} maxLength={1000} />
+        <div className="flex flex-wrap gap-2"><Button disabled={working || !disputeReason.trim()} onClick={() => { void submitDispute(); }}>Open dispute</Button><Button variant="outline" onClick={() => { setDisputeContribution(""); setDisputeReason(""); }}>Cancel</Button></div>
+      </Card>}
+
+      {openDisputes.length > 0 && (
+        <Card className="space-y-3">
+          <h2 className="font-semibold">Open disputes</h2>
+          <ul className="space-y-3 text-sm">
+            {openDisputes.map((d) => {
+              const payer = contributionById.get(d.contribution_id)?.payer_id ?? null;
+              const round = roundById.get(d.round_id);
+              const canResolve = isVerifier && d.opened_by !== uid && payer !== uid;
+              return (
+                <li key={d.id} className="space-y-2 rounded-lg border p-3">
+                  <p>Round {round?.round_number ?? "—"} · {memberName(payer)} · opened by {memberName(d.opened_by)}</p>
+                  <p className="whitespace-pre-wrap text-muted-foreground">{d.reason}</p>
+                  {canResolve && (
+                    <div className="space-y-2">
+                      <label className="block text-xs text-muted-foreground" htmlFor={"res-" + d.id}>Resolution (required)</label>
+                      <Textarea id={"res-" + d.id} value={resolutions[d.id] ?? ""} maxLength={1000} onChange={(e) => setResolutions({ ...resolutions, [d.id]: e.target.value })} />
+                      <Button size="sm" disabled={working || !(resolutions[d.id] ?? "").trim()} onClick={() => { void act("Dispute resolved", () => supabase.rpc("resolve_dispute", { _dispute: d.id, _resolution: (resolutions[d.id] ?? "").trim() })); }}>Resolve dispute</Button>
+                    </div>
+                  )}
+                  {d.opened_by === uid && <Button size="sm" variant="outline" disabled={working} onClick={() => { void act("Dispute withdrawn", () => supabase.rpc("withdraw_dispute", { _dispute: d.id })); }}>Withdraw my dispute</Button>}
+                </li>
+              );
+            })}
+          </ul>
+        </Card>
+      )}
+
+      {isOrganizer && isActive && (
+        <Card className="space-y-3">
+          <h2 className="font-semibold">Complete the circle</h2>
+          <p className="text-sm text-muted-foreground">Available once every round's payout receipt is confirmed. Completion closes further confirmations.</p>
+          <Button variant="outline" disabled={working || !allPayoutsConfirmed} onClick={() => {
+            if (window.confirm("Mark this circle complete? Confirmations will close.")) void act("Circle completed", () => supabase.rpc("complete_circle", { _group: groupId }));
+          }}>Mark circle complete</Button>
+        </Card>
+      )}
+
+      {isOrganizer && isActive && !pendingTermination && (
+        <Card className="space-y-3">
+          <h2 className="font-semibold">End the circle early</h2>
+          <p className="text-sm text-muted-foreground">Early termination needs unanimous consent: every member, including you, must agree. Your request counts as your consent.</p>
+          <label className="block text-sm" htmlFor="term-reason">Reason</label>
+          <Textarea id="term-reason" value={terminationReason} maxLength={1000} onChange={(e) => setTerminationReason(e.target.value)} />
+          <Button variant="outline" disabled={working || !terminationReason.trim()} onClick={() => { void act("Termination requested", () => supabase.rpc("request_termination", { _group: groupId, _reason: terminationReason.trim() })); setTerminationReason(""); }}>Request termination</Button>
+        </Card>
+      )}
+
+      {pendingTermination && !termConsentIds.has(uid) && (
+        <Card className="space-y-3">
+          <h2 className="font-semibold">Consent to early termination</h2>
+          <p className="text-sm text-muted-foreground">The circle ends only if every member consents. Withholding consent keeps the circle running.</p>
+          <Button disabled={working} onClick={() => { void act("Consent recorded", () => supabase.rpc("consent_termination", { _group: groupId })); }}>Consent to end the circle</Button>
+        </Card>
+      )}
+
+      {reconciliation.length > 0 && (
+        <Card className="space-y-3">
+          <h2 className="font-semibold">Reconciliation</h2>
+          <p className="text-sm text-muted-foreground">Confirmed contributions and payouts per member. Net position is what each member has paid in minus what they have received.</p>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[480px] text-left text-sm">
+              <thead><tr className="border-b text-xs text-muted-foreground"><th className="py-2 pr-2">Member</th><th className="py-2 pr-2">Contributions</th><th className="py-2 pr-2">Payouts</th><th className="py-2">Net</th></tr></thead>
+              <tbody>{reconciliation.map((row) => (
+                <tr key={row.user_id} className="border-b last:border-0">
+                  <td className="py-3 pr-2">{row.display_name}{row.user_id === uid ? " (you)" : ""}</td>
+                  <td className="py-3 pr-2">{formatMoney(row.contributions_confirmed, g.currency)} / {formatMoney(row.contributions_expected, g.currency)}</td>
+                  <td className="py-3 pr-2">{formatMoney(row.payout_confirmed, g.currency)} / {formatMoney(row.payout_expected, g.currency)}</td>
+                  <td className="py-3">{formatMoney(row.net_position, g.currency)}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        </Card>
+      )}
 
       {reportRound && <Card className="space-y-3">
         <h2 className="font-semibold">Record contribution — round {ordered.find((r) => r.id === reportRound)?.round_number}</h2>

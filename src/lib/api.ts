@@ -66,7 +66,7 @@ export const groupQuery = (groupId: string) =>
       const uid = await getUserId();
       const group = await must(supabase.from("equb_groups").select("*").eq("id", groupId).maybeSingle());
       if (!group) return null;
-      const [members, rounds, contributions, activity, terms, acceptances] = await Promise.all([
+      const [members, rounds, contributions, activity, terms, acceptances, memberConsents, missed, disputes, terminations, termConsents] = await Promise.all([
         must(supabase.rpc("get_group_members", { _group: groupId })),
         must(supabase.from("equb_rounds").select("*").eq("group_id", groupId).order("round_number")),
         must(supabase.from("contributions").select("*").eq("group_id", groupId)),
@@ -80,10 +80,24 @@ export const groupQuery = (groupId: string) =>
         ),
         must(supabase.from("group_terms").select("*").eq("group_id", groupId).order("version", { ascending: false })),
         must(supabase.from("term_acceptances").select("*").eq("group_id", groupId)),
+        must(supabase.from("group_members").select("user_id, verifier_consent_at").eq("group_id", groupId)),
+        must(supabase.from("missed_contributions").select("*").eq("group_id", groupId).order("created_at", { ascending: false })),
+        must(supabase.from("disputes").select("*").eq("group_id", groupId).order("opened_at", { ascending: false })),
+        must(supabase.from("group_terminations").select("*").eq("group_id", groupId)),
+        must(supabase.from("termination_consents").select("user_id").eq("group_id", groupId)),
       ]);
+      // Reconciliation is only meaningful once money has been scheduled; the RPC also re-checks membership.
+      const reconciliation = group.status === "active" || group.status === "completed" || group.status === "terminated"
+        ? await must(supabase.rpc("circle_reconciliation", { _group: groupId }))
+        : [];
       const me = members.find((m) => m.user_id === uid);
       const accepted = new Set(acceptances.filter((a) => a.version === group.terms_version).map((a) => a.user_id));
-      return { uid, group, members, rounds, contributions, activity, terms, acceptances, accepted, isOrganizer: me?.role === "organizer" };
+      const consentIds = new Set(memberConsents.filter((m) => m.verifier_consent_at).map((m) => m.user_id));
+      const termConsentIds = new Set(termConsents.map((t) => t.user_id));
+      return {
+        uid, group, members, rounds, contributions, activity, terms, acceptances, accepted,
+        isOrganizer: me?.role === "organizer", consentIds, missed, disputes, terminations, termConsentIds, reconciliation,
+      };
     },
   });
 

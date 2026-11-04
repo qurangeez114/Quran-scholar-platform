@@ -32,8 +32,8 @@ export function contributionStatus(c: ContributionLike | undefined | null): Cont
 export const CONTRIBUTION_LABEL: Record<ContributionStatus, string> = {
   missing: "Not recorded",
   recorded: "Recorded · not verified",
-  payer_confirmed: "Payer confirmed · awaiting organizer",
-  organizer_confirmed: "Organizer confirmed · awaiting payer",
+  payer_confirmed: "Payer confirmed · awaiting a verifier",
+  organizer_confirmed: "Verified by a verifier · awaiting payer",
   confirmed: "Confirmed by both",
 };
 
