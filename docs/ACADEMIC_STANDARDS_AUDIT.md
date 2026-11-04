@@ -27,3 +27,13 @@ International Center for Academic Integrity https://www.academicintegrity.org/ Â
 | Accreditation disclosure | None | Footer states no accreditation claim unless provided | CHEA |
 
 Migration: migrations/20261104_academic_standards.sql (NOT applied).
+
+## Phase 2 (2026-11-04)
+- `admin/syllabus-editor.html` + `academic/syllabus-editor.js`: owner-only editor for catalog/syllabus fields, outcomes, outcome-to-assessment mapping and per-lesson objectives, with entry checks (weights = 100%, every outcome assessed, citations have author + title). Save is disabled until the migrations are applied; RLS still authorizes writes.
+- `syllabus.html`: lesson objectives and an outcome-to-assessment alignment table (empty state when absent).
+- `lesson.html`: shows lesson objectives; grades through `qh_grade_quiz` when installed, else the existing client-graded insert.
+- `course.html`: real lesson count for guests via `qh_public_lesson_counts` when installed.
+- `ad-banner.js`: reads `qh_active_ads` when installed, else the table.
+- `certificate.html`: public certificate verification by ID via `qh_verify_certificate` (no recipient name returned).
+- Accessibility: `<main>` landmark on course pages, skip link and focus ring (site-chrome.js), account button inside a nav landmark, footer heading order.
+- Migration `migrations/20261104b_quiz_integrity_public_reads.sql` (NOT APPLIED).
