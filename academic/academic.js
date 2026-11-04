@@ -17,19 +17,22 @@ export async function courseById(id){
   const rows=await rest('qh_courses?select=*&id=eq.'+encodeURIComponent(id)+'&limit=1');return rows[0]||null;
 }
 export async function lessonsFor(id){
-  try{return await rest('qh_lessons?select=id,title,lesson_type,lesson_order&course_id=eq.'+encodeURIComponent(id)+'&order=lesson_order.asc');}catch(e){return [];}
+  const q='&course_id=eq.'+encodeURIComponent(id)+'&order=lesson_order.asc';
+  // learning_objectives exists after migration 20261104b; retry without it before then.
+  try{return await rest('qh_lessons?select=id,title,lesson_type,lesson_order,learning_objectives'+q);}catch(e){}
+  try{return await rest('qh_lessons?select=id,title,lesson_type,lesson_order'+q);}catch(e){return [];}
 }
 export function asList(v){if(v==null)return [];if(Array.isArray(v))return v;if(typeof v==='string'){try{const j=JSON.parse(v);if(Array.isArray(j))return j;}catch(e){}return v.split(/\n+/).map(s=>s.trim()).filter(Boolean);}return [v];}
 export const FOOTER_LINKS=[
   ['Academics',[['Course Catalog','/catalog.html'],['All Courses','/courses.html'],['Faculty Directory','/faculty.html'],['Academic Calendar','/student-handbook.html#calendar']]],
-  ['Students',[['Admissions','/student-handbook.html#admissions'],['Student Handbook','/student-handbook.html'],['My Progress','/my-progress.html'],['Transcript & Certificates','/transcript.html'],['FAQ','/student-handbook.html#faq']]],
+  ['Students',[['Admissions','/student-handbook.html#admissions'],['Student Handbook','/student-handbook.html'],['My Progress','/my-progress.html'],['Transcript & Certificates','/transcript.html'],['Verify a Certificate','/certificate.html'],['FAQ','/student-handbook.html#faq']]],
   ['Policies',[['Academic Integrity','/policies.html#integrity'],['Grading Policy','/policies.html#grading'],['Attendance & Participation','/policies.html#attendance'],['Accessibility','/policies.html#accessibility']]],
   ['Legal',[['Privacy Policy','/policies.html#privacy'],['Terms of Use','/policies.html#terms'],['Refund Policy','/policies.html#refund']]]
 ];
 export function renderFooter(){
   if(document.getElementById('ac-footer'))return;
   const f=document.createElement('footer');f.id='ac-footer';f.className='ac-footer';
-  f.innerHTML='<div class="ac-wrap">'+FOOTER_LINKS.map(([h,ls])=>'<nav aria-label="'+esc(h)+'"><h4>'+esc(h)+'</h4>'+ls.map(([t,u])=>'<a href="'+u+'">'+esc(t)+'</a>').join('')+'</nav>').join('')+
+  f.innerHTML='<div class="ac-wrap">'+FOOTER_LINKS.map(([h,ls])=>'<nav aria-label="'+esc(h)+'"><h2 class="fh">'+esc(h)+'</h2>'+ls.map(([t,u])=>'<a href="'+u+'">'+esc(t)+'</a>').join('')+'</nav>').join('')+
   '<p class="fine">© QuranHikma. Accreditation status: '+tbp('')+' QuranHikma does not claim accreditation unless stated here by the institution.</p></div>';
   document.body.appendChild(f);
 }
