@@ -256,6 +256,7 @@ section.src h2{font-size:25px;font-weight:600;margin-top:34px}
   <button class="bnav-btn" onclick="location.href='contradiction.html'"><span class="bni">⚡</span><span>Tensions</span></button>
   <button class="bnav-btn" onclick="location.href='narrations.html'"><span class="bni">🧵</span><span>Narrations</span></button>
 </nav>
+<script src="/research-actions.js"></script>
 <script src="/research-intent.js?v=20261029-search-recovery"></script>
 <script src="/research-discovery.js"></script>
 <script src="/hadith-connections.js"></script>
@@ -432,6 +433,13 @@ function snip(text,vars){
 }
 function esc2(t){return (t||'').toString();}
 function fullText(a){ const f=a.nextElementSibling; f.hidden=!f.hidden; a.textContent=f.hidden?'Read in full \u2193':'Show less \u2191'; return false; }
+function raId(key,r){
+  if(key==='quran') return 'q:'+r.sura+':'+r.aya;
+  if(key==='hadith'&&r.id) return 'h:'+r.id;
+  const base=[r.id,r.title,r.sura,r.aya,(r.text||'').slice(0,60)].join('|');
+  let h=0; for(let i=0;i<base.length;i++) h=(h*31+base.charCodeAt(i))|0;
+  return key+':'+(h>>>0).toString(36);
+}
 
 function resultData(el){try{return JSON.parse(el.closest('.card').dataset.result)}catch(_){return null}}
 function resultLink(key,r){
@@ -451,6 +459,8 @@ function sortResearchTraditions(rows,key){
 }
 function card(key,r,vars){
  const cfg=SRC[key], ref=cfg.ref(r);
+ let raTools='',raAttr='';
+ if(window.ResearchActions){const raKey=ResearchActions.register({id:raId(key,r),type:key,ref:(LABEL[key]||key)+(ref?' \u00b7 '+ref:''),title:r.title||'',text:r.text||'',arabic:r.arabic||'',url:resultLink(key,r),sura:r.sura,aya:r.aya});raAttr=' data-ra="'+esc(raKey)+'"';raTools=ResearchActions.bar(raKey);}
  const payload=esc(JSON.stringify({key,r,ref,query:CUR}));
  const sourceURL=key==='sira'?(r.source_ref||'').match(/https:\/\/hadithunlocked\.com\/ibnhisham\/[0-9]+\/[0-9]+/):null;
  const citation=sourceURL?'<p class="what"><a href="'+esc(sourceURL[0])+'" target="_blank" rel="noopener noreferrer">Read cited source ↗</a></p>':'';
@@ -460,7 +470,7 @@ function card(key,r,vars){
  const badge=key==='hadith'&&r.reference_status?(r.reference_status==='verified_publisher_mapping'?'<span class="ref-badge">Curated publisher reference mapping</span>':'<span class="ref-badge caution">Unverified local catalogue candidate</span>'):'';
  const context=(key==='tafsir'||key==='asbab')&&Number(r.sura)>0&&Number(r.aya)>0?'<a href="/?sura='+Number(r.sura)+'&amp;aya='+Number(r.aya)+'">Open associated verse</a>':'';
  const source=key==='quran'||key==='hadith'?'<a href="'+esc(resultLink(key,r))+'">Open '+(key==='quran'?'verse':'hadith')+' →</a>':context;
- return '<div class="card" data-result="'+payload+'"'+(key==='quran'?' data-sura="'+Number(r.sura)+'" data-aya="'+Number(r.aya)+'"':'')+'><div class="meta">'+esc(ref)+'</div>'+tradition+badge+(r.title?'<div class="ttl">'+highlight(r.title,vars)+'</div>':'')+(r.arabic?'<div class="txt" dir="rtl" lang="ar" style="font-size:1.25em;line-height:1.9">'+highlight(snip(r.arabic,vars),vars)+'</div>':'')+'<div class="txt">'+highlight(snip(r.text,vars),vars)+'</div><div class="more">'+source+'</div><div class="result-actions"><button type="button" onclick="resultAction(this,\'read\')">Read passage</button><button type="button" onclick="addResearchComparison(this)">Compare passage</button><button type="button" onclick="resultAction(this,\'copy\')">Copy</button><button type="button" onclick="resultAction(this,\'share\')">Share</button><button type="button" onclick="resultAction(this,\'save\')">Save to research</button><button type="button" onclick="resultAction(this,\'listen\')">Listen to text</button><button type="button" onclick="resultAction(this,\'related\')">Find related verses & stories</button></div><div class="result-full" hidden></div><p class="result-status" role="status" aria-live="polite"></p>'+citation+verified+related+'</div>';
+ return '<div class="card"'+raAttr+' data-result="'+payload+'"'+(key==='quran'?' data-sura="'+Number(r.sura)+'" data-aya="'+Number(r.aya)+'"':'')+'><div class="meta">'+esc(ref)+'</div>'+tradition+badge+(r.title?'<div class="ttl">'+highlight(r.title,vars)+'</div>':'')+(r.arabic?'<div class="txt" dir="rtl" lang="ar" style="font-size:1.25em;line-height:1.9">'+highlight(snip(r.arabic,vars),vars)+'</div>':'')+'<div class="txt">'+highlight(snip(r.text,vars),vars)+'</div><div class="more">'+source+'</div><div class="result-actions"><button type="button" onclick="resultAction(this,\'read\')">Read passage</button><button type="button" onclick="addResearchComparison(this)">Compare passage</button><button type="button" onclick="resultAction(this,\'copy\')">Copy</button><button type="button" onclick="resultAction(this,\'share\')">Share</button><button type="button" onclick="resultAction(this,\'save\')">Save to research</button><button type="button" onclick="resultAction(this,\'listen\')">Listen to text</button><button type="button" onclick="resultAction(this,\'related\')">Find related verses & stories</button></div><div class="result-full" hidden></div><p class="result-status" role="status" aria-live="polite"></p>'+raTools+citation+verified+related+'</div>';
 }
 function resultNormalize(v){return String(v||'').replace(/…/g,'').replace(/\s+/g,' ').trim();}
 async function resultPassage(data){
@@ -1069,15 +1079,112 @@ async function showHadith(id,hq){
 
 function jump(k){ const e=$('src-'+k); if(e) e.scrollIntoView({behavior:'smooth',block:'start'}); }
 
+/* ---- Query handling ----
+   Sentences and questions are reduced to their content words before they
+   reach the database: "What does the Quran say about treating parents?"
+   becomes "treating parents". Quoted phrases are kept as typed. */
+const STOP=new Set(('a an the and or but nor of in on at to for from by with into onto about over under than then so as is are was were be been being am do does did doing done have has had having '+
+ 'what whats which who whom whose when where why how whether if can could should would will shall may might must '+
+ 'i me my we us our you your he him his she her it its they them their this that these those there here '+
+ 'say says said tell tells told mention mentions mentioned teach teaches taught explain explains mean means meaning '+
+ 'quran qur\'an koran quranic islam islamic muslim muslims verse verses ayah ayat hadith hadiths please any some all '+
+ 'regarding concerning according something anything thing things also just really very much many more most').split(/\s+/));
+function cleanQuery(q){
+  const phrases=[]; q=q.replace(/"([^"]+)"/g,(m,p)=>{phrases.push('"'+p.trim()+'"');return ' ';});
+  if(/^\s*\d{1,3}\s*[:.]\s*\d{1,3}(\s*-\s*\d{1,3})?\s*$/.test(q)) return q.replace(/\s+/g,''); // verse reference such as 2:255
+  const raw=q.replace(/(\d)\s*:\s*(\d)/g,'$1\u0000$2').replace(/[?!.,;:()]+/g,' ').replace(/\u0000/g,':').split(/\s+/).filter(Boolean);
+  const kept=raw.filter(w=>/[\u0600-\u06FF]/.test(w)||!STOP.has(w.toLowerCase().replace(/['\u2019]s$/,'')));
+  const out=[...phrases,...kept].join(' ').trim();
+  return out||raw.join(' ');
+}
+/* ---- Verse references: 2:255, 2 255, 2.255, 2:255-257, Al-Baqarah 255, Baqarah 2:255 ---- */
+const SURAS=['fatiha','baqarah','imran','nisa','maidah','anam','araf','anfal','tawbah','yunus','hud','yusuf','rad','ibrahim','hijr','nahl','isra','kahf','maryam','taha','anbiya','hajj','muminun','nur','furqan','shuara','naml','qasas','ankabut','rum','luqman','sajdah','ahzab','saba','fatir','yasin','saffat','sad','zumar','ghafir','fussilat','shura','zukhruf','dukhan','jathiyah','ahqaf','muhammad','fath','hujurat','qaf','dhariyat','tur','najm','qamar','rahman','waqiah','hadid','mujadilah','hashr','mumtahanah','saff','jumuah','munafiqun','taghabun','talaq','tahrim','mulk','qalam','haqqah','maarij','nuh','jinn','muzzammil','muddaththir','qiyamah','insan','mursalat','naba','naziat','abasa','takwir','infitar','mutaffifin','inshiqaq','buruj','tariq','ala','ghashiyah','fajr','balad','shams','layl','duha','sharh','tin','alaq','qadr','bayyinah','zalzalah','adiyat','qariah','takathur','asr','humazah','fil','quraysh','maun','kawthar','kafirun','nasr','masad','ikhlas','falaq','nas'];
+const SURA_ALIAS={fatihah:1,faatiha:1,opening:1,cow:2,imraan:3,women:4,table:5,maida:5,cattle:6,anaam:6,heights:7,spoils:8,tawba:9,repentance:9,taubah:9,bara:9,jonah:10,joseph:12,thunder:13,abraham:14,bee:16,bani:17,israel:17,cave:18,mary:19,tha:20,prophets:21,believers:23,light:24,criterion:25,poets:26,ant:27,ants:27,story:28,spider:29,romans:30,prostration:32,sajda:32,confederates:33,sheba:34,originator:35,yaseen:36,sin:36,zumur:39,forgiver:40,mumin:40,haamim:41,consultation:41,smoke:44,kneeling:45,dunes:46,victory:48,rooms:49,qaaf:50,mount:52,star:53,moon:54,ar:55,merciful:55,event:56,iron:57,exile:59,friday:62,hypocrites:63,divorce:65,dominion:67,pen:68,noah:71,jinn:72,man:76,dahr:76,news:78,yasin:36,kauthar:108,kausar:108,ikhlaas:112,dawn:89,night:92,morning:93,fig:95,clot:96,power:97,earthquake:99,time:103,elephant:105,quraish:106,disbelievers:109,help:110,lahab:111,sincerity:112,daybreak:113,mankind:114,people:114};
+function suraNum(name){
+  const k=name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/^(surah?|surat)\s+/,'').replace(/^(al|an|ar|as|at|ash|az|ad|adh|aal|ali|ali-)[-\s']+/,'').replace(/['\u2019\u02bf\u02be`-]/g,'').replace(/\s+/g,'');
+  if(!k) return 0; const i=SURAS.indexOf(k); if(i>=0) return i+1;
+  if(SURA_ALIAS[k]) return SURA_ALIAS[k];
+  const f=SURAS.findIndex(x=>x.replace(/(.)\1/g,'$1')===k.replace(/(.)\1/g,'$1').replace(/h$/,'')||x.replace(/h$/,'')===k.replace(/h$/,'')); return f>=0?f+1:0;
+}
+const SURA_LEN=[7,286,200,176,120,165,206,75,129,109,123,111,43,52,99,128,111,110,98,135,112,78,118,64,77,227,93,88,69,60,34,30,73,54,45,83,182,88,75,85,54,53,89,59,37,35,38,29,18,45,60,49,62,55,78,96,29,22,24,13,14,11,11,18,12,12,30,52,52,44,28,28,20,56,40,31,50,40,46,42,29,19,36,25,22,17,19,26,30,20,15,21,11,8,8,19,5,8,8,11,11,8,3,9,5,4,7,3,6,3,5,4,5,6];
+function parseVerseRef(q){
+  q=q.trim().replace(/^(q|quran|qur'?an|surah?|sura)\s*/i,'');
+  let m=q.match(/^(\d{1,3})\s*[:.\s]\s*(\d{1,3})(?:\s*[-\u2013]\s*(\d{1,3}))?$/);
+  let s,a,b;
+  if(m){ s=+m[1]; a=+m[2]; b=m[3]?+m[3]:a; }
+  else if((m=q.match(/^([A-Za-z\u00c0-\u024f'\u2019\u02bf\u02be` -]+?)\s*(?:(\d{1,3})\s*:\s*)?(\d{1,3})(?:\s*[-\u2013]\s*(\d{1,3}))?$/))){
+    s=suraNum(m[1]); if(!s) return null; if(m[2]&&+m[2]!==s) return null; a=+m[3]; b=m[4]?+m[4]:a;
+  } else return null;
+  if(s<1||s>114||a<1||a>SURA_LEN[s-1]) return null;
+  b=Math.min(Math.max(b,a),SURA_LEN[s-1],a+19);
+  return {s,a,b};
+}
+async function verseLookup(ref){
+  const url=SB+'/rest/v1/ayas?select=sura_id,aya_number,english,arabic,arabic_transliteration&sura_id=eq.'+ref.s+'&aya_number=gte.'+ref.a+'&aya_number=lte.'+ref.b+'&order=aya_number';
+  const r=await fetch(url,{headers:H}); if(!r.ok) throw new Error('ayas '+r.status);
+  return (await r.json()).map(x=>({sura:x.sura_id,aya:x.aya_number,text:x.english||'',arabic:x.arabic||'',translit:x.arabic_transliteration||''}));
+}
+/* ---- Names: common Arabic transliterations -> the English forms used in the translation ---- */
+const NAMES={musa:'Moses',moosa:'Moses',mousa:'Moses',maryam:'Mary',mariam:'Mary',maryem:'Mary',ibrahim:'Abraham',ebrahim:'Abraham',ibraheem:'Abraham',isa:'Jesus',eesa:'Jesus',issa:'Jesus',yusuf:'Joseph',yousuf:'Joseph',yusef:'Joseph',yousef:'Joseph',nuh:'Noah',nooh:'Noah',adam:'Adam',hawwa:'Eve',dawud:'David',dawood:'David',daud:'David',sulayman:'Solomon',sulaiman:'Solomon',suleiman:'Solomon',harun:'Aaron',haroon:'Aaron',ismail:'Ishmael',ismael:'Ishmael',ishaq:'Isaac',yaqub:'Jacob',yakub:'Jacob',yaqoob:'Jacob',ayyub:'Job',ayub:'Job',yunus:'Jonah',younus:'Jonah',zakariya:'Zechariah',zakariyya:'Zechariah',zakaria:'Zechariah',yahya:'John',ilyas:'Elias',alyasa:'Elisha',lut:'Lot',loot:'Lot',idris:'Idrees',shuayb:'Shu\'ayb',shuaib:'Shu\'ayb',jibril:'Gabriel',jibreel:'Gabriel',firawn:'Pharaoh',firaun:'Pharaoh',pharoah:'Pharaoh',iblis:'Iblees',shaytan:'Satan',shaitan:'Satan',jalut:'Goliath',talut:'Saul',luqman:'Luqman',dhulqarnayn:'Dhul-Qarnayn',uzayr:'Ezra',haman:'Haman',qarun:'Korah'};
+function mapNames(q){
+  const used=[];
+  const out=q.replace(/[A-Za-z'\u2019]+/g,w=>{ const k=w.toLowerCase().replace(/['\u2019]/g,''); const e=NAMES[k]; if(e&&e.toLowerCase()!==k){ used.push(w+' \u2192 '+e); return e; } return w; });
+  return {q:out,used};
+}
+function terms(q){ return q.replace(/"/g,'').split(/\s+/).filter(w=>w.length>1).map(w=>w.toLowerCase()); }
+// Server variants: drop truncated stems such as "alla" for "Allah" so they are
+// not highlighted or shown as "Also searched as".
+const PROTECT=['allah','allahu','rasulullah','insha','inshallah','mashallah','subhanallah','alhamdulillah','bismillah'];
+function goodVars(vars){ return vars.filter(v=>{const l=(v||'').toLowerCase(); return !PROTECT.some(p=>p!==l&&p.startsWith(l)&&l.length>=3&&l.length<p.length);}); }
+// Rank rows inside a source by how many of the search words they contain.
+function rankRows(rows,ts){
+  if(ts.length<2) return rows;
+  const sc=r=>{const t=((r.title||'')+' '+(r.text||'')+' '+(r.arabic||'')).toLowerCase(); return ts.reduce((a,w)=>a+(t.includes(w.replace(/(ing|ed|es|s)$/,''))?1:0),0);};
+  return rows.map((r,i)=>[r,sc(r),i]).sort((x,y)=>y[1]-x[1]||x[2]-y[2]).map(x=>x[0]);
+}
+// Did you mean: uses the suggest_terms RPC (migrations/20261020_search_fuzzy.sql)
+// when it exists; silently does nothing before that migration is applied.
+async function didYouMean(q){
+  try{ const r=await rpc('suggest_terms',{q:q,lim:3}); return (r||[]).map(x=>x.suggestion||x).filter(s=>s&&s.toLowerCase()!==q.toLowerCase()); }catch(e){ return []; }
+}
+function srcSection(key,r,vars,q){
+  let h=`<h2>${esc(LABEL[key])} <small>${r.failed?'timed out':r.count?(r.capped?'more than 1,000 matches':n(r.count)+' match'+(r.count==1?'':'es')):'no matches'}</small></h2><p class="what">${esc(SRC[key].what)}</p>${r.relaxed?'<p class="what"><i>No passage has every word you typed, so these are the closest matches: they contain most of your words.</i></p>':''}`;
+  if(r.failed) h+=`<div class="none">This source took too long to answer for the whole phrase. <a href="#" onclick="retrySrc('${key}');return false">Try again with the main word only</a></div>`;
+  else if(r.count){
+    h+=rankRows(r.rows||[],terms(q)).map(x=>card(key,x,vars)).join('');
+    if(r.count>(r.rows||[]).length) h+=`<div class="more"><a href="research.html?q=${encodeURIComponent(q)}${['hadith','tafsir'].includes(key)?'&source='+key:''}">See all ${r.capped?'1,000+':n(r.count)} in the full search →</a></div>`;
+  } else h+='<div class="none">Nothing in this source for this search.</div>';
+  return h;
+}
+let SEQ=0, LASTQ='';
+async function retrySrc(key){
+  const el=$('src-'+key); if(!el) return;
+  const ts=terms(LASTQ).sort((a,b)=>b.length-a.length); const q1=ts[0]||LASTQ;
+  el.innerHTML=`<h2>${esc(LABEL[key])} <small><span class="spin"></span>searching</small></h2>`;
+  let r; try{ r=await rpc('site_search_src',{src:key,q:q1,lim:6}); }catch(e){ r={count:0,rows:[],failed:true}; }
+  const vars=goodVars([...new Set([...(r.variants||[]),...terms(LASTQ)])]);
+  el.innerHTML=srcSection(key,r,vars,LASTQ)+(r.failed?'':`<p class="what"><i>Searched for \u201c${esc(q1)}\u201d only.</i></p>`);
+  if(window.ResearchActions) ResearchActions.restore(el);
+}
+
 async function search(q){
   q=q.trim();
   discovery.cancel();discovery.refresh();
   if(!q){ $('out').innerHTML='<div class="empty">Type a word or question in the box above, then press Search.</div>'; $('q').focus(); return; }
+  // Symbols or punctuation only: nothing to search for.
+  if(!/[\p{L}\p{N}]/u.test(q)){ $('out').innerHTML='<div class="empty">That search has no letters or numbers in it. Type a word, a name, a question, or a verse number such as 2:255.</div>'; return; }
   const version=++searchVersion;
   if(searchController)searchController.abort();
   searchController=new AbortController();
   const signal=searchController.signal;
   CUR=q;
+  const my=++SEQ;
+  const nm=mapNames(cleanQuery(q));
+  const sq=nm.q; LASTQ=sq;
+  // Prophet names (Musa, Maryam…) are searched with the English forms the translation uses.
+  const nq=nm.used.length?sq:q;
+  // Only very common words ("the", "what is"): ask for something more specific.
+  if(!terms(sq).some(w=>!STOP.has(w))&&!/[\u0600-\u06FF\u1200-\u137F]/.test(sq)&&!/"/.test(q)){ $('out').innerHTML=`<div class="empty">\u201c${esc(q)}\u201d only has very common words, which appear almost everywhere. Add a more specific word, for example a subject, a name, or a verse number such as 2:255.</div>`; return; }
   document.querySelectorAll('#scope,.areas').forEach(e=>e.style.display='none');
   setTimeout(()=>$('out').scrollIntoView({behavior:'smooth',block:'start'}),50);
   const SCT=SEL.slice();
@@ -1117,8 +1224,10 @@ async function search(q){
       if(!result.count || result.ambiguous || result.conflicting_local_count>0)discovery.discover(q,{weak:!!result.count});
       return;
     }
-    const res=(await Promise.all((only?only:ORDER).map(k=>rpc(k==='sira'?'qh_sira_search':'site_search_src',k==='sira'?{q,lim:12}:{src:k,q,lim:6},signal).then(r=>{if(!r)throw new Error('No source response');return r;}).catch(()=>({key:k,count:0,rows:[],variants:[q],failed:true})))));
+    const res=(await Promise.all((only?only:ORDER).map(k=>rpc(k==='sira'?'qh_sira_search':'site_search_src',k==='sira'?{q,lim:12}:{src:k,q:nq,lim:6},signal).then(r=>{if(!r)throw new Error('No source response');return r;}).catch(()=>({key:k,count:0,rows:[],variants:[q],failed:true})))));
     if(version!==searchVersion)return;
+    // Mapped names match inside words ("Moses" also hits "mosquito"): keep whole-word Quran matches.
+    if(nm.used.length){const nameRe=new RegExp('\\b('+nm.used.map(u=>u.split(' \u2192 ')[1].replace(/[^A-Za-z' -]/g,'')).join('|')+')\\b','i');res.forEach(r=>{if(r&&r.key==='quran'&&Array.isArray(r.rows)){const keep=r.rows.filter(x=>nameRe.test(x.text||''));if(keep.length)r.rows=keep;}});}
     // Keep the source order: a long question does not automatically imply Sira.
     if(res.some(r=>r.topic_match)){const priority=['quran','hadith','tafsir','madhhab','sira'];res.sort((a,b)=>{const rank=k=>priority.includes(k)?priority.indexOf(k):priority.length;return rank(a.key)-rank(b.key);});}
     const topicSearch=res.some(r=>r.topic_match);
@@ -1162,6 +1271,7 @@ loadWhere().then(()=>{ if(hid&&!p){ showHadith(hid,new URLSearchParams(location.
 </script>
 <script src="/research-smart.js?v=20261029-search-recovery"></script>
 <script src="/quran-verse-audio.js" defer></script>
+<script src="/presentation-builder.js" defer></script>
 </body>
 </html>
 

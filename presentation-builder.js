@@ -116,6 +116,7 @@
     if (!exists) {
       basket.push(item);
       saveBasket(basket);
+      try { updateFloatCount(); } catch (e) {}
     }
     return !exists;
   }
@@ -249,6 +250,8 @@
     });
     observer.observe(document.body, { childList:true, subtree:true });
   }
+
+  window.QSPresentation = { addItem: addItem, getBasket: getBasket, toast: showToast, refresh: updateFloatCount };
 
   function init() {
     injectStyles();
