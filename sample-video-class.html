@@ -7,12 +7,15 @@ const questions=[{"id":"claim","q":"🎯 Claim catcher: which question does Chri
 
 function finalAttempts(){return state.attempts.filter(a=>a.phase==='final'&&a.version===2);}
 function hasPassed(){return finalAttempts().some(a=>a.percent>=PASS_MARK);}
+function shuffled(n){const a=[...Array(n).keys()];for(let i=n-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
 function questionAt(session){
- const base=questions[session.index];
- const q=session.phase==='final'?{...base,...base.variants[session.variant%base.variants.length]}:{...base};
- // Deterministic per-attempt rotation; all feedback and grading use the mapped index.
- const shift=(session.variant+session.index+(session.phase==='final'?1:0))%q.options.length;
- const indices=q.options.map((_,i)=>(i+shift)%q.options.length);
+ // Random question order and option order per attempt (stored in the session so refresh keeps it).
+ if(!session.order||!session.optOrders){session.order=shuffled(questions.length);session.optOrders=questions.map(x=>shuffled(x.options.length));persist();}
+ const qi=session.order[session.index],base=questions[qi];
+ // Final attempts rotate through every available wording (variants first, then the original) so a retake is reworded.
+ const pool=[...(base.variants||[]),{q:base.q,options:base.options,answer:base.answer,rationale:base.rationale}];
+ const q=session.phase==='final'?{...base,...pool[session.variant%pool.length]}:{...base};
+ const indices=session.optOrders[qi].slice(0,q.options.length);
  return {...q,options:indices.map(i=>q.options[i]),rationale:indices.map(i=>q.rationale[i]),answer:indices.indexOf(q.answer)};
 }
 function persist(){try{localStorage.setItem(key,JSON.stringify(state));return true;}catch{$('notice').textContent='Browser storage is unavailable. Keep this window open; refresh may lose progress.';return false;}}
@@ -27,7 +30,7 @@ function savePage(){const title=$('page-title').value.trim();if(!title){notice('
 function startQuiz(phase){
  if(phase==='final'&&!state.attempts.some(a=>a.phase==='practice'&&a.version===2)){notice('Complete the guided lesson quiz before the final check.');return;}
  const variant=phase==='final'?finalAttempts().length:0;
- state.quizSession={phase,index:0,answers:[],correct:[],variant,reviewed:false};persist();quiz();
+ state.quizSession={phase,index:0,answers:[],correct:[],variant,reviewed:false,order:shuffled(questions.length),optOrders:questions.map(x=>shuffled(x.options.length))};persist();quiz();
 }
 function quiz(){
  const session=state.quizSession;
