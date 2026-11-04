@@ -24,6 +24,16 @@ function CircleDetails() {
   const qc = useQueryClient();
   const q = useQuery(groupQuery(groupId));
   const iq = useQuery({ ...invitesQuery(groupId), enabled: q.data?.isOrganizer === true });
+  const verifierQuery = useQuery({
+    queryKey: ["verifier-consent", groupId, q.data?.uid],
+    enabled: Boolean(q.data?.uid),
+    queryFn: async () => {
+      const { data, error } = await supabase.from("group_members").select("*")
+        .eq("group_id", groupId).eq("user_id", q.data!.uid).single();
+      if (error) throw error;
+      return (data as typeof data & { verifier_consent_at?: string | null }).verifier_consent_at ?? null;
+    },
+  });
   const [working, setWorking] = useState(false);
   const [reportRound, setReportRound] = useState("");
   const [reportPayer, setReportPayer] = useState("");
@@ -145,7 +155,7 @@ function CircleDetails() {
         {ordered.length === 0 && <Card><p className="text-sm text-muted-foreground">The payout schedule has not been generated.</p></Card>}
         {ordered.map((r) => {
           const mine = contributions.find((c) => c.round_id === r.id && c.payer_id === uid);
-          const mineStatus = contributionStatus(mine);
+          const canIndependentlyVerify = isOrganizer || Boolean(verifierQuery.data);
           const rc = contributions.filter((c) => c.round_id === r.id);
           const totals = roundTotals(r, memberIds, amount, contributions);
           const allConfirmed = memberIds.length > 0 && memberIds.every((id) => {
@@ -168,8 +178,11 @@ function CircleDetails() {
                 <tbody>{members.map((m) => {
                   const c = rc.find((x) => x.payer_id === m.user_id);
                   const cs = contributionStatus(c);
-                  const allowed = c && cs !== "confirmed" && (m.user_id === uid || isOrganizer);
-                  return <tr key={m.user_id} className="border-b last:border-0"><td className="py-3 pr-2">{m.display_name}{m.user_id === uid ? " (you)" : ""}</td><td className="py-3 pr-2"><ContributionPill status={cs} /></td><td className="py-3">{allowed && <Button variant="outline" size="sm" disabled={working} onClick={() => { void act("Confirmation submitted", () => supabase.rpc("confirm_contribution", { _contribution: c.id })); }}>Confirm</Button>}</td></tr>;
+                  const allowed = c && g.status === "active" && (
+                    (m.user_id === uid && !c.payer_confirmed_at) ||
+                    (m.user_id !== uid && canIndependentlyVerify && !c.organizer_confirmed_at)
+                  );
+                  return <tr key={m.user_id} className="border-b last:border-0"><td className="py-3 pr-2">{m.display_name}{m.user_id === uid ? " (you)" : ""}</td><td className="py-3 pr-2"><ContributionPill status={cs} /></td><td className="py-3">{allowed && <Button variant="outline" size="sm" disabled={working} onClick={() => { void act("Confirmation submitted", () => supabase.rpc("confirm_contribution", { _contribution: c.id })); }}>{m.user_id === uid ? "Confirm I contributed" : "Verify payment received"}</Button>}</td></tr>;
                 })}</tbody>
               </table></div>
               <div className="flex flex-wrap gap-2 border-t pt-3">
