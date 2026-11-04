@@ -32,3 +32,21 @@ These resources are kept for *future investigation*, teaching-source comparison 
 - Follow each cited manuscript, historical report, edition, inscription, and scholarly reference separately to a traceable primary text or authoritative edition.
 - Document provenance, dates, claim, evidence, major interpretations, and contrary scholarship; label disputed conclusions.
 - Add verse-linked Sources entries only when an independently checked historical or textual relationship is supported; add comprehensive critical discussion to the Stories/History dossier where appropriate.
+
+
+## RH-2026-11-03-003 — QuranHikma Stories Netlify preview #87
+
+- **URL:** https://deploy-preview-87--fascinating-sunburst-516df8.netlify.app/stories.html?story=3
+- **Type:** Internal QuranHikma deployment preview / historical UI reference (not a documentary source).
+- **Potential use:** Preserve a point-in-time reference for the Stories interface, story deep-link behavior, layout, and related Sources ↔ Stories/History integration. Compare against current production when investigating regressions.
+- **Access/version note:** This is a numbered deployment preview, potentially outdated relative to `main` and production. Page content and story ID/slug behavior were not independently confirmed on 2026-11-03 (fetch unavailable).
+- **Research rule:** Do not cite the preview itself as proof of a pre-Islamic textual parallel. Follow any displayed sources back to their primary texts.
+
+## RH-2026-11-03-004 — New Advent historical Christian text library
+
+- **URL:** https://www.newadvent.org/
+- **Type:** Digital research/reference library including Church Fathers, Catholic Encyclopedia, Bible, Summa Theologiae and other religious works.
+- **Verified access:** Homepage and navigation sections visible on 2026-11-03.
+- **Potential use:** Locate translations and chapter/section references for early Christian, patristic, and apocryphal traditions relevant to Qur’anic stories, Mary, Jesus and other subjects.
+- **Priority subcollection:** https://www.newadvent.org/fathers/ — Fathers and early Christian writings.
+- **Research rule:** Distinguish the historical date of an original work from that of the hosted translation and manuscript witnesses. Record the exact work, chapter/section, translator or edition where identified, textual similarity and differences, and critical scholarly qualifications. The homepage or encyclopedia entry alone is not a primary-text citation, and translations should be corroborated with critical editions when possible.
