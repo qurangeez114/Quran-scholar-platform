@@ -22,7 +22,7 @@ const LEGACY = ['quran','hadith','tafsir','madhhab','sira','campaigns','themes',
 
 // The 15 audit queries (2026-11-03). kind decides which page path handles them.
 export const QUERIES = [
-  { q: 'mercy' }, { q: 'patience' }, { q: 'prayer times' }, { q: 'inheritance of daughters', expectQuranTop: '4:11' },
+  { q: 'mercy', expectQuranTop: '7:151' }, { q: 'patience' }, { q: 'prayer times' }, { q: 'inheritance of daughters', expectQuranTop: '4:11' },
   { q: 'الرحمن', pair: 'ar1' }, { q: 'الرَّحْمَٰنُ', pair: 'ar1' }, { q: 'بسم الله الرحمن الرحيم', expectQuran: true },
   { q: 'صبر', expectQuran: true }, { q: '2:255', kind: 'verse' }, { q: 'Bukhari 1', kind: 'hadithref' },
   { q: 'Muslim 2328', kind: 'hadithref' }, { q: 'intention actions' }, { q: 'ምሕረት', expectQuran: true, ethiopic: true },
@@ -60,7 +60,10 @@ async function runQuery(item, useRanked) {
   const rest = useRanked ? LEGACY.filter(k => !['quran','hadith','tafsir'].includes(k)) : LEGACY;
   const legacy = rest.map(k => post(k === 'sira' ? 'qh_sira_search' : 'site_search_src', k === 'sira' ? { q: item.q, lim: 12 } : { src: k, q: item.q, lim: 6 })
     .then(r => [k, r.json]).catch(() => [k, { count: 0, rows: [], failed: true }]));
-  const ranked = useRanked ? post('qh_research_search', { q: item.q }).then(r => r.json) : null;
+  // Same as research.html: one ranked request per source, in parallel.
+  const ranked = useRanked ? Promise.all(['quran','hadith','tafsir'].map(src => post('qh_research_search', { q: item.q, p_source: src })
+    .then(r => r.json.results?.[0] ? { ...r.json.results[0], ms: r.ms } : null).catch(() => null)))
+    .then(list => ({ ok: true, results: list.filter(Boolean), ms: Math.max(...list.map(x => x?.ms || 0)) })) : null;
   const [lr, rr] = await Promise.all([Promise.all(legacy), ranked]);
   const counts = {}, top = {}, failed = [];
   for (const [k, v] of lr) { counts[k] = v.count ?? (v.rows || []).length; if (v.failed) failed.push(k); top[k] = v.rows?.[0] ? (v.rows[0].sura ? `${v.rows[0].sura}:${v.rows[0].aya}` : v.rows[0].id ?? null) : null; }
@@ -80,7 +83,8 @@ for (const item of QUERIES) {
   for (let i = 0; i < ROUNDS; i++) runs.push(await runQuery(item, useRanked));
   const ms = runs.map(r => r.ms);
   const last = runs[runs.length - 1];
-  const row = { q: item.q, coldMs: Math.round(ms[0]), warmP50: Math.round(pct(ms.slice(1).length ? ms.slice(1) : ms, 50)), p95: Math.round(pct(ms, 95)), counts: last.counts, top: last.top, failed: last.failed || [] };
+  const rk = runs.map(r => r.rankedMs).filter(x => x != null);
+  const row = { q: item.q, rankedMaxMs: rk.length ? Math.round(Math.max(...rk)) : null, coldMs: Math.round(ms[0]), warmP50: Math.round(pct(ms.slice(1).length ? ms.slice(1) : ms, 50)), p95: Math.round(pct(ms, 95)), counts: last.counts, top: last.top, failed: last.failed || [] };
   results.push(row);
   const total = Object.values(last.counts).reduce((a, b) => a + (b || 0), 0);
   if (item.expectZero && total !== 0) failures.push(`${item.q}: expected 0 results, got ${total}`);
@@ -89,7 +93,7 @@ for (const item of QUERIES) {
   if (item.kind === 'verse' && last.counts.quran !== 1) failures.push(`${item.q}: verse lookup failed`);
   if (item.kind === 'hadithref' && !last.referenceMatch) failures.push(`${item.q}: reference lookup did not match`);
   if (row.failed.length) failures.push(`${item.q}: sources failed/timed out: ${row.failed.join(',')}`);
-  console.log(`${item.q.padEnd(26)} cold ${String(row.coldMs).padStart(6)} ms  warm p50 ${String(row.warmP50).padStart(6)} ms  ` +
+  console.log(`${item.q.padEnd(26)} cold ${String(row.coldMs).padStart(6)} ms  warm p50 ${String(row.warmP50).padStart(6)} ms  ${row.rankedMaxMs != null ? 'ranked ' + row.rankedMaxMs + ' ms  ' : ''}` +
     Object.entries(last.counts).filter(([, v]) => v).map(([k, v]) => `${k}:${v}`).join(' '));
 }
 const pairs = {};
@@ -99,6 +103,8 @@ for (const [name, [a, b]] of Object.entries(pairs)) {
 }
 const all = results.flatMap(r => [r.coldMs, r.p95]);
 const p95 = pct(all, 95);
+const rk95 = results.map(r => r.rankedMaxMs).filter(x => x != null);
+if (rk95.length) console.log(`\nRanked requests (slowest source per query, max of rounds): p95 ${Math.round(pct(rk95, 95))} ms`);
 console.log(`\nOverall p95 ${Math.round(p95)} ms (target ${P95} ms)`);
 if (p95 > P95) failures.push(`p95 ${Math.round(p95)} ms exceeds ${P95} ms`);
 const jsonOut = opt('--json');
