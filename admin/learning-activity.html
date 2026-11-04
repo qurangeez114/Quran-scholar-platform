@@ -1,40 +1,58 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Learning Activity · QuranHikma Administration</title><script src="/site-chrome.js" defer></script><style>
 :root{color-scheme:light}*{box-sizing:border-box}body{background:#f6f8f8;color:#253b42;font:16px system-ui,sans-serif;margin:0}main{max-width:1150px;margin:auto;padding:28px 16px}h1{font-size:30px;margin:5px 0}p{line-height:1.55}.muted{color:#61757a}.head{margin-bottom:24px}.panel{background:#fff;border:1px solid #d9e3e3;border-radius:12px;padding:20px;margin:16px 0}#status{padding:10px 0}.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}.kpis div{background:#f6f9f9;padding:16px;border-radius:10px}.kpis strong{display:block;font-size:28px;color:#104e53}.tablewrap{overflow:auto}table{border-collapse:collapse;width:100%;min-width:570px}th,td{text-align:left;border-bottom:1px solid #e2e9e9;padding:11px 9px}th{font-size:13px;color:#667c83}select,button{font:inherit;padding:8px 11px;border-radius:7px;border:1px solid #b9c9cc}button{background:#175e61;color:#fff;cursor:pointer}nav a{color:#176b65;margin-right:16px}@media(max-width:600px){main{padding:18px 12px}h1{font-size:23px}}
-</style></head><body><main><header class="head"><p class="muted">QuranHikma / Administration</p><h1>Class activity and study time</h1><p class="muted">Estimated time with the page visible and recently used. This is not verified attendance or proof of learning.</p><nav><a href="/admin/lms.html">Admin dashboard</a><a href="/courses.html">Courses</a></nav></header><div id="status" role="status">Checking administrator permissions…</div><div id="report" hidden><div class="kpis" id="stats"></div><section class="panel"><label>Reporting period <select id="period"><option value="7">Past 7 days</option><option value="30" selected>Past 30 days</option></select></label> <button id="refresh">Refresh</button><p class="muted">This report shows recorded engagement intervals, not individual page opens. Earlier activity is not backfilled. Inactive tabs and unsigned visits are excluded.</p></section><section class="panel"><h2>Activity by account and page</h2><div class="tablewrap"><table><thead><tr><th>Account identifier</th><th>Page</th><th>Engagement intervals</th><th>Estimated active minutes</th></tr></thead><tbody id="rows"></tbody></table></div></section></div></main>
+.tabs button{background:#e8f0f0;color:#175e61;margin-right:6px}.tabs button[aria-pressed=true]{background:#175e61;color:#fff}.bar{height:8px;background:#e2e9e9;border-radius:4px;min-width:80px}.bar i{display:block;height:100%;background:#2f8f7a;border-radius:4px}td.stop{color:#a33;font-weight:600}</style></head><body><main><header class="head"><p class="muted">QuranHikma / Administration</p><h1>Class activity and study time</h1><p class="muted">Estimated time with the page visible and recently used. This is not verified attendance or proof of learning.</p><nav><a href="/admin/lms.html">Admin dashboard</a><a href="/courses.html">Courses</a></nav></header><div id="status" role="status">Checking administrator permissions…</div><div id="report" hidden><div class="kpis" id="stats"></div><section class="panel"><label>Reporting period <select id="period"><option value="7">Past 7 days</option><option value="30" selected>Past 30 days</option><option value="90">Past 90 days</option><option value="365">Past year</option></select></label> <button id="refresh">Refresh</button><p class="muted">Totals are calculated on the server, so every recorded interval in the period is counted. Earlier activity is not backfilled. Inactive tabs and unsigned visits are excluded.</p></section>
+<section class="panel"><h2>Where students stop (lesson completion)</h2><label>Class <select id="course"><option value="">All classes</option></select></label><p class="muted">Enrolled students only (instructors and staff excluded). "Opened" means the student completed the lesson or has study time on it. "Stopped here" counts students whose furthest lesson reached is this one. Covers all time, not just the reporting period.</p><div class="tablewrap"><table><thead><tr><th>Class</th><th>#</th><th>Lesson</th><th>Enrolled</th><th>Opened</th><th>Completed</th><th>Completion</th><th>Stopped here</th><th>Active minutes</th></tr></thead><tbody id="funnel"></tbody></table></div></section>
+<section class="panel"><h2>Activity by person and page</h2><div class="tabs" role="group" aria-label="Show"><button type="button" data-g="student" aria-pressed="true">Students</button><button type="button" data-g="instructor" aria-pressed="false">Instructors &amp; staff</button><button type="button" data-g="" aria-pressed="false">Everyone</button></div><div class="tablewrap"><table><thead><tr><th>Name</th><th>Group</th><th>Page</th><th>Class</th><th>Engagement intervals</th><th>Estimated active minutes</th></tr></thead><tbody id="rows"></tbody></table></div></section></div></main>
 <script type="module">
 import {supabase} from '/accounts/client.js';
 import {lmsRequest} from '/accounts/lms-access.js';
-const status=document.getElementById('status'),report=document.getElementById('report');
-const period=document.getElementById('period'),rows=document.getElementById('rows'),stats=document.getElementById('stats');
-const duration=n=>String(Math.round(n/60*10)/10);
+const $=id=>document.getElementById(id);
+const status=$('status'),report=$('report'),period=$('period'),rows=$('rows'),stats=$('stats'),funnel=$('funnel'),courseSel=$('course');
+const minutes=n=>String(Math.round(Number(n||0)/60*10)/10);
+const PAGE_NAMES={'/lesson.html':'Lesson','/course.html':'Class page','/courses.html':'Courses list','/academic-hub.html':'Academic hub','/student-dashboard.html':'Student dashboard','/instructor-dashboard.html':'Instructor dashboard'};
+let summary=[],group='student';
+function cell(tr,val,cls){const td=document.createElement('td');if(val instanceof Node)td.append(val);else td.textContent=String(val??'');if(cls)td.className=cls;tr.append(td);}
+function renderRows(){
+ rows.replaceChildren();
+ const list=summary.filter(r=>!group||(group==='student'?r.person_group==='student':r.person_group!=='student'));
+ if(!list.length){const tr=document.createElement('tr');cell(tr,'No activity in this period.');rows.append(tr);return;}
+ for(const r of list){const tr=document.createElement('tr');const name=document.createElement('span');name.textContent=r.person_name;if(r.email)name.title=r.email;
+  cell(tr,name);cell(tr,r.person_group==='staff'?'Staff':r.person_group==='instructor'?'Instructor':'Student');cell(tr,PAGE_NAMES[r.page_path]||r.page_path);cell(tr,r.course_title||'—');cell(tr,r.intervals);cell(tr,minutes(r.active_seconds));rows.append(tr);}
+}
+function renderStats(){
+ const sum=(f)=>summary.filter(f).reduce((a,r)=>a+Number(r.active_seconds||0),0);
+ const ppl=(f)=>new Set(summary.filter(f).map(r=>r.user_id)).size;
+ const isS=r=>r.person_group==='student',isI=r=>!isS(r);
+ const items=[['Students active',ppl(isS)],['Instructors/staff active',ppl(isI)],['Student active hours',Math.round(sum(isS)/3600*10)/10],['Instructor active hours',Math.round(sum(isI)/3600*10)/10],['Engagement intervals',summary.reduce((a,r)=>a+Number(r.intervals||0),0)]];
+ stats.replaceChildren();for(const [n,v] of items){const d=document.createElement('div'),b=document.createElement('strong'),s=document.createElement('span');b.textContent=String(v);s.textContent=n;d.append(b,s);stats.append(d);}
+}
+async function loadFunnel(){
+ funnel.replaceChildren();
+ const {data,error}=await supabase.rpc('qh_learning_lesson_funnel',{p_course:courseSel.value||null});
+ if(error){const tr=document.createElement('tr');cell(tr,'Unable to load: '+error.message);funnel.append(tr);return;}
+ if(!courseSel.dataset.filled){courseSel.dataset.filled='1';const seen=new Map();for(const r of data||[])seen.set(r.course_id,r.course_title);
+  for(const [id,t] of [...seen].sort((a,b)=>String(a[1]).localeCompare(String(b[1])))){const o=document.createElement('option');o.value=id;o.textContent=t;courseSel.append(o);}}
+ const shown=(data||[]).filter(r=>Number(r.enrolled)>0||courseSel.value);
+ if(!shown.length){const tr=document.createElement('tr');cell(tr,'No enrolled students yet.');funnel.append(tr);return;}
+ for(const r of shown){const tr=document.createElement('tr');const pct=Number(r.enrolled)?Math.round(Number(r.completed)/Number(r.enrolled)*100):0;
+  const bar=document.createElement('div');bar.className='bar';bar.title=pct+'%';const i=document.createElement('i');i.style.width=pct+'%';bar.append(i);const w=document.createElement('span');w.append(bar,document.createTextNode(pct+'%'));
+  cell(tr,r.course_title);cell(tr,r.lesson_order);cell(tr,r.lesson_title);cell(tr,r.enrolled);cell(tr,r.opened);cell(tr,r.completed);cell(tr,w);cell(tr,r.stopped_here,Number(r.stopped_here)>0?'stop':'');cell(tr,minutes(r.active_seconds));funnel.append(tr);}
+}
 async function load(){
  const {data:{user},error:userError}=await supabase.auth.getUser();
  if(userError||!user){status.textContent='Please sign in with an administrator account.';return;}
- // This is a visual gate; database RLS independently authorizes all returned rows.
+ // Visual gate only; the database functions independently require staff (owner) access.
  let session;
  try{session=await lmsRequest('session');}catch{status.textContent='Cannot verify administrator access.';return;}
  if(session?.role!=='owner'){status.textContent='Owner administrator access required.';return;}
  status.textContent='Loading recorded activity…';
- const start=new Date(Date.now()-Number(period.value)*86400000).toISOString();
- const {data,error}=await supabase.from('qh_learning_activity').select('user_id,course_id,page_path,active_seconds,visited_at').gte('visited_at',start).order('visited_at',{ascending:false}).limit(5000);
+ const {data,error}=await supabase.rpc('qh_learning_activity_summary',{p_days:Number(period.value)});
  if(error){status.textContent='Unable to load authorized activity: '+error.message;return;}
- const group=new Map(),people=new Set();let total=0;
- for(const item of data||[]){
-  people.add(item.user_id);total+=item.active_seconds||0;
-  const key=item.user_id+'|'+(item.course_id||'')+'|'+item.page_path;
-  const rec=group.get(key)||{id:item.user_id,page:item.page_path,course:item.course_id,visits:0,seconds:0};
-  rec.visits++;rec.seconds+=item.active_seconds||0;group.set(key,rec);
- }
- const items=[['Accounts observed',people.size],['Engagement intervals',(data||[]).length],['Active hours',Math.round(total/3600*10)/10]];
- stats.replaceChildren();for(const [name,value] of items){const d=document.createElement('div'),b=document.createElement('strong'),s=document.createElement('span');b.textContent=String(value);s.textContent=name;d.append(b,s);stats.append(d);}
- rows.replaceChildren();
- for(const rec of [...group.values()].sort((a,b)=>b.seconds-a.seconds)){
-  const tr=document.createElement('tr');for(const val of [rec.id.slice(0,8)+'…',rec.page+(rec.course?' · '+rec.course.slice(0,8):''),rec.visits,duration(rec.seconds)]){
-   const td=document.createElement('td');td.textContent=String(val);tr.append(td);
-  }rows.append(tr);
- }
- report.hidden=false;status.textContent=(data||[]).length===5000?'Showing the latest 5,000 activity intervals; totals may be incomplete.':'Authorized report loaded.';
+ summary=data||[];renderStats();renderRows();await loadFunnel();
+ report.hidden=false;status.textContent='Report loaded: all recorded activity in the period, aggregated on the server.';
 }
-document.getElementById('refresh').addEventListener('click',load);period.addEventListener('change',load);load();
+document.querySelectorAll('.tabs button').forEach(b=>b.addEventListener('click',()=>{group=b.dataset.g;document.querySelectorAll('.tabs button').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));renderRows();}));
+courseSel.addEventListener('change',loadFunnel);
+$('refresh').addEventListener('click',load);period.addEventListener('change',load);load();
 </script><script src="/quran-verse-audio.js" defer></script>
 </body></html>

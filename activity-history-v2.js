@@ -220,6 +220,7 @@
         // Handle both formats: qnav_hist uses 'label'/'time', manual uses 'title'/'timestamp'
         const title = escapeHtml(item.label || item.title || 'Page');
         const url = escapeHtml(item.url || '');
+        const rawTitle = item.label || item.title || 'Page', rawUrl = item.url || '';
         const icon = item.icon || '📄';
         const time = formatTime(item.time || item.timestamp);
 
@@ -235,8 +236,8 @@
     </div>
   </div>
   <div class="qhikma-item-actions">
-    <button class="qhikma-btn-small" onclick="event.preventDefault(); qhikmaAddToResearch('${escapeAttr(title)}', '${escapeAttr(url)}')" title="Save">💾</button>
-    <button class="qhikma-btn-small" onclick="event.preventDefault(); qhikmaAddToPresentation('${escapeAttr(title)}', '${escapeAttr(url)}')" title="Add to slides">🎞</button>
+    <button class="qhikma-btn-small" onclick="event.preventDefault(); qhikmaAddToResearch(${jsArg(rawTitle)}, ${jsArg(rawUrl)})" title="Save">💾</button>
+    <button class="qhikma-btn-small" onclick="event.preventDefault(); qhikmaAddToPresentation(${jsArg(rawTitle)}, ${jsArg(rawUrl)})" title="Add to slides">🎞</button>
   </div>
 </a>
           `;
@@ -380,6 +381,13 @@
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+  }
+
+  // Safe JS string literal for an inline handler: JSON-quote, then HTML-escape for the attribute.
+  function jsArg(text) {
+    return String(JSON.stringify(String(text == null ? '' : text)))
+      .replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+      .replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
   function escapeAttr(text) {
