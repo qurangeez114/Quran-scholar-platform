@@ -46,7 +46,8 @@ declare
   script text;
   pp int := greatest(1, least(coalesce(p_per_page, 6), 50));
   off int := (greatest(coalesce(p_page, 1), 1) - 1) * greatest(1, least(coalesce(p_per_page, 6), 50));
-  cap constant int := 5000;
+  cap constant int := 1000;   -- totals are exact up to 1000, then shown as 1000+
+  pool int;                     -- only this many index candidates are fully scored
   srcs text[];
   s text;
   tsq tsquery;
@@ -63,6 +64,7 @@ begin
   if p_source is not null and p_source not in ('quran','hadith','tafsir') then
     return jsonb_build_object('ok', false, 'reason', 'unsupported_source');
   end if;
+  pool := greatest(300, off + pp);
   srcs := case when p_source is null then array['quran','hadith','tafsir'] else array[p_source] end;
   script := case when qq ~ '[؀-ۿ]' then 'ar' when qq ~ '[ሀ-፿]' then 'ge' else 'en' end;
 
@@ -96,14 +98,16 @@ begin
           into c, r from m;
       elsif s = 'hadith' then
         with m as materialized (
-               select hc.id, ts_rank_cd(hc.fts_en, tsq, 1)
-                        + case when hc.text_english ilike '%' || qq || '%' then 1 else 0 end as sc
+               select hc.id, ts_rank_cd(hc.fts_en, tsq, 1) as r0
                  from public.hadith_corpus hc
                 where hc.fts_en @@ tsq
                   and (colls is null or hc.collection = any(colls))
                   and not exists (select 1 from public.hadith_text_duplicates d where d.duplicate_id = hc.id)
                 limit cap + 1),
-             pg as (select id, sc from m order by sc desc, id limit pp offset off)
+             top as materialized (select id, r0 from m order by r0 desc, id limit pool),
+             sc as (select t.id, t.r0 + case when h.text_english ilike '%' || qq || '%' then 1 else 0 end as sc
+                      from top t join public.hadith_corpus h on h.id = t.id),
+             pg as (select id, sc from sc order by sc desc, id limit pp offset off)
         select (select count(*)::int from m),
                coalesce((select jsonb_agg(jsonb_build_object('id', h.id, 'collection', h.collection, 'number', h.hadith_number,
                     'tradition', h.tradition, 'grade', h.grade, 'book_chapter', h.book_chapter,
@@ -113,13 +117,15 @@ begin
           into c, r;
       else -- tafsir
         with m as materialized (
-               select t.id, ts_rank_cd(t.fts_en, tsq, 1)
-                        + case when t.content ilike '%' || qq || '%' then 1 else 0 end as sc
+               select t.id, ts_rank_cd(t.fts_en, tsq, 1) as r0
                  from public.tafsir_entries t
                 where t.language = 'en' and t.fts_en @@ tsq
                   and (colls is null or t.scholar_name = any(colls))
                 limit cap + 1),
-             pg as (select id, sc from m order by sc desc, id limit pp offset off)
+             top as materialized (select id, r0 from m order by r0 desc, id limit pool),
+             sc as (select tp.id, tp.r0 + case when t.content ilike '%' || qq || '%' then 1 else 0 end as sc
+                      from top tp join public.tafsir_entries t on t.id = tp.id),
+             pg as (select id, sc from sc order by sc desc, id limit pp offset off)
         select (select count(*)::int from m),
                coalesce((select jsonb_agg(jsonb_build_object('sura', t.sura, 'aya', t.aya, 'title', t.scholar_name,
                     'tradition', t.tradition, 'text', public.qh_research_context(t.content, qq, 1000),
@@ -162,32 +168,42 @@ begin
           $q$, wscore, conds, cap + 1, script, script, script, pp, off) into c, r;
         elsif s = 'hadith' then
           execute format($q$
-            with m as materialized (select h.id, (%s)::numeric - length(h.text_arabic_norm) / 1e6 as sc
+            with m as materialized (select h.id
                          from public.hadith_corpus h
-                        where %s and ($1::text[] is null or h.collection = any($1))
+                        where %2$s and ($1::text[] is null or h.collection = any($1))
                           and not exists (select 1 from public.hadith_text_duplicates d where d.duplicate_id = h.id)
-                        limit %s),
-                 pg as (select id, sc from m order by sc desc, id limit %s offset %s)
+                        limit %3$s),
+                 top as materialized (select h.id, (%1$s)::numeric - length(h.text_arabic_norm) / 1e6 as sc
+                          from m join public.hadith_corpus h on h.id = m.id
+                         order by (case when h.text_arabic_norm ilike %6$L then 0 else 1 end), length(h.text_arabic_norm), h.id
+                         limit %7$s),
+                 pg as (select id, sc from top order by sc desc, id limit %4$s offset %5$s)
             select (select count(*)::int from m),
                    coalesce((select jsonb_agg(jsonb_build_object('id', h.id, 'collection', h.collection, 'number', h.hadith_number,
                         'tradition', h.tradition, 'grade', h.grade, 'book_chapter', h.book_chapter,
                         'text', left(h.text_english, 1000), 'arabic', left(h.text_arabic, 900),
                         'lang', 'ar', 'score', round(pg.sc, 4)) order by pg.sc desc, h.id)
                       from pg join public.hadith_corpus h on h.id = pg.id), '[]')
-          $q$, wscore, conds, cap + 1, pp, off) into c, r using colls;
+          $q$, wscore, conds, cap + 1, pp, off,
+               '%' || replace(replace(replace(nq, '\', '\\'), '%', '\%'), '_', '\_') || '%', pool) into c, r using colls;
         else
           execute format($q$
-            with m as materialized (select t.id, (%s)::numeric - length(t.content_norm) / 1e6 as sc
+            with m as materialized (select t.id
                          from public.tafsir_entries t
-                        where t.language = %L and %s and ($1::text[] is null or t.scholar_name = any($1))
-                        limit %s),
-                 pg as (select id, sc from m order by sc desc, id limit %s offset %s)
+                        where t.language = %2$L and %3$s and ($1::text[] is null or t.scholar_name = any($1))
+                        limit %4$s),
+                 top as materialized (select t.id, (%1$s)::numeric - length(t.content_norm) / 1e6 as sc
+                          from m join public.tafsir_entries t on t.id = m.id
+                         order by (case when t.content_norm ilike %7$L then 0 else 1 end), length(t.content_norm), t.id
+                         limit %8$s),
+                 pg as (select id, sc from top order by sc desc, id limit %5$s offset %6$s)
             select (select count(*)::int from m),
                    coalesce((select jsonb_agg(jsonb_build_object('sura', t.sura, 'aya', t.aya, 'title', t.scholar_name,
                         'tradition', t.tradition, 'text', left(t.content, 1000), 'lang', t.language,
                         'score', round(pg.sc, 4)) order by pg.sc desc, t.id)
                       from pg join public.tafsir_entries t on t.id = pg.id), '[]')
-          $q$, wscore, case when script = 'ar' then 'ar' else 'ti' end, conds, cap + 1, pp, off) into c, r using colls;
+          $q$, wscore, case when script = 'ar' then 'ar' else 'ti' end, conds, cap + 1, pp, off,
+               '%' || replace(replace(replace(nq, '\', '\\'), '%', '\%'), '_', '\_') || '%', pool) into c, r using colls;
         end if;
       end if;
     end if;
@@ -199,7 +215,7 @@ begin
       'unsupported', (s = 'hadith' and script = 'ge')));
   end loop;
 
-  return jsonb_build_object('ok', true, 'version', 1, 'q', qq, 'script', script, 'results', out,
+  return jsonb_build_object('ok', true, 'version', 2, 'q', qq, 'script', script, 'results', out,
                             'ms', round(extract(epoch from clock_timestamp() - t0) * 1000));
 end $function$;
 

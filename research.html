@@ -1095,16 +1095,13 @@ async function searchAllSources(q,keys,signal){
   const core=keys.filter(k=>RANKED_SOURCES.includes(k));
   const rest=keys.filter(k=>!RANKED_SOURCES.includes(k));
   const restP=Promise.all(rest.map(k=>legacySource(k,q,signal)));
-  let rankedRows=null;
-  if(core.length){
-    const out=await rankedSearch(q,core.length===1?core[0]:null,1,6,null,signal);
-    if(out)rankedRows=out.results.filter(r=>core.includes(r.key));
-  }
-  let coreRes;
-  if(rankedRows){
-    // A source with no ranked match still gets the old relaxed ("most of your words") search.
-    coreRes=await Promise.all(core.map(k=>{const r=rankedRows.find(x=>x.key===k);return r&&r.count>0?r:legacySource(k,q,signal);}));
-  }else coreRes=await Promise.all(core.map(k=>legacySource(k,q,signal)));
+  // One ranked request per source, in parallel, so the page waits only for the slowest source.
+  // A source whose ranked call fails, is not installed, or finds nothing gets the old relaxed search.
+  const coreRes=await Promise.all(core.map(async k=>{
+    const out=await rankedSearch(q,k,1,6,null,signal);
+    const r=out&&out.results.find(x=>x.key===k);
+    return r&&r.count>0?r:legacySource(k,q,signal);
+  }));
   const restRes=await restP;
   return keys.map(k=>core.includes(k)?coreRes[core.indexOf(k)]:restRes[rest.indexOf(k)]);
 }
