@@ -305,9 +305,9 @@
           <div class="qhikma-item-time">${formatTime(ts)}</div>
         </div>
         <div class="qhikma-item-actions">
-          <button class="qhikma-action-btn" onclick="event.preventDefault();event.stopPropagation();qhikmaAddToResearch('${escapeAttr(title)}','${escapeAttr(url)}')" title="Save">💾</button>
-          <button class="qhikma-action-btn" onclick="event.preventDefault();event.stopPropagation();qhikmaAddToPresentation('${escapeAttr(title)}','${escapeAttr(url)}')" title="Add to Deck">📊</button>
-          <button class="qhikma-action-btn" onclick="event.preventDefault();event.stopPropagation();qhikmaShare('${escapeAttr(title)}','${escapeAttr(url)}')" title="Share">🔗</button>
+          <button class="qhikma-action-btn" onclick="event.preventDefault();event.stopPropagation();qhikmaAddToResearch(${jsArg(title)},${jsArg(url)})" title="Save">💾</button>
+          <button class="qhikma-action-btn" onclick="event.preventDefault();event.stopPropagation();qhikmaAddToPresentation(${jsArg(title)},${jsArg(url)})" title="Add to Deck">📊</button>
+          <button class="qhikma-action-btn" onclick="event.preventDefault();event.stopPropagation();qhikmaShare(${jsArg(title)},${jsArg(url)})" title="Share">🔗</button>
         </div>
       </a>
     `;
@@ -491,6 +491,13 @@
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+  }
+
+  // Safe JS string literal for an inline handler: JSON-quote, then HTML-escape for the attribute.
+  function jsArg(text) {
+    return String(JSON.stringify(String(text == null ? '' : text)))
+      .replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+      .replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
   function escapeAttr(text) {

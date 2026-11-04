@@ -214,6 +214,11 @@
             <input type="url" id="lessonVideoUrl" placeholder="https://www.youtube.com/watch?v=..." autocomplete="off">
             <p class="muted" style="font-size:14px;">Paste the video address here; use the content field above for viewing instructions.</p>
           </div>
+          <div class="form-group">
+            <label for="lessonReflectionPrompt">Reflection question for students (optional)</label>
+            <textarea id="lessonReflectionPrompt" maxlength="2000" style="min-height:80px" placeholder="e.g. How does this passage change how you read verse 2:256? Answer in a few sentences."></textarea>
+            <p style="color:#595959;font-size:14px;">Students answer in writing at the end of the lesson. You see their answers on the lesson page. Leave empty for no reflection.</p>
+          </div>
           <div style="display: flex; gap: 1rem;">
             <button id="saveLessonBtn" type="submit" class="btn btn-primary" style="flex: 1;">Save Lesson</button>
             <button type="button" class="btn" style="flex: 1; background: #ddd; color: #333;" id="cancelBtn">Cancel</button>
@@ -227,6 +232,16 @@
         <div class="lessons-list" id="lessonsList">
           <div class="loader">Loading lessons...</div>
         </div>
+        <details id="bulkAdd" style="margin-top:1.5rem">
+          <summary style="cursor:pointer;font-weight:600;color:#667eea">➕ Add many lessons at once</summary>
+          <p style="color:#595959;font-size:14px;margin:.5rem 0">Paste an outline, one lesson title per line. Lessons are added in this order after the existing ones as Text lessons. Leading numbers or bullets (1. / - / *) are removed.</p>
+          <div class="form-group" style="margin-bottom:.5rem">
+            <textarea id="bulkOutline" aria-label="Lesson outline, one per line" placeholder="1. Introduction to Surah al-Fatiha&#10;2. Meaning of al-Hamd&#10;3. Guidance and the straight path"></textarea>
+          </div>
+          <label style="font-size:14px;display:block;margin-bottom:.5rem">Lesson type <select id="bulkType" style="padding:.3rem"><option value="text">Text Content</option><option value="video">Video Lesson</option><option value="assignment">Assignment</option></select></label>
+          <button type="button" class="btn btn-primary btn-small" id="bulkAddBtn">Create lessons</button>
+          <p id="bulkStatus" role="status" aria-live="polite" style="font-size:14px;color:#41594b;margin-top:.5rem"></p>
+        </details>
       </div>
     </div>
   </div>
@@ -282,6 +297,23 @@
     let currentCourse = null;
     let lessons = [];
     let selectedLessonId = null;
+    let reflectionPrompts = new Map();
+    async function loadReflectionPrompts() {
+      const { data, error } = await supabase.from('qh_lesson_reflection_prompts').select('lesson_id,prompt').eq('course_id', currentCourse.id);
+      reflectionPrompts = new Map((error ? [] : data || []).map(r => [r.lesson_id, r.prompt]));
+    }
+    async function saveReflectionPrompt(lessonId, text) {
+      const prompt = String(text || '').trim();
+      if (!prompt) {
+        if (!reflectionPrompts.has(lessonId)) return;
+        const { error } = await supabase.from('qh_lesson_reflection_prompts').delete().eq('lesson_id', lessonId);
+        if (error) throw error; return;
+      }
+      const { error } = await supabase.from('qh_lesson_reflection_prompts').upsert(
+        { lesson_id: lessonId, course_id: currentCourse.id, prompt, updated_by: currentUser.id, updated_at: new Date().toISOString() },
+        { onConflict: 'lesson_id' });
+      if (error) throw error;
+    }
     const htmlEscape = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     function updateQuizHint() {
       const type=document.getElementById('lessonType').value;
@@ -335,6 +367,7 @@
     async function loadLessons() {
       try {
         lessons = await getLessonsByCourse(currentCourse.id);
+        await loadReflectionPrompts();
         renderLessons();
       } catch (error) {
         console.error('Error loading lessons:', error);
@@ -354,11 +387,12 @@
       container.innerHTML = lessons.map(lesson => `
         <div class="lesson-item ${selectedLessonId === lesson.id ? 'active' : ''}" onclick="selectLesson('${lesson.id}')">
           <div class="lesson-item-title">${lesson.lesson_order}. ${htmlEscape(lesson.title)}</div>
-          <div class="lesson-item-meta">Type: ${lesson.lesson_type}</div>
+          <div class="lesson-item-meta">Type: ${htmlEscape(lesson.lesson_type)}${reflectionPrompts.has(lesson.id) ? ' · 📝 Reflection' : ''}</div>
           <div class="lesson-item-actions">
             <a class="btn btn-small btn-primary" href="/lesson.html?lesson=${encodeURIComponent(lesson.id)}" onclick="event.stopPropagation()" style="text-decoration:none;display:inline-block;">Open lesson</a>
             ${lesson.lesson_type === 'quiz' ? '<a class="btn btn-small btn-primary" href="/admin/quiz-builder.html?lesson='+encodeURIComponent(lesson.id)+'" onclick="event.stopPropagation()" style="text-decoration:none;display:inline-block;">Edit questions</a>' : ''}
             <button class="btn btn-small" onclick="editLesson('${lesson.id}', event)">Edit</button>
+            <button class="btn btn-small" onclick="duplicateLesson('${lesson.id}', event)">Duplicate</button>
             <button class="btn btn-small btn-danger" onclick="deleteConfirm('${lesson.id}', event)">Delete</button>
           </div>
         </div>
@@ -381,6 +415,7 @@
       updateQuizHint();
       document.getElementById('lessonContent').value = lesson.content || '';
       document.getElementById('lessonVideoUrl').value = lesson.video_url || '';
+      document.getElementById('lessonReflectionPrompt').value = reflectionPrompts.get(lessonId) || '';
       document.getElementById('lessonForm').dataset.editId = lessonId;
       document.getElementById('cancelBtn').style.display = 'block';
       document.getElementById('saveLessonBtn').textContent = 'Save Changes';
@@ -433,6 +468,10 @@
           });
           showAlert('Lesson created!', 'success');
         }
+        if (savedLesson?.id) {
+          try { await saveReflectionPrompt(savedLesson.id, document.getElementById('lessonReflectionPrompt').value); }
+          catch (err) { showAlert('Lesson saved, but the reflection question failed: ' + (err.message || err), 'error'); }
+        }
 
         document.getElementById('lessonForm').reset();
         updateQuizHint();
@@ -452,6 +491,65 @@
       } finally {
         saveButton.disabled = false;
         saveButton.textContent = document.getElementById('lessonForm').dataset.editId ? 'Save Changes' : 'Save Lesson';
+      }
+    });
+
+    const nextLessonOrder = () => Math.max(0, ...lessons.map(l => Number(l.lesson_order) || 0)) + 1;
+
+    window.duplicateLesson = async function(lessonId, e) {
+      if (e) e.stopPropagation();
+      const src = lessons.find(l => l.id === lessonId);
+      if (!src) return;
+      try {
+        const copy = await createLesson(currentCourse.id, (src.title + ' (copy)').slice(0, 300), nextLessonOrder(), {
+          lesson_type: src.lesson_type, content: src.content, video_url: src.video_url
+        });
+        const notes = [];
+        if (reflectionPrompts.has(src.id)) await saveReflectionPrompt(copy.id, reflectionPrompts.get(src.id));
+        const { data: res } = await supabase.from('qh_lesson_resources')
+          .select('resource_kind,resource_ref,resource_title,instructor_note,position').eq('lesson_id', src.id);
+        if (res?.length) {
+          const { error } = await supabase.from('qh_lesson_resources').insert(res.map(r => ({ ...r, lesson_id: copy.id, course_id: currentCourse.id, added_by: currentUser.id })));
+          notes.push(error ? 'research resources not copied' : res.length + ' research resource(s) copied');
+        }
+        if (src.lesson_type === 'quiz') {
+          const { data: quiz } = await supabase.from('qh_quizzes').select('passing_score,questions').eq('lesson_id', src.id).maybeSingle();
+          if (quiz) {
+            const { error } = await supabase.from('qh_quizzes').insert({ lesson_id: copy.id, passing_score: quiz.passing_score, questions: quiz.questions });
+            notes.push(error ? 'quiz questions not copied' : 'quiz questions copied');
+          }
+        }
+        showAlert('Duplicated as "' + copy.title + '"' + (notes.length ? ' (' + notes.join(', ') + ')' : '') + '.', 'success');
+        await loadLessons();
+      } catch (error) {
+        console.error('Error duplicating lesson:', error);
+        showAlert('Failed to duplicate lesson: ' + (error.message || 'Please try again.'), 'error');
+      }
+    };
+
+    document.getElementById('bulkAddBtn').addEventListener('click', async () => {
+      const btn = document.getElementById('bulkAddBtn'), status = document.getElementById('bulkStatus');
+      const titles = document.getElementById('bulkOutline').value.split(/\r?\n/)
+        .map(t => t.replace(/^\s*(?:[-*•]+|\(?\d+[.)\]:-]?)\s*/, '').trim()).filter(Boolean).map(t => t.slice(0, 300));
+      if (!titles.length) { status.textContent = 'Paste at least one lesson title.'; return; }
+      if (titles.length > 100) { status.textContent = 'Add up to 100 lessons at a time.'; return; }
+      if (!confirm('Create ' + titles.length + ' lesson(s) in this order?')) return;
+      btn.disabled = true;
+      const type = document.getElementById('bulkType').value;
+      let order = nextLessonOrder(), made = 0;
+      try {
+        for (const title of titles) {
+          status.textContent = 'Creating ' + (made + 1) + ' of ' + titles.length + '…';
+          await createLesson(currentCourse.id, title, order++, { lesson_type: type, content: '', video_url: null });
+          made++;
+        }
+        status.textContent = 'Created ' + made + ' lesson(s). Open each one with Edit to add content.';
+        document.getElementById('bulkOutline').value = '';
+      } catch (error) {
+        status.textContent = 'Stopped after ' + made + ' lesson(s): ' + (error.message || error);
+      } finally {
+        btn.disabled = false;
+        await loadLessons();
       }
     });
 
