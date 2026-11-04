@@ -102,7 +102,7 @@ export function CircleLifecycle({
     status, members: members.length, rounds: rounds.length,
     paidRoundCount: rounds.filter(r => r.payout_recorded_at && r.recipient_confirmed_at).length,
     confirmedContributionCount: contributions.filter(c => c.payer_confirmed_at && c.organizer_confirmed_at).length,
-    disputesOpen, missedOpen, terminationPending: pending || Boolean(terminationQuery.error),
+    disputesOpen, missedOpen, terminationPending: pending || terminationQuery.isLoading || Boolean(terminationQuery.error),
   });
 
   async function execute(name: string, args: Record<string, unknown>, message: string) {
