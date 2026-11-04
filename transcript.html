@@ -1,0 +1,20 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="/favicon.svg"><link rel="stylesheet" href="/academic/academic.css"><script src="/site-chrome.js" defer></script><title>Transcript &amp; Certificates · QuranHikma</title><meta name="robots" content="noindex">
+</head><body class="ac"><main class="ac-wrap" id="main">
+<p class="eyebrow">Student Records</p><h1>Unofficial Transcript &amp; Certificates</h1>
+<div class="draft-banner" role="note"><strong>Unofficial record.</strong> This page lists completed courses from your QuranHikma account. Official transcript procedure, signatory and credit status: <span class="tbp">To be provided by QuranHikma</span>. Certificates are records of course completion and do not imply accreditation.</div>
+<p class="status" id="status" role="status" aria-live="polite">Checking your account…</p><div id="out"></div>
+<p class="noprint"><a href="#" id="print" class="btn">Print / save as PDF</a></p></main>
+<script type="module">
+import {db} from '/accounts/client.js';import {esc,renderFooter} from '/academic/academic.js';renderFooter();
+document.getElementById('print').onclick=e=>{e.preventDefault();print();};
+const st=document.getElementById('status'),out=document.getElementById('out');
+function letter(s){if(s==null)return '—';return s>=93?'A':s>=90?'A−':s>=87?'B+':s>=83?'B':s>=80?'B−':s>=77?'C+':s>=73?'C':s>=70?'C−':s>=60?'D':'F';}
+(async()=>{const {data:{user}}=await db.auth.getUser();
+ if(!user){st.innerHTML='Please <a href="/account.html?mode=login">log in</a> to view your transcript.';return;}
+ const {data:c,error}=await db.from('qh_certificates').select('course_id,certificate_code,completion_date,score,issued_at,qh_courses(title)').eq('user_id',user.id).order('completion_date');
+ if(error){st.textContent='Could not load records: '+error.message;return;}
+ st.innerHTML='<strong>Student:</strong> '+esc(user.email)+' · <strong>Generated:</strong> '+new Date().toISOString().slice(0,10);
+ if(!c||!c.length){out.innerHTML='<p>No completed courses yet. Completed courses and certificates will appear here.</p>';return;}
+ out.innerHTML='<div class="tablewrap"><table><thead><tr><th>Course</th><th>Completed</th><th>Score</th><th>Grade*</th><th>Credit</th><th>Certificate ID</th></tr></thead><tbody>'+c.map(r=>'<tr><td>'+esc(r.qh_courses?.title||'')+'</td><td>'+esc(r.completion_date)+'</td><td>'+(r.score==null?'—':esc(r.score)+'%')+'</td><td>'+letter(r.score)+'</td><td><span class="tbp">To be provided by QuranHikma</span></td><td><code>'+esc(r.certificate_code)+'</code></td></tr>').join('')+'</tbody></table></div><p class="meta">*Letter grade derived from the draft <a href="/policies.html#grading">grading scale</a>.</p>';
+})().catch(e=>{st.textContent='Error: '+e.message;});
+</script></body></html>
