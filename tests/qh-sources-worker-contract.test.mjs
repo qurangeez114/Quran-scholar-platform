@@ -20,7 +20,7 @@ test('queue and drafts are private and require service_role',()=>{
   assert.equal((sql.match(/enable row level security;/g)||[]).length,2);
   assert.equal((sql.match(/revoke all on table .* from PUBLIC, anon, authenticated;/g)||[]).length,2);
   assert.match(sql,/grant execute on function public\.qh_source_claim\(integer\) to service_role/);
-  assert.doesNotMatch(sql,/security definer/i);
+  assert.equal((sql.match(/security invoker set search_path/g)||[]).length,3);
 });
 test('leases and retries are bounded, preventing overlapping claims',()=>{
   assert.match(sql,/for update skip locked/);
