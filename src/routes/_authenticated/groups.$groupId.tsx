@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Notice, Pill, ContributionPill, PayoutPill } from "@/components/status";
 import { TermsView, type TermsSnapshot } from "@/components/terms-view";
+import { VerifierConsentPanel } from "@/components/verifier-consent-panel";
 import { groupQuery, invitesQuery } from "@/lib/api";
 import { contributionStatus, payoutStatus, roundTotals, formatMoney, formatDate, toNumber, PERIOD_LABEL, todayInTimeZone } from "@/lib/equb";
 
@@ -56,7 +57,9 @@ function CircleDetails() {
   if (q.error) return <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
   if (!q.data) return <Card><h2 className="font-semibold">Circle unavailable</h2><p className="mt-2 text-sm text-muted-foreground">You may not belong to this circle, or it no longer exists.</p><Button asChild variant="outline" className="mt-4"><Link to="/dashboard">Back to your circles</Link></Button></Card>;
 
-  const { uid, group: g, members, rounds, contributions, activity, isOrganizer } = q.data;
+  const { uid, group: g, members, rounds, contributions, activity, terms, isOrganizer } = q.data;
+  const publishedTerms = terms.find((t) => t.version === g.terms_version);
+  const termsSnapshot = publishedTerms?.terms as unknown as TermsSnapshot | undefined;
   const ordered = [...rounds].sort((a, b) => a.round_number - b.round_number);
   const memberIds = members.map((m) => m.user_id);
   const byId = new Map(members.map((m) => [m.user_id, m.display_name]));
@@ -97,12 +100,7 @@ function CircleDetails() {
       <Card className="space-y-4">
         <div className="flex items-center justify-between gap-3"><h2 className="font-semibold">Circle terms</h2><Button variant="outline" size="sm" onClick={() => setShowTerms(!showTerms)} aria-expanded={showTerms}>{showTerms ? "Hide" : "View"} terms</Button></div>
         <p className="text-sm text-muted-foreground">Version {g.terms_version} · {g.payout_method} payout order · {g.timezone}</p>
-        {showTerms && <TermsView t={{
-          contribution_amount: amount, currency: g.currency, periodicity: g.periodicity, max_members: g.max_members,
-          payout_amount: amount * g.max_members, start_date: g.start_date, timezone: g.timezone,
-          payout_method: g.payout_method, eligibility: g.eligibility, dropout_rules: g.dropout_rules,
-          missed_payment_rules: g.missed_payment_rules, dispute_rules: g.dispute_rules, refund_rules: g.refund_rules, rules: g.rules,
-        } as TermsSnapshot} version={g.terms_version} />}
+        {showTerms && (termsSnapshot ? <TermsView t={termsSnapshot} version={publishedTerms!.version} /> : <Notice tone="warning">The published terms snapshot is unavailable. Do not accept or change the circle terms until it can be retrieved.</Notice>)}
         {g.rules && !showTerms && <p className="whitespace-pre-wrap text-sm">{g.rules}</p>}
       </Card>
 
@@ -127,6 +125,8 @@ function CircleDetails() {
           </div>
         )}
       </Card>
+
+      <VerifierConsentPanel groupId={groupId} uid={uid} isOrganizer={isOrganizer} />
 
       {isOrganizer && g.status === "forming" && (
         <Card className="space-y-3">
