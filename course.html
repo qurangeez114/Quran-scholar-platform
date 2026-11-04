@@ -307,6 +307,7 @@
 <script src="/site-chrome.js" defer></script>
 </head>
 <body>
+<main id="main">
   <div class="hero">
     <h1 id="courseTitle">Loading...</h1>
     <p id="courseDescription"></p>
@@ -382,6 +383,7 @@
       </div>
     </div>
   </div>
+</main>
 
   <script type="module">
     import { supabase } from './accounts/client.js';
@@ -531,7 +533,15 @@
 
     function renderLessons() {
       const container = document.getElementById('lessonsList');
-      document.getElementById('lessonCount').textContent = (!enrollment && !preview && !includedByInstructor) ? 'Locked' : lessons.length;
+      const lc=document.getElementById('lessonCount');
+      lc.textContent = (!enrollment && !preview && !includedByInstructor) ? 'Locked' : lessons.length;
+      // Guests: show the real lesson count when the public count function (migration 20261104b) is installed.
+      if (!enrollment && !preview && !includedByInstructor) {
+        supabase.rpc('qh_public_lesson_counts',{p_course_ids:[currentCourse.id]}).then(({data,error})=>{
+          const n=!error&&Array.isArray(data)&&data[0]?Number(data[0].lesson_count):NaN;
+          if(Number.isFinite(n)) lc.textContent = n+' (enroll to open)';
+        }).catch(()=>{});
+      }
 
       // A pending application is NOT enrollment. Lesson rows are invisible
       // under RLS before approval, which must never be labeled "No lessons".

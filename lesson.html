@@ -614,6 +614,13 @@
       const guide=document.createElement('div');guide.className='quiz-result';
       guide.textContent=currentLesson.lesson_type==='video' ? 'Step 1: Watch the video. For this sample, focus on 2:16–4:25. Then mark this lesson complete and choose Next Lesson.' : currentLesson.lesson_type==='quiz' ? 'Step 3: Open the Quiz tab. Answer five questions, submit, then read the explanations. The pass mark is 90%, so you need 5/5 correct.' : 'Step 2: Read the toolkit. Open the interactive challenge link for guided practice, then return and mark this reading lesson complete. Practice scores stay separate from the course quiz.';
       if(currentCourse.id==='c9c5bd84-0e8b-45ba-9597-7112cf5089b1') content.before(guide);
+      // Per-lesson learning objectives (qh_lessons.learning_objectives, added by migration 20261104b). Hidden when absent.
+      {const prev=document.getElementById('lessonObjectives');if(prev)prev.remove();
+       let obj=currentLesson.learning_objectives;if(typeof obj==='string'){try{obj=JSON.parse(obj);}catch(e){obj=obj.split(/\n+/);}}
+       obj=Array.isArray(obj)?obj.map(x=>String(typeof x==='object'&&x?(x.text||''):x).trim()).filter(Boolean):[];
+       if(obj.length){const box=document.createElement('section');box.id='lessonObjectives';box.className='quiz-result';box.setAttribute('aria-labelledby','lessonObjectivesTitle');
+        const h=document.createElement('h2');h.id='lessonObjectivesTitle';h.style.fontSize='1.05rem';h.textContent='Learning objectives for this lesson';
+        const ul=document.createElement('ul');obj.forEach(t=>{const li=document.createElement('li');li.textContent=t;ul.append(li);});box.append(h,ul);content.before(box);}}
 
       if (currentLesson.lesson_type === 'text') {
         content.replaceChildren();
@@ -820,6 +827,15 @@
       });
     }
 
+    // Returns the server grade, or null when server grading is not installed (function missing or no answer key).
+    async function gradeOnServer(quizId, answers, stage) {
+      const { data, error } = await supabase.rpc('qh_grade_quiz', { p_quiz_id: quizId, p_answers: answers, p_stage: stage === 'final' ? 'final' : 'original' });
+      if (!error && data) return data;
+      const code = String(error?.code || ''), msg = String(error?.message || '');
+      if (code === 'PGRST202' || code === '42883' || code === 'P0002' || /could not find the function|schema cache|No answer key/i.test(msg)) return null;
+      throw error;
+    }
+
     function renderQuiz() {
       if (!currentQuiz || !Array.isArray(currentQuiz.questions) || !currentQuiz.questions.length) {
         document.getElementById('quizResult').textContent = 'No questions have been added to this quiz yet. Ask the instructor to open the Question Builder.';
@@ -892,8 +908,8 @@
         const checked = document.querySelector('input[name="q'+i+'"]:checked');
         return checked && Array.isArray(q.options) ? q.options[Number(checked.value)] || '' : '';
       });
-      const score = answers.filter((ans,i)=>ans === questions[i].correct_answer).length;
-      const percentage = Math.round(score / questions.length * 100);
+      let score = answers.filter((ans,i)=>ans === questions[i].correct_answer).length;
+      let percentage = Math.round(score / questions.length * 100);
       const result = document.getElementById('quizResult');
       const missing = answers.map((a,i)=>a?null:i+1).filter(Boolean);
       if (missing.length) {
@@ -920,10 +936,18 @@
           return;
         }
 
-        const passed = percentage >= Number(currentQuiz.passing_score || 90);
+        let passed = percentage >= Number(currentQuiz.passing_score || 90);
         button.textContent='Saving results…';
         if(preview){result.textContent='Preview score: '+percentage+'%. Nothing was saved.';return;}
-        await submitQuiz(currentQuiz.id, answers, percentage, currentQuiz.passing_score);
+        // Prefer server-side grading (qh_grade_quiz, migration 20261104b) so the recorded score cannot be set by the browser.
+        // Falls back to the current client-graded insert only while the function or answer key does not exist yet.
+        const server = await gradeOnServer(currentQuiz.id, answers, quizStage);
+        if (server) {
+          score = server.correct; percentage = server.score; passed = Boolean(server.passed);
+          (server.results||[]).forEach(r=>{ if(questions[r.index] && r.correct_answer) questions[r.index] = {...questions[r.index], correct_answer: r.correct_answer}; });
+        } else {
+          await submitQuiz(currentQuiz.id, answers, percentage, currentQuiz.passing_score);
+        }
         // A later failed retry must not erase an earlier passing lesson completion.
         const existing = (await getStudentProgress(currentCourse.id))
           .find(p=>p.lesson_id===currentLesson.id);
