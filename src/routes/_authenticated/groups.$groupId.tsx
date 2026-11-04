@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Notice, Pill, ContributionPill, PayoutPill } from "@/components/status";
 import { TermsView, type TermsSnapshot } from "@/components/terms-view";
 import { VerifierConsentPanel } from "@/components/verifier-consent-panel";
+import { confirmationAction } from "@/lib/verification";
 import { groupQuery, invitesQuery } from "@/lib/api";
 import { contributionStatus, payoutStatus, roundTotals, formatMoney, formatDate, toNumber, PERIOD_LABEL, todayInTimeZone } from "@/lib/equb";
 
@@ -155,7 +156,6 @@ function CircleDetails() {
         {ordered.length === 0 && <Card><p className="text-sm text-muted-foreground">The payout schedule has not been generated.</p></Card>}
         {ordered.map((r) => {
           const mine = contributions.find((c) => c.round_id === r.id && c.payer_id === uid);
-          const canIndependentlyVerify = isOrganizer || Boolean(verifierQuery.data);
           const rc = contributions.filter((c) => c.round_id === r.id);
           const totals = roundTotals(r, memberIds, amount, contributions);
           const allConfirmed = memberIds.length > 0 && memberIds.every((id) => {
@@ -178,10 +178,16 @@ function CircleDetails() {
                 <tbody>{members.map((m) => {
                   const c = rc.find((x) => x.payer_id === m.user_id);
                   const cs = contributionStatus(c);
-                  const allowed = c && g.status === "active" && (
-                    (m.user_id === uid && !c.payer_confirmed_at) ||
-                    (m.user_id !== uid && canIndependentlyVerify && !c.organizer_confirmed_at)
-                  );
+                  const action = c ? confirmationAction({
+                    groupStatus: g.status,
+                    payerId: m.user_id,
+                    viewerId: uid,
+                    payerConfirmedAt: c.payer_confirmed_at,
+                    verifierConfirmedAt: c.organizer_confirmed_at,
+                    viewerIsOrganizer: isOrganizer,
+                    viewerConsentedToVerify: Boolean(verifierQuery.data),
+                  }) : null;
+                  const allowed = Boolean(c && action);
                   return <tr key={m.user_id} className="border-b last:border-0"><td className="py-3 pr-2">{m.display_name}{m.user_id === uid ? " (you)" : ""}</td><td className="py-3 pr-2"><ContributionPill status={cs} /></td><td className="py-3">{allowed && <Button variant="outline" size="sm" disabled={working} onClick={() => { void act("Confirmation submitted", () => supabase.rpc("confirm_contribution", { _contribution: c.id })); }}>{m.user_id === uid ? "Confirm I contributed" : "Verify payment received"}</Button>}</td></tr>;
                 })}</tbody>
               </table></div>
