@@ -38,13 +38,13 @@ const stagingApi = supabase as unknown as {
 
 export function CircleLifecycle({
   groupId, uid, status, isOrganizer, members, rounds, contributions,
-  disputesOpen, missedOpen, currency,
+  currency,
 }: {
   groupId: string; uid: string; status: string; isOrganizer: boolean;
   members: { user_id: string }[];
   rounds: { payout_recorded_at: string | null; recipient_confirmed_at: string | null }[];
   contributions: { payer_confirmed_at: string | null; organizer_confirmed_at: string | null }[];
-  disputesOpen: number | null; missedOpen: number | null; currency: string;
+  currency: string;
 }) {
   const qc = useQueryClient();
   const [busy, setBusy] = useState(false);
@@ -77,6 +77,24 @@ export function CircleLifecycle({
     },
   });
 
+  const disputesQuery = useQuery({
+    queryKey: ["equb-disputes", groupId],
+    queryFn: async () => {
+      const r = await stagingApi.from("disputes").select("*").eq("group_id", groupId);
+      if (r.error) throw new Error(r.error.message);
+      return (r.data ?? []) as { status: string }[];
+    },
+  });
+  const missedQuery = useQuery({
+    queryKey: ["equb-missed", groupId],
+    queryFn: async () => {
+      const r = await stagingApi.from("missed_contributions").select("*").eq("group_id", groupId);
+      if (r.error) throw new Error(r.error.message);
+      return (r.data ?? []) as { status: string }[];
+    },
+  });
+  const disputesOpen = disputesQuery.data ? disputesQuery.data.filter(d => d.status === "open").length : null;
+  const missedOpen = missedQuery.data ? missedQuery.data.filter(d => d.status === "open").length : null;
   const termination = terminationQuery.data;
   const consentIds = new Set(consentsQuery.data?.map(x => x.user_id) ?? []);
   const pending = Boolean(termination && !termination.effective_at && status === "active");
@@ -84,7 +102,7 @@ export function CircleLifecycle({
     status, members: members.length, rounds: rounds.length,
     paidRoundCount: rounds.filter(r => r.payout_recorded_at && r.recipient_confirmed_at).length,
     confirmedContributionCount: contributions.filter(c => c.payer_confirmed_at && c.organizer_confirmed_at).length,
-    disputesOpen, missedOpen, terminationPending: pending,
+    disputesOpen, missedOpen, terminationPending: pending || Boolean(terminationQuery.error),
   });
 
   async function execute(name: string, args: Record<string, unknown>, message: string) {
@@ -196,6 +214,7 @@ export function CircleLifecycle({
             </tr>)}</tbody>
           </table>
         </div>}
+      {(missedQuery.error || disputesQuery.error) && <Notice tone="warning">Payment exceptions could not be checked. Completion is disabled until they can be verified.</Notice>}
       {!ready && status === "active" && <p className="text-xs text-muted-foreground">
         Completion requires every round paid and acknowledged, every contribution independently
         verified, no open payment exceptions, and no pending termination.
