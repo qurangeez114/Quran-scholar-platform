@@ -106,7 +106,7 @@ test('families: all computed relationships are candidates and omission is never 
 });
 test('isra: Malik b. Sasaa branch converges on Qatada; heaven placements differ from Sharik (apparent contradiction)',()=>{
   const {fam,an}=FAMS[0];
-  assert.equal(an.transmission.branches.malik_sasaa.common_link.transmitter,'قتاده');
+  assert.equal(an.transmission.branches.malik_sasaa.common_link.transmitter,'qatada');
   const r=an.relationships.find(r=>(r.a==='bukhari:3887'&&r.b==='bukhari:7517'));
   assert.ok(r.differences.some(d=>d.proposition==='i11_ibrahim'&&d.kind==='apparent_contradiction'));
   const ad=fam.members.find(m=>m.verified_reference==='bukhari:349');
@@ -118,3 +118,37 @@ test('illness: objection wording asif/raqiq is a wording variant, not a contradi
   const d=r.differences.find(d=>d.proposition==='f02_objection');assert.equal(d.kind,'wording_variant');
   assert.ok(!an.relationships.some(r=>/contradiction/.test(r.label)));
 });
+
+// --- Narrator identity review (2026-11-04) ---
+{
+  const fsx = require('fs'), px = require('path');
+  const load = s => JSON.parse(fsx.readFileSync(px.join(__dirname, '..', 'hadith-engine', 'pilot', s + '.json'), 'utf8'));
+  const norm = s => s.replace(/[\u064B-\u0652\u0670\u0640]/g, '').replace(/[إأآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي');
+  for (const slug of ['beginning-of-revelation', 'isra-wal-miraj', 'final-illness-abu-bakr-prayer']) {
+    const fam = load(slug);
+    test(slug + ': every route key resolves to a transmitter with a basis', () => {
+      for (const m of fam.members) for (const r of m.isnad_routes) for (const k of r) {
+        assert.ok(fam.transmitters[k], m.verified_reference + ' missing ' + k);
+        assert.ok(fam.transmitters[k].basis, k + ' has no basis');
+      }
+    });
+    test(slug + ': source_checked identities always cite a URL', () => {
+      for (const [k, t] of Object.entries(fam.transmitters)) if (t.identity_status === 'source_checked')
+        assert.ok((t.sources || []).length && t.sources.every(s => /^https:\/\//.test(s.url)), k);
+    });
+    if (slug !== 'beginning-of-revelation') test(slug + ': every curated route has its transmitters in the Arabic isnad text', () => {
+      for (const m of fam.members) { const txt = norm(m.text_arabic);
+        for (const r of m.isnad_routes) for (const k of r) {
+          const pats = fam.transmitters[k].arabic_pattern.split('|');
+          assert.ok(pats.some(p => txt.includes(p)), m.verified_reference + ': ' + k + ' pattern not in text');
+        } }
+    });
+  }
+  test('ambiguous names: Harb and ʿAbd Allāh b. Muḥammad source-checked, Yaḥyā (4922) stays candidate', () => {
+    const t = load('beginning-of-revelation').transmitters;
+    assert.strictEqual(t.harb.identity_status, 'source_checked');
+    assert.strictEqual(t.ab_muh.identity_status, 'source_checked');
+    assert.strictEqual(t.yahya_b.identity_status, 'candidate');
+    assert.strictEqual(t.abdallah_m.identity_status, 'candidate');
+  });
+}

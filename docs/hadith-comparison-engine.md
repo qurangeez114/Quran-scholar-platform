@@ -64,3 +64,27 @@ Differences from the first pilot, so reviewers know what is weaker:
 Rebuild: `python3 hadith-engine/tools/specs.py`, then `node hadith-engine/build-family-analysis.js isra-wal-miraj final-illness-abu-bakr-prayer`, then `python3 hadith-engine/tools/gen_family_seed.py <slug> <ts>`. The tools expect the scratch sunnah.com crawl, which is not committed.
 
 Musnad Aḥmad / sīra parallels for *Beginning of Revelation* were searched for and **none found**. The 1,370 "Ahmed" rows in `hadith_corpus_canonical` (and in `hadith_corpus`) contain no ḥadīth matching the revelation phrases (حراء/المدثر/الناموس/فتر الوحي/ورقه/بدئ). The only hit, record 84481, is ʿUthmān's "Ḥirāʾ shook" report, which is unrelated. `sira_events` holds editorial summaries, not narrations, and `sira_hadith_map` is empty. So nothing was added.
+
+## Narrator identity review (2026-11-04)
+
+Isnad routes for *Isrāʾ wa-l-Miʿrāj* and *Final illness — Abū Bakr leads the prayer* were rebuilt by hand
+from the full Arabic isnad (sunnah.com text) in `hadith-engine/tools/curate_isnads.py`, replacing the
+auto-extracted name chunks. Fixes: taḥwīl (ح) chains split into separate routes (Bukhārī 3342, 3207;
+Muslim 418e, 418f; Ibn Mājah 1232; Tirmidhī 3346), "ʿan abīhi"/"ḥaddathanī abī" resolved from context
+(ʿUrwa, Ḥafṣ b. Ghiyāth, Ibn ʿUmar, Abū Mūsā), the missing ʿAbd Allāh b. Dāwūd restored (Ibn Mājah 1234),
+the missing route of Bukhārī 7517 (ʿAbd al-ʿAzīz ← Sulaymān ← Sharīk ← Anas) added, and a fused
+"حدثنا" token removed (Tirmidhī 3672). Every transmitter now carries a `basis` and `sources`.
+
+| Name in isnad | Hadith | Identity | Status | Source |
+|---|---|---|---|---|
+| حرب | Bukhārī 4924 | Ḥarb b. Shaddād | source_checked | al-Qasṭallānī, *Irshād al-Sārī* (shamela.ws/book/21715/3220); Ibn Ḥajar, *Fatḥ al-Bārī* |
+| يحيى (after Ḥarb) | Bukhārī 4924 | Yaḥyā b. Abī Kathīr | source_checked | same |
+| عبد الله بن محمد ← عبد الرزاق | Bukhārī 4925, 4956, 6982 | ʿAbd Allāh b. Muḥammad al-Musnadī | source_checked (parallel chain) | al-ʿAynī, *ʿUmdat al-Qārī* (hdith.com/encyclopedia/book/b-43/h/401083) |
+| يحيى ← وكيع | Bukhārī 4922 | Yaḥyā b. Mūsā al-Balkhī **or** Yaḥyā b. Jaʿfar | candidate (unresolved by the commentators themselves) | Ibn Ḥajar; al-ʿAynī (hdith.com/…/399701); *Minḥat al-Bārī* (shamela.ws/book/18106/4767) |
+| يحيى ← الليث | Bukhārī 4953 | Yaḥyā b. Bukayr | candidate | identical chain explicit in Bukhārī 3 / 4925 (internal corroboration only) |
+| عبد الله ← يونس (via Salmawayh) | Bukhārī 4953 | proposed ʿAbd Allāh b. al-Mubārak | candidate | no commentary checked |
+
+All other identities remain `candidate`; names written in full in the isnad are marked
+"explicit", expansions of short forms are marked "proposal". Migration
+`20261104120000_hadith_transmitter_identity_review.sql` (not applied) updates the family-1 transmitter
+rows; the family-2/3 seed migrations (also not yet applied anywhere) were regenerated with the curated routes.
