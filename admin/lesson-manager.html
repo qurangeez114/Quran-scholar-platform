@@ -505,7 +505,8 @@
           lesson_type: src.lesson_type, content: src.content, video_url: src.video_url
         });
         const notes = [];
-        if (reflectionPrompts.has(src.id)) await saveReflectionPrompt(copy.id, reflectionPrompts.get(src.id));
+        const { data: srcPrompt } = await supabase.from('qh_lesson_reflection_prompts').select('prompt').eq('lesson_id', src.id).maybeSingle();
+        if (srcPrompt?.prompt) await saveReflectionPrompt(copy.id, srcPrompt.prompt);
         const { data: res } = await supabase.from('qh_lesson_resources')
           .select('resource_kind,resource_ref,resource_title,instructor_note,position').eq('lesson_id', src.id);
         if (res?.length) {
