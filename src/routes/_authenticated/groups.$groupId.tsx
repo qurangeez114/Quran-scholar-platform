@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Notice, Pill, ContributionPill, PayoutPill } from "@/components/status";
 import { TermsView, type TermsSnapshot } from "@/components/terms-view";
 import { VerifierConsentPanel } from "@/components/verifier-consent-panel";
+import { MissedAndDisputes } from "@/components/missed-and-disputes";
 import { confirmationAction } from "@/lib/verification";
 import { groupQuery, invitesQuery } from "@/lib/api";
 import { contributionStatus, payoutStatus, roundTotals, formatMoney, formatDate, toNumber, PERIOD_LABEL, todayInTimeZone } from "@/lib/equb";
@@ -214,6 +215,17 @@ function CircleDetails() {
         <Textarea id="report-note" value={reportNote} onChange={(e) => setReportNote(e.target.value)} maxLength={500} />
         <div className="flex gap-2"><Button disabled={working} onClick={submitContribution}>Save unverified record</Button><Button variant="outline" onClick={() => setReportRound("")}>Cancel</Button></div>
       </Card>}
+
+      <MissedAndDisputes
+        groupId={groupId}
+        uid={uid}
+        isOrganizer={isOrganizer}
+        optedInVerifier={Boolean(verifierQuery.data)}
+        status={g.status}
+        contributions={contributions}
+        rounds={rounds}
+        memberName={memberName}
+      />
 
       <Card className="space-y-3">
         <h2 className="font-semibold">Recent activity</h2>
