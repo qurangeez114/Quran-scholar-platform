@@ -28,3 +28,33 @@ jobs:
         run: npx tsc --noEmit
       - name: Vitest
         run: npm test
+
+  database-lifecycle:
+    name: PostgreSQL 17 lifecycle regression (no deployment)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 54329:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      EQUB_PG_URL: postgres://postgres:postgres@localhost:54329
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install database test dependencies
+        run: npm install --prefix db-review --no-audit --no-fund
+      - name: Run 48 SQL authorization and lifecycle tests
+        run: npm --prefix db-review run test:review
