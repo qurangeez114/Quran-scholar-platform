@@ -5,7 +5,7 @@ begin;
 create table if not exists public.qh_source_work_queue (
   sura integer not null check (sura between 1 and 114),
   aya integer not null check (aya > 0),
-  state text not null default 'pending' check (state in ('pending','leased','needs_review','retry','failed')),
+  state text not null default 'pending' check (state in ('pending','leased','needs_review','externally_screened','retry','failed')),
   attempts integer not null default 0 check (attempts >= 0),
   eligible_at timestamptz not null default now(),
   leased_until timestamptz,
@@ -44,12 +44,25 @@ from public.ayas a
 where a.sura_id between 1 and 114 and a.aya_number > 0
 on conflict (sura, aya) do nothing;
 
+-- Earlier checked-in batches (PR #105, #111, #112, #114) are only
+-- preliminary screenings, not fully verified scholarly coverage.
+update public.qh_source_work_queue set state='externally_screened',
+  updated_at=now()
+where state='pending' and ((sura=1 and aya between 1 and 7)
+   or (sura=2 and aya between 1 and 30));
+
 -- No SECURITY DEFINER: service_role is the only granted caller; RLS is enabled.
 create or replace function public.qh_source_claim(p_max integer default 1)
 returns table(sura integer, aya integer, lease_token uuid, arabic text, english text, attempts integer)
 language sql volatile security invoker set search_path = ''
 as $$
-  with pick as (
+  with exhausted as (
+    update public.qh_source_work_queue q
+       set state='failed', lease_token=null, leased_until=null,
+           last_error='expired after maximum attempts', updated_at=now()
+     where state='leased' and leased_until < now() and attempts >= 5
+     returning q.sura
+  ), pick as (
     select q.sura, q.aya
     from public.qh_source_work_queue q
     where (
