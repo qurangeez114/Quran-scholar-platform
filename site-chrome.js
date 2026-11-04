@@ -3,6 +3,12 @@
    page didn't. Safe to include on every page (idempotent). */
 (function () {
   'use strict';
+  // Site icon for every page that loads the shared chrome.
+  if (!document.querySelector('link[rel~="icon"]')) {
+    var icon = document.createElement('link');
+    icon.rel = 'icon'; icon.type = 'image/svg+xml'; icon.href = '/favicon.svg';
+    document.head.appendChild(icon);
+  }
   // Professional English reading typography for translations and research passages.
   // All other scripts and navigation keep their existing typefaces.
   if (!document.getElementById('qh-english-reading-css')) {
