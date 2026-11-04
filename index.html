@@ -859,7 +859,8 @@ body { padding-bottom: 80px !important; }
       var ref = sura + (aya ? ':'+aya : '');
       var siraRows = await sbGet('sira_events', {
         select: 'id,title_en',
-        or: '(quran_verses.ilike.*' + ref + '*,hadith_ref.ilike.*' + ref + '*,tafsir_ref.ilike.*' + ref + '*)',
+        // quran_verses is a jsonb array of {sura, aya, note}; ilike on jsonb returns HTTP 404.
+        quran_verses: 'cs.' + JSON.stringify([aya ? { sura: Number(sura), aya: Number(aya) } : { sura: Number(sura) }]),
         limit: 3
       });
       siraRows.forEach(function(ev) {
@@ -1462,6 +1463,7 @@ document.addEventListener('keyup',event=>{if(event.key==='Escape')hide();else if
 .verse-card:not(.qh-single-text-only) .verse-detail .tab-bar{display:flex!important;flex-wrap:wrap;gap:5px;align-items:center}
 .verse-card:not(.qh-single-text-only) .verse-detail .tab-panel{display:none!important}
 .verse-card:not(.qh-single-text-only).open .verse-detail .tab-panel.active{display:block!important}
+@media(max-width:600px){.verse-card .tab-bar>.tab-btn{order:3}.verse-card .tab-bar>button.tab-btn:first-of-type{order:1}.verse-card .tab-bar>[id^="ancient-tab-"]{order:2}.verse-card .tab-bar>[id^="depth-badge-"]{order:0}}
 @media(max-width:600px){.verse-card:not(.qh-single-text-only) .verse-detail .tab-bar{flex-wrap:nowrap!important;overflow-x:auto}.verse-card:not(.qh-single-text-only) .tab-bar .tab-btn{white-space:nowrap;flex:0 0 auto;min-height:42px}}
 </style>
 <style id="qh-mobile-single-reading-space">
@@ -2017,7 +2019,7 @@ function showDepthDetail(aya) {
 async function loadVerseSliraContext(sura, aya) {
   try {
     const maps = await sbFetch('sira_verse_map', {
-      select: 'sira_id,context_note',
+      select: 'sira_id',
       sura: `eq.${sura}`,
       aya: `eq.${aya}`
     });
@@ -2059,9 +2061,10 @@ async function loadVerseSliraContext(sura, aya) {
 async function loadVerseQiraat(sura, aya) {
   try {
     const variants = await sbFetch('qiraat_variants', {
-      select: 'id,variant_text,reader_id,riwayat_id,meaning_impact,translation_difference',
-      sura_id: `eq.${sura}`,
-      aya_number: `eq.${aya}`
+      // Live schema: surah_number, ayah_number, variant_text, base_text, explanation, source, word_position.
+      select: 'id,variant_text,base_text,explanation,source,word_position',
+      surah_number: `eq.${sura}`,
+      ayah_number: `eq.${aya}`
     });
     if (!variants.length) return;
 
@@ -2072,8 +2075,9 @@ async function loadVerseQiraat(sura, aya) {
       <div style="font-size:11px;font-weight:800;color:#2E7D32;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">📖 Qirāʾāt Variants (${variants.length})</div>
       ${variants.map(v => `<div style="margin-bottom:10px;padding:8px;background:#fff;border-radius:8px;border:1px solid #B0CDB0;">
         <div style="font-family:'Amiri',serif;font-size:18px;direction:rtl;text-align:right;margin-bottom:4px;">${escapeHtml(v.variant_text||'')}</div>
-        ${v.meaning_impact ? `<div style="font-size:12px;color:#2E7D32;font-weight:600;">Impact: ${escapeHtml(v.meaning_impact)}</div>` : ''}
-        ${v.translation_difference ? `<div style="font-size:12px;color:#444;">${escapeHtml(v.translation_difference)}</div>` : ''}
+        ${v.base_text ? `<div style="font-size:12px;color:#2E7D32;font-weight:600;">Ḥafṣ reading: <span style="font-family:'Amiri',serif;font-size:15px;">${escapeHtml(v.base_text)}</span></div>` : ''}
+        ${v.explanation ? `<div style="font-size:12px;color:#444;">${escapeHtml(v.explanation)}</div>` : ''}
+        ${v.source ? `<div style="font-size:11px;color:#6b6b6b;">Source: ${escapeHtml(v.source)}</div>` : ''}
       </div>`).join('')}
     </div>`;
 
@@ -3559,7 +3563,7 @@ async function qhPrefetchTabCounts(card) {
  const work=(async()=>{
   const tests=[
    ['tafsir','tafsir_entries',{sura:'eq.'+sura,aya:'eq.'+aya}],
-   ['asbab','asbab_al_nuzul',{sura:'eq.'+sura,aya:'eq.'+aya}],
+   ['asbab','asbab_al_nuzul',{sura_id:'eq.'+sura,aya_number:'eq.'+aya}],
    ['hadith','hadith_connections',{sura_id:'eq.'+sura,aya_number:'eq.'+aya}],
    ['xref','thematic_cross_references_v2',{sura:'eq.'+sura,aya:'eq.'+aya}]
   ];
@@ -4028,6 +4032,7 @@ function switchTab(num, tab, btn) {
     else card.classList.add('open');
   }
   card.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  try { const bar = btn && btn.closest('.tab-bar'); if (bar && bar.scrollWidth > bar.clientWidth) { const l = btn.offsetLeft - bar.offsetLeft; if (l < bar.scrollLeft || l + btn.offsetWidth > bar.scrollLeft + bar.clientWidth) bar.scrollTo({ left: Math.max(0, l - 12), behavior: 'smooth' }); } } catch (_) {}
   card.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   btn.classList.add('active');
   panel.classList.add('active');
@@ -12808,7 +12813,7 @@ window.QNAV_PAGE_LABEL='Quran Reader';window.QNAV_PAGE_ICON='📖';
  });
 })();
 </script>
-<script src="/qh-sources-panel.js?v=20261102-verified-v6-snapshot"></script>
+<script src="/qh-sources-panel.js?v=20261104-verified-v8-retry"></script>
 </body>
 </html><!-- Force rebuild Sat Sep  5 08:51:17 UTC 2026 -->
 

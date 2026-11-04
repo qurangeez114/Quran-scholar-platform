@@ -52,7 +52,7 @@
   // The mobile script is idempotent when the edge also supplies it.
   if (!document.querySelector('script[src*="mobile-floating-layout.js"]')) {
     var mobileLayout = document.createElement('script');
-    mobileLayout.src = '/mobile-floating-layout.js?v=20261101-phone-flow';
+    mobileLayout.src = '/mobile-floating-layout.js?v=20261104-gutter';
     mobileLayout.defer = true;
     document.head.appendChild(mobileLayout);
   }

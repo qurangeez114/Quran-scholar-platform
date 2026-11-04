@@ -152,25 +152,50 @@
     const tab = document.getElementById('ancient-tab-' + num);
     let timeoutId;
     try {
-      // Defer the API call so even a synchronous sbFetch/configuration exception
-      // becomes a rejected promise and reaches the verified-snapshot fallback.
-      const request = Promise.resolve().then(() => {
-        if (typeof sbFetch !== 'function') throw new Error('Sources API unavailable');
-        return sbFetch('ancient_sources', {
-          select: SELECT, sura: 'eq.' + suraId, aya: 'eq.' + num,
-          verification_status: 'eq.verified', order: 'source_title.asc', limit: '50'
+      // Live lookup: one attempt via the page's sbFetch, then one direct REST retry with its
+      // own abort timeout, before falling back to the dated verified snapshot. A single slow
+      // response (cold PostgREST / many concurrent panel queries) previously sent readers
+      // straight to the snapshot.
+      const params = {
+        select: SELECT, sura: 'eq.' + suraId, aya: 'eq.' + num,
+        verification_status: 'eq.verified', order: 'source_title.asc', limit: '50'
+      };
+      const attemptSbFetch = () => {
+        const request = Promise.resolve().then(() => {
+          if (typeof sbFetch !== 'function') throw new Error('Sources API unavailable');
+          return sbFetch('ancient_sources', params);
         });
-      });
-      const timeout = new Promise((_, reject) => {
-        timeoutId = setTimeout(() => reject(new Error('Source request timed out')), 6000);
-      });
+        const timeout = new Promise((_, reject) => {
+          timeoutId = setTimeout(() => reject(new Error('Source request timed out')), 7000);
+        });
+        return Promise.race([request, timeout]).finally(() => clearTimeout(timeoutId));
+      };
+      const attemptDirect = async () => {
+        if (typeof SUPABASE_URL !== 'string' || typeof HEADERS !== 'object') throw new Error('Sources config unavailable');
+        const url = new URL(SUPABASE_URL + '/rest/v1/ancient_sources');
+        Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+        const controller = new AbortController();
+        const t = setTimeout(() => controller.abort(), 9000);
+        try {
+          const r = await fetch(url, { headers: HEADERS, signal: controller.signal, cache: 'no-store' });
+          if (!r.ok) throw new Error('Sources HTTP ' + r.status);
+          return r.json();
+        } finally { clearTimeout(t); }
+      };
       let results;
       let snapshotAsOf = null;
       try {
-        results = await Promise.race([request, timeout]);
-        if (!Array.isArray(results)) throw new Error('Unexpected Sources API response');
+        try {
+          results = await attemptSbFetch();
+          if (!Array.isArray(results)) throw new Error('Unexpected Sources API response');
+        } catch (firstError) {
+          console.info('Live Sources first attempt failed, retrying once:', firstError && firstError.message);
+          await new Promise(r => setTimeout(r, 400));
+          results = await attemptDirect();
+          if (!Array.isArray(results)) throw new Error('Unexpected Sources API response');
+        }
       } catch (apiError) {
-        console.warn('Live Sources request failed; checking dated verified snapshot:', apiError);
+        console.warn('Live Sources request failed after retry; checking dated verified snapshot:', apiError);
         const fallback = await readVerifiedSnapshot(suraId, num);
         results = fallback.rows;
         snapshotAsOf = fallback.asOf;
@@ -228,5 +253,5 @@
       }
     }
   };
-  window.qhSourcesPanelVersion = '2026-11-02-verified-v7-scholarly-layout';
+  window.qhSourcesPanelVersion = '2026-11-04-verified-v8-retry';
 })();

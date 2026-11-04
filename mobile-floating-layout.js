@@ -239,7 +239,13 @@
   font-size: 16px; line-height: 1; cursor: pointer; padding: 0;
   box-shadow: 0 2px 8px rgba(0,0,0,.22);
 }
-#qh-float-toggle:active { opacity: .7; }`;
+#qh-float-toggle:active { opacity: .7; }
+@media (max-width: 600px) {
+  #qh-float-toggle { width: 16px; height: 40px; font-size: 13px; opacity: .78; }
+  html.qh-has-float-toggle body > .app #verseArea,
+  html.qh-has-float-toggle body .verse-card { box-sizing: border-box; }
+  html.qh-has-float-toggle body > .app #verseArea { padding-right: 18px !important; }
+}`;
 
   var style = document.createElement('style');
   style.id = 'qh-mobile-floating-layout';
@@ -294,6 +300,7 @@
       try { localStorage.setItem('floatingUIHidden', on); } catch (e) {}
     };
     document.body.appendChild(btn);
+    document.documentElement.classList.add('qh-has-float-toggle');
   }
 
   if (document.readyState === 'loading') {
