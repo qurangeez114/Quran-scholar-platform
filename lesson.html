@@ -789,7 +789,7 @@
         if (error) throw error;
 
         currentQuiz = data;
-        quizStage = 'practice';
+        restoreQuizAttempt();
         document.getElementById('quizResult').textContent = '';
         renderQuiz();
       } catch (error) {
@@ -803,9 +803,38 @@
 
     let quizStage = 'practice';
     let quizShuffleSeed = Math.floor(Math.random()*1000000);
+    // One seed per attempt, saved per quiz so a refresh keeps the same order.
+    // Grading never depends on position: answers are sent as option text in
+    // the original question order (what qh_grade_quiz expects).
+    const quizAttemptKey = () => 'qh_quiz_attempt_' + (currentQuiz && currentQuiz.id);
+    function saveQuizAttempt() {
+      try { localStorage.setItem(quizAttemptKey(), JSON.stringify({stage: quizStage, seed: quizShuffleSeed})); } catch (_) {}
+    }
+    function newQuizAttempt(stage) {
+      quizStage = stage;
+      quizShuffleSeed = Math.floor(Math.random()*1000000);
+      saveQuizAttempt();
+    }
+    function restoreQuizAttempt() {
+      let saved = null;
+      try { saved = JSON.parse(localStorage.getItem(quizAttemptKey()) || 'null'); } catch (_) {}
+      if (saved && Number.isFinite(saved.seed) && (saved.stage === 'practice' || saved.stage === 'final')) {
+        quizStage = saved.stage; quizShuffleSeed = saved.seed >>> 0;
+      } else newQuizAttempt('practice');
+    }
+    function seededOrder(n, seed) {
+      const order = Array.from({length: n}, (_, i) => i);
+      for (let j = n - 1; j > 0; j--) {
+        seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+        const k = seed % (j + 1); [order[j], order[k]] = [order[k], order[j]];
+      }
+      return order;
+    }
     const quizButton = () => document.querySelector('#quizForm button[type="submit"]');
     function currentRoundQuestions() {
-      return currentQuiz.questions.map((original,idx)=>{
+      const qOrder = seededOrder(currentQuiz.questions.length, (quizShuffleSeed ^ 0x5bd1e995) >>> 0);
+      return qOrder.map(idx=>{
+        const original=currentQuiz.questions[idx];
         const v=quizStage==='final'?original.variant:null;
         const candidate=v&&v.q&&Array.isArray(v.options)&&v.options.length>=2
           ? {...original,question:v.q,options:v.options,
@@ -814,15 +843,8 @@
         const options=candidate.options||[];
         // Seed is chosen once per quiz round; repeated rendering and grading
         // use the same arrangement, while a fresh attempt changes the order.
-        let seed=(quizShuffleSeed+idx*9973)>>>0;
-        const order=options.map((_,i)=>i);
-        // Shuffle temporarily disabled: options show in saved order (correct answer first).
-        const QUIZ_SHUFFLE_ENABLED=false;
-        for(let j=order.length-1;QUIZ_SHUFFLE_ENABLED&&j>0;j--){
-          seed=(Math.imul(seed,1664525)+1013904223)>>>0;
-          const k=seed%(j+1);[order[j],order[k]]=[order[k],order[j]];
-        }
-        return {...candidate,options:order.map(i=>options[i]),
+        const order=seededOrder(options.length,(quizShuffleSeed+idx*9973)>>>0);
+        return {...candidate,_origIndex:idx,options:order.map(i=>options[i]),
           option_explanations:order.map(i=>candidate.option_explanations?.[i]||'')};
       });
     }
@@ -908,6 +930,9 @@
         const checked = document.querySelector('input[name="q'+i+'"]:checked');
         return checked && Array.isArray(q.options) ? q.options[Number(checked.value)] || '' : '';
       });
+      // Same answers, re-indexed to the original question order for storage and server grading.
+      const answersOriginal = new Array(currentQuiz.questions.length).fill('');
+      questions.forEach((q,i)=>{ answersOriginal[q._origIndex] = answers[i]; });
       let score = answers.filter((ans,i)=>ans === questions[i].correct_answer).length;
       let percentage = Math.round(score / questions.length * 100);
       const result = document.getElementById('quizResult');
@@ -929,8 +954,7 @@
           info.textContent='Practice: '+score+'/'+questions.length+' ('+percentage+'%). Review every answer below; your grade is not yet recorded. Then complete the final reworded check.';
           result.append(info);
           addExplanations(questions,answers,'Practice feedback — learn from every answer');
-          quizStage='final';
-          quizShuffleSeed=Math.floor(Math.random()*1000000);
+          newQuizAttempt('final');
           renderQuiz();
           result.scrollIntoView({behavior:'smooth',block:'start'});
           return;
@@ -941,12 +965,13 @@
         if(preview){result.textContent='Preview score: '+percentage+'%. Nothing was saved.';return;}
         // Prefer server-side grading (qh_grade_quiz, migration 20261104b) so the recorded score cannot be set by the browser.
         // Falls back to the current client-graded insert only while the function or answer key does not exist yet.
-        const server = await gradeOnServer(currentQuiz.id, answers, quizStage);
+        const server = await gradeOnServer(currentQuiz.id, answersOriginal, quizStage);
         if (server) {
           score = server.correct; percentage = server.score; passed = Boolean(server.passed);
-          (server.results||[]).forEach(r=>{ if(questions[r.index] && r.correct_answer) questions[r.index] = {...questions[r.index], correct_answer: r.correct_answer}; });
+          // server results use original question indexes; map to displayed positions
+          (server.results||[]).forEach(r=>{ const d=questions.findIndex(q=>q._origIndex===r.index); if(d>=0 && r.correct_answer) questions[d] = {...questions[d], correct_answer: r.correct_answer}; });
         } else {
-          await submitQuiz(currentQuiz.id, answers, percentage, currentQuiz.passing_score);
+          await submitQuiz(currentQuiz.id, answersOriginal, percentage, currentQuiz.passing_score);
         }
         // A later failed retry must not erase an earlier passing lesson completion.
         const existing = (await getStudentProgress(currentCourse.id))
@@ -966,13 +991,14 @@
         notice.append(heading,detail);result.append(notice);
         addExplanations(questions,answers,'Answer explanations');
         document.getElementById('quizForm').style.display='none';
+        newQuizAttempt('practice'); // next visit or retry starts a fresh, differently ordered attempt
         if (!passed) {
           const again=document.createElement('button');
           again.className='btn btn-primary';
           again.type='button';
           again.textContent='↻ Retry the quiz';
           again.addEventListener('click',()=>{
-            quizStage='practice';quizShuffleSeed=Math.floor(Math.random()*1000000);result.replaceChildren();renderQuiz();
+            result.replaceChildren();renderQuiz();
             document.getElementById('quizForm').scrollIntoView({behavior:'smooth'});
           });
           result.append(again);
