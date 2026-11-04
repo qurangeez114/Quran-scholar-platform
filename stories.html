@@ -618,13 +618,19 @@ function tradClass(t){
   return'tO';
 }
 
+// ?story= accepts a slug or a numeric story id (used by verse Sources links).
+function findStory(key){
+  if(!key)return null;
+  return allStories.find(s=>s.slug===key)||allStories.find(s=>String(s.id)===key)||null;
+}
+
 async function init(){
   allStories=await sb('quranic_stories','select=*&order=total_mentions.desc');
   buildSidebar();
   // Render the first story immediately. Optional hadith catalogue must not block navigation.
   if(allStories.length) {
     const requested = new URLSearchParams(location.search).get('story');
-    openStory(allStories.find(s => s.slug === requested) || allStories[0], false);
+    openStory(findStory(requested) || allStories[0], false);
   }
   else document.getElementById('storyMain').innerHTML='<div class="stories-status">No stories are published yet.</div>';
   void loadHadithNavigation();
@@ -731,15 +737,19 @@ async function openStory(story, updateAddress = false){
   // Fetch independent sources concurrently rather than serially waiting for timeouts.
   const sourcesPromise = sb('story_sources','story_id=eq.'+story.id+'&select=*&order=tradition.asc')
     .catch(error=>{console.warn('Story comparisons unavailable:',error);return []});
-  const ancientPromise = (async()=>{
-    if(!Array.isArray(story.primary_suras)||!story.primary_suras.length)return [];
-    const suraFilter=story.primary_suras.map(s=>'sura.eq.'+s).join(',');
-    const rows=await sb('ancient_sources','or=('+suraFilter+')&verification_status=eq.verified&select=*&order=tradition.asc&limit=20');
-    return rows.filter(a=>a.source_locator&&a.verification_note&&/^https:\/\//i.test(a.reference_link||''));
-  })().catch(error=>{console.warn('Verified historical links unavailable:',error);return []});
+  // Read only evidence linked to verses belonging to this specific story.
+  // Never import all references from the same surah: unrelated narratives may share a surah.
+  const ancientPromise = sb('qh_verified_verse_story_sources',
+      'story_id=eq.'+encodeURIComponent(story.id)
+      +'&select=ancient_source_id,sura,aya,source_title,tradition,approx_date,source_locator,source_edition,reference_link,relationship_kind,parallel_summary,similarity_note,difference_note,verification_note'
+      +'&order=sura.asc,aya.asc&limit=100')
+    .then(rows=>rows
+      .filter(a=>a.source_locator&&a.verification_note&&/^https:\/\//i.test(a.reference_link||''))
+      .filter((a,i,arr)=>arr.findIndex(b=>b.ancient_source_id===a.ancient_source_id)===i))
+    .catch(error=>{console.warn('Verified story evidence unavailable',error);return []});
   // Avoid serial waits: source and historical-reference requests are already in flight.
   const [sourceRows, ancientSources] = await Promise.all([sourcesPromise,ancientPromise]);
-  sources = sourceRows;
+  let sources = sourceRows;
   if(requestId !== activeStoryRequest)return;
   // Fetch verses
   let verses=[];
@@ -1099,7 +1109,7 @@ async function genAI(){
 
 window.addEventListener('popstate',()=>{
   const slug=new URLSearchParams(location.search).get('story');
-  const selected=allStories.find(s=>s.slug===slug);
+  const selected=findStory(slug);
   if(selected)openStory(selected,false);
 });
 init().catch(error=>{
