@@ -14,6 +14,7 @@ import { VerifierConsentPanel } from "@/components/verifier-consent-panel";
 import { MissedAndDisputes } from "@/components/missed-and-disputes";
 import { CircleLifecycle } from "@/components/circle-lifecycle";
 import { confirmationAction } from "@/lib/verification";
+import { EQUB_LIFECYCLE_V2_STAGING } from "@/config/lifecycle-flags";
 import { groupQuery, invitesQuery } from "@/lib/api";
 import { contributionStatus, payoutStatus, roundTotals, formatMoney, formatDate, toNumber, PERIOD_LABEL, todayInTimeZone } from "@/lib/equb";
 
@@ -29,7 +30,7 @@ function CircleDetails() {
   const iq = useQuery({ ...invitesQuery(groupId), enabled: q.data?.isOrganizer === true });
   const verifierQuery = useQuery({
     queryKey: ["verifier-consent", groupId, q.data?.uid],
-    enabled: Boolean(q.data?.uid),
+    enabled: EQUB_LIFECYCLE_V2_STAGING && Boolean(q.data?.uid),
     queryFn: async () => {
       const { data, error } = await supabase.from("group_members").select("*")
         .eq("group_id", groupId).eq("user_id", q.data!.uid).single();
@@ -139,7 +140,7 @@ function CircleDetails() {
         )}
       </Card>
 
-      <VerifierConsentPanel groupId={groupId} uid={uid} isOrganizer={isOrganizer} />
+      {EQUB_LIFECYCLE_V2_STAGING && <VerifierConsentPanel groupId={groupId} uid={uid} isOrganizer={isOrganizer} />}
 
       {isOrganizer && g.status === "forming" && (
         <Card className="space-y-3">
@@ -217,7 +218,7 @@ function CircleDetails() {
         <div className="flex gap-2"><Button disabled={working} onClick={submitContribution}>Save unverified record</Button><Button variant="outline" onClick={() => setReportRound("")}>Cancel</Button></div>
       </Card>}
 
-      <MissedAndDisputes
+      {EQUB_LIFECYCLE_V2_STAGING && <MissedAndDisputes
         groupId={groupId}
         uid={uid}
         isOrganizer={isOrganizer}
@@ -226,9 +227,9 @@ function CircleDetails() {
         contributions={contributions}
         rounds={rounds}
         memberName={memberName}
-      />
+      />}
 
-      <CircleLifecycle
+      {EQUB_LIFECYCLE_V2_STAGING && <CircleLifecycle
         groupId={groupId}
         uid={uid}
         status={g.status}
@@ -237,7 +238,7 @@ function CircleDetails() {
         rounds={rounds}
         contributions={contributions}
         currency={g.currency}
-      />
+      />}
 
       <Card className="space-y-3">
         <h2 className="font-semibold">Recent activity</h2>
