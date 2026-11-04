@@ -518,7 +518,8 @@ body { padding-bottom: 60px !important; }
       var ref = sura + (aya ? ':'+aya : '');
       var siraRows = await sbGet('sira_events', {
         select: 'id,title_en',
-        or: '(quran_verses.ilike.*' + ref + '*,hadith_ref.ilike.*' + ref + '*,tafsir_ref.ilike.*' + ref + '*)',
+        // quran_verses is a jsonb array of {sura, aya, note}; ilike on jsonb returns HTTP 404.
+        quran_verses: 'cs.' + JSON.stringify([aya ? { sura: Number(sura), aya: Number(aya) } : { sura: Number(sura) }]),
         limit: 3
       });
       siraRows.forEach(function(ev) {
