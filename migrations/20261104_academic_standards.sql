@@ -20,7 +20,7 @@ ALTER TABLE public.qh_courses
 --   "late_work_policy": "text",
 --   "weekly_schedule": [{"week": 1, "topic": "text", "due": "text"}],
 --   "readings": [{"author": "", "title": "", "publisher": "", "year": "", "pages": "", "required": true}],
---   "assessments": [{"name": "Quizzes", "weight": 30, "description": "text"}]
+--   "assessments": [{"name": "Quizzes", "weight": 30, "description": "text", "outcomes": [1, 2]}]   -- outcomes = 1-based indexes into learning_outcomes
 -- }
 
 COMMENT ON COLUMN public.qh_courses.learning_outcomes IS 'JSON array of measurable learning outcome statements';
