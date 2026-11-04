@@ -32,9 +32,9 @@ export function contributionStatus(c: ContributionLike | undefined | null): Cont
 export const CONTRIBUTION_LABEL: Record<ContributionStatus, string> = {
   missing: "Not recorded",
   recorded: "Recorded · not verified",
-  payer_confirmed: "Payer confirmed · awaiting organizer",
-  organizer_confirmed: "Organizer confirmed · awaiting payer",
-  confirmed: "Confirmed by both",
+  payer_confirmed: "Payer confirmed · awaiting independent verifier",
+  organizer_confirmed: "Independently verified · awaiting payer",
+  confirmed: "Payer and independent verifier confirmed",
 };
 
 export type PayoutStatus = "planned" | "recorded" | "confirmed";
