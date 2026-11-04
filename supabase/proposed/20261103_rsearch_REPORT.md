@@ -32,3 +32,10 @@ Ranked (embedded Postgres 17 mock built from anon samples): 6–200 ms per query
 - The mock's `normalize_arabic` is an approximation of the production one.
 - English search uses AND logic ("intention actions" gives 0 ranked Quran hits). For any source with 0 ranked results, the page falls back to the legacy relaxed search.
 - The Supabase Management token in the box returned 401, so the live schema was inferred from anon REST and the #66/#61 branches. Re-run the pre-checks in each file.
+
+## Applied 2026-11-03/04 (approved)
+- Step 1: applied 23:5x PST. Step 2: backfill complete, 00:00–00:53 PST. Step 3: 5 valid indexes, 01:10–01:11 PST.
+- TEST v1 (one call covering all sources, 5,000 cap): p95 16.9 s, so we stopped. v2 (per-source calls, 1,000 cap, top-300 scoring) TEST_ROLLBACK: slowest source per query, in-database p50 0.17 s, p95 1.0 s, max 1.03 s; result quality unchanged.
+- Step 4 (v2): applied 01:36 PST. Row counts unchanged.
+- Production benchmark (--ranked, 2 rounds): ranked requests, slowest source wall p95 5.4 s, highly variable (the same call took 0.2–4.8 s). The legacy path was 29.1 s.
+- Page wait is still bounded by the legacy non-core sources (library, propositions, …): about 11 s on the deploy preview.
