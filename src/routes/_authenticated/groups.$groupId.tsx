@@ -12,6 +12,7 @@ import { Notice, Pill, ContributionPill, PayoutPill } from "@/components/status"
 import { TermsView, type TermsSnapshot } from "@/components/terms-view";
 import { VerifierConsentPanel } from "@/components/verifier-consent-panel";
 import { MissedAndDisputes } from "@/components/missed-and-disputes";
+import { CircleLifecycle } from "@/components/circle-lifecycle";
 import { confirmationAction } from "@/lib/verification";
 import { groupQuery, invitesQuery } from "@/lib/api";
 import { contributionStatus, payoutStatus, roundTotals, formatMoney, formatDate, toNumber, PERIOD_LABEL, todayInTimeZone } from "@/lib/equb";
@@ -225,6 +226,17 @@ function CircleDetails() {
         contributions={contributions}
         rounds={rounds}
         memberName={memberName}
+      />
+
+      <CircleLifecycle
+        groupId={groupId}
+        uid={uid}
+        status={g.status}
+        isOrganizer={isOrganizer}
+        members={members}
+        rounds={rounds}
+        contributions={contributions}
+        currency={g.currency}
       />
 
       <Card className="space-y-3">
