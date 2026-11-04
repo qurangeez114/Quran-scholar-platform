@@ -587,6 +587,7 @@ let renderedSearch=null;
 function render(results,vars,q,dg){
   renderedSearch={results,vars,q,dg,version:searchVersion};
   const total=results.reduce((a,r)=>a+(r.count||0),0);
+  const pending=results.some(r=>r.pending);
   let h=results.some(r=>r.topic_match)?'<div class="note" style="margin-top:12px"><b>Related-topic search: rights and legal status of non-Muslims.</b> Includes protections, obligations and restrictions. Quran and tafsir passages are selected by related verse references; other sources match related terminology. These results do not imply that every source takes the same position.</div>':'';
   const exactReference=results.find(r=>r.reference_match);
   if(exactReference){
@@ -597,26 +598,44 @@ function render(results,vars,q,dg){
   }
   const uniqVars=[...new Set(vars)].filter(v=>v.toLowerCase()!==q.toLowerCase());
   if(uniqVars.length) h+=`<div class="variants">Also searched as: ${uniqVars.map(v=>`<span>${esc(v)}</span>`).join(' ')}</div>`;
-  h+='<div class="tabs">'+results.map(r=>`<button data-source-tab="${r.key}" class="tab ${r.count?'':'off'}" onclick="jump('${r.key}')">${esc(LABEL[r.key])} <b>${r.failed?'Unavailable':countLabel(r)}</b></button>`).join('')+(!SEL.length?'<button class="tab" type="button" onclick="document.getElementById(\'argumentSourceResults\')?.scrollIntoView({behavior:\'smooth\',block:\'start\'})">Arguments &amp; perspectives</button>':'')+'</div>';
+  h+='<div class="tabs">'+results.map(r=>`<button data-source-tab="${r.key}" class="tab ${r.count||r.pending?'':'off'}" onclick="jump('${r.key}')">${esc(LABEL[r.key])} <b>${r.pending?'…':r.failed?'Unavailable':countLabel(r)}</b></button>`).join('')+(!SEL.length?'<button class="tab" type="button" onclick="document.getElementById(\'argumentSourceResults\')?.scrollIntoView({behavior:\'smooth\',block:\'start\'})">Arguments &amp; perspectives</button>':'')+'</div>';
   h+='<div id="pickerslot"></div>';
-  if(!results.some(r=>r.topic_match)) h+=overview(dg,results,q);
+  if(pending) h+=progressLine(results);
+  else if(!results.some(r=>r.topic_match)) h+=overview(dg,results,q);
   if(results.some(r=>r.failed)) h+='<div class="note" id="sourceFailureNotice" role="status">Some sources could not be searched in time. Available results are shown below; please retry to check the unavailable sources.</div>';
-  if(!total&&!results.some(r=>r.failed)){
+  if(!pending&&!total&&!results.some(r=>r.failed)){
     h+=`<div class="empty">Nothing found for \u201c${esc(q)}\u201d in any source.<br>Try another spelling, an Arabic form, or a simpler word. If the subject is real and missing, that is a gap in the site\u2019s coverage, not a sign that nothing was written about it.</div>`;
   }
-  results.filter(r=>total||r.failed).forEach(r=>{h+=sourceSection(r,vars);});
+  results.filter(r=>pending||total||r.failed).forEach(r=>{h+=sourceSection(r,vars);});
   if(exactReference?.conflicting_local_count>0){
     const others=exactReference.conflicting_local_rows||[];
     h+=`<details class="ref-other"><summary>${n(exactReference.conflicting_local_count)} additional local record(s) share this number — unverified</summary><p>These local records are preserved for scholarship, but they have NOT been established as the requested publisher citation. Different wording, numbering systems, and reported grades must be checked individually.</p>${others.map(r=>card('hadith',r,vars)).join('')}${exactReference.conflicting_local_count>others.length?'<p>Only the first eight candidates are shown.</p>':''}</details>`;
   }
   h+=`<div class="note">Results come straight from the site\u2019s own database. Some sources, especially hadith linked to the later suras, were assembled automatically and have not yet been reviewed verse by verse; each source above says what it contains so you can judge how much weight to give it.</div>`;
   h+='<section class="argument-catalog" id="argumentSourceResults" aria-label="External argument and apologetic sources"><h2>Arguments and outside perspectives</h2><p class="what">Checking indexed source articles…</p></section>';
+  if(pending){$('out').innerHTML=h;const outside=$('argumentSourceResults');if(outside)outside.remove();return;}
   $('out').innerHTML=h;
   if(!SEL.length)loadArgumentCatalog(q,searchVersion);else{const outside=$('argumentSourceResults');if(outside)outside.remove();}
 }
 
+function progressLine(results){
+  const done=results.filter(r=>!r.pending),total=done.reduce((a,r)=>a+(r.count||0),0),capped=done.some(r=>r.capped);
+  return '<p class="what" id="srcProgress" role="status"><span class="spin"></span>'+n(total)+(capped?'+':'')+' match'+(total===1?'':'es')+' so far · '+done.length+' of '+results.length+' sources searched…</p>';
+}
+// Put one source's results on the page as soon as its own request finishes.
+function sourceArrived(state,key,r){
+  if(!state||state.version!==searchVersion||!r)return;
+  const i=state.results.findIndex(x=>x.key===key);if(i<0)return;
+  state.results[i]=Object.assign({},r,{key});
+  (r.variants||[]).forEach(v=>{if(!state.vars.includes(v))state.vars.push(v);});
+  const section=$('src-'+key);if(section)section.outerHTML=sourceSection(state.results[i],state.vars);
+  const tab=document.querySelector('[data-source-tab="'+key+'"]');
+  if(tab){tab.classList.toggle('off',!state.results[i].count);tab.querySelector('b').textContent=r.failed?'Unavailable':countLabel(state.results[i]);}
+  const prog=$('srcProgress');if(prog)prog.outerHTML=progressLine(state.results);
+}
 function sourceSection(r,vars){
  let h='';
+ if(r.pending)return `<section class="src" id="src-${r.key}"><h2>${esc(LABEL[r.key])} <small>searching…</small></h2><p class="what">${esc(SRC[r.key].what)}</p><div class="none" role="status"><span class="spin"></span>Searching this source…</div></section>`;
     h+=`<section class="src" id="src-${r.key}"><h2>${esc(LABEL[r.key])} <small>${r.failed?'unavailable':r.count?(r.capped?'more than '+n(r.cap||1000)+' matches':n(r.count)+' match'+(r.count==1?'':'es')+(r.ranked?', ranked by relevance':'')):'no matches'}</small></h2><p class="what">${esc(SRC[r.key].what)}</p>${r.relaxed?'<p class="what"><i>No passage has every word you typed, so these are the closest matches: they contain most of your words.</i></p>':''}`;
     if(r.count){
       h+=sortResearchTraditions(r.rows,r.key).map(x=>card(r.key,x,vars)).join('');
@@ -1091,16 +1110,17 @@ async function rankedSearch(q,source,page,perPage,collections,signal){
     return null;
   }
 }
-async function searchAllSources(q,keys,signal){
+async function searchAllSources(q,keys,signal,onEach){
+  const report=(k,r)=>{try{if(onEach&&!signal?.aborted)onEach(k,r);}catch(e){}return r;};
   const core=keys.filter(k=>RANKED_SOURCES.includes(k));
   const rest=keys.filter(k=>!RANKED_SOURCES.includes(k));
-  const restP=Promise.all(rest.map(k=>legacySource(k,q,signal)));
+  const restP=Promise.all(rest.map(k=>Promise.resolve(legacySource(k,q,signal)).then(r=>report(k,r))));
   // One ranked request per source, in parallel, so the page waits only for the slowest source.
   // A source whose ranked call fails, is not installed, or finds nothing gets the old relaxed search.
   const coreRes=await Promise.all(core.map(async k=>{
     const out=await rankedSearch(q,k,1,6,null,signal);
     const r=out&&out.results.find(x=>x.key===k);
-    return r&&r.count>0?r:legacySource(k,q,signal);
+    return report(k,r&&r.count>0?r:await legacySource(k,q,signal));
   }));
   const restRes=await restP;
   return keys.map(k=>core.includes(k)?coreRes[core.indexOf(k)]:restRes[rest.indexOf(k)]);
@@ -1199,7 +1219,11 @@ async function search(q){
       if(!result.count || result.ambiguous || result.conflicting_local_count>0)discovery.discover(q,{weak:!!result.count});
       return;
     }
-    const res=await searchAllSources(q,only?only:ORDER,signal);
+    const keysToSearch=only?only:ORDER;
+    // Draw a placeholder for every source, then fill each one in as soon as it answers.
+    render(keysToSearch.map(k=>({key:k,pending:true,count:0,rows:[]})),[q],q,{});
+    const live=renderedSearch;
+    const res=await searchAllSources(q,keysToSearch,signal,(k,r)=>sourceArrived(live,k,r));
     if(version!==searchVersion)return;
     // Keep the source order: a long question does not automatically imply Sira.
     if(res.some(r=>r.topic_match)){const priority=['quran','hadith','tafsir','madhhab','sira'];res.sort((a,b)=>{const rank=k=>priority.includes(k)?priority.indexOf(k):priority.length;return rank(a.key)-rank(b.key);});}
