@@ -292,6 +292,7 @@ def parse_start(value):
 
 def main():
     ap = argparse.ArgumentParser(description="Precompute Ibn Kathir Arabic↔English Tafsir fidelity scores")
+    ap.add_argument("--max-chars", type=int, default=0, help="defer pairs longer than this many characters (default 0 = no limit)")
     ap.add_argument("--limit", type=int, default=20, help="maximum NEW evaluations this run (default: 20; 0 = all)")
     ap.add_argument("--start", type=parse_start, help="begin at or after SURA:AYA")
     ap.add_argument("--delay", type=float, default=1.0, help="seconds between successful API calls")
@@ -327,8 +328,11 @@ def main():
     # streaming proxy currently cuts long answers off mid-JSON, so prioritize
     # complete shorter Arabic+English source pairs without marking large ones
     # evaluated or changing their original order in the database.
-    deferred_large = sum(len(ar) + len(en) > 4000 for _, _, ar, en in missing)
-    missing = [pair for pair in missing if len(pair[2]) + len(pair[3]) <= 4000]
+    if args.max_chars:
+        deferred_large = sum(len(ar) + len(en) > args.max_chars for _, _, ar, en in missing)
+        missing = [pair for pair in missing if len(pair[2]) + len(pair[3]) <= args.max_chars]
+    else:
+        deferred_large = 0
     print(f"Long source pairs deferred for chunking: {deferred_large}")
 
     if args.limit:
