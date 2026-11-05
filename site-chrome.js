@@ -171,7 +171,20 @@
     document.addEventListener('keydown',function(e){if(e.key==='Escape')root.querySelectorAll('details').forEach(function(d){d.open=false;});});
   }
 
-  function init() { loadModal(); addSchoolNav(); addNav(); setTimeout(addClock, 400); setTimeout(addAccount, 400);
+  function init() {
+    // Shared cinematic visual system: page-specific imagery and palette, with no changes
+    // to verse content, search handlers, personal workspaces or scroll geometry.
+    if (!document.getElementById('qh-cinematic-css')) {
+      var cinemaCss=document.createElement('link');cinemaCss.id='qh-cinematic-css';
+      cinemaCss.rel='stylesheet';cinemaCss.href='/qh-cinematic-theme.css?v=20261105-lab1';
+      document.head.appendChild(cinemaCss);
+    }
+    if (!document.getElementById('qh-cinematic-js')) {
+      var cinemaJs=document.createElement('script');cinemaJs.id='qh-cinematic-js';
+      cinemaJs.src='/qh-cinematic-theme.js?v=20261105-lab1';
+      document.body.appendChild(cinemaJs);
+    }
+    loadModal(); addSchoolNav(); addNav(); setTimeout(addClock, 400); setTimeout(addAccount, 400);
     // Desktop Quran reader: dedicate the right edge to the existing approved
     // advertising slot while leaving phone and tablet layouts unchanged.
     if (file() === 'index.html' && !document.getElementById('qh-desktop-reader-rail-js')) {
