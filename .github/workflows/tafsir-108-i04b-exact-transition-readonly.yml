@@ -1,0 +1,104 @@
+name: Capture Surah 108 I04B exact transition read-only
+
+on:
+  push:
+    paths:
+      - '.github/workflows/tafsir-108-i04b-exact-transition-readonly.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Compute exact stored-text locators without writes
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          python - <<'PY'
+          import hashlib, json, os, unicodedata, urllib.parse, urllib.request
+
+          key = os.environ['SUPABASE_SERVICE_KEY']
+          query = urllib.parse.urlencode({
+              'id': 'in.(48457,11079)',
+              'select': 'id,sura,aya,language,scholar_key,content',
+          })
+          request = urllib.request.Request(
+              'https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/tafsir_entries?' + query,
+              headers={'apikey': key, 'Authorization': 'Bearer ' + key},
+          )
+          with urllib.request.urlopen(request, timeout=30) as response:
+              rows = {row['id']: row for row in json.load(response)}
+          assert set(rows) == {48457, 11079}
+          assert (rows[48457]['sura'], rows[48457]['aya'], rows[48457]['language'], rows[48457]['scholar_key']) == (108, 1, 'ar', 'ibn_kathir')
+          assert (rows[11079]['sura'], rows[11079]['aya'], rows[11079]['language'], rows[11079]['scholar_key']) == (108, 1, 'en', 'ibn_kathir')
+
+          ar = rows[48457]['content']
+          en = rows[11079]['content']
+          assert hashlib.sha256(ar.encode()).hexdigest() == '088bd57659f0a6645f7195f2e98caf9562e0571eca8214730cd55c07401402b2'
+          assert hashlib.sha256(en.encode()).hexdigest() == '7e5883c137fce598750407a0a0d4aca5fa03e791f371b3ffdd5d7c280511afda'
+
+          def normalized_with_raw_map(text):
+              chars, raw_map = [], []
+              for raw_i, ch in enumerate(text):
+                  for decomposed in unicodedata.normalize('NFKD', ch):
+                      if unicodedata.combining(decomposed) or decomposed == 'ـ':
+                          continue
+                      chars.append(decomposed)
+                      raw_map.append(raw_i)
+              return ''.join(chars), raw_map
+
+          normalized_ar, raw_map = normalized_with_raw_map(ar)
+          normalized_anchor = 'حتى قال مجاهد: هو الخير الكثير في الدنيا والاخرة.'
+          normalized_start = normalized_ar.find(normalized_anchor)
+          assert normalized_start >= 0
+          assert normalized_ar.find(normalized_anchor, normalized_start + 1) == -1
+          normalized_end = normalized_start + len(normalized_anchor)
+          ar_start = raw_map[normalized_start]
+          ar_end = raw_map[normalized_end - 1] + 1
+          ar_span = ar[ar_start:ar_end]
+
+          en_start_marker = 'Al-Bukhari also recorded'
+          en_end_marker = 'Then Allah says'
+          en_start = en.find(en_start_marker)
+          assert en_start >= 0 and en.find(en_start_marker, en_start + 1) == -1
+          en_end_start = en.find(en_end_marker, en_start + len(en_start_marker))
+          assert en_end_start > en_start
+          en_end = en_end_start + len(en_end_marker)
+          en_span = en[en_start:en_end]
+
+          forbidden = ['Mujahid', 'world and the hereafter', 'world and Hereafter']
+          assert all(term not in en_span for term in forbidden)
+          payload = {
+              'schema_version': 'quranhikma-i04b-exact-transition-readonly-log-v1',
+              'claim_id': '108-I04B',
+              'arabic': {
+                  'entry_id': 48457,
+                  'source_sha256': hashlib.sha256(ar.encode()).hexdigest(),
+                  'start_codepoint_0': ar_start,
+                  'end_codepoint_0': ar_end,
+                  'span': ar_span,
+                  'span_sha256': hashlib.sha256(ar_span.encode()).hexdigest(),
+              },
+              'english_transition': {
+                  'entry_id': 11079,
+                  'source_sha256': hashlib.sha256(en.encode()).hexdigest(),
+                  'start_codepoint_0': en_start,
+                  'end_codepoint_0': en_end,
+                  'span': en_span,
+                  'span_sha256': hashlib.sha256(en_span.encode()).hexdigest(),
+                  'positive_i04b_evidence_units': 0,
+              },
+              'print_locator': {
+                  'edition': 'Dar Taybah, 2nd ed., 1420/1999',
+                  'volume': 8,
+                  'page': 501,
+                  'url': 'https://shamela.ws/book/8473/4547',
+              },
+              'database_written': False,
+          }
+          print('I04B_EXACT_TRANSITION_JSON=' + json.dumps(payload, ensure_ascii=False, separators=(',', ':')))
+          print('I04B_EXACT_TRANSITION_READ_ONLY_PASS')
+          PY
