@@ -1,0 +1,147 @@
+name: Capture Surah 108 I07 exact transition read-only
+
+on:
+  push:
+    paths:
+      - ".github/workflows/tafsir-108-i07-exact-transition-readonly.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SUPABASE_URL: https://txqqlatwrgqfntucsitv.supabase.co
+      SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+    steps:
+      - name: Capture exact Arabic and English evidence without writes
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SUPABASE_SERVICE_KEY:-}"
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          import re
+          import unicodedata
+          import urllib.parse
+          import urllib.request
+
+          url = os.environ["SUPABASE_URL"].rstrip("/") + "/rest/v1/tafsir_entries"
+          query = urllib.parse.urlencode({
+              "id": "in.(48459,11081)",
+              "select": "id,sura,aya,language,scholar_key,content",
+              "order": "id.asc",
+          })
+          request = urllib.request.Request(
+              url + "?" + query,
+              headers={
+                  "apikey": os.environ["SUPABASE_SERVICE_KEY"],
+                  "Authorization": "Bearer " + os.environ["SUPABASE_SERVICE_KEY"],
+                  "Accept": "application/json",
+              },
+          )
+          with urllib.request.urlopen(request, timeout=30) as response:
+              rows = json.load(response)
+
+          by_id = {row["id"]: row for row in rows}
+          assert set(by_id) == {11081, 48459}, sorted(by_id)
+          ar_row = by_id[48459]
+          en_row = by_id[11081]
+          assert (ar_row["sura"], ar_row["aya"], ar_row["language"], ar_row["scholar_key"]) == (108, 3, "ar", "ibn_kathir")
+          assert (en_row["sura"], en_row["aya"], en_row["language"], en_row["scholar_key"]) == (108, 3, "en", "ibn_kathir")
+
+          ar = ar_row["content"]
+          en = en_row["content"]
+          assert hashlib.sha256(ar.encode()).hexdigest() == "088bd57659f0a6645f7195f2e98caf9562e0571eca8214730cd55c07401402b2"
+          assert hashlib.sha256(en.encode()).hexdigest() == "7e5883c137fce598750407a0a0d4aca5fa03e791f371b3ffdd5d7c280511afda"
+
+          def normalized_with_map(text):
+              normalized = []
+              mapping = []
+              for raw_index, char in enumerate(text):
+                  if unicodedata.category(char) == "Mn":
+                      continue
+                  if char == "ـ":
+                      continue
+                  normalized.append(char)
+                  mapping.append(raw_index)
+              return "".join(normalized), mapping
+
+          normalized_ar, ar_map = normalized_with_map(ar)
+          ar_start_anchor = "إن مبغضك"
+          ar_end_anchor = "المنقطع ذكره"
+          assert normalized_ar.count(ar_start_anchor) == 1
+          assert normalized_ar.count(ar_end_anchor) == 1
+          normalized_start = normalized_ar.index(ar_start_anchor)
+          normalized_end = normalized_ar.index(ar_end_anchor, normalized_start) + len(ar_end_anchor)
+          raw_start = ar_map[normalized_start]
+          raw_end = ar_map[normalized_end - 1] + 1
+          while raw_end < len(ar) and ar[raw_end] in " .،؛":
+              raw_end += 1
+          ar_span = ar[raw_start:raw_end]
+
+          lower_en = en.lower()
+          probes = ["most meanest", "meanest", "most lowly", "most disgraced", "cut off"]
+          hits = [(probe, lower_en.find(probe)) for probe in probes if lower_en.count(probe) == 1]
+          assert hits, {probe: lower_en.count(probe) for probe in probes}
+          probe, en_index = hits[0]
+
+          sentence_start = max(en.rfind("\n", 0, en_index), en.rfind(". ", 0, en_index))
+          sentence_start = 0 if sentence_start < 0 else sentence_start + (2 if en[sentence_start:sentence_start + 2] == ". " else 1)
+          while sentence_start < len(en) and en[sentence_start].isspace():
+              sentence_start += 1
+          stops = [pos for pos in (en.find(". ", en_index), en.find("\n", en_index)) if pos >= 0]
+          sentence_end = (min(stops) + 1) if stops else len(en)
+          en_sentence = en[sentence_start:sentence_end]
+
+          context_start = max(0, en_index - 450)
+          context_end = min(len(en), en_index + 650)
+          en_context = en[context_start:context_end]
+
+          def locator(text, start, end):
+              return {
+                  "codepoint_start": start,
+                  "codepoint_end_exclusive": end,
+                  "utf8_byte_start": len(text[:start].encode()),
+                  "utf8_byte_end_exclusive": len(text[:end].encode()),
+              }
+
+          payload = {
+              "schema": "quranhikma-i07-exact-transition-readonly-log-v1",
+              "surah": 108,
+              "claim_id": "108-I07",
+              "operation": "protected_read_only_capture",
+              "writes": 0,
+              "source_rows": {
+                  "arabic": {"id": 48459, "sha256": hashlib.sha256(ar.encode()).hexdigest()},
+                  "english": {"id": 11081, "sha256": hashlib.sha256(en.encode()).hexdigest()},
+              },
+              "arabic_candidate": {
+                  "text": ar_span,
+                  **locator(ar, raw_start, raw_end),
+                  "sha256": hashlib.sha256(ar_span.encode()).hexdigest(),
+                  "anchors": [ar_start_anchor, ar_end_anchor],
+              },
+              "english_candidate_sentence": {
+                  "text": en_sentence,
+                  **locator(en, sentence_start, sentence_end),
+                  "sha256": hashlib.sha256(en_sentence.encode()).hexdigest(),
+                  "probe": probe,
+                  "final_span_confirmed": False,
+              },
+              "english_probe_context": {
+                  "text": en_context,
+                  **locator(en, context_start, context_end),
+                  "sha256": hashlib.sha256(en_context.encode()).hexdigest(),
+              },
+              "route_status": "absent_extracted_route",
+              "source_independence": "single_duplicated_chapter_witness_external_independence_unknown",
+              "publication_ready": False,
+          }
+          print("I07_EXACT_TRANSITION_JSON=" + json.dumps(payload, ensure_ascii=False, sort_keys=True))
+          PY
