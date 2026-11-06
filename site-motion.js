@@ -22,6 +22,13 @@
     l.rel = 'stylesheet';
     l.href = 'site-motion.css';
     document.head.appendChild(l);
+    if (!document.getElementById('qh-universal-lab-theme')) {
+      var theme = document.createElement('link');
+      theme.id = 'qh-universal-lab-theme';
+      theme.rel = 'stylesheet';
+      theme.href = '/qh-universal-lab-theme.css?v=20261105';
+      document.head.appendChild(theme);
+    }
   }
 
   function staggerTag(nodes, selector) {
