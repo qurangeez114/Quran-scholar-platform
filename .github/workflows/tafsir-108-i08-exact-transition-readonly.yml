@@ -82,24 +82,17 @@ jobs:
               ar_end += 1
           ar_span = ar[ar_start:ar_end]
 
-          lower_en = en.lower()
-          shamir_hits = [m.start() for m in re.finditer(r"sham(?:i)?r", lower_en)]
-          uqba_hits = [m.start() for m in re.finditer(r"u(?:q|k)bah?", lower_en)]
-          assert len(shamir_hits) == 1, shamir_hits
-          assert len(uqba_hits) == 1, uqba_hits
-          assert abs(shamir_hits[0] - uqba_hits[0]) < 500
-          en_index = min(shamir_hits[0], uqba_hits[0])
-          en_last = max(shamir_hits[0], uqba_hits[0])
-          starts = [en.rfind("\n", 0, en_index), en.rfind(". ", 0, en_index)]
-          en_start = max(starts)
-          en_start = 0 if en_start < 0 else en_start + (2 if en[en_start:en_start + 2] == ". " else 1)
-          while en_start < len(en) and en[en_start].isspace():
-              en_start += 1
-          ends = [pos for pos in (en.find(". ", en_last), en.find("\n", en_last)) if pos >= 0]
-          en_end = min(ends) + 1 if ends else len(en)
+          en_start_anchor = "Shamir bin `Atiyah said"
+          en_end_anchor = "`Uqbah bin Abi Mu`ayt."
+          assert en.count(en_start_anchor) == 1
+          assert en.count(en_end_anchor) == 1
+          en_start = en.index(en_start_anchor)
+          en_end_start = en.index(en_end_anchor, en_start)
+          assert 0 < en_end_start - en_start < 300
+          en_end = en_end_start + len(en_end_anchor)
           en_span = en[en_start:en_end]
-          assert re.search(r"sham(?:i)?r", en_span.lower())
-          assert re.search(r"u(?:q|k)bah?", en_span.lower())
+          assert en_span.startswith(en_start_anchor)
+          assert en_span.endswith(en_end_anchor)
 
           def locator(text, start, end):
               return {
@@ -131,6 +124,7 @@ jobs:
                   "sha256": hashlib.sha256(en_span.encode()).hexdigest(),
                   "named_voice_present": True,
                   "named_referent_present": True,
+                  "anchors": [en_start_anchor, en_end_anchor],
               },
               "voice": "Shamir ibn Atiyya report",
               "chain_status": "attribution_explicit_chain_absent_in_checked_excerpt",
