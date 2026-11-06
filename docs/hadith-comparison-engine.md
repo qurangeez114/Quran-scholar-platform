@@ -111,3 +111,22 @@ Chosen for the strongest multi-collection attestation in the corpus, with a shar
   2. `python3 hadith-engine/tools/curate_isnads_batch2.py`
   3. `node hadith-engine/build-family-analysis.js actions-by-intentions islam-built-on-five farewell-pilgrimage-sanctity`
   4. `gen_family_seed.py`
+
+## Batch-3 families (added 2026-11-05)
+
+Both are statements with the widest companion spread in the corpus. Seeds are **not applied** and need owner approval.
+
+| Family | Page | Members | Companions | Pairs | Seed migration (not applied) |
+|---|---|---|---|---|---|
+| "Whoever lies about me deliberately" (`lying-about-the-prophet`) | `hadith-family.html?f=lying-about-the-prophet` | 29 (Ibn Mājah 8, Bukhārī 7, Aḥmad 5, Tirmidhī 5, Muslim 3, Abū Dāwūd 1) | 13 | 406 | `20261105130101_hadith_family_seed_lying_about_the_prophet.sql` |
+| "Whoever sees me in a dream has seen me" (`seeing-the-prophet-in-a-dream`) | `hadith-family.html?f=seeing-the-prophet-in-a-dream` | 16 (Ibn Mājah 6, Bukhārī 4, Muslim 4, Abū Dāwūd 1, Tirmidhī 1) | 7 | 120 | `20261105130102_hadith_family_seed_seeing_the_prophet_in_a_dream.sql` |
+
+- **Verification:** all 45 members match sunnah.com at ratio 1.0. That includes five Aḥmad pages (469, 584, 1075, 1413, 1428), which the corpus stores as 439, 550, 1021, 1337 and 1351.
+- **Isnads:** hand-curated in `hadith-engine/tools/curate_isnads_batch3.py`. All identities are `candidate`. `sharik_nakhai` is kept separate from the Isrāʾ family's `sharik` (Ibn Abī Namir).
+- **Excluded:** hadith that only share the ending "let him take his seat in the Fire" are different statements (standing for a man, false lineage, false oath, knowledge for other than Allah, the Qurʾān without knowledge, lying about a dream). Each is listed in `excluded`.
+- **Engine results (candidate):**
+  - No contradictions in either family.
+  - "Deliberately" missing or doubted is an omission.
+  - "Will see me awake" / "as if he saw me" are lexical variants.
+- **Shared records:** Bukhārī 110 and 6197 belong to both families, because they combine both statements.
+- **Rebuild:** `tools/specs_batch3.py`, then `tools/curate_isnads_batch3.py`, then `node build-family-analysis.js lying-about-the-prophet seeing-the-prophet-in-a-dream`, then `gen_family_seed.py`.
