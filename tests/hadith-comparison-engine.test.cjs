@@ -124,7 +124,7 @@ test('illness: objection wording asif/raqiq is a wording variant, not a contradi
   const fsx = require('fs'), px = require('path');
   const load = s => JSON.parse(fsx.readFileSync(px.join(__dirname, '..', 'hadith-engine', 'pilot', s + '.json'), 'utf8'));
   const norm = s => s.replace(/[\u064B-\u0652\u0670\u0640]/g, '').replace(/[إأآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي');
-  for (const slug of ['beginning-of-revelation', 'isra-wal-miraj', 'final-illness-abu-bakr-prayer']) {
+  for (const slug of ['beginning-of-revelation', 'isra-wal-miraj', 'final-illness-abu-bakr-prayer', 'actions-by-intentions', 'islam-built-on-five', 'farewell-pilgrimage-sanctity']) {
     const fam = load(slug);
     test(slug + ': every route key resolves to a transmitter with a basis', () => {
       for (const m of fam.members) for (const r of m.isnad_routes) for (const k of r) {
@@ -150,5 +150,62 @@ test('illness: objection wording asif/raqiq is a wording variant, not a contradi
     assert.strictEqual(t.ab_muh.identity_status, 'source_checked');
     assert.strictEqual(t.yahya_b.identity_status, 'candidate');
     assert.strictEqual(t.abdallah_m.identity_status, 'candidate');
+  });
+}
+
+// --- Batch-2 families (2026-11-05): niyya, five pillars, farewell sermon ---
+{
+  const B2=['actions-by-intentions','islam-built-on-five','farewell-pilgrimage-sanctity'].map(s=>({s,fam:require('../hadith-engine/pilot/'+s+'.json'),an:require('../hadith-engine/pilot/'+s+'.analysis.json'),cc:require('../hadith-engine/pilot/'+s+'.conclusions.json')}));
+  test('batch2: members verified (ratio>=0.95), evidence in Arabic, curated routes, candidate-only analysis, no English',()=>{
+    for(const {s,fam,an,cc} of B2){
+      assert.ok(fam.members.length>=7,s); assert.ok(!fam.unverified,s+' has unverified members');
+      assert.equal(new Set(fam.members.map(m=>m.hadith_corpus_canonical_id)).size,fam.members.length,s+' duplicates');
+      for(const m of fam.members){
+        assert.ok(m.text_match_ratio>=0.95,s+' '+m.verified_reference);
+        assert.match(m.verified_url,/^https:\/\/sunnah\.com\/(bukhari|muslim|tirmidhi|nasai|abudawud|ibnmajah|ahmad):\d+[a-z]?$/);
+        assert.ok(fam.branches[m.branch],m.verified_reference+' branch');
+        assert.ok(m.isnad_routes.length>=1,m.verified_reference+' no route');
+        const n=E.normalizeArabic(m.text_arabic);
+        for(const [p,c] of Object.entries(m.claims)) assert.ok(n.includes(c.evidence),s+' '+m.verified_reference+' '+p);
+        assert.equal(m.text_english,undefined);
+      }
+      Object.values(fam.transmitters).forEach(t=>assert.equal(t.identity_status,'candidate'));
+      an.relationships.forEach(r=>{assert.equal(r.verification_status,'candidate');
+        r.differences.forEach(d=>{if(d.a==='absent'||d.b==='absent') assert.ok(!/contradiction/.test(d.kind),s+' '+r.a+' '+r.b);});});
+      const refs=new Set(fam.members.map(m=>m.verified_reference));
+      cc.conclusions.forEach(c=>{c.citations.forEach(x=>assert.ok(refs.has(x),s+' cites '+x));assert.equal(c.status,'candidate');});
+    }
+  });
+  test('niyya: single strand to Yahya b. Said al-Ansari, who is the common link',()=>{
+    const {fam,an}=B2[0];
+    assert.equal(an.transmission.all.common_link.transmitter,'yahya_ansari');
+    for(const m of fam.members) for(const r of m.isnad_routes) assert.deepEqual(r.slice(-4),['yahya_ansari','muh_ibrahim','alqama','umar'],m.verified_reference);
+    assert.ok(!an.relationships.some(r=>/contradiction/.test(r.label)));
+  });
+  test('five pillars: order of fasting and hajj is the only contradiction, and Muslim 16a records the correction',()=>{
+    const {fam,an}=B2[1];
+    an.relationships.filter(r=>/contradiction/.test(r.label)).forEach(r=>r.differences.filter(d=>/contradiction/.test(d.kind)).forEach(d=>assert.equal(d.proposition,'p07_order')));
+    const m=fam.members.find(m=>m.verified_reference==='muslim:16a');
+    assert.equal(m.claims.p07_order.value,'sawm_before_hajj'); assert.ok(m.claims.p08_correction);
+    assert.equal(fam.members.find(m=>m.verified_reference==='bukhari:8').claims.p07_order.value,'hajj_before_sawm');
+  });
+  test('farewell sermon: multi-companion, Ibn Sirin is the Abu Bakra common link, naming of the day is not a contradiction',()=>{
+    const {fam,an}=B2[2];
+    assert.ok(new Set(fam.members.map(m=>m.branch)).size>=5);
+    assert.equal(an.transmission.all.common_link,null);
+    assert.equal(an.transmission.branches.abu_bakra.common_link.transmitter,'ibn_sirin');
+    an.relationships.forEach(r=>r.differences.forEach(d=>{if(d.proposition==='w04_day') assert.ok(!/contradiction/.test(d.kind),r.a+' '+r.b);}));
+    assert.equal(fam.members.find(m=>m.verified_reference==='tirmidhi:2159').claims.w04_day.value,'hajj_akbar');
+  });
+  test('batch2 seed migrations: one per family, wrapped in a transaction, idempotent inserts only',()=>{
+    const fsx=require('fs'),px=require('path'),dir=px.join(__dirname,'..','supabase','migrations');
+    for(const {s} of B2){
+      const f=fsx.readdirSync(dir).find(f=>f.endsWith('_hadith_family_seed_'+s.replace(/-/g,'_')+'.sql')); assert.ok(f,s);
+      const sql=fsx.readFileSync(px.join(dir,f),'utf8');
+      assert.match(sql,/^-- Seed: pilot family/); assert.match(sql,/\nbegin;\n/); assert.match(sql,/\ncommit;\n$/);
+      assert.ok(!/^\s*(delete|truncate|drop|alter)\b/im.test(sql),f+' destructive');
+      sql.split('\n').filter(l=>/^insert /.test(l)).forEach(l=>assert.match(l,/on conflict/,f));
+      sql.split('\n').filter(l=>/^update /.test(l)).forEach(l=>assert.match(l,/identity_status='candidate'/,f));
+    }
   });
 }
