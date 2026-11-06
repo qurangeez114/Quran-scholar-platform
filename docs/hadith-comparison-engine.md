@@ -88,3 +88,26 @@ All other identities remain `candidate`; names written in full in the isnad are 
 "explicit", expansions of short forms are marked "proposal". Migration
 `20261104120000_hadith_transmitter_identity_review.sql` (not applied) updates the family-1 transmitter
 rows; the family-2/3 seed migrations (also not yet applied anywhere) were regenerated with the curated routes.
+
+## Batch-2 families (added 2026-11-05)
+
+Chosen for the strongest multi-collection attestation in the corpus, with a shared matn and a clear isnad-cum-matn question. Seeds are **not applied**; they need owner approval and depend on `20261103120000_hadith_comparison_engine_schema.sql`.
+
+| Family | Page | Members | Branches | Pairs | Seed migration (not applied) |
+|---|---|---|---|---|---|
+| "Actions are only by intentions" (`actions-by-intentions`, statement) | `hadith-family.html?f=actions-by-intentions` | 16 (Bukhārī 7, Nasāʾī 3, Aḥmad 2, Muslim 1, Abū Dāwūd 1, Tirmidhī 1, Ibn Mājah 1) | ʿUmar ← ʿAlqama ← Muḥammad b. Ibrāhīm ← Yaḥyā b. Saʿīd (single strand) | 120 | `20261105120101_hadith_family_seed_actions_by_intentions.sql` |
+| "Islam is built on five" (`islam-built-on-five`, statement) | `hadith-family.html?f=islam-built-on-five` | 7 (Bukhārī 2, Muslim 3, Nasāʾī 1, Tirmidhī 1) | Ibn ʿUmar, via five successors | 21 | `20261105120102_hadith_family_seed_islam_built_on_five.sql` |
+| Farewell Pilgrimage: "your blood and wealth are sacred" (`farewell-pilgrimage-sanctity`, event) | `hadith-family.html?f=farewell-pilgrimage-sanctity` | 22 (Bukhārī 12, Muslim 4, Ibn Mājah 3, Tirmidhī 2, Abū Dāwūd 1) | Abū Bakra 10, Ibn ʿUmar 4, Jābir 3, ʿAmr b. al-Aḥwaṣ 3, Ibn ʿAbbās 1, Abū Saʿīd 1 | 231 | `20261105120103_hadith_family_seed_farewell_pilgrimage_sanctity.sql` |
+
+- **Verification:** all 45 members match a sunnah.com page at normalised-text ratio 1.0. Aḥmad 168 and 300 (stored as Ahmed 162/284) were matched against sunnah.com Musnad Aḥmad pages fetched for the check.
+- **Isnads** were hand-curated from the full Arabic isnad (`hadith-engine/tools/curate_isnads_batch2.py`). Taḥwīl and co-teachers are split into routes, and "ʿan abīhi" is resolved from context. Every identity is `candidate`, and each has a written `basis`. Short-form expansions are labelled as proposals.
+- **Engine results (candidate):**
+  - *Niyya:* Yaḥyā b. Saʿīd al-Anṣārī is the computed common link, and there are no contradictions; only omissions and wording variants.
+  - *Five pillars:* the only contradiction is the order of fasting and ḥajj (12 pairs). Muslim 16a records Ibn ʿUmar correcting a listener.
+  - *Farewell sermon:* there is no single common link across companions. Ibn Sīrīn is the common link for Abū Bakra. The day named (naḥr / Minā / ʿArafa / al-ḥajj al-akbar) is kept as a lexical value, so it is not a contradiction.
+- **Excluded:** derivative compilations (40 Nawawī, Riyāḍ, Mishkāt), Shīʿī-collection parallels (out of scope for this pilot), and the duplicate corpus row of Bukhārī 1 (record 1).
+- **Rebuild:**
+  1. `python3 hadith-engine/tools/specs_batch2.py` (needs the scratch sunnah.com crawl and candidate dumps).
+  2. `python3 hadith-engine/tools/curate_isnads_batch2.py`
+  3. `node hadith-engine/build-family-analysis.js actions-by-intentions islam-built-on-five farewell-pilgrimage-sanctity`
+  4. `gen_family_seed.py`
