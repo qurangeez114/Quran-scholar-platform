@@ -20,7 +20,7 @@
     if (document.querySelector('link[href="site-motion.css"]')) return;
     var l = document.createElement('link');
     l.rel = 'stylesheet';
-    l.href = 'site-motion.css';
+    l.href = '/site-motion.css?v=20261106-universal-v2';
     document.head.appendChild(l);
   }
 
@@ -180,7 +180,7 @@
       var homeLayout = document.createElement('link');
       homeLayout.id = 'qh-home-mobile-20261105';
       homeLayout.rel = 'stylesheet';
-      homeLayout.href = '/qh-home-mobile-20261105.css?v=20261106-single-brand';
+      homeLayout.href = '/qh-home-mobile-20261105.css?v=20261106-full-artwork-v2';
       document.head.appendChild(homeLayout);
     }
 
