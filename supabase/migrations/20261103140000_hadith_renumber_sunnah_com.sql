@@ -1,6 +1,8 @@
 -- Coordinated renumbering: hadith_corpus.hadith_number -> sunnah.com (universal) numbering, and every dependent
 -- base table that refers to a hadith by (collection, hadith_number), in ONE transaction.
--- 26899 candidate rows (full-text ratio >= 0.95, unique target, collection:number refs; Muwatta / Muslim intro excluded).
+-- 26899 candidate rows (full-text ratio >= 0.95, unique target, collection:number refs; Muwatta / Muslim intro excluded;
+-- any of the 570 ids from scripts/numbering/preserve_source_url_20261104.csv excluded because their source_url was corrected 2026-11-04;
+-- 0 of them were in scope).
 -- Backups: public.hadith_renumber_bk_20261103_<table> (full rows touched) + mapping public.hadith_renumber_map_20261103.
 -- Rollback: scripts/numbering/ROLLBACK_hadith_renumber_sunnah_com.sql (reverse mapping, same engine).
 -- NOT APPLIED. Requires owner approval to run.

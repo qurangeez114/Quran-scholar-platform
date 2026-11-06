@@ -6,7 +6,10 @@
 -- the per-row log is kept off-repo (applied_log.csv). Re-running is a no-op because of the old-URL guard.
 -- It is NOT a migration and is not picked up by `supabase db push`. Nobody has run it.
 -- Scope: 27513 rows: wrong_number, full-text ratio >= 0.95, target ref not claimed by another row.
--- Excluded: 1067 lower-confidence/ambiguous rows (kept as hadith_variants candidates only).
+-- Excluded: 1067 rows: lower-confidence/ambiguous (kept as hadith_variants candidates only) and
+--   any of the 570 ids listed in scripts/numbering/preserve_source_url_20261104.csv (source_url corrected 2026-11-04 by
+--   live Arabic match; regenerated against the 2026-11-04 backup so those values are never overwritten;
+--   0 of them were in this script's scope).
 -- Muwatta + Muslim introduction (book/number refs): only source_url changes; hadith_number kept.
 -- Safety: runs in one transaction; backs up old values to hadith_numbering_backup_20261103; each UPDATE only
 -- touches a row whose source_url still equals the audited stored value.

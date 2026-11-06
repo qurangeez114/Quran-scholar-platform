@@ -3,7 +3,9 @@ Only high-confidence (ratio>=0.95, unique target) rows whose sunnah.com ref is c
 import csv,collections
 R=[r for r in csv.DictReader(open('data/numbering/mapping.csv')) if r['status']=='wrong_number']
 dup={k for k,v in collections.Counter(r['proposed_ref'] for r in R).items() if v>1}
-M=[(int(r['canonical_id']),r['proposed_ref'].split(':',1)[1]) for r in R if float(r['match_ratio'])>=0.95 and r['proposed_ref'] not in dup and '/' not in r['proposed_ref']]
+KEEP={r['id'] for r in csv.DictReader(open('scripts/numbering/preserve_source_url_20261104.csv'))}
+# ids whose source_url was corrected 2026-11-04: the audited number no longer matches their verified URL, so they are not renumbered here.
+M=[(int(r['canonical_id']),r['proposed_ref'].split(':',1)[1]) for r in R if float(r['match_ratio'])>=0.95 and r['proposed_ref'] not in dup and '/' not in r['proposed_ref'] and r['canonical_id'] not in KEEP]
 q=lambda s:"'"+s.replace("'","''")+"'"
 DEPS=['verified_hadith_verse_links','hadith_verse_links_combined','theme_hadith_links','campaign_hadith','muhammad_hadith_links','hadiths',
       'hadith_attestation','external_narration_link','hadith_ambiguous_citations','hadith_truncated_records','hadith_verse_links_csv_import','theme_ai_synthesis']
@@ -56,7 +58,9 @@ def engine(tag): return APPLY.replace("'hadith_renumber_bk_'||tag","'hadith_renu
 with open('supabase/migrations/20261103140000_hadith_renumber_sunnah_com.sql','w') as f:
     f.write(f"""-- Coordinated renumbering: hadith_corpus.hadith_number -> sunnah.com (universal) numbering, and every dependent
 -- base table that refers to a hadith by (collection, hadith_number), in ONE transaction.
--- {len(M)} candidate rows (full-text ratio >= 0.95, unique target, collection:number refs; Muwatta / Muslim intro excluded).
+-- {len(M)} candidate rows (full-text ratio >= 0.95, unique target, collection:number refs; Muwatta / Muslim intro excluded;
+-- any of the {len(KEEP)} ids from scripts/numbering/preserve_source_url_20261104.csv excluded because their source_url was corrected 2026-11-04;
+-- {sum(1 for r in R if r['canonical_id'] in KEEP and float(r['match_ratio'])>=0.95 and r['proposed_ref'] not in dup and '/' not in r['proposed_ref'])} of them were in scope).
 -- Backups: public.hadith_renumber_bk_{TS}_<table> (full rows touched) + mapping public.hadith_renumber_map_{TS}.
 -- Rollback: scripts/numbering/ROLLBACK_hadith_renumber_sunnah_com.sql (reverse mapping, same engine).
 -- NOT APPLIED. Requires owner approval to run.

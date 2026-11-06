@@ -18,7 +18,10 @@ select v.id, 'sunnah.com', v.ref, v.url, 'full_text_normalised', v.ratio, case w
 from (values\n{body}\n) as v(id,ref,url,ratio,st)
 join public.hadith_corpus c on c.id = v.id
 on conflict (hadith_corpus_canonical_id, edition, reference) do nothing;\n""")
-U=[r for r in R if float(r['match_ratio'])>=0.95 and r['proposed_ref'] not in dup]
+# Rows whose source_url was re-verified and corrected on 2026-11-04 (or changed outside the audit) must never be
+# overwritten by this script: see scripts/numbering/preserve_source_url_20261104.csv.
+KEEP={r['id'] for r in csv.DictReader(open('scripts/numbering/preserve_source_url_20261104.csv'))}
+U=[r for r in R if float(r['match_ratio'])>=0.95 and r['proposed_ref'] not in dup and r['canonical_id'] not in KEEP]
 with open('scripts/numbering/APPROVAL_REQUIRED_update_canonical_numbers.sql','w') as f:
     f.write(f"""-- ============================================================================================
 -- !!! APPROVAL REQUIRED — DO NOT RUN WITHOUT EXPLICIT SIGN-OFF FROM THE OWNER !!!
@@ -28,7 +31,7 @@ with open('scripts/numbering/APPROVAL_REQUIRED_update_canonical_numbers.sql','w'
 -- the per-row log is kept off-repo (applied_log.csv). Re-running is a no-op because of the old-URL guard.
 -- It is NOT a migration and is not picked up by `supabase db push`. Nobody has run it.
 -- Scope: {len(U)} rows: wrong_number, full-text ratio >= 0.95, target ref not claimed by another row.
--- Excluded: {len(R)-len(U)} lower-confidence/ambiguous rows (kept as hadith_variants candidates only).
+-- Excluded: {len(R)-len(U)} rows: lower-confidence/ambiguous (kept as hadith_variants candidates only) and\n--   any of the {len(KEEP)} ids listed in scripts/numbering/preserve_source_url_20261104.csv (source_url corrected 2026-11-04 by\n--   live Arabic match; regenerated against the 2026-11-04 backup so those values are never overwritten;\n--   {sum(1 for r in R if r['canonical_id'] in KEEP and float(r['match_ratio'])>=0.95 and r['proposed_ref'] not in dup)} of them were in this script's scope).
 -- Muwatta + Muslim introduction (book/number refs): only source_url changes; hadith_number kept.
 -- Safety: runs in one transaction; backs up old values to hadith_numbering_backup_20261103; each UPDATE only
 -- touches a row whose source_url still equals the audited stored value.
