@@ -179,6 +179,13 @@
       cinemaCss.rel='stylesheet';cinemaCss.href='/qh-cinematic-theme.css?v=20261105-lab1';
       document.head.appendChild(cinemaCss);
     }
+    // Final scoped palette layer: universal emerald/gold controls and mobile-safe
+    // compact banners, loaded AFTER the existing cinematic stylesheet.
+    if (!document.getElementById('qh-universal-gold-css')) {
+      var goldCss=document.createElement('link');goldCss.id='qh-universal-gold-css';
+      goldCss.rel='stylesheet';goldCss.href='/quranhikma-universal-gold.css?v=20261105-mobile1';
+      document.head.appendChild(goldCss);
+    }
     if (!document.getElementById('qh-cinematic-js')) {
       var cinemaJs=document.createElement('script');cinemaJs.id='qh-cinematic-js';
       cinemaJs.src='/qh-cinematic-theme.js?v=20261105-lab1';
