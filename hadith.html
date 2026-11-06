@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hadith – Quran Hikma</title>
+<meta name="description" content="A hadith record with its Arabic text, translation, grade and separated catalogue, in-book and publisher references.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<link rel="canonical" id="canonical" href="https://quranhikma.com/hadith.html">
+<style>
+:root{--bg:#FAF7F0;--card:#fff;--ink:#2B2620;--ink2:#6B6358;--line:#E8E0D0;--gold:#886a1f;--goldbg:#FDF8EE;--goldline:#E8C97B;--teal:#0F766E;--warn:#9a3412;--warnbg:#fff7ed}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:'EB Garamond',Georgia,serif;font-size:17px;line-height:1.55}
+a{color:var(--teal)}
+main{max-width:1040px;margin:0 auto;padding:18px 16px 60px}
+.crumbs{font-size:14.5px;color:var(--ink2);margin:4px 0 10px}
+.crumbs a{color:var(--ink2)}
+h1{font-size:30px;margin:0 0 4px;font-weight:600}
+.kicker{color:var(--ink2);font-size:15px;margin:0 0 14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin:0 0 16px}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+.pair .ar{font-family:Amiri,serif;font-size:1.35em;line-height:2;direction:rtl;text-align:right}
+.pair .none{color:var(--ink2);font-style:italic}
+@media (max-width:760px){.pair{grid-template-columns:1fr}.pair .ar{order:-1}main{padding:12px 12px 48px}h1{font-size:25px}}
+.refs{width:100%;border-collapse:collapse;font-size:15.5px}
+.refs th{text-align:left;font-weight:600;padding:7px 12px 7px 0;vertical-align:top;width:36%;color:var(--ink)}
+.refs td{padding:7px 0;border-top:1px solid var(--line)}
+.refs tr:first-child td{border-top:0}
+.refs small{color:var(--ink2);display:block}
+.caution{background:var(--warnbg);border:1px solid #fed7aa;border-radius:10px;padding:10px 14px;color:var(--warn);margin:0 0 16px;font-size:15.5px}
+.tools{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 16px}
+.tools button,.tools a{font:inherit;font-size:15px;padding:6px 13px;border:1px solid var(--goldline);background:var(--goldbg);border-radius:999px;cursor:pointer;color:var(--ink);text-decoration:none}
+.tools button:hover,.tools a:hover{background:#F7EBCB}
+.status{font-size:14px;color:var(--teal);min-height:1.2em}
+.list a{display:block;padding:8px 0;border-top:1px solid var(--line)}
+.muted{color:var(--ink2)}
+</style>
+</head>
+<body>
+<script src="/site-chrome.js"></script>
+<main id="main">
+  <p class="crumbs" id="crumbs"><a href="/research.html">Research</a> › Hadith</p>
+  <div id="out"><p class="muted">Loading the hadith…</p></div>
+</main>
+<script src="/hadith-ref.js?v=20261103"></script>
+<script>
+const SB='https://ylosytbxpzxzwfzjpaej.supabase.co';
+const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
+const H={apikey:KEY,Authorization:'Bearer '+KEY,'Content-Type':'application/json'};
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const COLS='id,collection,hadith_number,narrator,book_chapter,tradition,grade,grade_details,grade_provenance,isnad,text_arabic,text_english,source_url';
+const PUBLISHER_URL=/^https:\/\/sunnah\.com\/(?:abudawud|bukhari|muslim|tirmidhi|ibnmajah|nasai):[0-9]+[a-z]?$/;
+async function rest(path){
+  const r=await fetch(SB+'/rest/v1/'+path,{headers:H});
+  if(!r.ok)throw new Error(path.split('?')[0]+' '+r.status);
+  return r.json();
+}
+function bookOf(h){const m=String(h.book_chapter||'').match(/Book\s+([0-9]+)/i);return m?m[1]:null;}
+let AMBIGUOUS=false;
+function permalinkAbs(h){const p=QHHadithRef.permalink(h.collection,h.hadith_number,h.id,AMBIGUOUS);return p?location.origin+p:location.href;}
+function referenceText(h){return h.collection+(h.hadith_number?' '+h.hadith_number:'')+' (QuranHikma record #'+h.id+')';}
+async function copy(text,label){
+  try{await navigator.clipboard.writeText(text);$('status').textContent=label+' copied.';}
+  catch(e){$('status').textContent='Copy is not available in this browser.';}
+}
+let CUR=null;
+function tool(kind){
+  const h=CUR;if(!h)return;
+  if(kind==='ar')return copy(h.text_arabic||'','Arabic text');
+  if(kind==='en')return copy(h.text_english||'','Translation');
+  if(kind==='ref')return copy(referenceText(h),'Reference');
+  if(kind==='link')return copy(permalinkAbs(h),'Link');
+  if(kind==='share'){
+    const data={title:referenceText(h),url:permalinkAbs(h)};
+    if(navigator.share)return navigator.share(data).catch(()=>{});
+    return copy(data.url,'Link');
+  }
+}
+function render(h,publisher,verses,siblings){
+  CUR=h;AMBIGUOUS=siblings.length>1;
+  const slug=QHHadithRef.slugFor(h.collection), book=bookOf(h);
+  document.title=referenceText(h).replace(/ \(.*\)$/,'')+' – Quran Hikma';
+  const perma=QHHadithRef.permalink(h.collection,h.hadith_number,h.id,AMBIGUOUS);
+  const slugNum=slug&&h.hadith_number?QHHadithRef.prettyPath(slug,h.hadith_number):null;
+  $('canonical').href='https://quranhikma.com'+(AMBIGUOUS?perma:(slugNum||perma));
+  if(perma&&!AMBIGUOUS&&new URLSearchParams(location.search).get('id')&&!location.pathname.startsWith('/hadith/')){try{history.replaceState(null,'',perma);}catch(e){}}
+  $('crumbs').innerHTML='<a href="/research.html">Research</a> › <a href="/research.html?q='+encodeURIComponent(h.collection)+'">'+esc(h.collection)+'</a>'+(book?' › Book '+esc(book):'')+' › Hadith '+esc(h.hadith_number||('#'+h.id));
+  const verified=publisher.filter(p=>PUBLISHER_URL.test(p.url||''));
+  let x='<h1>'+esc(h.collection)+(h.hadith_number?' '+esc(h.hadith_number):'')+'</h1>';
+  x+='<p class="kicker">'+[h.grade&&('Grade: '+h.grade),h.tradition,h.narrator&&('Narrator: '+h.narrator)].filter(Boolean).map(esc).join(' · ')+'</p>';
+  if(!verified.length)x+='<div class="caution"><strong>Publisher reference not verified.</strong> The number and text come from an imported local record. Reconcile them with the publisher edition before citing.</div>';
+  if(siblings.length>1)x+='<div class="caution"><strong>'+siblings.length+' local records share this number.</strong> This page shows record #'+esc(h.id)+'. Others: '+siblings.filter(s=>s.id!==h.id).map(s=>'<a href="'+esc(QHHadithRef.permalink(h.collection,h.hadith_number,s.id,true))+'">#'+esc(s.id)+'</a>').join(', ')+'</div>';
+  x+='<div class="tools" role="toolbar" aria-label="Copy and share"><button type="button" onclick="tool(\'ar\')">Copy Arabic</button><button type="button" onclick="tool(\'en\')">Copy translation</button><button type="button" onclick="tool(\'ref\')">Copy reference</button><button type="button" onclick="tool(\'link\')">Copy link</button><button type="button" onclick="tool(\'share\')">Share</button><a href="/research.html?hadith='+encodeURIComponent(h.id)+'">Related hadith and verses →</a></div><div class="status" id="status" role="status" aria-live="polite"></div>';
+  x+='<div class="card"><div class="pair"><div class="en" lang="en">'+(h.text_english?esc(h.text_english):'<span class="none">No English text for this report.</span>')+'</div><div class="ar" lang="ar">'+(h.text_arabic?esc(h.text_arabic):'<span class="none">No Arabic text for this report.</span>')+'</div></div></div>';
+  x+='<div class="card"><table class="refs" aria-label="References">';
+  x+='<tr><th>Reference (local catalogue)</th><td>'+esc(h.collection)+(h.hadith_number?' '+esc(h.hadith_number):'')+'<small>Numbering stored in this site’s imported edition.</small></td></tr>';
+  x+='<tr><th>In-book reference</th><td>'+(h.book_chapter?esc(h.book_chapter):'<span class="muted">Not recorded</span>')+'</td></tr>';
+  x+='<tr><th>Publisher reference</th><td>'+(verified.length?verified.map(p=>'<a href="'+esc(p.url)+'" target="_blank" rel="noopener noreferrer">Sunnah.com '+esc(slug||'')+':'+esc(p.external_reference)+' ↗</a>'+(p.verified_on?'<small>Mapping reviewed '+esc(p.verified_on)+(p.verified_by?': '+esc(p.verified_by):'')+'</small>':'')).join(''):'<span class="muted">Not verified against the publisher edition.</span>'+(h.source_url?'<small>Stored, unchecked URL: '+esc(h.source_url)+'</small>':''))+'</td></tr>';
+  x+='<tr><th>Local record</th><td>#'+esc(h.id)+'<small>Internal database id; stable on this site.</small></td></tr>';
+  x+='<tr><th>Grade</th><td>'+(h.grade?esc(h.grade):'<span class="muted">No grade recorded</span>')+(h.grade_provenance?'<small>Source of grade: '+esc(String(h.grade_provenance).replace(/_/g,' '))+'</small>':'')+'</td></tr>';
+  if(h.isnad)x+='<tr><th>Chain of narrators</th><td>'+esc(h.isnad)+'</td></tr>';
+  if(verses.length)x+='<tr><th>Related verses</th><td>'+verses.map(v=>'<a href="/?sura='+Number(v.sura_id)+'&aya='+Number(v.aya_number)+'">'+Number(v.sura_id)+':'+Number(v.aya_number)+'</a>').join(' · ')+'<small>Automatically linked; not reviewed verse by verse.</small></td></tr>';
+  x+='</table></div>';
+  $('out').innerHTML=x;
+}
+function notFound(msg){$('out').innerHTML='<div class="card"><p>'+esc(msg)+'</p><p><a href="/research.html">Search the Research page →</a></p></div>';}
+async function load(){
+  const p=new URLSearchParams(location.search);
+  let ref=p.get('ref');
+  const pathRef=location.pathname.match(/^\/hadith\/(.+)$/);
+  if(!ref&&pathRef)ref=decodeURIComponent(pathRef[1]);
+  const id=p.get('id');
+  let rows=[];
+  try{
+    if(id&&/^[1-9][0-9]*$/.test(id)){
+      rows=await rest('hadith_corpus?id=eq.'+encodeURIComponent(id)+'&select='+COLS);
+      if(rows[0]&&rows[0].hadith_number){
+        const sib=await rest('hadith_corpus?collection=eq.'+encodeURIComponent(rows[0].collection)+'&hadith_number=eq.'+encodeURIComponent(rows[0].hadith_number)+'&select=id&order=id').catch(()=>[]);
+        rows=[rows[0]].concat(sib.filter(s=>s.id!==rows[0].id));
+      }
+    }else if(ref){
+      const parsed=QHHadithRef.parse(ref);
+      if(!parsed)return notFound('That hadith reference is not in the form collection:number, for example bukhari:1.');
+      let collection=QHHadithRef.collectionFor(parsed.slug);
+      if(!collection){
+        const opts=await fetch(SB+'/rest/v1/rpc/scope_options',{method:'POST',headers:H,body:'{}'}).then(r=>r.json()).catch(()=>({}));
+        collection=QHHadithRef.collectionFor(parsed.slug,opts.hadith||[]);
+      }
+      if(!collection)return notFound('Unknown collection “'+parsed.slug+'”.');
+      rows=await rest('hadith_corpus?collection=eq.'+encodeURIComponent(collection)+'&hadith_number=eq.'+encodeURIComponent(parsed.number)+'&select='+COLS+'&order=id');
+      if(!rows.length){
+        // A curated publisher number (e.g. sunnah.com/muslim:1693) may map to a differently numbered local record.
+        const map=await rest('external_reference_map?site=eq.sunnah.com&url=eq.'+encodeURIComponent('https://sunnah.com/'+parsed.slug+':'+parsed.number)+'&select=hadith_corpus_id&limit=1').catch(()=>[]);
+        if(map[0])rows=await rest('hadith_corpus?id=eq.'+encodeURIComponent(map[0].hadith_corpus_id)+'&select='+COLS);
+      }
+      if(!rows.length)return notFound(collection+' '+parsed.number+' is not in the local collection.');
+    }else return notFound('No hadith was requested. Use an address like /hadith/bukhari:1.');
+  }catch(e){return notFound('The hadith could not be loaded. Please retry.');}
+  const h=rows[0];
+  if(!h||!h.collection)return notFound('That hadith could not be found.');
+  const [publisher,verses]=await Promise.all([
+    rest('external_reference_map?hadith_corpus_id=eq.'+encodeURIComponent(h.id)+'&site=eq.sunnah.com&select=external_reference,url,verified_on,verified_by&limit=10').catch(()=>[]),
+    rest('theme_hadith_links?hadith_id=eq.'+encodeURIComponent(h.id)+'&select=sura_id,aya_number&order=relevance_score.desc&limit=8').catch(()=>[])
+  ]);
+  render(h,publisher,verses,rows);
+}
+load();
+</script>
+</body>
+</html>
