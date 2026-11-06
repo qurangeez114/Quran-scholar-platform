@@ -180,7 +180,7 @@
       var homeLayout = document.createElement('link');
       homeLayout.id = 'qh-home-mobile-20261105';
       homeLayout.rel = 'stylesheet';
-      homeLayout.href = '/qh-home-mobile-20261105.css?v=20261106-full-artwork-v2';
+      homeLayout.href = '/qh-home-mobile-20261105.css?v=20261106-no-old-fallback-v3';
       document.head.appendChild(homeLayout);
     }
 
