@@ -241,21 +241,6 @@
     var caption = document.createElement('figcaption');
     caption.textContent = 'Research · Compare sources · Examine evidence · Explore history';
     figure.appendChild(frame);
-    var secondFrame = document.createElement('div');
-    secondFrame.className = 'qh-lab-frame qh-lab-second';
-    var secondImage = document.createElement('img');
-    secondImage.src = '/assets/banner.gif';
-    secondImage.addEventListener('error', function () {
-      // The supplied animated GIF must be deployed at /assets/banner.gif.
-      // Never silently replace the user's chosen artwork with older illustrations.
-      secondFrame.hidden = true;
-      figure.classList.add('qh-lab-gif-unavailable');
-    });
-    secondImage.alt = 'Everyday people from different backgrounds investigating an open manuscript under the microscope, with an anxious traditional scholar looking on.';
-    secondImage.loading = 'eager';
-    secondImage.decoding = 'async';
-    secondFrame.appendChild(secondImage);
-    figure.appendChild(secondFrame);
     figure.appendChild(caption);
     hero.classList.add('qh-home-hero-lab');
     // The form belongs to .qh-hero-inner, not directly to .qh-home-hero.
