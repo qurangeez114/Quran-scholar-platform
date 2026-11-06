@@ -69,10 +69,12 @@ jobs:
               return "".join(normalized), mapping
 
           normalized_ar, ar_map = normalized_with_map(ar)
-          ar_anchor = "وقال شمر بن عطية: نزلت في عقبة بن أبي معيط"
-          assert normalized_ar.count(ar_anchor) == 1
-          normalized_start = normalized_ar.index(ar_anchor)
-          normalized_end = normalized_start + len(ar_anchor)
+          ar_start_anchor = "وقال شمر بن عطية"
+          ar_end_anchor = "عقبة بن أبي معيط"
+          assert normalized_ar.count(ar_start_anchor) == 1
+          assert normalized_ar.count(ar_end_anchor) == 1
+          normalized_start = normalized_ar.index(ar_start_anchor)
+          normalized_end = normalized_ar.index(ar_end_anchor, normalized_start) + len(ar_end_anchor)
           ar_start = ar_map[normalized_start]
           ar_end = ar_map[normalized_end - 1] + 1
           while ar_end < len(ar) and ar[ar_end] in " .،؛":
@@ -120,7 +122,7 @@ jobs:
                   "text": ar_span,
                   **locator(ar, ar_start, ar_end),
                   "sha256": hashlib.sha256(ar_span.encode()).hexdigest(),
-                  "anchor": ar_anchor,
+                  "anchors": [ar_start_anchor, ar_end_anchor],
               },
               "english_candidate": {
                   "text": en_span,
