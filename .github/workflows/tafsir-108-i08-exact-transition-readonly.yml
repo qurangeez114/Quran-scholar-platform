@@ -1,0 +1,138 @@
+name: Capture Surah 108 I08 exact transition read-only
+
+on:
+  push:
+    paths:
+      - ".github/workflows/tafsir-108-i08-exact-transition-readonly.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SUPABASE_URL: https://ylosytbxpzxzwfzjpaej.supabase.co
+      SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+    steps:
+      - name: Capture exact Arabic and English evidence without writes
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SUPABASE_SERVICE_KEY:-}"
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          import re
+          import unicodedata
+          import urllib.parse
+          import urllib.request
+
+          url = os.environ["SUPABASE_URL"].rstrip("/") + "/rest/v1/tafsir_entries"
+          query = urllib.parse.urlencode({
+              "id": "in.(48459,11081)",
+              "select": "id,sura,aya,language,scholar_key,content",
+              "order": "id.asc",
+          })
+          request = urllib.request.Request(
+              url + "?" + query,
+              headers={
+                  "apikey": os.environ["SUPABASE_SERVICE_KEY"],
+                  "Authorization": "Bearer " + os.environ["SUPABASE_SERVICE_KEY"],
+                  "Accept": "application/json",
+              },
+          )
+          with urllib.request.urlopen(request, timeout=30) as response:
+              rows = json.load(response)
+
+          by_id = {row["id"]: row for row in rows}
+          assert set(by_id) == {11081, 48459}, sorted(by_id)
+          ar_row, en_row = by_id[48459], by_id[11081]
+          assert (ar_row["sura"], ar_row["aya"], ar_row["language"], ar_row["scholar_key"]) == (108, 3, "ar", "ibn_kathir")
+          assert (en_row["sura"], en_row["aya"], en_row["language"], en_row["scholar_key"]) == (108, 3, "en", "ibn_kathir")
+
+          ar, en = ar_row["content"], en_row["content"]
+          assert hashlib.sha256(ar.encode()).hexdigest() == "088bd57659f0a6645f7195f2e98caf9562e0571eca8214730cd55c07401402b2"
+          assert hashlib.sha256(en.encode()).hexdigest() == "7e5883c137fce598750407a0a0d4aca5fa03e791f371b3ffdd5d7c280511afda"
+
+          def normalized_with_map(text):
+              normalized, mapping = [], []
+              for raw_index, char in enumerate(text):
+                  for decomposed in unicodedata.normalize("NFKD", char):
+                      if unicodedata.combining(decomposed) or decomposed == "ـ":
+                          continue
+                      normalized.append(decomposed)
+                      mapping.append(raw_index)
+              return "".join(normalized), mapping
+
+          normalized_ar, ar_map = normalized_with_map(ar)
+          ar_anchor = "وقال شمر بن عطية: نزلت في عقبة بن أبي معيط"
+          assert normalized_ar.count(ar_anchor) == 1
+          normalized_start = normalized_ar.index(ar_anchor)
+          normalized_end = normalized_start + len(ar_anchor)
+          ar_start = ar_map[normalized_start]
+          ar_end = ar_map[normalized_end - 1] + 1
+          while ar_end < len(ar) and ar[ar_end] in " .،؛":
+              ar_end += 1
+          ar_span = ar[ar_start:ar_end]
+
+          lower_en = en.lower()
+          shamir_hits = [m.start() for m in re.finditer(r"sham(?:i)?r", lower_en)]
+          uqba_hits = [m.start() for m in re.finditer(r"u(?:q|k)bah?", lower_en)]
+          assert len(shamir_hits) == 1, shamir_hits
+          assert len(uqba_hits) == 1, uqba_hits
+          assert abs(shamir_hits[0] - uqba_hits[0]) < 500
+          en_index = min(shamir_hits[0], uqba_hits[0])
+          en_last = max(shamir_hits[0], uqba_hits[0])
+          starts = [en.rfind("\n", 0, en_index), en.rfind(". ", 0, en_index)]
+          en_start = max(starts)
+          en_start = 0 if en_start < 0 else en_start + (2 if en[en_start:en_start + 2] == ". " else 1)
+          while en_start < len(en) and en[en_start].isspace():
+              en_start += 1
+          ends = [pos for pos in (en.find(". ", en_last), en.find("\n", en_last)) if pos >= 0]
+          en_end = min(ends) + 1 if ends else len(en)
+          en_span = en[en_start:en_end]
+          assert re.search(r"sham(?:i)?r", en_span.lower())
+          assert re.search(r"u(?:q|k)bah?", en_span.lower())
+
+          def locator(text, start, end):
+              return {
+                  "codepoint_start": start,
+                  "codepoint_end_exclusive": end,
+                  "utf8_byte_start": len(text[:start].encode()),
+                  "utf8_byte_end_exclusive": len(text[:end].encode()),
+              }
+
+          payload = {
+              "schema": "quranhikma-i08-exact-transition-readonly-log-v1",
+              "surah": 108,
+              "claim_id": "108-I08",
+              "operation": "protected_read_only_capture",
+              "writes": 0,
+              "source_rows": {
+                  "arabic": {"id": 48459, "sha256": hashlib.sha256(ar.encode()).hexdigest()},
+                  "english": {"id": 11081, "sha256": hashlib.sha256(en.encode()).hexdigest()},
+              },
+              "arabic_candidate": {
+                  "text": ar_span,
+                  **locator(ar, ar_start, ar_end),
+                  "sha256": hashlib.sha256(ar_span.encode()).hexdigest(),
+                  "anchor": ar_anchor,
+              },
+              "english_candidate": {
+                  "text": en_span,
+                  **locator(en, en_start, en_end),
+                  "sha256": hashlib.sha256(en_span.encode()).hexdigest(),
+                  "named_voice_present": True,
+                  "named_referent_present": True,
+              },
+              "voice": "Shamir ibn Atiyya report",
+              "chain_status": "attribution_explicit_chain_absent_in_checked_excerpt",
+              "source_independence": "single_duplicated_chapter_witness_external_independence_unknown",
+              "publication_ready": False,
+          }
+          print("I08_EXACT_TRANSITION_JSON=" + json.dumps(payload, ensure_ascii=False, sort_keys=True))
+          PY
