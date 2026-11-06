@@ -180,7 +180,7 @@
       var homeLayout = document.createElement('link');
       homeLayout.id = 'qh-home-mobile-20261105';
       homeLayout.rel = 'stylesheet';
-      homeLayout.href = '/qh-home-mobile-20261105.css?v=20261105-small-banner';
+      homeLayout.href = '/qh-home-mobile-20261105.css?v=20261106-two-panels';
       document.head.appendChild(homeLayout);
     }
 
@@ -241,6 +241,15 @@
     var caption = document.createElement('figcaption');
     caption.textContent = 'Research · Compare sources · Examine evidence · Explore history';
     figure.appendChild(frame);
+    var secondFrame = document.createElement('div');
+    secondFrame.className = 'qh-lab-frame qh-lab-second';
+    var secondImage = document.createElement('img');
+    secondImage.src = '/assets/qh-research-community-panel.svg';
+    secondImage.alt = 'Everyday people from different backgrounds investigating an open manuscript under the microscope, with an anxious traditional scholar looking on.';
+    secondImage.loading = 'eager';
+    secondImage.decoding = 'async';
+    secondFrame.appendChild(secondImage);
+    figure.appendChild(secondFrame);
     figure.appendChild(caption);
     hero.classList.add('qh-home-hero-lab');
     // The form belongs to .qh-hero-inner, not directly to .qh-home-hero.
