@@ -162,16 +162,16 @@
     var css = document.createElement('style');
     css.id = 'qh-home-lab-style';
     css.textContent =
-      '#qh-home-directory .qh-home-hero.qh-home-hero-lab{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,46%);grid-template-rows:auto auto 1fr;gap:8px 24px;align-items:start;padding:22px 26px;background:linear-gradient(115deg,#fff9e9,#f4ebd5);overflow:hidden}' +
+      '#qh-home-directory .qh-home-hero.qh-home-hero-lab{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,42%);grid-template-rows:auto auto 1fr;gap:8px 18px;align-items:start;padding:14px 20px;background:linear-gradient(115deg,#fff9e9,#f4ebd5);overflow:hidden}' +
       '.qh-home-hero-lab>h1{grid-column:1;grid-row:1}.qh-home-hero-lab>p{grid-column:1;grid-row:2;margin-bottom:4px}.qh-home-hero-lab>#qh-home-research-form{grid-column:1;grid-row:3;min-width:0}' +
       '#qh-home-lab-media{grid-column:2;grid-row:1 / span 3;min-width:0;position:relative;align-self:center;margin:0}' +
       '#qh-home-lab-media .qh-lab-frame{position:relative;background:#0c1d30;border-radius:14px;overflow:hidden;box-shadow:0 8px 24px rgba(5,25,45,.22);border:1px solid #c8b78e}' +
-      '#qh-home-lab-media video,#qh-home-lab-media img{display:block;width:100%;height:auto;aspect-ratio:508/333;object-fit:cover}' +
+      '#qh-home-lab-media video,#qh-home-lab-media img{display:block;width:100%;height:auto;aspect-ratio:508/333;object-fit:contain}' +
       '#qh-home-lab-media video[hidden],#qh-home-lab-media img[hidden],#qh-home-lab-media button[hidden]{display:none}' +
       '#qh-home-lab-media button{position:absolute;right:9px;bottom:9px;padding:8px 11px;border:1px solid rgba(255,255,255,.55);border-radius:9px;background:rgba(8,25,42,.87);color:#fff;font:700 12px system-ui,sans-serif;min-height:38px;cursor:pointer}' +
       '#qh-home-lab-media button:focus-visible{outline:3px solid #f4c84e;outline-offset:2px}' +
       '#qh-home-lab-media figcaption{font:500 12px/1.5 system-ui,sans-serif;color:#63573f;margin-top:7px;text-align:center}' +
-      '@media(max-width:740px){#qh-home-directory .qh-home-hero.qh-home-hero-lab{grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto auto auto;gap:9px;padding:17px 15px}' +
+      '@media(max-width:740px){#qh-home-directory .qh-home-hero.qh-home-hero-lab{grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto auto auto;gap:9px;padding:12px 14px}' +
       '.qh-home-hero-lab>h1{grid-column:1;grid-row:1}.qh-home-hero-lab>p{grid-column:1;grid-row:2}.qh-home-hero-lab>#qh-home-research-form{grid-column:1;grid-row:4}' +
       '#qh-home-lab-media{grid-column:1;grid-row:3;width:100%;max-width:540px;margin:0 auto 4px}#qh-home-lab-media figcaption{font-size:11px}}';
     document.head.appendChild(css);
