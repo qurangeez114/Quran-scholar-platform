@@ -35,6 +35,8 @@ CONTEXT_HASHES = [
     "6ac4acb6268fa7deff959646611f0f347fdd74cb57ba8acf6f43a60f8f0e6258",
     "2c231ea2b17e65f08deda3f290d689c0548257d72495e30382dbcc75be1821ec",
 ]
+ASSERTION_SPANS = [(16866, 16874), (16874, 16917), (16917, 16952), (16952, 16991)]
+CONTEXT_SPANS = [(16733, 16801), (16801, 16866)]
 
 def require(ok: bool, message: str) -> None:
     if not ok:
@@ -71,8 +73,10 @@ def validate(d: dict) -> None:
     n = d["selected_next_repair"]
     require((n["claim_id"], n["route_id"]) == ("108-I06", "108-I06-R02"), "selected route")
     require(n["proposition_refs"] == PROPS and n["semantic_evidence_links"] == 4, "R02 propositions/links")
-    require([x["sha256"] for x in n["assertion_clause_locators"]] == ASSERTION_HASHES, "assertion locators")
-    require([x["sha256"] for x in n["shared_context_locators"]] == CONTEXT_HASHES, "context locators")
+    require([x["sha256"] for x in n["assertion_clause_locators"]] == ASSERTION_HASHES, "assertion locator hashes")
+    require([(x["start_cp"], x["end_cp"]) for x in n["assertion_clause_locators"]] == ASSERTION_SPANS, "assertion locator spans")
+    require([x["sha256"] for x in n["shared_context_locators"]] == CONTEXT_HASHES, "context locator hashes")
+    require([(x["start_cp"], x["end_cp"]) for x in n["shared_context_locators"]] == CONTEXT_SPANS, "context locator spans")
     require(n["source_entry"] == {"captured_entry_id": 48457, "canonical_entry_id": 48459, "offsets": "zero-based Unicode code points, half-open, unnormalized"}, "source entry")
     require(n["unresolved_voice_mappings"] == 4 and n["voices_allocated"] == 0, "voice boundary")
     require(n["evidence_rows_allocated"] == 0 and n["route_rows_allocated"] == 0, "physical rows")
