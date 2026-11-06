@@ -8,7 +8,9 @@
     'final-illness-abu-bakr-prayer': ['final-illness-abu-bakr-prayer.json', 'final-illness-abu-bakr-prayer.analysis.json', 'final-illness-abu-bakr-prayer.conclusions.json'],
     'actions-by-intentions': ['actions-by-intentions.json', 'actions-by-intentions.analysis.json', 'actions-by-intentions.conclusions.json'],
     'islam-built-on-five': ['islam-built-on-five.json', 'islam-built-on-five.analysis.json', 'islam-built-on-five.conclusions.json'],
-    'farewell-pilgrimage-sanctity': ['farewell-pilgrimage-sanctity.json', 'farewell-pilgrimage-sanctity.analysis.json', 'farewell-pilgrimage-sanctity.conclusions.json'] };
+    'farewell-pilgrimage-sanctity': ['farewell-pilgrimage-sanctity.json', 'farewell-pilgrimage-sanctity.analysis.json', 'farewell-pilgrimage-sanctity.conclusions.json'],
+    'lying-about-the-prophet': ['lying-about-the-prophet.json', 'lying-about-the-prophet.analysis.json', 'lying-about-the-prophet.conclusions.json'],
+    'seeing-the-prophet-in-a-dream': ['seeing-the-prophet-in-a-dream.json', 'seeing-the-prophet-in-a-dream.analysis.json', 'seeing-the-prophet-in-a-dream.conclusions.json'] };
   var LEGACY = { branches: { A: 'ʿĀʾisha branch', J: 'Jābir branch' }, companion_markers: { A: ['عائشه'], J: ['جابر بن عبد الله', 'جابر'] }, default_selection: ['bukhari:3', 'muslim:160a', 'bukhari:4953'] };
   var slug = (new URLSearchParams(location.search).get('f') || 'beginning-of-revelation');
   if (!FAMILIES.hasOwnProperty(slug)) slug = 'beginning-of-revelation';

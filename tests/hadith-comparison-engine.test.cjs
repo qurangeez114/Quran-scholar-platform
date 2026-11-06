@@ -124,7 +124,7 @@ test('illness: objection wording asif/raqiq is a wording variant, not a contradi
   const fsx = require('fs'), px = require('path');
   const load = s => JSON.parse(fsx.readFileSync(px.join(__dirname, '..', 'hadith-engine', 'pilot', s + '.json'), 'utf8'));
   const norm = s => s.replace(/[\u064B-\u0652\u0670\u0640]/g, '').replace(/[إأآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي');
-  for (const slug of ['beginning-of-revelation', 'isra-wal-miraj', 'final-illness-abu-bakr-prayer', 'actions-by-intentions', 'islam-built-on-five', 'farewell-pilgrimage-sanctity']) {
+  for (const slug of ['beginning-of-revelation', 'isra-wal-miraj', 'final-illness-abu-bakr-prayer', 'actions-by-intentions', 'islam-built-on-five', 'farewell-pilgrimage-sanctity', 'lying-about-the-prophet', 'seeing-the-prophet-in-a-dream']) {
     const fam = load(slug);
     test(slug + ': every route key resolves to a transmitter with a basis', () => {
       for (const m of fam.members) for (const r of m.isnad_routes) for (const k of r) {
@@ -200,6 +200,54 @@ test('illness: objection wording asif/raqiq is a wording variant, not a contradi
   test('batch2 seed migrations: one per family, wrapped in a transaction, idempotent inserts only',()=>{
     const fsx=require('fs'),px=require('path'),dir=px.join(__dirname,'..','supabase','migrations');
     for(const {s} of B2){
+      const f=fsx.readdirSync(dir).find(f=>f.endsWith('_hadith_family_seed_'+s.replace(/-/g,'_')+'.sql')); assert.ok(f,s);
+      const sql=fsx.readFileSync(px.join(dir,f),'utf8');
+      assert.match(sql,/^-- Seed: pilot family/); assert.match(sql,/\nbegin;\n/); assert.match(sql,/\ncommit;\n$/);
+      assert.ok(!/^\s*(delete|truncate|drop|alter)\b/im.test(sql),f+' destructive');
+      sql.split('\n').filter(l=>/^insert /.test(l)).forEach(l=>assert.match(l,/on conflict/,f));
+      sql.split('\n').filter(l=>/^update /.test(l)).forEach(l=>assert.match(l,/identity_status='candidate'/,f));
+    }
+  });
+}
+
+// --- Batch-3 families (2026-11-05): lying about the Prophet, seeing him in a dream ---
+{
+  const B3=['lying-about-the-prophet','seeing-the-prophet-in-a-dream'].map(s=>({s,fam:require('../hadith-engine/pilot/'+s+'.json'),an:require('../hadith-engine/pilot/'+s+'.analysis.json'),cc:require('../hadith-engine/pilot/'+s+'.conclusions.json')}));
+  test('batch3: members verified (ratio>=0.95), evidence in Arabic, curated routes, candidate-only analysis, no English',()=>{
+    for(const {s,fam,an,cc} of B3){
+      assert.ok(fam.members.length>=7,s); assert.ok(!fam.unverified,s+' has unverified members');
+      assert.equal(new Set(fam.members.map(m=>m.hadith_corpus_canonical_id)).size,fam.members.length,s+' duplicates');
+      for(const m of fam.members){
+        assert.ok(m.text_match_ratio>=0.95,s+' '+m.verified_reference);
+        assert.match(m.verified_url,/^https:\/\/sunnah\.com\/(bukhari|muslim|tirmidhi|nasai|abudawud|ibnmajah|ahmad):\d+[a-z]?$/);
+        assert.ok(fam.branches[m.branch],m.verified_reference+' branch');
+        assert.ok(m.isnad_routes.length>=1,m.verified_reference+' no route');
+        const n=E.normalizeArabic(m.text_arabic);
+        for(const [p,c] of Object.entries(m.claims)) assert.ok(n.includes(c.evidence),s+' '+m.verified_reference+' '+p);
+        assert.equal(m.text_english,undefined);
+      }
+      Object.values(fam.transmitters).forEach(t=>assert.equal(t.identity_status,'candidate'));
+      an.relationships.forEach(r=>{assert.equal(r.verification_status,'candidate');
+        r.differences.forEach(d=>{if(d.a==='absent'||d.b==='absent') assert.ok(!/contradiction/.test(d.kind),s+' '+r.a+' '+r.b);});});
+      const refs=new Set(fam.members.map(m=>m.verified_reference));
+      cc.conclusions.forEach(c=>{c.citations.forEach(x=>assert.ok(refs.has(x),s+' cites '+x));assert.equal(c.status,'candidate');});
+    }
+  });
+  test('lying: 13 companions, no cross-companion common link, deliberately-absent is omission',()=>{
+    const {fam,an}=B3[0];
+    assert.ok(new Set(fam.members.map(m=>m.branch)).size>=13); assert.equal(an.transmission.all.common_link,null);
+    assert.ok(!an.relationships.some(r=>/contradiction/.test(r.label)));
+    assert.equal(fam.members.find(m=>m.verified_reference==='bukhari:107').claims.k03_deliberate,undefined);
+  });
+  test('dream: wording of the outcome is a lexical variant, not a contradiction',()=>{
+    const {fam,an}=B3[1];
+    assert.equal(fam.members.find(m=>m.verified_reference==='bukhari:6993').claims.d01_seen.value,'will_see_awake');
+    assert.ok(!an.relationships.some(r=>/contradiction/.test(r.label)));
+    assert.equal(an.transmission.branches.abu_hurayra.common_link.transmitter,'abu_hurayra');
+  });
+  test('batch3 seed migrations: one per family, wrapped in a transaction, idempotent inserts only',()=>{
+    const fsx=require('fs'),px=require('path'),dir=px.join(__dirname,'..','supabase','migrations');
+    for(const {s} of B3){
       const f=fsx.readdirSync(dir).find(f=>f.endsWith('_hadith_family_seed_'+s.replace(/-/g,'_')+'.sql')); assert.ok(f,s);
       const sql=fsx.readFileSync(px.join(dir,f),'utf8');
       assert.match(sql,/^-- Seed: pilot family/); assert.match(sql,/\nbegin;\n/); assert.match(sql,/\ncommit;\n$/);
