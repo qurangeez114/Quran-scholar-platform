@@ -233,8 +233,12 @@
     caption.textContent = 'Research · Compare sources · Examine evidence · Explore history';
     figure.appendChild(frame);
     figure.appendChild(caption);
-    hero.classList.add('qh-home-hero-lab');
-    hero.insertBefore(figure, form);
+    // Keep the visual in its own compact media area. The search form is nested
+    // inside .qh-hero-inner; inserting before it in the hero caused a DOM error.
+    // A separate figure avoids increasing the header height and preserves
+    // native Android scroll and touch targets.
+    figure.classList.add('qh-home-lab-media-compact');
+    hero.insertAdjacentElement('afterend', figure);
 
     // Keep the first Surah directory page fast when the lab media is off-screen.
     if ('IntersectionObserver' in window && !video.hidden) {
