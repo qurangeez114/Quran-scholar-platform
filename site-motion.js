@@ -180,7 +180,7 @@
       var homeLayout = document.createElement('link');
       homeLayout.id = 'qh-home-mobile-20261105';
       homeLayout.rel = 'stylesheet';
-      homeLayout.href = '/qh-home-mobile-20261105.css?v=20261106-two-panels';
+      homeLayout.href = '/qh-home-mobile-20261105.css?v=20261106-full-gif';
       document.head.appendChild(homeLayout);
     }
 
@@ -244,7 +244,13 @@
     var secondFrame = document.createElement('div');
     secondFrame.className = 'qh-lab-frame qh-lab-second';
     var secondImage = document.createElement('img');
-    secondImage.src = '/assets/qh-research-community-panel.svg';
+    secondImage.src = '/assets/banner.gif';
+    secondImage.addEventListener('error', function () {
+      // Temporary visual fallback until the exact uploaded GIF is deployed.
+      if (secondImage.dataset.fallback) return;
+      secondImage.dataset.fallback = 'true';
+      secondImage.src = '/assets/qh-research-community-panel.svg';
+    });
     secondImage.alt = 'Everyday people from different backgrounds investigating an open manuscript under the microscope, with an anxious traditional scholar looking on.';
     secondImage.loading = 'eager';
     secondImage.decoding = 'async';
