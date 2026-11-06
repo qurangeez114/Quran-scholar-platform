@@ -175,6 +175,14 @@
       '.qh-home-hero-lab>h1{grid-column:1;grid-row:1}.qh-home-hero-lab>p{grid-column:1;grid-row:2}.qh-home-hero-lab>#qh-home-research-form{grid-column:1;grid-row:4}' +
       '#qh-home-lab-media{grid-column:1;grid-row:3;width:100%;max-width:540px;margin:0 auto 4px}#qh-home-lab-media figcaption{font-size:11px}}';
     document.head.appendChild(css);
+    // Homepage layout is a separate, cache-busted stylesheet; keep it scoped to this page.
+    if (!document.getElementById('qh-home-mobile-20261105')) {
+      var homeLayout = document.createElement('link');
+      homeLayout.id = 'qh-home-mobile-20261105';
+      homeLayout.rel = 'stylesheet';
+      homeLayout.href = '/qh-home-mobile-20261105.css';
+      document.head.appendChild(homeLayout);
+    }
 
     var figure = document.createElement('figure');
     figure.id = 'qh-home-lab-media';
@@ -186,11 +194,12 @@
     video.muted = true;
     video.defaultMuted = true;
     video.loop = true;
+    video.autoplay = true;
     video.playsInline = true;
     video.preload = 'metadata';
     video.setAttribute('playsinline', '');
     video.setAttribute('aria-label', 'A multicultural international Qur’an Hikma research team examining manuscripts, historical records, earlier scriptures and textual comparisons.');
-    video.playbackRate = 0.9;
+    video.playbackRate = 0.72;
     var poster = document.createElement('img');
     poster.src = '/assets/qh-research-lab-2026-poster.jpg';
     poster.alt = 'Researchers from varied backgrounds collaborating at a modern digital textual-research laboratory.';
@@ -234,7 +243,9 @@
     figure.appendChild(frame);
     figure.appendChild(caption);
     hero.classList.add('qh-home-hero-lab');
-    hero.insertBefore(figure, form);
+    // The form belongs to .qh-hero-inner, not directly to .qh-home-hero.
+    // Inserting through hero raised NotFoundError and prevented the media from appearing.
+    form.parentElement.insertBefore(figure, form);
 
     // Keep the first Surah directory page fast when the lab media is off-screen.
     if ('IntersectionObserver' in window && !video.hidden) {
