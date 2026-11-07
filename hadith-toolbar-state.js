@@ -124,7 +124,7 @@ class ToolbarState {
 }
 
 // Export singleton
-export { ToolbarState };
+// (module export removed: file is loaded as a classic script; window.ToolbarState is set below)
 
 // For vanilla JS (non-module):
 if (typeof window !== 'undefined') {
