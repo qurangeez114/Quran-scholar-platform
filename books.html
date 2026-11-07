@@ -73,7 +73,16 @@
   .act-btn{background:#FBF6E9;border:1px solid #E8DDC0;color:#7A5010;border-radius:16px;padding:5px 12px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:'EB Garamond',serif}
   .act-btn:active{background:#F3E9CE}
   .act-btn.playing{background:#3A2E1A;color:#fff;border-color:#3A2E1A}
-  mark.hl{background:#FFE58A;padding:0 1px;border-radius:2px}
+  mark.hl{background:#FFE58A;color:inherit;padding:0 1px;border-radius:2px}
+  .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+  .bs-sec h3{margin:18px 0 6px;color:#244d3e;font-size:17px}.bs-sec h3 small{color:#56665c;font-weight:400;font-size:13px}
+  .bs-card{border:1px solid #e1e8e3;border-radius:10px;padding:12px 14px;margin:8px 0;background:#fcfdfc;overflow-wrap:anywhere}
+  .bs-meta{font-size:12.5px;color:#56665c;margin-bottom:6px}.bs-meta b{color:#244d3e}
+  .bs-ar{font-size:20px;line-height:1.9;margin-bottom:6px}.bs-en{line-height:1.65}
+  .bs-note,.bs-summary{color:#56665c;font-size:13.5px;margin:10px 0}.bs-syn{color:#56665c;font-size:12.5px}
+  .bs-empty{color:#3d4a42;background:#f6f8f6;border-radius:8px;padding:10px 12px}.bs-err{color:#9b2c2c;font-size:13.5px}
+  .bs-spin{display:inline-block;width:12px;height:12px;border:2px solid #cbd6cf;border-top-color:#244d3e;border-radius:50%;margin-right:6px;vertical-align:-1px;animation:bsspin .8s linear infinite}
+  @keyframes bsspin{to{transform:rotate(360deg)}}@media (prefers-reduced-motion:reduce){.bs-spin{animation:none}}
   .note-box{margin-top:10px;background:#FFFBF0;border:1px dashed #D4A830;border-radius:8px;padding:10px;font-size:13px;color:#5A3A10}
   .note-box textarea{width:100%;border:1px solid #E8DDC0;border-radius:6px;padding:8px;font-family:'EB Garamond',serif;font-size:13.5px;resize:vertical;min-height:60px}
 
@@ -161,6 +170,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,.book-card:focus-v
 </style>
   <link rel="stylesheet" href="activity-history.css">
   <script src="site-motion.js" defer></script>
+<script src="/search-core.js"></script>
 </head>
 <body>
 
@@ -174,17 +184,18 @@ button:focus-visible,input:focus-visible,select:focus-visible,.book-card:focus-v
 <section class="library-hero"><div><span class="library-eyebrow">Quran Hikma · Source library</span><h2>Explore the books.<br>Follow the evidence.</h2><p>Browse collections, read Arabic texts and available translations, and bring references into your research.</p></div><div class="library-guide"><strong>A workspace for close reading</strong><p>Choose a collection to search its entries, explore narrators and topics, and save passages for further study.</p></div></section>
   <div id="bookSearchPanel" style="background:#fff;border:1.5px solid #244d3e;border-radius:12px;padding:16px 18px;margin-bottom:18px;">
     <div style="font-weight:700;color:#244d3e;font-size:17px;margin-bottom:4px;">Search inside all books</div>
-    <div style="font-size:13px;color:#64746c;margin-bottom:10px;">Type a word or concept in English or Arabic. Results come from every book in the library, with your words highlighted.</div>
+    <div style="font-size:13px;color:#64746c;margin-bottom:10px;">Type one or more words or concepts in English or Arabic. Entries must match every word; related terms (e.g. prayer = salah = الصلاة) count too. Results are ranked and highlighted.</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
-      <input type="text" id="bsInput" aria-label="Search inside all books" placeholder="e.g. pictures in the Kaaba, jizya, صور الكعبة" style="flex:1 1 220px;padding:10px 14px;border-radius:20px;border:1.5px solid #cbd6cf;font-size:15px;" onkeydown="if(event.key==='Enter') bookSearch()">
-      <button class="qbtn" onclick="bookSearch()">Search</button>
+      <input type="search" id="bsInput" aria-label="Search inside all books" placeholder="e.g. pictures in the Kaaba, jizya, صور الكعبة" style="flex:1 1 220px;padding:10px 14px;border-radius:20px;border:1.5px solid #cbd6cf;font-size:15px;" autocomplete="off" enterkeyhint="search" onkeydown="if(event.key==='Enter'){event.preventDefault();bookSearch()}">
+      <button type="button" class="qbtn" onclick="bookSearch()">Search</button>
     </div>
     <div id="bsLang" style="display:none;margin-top:10px;font-size:13px;color:#64746c;">Show: 
       <button class="qbtn ghost" data-l="both" onclick="bsSetLang('both')">Arabic and English</button>
       <button class="qbtn ghost" data-l="en" onclick="bsSetLang('en')">English only</button>
       <button class="qbtn ghost" data-l="ar" onclick="bsSetLang('ar')">Arabic only</button>
     </div>
-    <div id="bsResults" role="status" aria-live="polite"></div>
+    <div id="bsLive" class="sr-only" role="status" aria-live="polite"></div>
+    <div id="bsResults"></div>
   </div>
   <div class="cross-search-panel" style="background:#FBF6E9;border:1.5px solid #D4A830;border-radius:12px;padding:14px 16px;margin-bottom:18px;">
     <div style="font-weight:700;color:#5A3A10;margin-bottom:8px;">🔬 Compare Across All Hadith Books</div>
@@ -196,7 +207,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,.book-card:focus-v
     <div id="crossSearchResults"></div>
   </div>
   <div class="library-section-heading"><h2>Browse collections</h2><span id="libraryResultCount" role="status" aria-live="polite"></span></div>
-  <input aria-label="Search books by title or author" type="text" id="libSearchInput" class="lib-search" placeholder="Search books by title or author..." oninput="renderBookGrid()">
+  <input aria-label="Search books by title or author" type="text" id="libSearchInput" class="lib-search" placeholder="Filter collections: title, author, topic (e.g. tafsir ibn kathir)" oninput="renderBookGridDebounced()">
   <div class="lib-filter-row" id="libFilterRow"></div>
   <div id="bookCards"></div>
 </main>
@@ -429,17 +440,23 @@ function setLibFilter(cat, btn){
   renderBookGrid();
 }
 
+const renderBookGridDebounced = (window.QHSearch ? QHSearch.debounce : (f)=>f)(() => renderBookGrid(), 200);
 function renderBookGrid(){
   const c = document.getElementById('bookCards');
-  const q = (document.getElementById('libSearchInput').value || '').trim().toLowerCase();
+  const q = (document.getElementById('libSearchInput').value || '').trim();
   let list = ALL_BOOKS;
   if(LIB_ACTIVE_CAT !== 'all') list = list.filter(b => (b.category || 'default') === LIB_ACTIVE_CAT);
-  if(q) list = list.filter(b =>
-    (b.title_en||'').toLowerCase().includes(q) ||
-    (b.title_ar||'').toLowerCase().includes(q) ||
-    (b.author_en||'').toLowerCase().includes(q));
+  if(q && window.QHSearch){
+    // Multi-word, concept-aware match over every text field of the book record, ranked.
+    const groups = QHSearch.expand(q);
+    list = list.map(b => {
+      const f = {title: (b.title_en||'') + ' ' + (b.title_ar||''), ref: (b.author_en||'') + ' ' + (b.author_ar||'')};
+      f.body = Object.keys(b).filter(k => typeof b[k] === 'string' && !/url|^id$|_at$/.test(k) && !['title_en','title_ar','author_en','author_ar'].includes(k)).map(k => b[k]).join(' ');
+      return {b, s: QHSearch.score(f, groups, q)};
+    }).filter(x => x.s.matchedAll).sort((x, y) => y.s.score - x.s.score).map(x => x.b);
+  }
   document.getElementById('libraryResultCount').textContent = list.length + ' collection' + (list.length === 1 ? '' : 's');
-  if(!list.length){ c.innerHTML = '<div id="emptyState">No collections match. Try another title or author, or select All.</div>'; return; }
+  if(!list.length){ c.innerHTML = '<div id="emptyState">No collections match every word. Try fewer words, another spelling, or select All.</div>'; return; }
   c.innerHTML = list.map(b => {
     const style = CATEGORY_STYLE[b.category] || CATEGORY_STYLE.default;
     const coverInner = b.cover_image_url
@@ -1383,87 +1400,125 @@ loadBooks();
 </script>
 <script>
 (function(){
-const BS_SRC=[['entries','rpc','books_search_src','Library books (chapter index)'],['catalogue','rpc','books_search_src','Contradiction catalogue'],['asbab','rpc','books_search_src','Asbab al-Nuzul'],['hadith','site','hadith','Hadith collections'],['tafsir','site','tafsir','Tafsir']];
-let BS_LANG='both',BS_STATE=null;
-const DIAC='[\\u064B-\\u0652\\u0640\\u0670]*';
-function bsRx(vs){
-  const parts=(vs||[]).filter(Boolean).map(v=>{
-    const e=v.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
-    return /[؀-ۿ]/.test(v)?[...v].map(ch=>ch.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join(DIAC):e;
-  });
-  return parts.length?new RegExp('('+parts.join('|')+')','gi'):null;
+/* "Search inside all books": multi-word, concept-aware search over the
+   library sources. Server RPCs (books_search_src / site_search_src) do the
+   AND word match; QHSearch (search-core.js) adds Arabic normalisation,
+   English/Arabic concept expansion, re-ranking and highlighting. */
+const S=window.QHSearch;
+const BS_SRC=[['entries','rpc','Library books (chapter index)'],['catalogue','rpc','Contradiction catalogue'],['asbab','rpc','Asbab al-Nuzul'],['hadith','site','Hadith collections'],['tafsir','site','Tafsir']];
+const PAGE=8, FETCH_LIM=20;
+let BS_LANG='both', BS_STATE=null, BS_SEQ=0;
+const cache=new Map();
+
+function call(def,q){
+  const key=def[0]+'|'+q;
+  if(cache.has(key)) return cache.get(key);
+  const rpc=def[1]==='rpc';
+  const body=rpc?{kind:def[0],q:q,lim:FETCH_LIM}:{src:def[0],q:q,lim:FETCH_LIM};
+  const ctl=new AbortController(); const timer=setTimeout(()=>ctl.abort(),25000);
+  const p=fetch(SB_URL+'/rest/v1/rpc/'+(rpc?'books_search_src':'site_search_src'),{method:'POST',signal:ctl.signal,headers:{...HDR,'Content-Type':'application/json'},body:JSON.stringify(body)})
+    .then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+    .finally(()=>clearTimeout(timer));
+  cache.set(key,p); p.catch(()=>cache.delete(key));
+  return p;
 }
-function bsHl(text,rx){
-  const t=esc(text||'');
-  return rx?t.replace(rx,'<mark class="hl">$1</mark>'):t;
+function view(def,row){
+  if(def[1]==='rpc') return {title:row.book||'',ref:row.ref||row.topic||'',ar:row.ar||'',en:row.en||''};
+  const title=row.collection?row.collection+(row.number?' #'+row.number:''):(row.title||'')+(row.sura?' '+row.sura+':'+row.aya:'');
+  return {title:title,ref:row.grade||row.tradition||'',ar:row.arabic||'',en:row.text||''};
 }
-function bsSnip(text,rx,len){
-  text=text||''; if(text.length<=len) return text;
-  let i=0; if(rx){ rx.lastIndex=0; const m=rx.exec(text); if(m) i=Math.max(0,m.index-len/3); }
-  let out=text.slice(i,i+len);
-  return (i>0?'… ':'')+out+(i+len<text.length?' …':'');
-}
-async function bsCall(def,q){
-  const body=def[1]==='rpc'?{kind:def[0],q:q,lim:8}:{src:def[2],q:q,lim:8};
-  const fn=def[1]==='rpc'?'books_search_src':'site_search_src';
-  const r=await fetch(SB_URL+'/rest/v1/rpc/'+fn,{method:'POST',headers:{...HDR,'Content-Type':'application/json'},body:JSON.stringify(body)});
-  if(!r.ok) throw new Error(fn+' '+r.status);
-  return r.json();
-}
-window.bsSetLang=function(l){BS_LANG=l;bsRender();};
-window.bookSearch=async function(){
-  const q=document.getElementById('bsInput').value.trim();
-  const box=document.getElementById('bsResults');
-  if(q.length<2){box.innerHTML='';return;}
-  box.innerHTML='<p style="color:#64746c">Searching all books…</p>';
-  const out=await Promise.all(BS_SRC.map(d=>bsCall(d,q).then(r=>({d,r})).catch(()=>({d,r:null,failed:true}))));
-  BS_STATE={q,out};
-  document.getElementById('bsLang').style.display='block';
-  bsRender();
-};
-function bsRender(){
-  if(!BS_STATE) return;
-  document.querySelectorAll('#bsLang button').forEach(b=>b.style.fontWeight=b.dataset.l===BS_LANG?'700':'400');
-  const vs=new Set([BS_STATE.q]);
-  BS_STATE.out.forEach(o=>(o.r&&o.r.variants||[]).forEach(v=>vs.add(v)));
-  const rx=bsRx([...vs]);
-  let h='',total=0,fails=0;
-  BS_STATE.out.forEach((o,si)=>{
-    if(o.failed){fails++;return;}
-    const r=o.r; if(!r||!r.count) return;
-    total+=r.count;
-    h+='<h3 style="margin:18px 0 6px;color:#244d3e;">'+esc(o.d[3])+' <small style="color:#64746c;font-weight:400;">'+(r.capped?'1,000+':r.count)+' match'+(r.count==1?'':'es')+'</small></h3>';
-    r.rows.forEach((row,ri)=>{
-      const isRpc=o.d[1]==='rpc';
-      const title=isRpc?row.book:(row.collection?row.collection+(row.number?' #'+row.number:''):(row.title||'')+(row.sura?' '+row.sura+':'+row.aya:''));
-      const ref=isRpc?row.ref:(row.grade||row.tradition||'');
-      const ar=isRpc?row.ar:null;
-      const en=isRpc?row.en:row.text;
-      h+='<div style="border:1px solid #e1e8e3;border-radius:10px;padding:12px 14px;margin:8px 0;background:#fcfdfc;">';
-      h+='<div style="font-size:12.5px;color:#64746c;margin-bottom:6px;"><b style="color:#244d3e;">'+esc(title)+'</b>'+(ref?' · '+esc(ref):'')+'</div>';
-      if(ar&&BS_LANG!=='en') h+='<div dir="rtl" lang="ar" style="font-size:20px;line-height:1.9;margin-bottom:6px;">'+bsHl(bsSnip(ar,rx,400),rx)+'</div>';
-      if(en&&BS_LANG!=='ar') h+='<div style="line-height:1.65;">'+bsHl(bsSnip(en,rx,500),rx)+'</div>';
-      if(BS_LANG==='en'&&!en&&ar) h+='<div><button class="qbtn ghost" onclick="bsTranslate(this,'+si+','+ri+')">Translate to English</button><span class="bsTr"></span></div>';
-      if(BS_LANG==='ar'&&!ar) h+='<div style="color:#64746c;font-size:13px;">Arabic text is not stored for this entry. Switch to English to read it.</div>';
-      h+='</div>';
+function rowKey(def,row){ return def[0]+':'+(row.id!=null?row.id:(row.book_id||'')+'|'+(row.ref||'')+'|'+(row.sura||'')+':'+(row.aya||'')+'|'+String(row.en||row.text||row.ar||'').slice(0,60)); }
+
+async function searchSource(sec,seq){
+  const st=BS_STATE; sec.status='loading'; render();
+  const settled=await Promise.allSettled(st.queries.map(q=>call(sec.def,q)));
+  if(seq!==BS_SEQ) return;
+  const seen=new Map(); let ok=0, count=0, relaxed=false;
+  settled.forEach((s,qi)=>{
+    if(s.status!=='fulfilled'||!s.value) return; ok++;
+    const r=s.value; if(qi===0||!count) count=Math.max(count,r.count||0); if(r.relaxed) relaxed=true;
+    (r.rows||[]).forEach(row=>{
+      const k=rowKey(sec.def,row); if(seen.has(k)) return;
+      const v=view(sec.def,row); const sc=S.score({title:v.title,ref:v.ref,en:v.en,ar:v.ar},st.groups,st.q);
+      seen.set(k,{row:row,v:v,sc:sc});
     });
   });
+  if(!ok){ sec.status='error'; render(); return; }
+  const all=[...seen.values()].sort((a,b)=>b.sc.score-a.sc.score);
+  sec.full=all.filter(x=>x.sc.matchedAll);
+  sec.partial=sec.full.length?[]:all.filter(x=>x.sc.matched>0);
+  sec.count=count; sec.relaxed=relaxed; sec.status='done'; sec.shown=PAGE;
+  render();
+}
+function run(q){
+  q=(q||'').trim();
   const box=document.getElementById('bsResults');
-  if(!total) h='<p style="color:#64746c">No matches in any book'+(fails?' (some sources could not be searched, try again)':'')+'. Try another spelling or the Arabic word.</p>';
-  else h='<p style="margin-top:12px;color:#64746c;">'+(total>=1000?'1,000+':total)+' matches across the library for <b>'+esc(BS_STATE.q)+'</b>. Searched with related spellings: '+esc([...vs].join(', '))+'.</p>'+h;
-  box.innerHTML=h;
+  if(q.length<2){ BS_STATE=null; box.innerHTML=''; document.getElementById('bsLang').style.display='none'; return; }
+  const groups=S.expand(q);
+  if(!groups.length){ box.innerHTML='<p class="bs-note">Type at least one word that is not a stop word.</p>'; return; }
+  const queries=[q]; const alt=groups.map(g=>g.canonical).join(' ');
+  if(S.norm(alt)!==S.norm(q)) queries.push(alt);
+  const seq=++BS_SEQ;
+  BS_STATE={q:q,groups:groups,queries:queries,rx:S.highlightRegex(groups),sections:BS_SRC.map(d=>({def:d,status:'loading',full:[],partial:[],shown:PAGE}))};
+  document.getElementById('bsLang').style.display='block';
+  try{ const u=new URL(location.href); u.searchParams.set('bq',q); history.replaceState(null,'',u); }catch(e){}
+  BS_STATE.sections.forEach(sec=>searchSource(sec,seq));
+}
+window.bookSearch=function(){ run(document.getElementById('bsInput').value); };
+window.bsSetLang=function(l){ BS_LANG=l; render(); };
+window.bsMore=function(si){ const s=BS_STATE.sections[si]; s.shown+=PAGE; render(); };
+window.bsRetry=function(si){ const s=BS_STATE.sections[si]; BS_STATE.queries.forEach(q=>cache.delete(s.def[0]+'|'+q)); searchSource(s,BS_SEQ); };
+
+function card(item,si,ri){
+  const v=item.v, rx=BS_STATE.rx; let h='<article class="bs-card">';
+  h+='<div class="bs-meta"><b>'+S.highlight(v.title,rx)+'</b>'+(v.ref?' · '+S.highlight(v.ref,rx):'')+'</div>';
+  if(v.ar&&BS_LANG!=='en') h+='<div dir="rtl" lang="ar" class="bs-ar">'+S.highlight(S.snippet(v.ar,rx,400),rx)+'</div>';
+  if(v.en&&BS_LANG!=='ar') h+='<div class="bs-en">'+S.highlight(S.snippet(v.en,rx,500),rx)+'</div>';
+  if(BS_LANG==='en'&&!v.en&&v.ar) h+='<div><button type="button" class="qbtn ghost" onclick="bsTranslate(this,'+si+','+ri+')">Translate to English</button><span class="bsTr" aria-live="polite"></span></div>';
+  if(BS_LANG==='ar'&&!v.ar) h+='<div class="bs-note">Arabic text is not stored for this entry. Switch to English to read it.</div>';
+  return h+'</article>';
+}
+function render(){
+  const st=BS_STATE; if(!st) return;
+  document.querySelectorAll('#bsLang button').forEach(b=>{ const on=b.dataset.l===BS_LANG; b.style.fontWeight=on?'700':'400'; b.setAttribute('aria-pressed',on); });
+  let h='', total=0, loading=0, fails=0;
+  st.sections.forEach((sec,si)=>{
+    const name=S.escHtml(sec.def[2]);
+    if(sec.status==='loading'){ loading++; h+='<section class="bs-sec" aria-busy="true"><h3>'+name+'</h3><p class="bs-note"><span class="bs-spin" aria-hidden="true"></span>Searching…</p></section>'; return; }
+    if(sec.status==='error'){ fails++; h+='<section class="bs-sec"><h3>'+name+'</h3><p class="bs-err">This source could not be searched (timed out or unavailable). <button type="button" class="qbtn ghost" onclick="bsRetry('+si+')">Retry</button></p></section>'; return; }
+    const list=sec.full.length?sec.full:sec.partial; if(!list.length) return;
+    total+=list.length;
+    const partial=!sec.full.length;
+    h+='<section class="bs-sec"><h3>'+name+' <small>'+(partial?'partial matches':'best '+Math.min(list.length,sec.shown)+' of '+(sec.count>=1000?'1,000+':sec.count||list.length))+'</small></h3>';
+    if(partial) h+='<p class="bs-note">No entry here contains every word, so these contain some of them.</p>';
+    list.slice(0,sec.shown).forEach((it,ri)=>h+=card(it,si,ri));
+    if(list.length>sec.shown) h+='<button type="button" class="qbtn ghost" onclick="bsMore('+si+')">Show more from '+name+'</button>';
+    h+='</section>';
+  });
+  const terms=st.groups.map(g=>'<b>'+S.escHtml(g.term)+'</b>'+(g.variants.length>2?' <span class="bs-syn">('+S.escHtml(g.variants.filter(x=>x!==g.term).slice(0,5).join(', '))+')</span>':'')).join(' + ');
+  let head='<p class="bs-summary">'+(loading?'Searching '+loading+' more source'+(loading>1?'s':'')+'… ':'')+'Matching all of: '+terms+'.</p>';
+  if(!loading&&!total) head+='<p class="bs-empty">No matches in any book'+(fails?' (some sources could not be searched; use Retry)':'')+'. Try fewer words, another spelling, or the Arabic word.</p>';
+  const box=document.getElementById('bsResults'); box.setAttribute('aria-busy',loading?'true':'false');
+  box.innerHTML=head+h;
+  const live=document.getElementById('bsLive');
+  if(live&&!loading) live.textContent=total?total+' results found for '+st.q:'No results for '+st.q;
 }
 window.bsTranslate=async function(btn,si,ri){
-  const row=BS_STATE.out[si].r.rows[ri], span=btn.parentElement.querySelector('.bsTr');
+  const sec=BS_STATE.sections[si], it=(sec.full.length?sec.full:sec.partial)[ri], span=btn.parentElement.querySelector('.bsTr');
   btn.disabled=true; span.textContent=' Translating…';
   try{
-    const res=await fetch('/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({max_tokens:600,messages:[{role:'user',content:'Translate this Arabic into plain English. Output only the translation.\n\n'+(row.ar||'').slice(0,1500)}]})});
-    const d=await res.json();
-    const t=(d.content&&d.content[0]&&d.content[0].text)||'';
+    const res=await fetch('/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({max_tokens:600,messages:[{role:'user',content:'Translate this Arabic into plain English. Output only the translation.\n\n'+(it.v.ar||'').slice(0,1500)}]})});
+    const d=await res.json(); const t=(d.content&&d.content[0]&&d.content[0].text)||'';
     if(!res.ok||!t) throw new Error('x');
-    span.innerHTML='<div style="margin-top:6px;line-height:1.65;">'+esc(t)+'</div>';
+    span.innerHTML='<div class="bs-en" style="margin-top:6px">'+S.escHtml(t)+'</div>';
   }catch(e){ span.textContent=' Translation is temporarily unavailable.'; btn.disabled=false; }
 };
+const inp=document.getElementById('bsInput');
+if(inp){
+  const deb=S.debounce(()=>{ const q=inp.value.trim(); if(q.length>=3||!q) run(q); },650);
+  inp.addEventListener('input',deb);
+  const q0=new URLSearchParams(location.search).get('bq'); if(q0){ inp.value=q0; run(q0); }
+}
 })();
 </script>
 <script src="/quran-verse-audio.js" defer></script>
