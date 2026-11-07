@@ -45,7 +45,7 @@ test('Student must finish final reworded check before graded save',()=>{
 });
 test('YouTube playback is tracked separately from earned completion',()=>{
  const p=html('lesson.html');
- assert.match(p,/enablejsapi=1/);
+ assert.match(p,/enablejsapi(?:=|:\s*['"])1/);
  assert.match(p,/monitorYouTubePlayback\(iframe,currentLesson\.id\)/);
  assert.match(p,/Skipping ahead does not count/);
  assert.match(p,/Course progress is saved when you press/);
