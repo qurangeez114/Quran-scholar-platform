@@ -149,7 +149,8 @@ Be conservative and evidence-based. Do NOT deduct points merely because English 
 
 First establish that the supplied Arabic is a usable source for the English commentary. Use source_alignment "aligned" when the English is an abridgment or partial translation of that Arabic unit: omitted paragraphs, omitted reports, omitted criticism, and an English ending earlier than Arabic MUST reduce the numeric grade, even if abridgment is deliberate. Do not withhold a score just because coverage differs. Separate omissions from meaning changes in retained passages and from damaged English text; count all of them in the overall score without double-counting the same defect. A score is an editorial fidelity judgment, not a measured percentage of correct words. Use "misaligned" only for an actually unrelated/wrong source unit, and "uncertain" only when a usable Arabic source cannot be established (for example, corrupted or insufficient Arabic). Do not score those unusable-source cases.
 
-Keep each explanation concise (one or two sentences) while identifying any material mismatches. Return STRICT JSON only, with exactly these keys:
+Keep every explanation concise. Each string value MUST be at most 350 characters.
+Return STRICT JSON only, with exactly these keys and no markdown or preamble:
 {{
   "source_alignment": "aligned",
   "source_alignment_reason": "Identify the usable shared source unit; distinguish abridgment from an unrelated or unusable Arabic source.",
@@ -170,7 +171,7 @@ ENGLISH TRANSLATION:
 """
 
 
-def call_claude(prompt, model="claude-sonnet-4-6", max_tokens=3500, timeout=180):
+def call_claude(prompt, model="claude-sonnet-4-6", max_tokens=1800, timeout=180):
     payload = {
         "model": model,
         "max_tokens": max_tokens,
@@ -297,11 +298,19 @@ def main():
     ap.add_argument("--delay", type=float, default=1.0, help="seconds between successful API calls")
     ap.add_argument("--retries", type=int, default=0, help="retries per failed verse; opt in once stream health is verified")
     ap.add_argument("--model", default="claude-sonnet-4-6")
+    ap.add_argument(
+        "--max-source-chars",
+        type=int,
+        default=20000,
+        help="maximum combined Arabic+English source size sent in one request (default: 20000)",
+    )
     ap.add_argument("--dry-run", action="store_true", help="show missing targets without calling AI or writing")
     args = ap.parse_args()
 
     if args.limit < 0:
         ap.error("--limit cannot be negative")
+    if args.max_source_chars < 4000:
+        ap.error("--max-source-chars must be at least 4000")
     if not args.dry_run and not SUPABASE_SERVICE_KEY:
         ap.error("SUPABASE_SERVICE_KEY is required for writes; refusing to spend model calls with an anonymous read-only key")
 
@@ -323,13 +332,22 @@ def main():
             continue
         missing.append((s, a, ar, en))
 
-    # Large tafsir blocks need a separate chunked evaluation path. The
-    # streaming proxy currently cuts long answers off mid-JSON, so prioritize
-    # complete shorter Arabic+English source pairs without marking large ones
-    # evaluated or changing their original order in the database.
-    deferred_large = sum(len(ar) + len(en) > 4000 for _, _, ar, en in missing)
-    missing = [pair for pair in missing if len(pair[2]) + len(pair[3]) <= 4000]
-    print(f"Long source pairs deferred for chunking: {deferred_large}")
+    # Keep the complete Arabic and English source in a single comparison when
+    # it fits a bounded request. Earlier runs used a 4,000-character ceiling,
+    # which unnecessarily deferred most of the corpus. A strict response-size
+    # cap in the prompt plus a lower max_tokens prevents the proxy from ending
+    # mid-JSON while allowing the full source for the large majority of pairs.
+    # Truly large records remain untouched for the separate chunked path.
+    deferred_large = sum(len(ar) + len(en) > args.max_source_chars for _, _, ar, en in missing)
+    missing = [
+        pair
+        for pair in missing
+        if len(pair[2]) + len(pair[3]) <= args.max_source_chars
+    ]
+    print(
+        "Source pairs deferred for chunking "
+        f"(>{args.max_source_chars} characters): {deferred_large}"
+    )
 
     if args.limit:
         missing = missing[: args.limit]
