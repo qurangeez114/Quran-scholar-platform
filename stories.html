@@ -631,11 +631,11 @@ function storyName(story){
     return raw && /[A-Za-z]/.test(raw) ? raw : 'Al-Sirah (Biography)';
   if(raw && /[A-Za-z]/.test(raw))return raw;
   const readable=id.replace(/[-_]+/g,' ').trim();
-  return readable?readable.replace(/\\b[a-z]/g,t=>t.toUpperCase()):raw||ar||'Untitled story';
+  return readable?readable.replace(/\b[a-z]/g,t=>t.toUpperCase()):raw||ar||'Untitled story';
 }
 function storyKey(story){
   return String((story.slug||'')+' '+(story.name_english||'')).toLowerCase()
-    .normalize('NFD').replace(/[\\u0300-\\u036f]/g,'')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
     .replace(/[^a-z0-9]+/g,' ').trim();
 }
 function prophetRank(story){
@@ -758,7 +758,7 @@ function buildSidebar(){
     const includeDhul=c==='people'&&!haveDhul;
     const label=document.createElement('div');
     label.className='cat';
-    label.textContent=c+'s ('+(rows.length+(includeDhul?1:0))+')';
+    label.textContent=({prophet:'Prophets',event:'Events',people:'People',theme:'Themes'}[c]||c)+' ('+(rows.length+(includeDhul?1:0))+')';
     list.appendChild(label);
     // A synthetic navigational reference is visibly a dossier link, not a prophet or invented story row.
     if(includeDhul)rows.push({slug:'dhul-qarnayn-history-link',name_english:'Dhul-Qarnayn — historical dossier',name_arabic:'ذو القرنين',category:'people',_historyLink:true});
@@ -918,7 +918,7 @@ async function openStory(story, updateAddress = false){
   main.innerHTML=`
     <div class="s-hdr" id="story-introduction">
       <div class="s-ar">${story.name_arabic||''}</div>
-      <div class="s-en">${story.name_english}</div>
+      <div class="s-en">${storyName(story)}</div>
       ${story.name_tigrinya?`<div class="s-ti">${story.name_tigrinya}</div>`:''}
       <div class="s-meta">
         <span class="bdg bdg-g">${ICONS[story.category]||'📖'} ${story.category}</span>
@@ -959,7 +959,7 @@ async function openStory(story, updateAddress = false){
 
 async function loadStoryFiqh(story) {
   // Extract keywords from story name + category for madhhab search
-  const keywords = [story.name_english, story.category].filter(Boolean).join(' ');
+  const keywords = [storyName(story), story.category].filter(Boolean).join(' ');
   const kwMap = {
     'prayer':'Prayer and Worship','salah':'Prayer and Worship','moses':'Apostasy',
     'marriage':'Marriage and Family Law','nikah':'Marriage and Family Law',
@@ -984,7 +984,7 @@ async function loadStoryFiqh(story) {
     let topics = [];
 
     // Try direct keyword search first
-    const enc = encodeURIComponent(story.name_english.split(' ').slice(0,2).join(' '));
+    const enc = encodeURIComponent(storyName(story).split(' ').slice(0,2).join(' '));
     const r1 = await fetch(`${SB_URL2}/rest/v1/madhhab_topics?select=id,topic,category&or=(topic.ilike.*${enc}*,brief_description.ilike.*${enc}*)&limit=4`, {headers:H2});
     if (r1.ok) topics = await r1.json();
 
@@ -1134,7 +1134,7 @@ async function doSearch(){
     html+=`<div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);padding:0 0 8px;">📚 Source Comparisons</div>`;
     sourceRows.forEach(s=>{
       const story=s.quranic_stories||{};
-      html+=`<div class="src-card"><div class="src-hdr" onclick="this.nextElementSibling.classList.toggle('open');this.querySelector('.arr').textContent=this.nextElementSibling.classList.contains('open')?'▲':'▼';"><span class="trad ${tradClass(s.tradition)}">${s.tradition}</span><div class="src-info"><div class="src-name">${s.source_name}</div><div class="src-ref">${story.name_english?'Story: '+story.name_english:''}</div></div><span class="arr" style="color:var(--dim);">▼</span></div><div class="src-body"><p class="src-sum">${s.summary||''}</p><div class="cg"><div class="cb cs"><div class="cl">✓ Similarities</div><div class="ct">${s.similarities||'—'}</div></div><div class="cb cd"><div class="cl">✕ Differences</div><div class="ct">${s.differences||'—'}</div></div></div><div class="cb cu" style="margin-top:8px;"><div class="cl">★ Unique to Quran</div><div class="ct">${s.unique_quran||'—'}</div></div>${s.url?`<div style="margin-top:8px;"><a href="${s.url}" target="_blank" class="src-link">📎 Read source →</a></div>`:''}</div></div>`;
+      html+=`<div class="src-card"><div class="src-hdr" onclick="this.nextElementSibling.classList.toggle('open');this.querySelector('.arr').textContent=this.nextElementSibling.classList.contains('open')?'▲':'▼';"><span class="trad ${tradClass(s.tradition)}">${s.tradition}</span><div class="src-info"><div class="src-name">${s.source_name}</div><div class="src-ref">${storyName(story)?'Story: '+storyName(story):''}</div></div><span class="arr" style="color:var(--dim);">▼</span></div><div class="src-body"><p class="src-sum">${s.summary||''}</p><div class="cg"><div class="cb cs"><div class="cl">✓ Similarities</div><div class="ct">${s.similarities||'—'}</div></div><div class="cb cd"><div class="cl">✕ Differences</div><div class="ct">${s.differences||'—'}</div></div></div><div class="cb cu" style="margin-top:8px;"><div class="cl">★ Unique to Quran</div><div class="ct">${s.unique_quran||'—'}</div></div>${s.url?`<div style="margin-top:8px;"><a href="${s.url}" target="_blank" class="src-link">📎 Read source →</a></div>`:''}</div></div>`;
     });
   }
   if(hadithRows.length){
@@ -1187,7 +1187,7 @@ async function genAI(){
   if(!btn||!out)return;
   btn.textContent='⏳ Analyzing...';btn.disabled=true;out.style.display='block';out.textContent='Generating...';
   try{
-    const res=await fetch('https://qurangeez-quran-scholar-api.hf.space/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1200,messages:[{role:'user',content:`Write a scholarly comparative analysis of ${story.name_english} in the Quran vs other traditions. Include: 1) Quranic account key verses, 2) Similarities with other traditions, 3) Key differences, 4) Unique Quranic elements, 5) Scholarly significance. Under 500 words.`}]})});
+    const res=await fetch('https://qurangeez-quran-scholar-api.hf.space/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1200,messages:[{role:'user',content:`Write a scholarly comparative analysis of ${storyName(story)} in the Quran vs other traditions. Include: 1) Quranic account key verses, 2) Similarities with other traditions, 3) Key differences, 4) Unique Quranic elements, 5) Scholarly significance. Under 500 words.`}]})});
     const d=await res.json();
     out.textContent=d.content?.[0]?.text||'Analysis unavailable.';
   }catch(e){out.textContent='Error. Please try again.';}
