@@ -3,10 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="/qh-cinematic-theme.css?v=20261105-lab1">
-<script src="/qh-cinematic-theme.js?v=20261105-lab1" defer></script>
-<meta name="robots" content="noindex, nofollow">
-<title>Historical Parallels — Quran Hikma (draft)</title>
+<meta name="robots" content="noindex, follow">
+<title>Verified Historical Parallels — Quran Hikma</title>
 <style>
   :root { --ink:#241d12; --muted:#5e5648; --gold:#846e32; --line:#e6dcc6; --paper:#fffdf8; --bg:#f6f1e4; }
   * { box-sizing: border-box; }
@@ -22,6 +20,8 @@
   .badge.ok { background:#e6f0e4; color:#2e5a2a; }
   .badge.wait { background:#eee9dd; color:#6a6253; }
   .cols { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:12px 0; }
+  .cols > * { min-width:0; }
+  .story, .story * { overflow-wrap:anywhere; }
   .cols h3 { font:700 11px/1.4 system-ui,sans-serif; text-transform:uppercase; letter-spacing:.07em; color:var(--gold); margin:0 0 4px; }
   .cols p { margin:0; }
   .meta { font:400 14px/1.6 system-ui,sans-serif; color:var(--muted); margin:8px 0 0; }
@@ -37,42 +37,83 @@
 </head>
 <body>
 <main class="wrap">
-  <div class="draft">Draft — under review. Candidate parallels from literature search. Not linked from the site navigation. Entries marked “awaiting check” have not yet been read against their primary text.</div>
+  <div class="draft">Curated references only. Unverified candidate associations are excluded from this page. A checked parallel is not proof of direct borrowing.</div>
   <h1>Historical Parallels</h1>
-  <p class="lede">Stories in the Qur’an that also appear in earlier Jewish, Christian, Syriac, and Arabian sources. Each comparison shows what is shared, what differs, and how confident the dating is. Similarity does not establish borrowing.</p>
+  <p class="lede">Browse checked, verse-specific historical references. Open the Qur’anic passage in the reader or consult the cited primary-text locator. Manuscript dating and textual dependence require separate assessment.</p><p class="lede"><a href="stories.html">Browse Qur’anic stories</a> · <a href="index.html">Qur’an reader</a></p>
   <section id="stories" aria-live="polite"><p class="empty">Loading comparisons…</p></section>
 </main>
 <script>
 (function () {
-  const el = (t, text, cls) => { const n = document.createElement(t); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
-  const RELATION = { parallel: 'Textual parallel', context: 'Historical context', contrast: 'Textual contrast' };
-  fetch('data/sources/staging/pending-research-2026-11-02.json', { cache: 'no-cache' })
-    .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-    .then(d => {
-      const root = document.getElementById('stories');
+  'use strict';
+  const root = document.getElementById('stories');
+  const el = (tag, value, cls) => {
+    const node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (value != null) node.textContent = String(value);
+    return node;
+  };
+  const valid = row => {
+    if (row.verification_status !== 'verified' || !row.source_title || !row.source_locator ||
+        !row.verification_note || !Number.isInteger(Number(row.sura)) || !Number.isInteger(Number(row.aya))) return false;
+    try { return new URL(row.reference_link).protocol === 'https:'; }
+    catch (_) { return false; }
+  };
+  fetch('qh-sources-verified-snapshot.json', { cache: 'no-cache' })
+    .then(response => {
+      if (!response.ok) throw new Error('Snapshot HTTP ' + response.status);
+      return response.json();
+    })
+    .then(snapshot => {
+      if (snapshot.schema_version !== 1 || !Array.isArray(snapshot.records) ||
+          !/^\d{4}-\d{2}-\d{2}$/.test(snapshot.as_of || '')) throw new Error('Invalid snapshot');
       root.replaceChildren();
-      if (!d.records || !d.records.length) { root.appendChild(el('p', 'No comparisons are available yet.', 'empty')); return; }
-      d.records.forEach(rec => {
+      root.appendChild(el('p', 'Verified-reference snapshot as of ' + snapshot.as_of +
+        '. This dated snapshot may not contain newer database entries.', 'meta'));
+      const params = new URLSearchParams(location.search);
+      const sura = params.get('sura'), aya = params.get('aya');
+      const rows = snapshot.records.filter(valid).filter(row =>
+        (!sura || String(row.sura) === sura) && (!aya || String(row.aya) === aya));
+      if (!rows.length) {
+        root.appendChild(el('p', 'No checked references in this snapshot for the selected passage.', 'empty'));
+        return;
+      }
+      rows.sort((a,b) => Number(a.sura)-Number(b.sura) || Number(a.aya)-Number(b.aya));
+      rows.forEach(row => {
         const card = el('article', null, 'story');
-        const h = el('h2', rec.story);
-        const ok = rec.verification_status === 'reference_checked' || rec.verification_status === 'verified';
-        h.appendChild(el('span', ok ? 'Reference checked' : 'Awaiting check', 'badge ' + (ok ? 'ok' : 'wait')));
-        card.appendChild(h);
-        card.appendChild(el('p', 'Qur’an ' + rec.sura + ':' + rec.aya_range + ' · ' + (RELATION[rec.candidate_relation] || 'Documented relationship'), 'refs'));
+        const heading = el('h2', row.source_title);
+        heading.appendChild(el('span', 'Primary locator reviewed', 'badge ok'));
+        card.appendChild(heading);
+        card.appendChild(el('p', 'Qur’an ' + row.sura + ':' + row.aya +
+          ' · ' + (row.relationship_kind || 'Historical comparison'), 'refs'));
         const cols = el('div', null, 'cols');
-        const left = el('div'); left.appendChild(el('h3', 'What is shared')); left.appendChild(el('p', rec.shared));
-        const right = el('div'); right.appendChild(el('h3', 'What differs')); right.appendChild(el('p', rec.differs));
-        cols.appendChild(left); cols.appendChild(right);
+        const shared = el('div');
+        shared.appendChild(el('h3', 'Connection'));
+        shared.appendChild(el('p', row.similarity_note || row.parallel_summary || 'See cited passage.'));
+        const different = el('div');
+        different.appendChild(el('h3', 'Difference'));
+        different.appendChild(el('p', row.difference_note || 'Not recorded.'));
+        cols.append(shared, different);
         card.appendChild(cols);
-        card.appendChild(el('p', 'Parallel source: ' + rec.candidate_source, 'meta'));
-        card.appendChild(el('p', 'Dating: ' + rec.dating_note, 'meta'));
-        if (rec.checked_against) card.appendChild(el('p', 'Checked against: ' + rec.checked_against, 'check'));
+        card.appendChild(el('p', 'Source passage: ' + row.source_locator, 'meta'));
+        if (row.source_edition) card.appendChild(el('p', 'Edition: ' + row.source_edition, 'meta'));
+        if (row.approx_date) card.appendChild(el('p', 'Dating: ' + row.approx_date, 'meta'));
+        card.appendChild(el('p', 'Review: ' + row.verification_note, 'check'));
+        const reader = el('a', 'Read Qur’an ' + row.sura + ':' + row.aya);
+        reader.href = 'index.html?sura=' + encodeURIComponent(row.sura) +
+          '&aya=' + encodeURIComponent(row.aya) + '&from=history';
+        card.appendChild(reader);
+        card.appendChild(document.createTextNode(' · '));
+        const source = el('a', 'Read cited source');
+        source.href = row.reference_link;
+        source.target = '_blank';
+        source.rel = 'noopener noreferrer';
+        card.appendChild(source);
         root.appendChild(card);
       });
     })
-    .catch(() => {
-      const root = document.getElementById('stories');
-      root.replaceChildren(el('p', 'Comparisons could not be loaded. Please try again later.', 'empty'));
+    .catch(error => {
+      console.warn('Historical references unavailable:', error);
+      root.replaceChildren(el('p', 'Checked references could not be loaded. Please try again later.', 'empty'));
     });
 })();
 </script>
