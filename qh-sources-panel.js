@@ -48,6 +48,26 @@
     }).catch(error=>{ dhulTimelinePromise=null;throw error; });
     return dhulTimelinePromise;
   }
+  function appendDhulTimeline(wrap, verse, card) {
+    if (Number(card.dataset.sura) !== 18 || verse < 83 || verse > 98) return;
+    const timelineHost=el('section', null, 'margin:25px 0 10px;');
+    timelineHost.id='qh-dhul-scholars-18-' + verse;
+    timelineHost.setAttribute('aria-label', 'Dhul-Qarnayn scholarly interpretations');
+    timelineHost.appendChild(el('p','Loading the chronological scholarly record…',
+      'font:400 15px/1.6 system-ui,sans-serif;color:#5e5648;'));
+    wrap.appendChild(timelineHost);
+    void loadDhulTimeline().then(()=>{
+      if (!timelineHost.isConnected || !card.isConnected || document.getElementById('vc-'+verse)!==card) return;
+      window.QHDhulTimeline.render(timelineHost, {compact:true});
+    }).catch(err=>{
+      if(!timelineHost.isConnected) return;
+      console.warn('Dhul-Qarnayn chronology temporarily unavailable:',err);
+      const a=el('a', 'View the scholars’ dated positions in History ↗',
+        'font:600 15px/1.6 system-ui;color:#154c5c;display:inline-block;margin:12px 0;');
+      a.href='/history.html#dq-tafsir';
+      timelineHost.replaceChildren(a);
+    });
+  }
   function validReference(row) {
     if (row.verification_status !== 'verified' || !row.source_title ||
         !row.source_locator || !row.verification_note || !row.reference_link) return false;
@@ -273,26 +293,11 @@
           'font:400 15px/1.6 system-ui,sans-serif;color:#5e5648;margin:0 0 10px;'));
         rows.forEach(row => wrap.appendChild(renderSource(row)));
       }
-      if (suraId === 18 && num === 83) {
-        const timelineHost=el('section',null,'margin:24px 0 10px;');
-        timelineHost.id='qh-dhul-scholars-18-83';
-        wrap.appendChild(timelineHost);
-        try {
-          await loadDhulTimeline();
-          if (document.getElementById('vc-' + num) !== card) return;
-          window.QHDhulTimeline.render(timelineHost,{compact:true});
-        } catch (timelineError) {
-          console.warn('Scholarly timeline unavailable:',timelineError);
-          const a=el('a','Read the dated scholarly timeline on History ↗');
-          a.href='/history.html#dq-tafsir';
-          a.style.cssText='display:inline-block;padding:12px;color:#154c5c;font:600 15px system-ui;';
-          timelineHost.appendChild(a);
-        }
-      }
+      appendDhulTimeline(wrap, num, card);
       addResearchLinks(wrap, card);
       box.replaceChildren(wrap);
       box.dataset.loadedKey = key;
-      if (tab) tab.textContent = '🏛 Sources (' + rows.length + ')';
+      if (tab) tab.textContent = '🏛 Sources (' + rows.length + (suraId===18 && num>=83 && num<=98?' + Scholars':'') + ')';
     } catch (error) {
       if (document.getElementById('vc-' + num) !== card) return;
       console.error('Verse Sources load failed:', error);
@@ -304,6 +309,7 @@
       retry.type = 'button';
       retry.addEventListener('click', () => window.loadAncientPanel(num, suraId));
       wrap.appendChild(retry);
+      appendDhulTimeline(wrap, num, card);
       addResearchLinks(wrap, card);
       box.replaceChildren(wrap);
     } finally {
@@ -314,5 +320,5 @@
       }
     }
   };
-  window.qhSourcesPanelVersion = '2026-11-08-dhulqarnayn-scholars-v10';
+  window.qhSourcesPanelVersion = '2026-11-08-dhulqarnayn-versewide-timeline-v11';
 })();
