@@ -5,7 +5,7 @@
   const SELECT = 'source_title,tradition,approx_date,source_type,source_locator,relationship_kind,parallel_summary,similarity_note,difference_note,reference_link,source_edition,verification_note,verification_status';
   // A checked, dated snapshot keeps citations available during transient PostgREST failures.
   // Never promote unreviewed rows or pretend a cached snapshot is current live data.
-  const SNAPSHOT_URL = '/qh-sources-verified-snapshot.json?v=20261108-abraham-source-batch';
+  const SNAPSHOT_URL = '/qh-sources-verified-snapshot.json?v=20261108-qumran-research-batch';
   let snapshotPromise = null;
 
   function el(tag, text, css) {
@@ -32,6 +32,12 @@
       const a = el('a', 'Dhul-Qarnayn: historical sources & scholarly history ↗',
         'padding:9px 12px;border:1px solid #ac8750;border-radius:8px;background:#f9f0d9;color:#4e360a;font:600 14px/1.5 system-ui;text-decoration:none;');
       a.href = '/history.html#dhul-qarnayn';
+      bar.appendChild(a);
+    }
+    if (sura === 37 && verse >= 102 && verse <= 107) {
+      const a = el('a', 'Abraham’s sacrifice: dated scholar positions ↗',
+        'padding:9px 12px;border:1px solid #ac8750;border-radius:8px;background:#f9f0d9;color:#4e360a;font:600 14px/1.5 system-ui;text-decoration:none;');
+      a.href = '/scholarly-development.html';
       bar.appendChild(a);
     }
     wrap.appendChild(bar);
