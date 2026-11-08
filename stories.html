@@ -33,6 +33,12 @@ html,body {height:100%;background:#0F1623;color:#E8EDF5;font-family:-apple-syste
 #sb-search{padding:6px 8px;border-bottom:1px solid var(--border);}
 #sb-search input{width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:12px;padding:5px 10px;font-size:11px;outline:none;}
 #sb-list{flex:1;overflow-y:auto;overflow-x:hidden;}
+#sb-tools{padding:9px 10px;border-bottom:1px solid var(--border);display:grid;gap:7px;}
+#sb-tools label{font:600 11px/1.3 system-ui,sans-serif;color:var(--gold2)}
+#sb-tools select{width:100%;padding:8px 10px;background:var(--surface2);border:1px solid #54728a;border-radius:8px;color:var(--text);font:600 12px system-ui,sans-serif;cursor:pointer;}
+#sb-tools .sb-featured{display:block;border:1px solid #af8749;border-radius:9px;padding:9px 11px;background:#2d423e;color:#f3dda1;text-decoration:none;font:650 12px/1.4 system-ui,sans-serif;}
+#sb-tools .sb-help{color:var(--dim);font:400 10px/1.4 system-ui,sans-serif;}
+.si-n{display:flex;align-items:center;justify-content:center;min-width:26px;min-height:24px;padding:2px;border:1px solid #8a774a;border-radius:7px;color:#f1d48e;background:#282d36;font:700 11px system-ui,sans-serif;flex-shrink:0;}
 #sb-list::-webkit-scrollbar{width:3px;}
 #sb-list::-webkit-scrollbar-thumb{background:var(--border);}
 
@@ -528,7 +534,16 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid #f2d9
   
 <nav id="sb">
     <div id="sb-hdr">📚 Stories & Sources</div>
-    <div id="sb-search"><input aria-label="Filter" id="sbFilter" type="text" placeholder="Filter..." oninput="filterSB(this.value)" autocomplete="off"/></div>
+    <div id="sb-search"><input aria-label="Filter" id="sbFilter" type="text" placeholder="Filter stories by name or number..." oninput="filterSB(this.value)" autocomplete="off"/></div>
+    <div id="sb-tools">
+      <label for="sb-order">List order</label>
+      <select id="sb-order" aria-label="Sort stories" onchange="setStoryOrder(this.value)">
+        <option value="narrative">Numbered narrative order</option>
+        <option value="alpha">Alphabetical (A–Z)</option>
+      </select>
+      <small class="sb-help">The narrative order is traditional and approximate, not a verified historical chronology. Numbers restart for each category.</small>
+      <a class="sb-featured" href="/history.html#dhul-qarnayn">🌍 Dhul-Qarnayn — Sources &amp; History ↗</a>
+    </div>
     <div id="sb-list" tabindex="0" role="region" aria-label="Story list"><div class="loading"><div class="spin"></div></div></div>
   </nav>
 
@@ -594,6 +609,70 @@ async function sb(table,params){
 let allStories=[];
 const ICONS={prophet:'🕌',event:'⚡',people:'👥',theme:'💡'};
 const CATS=['prophet','event','people','theme'];
+// Qur'anic story sequence is thematic/traditional, not a claim about absolute historical dates.
+// Names may vary by transliteration in the source database.
+const PROPHET_STORY_ORDER=[
+  'adam','idris','enoch','nuh','noah','hud','salih','saleh',
+  'ibrahim','abraham','lut','lot','ismail','ishmael','ishaq','isaac',
+  'yaqub','jacob','yusuf','joseph','ayyub','job','shuayb','shuaib',
+  'musa','moses','harun','aaron','dhul kifl','dhulkifl','dhu al kifl',
+  'dawud','david','sulayman','solomon','ilyas','elijah','alyasa',
+  'elisha','yunus','jonah','zakariya','zechariah','yahya','john',
+  'isa','jesus','muhammad'
+];
+let storyOrder='narrative';
+function storyName(story){
+  const raw=String(story.name_english||'').trim();
+  const id=String(story.slug||'').toLowerCase();
+  const ar=String(story.name_arabic||'');
+  if(/sirat|siraat|sirāt|ṣirāt|الصراط|السراط/i.test(id+' '+raw+' '+ar))
+    return 'Al-Sirat (The Path)';
+  if(/sirah|السيرة/i.test(id+' '+raw+' '+ar))
+    return raw && /[A-Za-z]/.test(raw) ? raw : 'Al-Sirah (Biography)';
+  if(raw && /[A-Za-z]/.test(raw))return raw;
+  const readable=id.replace(/[-_]+/g,' ').trim();
+  return readable?readable.replace(/\b[a-z]/g,t=>t.toUpperCase()):raw||ar||'Untitled story';
+}
+function storyEnglishContext(story){
+  // A contextual note, not a machine-translation of any untranslated Arabic source.
+  if(storyName(story)==='Al-Sirat (The Path)'){
+    return 'English context: Al-Ṣirāṭ literally means “the path.” Qur’an 1:6 speaks of the straight path (al-ṣirāṭ al-mustaqīm), while later Islamic eschatological traditions also describe a bridge called al-Ṣirāṭ. These usages should be distinguished in source comparisons.';
+  }
+  return '';
+}
+function storyKey(story){
+  return String((story.slug||'')+' '+(story.name_english||'')).toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/[^a-z0-9]+/g,' ').trim();
+}
+function prophetRank(story){
+  const key=' '+storyKey(story)+' ';
+  for(let i=0;i<PROPHET_STORY_ORDER.length;i++){
+    const term=PROPHET_STORY_ORDER[i];
+    if(key.includes(' '+term+' '))return i;
+  }
+  return 10000;
+}
+function orderStories(rows,category){
+  return rows.slice().sort((a,b)=>{
+    if(storyOrder==='narrative'&&category==='prophet'){
+      const d=prophetRank(a)-prophetRank(b);
+      if(d)return d;
+    }
+    return storyName(a).localeCompare(storyName(b),undefined,{sensitivity:'base',numeric:true});
+  });
+}
+function setStoryOrder(mode){
+  storyOrder=mode==='alpha'?'alpha':'narrative';
+  const selected=document.getElementById('sb-order');
+  if(selected)selected.value=storyOrder;
+  buildSidebar();
+  const story=new URLSearchParams(location.search).get('story');
+  const active=findStory(story)||allStories.find(x=>document.getElementById('storyMain')?.dataset.storySlug===x.slug);
+  if(active){const item=document.getElementById('si-'+active.slug);item?.classList.add('on');item?.setAttribute('aria-current','page');}
+  try{localStorage.setItem('qh_stories_order_v1',storyOrder);}catch(_){}
+}
+try{if(localStorage.getItem('qh_stories_order_v1')==='alpha')storyOrder='alpha';}catch(_){} 
 const SNAMES={1:'Al-Fatiha',2:'Al-Baqarah',3:'Ali Imran',4:'An-Nisa',5:'Al-Maidah',6:'Al-Anam',7:'Al-Araf',8:'Al-Anfal',9:'At-Tawbah',10:'Yunus',11:'Hud',12:'Yusuf',14:'Ibrahim',15:'Al-Hijr',17:'Al-Isra',18:'Al-Kahf',19:'Maryam',20:'Ta-Ha',21:'Al-Anbiya',22:'Al-Hajj',26:'Ash-Shuara',27:'An-Naml',28:'Al-Qasas',37:'As-Saffat',71:'Nuh',85:'Al-Buruj'};
 
 function toggleSB(){
@@ -626,11 +705,13 @@ function findStory(key){
 
 async function init(){
   allStories=await sb('quranic_stories','select=*&order=total_mentions.desc');
+  const orderControl=document.getElementById('sb-order');
+  if(orderControl)orderControl.value=storyOrder;
   buildSidebar();
   // Render the first story immediately. Optional hadith catalogue must not block navigation.
   if(allStories.length) {
     const requested = new URLSearchParams(location.search).get('story');
-    openStory(findStory(requested) || allStories[0], false);
+    openStory(findStory(requested) || orderStories(allStories.filter(s=>s.category==='prophet'),'prophet')[0] || allStories[0], false);
   }
   else document.getElementById('storyMain').innerHTML='<div class="stories-status">No stories are published yet.</div>';
   void loadHadithNavigation();
@@ -667,39 +748,50 @@ async function loadHadithNavigation(){
 
 function buildSidebar(){
   const list=document.getElementById('sb-list');
-  list.innerHTML='';
+  list.replaceChildren();
   const cats={};
   allStories.forEach(s=>{
     const c=s.category||'other';
     if(!cats[c])cats[c]=[];
     cats[c].push(s);
   });
+  // Dhul-Qarnayn may have a verse dossier but no standalone quranic_stories row.
+  // Make it discoverable under People without inventing a database story.
+  const haveDhul=allStories.some(s=>/dhul.?qarnayn|dhu.?al.?qarnayn|ذو القرنين/i.test(
+    [s.slug,s.name_english,s.name_arabic].join(' ')));
   [...CATS,...Object.keys(cats).filter(c=>!CATS.includes(c))].forEach(c=>{
-    if(!cats[c])return;
+    const rows=orderStories(cats[c]||[],c);
+    if(!rows.length&&c!=='people')return;
+    const includeDhul=c==='people'&&!haveDhul;
     const label=document.createElement('div');
     label.className='cat';
-    label.textContent=c+'s';
+    label.textContent=({prophet:'Prophets',event:'Events',people:'People',theme:'Themes'}[c]||c)+' ('+(rows.length+(includeDhul?1:0))+')';
     list.appendChild(label);
-    cats[c].forEach(s=>{
-      // A real URL works even if an optional script or API request fails.
+    // A synthetic navigational reference is visibly a dossier link, not a prophet or invented story row.
+    if(includeDhul)rows.push({slug:'dhul-qarnayn-history-link',name_english:'Dhul-Qarnayn — historical dossier',name_arabic:'ذو القرنين',category:'people',_historyLink:true});
+    const sorted=orderStories(rows,c);
+    sorted.forEach((s,i)=>{
       const div=document.createElement('a');
-      div.href='stories.html?story='+encodeURIComponent(s.slug);
+      div.href=s._historyLink?'/history.html#dhul-qarnayn':'stories.html?story='+encodeURIComponent(s.slug);
       div.className='si';
       div.id='si-'+s.slug;
-      div.setAttribute('aria-controls','storyMain');
-      div.setAttribute('aria-label','Read story: '+s.name_english);
-      div.innerHTML=`<span class="si-icon" style="background:rgba(201,168,76,.15);">${ICONS[s.category]||'📖'}</span><span class="si-text"><span class="si-ar">${s.name_arabic||''}</span><span class="si-en">${s.name_english}</span></span>`;
-      div.addEventListener('click',(event)=>{
-        if(event.button!==0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey)return;
+      div.setAttribute('aria-label',(i+1)+'. '+storyName(s)+(s._historyLink?' historical sources':' — read story'));
+      if(!s._historyLink)div.setAttribute('aria-controls','storyMain');
+      const number=document.createElement('span');number.className='si-n';number.textContent=String(i+1);
+      const text=document.createElement('span');text.className='si-text';
+      const ar=document.createElement('span');ar.className='si-ar';ar.textContent=s.name_arabic||'';
+      const en=document.createElement('span');en.className='si-en';en.textContent=storyName(s);
+      text.append(ar,en);
+      div.append(number,text);
+      if(!s._historyLink)div.addEventListener('click',(event)=>{
+        if(event.button!==0||event.ctrlKey||event.metaKey||event.shiftKey||event.altKey)return;
         event.preventDefault();
-        // Close sidebar on mobile (any width) so story is visible
-        const sb=document.getElementById('sb');
-        const ov=document.getElementById('overlay');
-        if(sb && sb.classList.contains('open')){
+        const sb=document.getElementById('sb'),ov=document.getElementById('overlay');
+        if(sb&&sb.classList.contains('open')){
           sb.classList.remove('open');
-          if(ov) ov.classList.remove('open');
+          if(ov)ov.classList.remove('open');
         }
-        openStory(s, true);
+        openStory(s,true);
       });
       list.appendChild(div);
     });
@@ -710,6 +802,8 @@ let activeStoryRequest = 0;
 async function openStory(story, updateAddress = false){
   const requestId = ++activeStoryRequest;
   if(!story || !story.slug) return;
+  const storyMain=document.getElementById('storyMain');
+  if(storyMain)storyMain.dataset.storySlug=story.slug;
   // Highlight
   document.querySelectorAll('#sb-list .si').forEach(e=>{
     e.classList.remove('on');
@@ -731,7 +825,7 @@ async function openStory(story, updateAddress = false){
   const main=document.getElementById('storyMain');
   // Give an immediate visible response to a sidebar click, even on a slow database.
   main.innerHTML = '<div class="s-hdr" role="status" aria-live="polite"><div class="s-en"></div><p class="s-sum">Loading verses and historical comparisons…</p></div>';
-  main.querySelector('.s-en').textContent = story.name_english || 'Selected story';
+  main.querySelector('.s-en').textContent = storyName(story);
   const scroller=document.getElementById('main');
   if(scroller)scroller.scrollTop=0;
   // Fetch independent sources concurrently rather than serially waiting for timeouts.
@@ -831,7 +925,7 @@ async function openStory(story, updateAddress = false){
   main.innerHTML=`
     <div class="s-hdr" id="story-introduction">
       <div class="s-ar">${story.name_arabic||''}</div>
-      <div class="s-en">${story.name_english}</div>
+      <div class="s-en">${storyName(story)}</div>
       ${story.name_tigrinya?`<div class="s-ti">${story.name_tigrinya}</div>`:''}
       <div class="s-meta">
         <span class="bdg bdg-g">${ICONS[story.category]||'📖'} ${story.category}</span>
@@ -840,6 +934,7 @@ async function openStory(story, updateAddress = false){
         <button class="read-btn" onclick="genAI()">✨ AI Analysis</button>
       </div>
       <p class="s-sum">${story.summary||''}</p>
+      ${storyEnglishContext(story)?`<p class="s-sum" lang="en" style="font-style:normal;color:#d8e6ed;">${storyEnglishContext(story)}</p>`:''}
     </div>
     <nav class="story-toc" aria-label="Sections of this story">
       <a href="#story-introduction">Overview</a>
@@ -872,7 +967,7 @@ async function openStory(story, updateAddress = false){
 
 async function loadStoryFiqh(story) {
   // Extract keywords from story name + category for madhhab search
-  const keywords = [story.name_english, story.category].filter(Boolean).join(' ');
+  const keywords = [storyName(story), story.category].filter(Boolean).join(' ');
   const kwMap = {
     'prayer':'Prayer and Worship','salah':'Prayer and Worship','moses':'Apostasy',
     'marriage':'Marriage and Family Law','nikah':'Marriage and Family Law',
@@ -897,7 +992,7 @@ async function loadStoryFiqh(story) {
     let topics = [];
 
     // Try direct keyword search first
-    const enc = encodeURIComponent(story.name_english.split(' ').slice(0,2).join(' '));
+    const enc = encodeURIComponent(storyName(story).split(' ').slice(0,2).join(' '));
     const r1 = await fetch(`${SB_URL2}/rest/v1/madhhab_topics?select=id,topic,category&or=(topic.ilike.*${enc}*,brief_description.ilike.*${enc}*)&limit=4`, {headers:H2});
     if (r1.ok) topics = await r1.json();
 
@@ -1047,7 +1142,7 @@ async function doSearch(){
     html+=`<div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);padding:0 0 8px;">📚 Source Comparisons</div>`;
     sourceRows.forEach(s=>{
       const story=s.quranic_stories||{};
-      html+=`<div class="src-card"><div class="src-hdr" onclick="this.nextElementSibling.classList.toggle('open');this.querySelector('.arr').textContent=this.nextElementSibling.classList.contains('open')?'▲':'▼';"><span class="trad ${tradClass(s.tradition)}">${s.tradition}</span><div class="src-info"><div class="src-name">${s.source_name}</div><div class="src-ref">${story.name_english?'Story: '+story.name_english:''}</div></div><span class="arr" style="color:var(--dim);">▼</span></div><div class="src-body"><p class="src-sum">${s.summary||''}</p><div class="cg"><div class="cb cs"><div class="cl">✓ Similarities</div><div class="ct">${s.similarities||'—'}</div></div><div class="cb cd"><div class="cl">✕ Differences</div><div class="ct">${s.differences||'—'}</div></div></div><div class="cb cu" style="margin-top:8px;"><div class="cl">★ Unique to Quran</div><div class="ct">${s.unique_quran||'—'}</div></div>${s.url?`<div style="margin-top:8px;"><a href="${s.url}" target="_blank" class="src-link">📎 Read source →</a></div>`:''}</div></div>`;
+      html+=`<div class="src-card"><div class="src-hdr" onclick="this.nextElementSibling.classList.toggle('open');this.querySelector('.arr').textContent=this.nextElementSibling.classList.contains('open')?'▲':'▼';"><span class="trad ${tradClass(s.tradition)}">${s.tradition}</span><div class="src-info"><div class="src-name">${s.source_name}</div><div class="src-ref">${storyName(story)?'Story: '+storyName(story):''}</div></div><span class="arr" style="color:var(--dim);">▼</span></div><div class="src-body"><p class="src-sum">${s.summary||''}</p><div class="cg"><div class="cb cs"><div class="cl">✓ Similarities</div><div class="ct">${s.similarities||'—'}</div></div><div class="cb cd"><div class="cl">✕ Differences</div><div class="ct">${s.differences||'—'}</div></div></div><div class="cb cu" style="margin-top:8px;"><div class="cl">★ Unique to Quran</div><div class="ct">${s.unique_quran||'—'}</div></div>${s.url?`<div style="margin-top:8px;"><a href="${s.url}" target="_blank" class="src-link">📎 Read source →</a></div>`:''}</div></div>`;
     });
   }
   if(hadithRows.length){
@@ -1100,7 +1195,7 @@ async function genAI(){
   if(!btn||!out)return;
   btn.textContent='⏳ Analyzing...';btn.disabled=true;out.style.display='block';out.textContent='Generating...';
   try{
-    const res=await fetch('https://qurangeez-quran-scholar-api.hf.space/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1200,messages:[{role:'user',content:`Write a scholarly comparative analysis of ${story.name_english} in the Quran vs other traditions. Include: 1) Quranic account key verses, 2) Similarities with other traditions, 3) Key differences, 4) Unique Quranic elements, 5) Scholarly significance. Under 500 words.`}]})});
+    const res=await fetch('https://qurangeez-quran-scholar-api.hf.space/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1200,messages:[{role:'user',content:`Write a scholarly comparative analysis of ${storyName(story)} in the Quran vs other traditions. Include: 1) Quranic account key verses, 2) Similarities with other traditions, 3) Key differences, 4) Unique Quranic elements, 5) Scholarly significance. Under 500 words.`}]})});
     const d=await res.json();
     out.textContent=d.content?.[0]?.text||'Analysis unavailable.';
   }catch(e){out.textContent='Error. Please try again.';}
