@@ -40,6 +40,9 @@ html,body {height:100%;background:#0F1623;color:#E8EDF5;font-family:-apple-syste
 #sb-tools select{width:100%;padding:8px 10px;background:var(--surface2);border:1px solid #54728a;border-radius:8px;color:var(--text);font:600 12px system-ui,sans-serif;cursor:pointer;}
 #sb-tools .sb-featured{display:block;border:1px solid #af8749;border-radius:9px;padding:9px 11px;background:#2d423e;color:#f3dda1;text-decoration:none;font:650 12px/1.4 system-ui,sans-serif;}
 #sb-tools .sb-help{color:var(--dim);font:400 10px/1.4 system-ui,sans-serif;}
+#sb-tools .sb-dhul{border:2px solid #ddbc71;background:linear-gradient(130deg,#164a41,#284e4a);color:#fff0b6;font:700 14px/1.45 system-ui,sans-serif;min-height:48px;display:flex;align-items:center}
+#sb-tools .sb-dhul:hover,#sb-tools .sb-dhul.on,#sb-tools .sb-dhul[aria-current="page"]{border-color:#ffe4a2;background:#2c6150;box-shadow:0 0 0 1px #ddbc71 inset}
+#sb-tools .sb-dhul:focus-visible{outline:3px solid #fff0b6;outline-offset:3px}
 .si-n{display:flex;align-items:center;justify-content:center;min-width:26px;min-height:24px;padding:2px;border:1px solid #8a774a;border-radius:7px;color:#f1d48e;background:#282d36;font:700 11px system-ui,sans-serif;flex-shrink:0;}
 #sb-list::-webkit-scrollbar{width:3px;}
 #sb-list::-webkit-scrollbar-thumb{background:var(--border);}
@@ -545,6 +548,7 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid #f2d9
         <option value="alpha">Alphabetical (A–Z)</option>
       </select>
       <small class="sb-help">The narrative order is traditional and approximate, not a verified historical chronology. Numbers restart for each category.</small>
+      <a id="qh-dhul-sidebar-link" class="sb-featured sb-dhul" href="stories.html?story=dhul-qarnayn" aria-controls="storyMain" onclick="return openDhulQarnaynFromLink(event)">🌍 Dhul-Qarnayn · ذو القرنين</a>
       <a class="sb-featured" href="stories.html?view=research-candidates" onclick="return openResearchCandidatesFromLink(event)">🔎 Research topics awaiting verification</a>
     </div>
     <div id="sb-list" tabindex="0" role="region" aria-label="Story list"><div class="loading"><div class="spin"></div></div></div>
@@ -672,7 +676,10 @@ function setStoryOrder(mode){
   buildSidebar();
   const story=new URLSearchParams(location.search).get('story');
   const active=findStory(story)||allStories.find(x=>document.getElementById('storyMain')?.dataset.storySlug===x.slug);
-  if(active){const item=document.getElementById('si-'+active.slug);item?.classList.add('on');item?.setAttribute('aria-current','page');}
+  if(active){
+    setDhulSidebarActive(isDhulQarnayn(active));
+    if(!isDhulQarnayn(active)){const item=document.getElementById('si-'+active.slug);item?.classList.add('on');item?.setAttribute('aria-current','page');}
+  }
   try{localStorage.setItem('qh_stories_order_v1',storyOrder);}catch(_){}
 }
 try{if(localStorage.getItem('qh_stories_order_v1')==='alpha')storyOrder='alpha';}catch(_){} 
@@ -703,7 +710,16 @@ function tradClass(t){
 // ?story= accepts a slug or a numeric story id (used by verse Sources links).
 function findStory(key){
   if(!key)return null;
+  // Public route and database slug both resolve to the same existing story.
+  if(key==='dhul-qarnayn'||key==='dhul_qarnayn')return allStories.find(isDhulQarnayn)||null;
   return allStories.find(s=>s.slug===key)||allStories.find(s=>String(s.id)===key)||null;
+}
+function setDhulSidebarActive(active){
+  const link=document.getElementById('qh-dhul-sidebar-link');
+  if(!link)return;
+  link.classList.toggle('on',!!active);
+  if(active)link.setAttribute('aria-current','page');
+  else link.removeAttribute('aria-current');
 }
 
 async function init(){
@@ -787,6 +803,7 @@ function closeStoriesSidebar(){
 function prepareStoriesPane(slug,updateAddress,view) {
   const main=document.getElementById('storyMain');
   closeStoriesSidebar();
+  setDhulSidebarActive(false);
   document.querySelectorAll('#sb-list .si').forEach(item=>{
     item.classList.remove('on');item.removeAttribute('aria-current');
   });
@@ -818,6 +835,7 @@ function openResearchCandidates(updateAddress=false){
 function openDhulQarnaynDossier(updateAddress=false) {
   ++activeStoryRequest;
   const main=prepareStoriesPane('dhul-qarnayn',updateAddress,null);
+  setDhulSidebarActive(true);
   const selected=document.getElementById('si-dhul-qarnayn-history-link');
   if(selected){selected.classList.add('on');selected.setAttribute('aria-current','page');}
   main.innerHTML=[
@@ -855,55 +873,44 @@ function buildSidebar(){
   const list=document.getElementById('sb-list');
   list.replaceChildren();
   const cats={};
+  // The real dhul_qarnayn row is an Event in the database. It is already
+  // the one pinned Story link above; do not bury or duplicate it in Events.
   allStories.forEach(s=>{
+    if(isDhulQarnayn(s))return;
     const c=s.category||'other';
     if(!cats[c])cats[c]=[];
     cats[c].push(s);
   });
-  // Dhul-Qarnayn may have a verse dossier but no standalone quranic_stories row.
-  // Make it discoverable under People without inventing a database story.
-  const haveDhul=allStories.some(isDhulQarnayn);
   [...CATS,...Object.keys(cats).filter(c=>!CATS.includes(c))].forEach(c=>{
     const rows=orderStories(cats[c]||[],c);
-    if(!rows.length&&c!=='people')return;
-    const includeDhul=c==='people'&&!haveDhul;
+    if(!rows.length)return;
     const label=document.createElement('div');
     label.className='cat';
-    label.textContent=({prophet:'Prophets',event:'Events',people:'People',theme:'Themes'}[c]||c)+' ('+(rows.length+(includeDhul?1:0))+')';
+    label.textContent=({prophet:'Prophets',event:'Events',people:'People',theme:'Themes'}[c]||c)+' ('+rows.length+')';
     list.appendChild(label);
-    // A synthetic navigation entry, when needed, points to one integrated Story,
-    // not to a second dedicated History story/page.
-    if(includeDhul)rows.push({slug:'dhul-qarnayn-history-link',name_english:'Dhul-Qarnayn',name_arabic:'ذو القرنين',category:'people',_historyLink:true});
-    const sorted=orderStories(rows,c);
-    sorted.forEach((s,i)=>{
+    rows.forEach((s,i)=>{
       const div=document.createElement('a');
-      div.href=s._historyLink?'stories.html?story=dhul-qarnayn':'stories.html?story='+encodeURIComponent(s.slug);
+      div.href='stories.html?story='+encodeURIComponent(s.slug);
       div.className='si';
       div.id='si-'+s.slug;
-      div.setAttribute('aria-label',(i+1)+'. '+storyName(s)+(s._historyLink?' — read story and historical sources':' — read story'));
-      if(!s._historyLink)div.setAttribute('aria-controls','storyMain');
+      div.setAttribute('aria-label',(i+1)+'. '+storyName(s)+' — read story');
+      div.setAttribute('aria-controls','storyMain');
       const number=document.createElement('span');number.className='si-n';number.textContent=String(i+1);
       const text=document.createElement('span');text.className='si-text';
       const ar=document.createElement('span');ar.className='si-ar';ar.textContent=s.name_arabic||'';
       const en=document.createElement('span');en.className='si-en';en.textContent=storyName(s);
       text.append(ar,en);
       div.append(number,text);
-      if(s._historyLink)div.addEventListener('click',openDhulQarnaynFromLink);
-      if(!s._historyLink)div.addEventListener('click',(event)=>{
+      div.addEventListener('click',(event)=>{
         if(event.button!==0||event.ctrlKey||event.metaKey||event.shiftKey||event.altKey)return;
         event.preventDefault();
-        const sb=document.getElementById('sb'),ov=document.getElementById('overlay');
-        if(sb&&sb.classList.contains('open')){
-          sb.classList.remove('open');
-          if(ov)ov.classList.remove('open');
-        }
+        closeStoriesSidebar();
         openStory(s,true);
       });
       list.appendChild(div);
     });
   });
 }
-
 let activeStoryRequest = 0;
 async function openStory(story, updateAddress = false){
   const requestId = ++activeStoryRequest;
@@ -911,6 +918,7 @@ async function openStory(story, updateAddress = false){
   // When a real database row exists, keep its full Qur’anic and historical content,
   // then append the same reviewed scholar chronology.
   const storyIsDhul=isDhulQarnayn(story);
+  setDhulSidebarActive(storyIsDhul);
   const storyMain=document.getElementById('storyMain');
   if(storyMain)storyMain.dataset.storySlug=story.slug;
   // Highlight
@@ -926,7 +934,7 @@ async function openStory(story, updateAddress = false){
   if(updateAddress){
     const url = new URL(location.href);
     url.searchParams.delete('view');
-    url.searchParams.set('story',story.slug);
+    url.searchParams.set('story',storyIsDhul?'dhul-qarnayn':story.slug);
     url.hash='';
     history.pushState({story:story.slug},'',url.pathname+url.search);
   }
