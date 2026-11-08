@@ -169,6 +169,30 @@ section.src h2{font-size:25px;font-weight:600;margin-top:34px}
 .smart-notice{background:#eef5f0;border-left:3px solid #3e7a68;padding:12px 14px;margin:14px 0;font-size:15px;line-height:1.5}
 @media(max-width:600px){.smart-controls{margin:10px 0}.smart-actions{gap:5px}.smart-actions button{padding:7px 10px}}
 .result-actions{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0}.result-actions button{font:inherit;font-size:14px;padding:7px 10px;border:1px solid #d6c69f;border-radius:7px;background:#fffaf0;color:#315c56;cursor:pointer}.result-full{white-space:pre-wrap;border-top:1px solid var(--line);margin-top:10px;padding-top:4px}.result-status{font-size:14px;color:var(--ink2)}
+
+/* Research: single, compact selected-book results with readable mobile states. */
+#src-books .book-error,#src-books .book-checks{margin:14px 0;padding:12px 14px;background:#fff;border:1px solid #e8e0d0;border-radius:10px;font-size:15px;line-height:1.5}
+#src-books .book-error{border-left:3px solid #b47832}
+#src-books .book-error button{font:inherit;font-size:15px;border:1px solid #bca66b;border-radius:7px;padding:6px 10px;background:#fff;cursor:pointer}
+#src-books .book-checks summary,#src-books .book-error summary{cursor:pointer;min-height:36px;display:list-item}
+#src-books .book-checks p,#src-books .book-error p{margin:5px 0 0}
+@media(max-width:600px){
+ .qh-page--research .hero{padding:14px 12px 4px}
+ .qh-page--research .hero h1{font-size:27px;margin-bottom:4px}
+ .qh-page--research .hero>p{font-size:15px;margin:0 0 10px}
+ .qh-page--research .sbox input{font-size:16px;padding:11px 12px}
+ .qh-page--research .sbox button{font-size:16px}
+ .qh-page--research .smart-controls{padding:10px}
+ .qh-page--research .smart-actions{margin-bottom:7px}
+ .qh-page--research .smart-actions button{min-height:36px}
+ .qh-page--research .external-option p{display:none}
+ .qh-page--research main{padding:8px 12px 84px}
+ .qh-page--research #src-books h2{font-size:24px;margin:0 0 4px}
+ .qh-page--research #src-books .bvh{font-size:20px;margin:16px 0 8px}
+ .qh-page--research #src-books .what{font-style:normal;font-size:15px}
+ .qh-page--research #src-books .card .txt{font-size:18px;line-height:1.7}
+}
+
 </style>
   <script src="site-motion.js" defer></script>
 <script src="/site-chrome.js" defer></script>
@@ -1004,21 +1028,74 @@ async function loadWhere(){
   renderWhere();
 }
 let BK=[];
-async function booksSection(books,q){
-  const vars=await wordVars(q);
-  BK=books.map(b=>({kind:b.slice(0,b.indexOf(':')),name:b.slice(b.indexOf(':')+1),off:0,vars:vars}));
-  const parts=await Promise.all(BK.map(b=>rpc('book_rows',{kind:b.kind,name:b.name,q:q,lim:6,off:0}).catch(()=>null)));
-  let h='<h2>Your selected books</h2><p class="what">Passages matching the search in the books you chose.</p>'; if (/^terroris(?:e|ed|es|ing|ation)$/i.test(q.trim())) h+='<p class="note">These books may use different wording. <button type="button" onclick="document.getElementById(\'q\').value=\'terror\';search(\'terror\')">Search for “terror” instead</button> Results may refer to different situations.</p>';
-  BK.forEach((b,i)=>{ const rows=parts[i]; b.off=rows?.length||0;
-    h+=`<h3 class="bvh">${esc(b.name)}</h3><div id="bk-${i}">${rows===null?'<div class="none">This book could not be searched. Please retry.</div>':rows.length?sortResearchTraditions(rows,b.kind).map(r=>card(b.kind,r,vars)).join(''):'<div class="none">No match for this wording in this book.</div>'}</div><div id="bkm-${i}">${rows?.length===6?`<div class="more"><a href="#" onclick="moreBook(${i});return false">Show more from ${esc(b.name)} \u2192</a></div>`:''}</div>`;
+async function bookSearchRows(book,query,lim,off,signal){
+  const hadith=book.kind==='hadith';
+  const fn=hadith?'qh_research_hadith_book_rows':'book_rows';
+  const args=hadith
+    ?{p_name:book.name,p_query:query,p_lim:lim,p_off:off}
+    :{kind:book.kind,name:book.name,q:query,lim:lim,off:off};
+  const rows=await rpc(fn,args,signal);
+  if(!Array.isArray(rows))throw new Error('Invalid selected-book search response');
+  return rows;
+}
+async function booksSection(books,q,version,signal){
+  // A selected-book search is independent of the broad all-source search.
+  // Keep its request version so a previous search cannot append duplicate sections.
+  const vars=[...new Set(q.split(/\s+/).filter(Boolean))];
+  const requested=books.map(v=>({
+    kind:v.slice(0,v.indexOf(':')),
+    name:v.slice(v.indexOf(':')+1),
+    off:0,vars:vars,version:version
+  }));
+  const parts=await Promise.all(requested.map(async b=>{
+    try{return await bookSearchRows(b,q,6,0,signal);}
+    catch(_){return null;}
+  }));
+  if(version!==searchVersion||signal?.aborted)return null;
+  BK=requested;
+  let h='<h2>Results in selected books</h2><p class="what">Possible passage matches for “'+esc(q)+'”. Confirm the text and its citation before drawing a conclusion.</p>';
+  const noMatches=[],failed=[];
+  let shown=0;
+  BK.forEach((b,i)=>{
+    const rows=parts[i];
+    b.off=rows?.length||0;
+    if(rows===null){failed.push(b.name);return;}
+    if(!rows.length){noMatches.push(b.name);return;}
+    shown+=rows.length;
+    h+='<h3 class="bvh">'+esc(b.name)+'</h3><div id="bk-'+i+'">'+
+      sortResearchTraditions(rows,b.kind).map(row=>card(b.kind,row,vars)).join('')+'</div>'+
+      '<div id="bkm-'+i+'">'+
+      (rows.length===6?'<div class="more"><a href="#" onclick="moreBook('+i+');return false">Show more from '+esc(b.name)+' →</a></div>':'')+
+      '</div>';
   });
-  const el=document.createElement('section'); el.className='src'; el.id='src-books'; el.innerHTML=h; return el;
+  if(!shown&&!failed.length){
+    h+='<div class="empty">No matching passages returned from the selected books. Try alternate spellings, Arabic words, or a shorter query.</div>';
+  }
+  if(failed.length){
+    h+='<div class="book-error" role="status">'+failed.length+' selected book search(es) could not finish. Other results remain available. '+
+      '<button type="button" onclick="search(CUR)">Retry the search</button>'+
+      '<details><summary>Show unavailable books</summary><p>'+failed.map(esc).join(' · ')+'</p></details></div>';
+  }
+  if(noMatches.length){
+    h+='<details class="book-checks"><summary>'+noMatches.length+' other selected book(s) searched with no matching passages</summary>'+
+      '<p>'+noMatches.map(esc).join(' · ')+'</p></details>';
+  }
+  const el=document.createElement('section');
+  el.className='src';el.id='src-books';el.innerHTML=h;
+  return el;
 }
 async function moreBook(i){
-  const b=BK[i]; const rows=await rpc('book_rows',{kind:b.kind,name:b.name,q:CUR,lim:10,off:b.off}).catch(()=>null);
-  if(!rows){$('bkm-'+i).textContent='Could not load more passages. Try the search again.';return;}
-  $('bk-'+i).insertAdjacentHTML('beforeend',sortResearchTraditions(rows,b.kind).map(r=>card(b.kind,r,b.vars)).join(''));
-  b.off+=rows.length; $('bkm-'+i).innerHTML=rows.length===10?`<div class="more"><a href="#" onclick="moreBook(${i});return false">Show more \u2192</a></div>`:'';
+  const b=BK[i];
+  if(!b||b.version!==searchVersion)return;
+  const version=b.version;
+  let rows;
+  try{rows=await bookSearchRows(b,CUR,10,b.off,searchController?.signal);}
+  catch(_){rows=null;}
+  if(version!==searchVersion||searchController?.signal.aborted||!$('bkm-'+i))return;
+  if(rows===null){$('bkm-'+i).textContent='Could not load more passages. Please try again.';return;}
+  $('bk-'+i).insertAdjacentHTML('beforeend',sortResearchTraditions(rows,b.kind).map(row=>card(b.kind,row,b.vars)).join(''));
+  b.off+=rows.length;
+  $('bkm-'+i).innerHTML=rows.length===10?'<div class="more"><a href="#" onclick="moreBook('+i+');return false">Show more →</a></div>':'';
 }
 
 async function wordVars(q){
@@ -1117,6 +1194,15 @@ async function search(q){
       if(!result.count || result.ambiguous || result.conflicting_local_count>0)discovery.discover(q,{weak:!!result.count});
       return;
     }
+    // Search only the requested books: no unrelated source RPCs, digests, or duplicate rendering.
+    if(bookSel.length&&!srcSel.length){
+      $('out').innerHTML='<div class="empty"><span class="spin"></span>Searching '+bookSel.length+' selected books…</div>';
+      const sec=await booksSection(bookSel,q,version,signal);
+      if(version!==searchVersion||signal.aborted||!sec)return;
+      $('out').replaceChildren(sec);
+      if(!sec.querySelector('.card'))discovery.discover(q,{incomplete:!!sec.querySelector('.book-error')});
+      return;
+    }
     const res=(await Promise.all((only?only:ORDER).map(k=>rpc(k==='sira'?'qh_sira_search':'site_search_src',k==='sira'?{q,lim:12}:{src:k,q,lim:6},signal).then(r=>{if(!r)throw new Error('No source response');return r;}).catch(()=>({key:k,count:0,rows:[],variants:[q],failed:true})))));
     if(version!==searchVersion)return;
     // Keep the source order: a long question does not automatically imply Sira.
@@ -1139,7 +1225,7 @@ async function search(q){
     let sb=[]; if(!only&&!topicSearch&&q.split(/\s+/).length<=4){ try{sb=await rpc('source_books',{q:q},signal);}catch(e){} }
     if(version!==searchVersion)return;
     if(only&&!only.length){ $('out').innerHTML='<div id="pickerslot"></div>'; } else render(res,vars,q,dg);
-    if(bookSel.length){ const sec=await booksSection(bookSel,q); const slot=$('pickerslot'); if(slot) slot.replaceWith(sec); else $('out').prepend(sec); }
+    if(bookSel.length){ const sec=await booksSection(bookSel,q,version,signal); if(version!==searchVersion||signal.aborted||!sec)return; document.getElementById('src-books')?.remove(); const slot=$('pickerslot'); if(slot) slot.replaceWith(sec); else $('out').prepend(sec); }
     else insertPicker(sb,q);
     if(bookSel.length&&!res.some(r=>r.count>0)&&!document.querySelector('#src-books .card'))discovery.discover(q);
     if(cres.length&&(!only||only.length)){
