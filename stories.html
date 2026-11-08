@@ -4,6 +4,7 @@
 <script src="placeholder-guard.js"></script>
   <script src="track-page-visits.js"></script>
   <script src="site-chrome.js" defer></script>
+<script src="/qh-dhulqarnayn-timeline.js?v=20261108" defer></script>
 
 <script>
 window.controversyScore=function(v){var t=[v.english,v.aya_text,v.text_english,v.hadith_text,v.topic,v.brief_description,v.content,v.reason_text,v.story_en,v.title_en,v.summary,v.name_english,v.theme].filter(Boolean).join(' ').toLowerCase();var s=0;['kill','slay','smite','amputat','crucif','stone','whip','lash','apostat','slave','captive','concubin','beat.*wife','wife.*beat','fight.*until','jihad','warfare','adulter','zina','thief.*hand','homosexual','liwat','blasphemy','jizya','dhimmi','women.*half','inherit.*half','polygam','nushuz','sex slave','cut hand'].forEach(function(k){try{if(new RegExp(k).test(t))s+=12;}catch(e){}});['divorce','talaq','inheritance','veil','hijab','niqab','disbeliev','infidel','kafir','hellfire','punishment','torment','war','battle','riba','usury','intoxicant','alcohol','honor kill','martyr'].forEach(function(k){if(t.indexOf(k)!==-1)s+=5;});['alhamdulillah','merciful','compassionate','forgiving','be patient'].forEach(function(k){if(t.indexOf(k)!==-1)s-=2;});if(v.controversy_level)s+=(parseInt(v.controversy_level)-1)*4;if(v.human_rights_score!=null)s+=Math.max(0,(5-parseFloat(v.human_rights_score))*2);return s;};
@@ -542,7 +543,7 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid #f2d9
         <option value="alpha">Alphabetical (A–Z)</option>
       </select>
       <small class="sb-help">The narrative order is traditional and approximate, not a verified historical chronology. Numbers restart for each category.</small>
-      <a class="sb-featured" href="/history.html#dhul-qarnayn">🌍 Dhul-Qarnayn — Sources &amp; History ↗</a>
+      <a class="sb-featured" href="stories.html?story=dhul-qarnayn" onclick="return openDhulQarnaynFromLink(event)">🌍 Dhul-Qarnayn — Scholars &amp; Sources</a>
     </div>
     <div id="sb-list" tabindex="0" role="region" aria-label="Story list"><div class="loading"><div class="spin"></div></div></div>
   </nav>
@@ -708,11 +709,13 @@ async function init(){
   const orderControl=document.getElementById('sb-order');
   if(orderControl)orderControl.value=storyOrder;
   buildSidebar();
-  // Render the first story immediately. Optional hadith catalogue must not block navigation.
-  if(allStories.length) {
-    const requested = new URLSearchParams(location.search).get('story');
-    openStory(findStory(requested) || orderStories(allStories.filter(s=>s.category==='prophet'),'prophet')[0] || allStories[0], false);
-  }
+  // The Dhul-Qarnayn dossier is available even when the historical story
+  // has no standalone row in quranic_stories.
+  const requested=new URLSearchParams(location.search).get('story');
+  const selected=findStory(requested);
+  if(requested==='dhul-qarnayn'&&!selected)openDhulQarnaynDossier(false);
+  else if(allStories.length)openStory(selected || orderStories(allStories.filter(s=>s.category==='prophet'),'prophet')[0] || allStories[0], false);
+  else if(requested==='dhul-qarnayn')openDhulQarnaynDossier(false);
   else document.getElementById('storyMain').innerHTML='<div class="stories-status">No stories are published yet.</div>';
   void loadHadithNavigation();
 }
@@ -746,6 +749,59 @@ async function loadHadithNavigation(){
   }
 }
 
+function isDhulQarnayn(story) {
+  return !!story && /dhul.?qarnayn|dhul.?karnayn|dhu.?al.?qarnayn|zul.?qarnayn|ذو القرنين/i.test(
+    [story.slug,story.name_english,story.name_arabic].join(' '));
+}
+function openDhulQarnaynFromLink(event) {
+  if(event && (event.button!==0||event.ctrlKey||event.metaKey||event.shiftKey||event.altKey))return true;
+  if(event)event.preventDefault();
+  openDhulQarnaynDossier(true);
+  return false;
+}
+function openDhulQarnaynDossier(updateAddress=false) {
+  activeStoryRequest++;
+  const sb=document.getElementById('sb'),ov=document.getElementById('overlay');
+  sb?.classList.remove('open');ov?.classList.remove('open');
+  document.querySelectorAll('#sb-list .si').forEach(el=>{el.classList.remove('on');el.removeAttribute('aria-current');});
+  const selected=document.getElementById('si-dhul-qarnayn-history-link');
+  if(selected){selected.classList.add('on');selected.setAttribute('aria-current','page');}
+  if(updateAddress){
+    const url=new URL(location.href);
+    url.searchParams.set('story','dhul-qarnayn');
+    history.pushState({story:'dhul-qarnayn'},'',url.pathname+url.search+url.hash);
+  }
+  document.getElementById('browse').style.display='block';
+  document.getElementById('s-res').style.display='none';
+  const main=document.getElementById('storyMain');
+  main.dataset.storySlug='dhul-qarnayn';
+  main.replaceChildren();
+  const hero=document.createElement('section');hero.className='s-hdr';
+  const ar=document.createElement('div');ar.className='s-ar';ar.lang='ar';ar.dir='rtl';ar.textContent='ذو القرنين';
+  const title=document.createElement('h2');title.className='s-en';title.textContent='Dhul-Qarnayn — Alexander traditions and Muslim scholarship';
+  const intro=document.createElement('p');intro.className='s-sum';
+  intro.textContent='Qur’an 18:83–98 names Dhul-Qarnayn but does not identify him by a personal name. Compare dated literary parallels separately from how Muslim scholars identified this figure over the centuries.';
+  hero.append(ar,title,intro);main.appendChild(hero);
+  const sources=document.createElement('section');sources.className='sec';sources.style.cssText='margin:14px;padding:16px;border:1px solid #64705d;border-radius:12px;';
+  const h=document.createElement('h3');h.className='sec-t';h.textContent='Textual sources and historical background';
+  sources.appendChild(h);
+  const p=document.createElement('p');p.style.cssText='font-size:15px;line-height:1.7;margin:10px 0;color:#e1e9ed;';
+  p.textContent='The Syriac Alexander Legend has overlapping motifs (two horns, journeys to the ends of the earth, Gog and Magog, an iron-and-brass barrier). Josephus earlier records an Alexander iron-gate tradition. Neither account proves direct Qur’anic borrowing; the Syriac composition date is debated.';
+  sources.appendChild(p);
+  const links=[
+    ['/index.html?sura=18&aya=83','Read Qur’an 18:83–98 with verse Sources'],
+    ['/history.html#dq-pre','View dated pre-Islamic and late-antique parallels'],
+    ['https://www.jasoncolavito.com/the-syriac-alexander-legend.html','Read the Syriac Alexander Legend (translation)'],
+    ['https://tafsir.app/ibn-katheer/18/83','Read Ibn Kathīr on 18:83']
+  ];
+  links.forEach(([href,label])=>{const a=document.createElement('a');a.href=href;a.textContent=label+' ↗';a.style.cssText='display:block;margin:8px 0;color:#f5d78d;text-decoration:underline;font-size:14px;';if(href.startsWith('http')){a.target='_blank';a.rel='noopener noreferrer';}sources.appendChild(a);});
+  main.appendChild(sources);
+  const timeline=document.createElement('section');timeline.id='qh-dhul-stories-timeline';timeline.style.margin='14px';
+  main.appendChild(timeline);
+  if(window.QHDhulTimeline?.render)window.QHDhulTimeline.render(timeline);
+  else {const a=document.createElement('a');a.href='/history.html#dq-tafsir';a.textContent='Read the documented scholar timeline in History ↗';a.style.color='#f5d78d';timeline.appendChild(a);}
+  const scroller=document.getElementById('main');if(scroller)scroller.scrollTop=0;
+}
 function buildSidebar(){
   const list=document.getElementById('sb-list');
   list.replaceChildren();
@@ -757,8 +813,7 @@ function buildSidebar(){
   });
   // Dhul-Qarnayn may have a verse dossier but no standalone quranic_stories row.
   // Make it discoverable under People without inventing a database story.
-  const haveDhul=allStories.some(s=>/dhul.?qarnayn|dhu.?al.?qarnayn|ذو القرنين/i.test(
-    [s.slug,s.name_english,s.name_arabic].join(' ')));
+  const haveDhul=allStories.some(isDhulQarnayn);
   [...CATS,...Object.keys(cats).filter(c=>!CATS.includes(c))].forEach(c=>{
     const rows=orderStories(cats[c]||[],c);
     if(!rows.length&&c!=='people')return;
@@ -772,7 +827,7 @@ function buildSidebar(){
     const sorted=orderStories(rows,c);
     sorted.forEach((s,i)=>{
       const div=document.createElement('a');
-      div.href=s._historyLink?'/history.html#dhul-qarnayn':'stories.html?story='+encodeURIComponent(s.slug);
+      div.href=s._historyLink?'stories.html?story=dhul-qarnayn':'stories.html?story='+encodeURIComponent(s.slug);
       div.className='si';
       div.id='si-'+s.slug;
       div.setAttribute('aria-label',(i+1)+'. '+storyName(s)+(s._historyLink?' historical sources':' — read story'));
@@ -783,6 +838,7 @@ function buildSidebar(){
       const en=document.createElement('span');en.className='si-en';en.textContent=storyName(s);
       text.append(ar,en);
       div.append(number,text);
+      if(s._historyLink)div.addEventListener('click',openDhulQarnaynFromLink);
       if(!s._historyLink)div.addEventListener('click',(event)=>{
         if(event.button!==0||event.ctrlKey||event.metaKey||event.shiftKey||event.altKey)return;
         event.preventDefault();
@@ -802,6 +858,9 @@ let activeStoryRequest = 0;
 async function openStory(story, updateAddress = false){
   const requestId = ++activeStoryRequest;
   if(!story || !story.slug) return;
+  // When a real database row exists, keep its full Qur’anic and historical content,
+  // then append the same reviewed scholar chronology.
+  const storyIsDhul=isDhulQarnayn(story);
   const storyMain=document.getElementById('storyMain');
   if(storyMain)storyMain.dataset.storySlug=story.slug;
   // Highlight
@@ -961,6 +1020,14 @@ async function openStory(story, updateAddress = false){
       <div id="fiqh-list"></div>
     </div>
   `;
+  if(storyIsDhul){
+    const timeline=document.createElement('section');
+    timeline.id='qh-dhul-stories-timeline';
+    timeline.style.margin='16px';
+    main.appendChild(timeline);
+    if(window.QHDhulTimeline?.render)window.QHDhulTimeline.render(timeline);
+    else {const a=document.createElement('a');a.href='/history.html#dq-tafsir';a.textContent='Read the chronological scholar opinions in History ↗';a.style.color='#f5d78d';timeline.appendChild(a);}
+  }
   window._curStory=story;
   loadStoryFiqh(story);
 }
@@ -1206,6 +1273,7 @@ window.addEventListener('popstate',()=>{
   const slug=new URLSearchParams(location.search).get('story');
   const selected=findStory(slug);
   if(selected)openStory(selected,false);
+  else if(slug==='dhul-qarnayn')openDhulQarnaynDossier(false);
 });
 init().catch(error=>{
  console.error('Stories initialization failed',error);
