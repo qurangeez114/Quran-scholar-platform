@@ -155,7 +155,7 @@
     target.appendChild(caution);
     if(!options.compact){
       const a=node('a',null,'Explore the earlier literary sources and the historical analysis ↗');
-      a.href='/history.html#dhul-qarnayn';a.style.cssText='display:inline-block;margin-top:10px;color:#096572;font-weight:700;';
+      a.href='/stories.html?story=dhul-qarnayn#story-earlier-sources';a.style.cssText='display:inline-block;margin-top:10px;color:#096572;font-weight:700;';
       target.appendChild(a);
     }
     draw('all');
