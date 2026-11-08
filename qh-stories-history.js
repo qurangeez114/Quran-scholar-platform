@@ -140,6 +140,12 @@
     }else{
       addParagraph(host,'The source-linked chronology is loading or unavailable.','qh-hist-empty');
       addLink(host,'Open Qur’an 18:83 Sources','/index.html?sura=18&aya=83');
+      const deferred=document.querySelector('script[src*="qh-dhulqarnayn-timeline"]');
+      if(deferred){
+        deferred.addEventListener('load',()=>{
+          if(host.isConnected && window.QHDhulTimeline?.render)window.QHDhulTimeline.render(host);
+        },{once:true});
+      }
     }
   }
 
