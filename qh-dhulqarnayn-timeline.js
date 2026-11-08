@@ -16,21 +16,23 @@
     },
     {
       year: 923, dates: '839–923 CE', scholar: 'Al-Ṭabarī',
-      work: 'Jāmiʿ al-Bayān, on Qur’an 18:83',
-      stance: 'reports', stanceLabel: 'Transmits reports',
-      position: 'Presents transmitted explanations of Dhul-Qarnayn, his title, journeys, and character, rather than offering a modern biographical identification with documented evidence.',
-      reasoning: 'His approach records variant reports attributed to earlier authorities. Readers should distinguish the views he cites from what he independently affirms.',
-      source: 'https://tafsir.app/tabari/18/83',
-      sourceLabel: 'Read al-Ṭabarī’s Arabic tafsīr'
+      work: 'Jāmiʿ al-Bayān, on Qur’an 18:94',
+      stance: 'reports', stanceLabel: 'Transmits Alexander identification',
+      position: 'Preserves an account attributed to Wahb ibn Munabbih naming Dhul-Qarnayn Alexander. He also preserves an alternative name, Marzabān ibn Mardaba the Greek, in a report through Ibn Isḥāq.',
+      arabic: 'وَكَانَ اسْمُهُ الْإِسْكَنْدَرَ',
+      reasoning: 'This is an earlier report quoted in al-Ṭabarī’s tafsīr, not his own unequivocal identification. The Alexander report is transmitted through Ibn Isḥāq, from an unnamed intermediary, on the authority of Wahb ibn Munabbih; the attribution and its historical accuracy should not be conflated.',
+      source: 'https://quran.ksu.edu.sa/tafseer/tabary/sura18-aya94.html',
+      sourceLabel: 'Read al-Ṭabarī’s Alexander report at 18:94'
     },
     {
       year: 1210, dates: '1149–1210 CE', scholar: 'Fakhr al-Dīn al-Rāzī',
       work: 'Mafātīḥ al-Ghayb (al-Tafsīr al-Kabīr), on Qur’an 18:83',
-      stance: 'alexander', stanceLabel: 'Argues for Alexander son of Philip',
-      position: 'Presents the identification with Alexander son of Philip as compelling, while listing other views such as a Himyarite ruler.',
-      reasoning: 'He compares the westward, eastward, and northern reach of Dhul-Qarnayn with medieval historical accounts of Alexander’s empire. He acknowledges a theological difficulty concerning Alexander’s association with Aristotle.',
-      source: 'https://tafsir.ca/tafsir/razi/18/2/',
-      sourceLabel: 'Read al-Rāzī’s reasoning and alternative views'
+      stance: 'alexander', stanceLabel: 'Favors Alexander son of Philip, with reservations',
+      position: 'Calls the identification of Dhul-Qarnayn with Alexander son of Philip the most apparent of the reported interpretations, while also reporting a Himyarite ruler and an unidentified righteous servant as alternatives.',
+      arabic: 'وَالْقَوْلُ الْأَوَّلُ أَظْهَرُ',
+      reasoning: 'Al-Rāzī argues from the immense geographical reach attributed to Dhul-Qarnayn and to Alexander in the histories familiar to him. He explicitly notes a serious objection: Alexander was associated with Aristotle’s philosophy, which he cannot reconcile easily with the Qur’anic praise. His argument reflects medieval historical geography, not independent proof of identity.',
+      source: 'https://quran-tafsir.net/alrazy/sura18-aya83.html',
+      sourceLabel: 'Read al-Rāzī’s original argument and objection'
     },
     {
       year: 1273, dates: 'd. 1273 CE', scholar: 'Al-Qurṭubī',
