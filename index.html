@@ -3307,6 +3307,15 @@ async function init() {
   } catch(e) {
     document.getElementById('suraList').innerHTML = '';
     document.getElementById('verseArea').innerHTML = `<div class="error-box">⚠️ Cannot connect to Supabase.<br><br>${e.message}</div>`;
+    // Metadata-only fallback keeps all 114 chapters discoverable during API failure.
+    const homeFallbackNames=['Al-Faatihah','Al-Baqarah','Aal Imraan','An-Nisaa','Al-Maa\'idah','Al-An\'aam','Al-A\'raaf','Al-Anfaal','At-Tawbah','Yunus','Hud','Yusuf','Ar-Ra\'d','Ibrahim','Al-Hijr','An-Nahl','Al-Isra','Al-Kahf','Maryam','Ta-Ha','Al-Anbiya','Al-Hajj','Al-Mu\'minun','An-Nur','Al-Furqaan','Ash-Shu\'ara','An-Naml','Al-Qasas','Al-Ankabut','Ar-Rum','Luqman','As-Sajdah','Al-Ahzab','Saba','Fatir','Ya-Sin','As-Saffat','Sad','Az-Zumar','Ghafir','Fussilat','Ash-Shura','Az-Zukhruf','Ad-Dukhan','Al-Jathiyah','Al-Ahqaf','Muhammad','Al-Fath','Al-Hujurat','Qaf','Adh-Dhariyat','At-Tur','An-Najm','Al-Qamar','Ar-Rahman','Al-Waqi\'ah','Al-Hadid','Al-Mujadila','Al-Hashr','Al-Mumtahanah','As-Saf','Al-Jumu\'ah','Al-Munafiqun','At-Taghabun','At-Talaq','At-Tahrim','Al-Mulk','Al-Qalam','Al-Haqqah','Al-Ma\'arij','Nuh','Al-Jinn','Al-Muzzammil','Al-Muddathir','Al-Qiyamah','Al-Insan','Al-Mursalat','An-Naba','An-Nazi\'at','Abasa','At-Takwir','Al-Infitar','Al-Mutaffifin','Al-Inshiqaq','Al-Buruj','At-Tariq','Al-A\'la','Al-Ghashiyah','Al-Fajr','Al-Balad','Ash-Shams','Al-Layl','Ad-Duha','Ash-Sharh','At-Tin','Al-\'Alaq','Al-Qadr','Al-Bayyinah','Az-Zalzalah','Al-\'Adiyat','Al-Qari\'ah','At-Takathur','Al-\'Asr','Al-Humazah','Al-Fil','Quraysh','Al-Ma\'un','Al-Kawthar','Al-Kafirun','An-Nasr','Al-Masad','Al-Ikhlas','Al-Falaq','An-Nas'];
+    const fallback=homeFallbackNames.map((name,i)=>({sura_id:i+1,sura_name_english:name,transliteration:name,number_of_ayas:''}));
+    window.qhHomeFallbackRows=fallback;
+    if(window.qhRenderHomeDirectory){
+      window.qhRenderHomeDirectory(allSuras.length?allSuras:fallback);
+      const homeStatus=document.getElementById('qh-home-status');
+      if(homeStatus&&!allSuras.length)homeStatus.textContent='Chapter directory available; verse data connection is temporarily unavailable.';
+    }
   }
 }
 
@@ -12852,7 +12861,7 @@ window.QNAV_PAGE_LABEL='Quran Reader';window.QNAV_PAGE_ICON='📖';
    const n=document.createElement('span');n.className='qh-home-num';n.textContent=id;
    const label=document.createElement('span');label.className='qh-home-name';
    const strong=document.createElement('strong');strong.textContent=text(s.sura_name_english||s.sura_name||'Surah '+id);
-   const small=document.createElement('small');small.textContent=text(s.sura_name_translated||s.number_of_ayas+' verses');
+   const small=document.createElement('small');small.textContent=text(s.sura_name_translated||(s.number_of_ayas?s.number_of_ayas+' verses':'Qur’an chapter'));
    label.append(strong,small);
    const ar=document.createElement('span');ar.className='qh-home-ar';ar.lang='ar';ar.dir='rtl';ar.textContent=text((typeof ARABIC_NAMES!=='undefined'&&ARABIC_NAMES[id])||s.sura_name||'');
    const nameGroup=document.createElement('span');nameGroup.className='qh-home-ar-group';
@@ -12884,6 +12893,13 @@ window.QNAV_PAGE_LABEL='Quran Reader';window.QNAV_PAGE_ICON='📖';
  document.getElementById('qh-home-single-form').addEventListener('submit',e=>{e.preventDefault();const id=Number(number.value);if(!Number.isInteger(id)||id<1||id>114){document.getElementById('qh-home-single-status').textContent='Choose a chapter number from 1 to 114.';return;}location.href='index.html?sura='+id+'&single='+encodeURIComponent(langSelect.value);});
  search.addEventListener('input',draw);
  window.qhRenderHomeDirectory=function(suras){rows=Array.isArray(suras)?suras.slice():[];status.textContent='';chooser.replaceChildren(new Option('Select Surah…',''));for(const s of rows){const id=Number(s.sura_id||s.id);if(id>=1&&id<=114)chooser.add(new Option(id+' · '+text(s.sura_name_english||s.sura_name||'Surah '+id),String(id)));}if(rows.length){chooser.value='1';number.value='1';updateMax();}draw();};
+ // The reader init may finish before this script registers its renderer.
+ if(typeof allSuras!=='undefined'&&Array.isArray(allSuras)&&allSuras.length){
+  window.qhRenderHomeDirectory(allSuras);
+ } else if(Array.isArray(window.qhHomeFallbackRows)) {
+  window.qhRenderHomeDirectory(window.qhHomeFallbackRows);
+  status.textContent='Chapter directory available; verse data connection is temporarily unavailable.';
+ }
  document.getElementById('qh-home-chrono').addEventListener('click',function(){
   document.body.classList.remove('qh-home-mode');
   if(typeof switchSidebarTab==='function')switchSidebarTab('chrono');
