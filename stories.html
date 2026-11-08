@@ -915,8 +915,10 @@ async function openStory(story, updateAddress = false){
   }
   if(updateAddress){
     const url = new URL(location.href);
+    url.searchParams.delete('view');
     url.searchParams.set('story',story.slug);
-    history.pushState({story:story.slug},'',url.pathname+url.search+url.hash);
+    url.hash='';
+    history.pushState({story:story.slug},'',url.pathname+url.search);
   }
   // Show browse area
   document.getElementById('browse').style.display='block';
@@ -1037,20 +1039,36 @@ async function openStory(story, updateAddress = false){
     </div>
     <nav class="story-toc" aria-label="Sections of this story">
       <a href="#story-introduction">Overview</a>
-      <a href="#story-verses">Qur’anic passages</a>
-      <a href="#story-sources">Comparative sources</a>
-      <a href="#story-analysis">Analysis</a>
+      <a href="#story-verses">Qur’anic account</a>
+      <a href="#story-earlier-sources">Earlier textual witnesses</a>
+      <a href="#story-scholars">Muslim interpretations</a>
+      <a href="#story-history-analysis">Evidence &amp; cautions</a>
+      <a href="#story-study-sources">More sources</a>
     </nav>
-    <div class="sec" id="story-verses">
-      <div class="sec-t">📖 Key Qur’anic Passages</div>
+    <section class="sec" id="story-verses">
+      <h2 class="sec-t">📖 Qur’anic passages</h2>
       ${vHTML}
-    </div>
-    <div class="sec" id="story-sources">
-      <div class="sec-t">📚 Comparative Sources</div>
-      ${story.slug==='ibrahim'?'<p style="margin:12px 16px;padding:12px 14px;border:1px solid #ba9f65;background:#fff9eb;border-radius:9px;"><a href="/scholarly-development.html" style="font-weight:700;color:#205844;">Abraham’s sacrifice: compare ancient sources and changing scholarly opinions →</a></p>':''}
+    </section>
+    <section class="sec" id="story-earlier-sources">
+      <h2 class="sec-t">📜 Earlier textual witnesses &amp; historical parallels</h2>
+      <p class="qh-hist-section-note">Primary-text passages are checked by verse. Dates refer to texts or surviving evidence, not necessarily to the events narrated.</p>
+      ${storyIsDhul?'<div id="qh-story-early-evidence"></div>':''}
+      ${ancientHTML||'<p class="qh-hist-empty">No independently checked verse-specific historical reference has been published for this story yet. This is not evidence that no parallels exist.</p>'}
+    </section>
+    <section class="sec" id="story-scholars">
+      <h2 class="sec-t">📚 Muslim scholarly interpretations through time</h2>
+      <p class="qh-hist-section-note">Scholar opinions are distinct from the Qur’anic wording. Dates approximate scholarly chronology; quoted earlier reports are not automatically a commentator’s preferred view.</p>
+      <div id="qh-story-scholar-timeline" aria-live="polite"><p class="qh-hist-empty">Loading source-attributed scholar positions…</p></div>
+    </section>
+    <section class="sec" id="story-history-analysis">
+      <h2 class="sec-t">🔬 Historical analysis: evidence &amp; cautions</h2>
+      <div id="qh-story-history-assessment"></div>
+    </section>
+    <section class="sec" id="story-study-sources">
+      <h2 class="sec-t">📚 Supplementary comparative source index</h2>
+      <p class="qh-hist-section-note">The broader story-source catalogue provides research leads and comparisons. Not every entry in this index is verified at the individual verse level; use the checked references above for sourced verse comparisons.</p>
       ${srcHTML}
-      ${ancientHTML}
-    </div>
+    </section>
     <div class="ai-box" id="story-analysis">
       <div class="sec-t" style="border:none;margin:0 0 10px;">🤖 AI Deep Analysis</div>
       <div id="ai-out" class="ai-out"></div>
@@ -1061,13 +1079,35 @@ async function openStory(story, updateAddress = false){
       <div id="fiqh-list"></div>
     </div>
   `;
+  // All Stories show the same research structure. Dhul-Qarnayn has a separately
+  // reviewed early-text dossier and a dedicated source-linked scholar timeline.
+  const hx=window.QHStoryHistory;
   if(storyIsDhul){
-    const timeline=document.createElement('section');
-    timeline.id='qh-dhul-stories-timeline';
-    timeline.style.margin='16px';
-    main.appendChild(timeline);
-    if(window.QHDhulTimeline?.render)window.QHDhulTimeline.render(timeline);
-    else {const a=document.createElement('a');a.href='/history.html#dq-tafsir';a.textContent='Read the chronological scholar opinions in History ↗';a.style.color='#f5d78d';timeline.appendChild(a);}
+    if(hx){
+      hx.renderDhulWitnesses(document.getElementById('qh-story-early-evidence'));
+      hx.renderDhulTimeline(document.getElementById('qh-story-scholar-timeline'));
+      hx.renderDhulAssessment(document.getElementById('qh-story-history-assessment'));
+    }
+  }else if(hx){
+    const keys=new Set([
+      ...verses.map(v=>String(v.sura_id)+':'+String(v.aya_number)),
+      ...ancientSources.map(v=>String(v.sura)+':'+String(v.aya))
+    ]);
+    const suras=[...new Set([...verses.map(v=>Number(v.sura_id)),...ancientSources.map(v=>Number(v.sura))])].filter(Number.isInteger);
+    const ayas=[...new Set([...verses.map(v=>Number(v.aya_number)),...ancientSources.map(v=>Number(v.aya))])].filter(Number.isInteger);
+    const renderPositions=(rows)=>{
+      if(requestId!==activeStoryRequest || document.getElementById('storyMain')?.dataset.storySlug!==story.slug)return;
+      const positions=rows.filter(row=>keys.has(String(row.sura)+':'+String(row.aya)));
+      hx.renderScholarPositions(document.getElementById('qh-story-scholar-timeline'),positions);
+      hx.renderGenericAssessment(document.getElementById('qh-story-history-assessment'),storyName(story),ancientSources.length,positions.length);
+    };
+    if(suras.length&&ayas.length){
+      const query='sura=in.('+suras.join(',')+')&aya=in.('+ayas.join(',')+')'
+        +'&select=sura,aya,scholar,century,madhhab_or_school,tafsir_source,interpretation,evidence_cited&limit=100';
+      void sb('classical_tafsir_positions',query)
+        .then(renderPositions)
+        .catch(error=>{console.warn('Source-linked scholar chronology unavailable:',error);renderPositions([]);});
+    }else renderPositions([]);
   }
   window._curStory=story;
   loadStoryFiqh(story);
@@ -1311,10 +1351,13 @@ async function genAI(){
 }
 
 window.addEventListener('popstate',()=>{
-  const slug=new URLSearchParams(location.search).get('story');
+  const params=new URLSearchParams(location.search);
+  const slug=params.get('story');
   const selected=findStory(slug);
-  if(selected)openStory(selected,false);
+  if(params.get('view')==='research-candidates')openResearchCandidates(false);
+  else if(selected)openStory(selected,false);
   else if(slug==='dhul-qarnayn')openDhulQarnaynDossier(false);
+  else if(allStories.length)openStory(allStories[0],false);
 });
 init().catch(error=>{
  console.error('Stories initialization failed',error);
