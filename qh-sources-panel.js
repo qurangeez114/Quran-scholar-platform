@@ -5,7 +5,7 @@
   const SELECT = 'source_title,tradition,approx_date,source_type,source_locator,relationship_kind,parallel_summary,similarity_note,difference_note,reference_link,source_edition,verification_note,verification_status';
   // A checked, dated snapshot keeps citations available during transient PostgREST failures.
   // Never promote unreviewed rows or pretend a cached snapshot is current live data.
-  const SNAPSHOT_URL = '/qh-sources-verified-snapshot.json?v=20261102-b6';
+  const SNAPSHOT_URL = '/qh-sources-verified-snapshot.json?v=20261108-dhulqarnayn';
   let snapshotPromise = null;
 
   function el(tag, text, css) {
@@ -26,6 +26,14 @@
       });
       bar.appendChild(b);
     });
+    const sura = Number(card.dataset.sura);
+    const verse = Number((card.id || '').replace('vc-', ''));
+    if (sura === 18 && verse >= 83 && verse <= 98) {
+      const a = el('a', 'Dhul-Qarnayn: historical sources & scholarly history ↗',
+        'padding:9px 12px;border:1px solid #ac8750;border-radius:8px;background:#f9f0d9;color:#4e360a;font:600 14px/1.5 system-ui;text-decoration:none;');
+      a.href = '/history.html#dhul-qarnayn';
+      bar.appendChild(a);
+    }
     wrap.appendChild(bar);
   }
   function validReference(row) {
@@ -201,7 +209,26 @@
         snapshotAsOf = fallback.asOf;
       }
       if (document.getElementById('vc-' + num) !== card) return;
-      const rows = Array.isArray(results) ? results.filter(validReference) : [];
+      // Combine checked, versioned publications with live data: new published
+      // source records must appear even if the Supabase live table is behind.
+      const liveRows = Array.isArray(results) ? results.filter(validReference) : [];
+      let publishedRows = [], publishedAsOf = null;
+      try {
+        const published = await readVerifiedSnapshot(suraId, num);
+        publishedRows = published.rows;
+        publishedAsOf = published.asOf;
+      } catch (snapshotError) {
+        console.info('No additional published Sources snapshot:', snapshotError && snapshotError.message);
+      }
+      const rows = liveRows.slice();
+      let fromPublished = 0;
+      publishedRows.forEach(row => {
+        if (!rows.some(existing => existing.source_title === row.source_title &&
+            existing.reference_link === row.reference_link)) {
+          rows.push(row); fromPublished++;
+        }
+      });
+      rows.sort((a, b) => a.source_title.localeCompare(b.source_title));
       const wrap = el('section', null, 'max-width:74ch;margin:0 auto;color:#292721;');
       wrap.appendChild(el('h3', 'Sources for Qur’an ' + key,
         'font:600 21px/1.4 system-ui,sans-serif;margin:0 0 10px;'));
@@ -216,6 +243,12 @@
           window.loadAncientPanel(num, suraId);
         });
         wrap.appendChild(refresh);
+      }
+      if (fromPublished > 0 && !snapshotAsOf) {
+        wrap.appendChild(el('p', fromPublished + ' additional reviewed source reference' +
+          (fromPublished === 1 ? '' : 's') + ' from the curated publication dated ' + publishedAsOf +
+          '. Live database synchronization may follow later.',
+          'font:400 13px/1.55 system-ui,sans-serif;color:#655e4c;margin:0 0 12px;'));
       }
       if (rows.length === 0) {
         wrap.appendChild(el('p', snapshotAsOf
@@ -253,5 +286,5 @@
       }
     }
   };
-  window.qhSourcesPanelVersion = '2026-11-04-verified-v8-retry';
+  window.qhSourcesPanelVersion = '2026-11-08-dhulqarnayn-verified-v9';
 })();
