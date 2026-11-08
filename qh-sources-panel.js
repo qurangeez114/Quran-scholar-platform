@@ -36,6 +36,18 @@
     }
     wrap.appendChild(bar);
   }
+  let dhulTimelinePromise;
+  function loadDhulTimeline() {
+    if (window.QHDhulTimeline && typeof window.QHDhulTimeline.render === 'function') return Promise.resolve();
+    if (!dhulTimelinePromise) dhulTimelinePromise = new Promise((resolve,reject) => {
+      const script=document.createElement('script');
+      script.src='/qh-dhulqarnayn-timeline.js?v=20261108';
+      script.onload=()=>window.QHDhulTimeline ? resolve() : reject(new Error('Timeline component unavailable'));
+      script.onerror=()=>reject(new Error('Timeline script could not load'));
+      document.head.appendChild(script);
+    }).catch(error=>{ dhulTimelinePromise=null;throw error; });
+    return dhulTimelinePromise;
+  }
   function validReference(row) {
     if (row.verification_status !== 'verified' || !row.source_title ||
         !row.source_locator || !row.verification_note || !row.reference_link) return false;
@@ -261,6 +273,22 @@
           'font:400 15px/1.6 system-ui,sans-serif;color:#5e5648;margin:0 0 10px;'));
         rows.forEach(row => wrap.appendChild(renderSource(row)));
       }
+      if (suraId === 18 && num === 83) {
+        const timelineHost=el('section',null,'margin:24px 0 10px;');
+        timelineHost.id='qh-dhul-scholars-18-83';
+        wrap.appendChild(timelineHost);
+        try {
+          await loadDhulTimeline();
+          if (document.getElementById('vc-' + num) !== card) return;
+          window.QHDhulTimeline.render(timelineHost,{compact:true});
+        } catch (timelineError) {
+          console.warn('Scholarly timeline unavailable:',timelineError);
+          const a=el('a','Read the dated scholarly timeline on History ↗');
+          a.href='/history.html#dq-tafsir';
+          a.style.cssText='display:inline-block;padding:12px;color:#154c5c;font:600 15px system-ui;';
+          timelineHost.appendChild(a);
+        }
+      }
       addResearchLinks(wrap, card);
       box.replaceChildren(wrap);
       box.dataset.loadedKey = key;
@@ -286,5 +314,5 @@
       }
     }
   };
-  window.qhSourcesPanelVersion = '2026-11-08-dhulqarnayn-verified-v9';
+  window.qhSourcesPanelVersion = '2026-11-08-dhulqarnayn-scholars-v10';
 })();
