@@ -31,7 +31,7 @@
     if (sura === 18 && verse >= 83 && verse <= 98) {
       const a = el('a', 'Dhul-Qarnayn: historical sources & scholarly history ↗',
         'padding:9px 12px;border:1px solid #ac8750;border-radius:8px;background:#f9f0d9;color:#4e360a;font:600 14px/1.5 system-ui;text-decoration:none;');
-      a.href = '/history.html#dhul-qarnayn';
+      a.href = '/stories.html?story=dhul-qarnayn#story-earlier-sources';
       bar.appendChild(a);
     }
     if (sura === 37 && verse >= 102 && verse <= 107) {
@@ -68,9 +68,9 @@
     }).catch(err=>{
       if(!timelineHost.isConnected) return;
       console.warn('Dhul-Qarnayn chronology temporarily unavailable:',err);
-      const a=el('a', 'View the scholars’ dated positions in History ↗',
+      const a=el('a', 'View dated scholar positions in Stories ↗',
         'font:600 15px/1.6 system-ui;color:#154c5c;display:inline-block;margin:12px 0;');
-      a.href='/history.html#dq-tafsir';
+      a.href='/stories.html?story=dhul-qarnayn#story-scholars';
       timelineHost.replaceChildren(a);
     });
   }
