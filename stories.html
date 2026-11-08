@@ -772,6 +772,15 @@ function openResearchCandidatesFromLink(event) {
   openResearchCandidates(true);
   return false;
 }
+function scrollToStoryHash(){
+  const id=decodeURIComponent(location.hash.replace(/^#/,''));
+  if(!/^story-(introduction|verses|earlier-sources|scholars|history-analysis|study-sources|research-candidates)$/.test(id))return;
+  const target=document.getElementById(id);
+  if(!target || !document.getElementById('storyMain')?.contains(target))return;
+  // Dynamic stories are fetched after navigation. Browser's initial fragment
+  // scroll occurs before these sections exist, so repeat it after rendering.
+  requestAnimationFrame(()=>{if(target.isConnected)target.scrollIntoView({block:'start',behavior:'auto'});});
+}
 function closeStoriesSidebar(){
   const sb=document.getElementById('sb'),ov=document.getElementById('overlay');
   sb?.classList.remove('open');ov?.classList.remove('open');
@@ -805,6 +814,7 @@ function openResearchCandidates(updateAddress=false){
     '<section class="sec" id="story-research-candidates"><h2 class="sec-t">🔎 Topics under review</h2><div id="qh-stories-candidate-list" role="status">Loading candidates…</div></section>'
   ].join('');
   if(window.QHStoryHistory)window.QHStoryHistory.renderResearchCandidates(document.getElementById('qh-stories-candidate-list'));
+  scrollToStoryHash();
 }
 function openDhulQarnaynDossier(updateAddress=false) {
   ++activeStoryRequest;
@@ -840,6 +850,7 @@ function openDhulQarnaynDossier(updateAddress=false) {
     hx.renderDhulTimeline(document.getElementById('qh-story-scholar-timeline'));
     hx.renderDhulAssessment(document.getElementById('qh-story-history-assessment'));
   }
+  scrollToStoryHash();
 }
 function buildSidebar(){
   const list=document.getElementById('sb-list');
@@ -1111,6 +1122,7 @@ async function openStory(story, updateAddress = false){
   }
   window._curStory=story;
   loadStoryFiqh(story);
+  scrollToStoryHash();
 }
 
 async function loadStoryFiqh(story) {
