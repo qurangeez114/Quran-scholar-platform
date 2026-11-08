@@ -59,7 +59,7 @@
   var NAV = [
     ['index.html','📖','Quran'],['my-pages.html','🗃️','My Page'],['campaigns.html','⚔️','Campaigns'],['research.html','🔬','Research'],
     ['themes.html','🗂️','Themes'],['madhhab.html','⚖️','Madhhab'],['sira.html','🕌','Sīra'],
-    ['stories.html','📚','Stories'],['books.html','📕','Books'],['fatwas.html','🧾','Fatwa'],['narrations.html','🧵','Narrations'],
+    ['stories.html','📚','Stories'],['history.html','🏛️','History'],['books.html','📕','Books'],['fatwas.html','🧾','Fatwa'],['narrations.html','🧵','Narrations'],
     ['marketplace.html','🛒','Market'],['muhammad.html','☪️','Muhammad'],['contradiction.html','⚡','Tensions'],
     ['knowledge-graph.html','🕸️','Graph'],['tafsir-fidelity.html','🔍','Tefsir Fidelity'],['my-research.html','🗄️','Saved']
   ];
