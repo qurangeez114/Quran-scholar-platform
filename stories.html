@@ -969,7 +969,8 @@ async function openStory(story, updateAddress = false){
   // Fetch verses
   let verses=[];
   try{
-    const sv=await sb('story_verses','story_id=eq.'+story.id+'&select=sura_id,aya_number,note&order=sura_id.asc&limit=10');
+    const verseLimit=story.slug==='ibrahim'?25:10;
+    const sv=await sb('story_verses','story_id=eq.'+story.id+'&select=sura_id,aya_number,note&order=sura_id.asc,aya_number.asc&limit='+verseLimit);
     if(sv&&sv.length){
       verses=await Promise.all(sv.map(v=>sb('ayas','sura_id=eq.'+v.sura_id+'&aya_number=eq.'+v.aya_number+'&select=sura_id,aya_number,arabic,english&limit=1').then(r=>r[0]?{...r[0],note:v.note}:null)));
       verses=verses.filter(Boolean);
