@@ -6,6 +6,7 @@
   <script src="site-chrome.js" defer></script>
 <script src="/qh-dhulqarnayn-timeline.js?v=20261108" defer></script>
 <script src="/qh-stories-history.js?v=20261108-unified"></script>
+<script src="/qh-abraham-sacrifice-brief.js?v=20261108-research"></script>
 
 <script>
 window.controversyScore=function(v){var t=[v.english,v.aya_text,v.text_english,v.hadith_text,v.topic,v.brief_description,v.content,v.reason_text,v.story_en,v.title_en,v.summary,v.name_english,v.theme].filter(Boolean).join(' ').toLowerCase();var s=0;['kill','slay','smite','amputat','crucif','stone','whip','lash','apostat','slave','captive','concubin','beat.*wife','wife.*beat','fight.*until','jihad','warfare','adulter','zina','thief.*hand','homosexual','liwat','blasphemy','jizya','dhimmi','women.*half','inherit.*half','polygam','nushuz','sex slave','cut hand'].forEach(function(k){try{if(new RegExp(k).test(t))s+=12;}catch(e){}});['divorce','talaq','inheritance','veil','hijab','niqab','disbeliev','infidel','kafir','hellfire','punishment','torment','war','battle','riba','usury','intoxicant','alcohol','honor kill','martyr'].forEach(function(k){if(t.indexOf(k)!==-1)s+=5;});['alhamdulillah','merciful','compassionate','forgiving','be patient'].forEach(function(k){if(t.indexOf(k)!==-1)s-=2;});if(v.controversy_level)s+=(parseInt(v.controversy_level)-1)*4;if(v.human_rights_score!=null)s+=Math.max(0,(5-parseFloat(v.human_rights_score))*2);return s;};
@@ -524,6 +525,7 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid #f2d9
 <link rel="stylesheet" href="/quranhikma-components.css?v=1">
 <link rel="stylesheet" href="/quranhikma-layout.css?v=1">
 <link rel="stylesheet" href="/qh-stories-history.css?v=20261108-unified">
+<link rel="stylesheet" href="/qh-abraham-sacrifice-brief.css?v=20261108-research">
 </head>
 <body class="qh-design qh-page--stories qh-theme-dark">
 <div style="position:sticky;top:0;z-index:9999;display:flex;justify-content:flex-end;padding:6px 12px;background:#FDF8EE;border-bottom:1px solid #E8D8A0;"></div>
@@ -789,7 +791,7 @@ function openResearchCandidatesFromLink(event) {
 }
 function scrollToStoryHash(){
   const id=decodeURIComponent(location.hash.replace(/^#/,''));
-  if(!/^story-(introduction|verses|earlier-sources|scholars|history-analysis|study-sources|research-candidates)$/.test(id))return;
+  if(!/^story-(introduction|verses|textual-arguments|earlier-sources|scholars|history-analysis|study-sources|research-candidates)$/.test(id))return;
   const target=document.getElementById(id);
   if(!target || !document.getElementById('storyMain')?.contains(target))return;
   // Dynamic stories are fetched after navigation. Browser's initial fragment
@@ -1058,6 +1060,7 @@ async function openStory(story, updateAddress = false){
     <nav class="story-toc" aria-label="Sections of this story">
       <a href="#story-introduction">Overview</a>
       <a href="#story-verses">Qur’anic account</a>
+      ${story.slug==='ibrahim'?'<a href="#story-textual-arguments">Textual arguments</a>':''}
       <a href="#story-earlier-sources">Earlier textual witnesses</a>
       <a href="#story-scholars">Muslim interpretations</a>
       <a href="#story-history-analysis">Evidence &amp; cautions</a>
@@ -1067,6 +1070,7 @@ async function openStory(story, updateAddress = false){
       <h2 class="sec-t">📖 Qur’anic passages</h2>
       ${vHTML}
     </section>
+    ${story.slug==='ibrahim'?'<section class="sec" id="story-textual-arguments"><h2 class="sec-t">🔎 The sacrificial son: Qur’anic text and competing readings</h2><div id="qh-abraham-textual-arguments"></div></section>':''}
     <section class="sec" id="story-earlier-sources">
       <h2 class="sec-t">📜 Earlier textual witnesses &amp; historical parallels</h2>
       <p class="qh-hist-section-note">Primary-text passages are checked by verse. Dates refer to texts or surviving evidence, not necessarily to the events narrated.</p>
@@ -1097,8 +1101,10 @@ async function openStory(story, updateAddress = false){
       <div id="fiqh-list"></div>
     </div>
   `;
-  // All Stories show the same research structure. Dhul-Qarnayn has a separately
-  // reviewed early-text dossier and a dedicated source-linked scholar timeline.
+  // Abraham's source-checked text study is subordinate to its existing story.
+  if(story.slug==='ibrahim'&&window.QHAbrahamSacrifice?.render)
+    window.QHAbrahamSacrifice.render(document.getElementById('qh-abraham-textual-arguments'));
+  // Dhul-Qarnayn has separate early-text and scholar sections.
   const hx=window.QHStoryHistory;
   if(storyIsDhul){
     if(hx){
@@ -1111,8 +1117,12 @@ async function openStory(story, updateAddress = false){
       ...verses.map(v=>String(v.sura_id)+':'+String(v.aya_number)),
       ...ancientSources.map(v=>String(v.sura)+':'+String(v.aya))
     ]);
-    const suras=[...new Set([...verses.map(v=>Number(v.sura_id)),...ancientSources.map(v=>Number(v.sura))])].filter(Number.isInteger);
-    const ayas=[...new Set([...verses.map(v=>Number(v.aya_number)),...ancientSources.map(v=>Number(v.aya))])].filter(Number.isInteger);
+    // Qur'an 37:101–113 is one coherent argument context, even when the
+    // ordinary story_verses excerpt omits 37:101 or 37:112.
+    if(story.slug==='ibrahim')
+      for(let aya=101;aya<=113;aya++)keys.add('37:'+aya);
+    const suras=[...new Set([...verses.map(v=>Number(v.sura_id)),...ancientSources.map(v=>Number(v.sura)),...(story.slug==='ibrahim'?[37]:[])])].filter(Number.isInteger);
+    const ayas=[...new Set([...verses.map(v=>Number(v.aya_number)),...ancientSources.map(v=>Number(v.aya)),...(story.slug==='ibrahim'?Array.from({length:13},(_,i)=>101+i):[])])].filter(Number.isInteger);
     const renderPositions=(rows)=>{
       if(requestId!==activeStoryRequest || document.getElementById('storyMain')?.dataset.storySlug!==story.slug)return;
       const positions=rows.filter(row=>keys.has(String(row.sura)+':'+String(row.aya)));
