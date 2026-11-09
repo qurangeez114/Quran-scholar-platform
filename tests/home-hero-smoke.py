@@ -12,7 +12,7 @@ for element_id in required_ids:
     count = len(re.findall(r'id=["\\\']' + re.escape(element_id) + r'["\\\']', home))
     assert count == 1, f"{element_id}: expected one element; found {count}"
 assert 'quranhikma-emerald-gold.css' in home
-assert 'Qur’an Research Platform' in home
+assert 'Islam Research Platform' in home
 assert 'Holy Qur' not in home[home.index('class="qh-home-hero"'):home.index('class="qh-home-shortcuts"')]
 assert 'href="#qh-home-grid"' in home
 assert 'action="research.html"' in home and 'name="q"' in home
