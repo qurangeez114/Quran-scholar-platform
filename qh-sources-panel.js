@@ -34,10 +34,10 @@
       a.href = '/stories.html?story=dhul-qarnayn#story-earlier-sources';
       bar.appendChild(a);
     }
-    if (sura === 37 && verse >= 102 && verse <= 107) {
-      const a = el('a', 'Abraham’s sacrifice: dated scholar positions ↗',
+    if (sura === 37 && verse >= 101 && verse <= 113) {
+      const a = el('a', 'Abraham: Quranic arguments and scholarly history ↗',
         'padding:9px 12px;border:1px solid #ac8750;border-radius:8px;background:#f9f0d9;color:#4e360a;font:600 14px/1.5 system-ui;text-decoration:none;');
-      a.href = '/scholarly-development.html';
+      a.href = '/stories.html?story=ibrahim#story-textual-arguments';
       bar.appendChild(a);
     }
     wrap.appendChild(bar);
