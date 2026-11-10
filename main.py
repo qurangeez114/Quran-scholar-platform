@@ -85,7 +85,7 @@ def search_verses(q: str = Query(...), lang: str = Query(default='all'), limit: 
 
 @app.get('/cross-references/{surah}/{ayah}')
 def get_cross_refs(surah: int, ayah: int):
-    return sb_get(f'/rest/v1/cross_references?surah_number=eq.{surah}&ayah_number=eq.{ayah}&select=*&limit=50')
+    return sb_get(f'/rest/v1/cross_references?source_surah=eq.{surah}&source_ayah=eq.{ayah}&select=*&limit=50')
 
 @app.get('/word-analysis/{surah}/{ayah}')
 def get_word_analysis(surah: int, ayah: int):
