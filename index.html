@@ -2670,6 +2670,23 @@ function qhAddXrefFlowControl(panel){
  });
 }
 
+// Paginate thematic links when a verse exceeds the default 1,000-row API cap.
+async function qhFetchAllThematicXrefs(sura, aya) {
+  const all = [], pageSize = 1000;
+  for (let offset = 0; offset < 4000; offset += pageSize) {
+    const page = await sbFetch('thematic_cross_references_v2', {
+      select: 'theme,related_sura,related_aya,reason,category',
+      sura: 'eq.' + sura, aya: 'eq.' + aya,
+      order: 'theme.asc,related_sura.asc,related_aya.asc',
+      limit: pageSize, offset
+    });
+    if (!Array.isArray(page)) throw new Error('Invalid cross-reference response');
+    all.push(...page);
+    if (page.length < pageSize) return all;
+  }
+  throw new Error('Cross-reference result exceeds supported page limit');
+}
+
 async function loadCrossReferences(sura, aya) {
   const panel = document.getElementById('tp-' + aya + '-xrefs');
   const tab   = document.getElementById('xref-tab-' + aya);
@@ -2678,12 +2695,19 @@ async function loadCrossReferences(sura, aya) {
   panel.innerHTML = '<div style="padding:20px;font-size:13px;color:#595959;"><span class="spinner"></span> Loading cross-references...</div>';
 
   try {
-    let rows = await sbFetch('thematic_cross_references_v2', {
-      select: 'theme,related_sura,related_aya,reason,category',
-      sura:   'eq.' + sura,
-      aya:    'eq.' + aya,
-      order:  'theme'
-    });
+    const [v2Result, directResult] = await Promise.allSettled([
+      qhFetchAllThematicXrefs(sura, aya),
+      sbFetch('cross_references', {
+        select: 'ref_surah,ref_ayah_start,ref_ayah_end',
+        source_surah: 'eq.' + sura, source_ayah: 'eq.' + aya
+      })
+    ]);
+    if (v2Result.status === 'rejected' && directResult.status === 'rejected')
+      throw new Error('Both cross-reference sources were unavailable');
+    let rows = v2Result.status === 'fulfilled' ? v2Result.value : [];
+    const direct = directResult.status === 'fulfilled' ? directResult.value : [];
+    if (v2Result.status === 'rejected') console.warn('Thematic lookup unavailable', v2Result.reason);
+    if (directResult.status === 'rejected') console.warn('Direct lookup unavailable', directResult.reason);
 
     // Fall back to old table if v2 has no data for this verse
     if (!rows.length) {
@@ -2691,7 +2715,7 @@ async function loadCrossReferences(sura, aya) {
         select: 'theme,sura,aya',
         sura: 'eq.' + sura,
         aya:  'eq.' + aya
-      });
+      }).catch(err => { console.warn('Legacy thematic lookup unavailable', err); return []; });
       const themes = [...new Set(oldThemeRows.map(r => r.theme))];
       if (themes.length) {
         const allThematic = await Promise.all(themes.map(t =>
@@ -2701,7 +2725,7 @@ async function loadCrossReferences(sura, aya) {
             limit: 50,
             order: 'sura'
           })
-        ));
+        )).catch(err => { console.warn('Legacy thematic expansion unavailable', err); return []; });
         const related = allThematic.flat().filter(r => !(r.sura === sura && r.aya === aya));
         // Convert old format to v2 format
         rows = related.map(r => ({
@@ -2711,22 +2735,18 @@ async function loadCrossReferences(sura, aya) {
           reason: 'Thematic cross-reference',
           category: r.theme
         }));
-        // Also add direct cross-references
-        const direct = await sbFetch('cross_references', {
-          select: 'ref_surah,ref_ayah_start,ref_ayah_end',
-          source_surah: 'eq.' + sura,
-          source_ayah:  'eq.' + aya
-        });
-        direct.forEach(r => rows.unshift({
-          theme: 'Direct Cross-Reference',
-          related_sura: r.ref_surah,
-          related_aya: r.ref_ayah_start,
-          reason: 'Direct reference',
-          category: 'Direct Cross-Reference'
-        }));
+
       }
     }
 
+    // Preserve direct links independently of all thematic memberships.
+    direct.forEach(r => rows.unshift({
+      theme: 'Direct Cross-Reference',
+      related_sura: r.ref_surah,
+      related_aya: r.ref_ayah_start,
+      reason: 'Direct reference',
+      category: 'Direct Cross-Reference'
+    }));
     if (!rows.length) {
       if (tab) tab.textContent = 'Cross-Refs (0)';
       panel.innerHTML = '<div style="padding:20px;text-align:center;color:#BBB;font-style:italic;font-size:13px;">No cross-references added yet.</div>';
@@ -2748,7 +2768,9 @@ async function loadCrossReferences(sura, aya) {
     const totalVerses = Object.values(byTheme).reduce((s,v) => s + v.length, 0);
     if (tab) tab.textContent = 'Cross-Refs (' + totalVerses + ')';
 
-    let html = '<div style="padding:12px 16px 4px;font-size:12px;color:#5f6f81;">This verse belongs to <b>' + Object.keys(byTheme).length + '</b> theme(s). Tap any verse to open it.</div>';
+    let html = '<div style="padding:12px 16px 4px;font-size:12px;color:#5f6f81;">' +
+      (direct.length ? 'Direct references are listed separately. ' : '') +
+      'Shared-topic links are broad thematic associations, not independently verified textual parallels. Tap a verse to open it.</div>';
 
     const _themeEntries = Object.entries(byTheme);
     // Rank each theme's links by Arabic-stem overlap with the source verse
@@ -3652,7 +3674,8 @@ async function qhPrefetchTabCounts(card) {
    ['tafsir','tafsir_entries',{sura:'eq.'+sura,aya:'eq.'+aya}],
    ['asbab','asbab_al_nuzul',{sura_id:'eq.'+sura,aya_number:'eq.'+aya}],
    ['hadith','hadith_connections',{sura_id:'eq.'+sura,aya_number:'eq.'+aya}],
-   ['xref','thematic_cross_references_v2',{sura:'eq.'+sura,aya:'eq.'+aya}]
+   ['xref','thematic_cross_references_v2',{sura:'eq.'+sura,aya:'eq.'+aya}],
+    ['xref_direct','cross_references',{source_surah:'eq.'+sura,source_ayah:'eq.'+aya}]
   ];
   const result={};
   await Promise.all(tests.map(async ([name,table,where])=>{
@@ -3667,6 +3690,9 @@ async function qhPrefetchTabCounts(card) {
     if(Number.isFinite(count))result[name]=count;
    }catch(e){console.warn('Research count unavailable',name,e);}
   }));
+  // The provisional count includes both sources; render time deduplicates.
+  if(Number.isInteger(result.xref_direct)) result.xref=(result.xref||0)+result.xref_direct;
+  delete result.xref_direct;
   return result;
  })();
  qhCountCache.set(key,work);
@@ -3903,79 +3929,7 @@ async function toggleVerse(num, suraId, el) {
     }
   }
 
-  // Load cross-references
-  const xrefPanel = document.getElementById(`tp-${num}-xrefs`);
-  const xrefTab = document.getElementById(`xref-tab-${num}`);
-  if (xrefPanel.querySelector('.loading')) {
-    try {
-      // Fetch direct cross-references
-      const refs = await sbFetch('cross_references', {
-        select: 'ref_surah,ref_ayah_start,ref_ayah_end',
-        source_surah: `eq.${suraId}`,
-        source_ayah: `eq.${num}`
-      });
-      // Fetch thematic cross-references (verses sharing same themes)
-      const themeRows = await sbFetch('thematic_cross_references', {
-        select: 'theme,sura,aya',
-        sura: `eq.${suraId}`,
-        aya: `eq.${num}`
-      });
-      const themes = [...new Set(themeRows.map(r => r.theme))];
-      let thematicRefs = [];
-      if (themes.length) {
-        const allThematic = await Promise.all(themes.map(t =>
-          sbFetch('thematic_cross_references', {
-            select: 'theme,sura,aya',
-            theme: `eq.${t}`,
-            limit: 50,
-            order: 'sura'
-          })
-        ));
-        thematicRefs = allThematic.flat().filter(r => !(r.sura === suraId && r.aya === num));
-      }
-      const total = refs.length + thematicRefs.length;
-      if (xrefTab) xrefTab.textContent = `Cross-Refs (${total})`;
-      if (total > 0) {
-        let html = '';
-        // Direct refs section
-        if (refs.length) {
-          html += `<div style="font-size:11px;font-weight:700;color:#7d5f14;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Direct Cross-References (${refs.length})</div>`;
-          html += `<div class="xref-grid">${refs.map(r => {
-            const label = r.ref_ayah_start === r.ref_ayah_end || !r.ref_ayah_end
-              ? `${r.ref_surah}:${r.ref_ayah_start}`
-              : `${r.ref_surah}:${r.ref_ayah_start}–${r.ref_ayah_end}`;
-            return `<div class="xref-card" onclick="navToVerse(${r.ref_surah}, ${r.ref_ayah_start})">
-              <div class="xref-ref">${label}</div>
-              <div class="xref-theme">Surah ${r.ref_surah}</div>
-            </div>`;
-          }).join('')}</div>`;
-        }
-        // Thematic refs grouped by theme
-        if (thematicRefs.length) {
-          const byTheme = {};
-          thematicRefs.forEach(r => { if(!byTheme[r.theme]) byTheme[r.theme]=[]; byTheme[r.theme].push(r); });
-          Object.entries(byTheme).forEach(([theme, verses]) => {
-            html += `<div style="margin-top:14px;">
-              <div style="font-size:11px;font-weight:700;color:#5A7080;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;border-top:1px solid #E8E4DC;padding-top:8px;">🗂 Theme: ${escapeHtml(theme)} (${verses.length} verses)</div>
-              <div class="xref-grid">${verses.map(r =>
-                `<div class="xref-card" onclick="navToVerse(${r.sura}, ${r.aya})">
-                  <div class="xref-ref">${r.sura}:${r.aya}</div>
-                  <div class="xref-theme">Surah ${r.sura}</div>
-                </div>`
-              ).join('')}</div>
-            </div>`;
-          });
-        }
-        xrefPanel.innerHTML = html;
-      } else {
-        xrefPanel.innerHTML = `<div style="color:#BBB;font-style:italic;font-size:13px;padding:20px;text-align:center">No cross-references for this verse.</div>`;
-      }
-    } catch(err) {
-      console.error('Cross-ref error:', err);
-      xrefPanel.innerHTML = `<div style="color:#BBB;font-style:italic;font-size:13px;padding:20px;text-align:center">Could not load cross-references.</div>`;
-    }
-  }
-
+  // The canonical loader below owns Cross-Refs; do not race another renderer.
   // Load Cross-References
   loadCrossReferences(suraId, num);
   // Load AI Analysis (stored DB data)
