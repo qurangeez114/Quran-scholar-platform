@@ -2596,6 +2596,10 @@ async function qhRankVerses(srcSura, srcAya, verses) {
 }
 
 // Toggle a theme's collapsed chip overflow.
+function qhXrefHeadToggle(id) {
+  const el = document.getElementById(id);
+  if (el) el.style.display = el.style.display === 'none' ? 'flex' : 'none';
+}
 function qhXrefToggle(id, btn) {
   var wrap = document.getElementById(id);
   if (!wrap) return;
@@ -2740,13 +2744,17 @@ async function loadCrossReferences(sura, aya) {
     }
 
     // Preserve direct links independently of all thematic memberships.
-    direct.forEach(r => rows.unshift({
-      theme: 'Direct Cross-Reference',
-      related_sura: r.ref_surah,
-      related_aya: r.ref_ayah_start,
-      reason: 'Direct reference',
-      category: 'Direct Cross-Reference'
-    }));
+    direct.forEach(r => {
+      const first = Number(r.ref_ayah_start);
+      const last = Math.max(first, Number(r.ref_ayah_end ?? first));
+      for (let a = first; a <= last; a++) rows.unshift({
+        theme: 'Direct Cross-Reference',
+        related_sura: r.ref_surah,
+        related_aya: a,
+        reason: 'Direct reference',
+        category: 'Direct Cross-Reference'
+      });
+    });
     if (!rows.length) {
       if (tab) tab.textContent = 'Cross-Refs (0)';
       panel.innerHTML = '<div style="padding:20px;text-align:center;color:#BBB;font-style:italic;font-size:13px;">No cross-references added yet.</div>';
@@ -2789,13 +2797,16 @@ async function loadCrossReferences(sura, aya) {
         verses.map(function(v) { return String(v.related_sura) + ':' + String(v.related_aya); })
       ) - 1;
       html += '<div style="margin:0 12px 16px;">';
-      html += '<div onclick="openThemeAnalysis(\'' + encodeURIComponent(theme) + '\')" style="background:linear-gradient(135deg,#FDF5DE,#FAF0C0);border:2px solid #E8C97B;border-radius:10px;padding:10px 14px;margin-bottom:10px;cursor:pointer;">';
+      const _wrapId = 'xrefw-' + aya + '-' + _li;
+      const _headClick = theme === 'Direct Cross-Reference'
+        ? 'qhXrefHeadToggle(\'' + _wrapId + '\')'
+        : 'openThemeAnalysis(\'' + encodeURIComponent(theme) + '\')';
+      html += '<div onclick="' + _headClick + '" style="background:linear-gradient(135deg,#FDF5DE,#FAF0C0);border:2px solid #E8C97B;border-radius:10px;padding:10px 14px;margin-bottom:10px;cursor:pointer;">';
       html += '<div style="display:flex;align-items:center;justify-content:space-between;">';
       html += '<div><div style="font-size:13px;font-weight:800;color:#5A3A10;">🗂 ' + escapeHtml(theme) + '</div>';
       html += '<div style="font-size:11px;color:#7d5f14;margin-top:2px;">' + verses.length + ' verse' + (verses.length>1?'s':'') + ' · tap to open full analysis ↗</div></div>';
       html += '<div style="font-size:20px;color:#7d5f14;font-weight:700;">↗</div>';
       html += '</div></div>';
-      const _wrapId = 'xrefw-' + aya + '-' + _li;
       html += '<div id="' + _wrapId + '" data-open="0" style="display:flex;flex-wrap:wrap;gap:6px;padding:0 4px;">';
       verses.forEach(function(r, _vi) {
         const si = allSuras.find(function(s){ return (s.sura_id||s.id) === r.related_sura; });
@@ -10485,7 +10496,7 @@ async function fetchSupabaseContext(query) {
 
       // Cross-references
       const xrefRes = await fetch(
-        `${SUPABASE_URL}/rest/v1/cross_references?source_surah=eq.${sura}&source_ayah=eq.${aya}&select=ref_surah,ref_ayah_start,ref_ayah_end&limit=10`,
+        `${SUPABASE_URL}/rest/v1/cross_references?source_surah=eq.${sura}&source_ayah=eq.${aya}&select=ref_surah,ref_ayah_start,ref_ayah_end&limit=1000`,
         { headers: HEADERS }
       );
       const xrefData = await xrefRes.json();
