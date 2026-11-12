@@ -6,12 +6,13 @@ ROOT=Path(__file__).resolve().parents[1]
 CONTRACT=ROOT/"data/tafsir/staging/tabari-108-t09-guard-compatible-integration-contract-2026-11-12.json"
 CANDIDATE=ROOT/"data/tafsir/staging/tabari-108-t09-voice-enum-staged-repair-2026-11-12.json"
 PAYLOAD=ROOT/"data/tafsir/staging/surah-108-payload-assembly-2026-10-16.json"
+LIFECYCLE=ROOT/"scripts/test-ibn-kathir-i04a-coordinated-lifecycle.py"
 CANON="ce87f640f60c43651adcc45e4bfca192b6cbd253";TARGET="3ea692a1c310d1206fafedb3efe16c6ce1ced946"
 PATHS=["generated_at","rows[12].blocking_note","rows[12].proposed_payload.voice.originating_voice_type","rows[12].schema_vocabulary_repairs[1]","tabari_t09_voice_enum_repair"]
 STATEMENT="An interpretation attributed to unnamed Arabic-language scholars construes the bodily wording as facing the qibla with the upper chest."
 SOURCE_HASH="55143e1930f2511d2af04570d8e8e1091490c769829840a0ea03b92178992314";ANCHOR="استقبل القبلة بنحرك"
 
-def validate(d,c,p):
+def validate(d,c,p,s):
  assert d["schema_version"]=="quranhikma-tabari-108-t09-guard-compatible-integration-contract-v1"
  assert d["status"]=="guard_compatible_exact_transition_contract_built_not_applied_h01_active"
  assert (d["surah"],d["scholar_key"],d["claim_id"],d["hold_id"])==(108,"tabari","108-T09","108-TABARI-SCHOLAR-H01")
@@ -57,14 +58,16 @@ def validate(d,c,p):
  assert n["hold_clearance_authorized"] is False and n["database_write_authorized"] is False and n["advance_to_surah_107"] is False
  assert d["validation"]=={"result":"PASS","validator":"scripts/validate-tabari-108-t09-guard-compatible-integration-contract.py","unsafe_mutations_rejected":54}
  assert d["database_written"] is False and d["database_write_count"]==0 and d["publication_ready"] is False and d["scholar_complete"] is False and d["chapter_complete"] is False
- assert c["schema_version"]=="quranhikma-tabari-108-t09-voice-enum-isolated-staging-candidate-v1"
- assert c["repair"]["candidate_only"] is True and c["repair"]["canonical_payload_changed"] is False and c["repair"]["schema_compatible_candidate"] is True
- assert c["selected_next_boundary"]["kind"]=="tabari_h01_t09_guard_compatible_integration_contract"
+ assert c["schema_version"]=="quranhikma-tabari-108-t09-voice-enum-coordinated-staging-integration-v1"
+ assert c["repair"]["candidate_only"] is False and c["repair"]["canonical_payload_changed"] is True and c["repair"]["schema_compatible_candidate"] is True
+ assert c["repair"]["integrated_payload_blob"]==TARGET and c["repair"]["guard_compatible_lifecycle_script_blob"]=="d28aad7abdbaa2132e4eb783c5eeff467f6d30df"
+ assert c["selected_next_boundary"]["kind"]=="tabari_h01_t09_post_integration_guard_validation"
  row=p["rows"][12]
  assert row["claim_id"]=="108-T09" and row["statement_en"]==STATEMENT
- assert row["proposed_payload"]["voice"]=={"reporting_work_id":1,"originating_voice_type":"unnamed_report","originating_voice_name":None}
+ assert row["proposed_payload"]["voice"]=={"reporting_work_id":1,"originating_voice_type":"unattributed_group","originating_voice_name":None}
  assert row["plan_row"]["evidence"]["source_sha256"]==SOURCE_HASH and row["plan_row"]["evidence"]["normalized_arabic_anchor"]==ANCHOR
- assert row["publication_ready"] is False and "tabari_t09_voice_enum_repair" not in p
+ assert row["publication_ready"] is False and p["tabari_t09_voice_enum_repair"]["schema_compatible"] is True
+ assert "T09_PAYLOAD_PIN='"+TARGET+"'" in s and "exact_five_file_preview_plus_pinned_t09_enum_transition" in s and "exact_t09_transition" in s
 
 def mutations(d):
  c=[]
@@ -99,11 +102,11 @@ def mutations(d):
  assert len(c)==54,len(c);return c
 
 def main():
- d=json.loads(CONTRACT.read_text(encoding="utf-8"));c=json.loads(CANDIDATE.read_text(encoding="utf-8"));p=json.loads(PAYLOAD.read_text(encoding="utf-8"));validate(d,c,p)
+ d=json.loads(CONTRACT.read_text(encoding="utf-8"));c=json.loads(CANDIDATE.read_text(encoding="utf-8"));p=json.loads(PAYLOAD.read_text(encoding="utf-8"));s=LIFECYCLE.read_text(encoding="utf-8");validate(d,c,p,s)
  rejected=0
  for x in mutations(d):
-  try:validate(x,c,p)
+  try:validate(x,c,p,s)
   except (AssertionError,KeyError):rejected+=1
  assert rejected==54
- print("PASS: exact T09 guard-compatible integration contract pins canonical/candidate blobs, preserves I04A states and rejects 54/54 unsafe mutations; H01 active.")
+ print("PASS: T09 integration contract remains exact after coordinated application; pinned payload and lifecycle classifier present; 54/54 unsafe contract mutations rejected; H01 active.")
 if __name__=="__main__":main()
