@@ -1,0 +1,35 @@
+name: Publish Surah 108 Tabari T11A and T11C
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_commit:
+        description: Exact commit SHA containing the reviewed implementation
+        required: true
+        type: string
+      confirm_apply:
+        description: Type APPLY_T11A_T11C_33_ROWS to authorize this bounded write
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tafsir-108-tabari-t11-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate pinned contract
+        run: python scripts/validate-tabari-108-t11-authorized-five-table-write-workflow-contract.py
+      - name: Publish and verify exactly 33 rows
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          CONFIRM_COMMIT: ${{ inputs.confirm_commit }}
+          CONFIRM_APPLY: ${{ inputs.confirm_apply }}
+        run: python scripts/publish-tabari-108-t11-five-table.py
