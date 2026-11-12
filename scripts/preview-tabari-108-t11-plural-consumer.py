@@ -6,7 +6,7 @@ PAYLOAD_NAME="surah-108-payload-assembly-2026-10-16.json"
 PROJECTION_NAME="surah-108-voice-projection-2026-10-17.json"
 CONTRACT_NAME="tabari-108-t11-plural-consumer-contract-2026-11-12.json"
 T09_NAME="tabari-108-t09-coordinated-integration-result-2026-11-12.json"
-PINS={PAYLOAD_NAME:"3ea692a1c310d1206fafedb3efe16c6ce1ced946",PROJECTION_NAME:"ba5b61eb693222bc1ff3604daec52a6632cd7cfa",CONTRACT_NAME:"171fbe9749e7deb0ca521a6f720df910ffe0dd6a",T09_NAME:"0af8fa484379ac89a308467790a5c25b940d63d4"}
+PINS={PAYLOAD_NAME:"3ea692a1c310d1206fafedb3efe16c6ce1ced946",PROJECTION_NAME:"67cf93d8a49573c02342d7cd04d2965473e886b1",CONTRACT_NAME:"171fbe9749e7deb0ca521a6f720df910ffe0dd6a",T09_NAME:"0af8fa484379ac89a308467790a5c25b940d63d4"}
 CANONICAL_PRE_T09="ce87f640f60c43651adcc45e4bfca192b6cbd253"
 CLAIMS=("108-T11A","108-T11C")
 def git_blob(raw):return hashlib.sha1(b"blob "+str(len(raw)).encode()+b"\0"+raw).hexdigest()
@@ -23,13 +23,13 @@ def build(payload,projection,contract,t09):
  check(contract["basis"]["payload"]["blob"]==PINS[PAYLOAD_NAME],"contract payload pin")
  check(t09["integration"]["payload_blob"]==PINS[PAYLOAD_NAME],"T09 payload pin")
  check(t09["lifecycle_invariants"]["active_scholar_holds_after"]==48 and t09["database_written"] is False,"T09 lifecycle")
- check(projection["inputs"]["assembly_blob_sha"]==CANONICAL_PRE_T09,"unexpected projection baseline")
+ check(projection["inputs"]["assembly_blob_sha"]==PINS[PAYLOAD_NAME],"unexpected projection baseline")
  check(all(x["database_written"] is False and x["publication_ready"] is False and x["chapter_complete"] is False for x in (payload,projection)),"publication hold")
  out={
   "status":"PASS",
   "mode":"non_applying_plural_consumer_view",
   "input_blobs":copy.deepcopy(PINS),
-  "assembly_alignment":{"projection_input_blob":projection["inputs"]["assembly_blob_sha"],"current_payload_blob":PINS[PAYLOAD_NAME],"aligned":False,"reason":"projection metadata predates the exact T09-only payload transition; full projection baseline refresh remains required"},
+  "assembly_alignment":{"projection_input_blob":projection["inputs"]["assembly_blob_sha"],"current_payload_blob":PINS[PAYLOAD_NAME],"aligned":True,"reason":"projection metadata exactly matches the pinned T09 payload transition"},
   "claims":{},
   "files_changed":False,"database_written":False,"publication_ready":False,"chapter_complete":False
  }

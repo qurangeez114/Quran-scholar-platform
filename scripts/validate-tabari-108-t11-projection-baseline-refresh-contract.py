@@ -9,12 +9,15 @@ PAYLOAD=ROOT/'data/tafsir/staging/surah-108-payload-assembly-2026-10-16.json'
 LIFE=ROOT/'scripts/test-ibn-kathir-i04a-coordinated-lifecycle.py'
 ADAPTER_RESULT=ROOT/'data/tafsir/staging/tabari-108-t11-plural-consumer-adapter-result-2026-11-12.json'
 CURRENT='ba5b61eb693222bc1ff3604daec52a6632cd7cfa';TARGET='67cf93d8a49573c02342d7cd04d2965473e886b1';PAYLOAD_PIN='3ea692a1c310d1206fafedb3efe16c6ce1ced946';PRE='ce87f640f60c43651adcc45e4bfca192b6cbd253'
+LIFE_APPLIED='a9f90819f8e3c5941b727b0780d76286d7566787';ADAPTER_RESULT_APPLIED='3cf3d5e2308513e10e59cef7fce615d43b5106ab'
 def encode(x):return (json.dumps(x,ensure_ascii=False,indent=2)+'\n').encode()
 def blob_bytes(b):return hashlib.sha1(b'blob '+str(len(b)).encode()+b'\0'+b).hexdigest()
 def blob(path):return blob_bytes(path.read_bytes())
 def row(d,cid):return next(x for x in d['rows'] if x['claim_id']==cid)
 def candidate(p):
  x=copy.deepcopy(p);x['inputs']['assembly_blob_sha']=PAYLOAD_PIN;r=row(x,'108-T09');r['database_fields']['originating_voice_type']='unattributed_group';r['blockers']=['proposition_id unresolved until authorized proposition insertion','live source and full-payload validation pending'];return x
+def historical(p):
+ x=copy.deepcopy(p);x['inputs']['assembly_blob_sha']=PRE;r=row(x,'108-T09');r['database_fields']['originating_voice_type']='unnamed_report';r['blockers']=['proposition_id unresolved until authorized proposition insertion','live source and full-payload validation pending','unsupported originating_voice_type retained without coercion','voice name/type CHECK mismatch'];return x
 def validate_candidate(original,target,payload):
  assert blob_bytes(encode(original))==CURRENT and blob_bytes(encode(target))==TARGET
  assert target==candidate(original)
@@ -33,8 +36,8 @@ def validate(d,p,payload,life,adapter):
  assert d['schema_version']=='quranhikma-tabari-108-t11-projection-baseline-refresh-contract-v1' and (d['surah'],d['scholar_key'],d['hold_id'])==(108,'tabari','108-TABARI-SCHOLAR-H01')
  assert d['status']=='exact_projection_refresh_contract_built_not_applied_h01_active'
  b=d['basis'];assert b=={'repository_head':'ff98d6f9fde08f58d58ef82c558f18d5e6e918e8','payload_blob':PAYLOAD_PIN,'projection_path':'data/tafsir/staging/surah-108-voice-projection-2026-10-17.json','projection_current_blob':CURRENT,'projection_target_blob':TARGET,'pre_t09_payload_blob':PRE,'lifecycle_script_blob':'d28aad7abdbaa2132e4eb783c5eeff467f6d30df','plural_contract_blob':'171fbe9749e7deb0ca521a6f720df910ffe0dd6a','adapter_blob':'88c9a165c9e352dbfbd4cbb0f3de78851a7a6bf7','adapter_result_blob':'ef6eb151d6feb8f23ebd28d6ff7542f7baa58f03','adapter_validator_blob':'f232c2a12beb5f8ebecf07bb34769e66c309bc73','adapter_guard_run_id':43233250161,'adapter_guard_conclusion':'success'}
- assert blob(PROJ)==CURRENT and blob(PAYLOAD)==PAYLOAD_PIN and blob(LIFE)=='d28aad7abdbaa2132e4eb783c5eeff467f6d30df'
- target=candidate(p);validate_candidate(p,target,payload)
+ assert blob(PROJ)==TARGET and blob(PAYLOAD)==PAYLOAD_PIN and blob(LIFE)==LIFE_APPLIED and blob(ADAPTER_RESULT)==ADAPTER_RESULT_APPLIED
+ original=historical(p);validate_candidate(original,p,payload)
  t=d['exact_projection_transition'];assert t['changed_paths']==['inputs.assembly_blob_sha','rows[108-T09].database_fields.originating_voice_type','rows[108-T09].blockers']
  assert t['from']['assembly_blob_sha']==PRE and t['from']['t09_voice_type']=='unnamed_report' and len(t['from']['t09_blockers'])==4
  assert t['to']=={'assembly_blob_sha':PAYLOAD_PIN,'t09_voice_type':'unattributed_group','t09_originating_voice_name':None,'t09_blockers':['proposition_id unresolved until authorized proposition insertion','live source and full-payload validation pending']}
@@ -47,6 +50,7 @@ def validate(d,p,payload,life,adapter):
   assert pc[cid]['cardinalities']==ao[cid]['cardinalities']
  assert pc['108-T11C']['legacy_saved_hash']=='6624f5de8cb9634f41597c83af2c1b766aca47b9ceda27e183a9b4c8b12005f1' and pc['108-T11C']['full_report_hash']=='e2e3057e54e8d5b6578c72388178e03b00c0f5f1b68236ade34e909f5f36572e' and pc['108-T11C']['excluded_span']==[2567,2809]
  assert pc['all_other_projection_rows_unchanged'] is True and pc['evidence_links_routes_unchanged'] is True
+ assert adapter['basis']['projection_blob']==TARGET and adapter['adapter_output']['assembly_alignment']['aligned'] is True
  plan=d['guard_compatible_integration_plan'];assert len(plan['atomic_files'])==6 and plan['lifecycle_new_state']=='exact_five_file_preview_plus_pinned_t09_payload_and_projection_transition' and plan['preserve_existing_states']==['original_unapplied','exact_five_file_preview','exact_five_file_preview_plus_pinned_t09_enum_transition']
  assert plan['adapter_post_refresh_state']=='aligned_true_with_identical_t11_consumer_views' and plan['workflow_yaml_change_required'] is False and plan['required_workflow_result']=='every triggered payload/projection workflow succeeds' and plan['revert_on_any_failure'] is True
  assert all(plan[k] is False for k in ('weaken_guard','bypass_guard','database_write','physical_id_allocation','hold_clearance'))
@@ -78,9 +82,10 @@ def main():
   except (AssertionError,KeyError):rejected+=1
  assert rejected==68
  crej=0
- for x in candidate_mutations(p):
-  try:validate_candidate(p,x,payload)
+ original=historical(p)
+ for x in candidate_mutations(original):
+  try:validate_candidate(original,x,payload)
   except (AssertionError,KeyError):crej+=1
  assert crej==10
- print('PASS: exact projection refresh contract pins 3-path T09 transition; preserves 73 unrelated rows and T11 plural views; 68/68 contract and 10/10 candidate mutations rejected; H01 active')
+ print('PASS: exact 3-path projection refresh applied; 73 unrelated rows and T11 plural views preserved; 68/68 contract and 10/10 candidate mutations rejected; H01 active')
 if __name__=='__main__':main()

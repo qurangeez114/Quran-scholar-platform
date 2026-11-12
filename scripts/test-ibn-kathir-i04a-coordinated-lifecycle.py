@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""Accept original, exact I04A transition, or exact I04A plus pinned T09 enum repair; read-only."""
+"""Accept exact I04A/T09 payload and projection lifecycle states; read-only."""
 import argparse,copy,importlib.util,json
 from pathlib import Path
 sp=importlib.util.spec_from_file_location('preview',Path(__file__).with_name('preview-ibn-kathir-i04a-coordinated.py'));p=importlib.util.module_from_spec(sp);sp.loader.exec_module(p)
 T09_PAYLOAD_PIN='3ea692a1c310d1206fafedb3efe16c6ce1ced946'
 T09_STATE='exact_five_file_preview_plus_pinned_t09_enum_transition'
+T09_PROJECTION_PIN='67cf93d8a49573c02342d7cd04d2965473e886b1'
+T09_PROJECTION_STATE='exact_five_file_preview_plus_pinned_t09_payload_and_projection_transition'
 def t09row(x):return next(r for r in x['rows'] if r['claim_id']=='108-T09')
 def exact_t09_transition(expected,current):
     if p.blob(p.encode(current))!=T09_PAYLOAD_PIN:return False
@@ -20,10 +22,21 @@ def exact_t09_transition(expected,current):
     nr['schema_vocabulary_repairs']=copy.deepcopy(e['schema_vocabulary_repairs'])
     if n.pop('tabari_t09_voice_enum_repair',None) is None:return False
     return n==expected
+def exact_t09_projection_transition(expected,current):
+    if p.blob(p.encode(current))!=T09_PROJECTION_PIN:return False
+    e=t09row(expected);c=t09row(current)
+    if current['inputs']['assembly_blob_sha']!=T09_PAYLOAD_PIN:return False
+    if c['database_fields']!={'reporting_work_id':1,'originating_voice_type':'unattributed_group','originating_voice_name':None}:return False
+    if c['blockers']!=['proposition_id unresolved until authorized proposition insertion','live source and full-payload validation pending']:return False
+    n=copy.deepcopy(current);nr=t09row(n)
+    n['inputs']['assembly_blob_sha']=expected['inputs']['assembly_blob_sha']
+    nr['database_fields']=copy.deepcopy(e['database_fields']);nr['blockers']=copy.deepcopy(e['blockers'])
+    return n==expected
 def classify(original,expected,current):
     if current==original:return 'original_unapplied'
     if current==expected:return 'exact_five_file_preview'
     if current[1:]==expected[1:] and exact_t09_transition(expected[0],current[0]):return T09_STATE
+    if current[2:]==expected[2:] and exact_t09_transition(expected[0],current[0]) and exact_t09_projection_transition(expected[1],current[1]):return T09_PROJECTION_STATE
     raise ValueError('partial or divergent I04A/T09 transition')
 def main():
     ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('--baseline',required=True);ap.add_argument('--current',required=True);a=ap.parse_args()
@@ -58,9 +71,24 @@ def main():
         tbad(lambda r,x:r['plan_row'].update(transmission_route_state='present'))
         tbad(lambda r,x:r.update(publication_ready=True))
         tbad(lambda r,x:x.update(unrelated_change=True))
+    if state==T09_PROJECTION_STATE:
+        p.need(exact_t09_transition(expected[0],current[0]),'T09 payload positive transition')
+        p.need(exact_t09_projection_transition(expected[1],current[1]),'T09 projection positive transition')
+        def pbad(mutator):
+            x=copy.deepcopy(current);mutator(t09row(x[1]),x[1]);cases.append(x)
+        pbad(lambda r,x:x['inputs'].update(assembly_blob_sha=expected[1]['inputs']['assembly_blob_sha']))
+        pbad(lambda r,x:r['database_fields'].update(originating_voice_type='exegete_own_view'))
+        pbad(lambda r,x:r['database_fields'].update(originating_voice_name='unknown'))
+        pbad(lambda r,x:r['blockers'].clear())
+        pbad(lambda r,x:r.update(publication_ready=True))
+        pbad(lambda r,x:r.update(state='complete'))
+        pbad(lambda r,x:next(z for z in x['rows'] if z['claim_id']=='108-T11A')['database_rows'].pop())
+        pbad(lambda r,x:x['counts'].update(projected=71))
+        pbad(lambda r,x:x.update(database_written=True))
+        pbad(lambda r,x:x.update(unrelated_change=True))
     for bad in cases:
         try:classify(original,expected,bad)
         except ValueError:continue
         raise ValueError('unsafe transition accepted')
-    print(json.dumps(dict(status='PASS',current_state=state,rejected_cases=len(cases),partial_subsets_rejected=30,t09_unsafe_variants_rejected=9 if state==T09_STATE else 0,files_applied=False,database_written=False,publication_ready=False,chapter_complete=False)))
+    print(json.dumps(dict(status='PASS',current_state=state,rejected_cases=len(cases),partial_subsets_rejected=30,t09_payload_unsafe_variants_rejected=9 if state in (T09_STATE,T09_PROJECTION_STATE) else 0,t09_projection_unsafe_variants_rejected=10 if state==T09_PROJECTION_STATE else 0,files_applied=False,database_written=False,publication_ready=False,chapter_complete=False)))
 if __name__=='__main__':main()
