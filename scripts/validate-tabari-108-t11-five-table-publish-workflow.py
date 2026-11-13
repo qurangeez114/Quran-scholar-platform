@@ -81,6 +81,8 @@ def synthetic_source(preflight):
 
 def main():
     mod = load_module()
+    assert mod.REVERSE_ORDER == ("evidence_transmission_routes", "proposition_evidence",
+                                 "proposition_voice_chain", "evidence_units", "propositions")
     contract = json.loads(CONTRACT.read_text())
     preflight = json.loads(PREFLIGHT.read_text())
     preview = json.loads(PREVIEW.read_text())

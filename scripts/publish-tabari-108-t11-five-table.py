@@ -23,7 +23,8 @@ PINS = {
 BASE_URL = "https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/"
 CONFIRM_PHRASE = "APPLY_T11A_T11C_33_ROWS"
 TABLE_ORDER = ("propositions", "proposition_voice_chain", "evidence_units", "proposition_evidence", "evidence_transmission_routes")
-REVERSE_ORDER = tuple(reversed(TABLE_ORDER))
+REVERSE_ORDER = ("evidence_transmission_routes", "proposition_evidence",
+                 "proposition_voice_chain", "evidence_units", "propositions")
 
 
 def git_blob(raw):
