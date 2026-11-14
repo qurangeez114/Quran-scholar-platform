@@ -74,17 +74,9 @@
     }
   ],
   "next_actions": [
-    "Individually review story_sources IDs 131,132,142–149 and stage explicit review states; never auto-promote records with merely nonempty locators.",
-    "Audit five missing reference locators and seven missing URLs in story_sources without exposing unverified material",
-    "Trace the 149 story_sources records to original witnesses and add explicit publication review state before any verified-only public migration",
-    "Inspect qh_verified_verse_story_sources view security mode and grants; test anonymous reads of base tables and view",
-    "Inspect editor authorization and all policies before drafting migration",
-    "Draft verified-only SELECT migration after reviewing complete policy set and editorial identity checks",
-    "Audit SELECT grants and editorial roles; stage verified-only RLS migration and test anonymous/editor access, including five nonverified rows.",
-    "Design and review safe verified-only RLS migration using actual ancient_sources schema and linked-table joins; do not change live policies without dependency and editorial-workflow tests.",
-    "Inspect latest Supabase policies for ancient_sources and dependent tables, and review verified-only migration before publication.",
-    "Enumerate unique sura:aya keys from main plus all open/merged research PRs, retaining provenance and per-verse depth; avoid double-counting PR #144 corrections.",
-    "After full union, screen first missing consecutive range; verify original/critical witnesses before public source promotion."
+    "Design an explicit reviewed/public status for independent story_sources, including treatment of 149 legacy rows; do not auto-publish based on nonempty citations.",
+    "Prepare reviewed migration that REPLACES ancient_sources USING(true) policy rather than merely adding another permissive policy; test anon/authenticated/editor reads and rollback.",
+    "Reconcile unique verse keys across main, research PRs and Supabase; resume earliest confirmed gap."
   ],
   "live_supabase_rls_audit": {
     "checked_at": "2026-11-14",
@@ -258,5 +250,14 @@
       "Rows 143,144,149 need precise primary-text locators and critical dating checks; Pirkei De-Rabbi Eliezer cannot automatically be assumed pre-Islamic."
     ],
     "status": "audit_only_no_rows_modified"
+  },
+  "live_policy_completeness_audit": {
+    "checked_at": "2026-11-14",
+    "method": "read-only pg_policies, pg_class, information_schema.role_table_grants",
+    "finding": "Exactly one SELECT policy per audited research table, all assigned to PUBLIC with USING(true); no other pg_policies entries on those four tables at audit time. RLS enabled on each table, not forced. No INSERT/UPDATE/DELETE policies listed, so ordinary anon/authenticated writes are not authorized through RLS by these policies.",
+    "view": "qh_verified_verse_story_sources is a security_invoker=true view (not a security-definer view); anon and authenticated have SELECT grants. The view's verified filter does not secure direct base-table reads.",
+    "security_implication": "A future verified-only policy must replace (DROP/ALTER) the permissive ancient_sources SELECT policy; adding a restrictive-looking permissive policy alongside USING(true) will not restrict public reads because permissive policies combine by OR. Verify editorial read pathway separately. Independent story_sources requires its own publication model.",
+    "production_modified": false,
+    "role_impersonation_test_performed": false
   }
 }
