@@ -1,6 +1,6 @@
 {
   "schema_version": "quranhikma-sources-reconciliation-audit-v1",
-  "as_of": "2026-11-14T07:55:17-08:00",
+  "as_of": "2026-11-14T09:00:00-08:00",
   "status": "nonpublic_reconciliation_only",
   "base": "main",
   "methodology": "GitHub PR metadata and selected source JSON checked; no claim of complete repository/DB inventory. Do not count draft PR coverage as merged or fully verified. This revision cross-checked current PR #144 and #93 descriptions, #236 supersession note, PR #445 file, and main 2026-11-03 baseline; still no complete PR union or live DB audit. Live production Supabase pg_policies read-only audit performed 2026-11-14 06:01 Pacific; policy findings are confirmed, not just inherited PR claims.",
@@ -74,6 +74,9 @@
     }
   ],
   "next_actions": [
+    "Audit story_sources rows and visibility criteria independently: no FK to ancient_sources, no verification status",
+    "Inspect qh_verified_verse_story_sources view security mode and grants; test anonymous reads of base tables and view",
+    "Inspect editor authorization and all policies before drafting migration",
     "Draft verified-only SELECT migration after reviewing complete policy set and editorial identity checks",
     "Audit SELECT grants and editorial roles; stage verified-only RLS migration and test anonymous/editor access, including five nonverified rows.",
     "Design and review safe verified-only RLS migration using actual ancient_sources schema and linked-table joins; do not change live policies without dependency and editorial-workflow tests.",
@@ -184,5 +187,18 @@
       "Test story_sources joins and all public views/functions for indirect leakage",
       "Apply migration only after review, rollback and production readback"
     ]
+  },
+  "live_supabase_dependency_audit": {
+    "checked_at": "2026-11-14",
+    "method": "read-only information_schema.columns, pg_constraint, pg_views",
+    "finding": "story_sources has no verification_status and no ancient_source_id foreign key; it links only by story_id to quranic_stories. Thus filtering ancient_sources cannot secure independent story_sources text. story_verses also links only by story_id. qh_verified_verse_story_sources view explicitly filters ancient_sources verification_status='verified' and nonempty source_locator, but base-table SELECT remains unrestricted.",
+    "constraints": [
+      "ancient_sources verification_status CHECK allows unverified, verified, disputed, rejected",
+      "ancient_sources verified_requires_citation CHECK requires title, locator, link, verification_note and relationship_kind but does not establish primary-text correctness",
+      "story_sources.story_id references quranic_stories.id with ON DELETE CASCADE",
+      "story_verses has unique(story_id,sura_id,aya_number)"
+    ],
+    "recommended_next": "Inspect all story_sources row provenance and editorial write policies, view security mode and grants, RPC functions, and application consumers; propose publication flag or reviewed association model for story_sources, rather than assuming ancient_sources policy protects it.",
+    "migration_applied": false
   }
 }
