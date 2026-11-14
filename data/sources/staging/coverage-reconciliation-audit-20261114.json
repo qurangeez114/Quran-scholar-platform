@@ -1,6 +1,6 @@
 {
   "schema_version": "quranhikma-sources-reconciliation-audit-v1",
-  "as_of": "2026-11-14T06:59:00-08:00",
+  "as_of": "2026-11-14T07:55:17-08:00",
   "status": "nonpublic_reconciliation_only",
   "base": "main",
   "methodology": "GitHub PR metadata and selected source JSON checked; no claim of complete repository/DB inventory. Do not count draft PR coverage as merged or fully verified. This revision cross-checked current PR #144 and #93 descriptions, #236 supersession note, PR #445 file, and main 2026-11-03 baseline; still no complete PR union or live DB audit. Live production Supabase pg_policies read-only audit performed 2026-11-14 06:01 Pacific; policy findings are confirmed, not just inherited PR claims.",
@@ -74,6 +74,7 @@
     }
   ],
   "next_actions": [
+    "Draft verified-only SELECT migration after reviewing complete policy set and editorial identity checks",
     "Audit SELECT grants and editorial roles; stage verified-only RLS migration and test anonymous/editor access, including five nonverified rows.",
     "Design and review safe verified-only RLS migration using actual ancient_sources schema and linked-table joins; do not change live policies without dependency and editorial-workflow tests.",
     "Inspect latest Supabase policies for ancient_sources and dependent tables, and review verified-only migration before publication.",
@@ -159,5 +160,29 @@
     "risk": "Public SELECT USING(true) exposes five nonverified ancient_sources rows (2 unverified and 3 rejected) to roles with table SELECT privilege; actual anonymous access and editorial dependencies require explicit role tests. Other story tables have no status field; cannot apply verified-only condition directly.",
     "safe_migration_plan": "Before applying: inspect grants, all policies, application queries, functions/views, joins, editor roles, and anon/authenticated behavior. Restrict ancient_sources public SELECT to verification_status='verified', preserving explicit authorized editorial read access. For story_sources/stories/verses, model publication through reviewed verified associations or publication flags and test dependent reads. Stage migration, test anon/editor, then deploy with rollback.",
     "applied": false
+  },
+  "live_supabase_grants_audit": {
+    "checked_at": "2026-11-14",
+    "query": "information_schema.role_table_grants, SELECT, public schema",
+    "tables": [
+      "ancient_sources",
+      "quranic_stories",
+      "story_sources",
+      "story_verses"
+    ],
+    "select_grantees_each": [
+      "anon",
+      "authenticated",
+      "postgres",
+      "service_role"
+    ],
+    "finding": "Both anon and authenticated have SELECT grants on all four tables. Combined with the previously confirmed permissive USING(true) public SELECT policies, this supports an actual unauthenticated read exposure of nonverified ancient_sources rows, subject to any additional policies and runtime conditions. No role impersonation test performed.",
+    "migration_prerequisites": [
+      "Enumerate all SELECT policies and any permissive OR combinations before replacing policies",
+      "Inspect editor identity/claims and existing write policies; authenticated is not synonymous with editor",
+      "Test anon cannot read five nonverified ancient_sources rows, and authorized editors can read them",
+      "Test story_sources joins and all public views/functions for indirect leakage",
+      "Apply migration only after review, rollback and production readback"
+    ]
   }
 }
