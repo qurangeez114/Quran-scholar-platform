@@ -38,3 +38,23 @@ Only after saving the exact original policy definitions and confirming no concur
 
 ## Research workflow
 Keep per-ayah screening and primary-text verification distinct. Do not treat the 149 story_sources rows as verified; do not promote the 10 flagged rows without precise original passage, critical edition, date, and stable link. Resume earliest *confirmed* uncovered ayat only after reconciling main and overlapping PRs.
+
+## Live policy-name recheck — 2026-11-14 15:57 PST
+Read-only `pg_policies` inspection confirmed these exact current permissive SELECT policies (all roles `{public}`, `qual=true`):
+
+| Table | Policy name |
+| --- | --- |
+| `public.ancient_sources` | `public read ancient_sources` |
+| `public.story_sources` | `public read sources` |
+| `public.quranic_stories` | `public read stories` |
+| `public.story_verses` | `public read verses` |
+
+**Additional release guard:** A migration that only changes `ancient_sources` still leaves `story_sources` fully readable. Do not add a `verification_status` column with default `verified`; any backfill must default to `unreviewed` and be independently assessed. Do not rely on `authenticated` as proof of editor privileges. Before implementing, identify the existing trusted editor membership/claim and ensure it cannot be user-edited; deny access when absent.
+
+**Staging acceptance queries (run with impersonated JWT roles, never with service_role for public-access assertions):**
+```sql
+select current_user, auth.role(), count(*) from public.ancient_sources;
+select verification_status, count(*) from public.ancient_sources group by verification_status;
+select count(*) from public.story_sources;
+```
+Expected after approved migration: anon/ordinary authenticated users can see only verified ancient rows; zero unreviewed story-source rows; authorized editors can see staged rows. Confirm row counts again immediately before the migration. Query dependent views and RPCs under the same impersonated roles to detect indirect leaks. This section is documentation only; no SQL was executed to modify production.
