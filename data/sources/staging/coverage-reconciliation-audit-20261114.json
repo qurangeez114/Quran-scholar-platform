@@ -1,6 +1,6 @@
 {
   "schema_version": "quranhikma-sources-reconciliation-audit-v1",
-  "as_of": "2026-11-14T06:01:03-08:00",
+  "as_of": "2026-11-14T06:59:00-08:00",
   "status": "nonpublic_reconciliation_only",
   "base": "main",
   "methodology": "GitHub PR metadata and selected source JSON checked; no claim of complete repository/DB inventory. Do not count draft PR coverage as merged or fully verified. This revision cross-checked current PR #144 and #93 descriptions, #236 supersession note, PR #445 file, and main 2026-11-03 baseline; still no complete PR union or live DB audit. Live production Supabase pg_policies read-only audit performed 2026-11-14 06:01 Pacific; policy findings are confirmed, not just inherited PR claims.",
@@ -51,9 +51,9 @@
   ],
   "unreconciled": [
     "Main and all draft PR coverage must be keyed by sura:aya and deduplicated before authoritative counts",
-    "Supabase staged/verified snapshot not queried in this run",
     "PRs #90 #91 #93 #96 #97 #98 need complete dependency/merge review",
-    "Historical dossier outlines must not be counted as completed dossiers"
+    "Historical dossier outlines must not be counted as completed dossiers",
+    "Live ancient_sources status inventory obtained (34 verified, 2 unverified, 3 rejected); still need individual locator/edition audit and staging PR union."
   ],
   "new_ayat_reviewed_this_run": 0,
   "new_verified_public": 0,
@@ -74,6 +74,7 @@
     }
   ],
   "next_actions": [
+    "Audit SELECT grants and editorial roles; stage verified-only RLS migration and test anonymous/editor access, including five nonverified rows.",
     "Design and review safe verified-only RLS migration using actual ancient_sources schema and linked-table joins; do not change live policies without dependency and editorial-workflow tests.",
     "Inspect latest Supabase policies for ancient_sources and dependent tables, and review verified-only migration before publication.",
     "Enumerate unique sura:aya keys from main plus all open/merged research PRs, retaining provenance and per-verse depth; avoid double-counting PR #144 corrections.",
@@ -122,5 +123,41 @@
       }
     ],
     "assessment": "Confirmed unrestricted public SELECT policy on ancient_sources; UI-only verified filtering is insufficient. No schema changes made. Need inspect actual columns, dependencies, grants, and editorial access before designing safe migration."
+  },
+  "live_supabase_schema_audit": {
+    "checked_at": "2026-11-14",
+    "tables": {
+      "ancient_sources": {
+        "status_column": "verification_status",
+        "status_type": "text",
+        "status_nullable": false,
+        "other_fields": [
+          "source_locator",
+          "reference_link",
+          "source_edition",
+          "verification_note",
+          "verified_at",
+          "relationship_kind"
+        ],
+        "counts": {
+          "verified": 34,
+          "unverified": 2,
+          "rejected": 3
+        },
+        "total": 39
+      },
+      "quranic_stories": {
+        "verification_status_column": false
+      },
+      "story_sources": {
+        "verification_status_column": false
+      },
+      "story_verses": {
+        "verification_status_column": false
+      }
+    },
+    "risk": "Public SELECT USING(true) exposes five nonverified ancient_sources rows (2 unverified and 3 rejected) to roles with table SELECT privilege; actual anonymous access and editorial dependencies require explicit role tests. Other story tables have no status field; cannot apply verified-only condition directly.",
+    "safe_migration_plan": "Before applying: inspect grants, all policies, application queries, functions/views, joins, editor roles, and anon/authenticated behavior. Restrict ancient_sources public SELECT to verification_status='verified', preserving explicit authorized editorial read access. For story_sources/stories/verses, model publication through reviewed verified associations or publication flags and test dependent reads. Stage migration, test anon/editor, then deploy with rollback.",
+    "applied": false
   }
 }
