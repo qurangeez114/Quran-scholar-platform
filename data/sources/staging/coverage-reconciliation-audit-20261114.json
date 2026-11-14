@@ -1,9 +1,9 @@
 {
   "schema_version": "quranhikma-sources-reconciliation-audit-v1",
-  "as_of": "2026-11-14T05:00:28-08:00",
+  "as_of": "2026-11-14T06:01:03-08:00",
   "status": "nonpublic_reconciliation_only",
   "base": "main",
-  "methodology": "GitHub PR metadata and selected source JSON checked; no claim of complete repository/DB inventory. Do not count draft PR coverage as merged or fully verified. This revision cross-checked current PR #144 and #93 descriptions, #236 supersession note, PR #445 file, and main 2026-11-03 baseline; still no complete PR union or live DB audit.",
+  "methodology": "GitHub PR metadata and selected source JSON checked; no claim of complete repository/DB inventory. Do not count draft PR coverage as merged or fully verified. This revision cross-checked current PR #144 and #93 descriptions, #236 supersession note, PR #445 file, and main 2026-11-03 baseline; still no complete PR union or live DB audit. Live production Supabase pg_policies read-only audit performed 2026-11-14 06:01 Pacific; policy findings are confirmed, not just inherited PR claims.",
   "confirmed_existing_ranges": [
     {
       "range": "1:1-7",
@@ -45,7 +45,7 @@
     },
     {
       "pr": 93,
-      "finding": "RLS SELECT public USING(true) on ancient_sources reported in PR #93",
+      "finding": "CONFIRMED by live Supabase pg_policies read-only query 2026-11-14: public.ancient_sources has SELECT role {public} USING(true), as do quranic_stories, story_sources, story_verses.",
       "action": "Audit actual current Supabase policies and apply reviewed verified-only policy migration before publishing candidates."
     }
   ],
@@ -74,8 +74,53 @@
     }
   ],
   "next_actions": [
+    "Design and review safe verified-only RLS migration using actual ancient_sources schema and linked-table joins; do not change live policies without dependency and editorial-workflow tests.",
     "Inspect latest Supabase policies for ancient_sources and dependent tables, and review verified-only migration before publication.",
     "Enumerate unique sura:aya keys from main plus all open/merged research PRs, retaining provenance and per-verse depth; avoid double-counting PR #144 corrections.",
     "After full union, screen first missing consecutive range; verify original/critical witnesses before public source promotion."
-  ]
+  ],
+  "live_supabase_rls_audit": {
+    "checked_at": "2026-11-14",
+    "project_ref": "ylosytbxpzxzwfzjpaej",
+    "query": "pg_policies read-only",
+    "observations": [
+      {
+        "table": "public.ancient_sources",
+        "policy": "public read ancient_sources",
+        "roles": [
+          "public"
+        ],
+        "command": "SELECT",
+        "qual": "true"
+      },
+      {
+        "table": "public.quranic_stories",
+        "policy": "public read stories",
+        "roles": [
+          "public"
+        ],
+        "command": "SELECT",
+        "qual": "true"
+      },
+      {
+        "table": "public.story_sources",
+        "policy": "public read sources",
+        "roles": [
+          "public"
+        ],
+        "command": "SELECT",
+        "qual": "true"
+      },
+      {
+        "table": "public.story_verses",
+        "policy": "public read verses",
+        "roles": [
+          "public"
+        ],
+        "command": "SELECT",
+        "qual": "true"
+      }
+    ],
+    "assessment": "Confirmed unrestricted public SELECT policy on ancient_sources; UI-only verified filtering is insufficient. No schema changes made. Need inspect actual columns, dependencies, grants, and editorial access before designing safe migration."
+  }
 }
