@@ -50,9 +50,14 @@ def main():
                 candidates = row.get("candidate_sources", row.get("candidates", []))
                 if not isinstance(candidates, list):
                     raise ValueError("candidates must be a list")
+                if "source_locators" in row and not isinstance(row["source_locators"], list):
+                    raise ValueError("source_locators must be a list")
                 records[key].append({"file": path.name, "depth": row.get("review_depth"),
                                      "classification": row.get("classification", row.get("status")),
-                                     "candidates": len(candidates)})
+                                     "candidates": len(candidates),
+                                     "reviewed_at": row.get("reviewed_at", row.get("review_date")),
+                                     "source_locators": row.get("source_locators", []),
+                                     "review_notes": row.get("notes")})
             except (ValueError, TypeError, KeyError, AttributeError) as exc:
                 invalid.append({"file": path.name, "error": str(exc), "row": row})
     duplicates = {k:v for k,v in records.items() if len(v)>1}
