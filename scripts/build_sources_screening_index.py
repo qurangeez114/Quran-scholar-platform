@@ -44,8 +44,6 @@ def main():
         raise SystemExit("Conflicting or invalid coverage; index not overwritten")
     OUT.write_text(json.dumps(output,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
     print(f"Indexed {len(entries)} unique ayat in {len(files)} local files; {len(duplicates)} duplicate keys; {len(invalid)} invalid rows.")
-    if duplicates or invalid:
-        raise SystemExit("Review conflicting or invalid coverage before promoting the index")
 
 if __name__ == "__main__":
     main()
