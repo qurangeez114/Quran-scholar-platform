@@ -2780,8 +2780,6 @@ async function loadCrossReferences(sura, aya) {
       (direct.length ? 'Direct references are listed separately. ' : '') +
       'Shared-topic links are broad thematic associations, not independently verified textual parallels. Tap a verse to open it.</div>';
 
-    html += '<div style="padding:8px 16px"><a href="crossref-reader.html?sura=' + sura + '&aya=' + aya + '&theme=all" style="display:inline-block;padding:10px 15px;border-radius:8px;background:#176554;color:#fff;font-weight:700;text-decoration:none">📖 Open all reference verses on one page ↗</a></div>';
-
     const _themeEntries = Object.entries(byTheme);
     // Rank each theme's links by Arabic-stem overlap with the source verse
     // so the strongest surface first instead of raw sura order.
@@ -2800,7 +2798,9 @@ async function loadCrossReferences(sura, aya) {
       ) - 1;
       html += '<div style="margin:0 12px 16px;">';
       const _wrapId = 'xrefw-' + aya + '-' + _li;
-      const _headClick = "window.location.href='crossref-reader.html?sura=" + sura + "&aya=" + aya + "&theme=" + encodeURIComponent(theme) + "'";
+      const _headClick = theme === 'Direct Cross-Reference'
+        ? 'openDirectXrefPage(' + Number(sura) + ',' + Number(aya) + ')'
+        : 'openThemeAnalysis(\'' + encodeURIComponent(theme) + '\')';
       html += '<div onclick="' + _headClick + '" style="background:linear-gradient(135deg,#FDF5DE,#FAF0C0);border:2px solid #E8C97B;border-radius:10px;padding:10px 14px;margin-bottom:10px;cursor:pointer;">';
       html += '<div style="display:flex;align-items:center;justify-content:space-between;">';
       html += '<div><div style="font-size:13px;font-weight:800;color:#5A3A10;">🗂 ' + escapeHtml(theme) + '</div>';
@@ -2814,7 +2814,7 @@ async function loadCrossReferences(sura, aya) {
         // Paired control: the reference opens the verse, the 📱 opens the
         // social-card generator for that verse directly, matching the same
         // action available on a verse card itself.
-        const _hide = _vi >= QH_XREF_SHOW;
+        const _hide = theme !== 'Direct Cross-Reference' && _vi >= QH_XREF_SHOW;
         html += '<span' + (_hide ? ' data-overflow="1"' : '')
           + ' style="' + (_hide ? 'display:none;' : 'display:inline-flex;')
           + 'align-items:stretch;border:2px solid #D4C9A8;border-radius:8px;overflow:visible;background:#fff;">';
@@ -2831,7 +2831,7 @@ async function loadCrossReferences(sura, aya) {
         html += '</span>';
       });
       html += '</div>';
-      if (verses.length > QH_XREF_SHOW) {
+      if (verses.length > QH_XREF_SHOW && theme !== 'Direct Cross-Reference') {
         const _moreLbl = 'Show all ' + verses.length + ' ↓';
         html += '<button data-more="' + _moreLbl + '" onclick="qhXrefToggle(\'' + _wrapId + '\',this)"'
           + ' style="margin:8px 4px 0;padding:5px 12px;background:transparent;border:1px solid #D4C9A8;'
@@ -2978,6 +2978,10 @@ async function loadFiqhPanel(num, suraId) {
 // ============================================================
 
 
+function openDirectXrefPage(sura, aya) {
+  const url = 'theme-analysis.html?theme=Direct%20Cross-Reference&sura=' + sura + '&aya=' + aya;
+  if (window.qnavGoTo) { qnavGoTo(url); } else { window.location.href = url; }
+}
 function openThemeAnalysis(encodedTheme) {
   const theme = decodeURIComponent(encodedTheme);
   const url = 'theme-analysis.html?theme=' + encodeURIComponent(theme);
