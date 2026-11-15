@@ -950,7 +950,7 @@ async function openStory(story, updateAddress = false){
   const scroller=document.getElementById('main');
   if(scroller)scroller.scrollTop=0;
   // Fetch independent sources concurrently rather than serially waiting for timeouts.
-  const sourcesPromise = sb('story_sources','story_id=eq.'+story.id+'&select=*&order=tradition.asc')
+  const sourcesPromise = sb('qh_verified_verse_story_sources','story_id=eq.'+encodeURIComponent(story.id)+'&select=story_id,source_title,tradition,source_locator,source_edition,reference_link,parallel_summary,similarity_note,difference_note&order=tradition.asc&limit=100').then(rows=>rows.map(a=>({tradition:a.tradition,source_name:a.source_title,reference:a.source_locator,volume:a.source_edition,url:a.reference_link,summary:a.parallel_summary,similarities:a.similarity_note,differences:a.difference_note,unique_quran:''})))
     .catch(error=>{console.warn('Story comparisons unavailable:',error);return []});
   // Read only evidence linked to verses belonging to this specific story.
   // Never import all references from the same surah: unrelated narratives may share a surah.
@@ -1291,7 +1291,7 @@ async function doSearch(){
   const searchRequestId=++activeStoryRequest;
   document.getElementById('main').scrollTop=0;
   const [stSrc,hdSrc,verses]=await Promise.allSettled([
-    sb('story_sources','or=(summary.ilike.*'+enc+'*,similarities.ilike.*'+enc+'*,differences.ilike.*'+enc+'*,source_name.ilike.*'+enc+'*)&select=*,quranic_stories(name_english,slug)&limit=15'),
+    sb('qh_verified_verse_story_sources','or=(parallel_summary.ilike.*'+enc+'*,similarity_note.ilike.*'+enc+'*,difference_note.ilike.*'+enc+'*,source_title.ilike.*'+enc+'*)&select=story_id,tradition,source_title,source_locator,parallel_summary,similarity_note,difference_note&limit=15').then(rows=>rows.map(a=>({tradition:a.tradition,source_name:a.source_title,reference:a.source_locator,summary:a.parallel_summary,similarities:a.similarity_note,differences:a.difference_note,quranic_stories:allStories.find(st=>st.id===a.story_id)||{}}))),
     sb('hadith_comparative','or=(topic.ilike.*'+enc+'*,summary.ilike.*'+enc+'*,hadith_text.ilike.*'+enc+'*)&select=*&limit=10'),
     sb('ayas','or=(english.ilike.*'+enc+'*,arabic.ilike.*'+enc+'*)&select=sura_id,aya_number,arabic,english&limit=5')
   ]);
