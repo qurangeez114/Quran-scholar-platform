@@ -25,6 +25,8 @@ def main():
                 if not (1 <= sura <= 114 and aya >= 1):
                     raise ValueError("invalid verse key")
                 key = f"{sura}:{aya}"
+                if not isinstance(row.get("candidate_sources", []), list):
+                    raise ValueError("candidate_sources must be a list")
                 records[key].append({"file": path.name, "depth": row.get("review_depth"),
                                      "classification": row.get("classification"),
                                      "candidates": len(row.get("candidate_sources", []))})
@@ -38,6 +40,8 @@ def main():
               "unique_ayat":len(entries),"duplicate_keys":duplicates,"invalid_rows":invalid,
               "entries":entries,
               "next_target_rule":"Do not infer first unreviewed verse until all main, open PR, and database coverage are reconciled."}
+    if duplicates or invalid:
+        raise SystemExit("Conflicting or invalid coverage; index not overwritten")
     OUT.write_text(json.dumps(output,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
     print(f"Indexed {len(entries)} unique ayat in {len(files)} local files; {len(duplicates)} duplicate keys; {len(invalid)} invalid rows.")
     if duplicates or invalid:
