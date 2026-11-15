@@ -19,18 +19,22 @@ def main():
     files = sorted(STAGING.glob("coverage-*-to-*-*.json"))
     for path in files:
         data = json.loads(path.read_text(encoding="utf-8"))
-        for row in data.get("rows", []):
+        if not isinstance(data.get("rows"), list):
+            invalid.append({"file": path.name, "error": "rows must be an array"})
+            continue
+        for row in data["rows"]:
             try:
-                sura, aya = int(row["sura"]), int(row["aya"])
+                sura, aya = int(row.get("sura", row.get("surah", data.get("surah")))), int(row["aya"])
                 if not (1 <= sura <= 114 and aya >= 1):
                     raise ValueError("invalid verse key")
                 key = f"{sura}:{aya}"
-                if not isinstance(row.get("candidate_sources", []), list):
-                    raise ValueError("candidate_sources must be a list")
+                candidates = row.get("candidate_sources", row.get("candidates", []))
+                if not isinstance(candidates, list):
+                    raise ValueError("candidates must be a list")
                 records[key].append({"file": path.name, "depth": row.get("review_depth"),
-                                     "classification": row.get("classification"),
-                                     "candidates": len(row.get("candidate_sources", []))})
-            except (ValueError, TypeError, KeyError) as exc:
+                                     "classification": row.get("classification", row.get("status")),
+                                     "candidates": len(candidates)})
+            except (ValueError, TypeError, KeyError, AttributeError) as exc:
                 invalid.append({"file": path.name, "error": str(exc), "row": row})
     duplicates = {k:v for k,v in records.items() if len(v)>1}
     entries = {k:{"evidence":v, "status":"conflict_needs_review" if len(v)>1 else "preliminary_screen_only"}
