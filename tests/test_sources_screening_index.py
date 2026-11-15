@@ -85,5 +85,20 @@ class ScreeningIndexTests(unittest.TestCase):
         indexer.main()
         self.assertIn("2:4", json.loads(indexer.OUT.read_text())["entries"])
 
+    def test_verse_beyond_surah_length_rejected(self):
+        self.put("coverage-1-8-to-1-8-a.json", {"rows": [{"sura": 1, "aya": 8}]})
+        with self.assertRaises(SystemExit):
+            indexer.main()
+        self.assertFalse(indexer.OUT.exists())
+
+    def test_final_verse_of_quran_accepted(self):
+        self.put("coverage-114-6-to-114-6-a.json", {"rows": [{"sura": 114, "aya": 6, "candidates": []}]})
+        indexer.main()
+        self.assertIn("114:6", json.loads(indexer.OUT.read_text())["entries"])
+
+    def test_canonical_verse_count(self):
+        self.assertEqual(len(indexer.SURAH_LENGTHS), 114)
+        self.assertEqual(sum(indexer.SURAH_LENGTHS), 6236)
+
 if __name__ == "__main__":
     unittest.main()
