@@ -22,6 +22,26 @@ class ScreeningIndexTests(unittest.TestCase):
     def put(self, name, data):
         (self.dir / name).write_text(json.dumps(data), encoding="utf-8")
 
+    def test_review_metadata_preserved_without_promotion(self):
+        self.put("coverage-2-1-to-2-1-metadata.json", {"rows": [{
+            "sura": 2, "aya": 1, "reviewed_at": "2026-11-14",
+            "source_locators": ["Deuteronomy 6:4"], "candidate_sources": []
+        }]})
+        indexer.main()
+        entry = json.loads(indexer.OUT.read_text())["entries"]["2:1"]
+        self.assertEqual(entry["status"], "preliminary_screen_only")
+        self.assertEqual(entry["evidence"][0]["reviewed_at"], "2026-11-14")
+        self.assertEqual(entry["evidence"][0]["source_locators"], ["Deuteronomy 6:4"])
+
+    def test_malformed_source_locators_fail_closed(self):
+        self.put("coverage-2-1-to-2-1-badlocators.json", {"rows": [{
+            "sura": 2, "aya": 1, "source_locators": "not a list"
+        }]})
+        indexer.OUT.write_text("existing", encoding="utf-8")
+        with self.assertRaises(SystemExit):
+            indexer.main()
+        self.assertEqual(indexer.OUT.read_text(), "existing")
+
     def test_real_fatiha_schema(self):
         self.put("coverage-1-1-to-1-7-20261103.json", {
             "surah": 1, "rows": [
