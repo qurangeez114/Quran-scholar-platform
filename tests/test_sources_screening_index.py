@@ -68,5 +68,22 @@ class ScreeningIndexTests(unittest.TestCase):
             indexer.main()
         self.assertFalse(indexer.OUT.exists())
 
+    def test_fractional_verse_key_rejected(self):
+        self.put("coverage-2-4-to-2-4-a.json", {"rows": [{"sura": 2.5, "aya": 4}]})
+        with self.assertRaises(SystemExit):
+            indexer.main()
+        self.assertFalse(indexer.OUT.exists())
+
+    def test_noncanonical_numeric_string_rejected(self):
+        self.put("coverage-2-4-to-2-4-a.json", {"rows": [{"sura": "02", "aya": "4"}]})
+        with self.assertRaises(SystemExit):
+            indexer.main()
+        self.assertFalse(indexer.OUT.exists())
+
+    def test_canonical_numeric_strings_accepted(self):
+        self.put("coverage-2-4-to-2-4-a.json", {"rows": [{"sura": "2", "aya": "4", "candidates": []}]})
+        indexer.main()
+        self.assertIn("2:4", json.loads(indexer.OUT.read_text())["entries"])
+
 if __name__ == "__main__":
     unittest.main()
