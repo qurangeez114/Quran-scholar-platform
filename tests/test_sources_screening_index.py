@@ -50,5 +50,23 @@ class ScreeningIndexTests(unittest.TestCase):
             indexer.main()
         self.assertFalse(indexer.OUT.exists())
 
+    def test_empty_staging_does_not_overwrite(self):
+        indexer.OUT.write_text("existing", encoding="utf-8")
+        with self.assertRaises(SystemExit):
+            indexer.main()
+        self.assertEqual(indexer.OUT.read_text(), "existing")
+
+    def test_malformed_json_does_not_overwrite(self):
+        (self.dir / "coverage-2-3-to-2-3-a.json").write_text("{bad", encoding="utf-8")
+        with self.assertRaises(SystemExit):
+            indexer.main()
+        self.assertFalse(indexer.OUT.exists())
+
+    def test_boolean_verse_key_rejected(self):
+        self.put("coverage-2-4-to-2-4-a.json", {"rows": [{"sura": True, "aya": 4}]})
+        with self.assertRaises(SystemExit):
+            indexer.main()
+        self.assertFalse(indexer.OUT.exists())
+
 if __name__ == "__main__":
     unittest.main()
