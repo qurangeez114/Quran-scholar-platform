@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cross-References — QuranHikma</title>
+<style>body{margin:0;background:#f7f4eb;color:#24313a;font:17px/1.7 system-ui,sans-serif}header{background:#143d35;color:white;padding:18px max(18px,calc((100vw - 1000px)/2))}header a{color:#e5c77a}main{max-width:960px;margin:auto;padding:20px}h1{font-size:clamp(23px,3vw,34px);margin:4px 0}label{display:inline-flex;gap:12px;align-items:center;flex-wrap:wrap}select{font:inherit;padding:9px;border-radius:8px;border:1px solid #aaa}article{background:white;border:1px solid #ddd5c4;border-radius:12px;margin:12px 0;padding:18px 22px}article a{color:#176554;font-weight:700;text-decoration:none}.verse{margin:10px 0;font-size:clamp(19px,2vw,24px)}.verse[lang=ar]{font-family:"Noto Naskh Arabic","Amiri",serif;font-size:clamp(28px,3vw,37px);line-height:2.1;text-align:right;direction:rtl}.muted{color:#626c70;font-size:14px}#status{padding:12px 0}@media(max-width:600px){main{padding:12px}article{padding:14px}}</style></head>
+<body><header><a href="index.html">← QuranHikma</a><h1>Cross-References: Full Verse Text</h1></header><main><p id="context" class="muted"></p><label>Reading language <select id="language"><option value="ar">Arabic</option><option value="en" selected>English</option><option value="ti">Tigrinya</option><option value="am">Amharic</option><option value="om">Oromo</option><option value="so">Somali</option><option value="ur">Urdu</option><option value="fr">French</option><option value="id">Indonesian</option><option value="fa">Persian</option></select></label><p id="status" role="status">Loading references…</p><section id="verses"></section></main>
+<script>
+'use strict';
+const API='https://ylosytbxpzxzwfzjpaej.supabase.co/rest/v1/',KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
+const headers={apikey:KEY,Authorization:'Bearer '+KEY};
+const params=new URLSearchParams(location.search),sura=Number(params.get('sura')),aya=Number(params.get('aya')),theme=params.get('theme')||'all';
+const allowed={ar:'arabic',en:'english',ti:'tigrinya',am:'amharic',om:'oromo',so:'somali',ur:'urdu',fr:'french',id:'indonesian',fa:'persian'};
+const status=document.getElementById('status'),out=document.getElementById('verses'),language=document.getElementById('language');
+let references=[];
+async function get(table,query){const r=await fetch(API+table+'?'+query,{headers});if(!r.ok)throw Error(table+' returned '+r.status);return r.json();}
+async function allRows(table,query){let rows=[];for(let offset=0;offset<10000;offset+=500){const part=await get(table,query+'&limit=500&offset='+offset);rows.push(...part);if(part.length<500)return rows;}throw Error('Too many references to display');}
+async function loadReferences(){
+ if(!Number.isInteger(sura)||sura<1||sura>114||!Number.isInteger(aya)||aya<1){throw Error('Invalid source verse');}
+ document.getElementById('context').textContent='Source '+sura+':'+aya+' · '+(theme==='all'?'All references':theme==='direct'?'Direct cross-references':theme);
+ let rows=[];
+ if(theme==='all'||theme==='direct'){
+ const direct=await allRows('cross_references','select=ref_surah,ref_ayah_start,ref_ayah_end&source_surah=eq.'+sura+'&source_ayah=eq.'+aya);
+ for(const r of direct){for(let a=r.ref_ayah_start;a<=Math.min(r.ref_ayah_end||r.ref_ayah_start,r.ref_ayah_start+49);a++)rows.push(r.ref_surah+':'+a);}
+ }
+ if(theme!=='direct'){
+ const filter='select=theme,related_sura,related_aya&sura=eq.'+sura+'&aya=eq.'+aya+(theme==='all'?'':'&theme=eq.'+encodeURIComponent(theme));
+ const thematic=await allRows('thematic_cross_references_v2',filter);
+ for(const r of thematic)rows.push(r.related_sura+':'+r.related_aya);
+ }
+ references=[...new Set(rows)].filter(x=>/^\d+:\d+$/.test(x)).sort((a,b)=>{const [s1,a1]=a.split(':').map(Number),[s2,a2]=b.split(':').map(Number);return s1-s2||a1-a2;});
+}
+async function render(){
+ out.replaceChildren();status.textContent='Loading '+references.length+' verses…';
+ const field=allowed[language.value]||'english',result=new Map();
+ try{
+ for(let i=0;i<references.length;i+=25){
+ const batch=references.slice(i,i+25);
+ const filter='select=sura_id,aya_number,'+field+'&or=('+batch.map(ref=>{const [s,a]=ref.split(':');return 'and(sura_id.eq.'+s+',aya_number.eq.'+a+')';}).join(',')+')';
+ const data=await get('ayas',filter);
+ for(const v of data)result.set(v.sura_id+':'+v.aya_number,v[field]||'');
+ }
+ let missing=0;
+ for(const ref of references){
+ const card=document.createElement('article'),link=document.createElement('a'),p=document.createElement('p');
+ const [s,a]=ref.split(':');link.href='index.html?sura='+s+'&aya='+a;link.textContent=ref;
+ const value=result.get(ref)||'';if(!value)missing++;
+ p.className='verse';p.textContent=value||'Translation not available in this language.';p.lang=language.value==='ar'?'ar':language.value;
+ card.append(link,p);out.append(card);
+ }
+ status.textContent=references.length+' distinct verses'+(missing?' · '+missing+' translations unavailable':'');
+ }catch(e){status.textContent='Unable to load verse text: '+e.message;}
+}
+language.addEventListener('change',render);
+loadReferences().then(render).catch(e=>{status.textContent='Unable to load references: '+e.message;});
+</script></body></html>
