@@ -17,14 +17,22 @@ def main():
     records = defaultdict(list)
     invalid = []
     files = sorted(STAGING.glob("coverage-*-to-*-*.json"))
+    if not files:
+        raise SystemExit("No coverage staging files matched; index not overwritten")
     for path in files:
-        data = json.loads(path.read_text(encoding="utf-8"))
-        if not isinstance(data.get("rows"), list):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, UnicodeError) as exc:
+            invalid.append({"file": path.name, "error": f"unreadable JSON: {exc}"})
+            continue
+        if not isinstance(data, dict) or not isinstance(data.get("rows"), list):
             invalid.append({"file": path.name, "error": "rows must be an array"})
             continue
         for row in data["rows"]:
             try:
                 sura, aya = int(row.get("sura", row.get("surah", data.get("surah")))), int(row["aya"])
+                if isinstance(row.get("aya"), bool) or isinstance(row.get("sura", row.get("surah", data.get("surah"))), bool):
+                    raise ValueError("boolean verse key")
                 if not (1 <= sura <= 114 and aya >= 1):
                     raise ValueError("invalid verse key")
                 key = f"{sura}:{aya}"
