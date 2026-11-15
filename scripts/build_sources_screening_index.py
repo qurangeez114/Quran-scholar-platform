@@ -13,6 +13,16 @@ ROOT = Path(__file__).resolve().parents[1]
 STAGING = ROOT / "data/sources/staging"
 OUT = STAGING / "screening-index-main-and-branch.json"
 
+def verse_number(value):
+    """Accept only positive integral JSON numbers or canonical decimal strings."""
+    if isinstance(value, bool):
+        raise ValueError("boolean verse key")
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and value.isascii() and value.isdecimal() and value == str(int(value)):
+        return int(value)
+    raise ValueError("nonintegral or noncanonical verse key")
+
 def main():
     records = defaultdict(list)
     invalid = []
@@ -30,9 +40,8 @@ def main():
             continue
         for row in data["rows"]:
             try:
-                sura, aya = int(row.get("sura", row.get("surah", data.get("surah")))), int(row["aya"])
-                if isinstance(row.get("aya"), bool) or isinstance(row.get("sura", row.get("surah", data.get("surah"))), bool):
-                    raise ValueError("boolean verse key")
+                sura = verse_number(row.get("sura", row.get("surah", data.get("surah"))))
+                aya = verse_number(row["aya"])
                 if not (1 <= sura <= 114 and aya >= 1):
                     raise ValueError("invalid verse key")
                 key = f"{sura}:{aya}"
