@@ -117,3 +117,8 @@ begin
   return null;
 end;
 $$;
+
+-- Hardening: these helpers only raise errors or return booleans. They run inside trigger functions
+-- (owned by the migration role), so they do not need to be callable by API roles.
+revoke all on function qh_lms_private.assert_course_publishable(uuid) from public, anon, authenticated;
+revoke all on function qh_lms_private.is_valid_https_url(text) from public, anon, authenticated;

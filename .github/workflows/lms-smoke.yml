@@ -13,7 +13,9 @@ on:
       - 'admin/lms.html'
       - 'admin/courses.html'
       - 'supabase/functions/lms-admin/**'
+      - 'supabase/migrations/**'
       - 'tests/learning-flows.test.mjs'
+      - 'tests/lms/**'
       - 'admin/lesson-manager.html'
       - 'admin/quiz-builder.html'
       - 'tests/lms-client-smoke.test.mjs'
@@ -32,7 +34,9 @@ on:
       - 'admin/lms.html'
       - 'admin/courses.html'
       - 'supabase/functions/lms-admin/**'
+      - 'supabase/migrations/**'
       - 'tests/learning-flows.test.mjs'
+      - 'tests/lms/**'
       - 'admin/lesson-manager.html'
       - 'admin/quiz-builder.html'
       - 'tests/lms-client-smoke.test.mjs'
@@ -42,8 +46,20 @@ permissions:
 jobs:
   lms-smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - name: Run LMS static checks
         run: node --test tests/lms-client-smoke.test.mjs tests/learning-flows.test.mjs
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install LMS test dependencies
+        working-directory: tests/lms
+        run: npm ci --no-audit --no-fund
+      - name: Publish-readiness database tests (isolated PGlite, real schema and migrations)
+        working-directory: tests/lms
+        run: node publish-readiness.mjs
+      - name: Browser publish-check parity tests
+        working-directory: tests/lms
+        run: node course-readiness.mjs
