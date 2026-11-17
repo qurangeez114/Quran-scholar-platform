@@ -37,6 +37,7 @@ files). Each file is idempotent or additive; read it before running.
 | 4 | `migrations/20261104b_quiz_integrity_public_reads.sql` (server quiz grading, answer keys, lesson objectives, certificate verification, public lesson counts) | Verified unapplied (`qh_grade_quiz`, `qh_quiz_keys`, `qh_verify_certificate` missing) |
 | 5 | `supabase/migrations/20261116090000_enforce_course_publish_readiness.sql` (server-side publish checks) | **Cannot verify** from outside (private schema triggers). It was merged to `main` in PR #450; check Dashboard → Database → Triggers for `qh_courses_publish_readiness`, and apply it if missing. |
 | 6 | `supabase/migrations/20261116130000_publish_requires_syllabus.sql` (new in this release: publishing also requires a syllabus once step 3 is applied) | Unapplied (new file). Apply after #5. |
+| 7 | `supabase/migrations/20261117090000_owner_manage_all_courses.sql` (site owners can see, edit, publish, unpublish and delete every course, including instructors' courses; instructors still manage only their own) | Unapplied (new file). Apply after #6. Without it, Admin → Courses lists all courses for the owner but saving changes to another instructor's course fails. |
 
 Older files in `supabase/migrations/` (up to `20261108084500_speed_up_research_hadith_book_rows.sql`)
 could not be individually verified from outside; compare with Dashboard → Database → Migrations.
