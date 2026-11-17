@@ -403,8 +403,10 @@
     async function loadCourses() {
       try {
         const all = await getCourses(false); // include your drafts
-        const mine = all.filter(c => c.created_by === currentUser.id);
-        const others = all.filter(c => c.created_by !== currentUser.id && c.is_published);
+        // Owners can enroll students directly into any course.
+        const isOwner = teachingRole === 'owner';
+        const mine = isOwner ? all : all.filter(c => c.created_by === currentUser.id);
+        const others = isOwner ? [] : all.filter(c => c.created_by !== currentUser.id && c.is_published);
         ownCourseIds = new Set(mine.map(c => c.id));
         const courseSelect = document.getElementById('courseSelect');
         const group = (label, list, suffix) => {
@@ -419,7 +421,7 @@
           });
           courseSelect.appendChild(g);
         };
-        group('My courses (enroll directly)', mine, c => c.is_published ? '' : ' (draft)');
+        group(isOwner ? 'All courses (enroll directly)' : 'My courses (enroll directly)', mine, c => c.is_published ? '' : ' (draft)');
         group("Other instructors' published courses (recommend)", others, () => '');
         if (!mine.length && !others.length) {
           showAlert('You have no courses yet. Create one in Manage Courses first.', 'info');

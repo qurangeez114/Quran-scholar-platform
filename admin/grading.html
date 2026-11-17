@@ -329,16 +329,21 @@
         throw Error('Sign in required');
       }
       // Same access rule as the Instructor Dashboard (active instructor or owner; temporary password replaced).
-      await requireTeachingAccess();
+      const state = await requireTeachingAccess();
+      teachingRole = state?.role || 'instructor';
+    }
+
+    // Owners grade every course; instructors see only courses they created.
+    let teachingRole = 'instructor';
+    function managedCourses() {
+      const query = supabase.from('qh_courses').select('id');
+      return teachingRole === 'owner' ? query : query.eq('created_by', currentUser.id);
     }
 
     async function loadAssignments() {
       try {
         // Get all courses created by user
-        const { data: courses, error: courseError } = await supabase
-          .from('qh_courses')
-          .select('id')
-          .eq('created_by', currentUser.id);
+        const { data: courses, error: courseError } = await managedCourses();
 
         if (courseError) throw courseError;
 
@@ -516,10 +521,7 @@
 
     async function loadQuizzes() {
       try {
-        const { data: courses, error: courseError } = await supabase
-          .from('qh_courses')
-          .select('id')
-          .eq('created_by', currentUser.id);
+        const { data: courses, error: courseError } = await managedCourses();
 
         if (courseError) throw courseError;
         if (!courses.length) { document.getElementById('quizzesList').textContent = 'No courses available for this instructor.'; return; }

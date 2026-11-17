@@ -122,7 +122,7 @@ $('quizForm').addEventListener('submit',async e=>{
 async function init(){
  try{
   if(!lessonId)throw Error('Missing lesson ID. Open this page from the course lesson manager.');
-  await requireTeachingAccess();
+  const access=await requireTeachingAccess();
   const {data:auth,error:authError}=await supabase.auth.getUser();
   if(authError||!auth.user)throw Error('Sign in as the course instructor.');
   const {data:lesson,error:lessonError}=await supabase.from('qh_lessons').select('id,course_id,title,lesson_type').eq('id',lessonId).single();
@@ -130,7 +130,7 @@ async function init(){
   courseId=lesson.course_id;
   const {data:course,error:courseError}=await supabase.from('qh_courses').select('id,created_by').eq('id',courseId).single();
   if(courseError)throw courseError;
-  if(course.created_by!==auth.user.id)throw Error('Only the course creator may edit this quiz.');
+  if(access?.role!=='owner'&&course.created_by!==auth.user.id)throw Error('Only the course creator or a site owner may edit this quiz.');
   if(lesson.lesson_type!=='quiz')throw Error('This lesson is not a quiz. Change its type to Quiz in Lesson Manager first.');
   $('lessonName').textContent=lesson.title;
   $('backLessons').href='/admin/lesson-manager.html?course='+encodeURIComponent(courseId);
