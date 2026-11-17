@@ -87,7 +87,7 @@ async function save(e){
 
 async function init(){
  const {data:{user}}=await supabase.auth.getUser();
- if(!user){status.innerHTML='Please <a href="/account.html?mode=login">sign in</a> with an administrator account.';return;}
+ if(!user){status.innerHTML='Please <a href="/account.html?mode=login&returnTo='+encodeURIComponent(location.pathname+location.search)+'">sign in</a> with an administrator account.';return;}
  let session;try{session=await lmsRequest('session');}catch{status.textContent='Cannot verify administrator access.';return;}
  if(session?.role!=='owner'){status.textContent='Administrator access required.';return;}
  const {data,error}=await supabase.from('qh_courses').select('*').order('title');
