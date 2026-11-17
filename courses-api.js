@@ -58,12 +58,15 @@ export async function updateCourse(id, updates) {
 }
 
 export async function deleteCourse(id) {
-  const { error } = await supabase
+  // Row security silently skips courses you cannot manage, so confirm a row was removed.
+  const { data, error } = await supabase
     .from('qh_courses')
     .delete()
-    .eq('id', id);
+    .eq('id', id)
+    .select('id');
 
   if (error) throw error;
+  if (!data?.length) throw Object.assign(new Error('Course not deleted: no permission'), { code: 'PGRST116' });
 }
 
 export async function getLessonsByCourse(courseId) {

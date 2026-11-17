@@ -330,8 +330,10 @@
     }
     document.getElementById('lessonType').addEventListener('change',updateQuizHint);
 
+    let teachingRole = 'instructor';
     async function checkAuth() {
-      await requireTeachingAccess();
+      const state = await requireTeachingAccess();
+      teachingRole = state?.role || 'instructor';
       const { data } = await supabase.auth.getSession();
       currentUser = data.session?.user;
 
@@ -356,7 +358,8 @@
       try {
         currentCourse = await getCourseById(courseId);
 
-        if (currentCourse.created_by !== currentUser.id) {
+        // Owners may manage any course; instructors only their own.
+        if (teachingRole !== 'owner' && currentCourse.created_by !== currentUser.id) {
           showAlert('You do not have permission to edit this course', 'error');
           window.location.href = 'courses.html';
           return;

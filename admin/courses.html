@@ -164,6 +164,7 @@
       overflow-wrap: anywhere;
     }
 
+    .course-creator { margin-top: 4px; font-weight: 600; color: #41594b; }
     .course-meta {
       font-size: 0.78rem;
       color: #6f818b;
@@ -381,15 +382,18 @@
 
   <script type="module">
     import { supabase } from '../accounts/client.js';
-    import { requireTeachingAccess } from '../accounts/lms-access.js';
+    import { requireTeachingAccess, lmsRequest } from '../accounts/lms-access.js';
     import { getCourses, createCourse, updateCourse, deleteCourse } from '../courses-api.js';
 
     import {loadCourseReadiness} from '../accounts/course-readiness.js';
     let currentUser = null;
     let courses = [];
+    let teachingRole = 'instructor';
+    let creatorNames = new Map();
 
     async function checkAuth() {
-      await requireTeachingAccess();
+      const state = await requireTeachingAccess();
+      teachingRole = state?.role || 'instructor';
       const { data } = await supabase.auth.getSession();
       currentUser = data.session?.user;
 
@@ -400,8 +404,19 @@
 
     async function loadCourses() {
       try {
-        const allCourses = await getCourses(false); // Include unpublished
-        courses = allCourses.filter(c => c.created_by === currentUser.id);
+        if (teachingRole === 'owner') {
+          // Owners manage every course. The lms-admin dashboard lists all courses
+          // with creator names; fall back to a direct read if it is unavailable.
+          let dash = null;
+          try { dash = await lmsRequest('dashboard'); } catch (e) { console.warn('Dashboard unavailable:', e); }
+          creatorNames = new Map();
+          for (const p of dash?.people || []) creatorNames.set(p.user_id, p.display_name || p.email || '');
+          for (const a of dash?.accounts || []) if (a?.user_id && a.display_name) creatorNames.set(a.user_id, a.display_name);
+          courses = dash?.courses || await getCourses(false);
+        } else {
+          const allCourses = await getCourses(false); // Include unpublished
+          courses = allCourses.filter(c => c.created_by === currentUser.id);
+        }
         renderCourses();
       } catch (error) {
         console.error('Error loading courses:', error);
@@ -413,6 +428,20 @@
     function escapeHTML(value) {
       return String(value ?? '').replace(/[&<>"']/g, c =>
         ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    const NO_ACCESS = 'your account does not have permission to change this course. If you are the site owner, apply the owner course access migration (see docs/SETUP_CHECKLIST.md).';
+    // A blocked update returns no row (PGRST116); explain it instead of showing the raw code.
+    function friendlyError(error) {
+      if (error?.code === 'PGRST116') return NO_ACCESS;
+      return error?.message || 'please retry';
+    }
+
+    // Owner view: say who created each course.
+    function creatorLabel(course) {
+      if (course.created_by === currentUser?.id) return 'Created by you';
+      const name = creatorNames.get(course.created_by);
+      return name ? 'Created by ' + name : 'Created by another instructor';
     }
 
     function renderCourses() {
@@ -429,6 +458,7 @@
           <div class="course-description">${escapeHTML(course.description || 'No description')}</div>
           <div class="course-meta">
             Created: ${new Date(course.created_at).toLocaleDateString()}
+            ${teachingRole === 'owner' ? `<div class="course-creator">${escapeHTML(creatorLabel(course))}</div>` : ''}
           </div>
           <div class="course-state">
             <span class="status-badge ${course.is_published ? 'published' : 'draft'}">
@@ -553,7 +583,7 @@
         await loadCourses();
       } catch (error) {
         console.error('Error updating course:', error);
-        showAlert('Failed to update course: ' + (error.message || 'please retry'), 'error');
+        showAlert('Failed to update course: ' + friendlyError(error), 'error');
       }
     });
 
@@ -573,7 +603,7 @@
         await loadCourses();
       } catch (error) {
         console.error('Error changing publish state:', error);
-        showAlert((is_published ? 'Could not publish: ' : 'Could not unpublish: ') + (error.message || 'please retry'), 'error');
+        showAlert((is_published ? 'Could not publish: ' : 'Could not unpublish: ') + friendlyError(error), 'error');
       }
     };
 
@@ -590,7 +620,7 @@
         await loadCourses();
       } catch (error) {
         console.error('Error deleting course:', error);
-        showAlert('Failed to delete course', 'error');
+        showAlert('Failed to delete course: ' + friendlyError(error), 'error');
       }
     };
 
