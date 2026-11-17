@@ -37,6 +37,7 @@ export function mountEmailLinkPanel({onVerified}={}){
   try{
    await verifyEmailLink(link);
    box.remove();
+   window.dispatchEvent(new CustomEvent('qh-email-link-verified',{detail:link.type}));
    if(onVerified)await onVerified(link.type);
   }catch(e){
    p.textContent=/expired|invalid/i.test(e.message||'')

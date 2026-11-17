@@ -71,12 +71,32 @@ async function submit(form,action){
 }
 $('provision-form').onsubmit=e=>{e.preventDefault();return submit(e.currentTarget,'provision');};
 $('provision-form').elements.role.onchange=roleForm;
+// Forced change of a temporary password. Errors stay on the form; a failed change never signs anyone out.
+function passwordError(text){const node=$('password-error');if(node){node.textContent=text||'';node.hidden=!text;}if(text)status(text);}
+function explainPasswordError(message){
+ const m=String(message||'');
+ if(/different password|same password|different from/i.test(m))return 'Your new password must be different from the temporary password and 12–128 characters long.';
+ if(/temporary password is incorrect/i.test(m))return 'The current temporary password is incorrect. Check the password your administrator or instructor gave you, or use Reset password to set one by email.';
+ if(/sign in required|jwt|session/i.test(m))return 'Your sign-in has expired. Log in again with your temporary password, then choose a new one. ('+m+')';
+ if(/no temporary password change is pending/i.test(m))return 'Your password was already changed. Reload this page to continue.';
+ return 'Your password could not be changed: '+(m||'please retry')+'.';
+}
 $('password-form').onsubmit=async e=>{
  e.preventDefault();const form=e.currentTarget,values=Object.fromEntries(new FormData(form));
- if(values.newPassword!==values.confirmPassword)return status('New passwords do not match.');
- form.querySelector('button').disabled=true;
- try{await lmsRequest('change_password',values);form.reset();await db.auth.refreshSession();if(state.role==='student'){location.replace('/student-dashboard.html');return;}await start();}
- catch(error){status(error.message);}finally{form.querySelector('button').disabled=false;}
+ passwordError('');
+ if(String(values.newPassword||'').length<12)return passwordError('Your new password must be at least 12 characters.');
+ if(values.newPassword!==values.confirmPassword)return passwordError('The new passwords do not match.');
+ if(values.newPassword===values.currentPassword)return passwordError('Your new password must be different from the temporary password.');
+ const button=form.querySelector('button');button.disabled=true;status('Saving your new password…');
+ try{
+  await lmsRequest('change_password',values);
+  form.reset();
+  try{await db.auth.refreshSession();}catch{}
+  try{window.dispatchEvent(new CustomEvent('qh-password-changed'));}catch{}
+  if(state.role==='student'){status('Password changed. Opening your Student Dashboard…');location.replace('/student-dashboard.html');return;}
+  status('Password changed.');await start();
+ }catch(error){passwordError(explainPasswordError(error.message));}
+ finally{button.disabled=false;}
 };
 for(const id of ['search','country-filter','city-filter','sort','instructor-filter','class-filter','student-search'])$(id).addEventListener('input',()=>{if(id==='country-filter')$('city-filter').value='';render();});
 $('refresh').onclick=()=>refresh().catch(e=>status(e.message));
@@ -108,7 +128,7 @@ async function start(){
  $('dashboard').hidden=true;$('password-panel').hidden=true;
  const {data}=await db.auth.getSession();if(!data.session){status('Please log in to continue.');location.replace(instructorLoginUrl());return;}
  state=await lmsRequest('session');
- if(state.account?.must_change_password){$('password-panel').hidden=false;status('Set your own password to continue.');return;}
+ if(state.account?.must_change_password){$('password-panel').hidden=false;if(state.role==='student')$('title').textContent='Choose your password';status('Set your own password to continue.');return;}
  if(!['owner','instructor'].includes(state.role)){status('This page is for authorized instructors and the owner.');return;}
  await refresh();$('dashboard').hidden=false;
 }
