@@ -1,5 +1,5 @@
 import {db} from './client.js';
-import {lmsRequest} from './lms-access.js';
+import {lmsRequest,instructorLoginUrl} from './lms-access.js';
 const $=id=>document.getElementById(id);
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let snapshot,state;
@@ -30,12 +30,16 @@ function render(){
  $('title').textContent=owner?'Admin Page':'Instructor Dashboard';
  $('instructors-panel').hidden=!owner;$('role-label').hidden=!owner;$('instructor-filter').parentElement.hidden=!owner;
  $('profile-panel').hidden=owner;
- if(!owner){$('provision-form').elements.role.value='student';$('provision-title').textContent='Enroll a student in your class';}
+ if(!owner){$('provision-form').elements.role.value='student';$('provision-title').textContent='Enroll a student in your course';}
+ // Instructors with no courses yet see a "Create your first course" prompt instead of an empty enrollment form.
+ const noCourses=!owner&&snapshot.courses.length===0;
+ if($('first-course'))$('first-course').hidden=!noCourses;
+ if($('provision-panel'))$('provision-panel').hidden=noCourses;
  roleForm();
  const instructors=snapshot.accounts.filter(a=>a.role==='instructor');
- $('metrics').innerHTML=[['Instructors',owner?instructors.length:1],['Classes',snapshot.courses.length],['Students',new Set(snapshot.enrollments.map(e=>e.user_id)).size],['Saved quiz attempts',snapshot.attempts.length]].map(([label,count])=>`<div><strong>${count}</strong>${label}</div>`).join('');
- options($('provision-form').elements.course_id,snapshot.courses,c=>c.id,c=>c.title,'Select a class');
- options($('class-filter'),snapshot.courses,c=>c.id,c=>c.title,'All classes');
+ $('metrics').innerHTML=[['Instructors',owner?instructors.length:1],['Courses',snapshot.courses.length],['Students',new Set(snapshot.enrollments.map(e=>e.user_id)).size],['Saved quiz attempts',snapshot.attempts.length]].map(([label,count])=>`<div><strong>${count}</strong>${label}</div>`).join('');
+ options($('provision-form').elements.course_id,snapshot.courses,c=>c.id,c=>c.title,'Select a course');
+ options($('class-filter'),snapshot.courses,c=>c.id,c=>c.title,'All courses');
  const creatorIds=[...new Set(snapshot.courses.map(c=>c.created_by).concat(instructors.map(i=>i.user_id)))];
  options($('instructor-filter'),creatorIds,id=>id,id=>name(id),'All instructors');
  options($('country-filter'),[...new Set(instructors.map(i=>i.country).filter(Boolean))].sort(),v=>v,v=>v,'All countries');
@@ -43,9 +47,9 @@ function render(){
  options($('city-filter'),[...new Set(eligible.map(i=>i.city).filter(Boolean))].sort(),v=>v,v=>v,'All cities');
  const term=$('search').value.toLowerCase();
  const visible=instructors.filter(i=>(`${i.display_name} ${i.email}`).toLowerCase().includes(term)&&(!$('country-filter').value||i.country===$('country-filter').value)&&(!$('city-filter').value||i.city===$('city-filter').value)).sort((a,b)=>String(a[$('sort').value]).localeCompare(String(b[$('sort').value])));
- $('instructors').innerHTML=visible.map(i=>`<article class="card"><h3>${instructorLink(i.user_id,i.display_name)}</h3><p>${esc(i.email)}</p><p>${esc(i.city||'City not set')}, ${esc(i.country||'Country not set')}</p><p>${i.active?'Active':'Suspended'} · ${i.must_change_password?'Password change pending':'Account ready'}</p><a href="/faculty-admin.html?id=${encodeURIComponent(i.user_id)}" class="faculty-edit-link">Edit account &amp; faculty profile</a> <button type="button" data-view="${i.user_id}">View classes and students</button> <button type="button" data-invite="${i.user_id}" ${i.active?'':'disabled title="Restore the account before inviting"'}>Resend invitation email</button> <button type="button" data-toggle="${i.user_id}" data-active="${i.active}">${i.active?'Suspend access':'Restore access'}</button></article>`).join('')||'<p>No matching instructors.</p>';
+ $('instructors').innerHTML=visible.map(i=>`<article class="card"><h3>${instructorLink(i.user_id,i.display_name)}</h3><p>${esc(i.email)}</p><p>${esc(i.city||'City not set')}, ${esc(i.country||'Country not set')}</p><p>${i.active?'Active':'Suspended'} · ${i.must_change_password?'Password change pending':'Account ready'}</p><a href="/faculty-admin.html?id=${encodeURIComponent(i.user_id)}" class="faculty-edit-link">Edit account &amp; faculty profile</a> <button type="button" data-view="${i.user_id}">View courses and students</button> <button type="button" data-invite="${i.user_id}" ${i.active?'':'disabled title="Restore the account before inviting"'}>Resend invitation email</button> <button type="button" data-toggle="${i.user_id}" data-active="${i.active}">${i.active?'Suspend access':'Restore access'}</button></article>`).join('')||'<p>No matching instructors.</p>';
  const courses=filteredCourses(),ids=new Set(courses.map(c=>c.id));
- $('classes').innerHTML=courses.map(c=>`<article class="card"><h3>${esc(c.title)}</h3><p>${instructorLink(c.created_by)} · ${c.is_published?'Published':'Draft'}</p><p>${snapshot.enrollments.filter(e=>e.course_id===c.id).length} enrolled students</p><a href="/admin/lesson-manager.html?course=${c.id}">Lessons</a><a href="/course.html?course=${c.id}&preview=1">Preview as student</a><a href="/admin/grading.html?tab=quizzes&course=${c.id}">Results</a></article>`).join('')||'<p>No matching classes.</p>';
+ $('classes').innerHTML=courses.map(c=>`<article class="card"><h3>${esc(c.title)}</h3><p>${instructorLink(c.created_by)} · ${c.is_published?'Published':'Draft'}</p><p>${snapshot.enrollments.filter(e=>e.course_id===c.id).length} enrolled students</p><a href="/admin/lesson-manager.html?course=${c.id}">Lessons</a><a href="/course.html?course=${c.id}&preview=1">Preview as student</a><a href="/admin/grading.html?tab=quizzes&course=${c.id}">Results</a></article>`).join('')||'<p>No matching courses.</p>';
  const studentTerm=$('student-search').value.toLowerCase();
  const matches=id=>`${name(id)} ${person(id)?.email||''}`.toLowerCase().includes(studentTerm);
  $('students').innerHTML=snapshot.enrollments.filter(e=>ids.has(e.course_id)&&matches(e.user_id)).map(e=>{
@@ -102,7 +106,7 @@ $('instructors').onclick=async e=>{
 };
 async function start(){
  $('dashboard').hidden=true;$('password-panel').hidden=true;
- const {data}=await db.auth.getSession();if(!data.session){status('Sign in through My Account to continue.');return;}
+ const {data}=await db.auth.getSession();if(!data.session){status('Please log in to continue.');location.replace(instructorLoginUrl());return;}
  state=await lmsRequest('session');
  if(state.account?.must_change_password){$('password-panel').hidden=false;status('Set your own password to continue.');return;}
  if(!['owner','instructor'].includes(state.role)){status('This page is for authorized instructors and the owner.');return;}
