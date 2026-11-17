@@ -42,6 +42,19 @@ class ScreeningIndexTests(unittest.TestCase):
             indexer.main()
         self.assertEqual(indexer.OUT.read_text(), "existing")
 
+    def test_staging_publication_flags_fail_closed(self):
+        for flag in ("public", "published", "verified"):
+            with self.subTest(flag=flag):
+                for old in self.dir.glob("coverage-*.json"):
+                    old.unlink()
+                self.put("coverage-2-1-to-2-1-flag.json", {"rows": [
+                    {"sura": 2, "aya": 1, flag: True}
+                ]})
+                indexer.OUT.write_text("existing", encoding="utf-8")
+                with self.assertRaises(SystemExit):
+                    indexer.main()
+                self.assertEqual(indexer.OUT.read_text(), "existing")
+
     def test_real_fatiha_schema(self):
         self.put("coverage-1-1-to-1-7-20261103.json", {
             "surah": 1, "rows": [
