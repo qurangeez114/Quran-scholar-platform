@@ -1,0 +1,19 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="/favicon.svg"><link rel="stylesheet" href="/academic/academic.css"><script src="/site-chrome.js" defer></script><title>My Progress · QuranHikma</title><meta name="robots" content="noindex">
+</head><body class="ac"><main class="ac-wrap" id="main">
+<p class="eyebrow">Student Records</p><h1>My Progress</h1><p class="lede">Your enrolled courses, lessons completed and quiz scores.</p>
+<p class="status" id="status" role="status" aria-live="polite">Checking your account…</p><div id="out"></div>
+<p class="meta">See also: <a href="/transcript.html">Transcript &amp; Certificates</a> · <a href="/policies.html#grading">Grading policy</a></p></main>
+<script type="module">
+import {db} from '/accounts/client.js';import {esc,renderFooter} from '/academic/academic.js';renderFooter();
+const st=document.getElementById('status'),out=document.getElementById('out');
+(async()=>{const {data:{user}}=await db.auth.getUser();
+ if(!user){st.innerHTML='Please <a href="/account.html?mode=login">log in</a> to see your progress.';return;}
+ const {data:en,error}=await db.from('qh_enrollments').select('course_id,progress_pct,completed_lessons,enrolled_at,qh_courses(title)').eq('user_id',user.id);
+ if(error){st.textContent='Could not load enrollments: '+error.message;return;}
+ if(!en||!en.length){st.innerHTML='You are not enrolled in any course yet. Browse the <a href="/catalog.html">catalog</a>.';return;}
+ const {data:pr}=await db.from('qh_student_progress').select('course_id,completed,quiz_score').eq('user_id',user.id);
+ st.textContent=en.length+' enrolled course'+(en.length>1?'s':'');
+ out.innerHTML=en.map(e=>{const p=(pr||[]).filter(x=>x.course_id===e.course_id);const q=p.filter(x=>x.quiz_score!=null);const avg=q.length?Math.round(q.reduce((a,b)=>a+b.quiz_score,0)/q.length):null;const pct=Math.max(0,Math.min(100,e.progress_pct||0));
+  return '<div class="card"><h2 style="margin-top:0;border:0">'+esc(e.qh_courses?.title||'Course')+'</h2><div class="bar" role="progressbar" aria-valuenow="'+pct+'" aria-valuemin="0" aria-valuemax="100"><i style="width:'+pct+'%"></i></div><p class="meta">'+pct+'% complete · '+(e.completed_lessons||0)+' lessons completed · Average quiz score: '+(avg==null?'—':avg+'%')+' · Enrolled '+esc((e.enrolled_at||'').slice(0,10))+'</p><a class="btn" href="/course.html?course='+encodeURIComponent(e.course_id)+'">Continue</a> <a class="btn" href="/syllabus.html?course='+encodeURIComponent(e.course_id)+'">Syllabus</a></div>';}).join('');
+})().catch(e=>{st.textContent='Error: '+e.message;});
+</script></body></html>
