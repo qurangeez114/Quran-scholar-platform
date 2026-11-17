@@ -18,6 +18,7 @@ assert.match(style,/\.course-actions \.btn:focus-visible/);
 assert.match(style,/background:\s*#173446/,'Academic header must use restrained navy');
 const actions=[
  ['viewLessons','Lessons'],
+ ['togglePublish','Publish'],
  ['editCourse','Edit'],
  ['/course.html?course=','Preview as student'],
  ['/admin/grading.html?tab=quizzes','Results'],
@@ -60,8 +61,8 @@ let cards=[...document.querySelectorAll('.course-item')];
 assert.equal(cards.length,2);
 for(const card of cards){
  const controls=[...card.querySelectorAll('.course-actions .btn')];
- assert.equal(controls.length,5,'All five action buttons/links are present');
- assert.deepEqual(controls.map(c=>c.textContent.trim()),['Lessons','Edit','Preview as student','Results','Delete']);
+ assert.equal(controls.length,6,'All six action buttons/links are present');
+ assert.deepEqual(controls.map(c=>c.textContent.trim()),['Lessons','Publish','Edit','Preview as student','Results','Delete']);
  assert.ok(controls.every(c=>c.getAttribute('href') || c.getAttribute('type')==='button'));
  assert.equal(card.querySelector('.course-state .status-badge').textContent.trim(),'Draft');
 }
@@ -69,6 +70,16 @@ assert.ok(!cards[1].querySelector('img'),'Unsafe course description must be disp
 assert.ok(cards[1].textContent.includes('<img src=x onerror=alert(1)>'));
 assert.match(cards[0].querySelector('.course-actions .course-preview').href,/\/course\.html\?course=/);
 assert.match(cards[0].querySelector('.course-actions a[href*="grading"]').href,/\/admin\/grading\.html\?tab=quizzes/);
+// One-click Publish on a draft card uses the readiness gate, then publishes.
+readyErrors=['Add at least one lesson'];
+await fakeWindow.togglePublish(second);
+assert.ok(logged.some(x=>x.type==='alert'&&x.message.includes('Add at least one lesson')));
+assert.equal(courses[1].is_published,false,'Publish button respects course readiness');
+readyErrors=[];
+await fakeWindow.togglePublish(second);
+assert.equal(courses[1].is_published,true,'Publish button publishes a ready draft');
+assert.equal([...document.querySelectorAll('.course-item')][1].querySelector('.course-publish').textContent.trim(),'Unpublish');
+logged.length=0;
 fakeWindow.viewLessons(cid);
 assert.equal(fakeWindow.location.href,'/admin/lesson-manager.html?course='+cid);
 await fakeWindow.editCourse(cid);
@@ -97,4 +108,4 @@ allowDelete=false;await fakeWindow.deleteCourseConfirm(cid);
 assert.ok(courses.some(c=>c.id===cid),'Cancellation leaves course intact');
 allowDelete=true;await fakeWindow.deleteCourseConfirm(cid);
 assert.ok(!courses.some(c=>c.id===cid),'Confirmed deletion removes course');
-console.log('PASS: responsive card CSS, five readable action controls, escaped text, course create/edit/publish gate, preview/results URLs, lessons navigation and confirmed delete.');
+console.log('PASS: responsive card CSS, six readable action controls (including Publish/Unpublish), escaped text, course create/edit/publish gate, preview/results URLs, lessons navigation and confirmed delete.');
