@@ -1,11 +1,31 @@
 import assert from 'node:assert/strict';import {readFile} from 'node:fs/promises';
 const {JSDOM}=await import(process.env.JSDOM_MODULE||'jsdom');
-const html=await readFile(new URL('../account.html',import.meta.url),'utf8');let code=await readFile(new URL('../accounts/account.js',import.meta.url),'utf8');code=code.replace(/^import[^\n]+\n/,'');
+const html=await readFile(new URL('../account.html',import.meta.url),'utf8');let code=await readFile(new URL('../accounts/account.js',import.meta.url),'utf8');code=code.replace(/^import[^\n]+\n/gm,'');
+let fb=await readFile(new URL('../accounts/auth-feedback.js',import.meta.url),'utf8');fb=fb.replace(/^export /gm,'').replace(/^const /gm,'var ');
 const dom=new JSDOM(html,{url:'https://quranhikma.com/account.html',runScripts:'outside-only'});const w=dom.window,d=w.document;w.HTMLDialogElement.prototype.showModal=function(){this.open=true};w.HTMLDialogElement.prototype.close=function(){this.open=false};
 let state={state:'active'},missing=false,session={user:{id:'test',email:'test@example.test'}},deletions=0;
-w.db={auth:{getSession:async()=>({data:{session}}),onAuthStateChange:()=>{},signOut:async()=>{session=null;return {}; }},from:()=>({select:()=>({eq:()=>({maybeSingle:async()=>({data:{user_id:'test'}})})})}),rpc:async(name)=>{if(name==='qh_account_status')return missing?{error:{message:'missing'}}:{data:state};if(name==='qh_request_account_deletion'){deletions++;state={state:'recoverable',recover_until:new Date(Date.now()+72*3600e3).toISOString()};return {data:state};}if(name==='qh_restore_my_account'){state={state:'active'};return {data:state};}return {data:false};}};w.message=t=>d.getElementById('status').textContent=t;w.exportResearch=async()=>{};w.eval(code);const tick=()=>new Promise(r=>setTimeout(r,20));await tick();
+w.db={auth:{getSession:async()=>({data:{session}}),onAuthStateChange:()=>{},signOut:async()=>{session=null;return {}; }},from:()=>({select:()=>({eq:()=>({maybeSingle:async()=>({data:{user_id:'test'}})})})}),rpc:async(name)=>{if(name==='qh_account_status')return missing?{error:{message:'missing'}}:{data:state};if(name==='qh_request_account_deletion'){deletions++;state={state:'recoverable',recover_until:new Date(Date.now()+72*3600e3).toISOString()};return {data:state};}if(name==='qh_restore_my_account'){state={state:'active'};return {data:state};}return {data:false};}};w.message=t=>d.getElementById('status').textContent=t;w.exportResearch=async()=>{};w.setMessage=t=>{d.getElementById('status').textContent=t||'';};w.lmsRequest=async()=>({role:'learner',account:{}});w.eval(fb);w.eval(code);const tick=()=>new Promise(r=>setTimeout(r,20));await tick();
 assert.equal(d.getElementById('delete-account').disabled,false);d.getElementById('delete-account').click();assert.equal(deletions,0,'opening dialog never deletes');d.getElementById('cancel-delete').click();assert.equal(deletions,0);d.getElementById('delete-account').click();d.getElementById('confirm-delete').click();await tick();assert.equal(deletions,1);assert.equal(session,null);assert.match(d.getElementById('status').textContent,/72 hours/);
 session={user:{id:'test',email:'test@example.test'}};await w.eval('render()');assert.equal(d.getElementById('signed-in').hidden,true);assert.equal(d.getElementById('account-recovery').hidden,false);assert.equal(d.getElementById('restore-account').hidden,false);d.getElementById('restore-account').click();await tick();assert.equal(state.state,'active');assert.equal(d.getElementById('signed-in').hidden,false);
 state={state:'archived'};await w.eval('render()');assert.equal(d.getElementById('restore-account').hidden,true);assert.match(d.getElementById('recovery-description').textContent,/administrator/);
 missing=true;await w.eval('render()');assert.equal(d.getElementById('delete-account').disabled,true,'missing backend must never use legacy permanent deletion');
-console.log('PASS: confirmation, cancellation, deactivation/signout, recovery screen, restore, expired deadline, and fail-safe missing backend.');w.close();
+console.log('PASS: confirmation, cancellation, deactivation/signout, recovery screen, restore, expired deadline, and fail-safe missing backend.');
+// Reset-request workflow on the real page code, with the auth call mocked: no email is ever sent.
+let resetCalls=0,resetMode='limit';
+w.db.auth.resetPasswordForEmail=async()=>{resetCalls++;return resetMode==='limit'?{error:{code:'over_email_send_rate_limit',status:429,message:'429: email rate limit exceeded'}}:{error:null};};
+session=null;await w.eval('render()');await tick();
+d.querySelector('[data-mode="recover"]').click();d.getElementById('email').value='reset-test@example.test';
+d.getElementById('auth-form').dispatchEvent(new w.Event('submit',{cancelable:true}));await tick();
+assert.equal(resetCalls,1,'first press reaches the auth call once');
+assert.match(d.getElementById('status').textContent,/site-wide limit/);assert.doesNotMatch(d.getElementById('status').textContent,/rate limit exceeded/);
+assert.equal(d.getElementById('submit').disabled,true,'button disabled during cooldown');assert.match(d.getElementById('submit').textContent,/^Try again in 15:00$/);
+d.getElementById('auth-form').dispatchEvent(new w.Event('submit',{cancelable:true}));await tick();
+assert.equal(resetCalls,1,'repeat press during cooldown never reaches the auth call');assert.match(d.getElementById('status').textContent,/Please wait/);
+const stored=[];for(let i=0;i<w.localStorage.length;i++){const k=w.localStorage.key(i);stored.push(k+'='+w.localStorage.getItem(k));}
+assert.ok(stored.some(x=>x.startsWith('qh.authEmailCooldownUntil=')),'cooldown timestamp stored');assert.ok(!stored.join('|').includes('@'),'no email address stored in the browser');
+w.localStorage.setItem('qh.authEmailCooldownUntil',String(Date.now()-1));w.eval('updateRecoverButton()');
+assert.equal(d.getElementById('submit').disabled,false,'button re-enabled once cooldown ends');
+resetMode='ok';d.getElementById('auth-form').dispatchEvent(new w.Event('submit',{cancelable:true}));await tick();
+assert.equal(resetCalls,2);assert.match(d.getElementById('status').textContent,/Check your email/);assert.equal(d.getElementById('submit').disabled,true,'60-second cooldown after an accepted request');
+console.log('PASS: reset-request cooldown, friendly rate-limit message, no email stored, and re-enable after cooldown (auth mocked).');
+w.close();
