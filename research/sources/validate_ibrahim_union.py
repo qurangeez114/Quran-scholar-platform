@@ -28,14 +28,24 @@ def validate():
     assert data["counts"]["implicit"] == 20
     assert data["counts"]["candidates"] == 14
     for row in rows:
+        assert row["classification"] in {"needs_further_research", "no_specific_parallel_established_preliminarily"}, f"Invalid classification for {row['key']}"
         assert row["source_files"], f"No provenance for {row['key']}"
+        source_rows = []
         for name in row["source_files"]:
             assert "/" not in name and name.endswith(".json"), f"Unsafe source filename {name}"
             source = json.loads((STAGING / name).read_text(encoding="utf-8"))
-            assert any(
-                f"{r.get('sura', source.get('sura'))}:{r.get('aya')}" == row["key"]
-                for r in source.get("records", [])
-            ), f"Provenance mismatch for {row['key']} in {name}"
+            matches = [r for r in source.get("records", []) if f"{r.get('sura', source.get('sura'))}:{r.get('aya')}" == row["key"]]
+            assert matches, f"Provenance mismatch for {row['key']} in {name}"
+            source_rows.extend(matches)
+        assert max((len(r.get("candidates", [])) for r in source_rows), default=0) == row["staged_candidate_count"], f"Candidate count mismatch for {row['key']}"
+        if row["review_evidence"] == "explicit_true":
+            assert any(r.get("reviewed") is True for r in source_rows), f"Missing explicit review for {row['key']}"
+        classifications = {r.get("review_depth") for r in source_rows if r.get("review_depth") in {"needs_further_research", "no_specific_parallel_established_preliminarily"}}
+        if len(classifications) == 1:
+            assert row["classification"] in classifications, f"Classification drift for {row['key']}"
+        for source_row in source_rows:
+            for candidate in source_row.get("candidates", []):
+                assert candidate.get("verified") is not True and candidate.get("public") is not True, f"Public candidate in staging for {row['key']}"
     return "PASS: 52 unique Ibrahim keys; 32 explicit, 20 implicit; 14 staged; zero public"
 
 if __name__ == "__main__":
