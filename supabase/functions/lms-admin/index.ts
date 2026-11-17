@@ -56,6 +56,21 @@ const facultyInput=(body:any)=>{
  return patch;
 };
 const uuid = (value:unknown) => { const v=text(value); if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)) fail('Invalid identifier'); return v; };
+// Send the right access email for an existing Auth user.
+// Unconfirmed users (never opened their invitation) get a fresh invitation: a magic
+// link would make Supabase Auth send a generic "Confirm your signup" message and,
+// on current Auth versions, discard the temporary password. Confirmed users get a
+// sign-in (magic) link and keep their password.
+async function sendAccessEmail(userId:string,email:string,redirectTo:string){
+ const {data,error}=await service.auth.admin.getUserById(userId);
+ if(error||!data?.user)return {error:error||new Error('User not found'),kind:'none'};
+ if(!data.user.email_confirmed_at){
+  const invited=await service.auth.admin.inviteUserByEmail(email,{redirectTo});
+  return {error:invited.error,kind:'invite'};
+ }
+ const link=await service.auth.signInWithOtp({email,options:{shouldCreateUser:false,emailRedirectTo:redirectTo}});
+ return {error:link.error,kind:'magiclink'};
+}
 async function findEmail(email:string){
  for(let page=1;page<=100;page++){
   const {data,error}=await service.auth.admin.listUsers({page,perPage:1000}); if(error)throw error;
@@ -373,12 +388,12 @@ Deno.serve(async req=>{
    const id=uuid(body.user_id);
    const targetAccount=await checked(service.from('qh_lms_accounts').select('email,role,active').eq('user_id',id).maybeSingle());
    if(!targetAccount||targetAccount.role!=='instructor'||!targetAccount.active)fail('Active instructor not found');
-   // Existing-account magic link keeps the password unchanged and never creates a new user.
-   const {error:mailError}=await service.auth.signInWithOtp({
-    email:targetAccount.email,options:{shouldCreateUser:false,emailRedirectTo:instructorWelcome}
-   });
-   if(mailError)fail('Invitation email could not be sent. Check email configuration and retry.');
-   result={ok:true,emailAccepted:true,message:'Instructor sign-in link requested for '+targetAccount.email+'. Delivery is not guaranteed; check the inbox or spam folder.'};
+   // Never creates a user and never replaces the password (see sendAccessEmail).
+   const sent=await sendAccessEmail(id,targetAccount.email,instructorWelcome);
+   if(sent.error)fail('Invitation email could not be sent. Check email configuration and retry.');
+   result={ok:true,emailAccepted:true,message:sent.kind==='invite'
+    ?'New invitation email requested for '+targetAccount.email+'. Earlier invitation links no longer work. Delivery is not guaranteed; check the inbox or spam folder.'
+    :'Instructor sign-in link requested for '+targetAccount.email+'. Delivery is not guaranteed; check the inbox or spam folder.'};
   }else if(body.action==='resend_student_invite'){
    const courseId=uuid(body.course_id),targetId=uuid(body.user_id);
    await ownCourse(courseId);
@@ -387,11 +402,11 @@ Deno.serve(async req=>{
    if(!enrolled)fail('Student is not enrolled in this class',404);
    const {data:userResult,error:userError}=await service.auth.admin.getUserById(targetId);
    if(userError||!userResult.user?.email)fail('Student account could not be found',404);
-   const {error:mailError}=await service.auth.signInWithOtp({
-    email:userResult.user.email,options:{shouldCreateUser:false,emailRedirectTo:studentWelcome}
-   });
-   if(mailError)fail('Student invitation could not be sent. Check Auth SMTP configuration and retry.',503);
-   result={ok:true,emailAccepted:true,message:'Student sign-in link requested. Delivery depends on SMTP configuration.'};
+   const sent=await sendAccessEmail(targetId,userResult.user.email,studentWelcome);
+   if(sent.error)fail('Student invitation could not be sent. Check Auth SMTP configuration and retry.',503);
+   result={ok:true,emailAccepted:true,message:sent.kind==='invite'
+    ?'New student invitation requested. Earlier invitation links no longer work. Delivery depends on SMTP configuration.'
+    :'Student sign-in link requested. Delivery depends on SMTP configuration.'};
   }else if(body.action==='provision'){
    const requested=body.role==='instructor'?'instructor':body.role==='student'?'student':fail('Choose student or instructor');
    if(requested==='instructor'&&!owner)fail('Only the owner can authorize instructors',403);
@@ -406,35 +421,31 @@ Deno.serve(async req=>{
    if(!target){
     if(typeof body.temporaryPassword!=='string'||body.temporaryPassword.length<12||body.temporaryPassword.length>128)
       fail('New accounts require a temporary password of 12–128 characters');
-    // Supabase Auth triggers an invitation email immediately on either registration type.
-    // The password is configured server-side and must be delivered out of band,
-    // or the recipient can choose Forgot Password to set their own.
+    // Order matters. Setting a password on an Auth user clears its pending
+    // confirmation/invitation token, so the old "invite, then set password" order
+    // emailed a link that was already dead. Create the unconfirmed user with its
+    // temporary password first (no email is sent), then send the invitation,
+    // which issues a fresh token and keeps the password.
     const destination=requested==='instructor'?instructorWelcome:studentWelcome;
-    const {data,error}=await service.auth.admin.inviteUserByEmail(email,{
+    const createdUser=await service.auth.admin.createUser({
+     email,password:body.temporaryPassword,email_confirm:false,
+     user_metadata:{display_name:displayName,learning_role:requested}
+    });
+    if(createdUser.error||!createdUser.data.user)fail('Account creation failed. Contact the owner.',503);
+    target=createdUser.data.user;
+    const {error}=await service.auth.admin.inviteUserByEmail(email,{
      data:{display_name:displayName,learning_role:requested},redirectTo:destination
     });
     // If outgoing SMTP is unavailable, preserve registration instead of losing
-    // the student's enrollment or the instructor's authorization. The response
-    // must prominently say email failed and expose a resend control.
+    // the student's enrollment or the instructor's authorization. Confirm the
+    // address so the temporary password works; the response must prominently say
+    // email failed and expose a resend control.
     if(error){
-     target=await findEmail(email);
-     if(!target){
-      const fallback=await service.auth.admin.createUser({
-       email,password:body.temporaryPassword,email_confirm:true,
-       user_metadata:{display_name:displayName,learning_role:requested}
-      });
-      if(fallback.error)fail('Account creation failed. Email service is unavailable; contact the owner.',503);
-      target=fallback.data.user;
-     }
+     const confirmed=await service.auth.admin.updateUserById(target!.id,{email_confirm:true});
+     if(confirmed.error)fail('Account created, but email is unavailable and the account could not be activated. Contact the owner.',503);
      emailAccepted=false;
-    }else{
-     if(!data.user)fail('Invitation returned no user record. Contact the owner.');
-     target=data.user;emailAccepted=true;
-    }
-    if(!target)fail('Could not create account');
+    }else emailAccepted=true;
     created=true;
-    const updated=await service.auth.admin.updateUserById(target.id,{password:body.temporaryPassword});
-    if(updated.error)fail('Temporary-password setup failed. Contact the owner.',503);
    }
    if(!target)fail('Could not create account');
    const existing=await checked(service.from('qh_lms_accounts').select('*').eq('user_id',target!.id).maybeSingle());
@@ -451,10 +462,8 @@ Deno.serve(async req=>{
      ||(requested==='student'&&!alreadyLinked)
    );
    if(shouldNotifyExisting){
-    const {error:mailError}=await service.auth.signInWithOtp({
-     email,options:{shouldCreateUser:false,emailRedirectTo:requested==='instructor'?instructorWelcome:studentWelcome}
-    });
-    emailAccepted=!mailError;
+    const sent=await sendAccessEmail(target!.id,email,requested==='instructor'?instructorWelcome:studentWelcome);
+    emailAccepted=!sent.error;
    }
    const duplicate=!created&&!shouldNotifyExisting;
    const message=duplicate
