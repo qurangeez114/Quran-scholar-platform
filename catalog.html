@@ -1,0 +1,28 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="/favicon.svg"><link rel="stylesheet" href="/academic/academic.css"><script src="/site-chrome.js" defer></script>
+<title>Academic Catalog · QuranHikma</title><meta name="description" content="QuranHikma academic catalog: published courses, credit, prerequisites, learning outcomes and syllabi.">
+</head><body class="ac"><main class="ac-wrap" id="main">
+<p class="eyebrow">Academic Catalog</p><h1>Course Catalog</h1>
+<p class="lede">Every published QuranHikma course, with its syllabus, credit, prerequisites and learning outcomes. Fields the institution has not yet published are clearly marked.</p>
+<div class="card"><h2 style="margin-top:0">About this catalog</h2>
+<table><tr><th scope="row">Catalog year</th><td id="cat-year"></td></tr><tr><th scope="row">Institutional accreditation</th><td id="cat-accr"></td></tr><tr><th scope="row">Credit-hour definition</th><td id="cat-credit"></td></tr><tr><th scope="row">Related policies</th><td><a href="/policies.html#grading">Grading</a> · <a href="/policies.html#integrity">Academic integrity</a> · <a href="/student-handbook.html#admissions">Admissions</a> · <a href="/policies.html#refund">Refunds</a></td></tr></table></div>
+<label class="field noprint">Search courses<input id="q" type="search" placeholder="Title or description"></label>
+<p class="status" id="status" role="status" aria-live="polite">Loading courses…</p>
+<div class="grid" id="list"></div>
+</main>
+<script type="module">
+import {publishedCourses,esc,val,tbp,asList,renderFooter} from '/academic/academic.js';
+renderFooter();
+document.getElementById('cat-year').innerHTML=tbp('');
+document.getElementById('cat-accr').innerHTML=tbp('Accrediting body and status (leave blank if not accredited)');
+document.getElementById('cat-credit').innerHTML=tbp('');
+let all=[];
+function card(c){const outs=asList(c.learning_outcomes);
+ return '<article class="card"><p class="eyebrow">'+(c.course_code?esc(c.course_code):'Course')+'</p><h3 style="margin:.2em 0">'+esc(c.title)+'</h3>'+
+ '<p>'+esc((c.description||'').slice(0,260))+((c.description||'').length>260?'…':'')+'</p>'+
+ '<p class="meta"><strong>Credit:</strong> '+(c.credit_hours!=null?esc(c.credit_hours)+' hours':tbp(''))+'<br><strong>Prerequisites:</strong> '+(c.prerequisites?esc(c.prerequisites):tbp(''))+'<br><strong>Learning outcomes:</strong> '+(outs.length?outs.length+' published':tbp(''))+'</p>'+
+ '<div class="actions"><a class="btn primary" href="/syllabus.html?course='+encodeURIComponent(c.id)+'">View syllabus</a><a class="btn" href="/course.html?course='+encodeURIComponent(c.id)+'">Course page</a></div></article>';}
+function draw(){const q=document.getElementById('q').value.trim().toLowerCase();const rows=all.filter(c=>!q||(c.title+' '+(c.description||'')).toLowerCase().includes(q));
+ document.getElementById('list').innerHTML=rows.map(card).join('');document.getElementById('status').textContent=rows.length+' of '+all.length+' published courses';}
+publishedCourses().then(r=>{all=r;draw();}).catch(e=>{document.getElementById('status').textContent='Could not load the catalog ('+e.message+'). Please try again later.';});
+document.getElementById('q').addEventListener('input',draw);
+</script></body></html>
