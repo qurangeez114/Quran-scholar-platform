@@ -75,7 +75,7 @@ const fallback=await call(teacher,{
 assert.equal(fallback.status,200,'registration must continue on mail failure');
 assert.equal(fallback.data.created,true);
 assert.equal(fallback.data.emailAccepted,false,'do not claim failed SMTP sent the email');
-assert.match(fallback.data.message,/no email was sent successfully/);
+assert.match(fallback.data.message,/email could not be sent.*Resend/);assert.match(fallback.data.message,/temporary password/);
 assert.equal(tables.qh_lms_accounts.at(-1).must_change_password,true);
 assert.ok(users.find(u=>u.email==='smtp-error@example.invalid').email_confirmed_at,'mail outage: account is confirmed so the temporary password works');
 assert.equal((await call(pending,{action:'change_password',currentPassword:'same-password-123',newPassword:'same-password-123'})).status,400);
