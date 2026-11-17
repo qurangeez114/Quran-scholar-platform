@@ -215,6 +215,7 @@
 
     .alert.error { background: #ffebee; color: #c62828; border-left: 4px solid #c62828; }
     .alert.success { background: #e8f5e9; color: #2e7d32; border-left: 4px solid #2e7d32; }
+    .alert.info { background: #e8f1fb; color: #1d4f7a; border-left: 4px solid #1d4f7a; }
 
     .loader { text-align: center; color: #595959; padding: 2rem; }
 
@@ -841,9 +842,10 @@
     const hasRewordedCheck = () => !!currentQuiz?.questions?.some(q=>q.variant?.q && Array.isArray(q.variant.options));
     // The label must match what the button does: practice (not graded) only when a reworded final check follows.
     function quizButtonLabel() {
-      if (quizStage === 'final') return preview ? 'Check Final Answers (preview, not saved)' : 'Submit Final Check';
-      if (hasRewordedCheck()) return 'Practice: Check My Answers (not graded)';
-      return preview ? 'Check My Answers (preview, not saved)' : 'Submit Quiz (graded)';
+      // Enrolled students: say the attempt is graded and saved. "Practice"/"not saved" only where nothing is recorded.
+      if (quizStage === 'final') return preview ? 'Check Final Answers (preview, not saved)' : 'Submit Final Check (graded and saved)';
+      if (hasRewordedCheck()) return preview ? 'Practice: Check My Answers (preview, not saved)' : 'Practice round: Check My Answers (not saved)';
+      return preview ? 'Check My Answers (preview, not saved)' : 'Submit Quiz (graded and saved)';
     }
     function currentRoundQuestions() {
       const qOrder = seededOrder(currentQuiz.questions.length, (quizShuffleSeed ^ 0x5bd1e995) >>> 0);
@@ -883,10 +885,10 @@
       container.replaceChildren();
       const intro = document.createElement('p');
       intro.textContent = quizStage === 'final'
-        ? '🕵️ Final Detective Check: apply what you learned to the reworded questions. This round determines your recorded grade.'
+        ? (preview ? '🕵️ Preview of the final check: nothing is saved.' : '🕵️ Final Detective Check: apply what you learned to the reworded questions. This round is graded and saved as your recorded grade.')
         : !hasRewordedCheck()
-        ? (preview ? '🎯 Preview: answer the questions, then check them to see the score and your explanations. Nothing is saved.' : '🎯 Answer every question, then submit. This quiz has no practice round: your submission is graded and explanations appear afterwards.')
-        : '🎯 Practice round: answer the questions. Explanations appear before the final reworded check.';
+        ? (preview ? '🎯 Preview: answer the questions, then check them to see the score and your explanations. Nothing is saved.' : '🎯 Answer every question, then submit. This quiz has no practice round: your submission is graded and saved to your record, and explanations appear afterwards.')
+        : '🎯 Practice round (not saved): answer the questions. Explanations appear before the final reworded check, which is graded and saved.';
       container.append(intro);
       questions.forEach((q, idx) => {
         const section = document.createElement('section');
@@ -1029,7 +1031,7 @@
         await refreshLessonProgress();
         showAlert(progressResult.enrollmentWarning
           ? 'Score saved, but dashboard sync needs attention: '+progressResult.enrollmentWarning
-          : 'Quiz grade and lesson progress saved.',progressResult.enrollmentWarning?'error':'success');
+          : 'Quiz grade and lesson progress saved.'+completionNote(progressResult),progressResult.enrollmentWarning?'error':(progressResult.certificateWarning?'info':'success'));
       } catch (error) {
         console.error('Error submitting quiz:',error);
         showAlert('Quiz result or progress could not be saved: '+(error.message||'Please retry.'),'error');
@@ -1321,6 +1323,13 @@
       }
     }
 
+    // Course-complete message: certificate issued, or a plain note when it could not be issued yet.
+    function completionNote(r) {
+      if (r?.certificate?.certificate_code) return ' Course complete — your certificate is ready on your Student Dashboard.';
+      if (r?.certificateWarning) return ' Course complete. ' + r.certificateWarning;
+      return '';
+    }
+
     window.markLessonComplete = async function() {
       const button = document.getElementById('completeBtn');
       if(preview){showAlert('Preview only: completion is not saved.','info');return;}
@@ -1329,7 +1338,7 @@
       try {
         const result = await updateStudentProgress(currentCourse.id,currentLesson.id,true);
         button.textContent='✓ Completed and saved';
-        showAlert(result.enrollmentWarning ? 'Lesson saved. Dashboard sync needs attention: '+result.enrollmentWarning : 'Lesson completed and saved. Use Next Lesson when you are ready.',result.enrollmentWarning?'error':'success');
+        showAlert(result.enrollmentWarning ? 'Lesson saved. Dashboard sync needs attention: '+result.enrollmentWarning : 'Lesson completed and saved.'+(completionNote(result)||' Use Next Lesson when you are ready.'),result.enrollmentWarning?'error':(result.certificateWarning?'info':'success'));
         await refreshLessonProgress();
       } catch (error) {
         button.disabled=false;button.textContent='Retry saving completion';

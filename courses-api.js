@@ -449,28 +449,19 @@ export async function updateEnrollmentProgress(enrollmentId, progress_pct) {
 // ============================================================================
 
 // Certificate Generation
+// Certificates are issued only by the server (qh_issue_certificate, migration
+// 20261117100000), which checks enrollment, every lesson completed, every quiz
+// passed and every assignment submitted. Students cannot insert certificates.
+export const CERTIFICATE_NOT_READY = 'Your completion is saved. Certificates are not switched on yet; QuranHikma will issue yours once setup is finished.';
 export async function generateCertificate(courseId) {
   const user = (await supabase.auth.getUser()).data.user;
   if (!user) throw new Error('Not authenticated');
 
-  // Generate unique certificate code
-  const certificateCode = `CERT-${user.id.substring(0, 8)}-${courseId.substring(0, 8)}-${Date.now()}`;
-
-  const { data, error } = await supabase
-    .from('qh_certificates')
-    .insert({
-      user_id: user.id,
-      course_id: courseId,
-      certificate_code: certificateCode,
-      completion_date: new Date().toISOString().split('T')[0]
-    })
-    .select()
-    .single();
-
+  const { data, error } = await supabase.rpc('qh_issue_certificate', { p_course_id: courseId });
   if (error) {
-    // Certificate already exists for this course
-    if (error.code === '23505') {
-      return getCertificateForCourse(courseId);
+    const code = String(error.code || ''), msg = String(error.message || '');
+    if (code === 'PGRST202' || code === '42883' || /could not find the function|schema cache/i.test(msg)) {
+      throw Object.assign(new Error(CERTIFICATE_NOT_READY), { code: 'CERT_NOT_READY' });
     }
     throw error;
   }
@@ -535,8 +526,8 @@ export async function updateStudentProgress(courseId, lessonId, completed = fals
 
   // Update enrollment progress percentage
   try {
-    await updateEnrollmentProgressFromLessons(courseId);
-    return data;
+    const sync = await updateEnrollmentProgressFromLessons(courseId);
+    return { ...data, certificate: sync?.certificate || null, certificateWarning: sync?.certificateWarning || null };
   } catch (error) {
     // The lesson record is already saved; distinguish a dashboard-sync failure.
     return { ...data, enrollmentWarning: error.message || 'Dashboard sync unavailable' };
@@ -600,8 +591,16 @@ export async function updateEnrollmentProgressFromLessons(courseId) {
   if (updateError) throw updateError;
 
   // Check if course is completed (100%) and generate certificate
+  let certificate = null;
   if (progressPct === 100) {
-    const certificate = await generateCertificate(courseId);
+    // A certificate problem must not hide the saved progress; report it separately.
+    try {
+      certificate = await generateCertificate(courseId);
+    } catch (err) {
+      console.error('Certificate not issued:', err);
+      const certificateWarning = err.code === 'CERT_NOT_READY' ? err.message : 'Your completion is saved, but the certificate could not be issued yet: ' + (err.message || 'please try again later.');
+      return { progressPct, completedCount, totalLessons: lessons.length, certificateWarning };
+    }
 
     // Send completion email
     try {
@@ -624,7 +623,7 @@ export async function updateEnrollmentProgressFromLessons(courseId) {
     }
   }
 
-  return { progressPct, completedCount, totalLessons: lessons.length };
+  return { progressPct, completedCount, totalLessons: lessons.length, certificate };
 }
 
 // Course Analytics
