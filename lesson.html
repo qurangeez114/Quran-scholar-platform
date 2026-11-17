@@ -440,7 +440,9 @@
       currentUser = data.session?.user;
 
       if (!currentUser) {
-        window.location.href = '/account.html';
+        // Come back to this lesson after logging in.
+        window.location.href = '/account.html?mode=login&returnTo=' + encodeURIComponent(location.pathname + location.search);
+        throw Error('Sign in required');
       }
     }
 
@@ -472,7 +474,7 @@
         document.getElementById('lessonTitle').textContent = currentLesson.title;
         document.title = `${currentLesson.title} - QuranHikma`;
 
-        if(preview){await requireTeachingAccess();const managed=await lmsRequest('dashboard');if(!managed.courses.some(c=>c.id===currentCourse.id))throw Error('You can preview only classes you manage');}
+        if(preview){await requireTeachingAccess();const managed=await lmsRequest('dashboard');if(!managed.courses.some(c=>c.id===currentCourse.id))throw Error('You can preview only courses you manage');}
         renderLesson();
         renderLessonResources(currentLesson.id);
         void (async()=>{let isManager=currentCourse?.created_by===currentUser?.id;if(!isManager){try{isManager=(await lmsRequest('session'))?.role==='owner';}catch{}}
@@ -482,6 +484,8 @@
         document.getElementById('lessonContent').before(rules);
         // Secondary panels must not block the quiz or assignment.
         if(!preview){void refreshLessonProgress();void loadDiscussion();}
+        else showPreviewProgress();
+        void prepareNextLesson();
 
         // Load quiz or assignment if needed
         if (currentLesson.lesson_type === 'quiz') {
@@ -834,6 +838,13 @@
       return order;
     }
     const quizButton = () => document.querySelector('#quizForm button[type="submit"]');
+    const hasRewordedCheck = () => !!currentQuiz?.questions?.some(q=>q.variant?.q && Array.isArray(q.variant.options));
+    // The label must match what the button does: practice (not graded) only when a reworded final check follows.
+    function quizButtonLabel() {
+      if (quizStage === 'final') return preview ? 'Check Final Answers (preview, not saved)' : 'Submit Final Check';
+      if (hasRewordedCheck()) return 'Practice: Check My Answers (not graded)';
+      return preview ? 'Check My Answers (preview, not saved)' : 'Submit Quiz (graded)';
+    }
     function currentRoundQuestions() {
       const qOrder = seededOrder(currentQuiz.questions.length, (quizShuffleSeed ^ 0x5bd1e995) >>> 0);
       return qOrder.map(idx=>{
@@ -863,7 +874,7 @@
 
     function renderQuiz() {
       if (!currentQuiz || !Array.isArray(currentQuiz.questions) || !currentQuiz.questions.length) {
-        document.getElementById('quizResult').textContent = 'No questions have been added to this quiz yet. Ask the instructor to open the Question Builder.';
+        document.getElementById('quizResult').textContent = 'No questions have been added to this quiz yet. Ask the instructor to add questions in the Quiz Builder.';
         document.getElementById('quizForm').style.display = 'none';
         return;
       }
@@ -873,7 +884,9 @@
       const intro = document.createElement('p');
       intro.textContent = quizStage === 'final'
         ? '🕵️ Final Detective Check: apply what you learned to the reworded questions. This round determines your recorded grade.'
-        : '🎯 Practice round: answer the questions. Explanations appear before the final reworded check when one is available.';
+        : !hasRewordedCheck()
+        ? (preview ? '🎯 Preview: answer the questions, then check them to see the score and your explanations. Nothing is saved.' : '🎯 Answer every question, then submit. This quiz has no practice round: your submission is graded and explanations appear afterwards.')
+        : '🎯 Practice round: answer the questions. Explanations appear before the final reworded check.';
       container.append(intro);
       questions.forEach((q, idx) => {
         const section = document.createElement('section');
@@ -894,7 +907,7 @@
         });
         container.append(section);
       });
-      quizButton().textContent = quizStage === 'final' ? 'Submit Final Check' : 'Practice: Check My Answers (not graded)';
+      quizButton().textContent = quizButtonLabel();
       document.getElementById('quizForm').style.display = 'block';
     }
 
@@ -946,7 +959,7 @@
         const firstQ = document.querySelector('input[name="q'+(missing[0]-1)+'"]');
         if (firstQ) firstQ.scrollIntoView({behavior:'smooth',block:'center'});
         button.disabled = false;
-        button.textContent = quizStage==='final' ? 'Submit Final Check' : 'Practice: Check My Answers (not graded)';
+        button.textContent = quizButtonLabel();
         return;
       }
       try {
@@ -965,7 +978,14 @@
 
         let passed = percentage >= Number(currentQuiz.passing_score || 90);
         button.textContent='Saving results…';
-        if(preview){result.textContent='Preview score: '+percentage+'%. Nothing was saved.';return;}
+        if(preview){
+          result.replaceChildren();
+          const info=document.createElement('p');
+          info.textContent='Preview score: '+score+'/'+questions.length+' ('+percentage+'%). Required: '+(currentQuiz.passing_score||90)+'%. Nothing was saved. Students see these explanations after they submit.';
+          result.append(info);
+          addExplanations(questions,answers,'Answer explanations (as students see them)');
+          return;
+        }
         // Prefer server-side grading (qh_grade_quiz, migration 20261104b) so the recorded score cannot be set by the browser.
         // Falls back to the current client-graded insert only while the function or answer key does not exist yet.
         const server = await gradeOnServer(currentQuiz.id, answersOriginal, quizStage);
@@ -1015,7 +1035,7 @@
         showAlert('Quiz result or progress could not be saved: '+(error.message||'Please retry.'),'error');
       } finally {
         button.disabled=false;
-        button.textContent=quizStage==='final'?'Submit Final Check':'Practice: Check My Answers (not graded)';
+        button.textContent=quizButtonLabel();
       }
     });
 
@@ -1242,17 +1262,43 @@
       window.location.href = `/course.html?course=${currentCourse.id}${preview?'&preview=1':''}`;
     };
 
-    window.goToNextLesson = async function() {
-      if (!lessons.length) {
-        const all = await getLessonsByCourse(currentCourse.id);
-        lessons = all;
-      }
+    // Instructor preview never records progress: say so instead of "checking…".
+    function showPreviewProgress() {
+      document.getElementById('lessonStatus').textContent = 'Preview: progress is not saved';
+      document.getElementById('progressText').textContent = 'Instructor preview. Completion, quiz scores and submissions are not recorded.';
+    }
 
-      const currentIndex = lessons.findIndex(l => l.id === currentLesson.id);
-      if (currentIndex < lessons.length - 1) {
-        window.location.href = `/lesson.html?lesson=${lessons[currentIndex + 1].id}${preview?'&preview=1':''}`;
-      } else {
-        window.location.href = `/course.html?course=${currentCourse.id}${preview?'&preview=1':''}`;
+    async function loadLessonList() {
+      if (!lessons.length) lessons = (await getLessonsByCourse(currentCourse.id)) || [];
+      return lessons;
+    }
+
+    // Label the button for what it will do (next lesson, or back to the outline on the last one).
+    async function prepareNextLesson() {
+      const button = document.getElementById('nextLessonBtn');
+      try {
+        const list = await loadLessonList();
+        const index = list.findIndex(l => l.id === currentLesson.id);
+        button.textContent = index >= 0 && index < list.length - 1 ? 'Next Lesson →' : 'Back to course outline →';
+        if (preview && index >= 0) document.getElementById('progressText').textContent += ' Lesson ' + (index + 1) + ' of ' + list.length + '.';
+      } catch (error) {
+        console.error('Lesson list unavailable:', error);
+      }
+    }
+
+    window.goToNextLesson = async function() {
+      if (!currentLesson || !currentCourse) { showAlert('The lesson is still loading. Please try again in a moment.', 'info'); return; }
+      try {
+        const list = await loadLessonList();
+        const currentIndex = list.findIndex(l => l.id === currentLesson.id);
+        if (currentIndex >= 0 && currentIndex < list.length - 1) {
+          window.location.href = `/lesson.html?lesson=${encodeURIComponent(list[currentIndex + 1].id)}${preview?'&preview=1':''}`;
+        } else {
+          window.location.href = `/course.html?course=${encodeURIComponent(currentCourse.id)}${preview?'&preview=1':''}`;
+        }
+      } catch (error) {
+        console.error('Next lesson unavailable:', error);
+        showAlert('Could not open the next lesson: ' + (error.message || 'please go back to the course outline.'), 'error');
       }
     };
 
