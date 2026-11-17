@@ -413,7 +413,7 @@ Deno.serve(async req=>{
    const courseId=requested==='student'?uuid(body.course_id):null;if(courseId)await ownCourse(courseId);
    const email=text(body.email,254).toLowerCase();if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))fail('Enter a valid email');
    const displayName=text(body.display_name);if(!displayName)fail('Enter a name');
-   let target=await findEmail(email),created=false,emailAccepted=false, alreadyLinked=false;
+   let target=await findEmail(email),created=false,emailAccepted=false, alreadyLinked=false, emailError='';
    if(target&&courseId){
     alreadyLinked=!!await checked(service.from('qh_enrollments')
      .select('user_id').eq('user_id',target.id).eq('course_id',courseId).maybeSingle());
@@ -441,6 +441,7 @@ Deno.serve(async req=>{
     // address so the temporary password works; the response must prominently say
     // email failed and expose a resend control.
     if(error){
+     emailError=error.message||'';
      const confirmed=await service.auth.admin.updateUserById(target!.id,{email_confirm:true});
      if(confirmed.error)fail('Account created, but email is unavailable and the account could not be activated. Contact the owner.',503);
      emailAccepted=false;
@@ -464,13 +465,19 @@ Deno.serve(async req=>{
    if(shouldNotifyExisting){
     const sent=await sendAccessEmail(target!.id,email,requested==='instructor'?instructorWelcome:studentWelcome);
     emailAccepted=!sent.error;
+    if(sent.error)emailError=sent.error.message||'';
    }
+   const rateLimited=/rate limit|too many|429|security purposes/i.test(emailError);
    const duplicate=!created&&!shouldNotifyExisting;
    const message=duplicate
     ?(requested==='instructor'?'Instructor is already authorized. No duplicate email sent.':'Student is already enrolled. No duplicate email sent.')
     :emailAccepted
      ?(created?'Account registered; invitation email requested immediately. Share the temporary password separately or let the recipient reset it.':'Existing user assigned; sign-in email requested immediately. Existing password retained.')
-     :'Registration saved, but no email was sent successfully. Check Supabase Auth SMTP settings and use the resend control.';
+     :(rateLimited
+      ?'Saved, but the email was not sent: the site reached its hourly email limit. Wait about an hour, then press Resend on this person\'s row.'
+      :'Saved, but the email could not be sent. Press Resend on this person\'s row to try again.')
+      +(created?' Their account is active: they can log in now with the temporary password you gave them.':'')
+      +' (Site setup: configure custom SMTP in Supabase to raise the email limit; see docs/SETUP_CHECKLIST.md.)';
    result={ok:true,created,emailAccepted,duplicate,must_change_password:created,message};
   }else fail('Unknown action');
   return new Response(JSON.stringify(result),{headers});

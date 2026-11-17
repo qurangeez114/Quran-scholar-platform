@@ -265,6 +265,8 @@
     <div class="nav-header">
       <h2>Welcome back, <span id="userName">Student</span>!</h2>
       <nav class="student-academic-nav" aria-label="Student academic navigation">
+ <a href="/my-progress.html">My Progress</a>
+ <a href="/transcript.html">Transcript &amp; Certificates</a>
  <a href="/courses.html">Browse Courses</a>
  <a href="/apply.html">School Admissions</a>
  <a href="/faculty.html">Faculty Directory</a>
@@ -348,9 +350,15 @@
       currentUser = data.session?.user;
 
       if (!currentUser) {
-        window.location.replace('/account.html');
+        window.location.replace('/account.html?mode=login&returnTo=' + encodeURIComponent(location.pathname + location.search));
         return false;
       }
+      // A temporary password must be replaced first (the form is on the dashboard page).
+      try {
+        const { lmsRequest } = await import('./accounts/lms-access.js');
+        const state = await lmsRequest('session');
+        if (state?.account?.must_change_password) { window.location.replace('/instructor-dashboard.html'); return false; }
+      } catch (_) {}
       return true;
     }
 

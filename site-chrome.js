@@ -148,7 +148,17 @@
     if (document.getElementById('qh-account-btn')) return;
     var a = document.createElement('a');
     a.id = 'qh-account-btn'; a.href = '/account.html'; a.title = 'Log in / My account';
-    a.textContent = '👤'; a.setAttribute('aria-label', 'Log in or open your account');
+    a.textContent = '👤';
+    // Signed-in visitors see "My account", not a login prompt next to "Log out".
+    function label() {
+      var signedIn = false;
+      try { var raw = localStorage.getItem('sb-ylosytbxpzxzwfzjpaej-auth-token'); var t = raw && JSON.parse(raw); signedIn = !!(t && t.access_token && (!t.expires_at || t.expires_at * 1000 > Date.now() || t.refresh_token)); } catch (e) {}
+      a.title = signedIn ? 'My account' : 'Log in / My account';
+      a.setAttribute('aria-label', signedIn ? 'Open my account' : 'Log in or open your account');
+    }
+    label();
+    window.addEventListener('storage', function (e) { if (!e.key || e.key.indexOf('auth-token') !== -1) label(); });
+    setInterval(label, 5000);
     a.style.cssText = 'text-decoration:none;border:1px solid #E8C97B;border-radius:50%;width:36px;height:36px;font-size:18px;color:#C9A84C;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:none;';
     var h = document.querySelector('header');
     if (h) { h.appendChild(a); }
@@ -157,7 +167,7 @@
 
   function addSchoolNav() {
     var path = location.pathname.charAt(0)==='/' ? location.pathname.slice(1) : location.pathname;
-    if (!["courses.html","course.html","lesson.html","student-dashboard.html","instructor-dashboard.html","faculty.html","faculty-profile.html","faculty-admin.html","apply.html","academic-hub.html","account.html","login.html","my-pages.html","my-research.html","quiz-results.html","sample-course.html","sample-video-class.html","admin-dashboard.html","admin-users.html","admin-evaluation-manager.html","instructor-welcome.html","student-welcome.html","admin/lms.html","admin/courses.html","admin/lesson-manager.html","admin/quiz-builder.html","admin/grading.html","admin/bulk-enrollment.html","admin/analytics.html","admin/deleted-accounts.html"].includes(path)) return;
+    if (!["courses.html","course.html","lesson.html","student-dashboard.html","instructor-dashboard.html","faculty.html","faculty-profile.html","faculty-admin.html","apply.html","academic-hub.html","account.html","login.html","my-pages.html","my-research.html","quiz-results.html","sample-course.html","sample-video-class.html","admin-dashboard.html","admin-users.html","admin-evaluation-manager.html","instructor-welcome.html","student-welcome.html","instructor-guide.html","admin/lms.html","admin/courses.html","admin/lesson-manager.html","admin/quiz-builder.html","admin/grading.html","admin/bulk-enrollment.html","admin/analytics.html","admin/deleted-accounts.html"].includes(path)) return;
     if (document.getElementById('qh-school-topnav')) return;
     var s = document.createElement('style');
     s.id='qh-school-topnav-css';
@@ -179,8 +189,8 @@
     var root = document.createElement('nav'); root.id='qh-school-topnav'; root.setAttribute('aria-label','School navigation');
     var groups = [
       ['Explore',[['Courses','/courses.html'],['Sample class','/sample-video-class.html'],['Apply to study','/apply.html'],['Faculty directory','/faculty.html']]],
-      ['My Learning',[['Student dashboard','/student-dashboard.html'],['My courses','/academic-hub.html?tab=courses'],['Learning groups','/academic-hub.html?tab=groups'],['Live classes','/academic-hub.html?tab=live'],['Quiz results','/quiz-results.html']]],
-      ['Teaching',[['Instructor dashboard','/instructor-dashboard.html'],['Manage courses','/admin/courses.html'],['Lesson manager','/admin/lesson-manager.html'],['Quiz builder','/admin/quiz-builder.html'],['Grading','/admin/grading.html'],['Faculty profile','/faculty-profile.html']]],
+      ['My Learning',[['Student dashboard','/student-dashboard.html'],['My courses','/academic-hub.html?tab=courses'],['Learning groups','/academic-hub.html?tab=groups'],['Live classes','/academic-hub.html?tab=live'],['Quiz results','/quiz-results.html'],['My progress','/my-progress.html'],['Transcript & certificates','/transcript.html']]],
+      ['Teaching',[['Instructor dashboard','/instructor-dashboard.html'],['Manage courses','/admin/courses.html'],['Grading','/admin/grading.html'],['Bulk enrollment','/admin/bulk-enrollment.html'],['Instructor guide','/instructor-guide.html'],['Faculty profile','/faculty-profile.html']]],
       ['Community',[['Faculty','/faculty.html'],['Messages','/academic-hub.html?tab=messages'],['Research workspace','/my-research.html']]],
       ['Administration',[['Admin dashboard','/admin-dashboard.html'],['School administration','/admin/lms.html'],['Student applications','/admin/lms.html'],['Manage users','/admin-users.html'],['Analytics','/admin/analytics.html']]]
     ];
