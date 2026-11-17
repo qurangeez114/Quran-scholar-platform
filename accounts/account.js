@@ -1,7 +1,6 @@
 import {db,message as setMessage,exportResearch} from './client.js';
 import {lmsRequest} from './lms-access.js';
-import {friendlyAuthError,cooldownRemainingMs,startCooldown,formatWait,safeStorage,RECOVER_COOLDOWN_MS} from './auth-feedback.js';
-const cooldownStore=safeStorage();
+import {friendlyAuthError} from './auth-feedback.js';
 let mode='login',recovering=location.hash.includes('type=recovery');
 const $=id=>document.getElementById(id);
 function requestedFatwaReturn(){
@@ -24,16 +23,7 @@ function message(text,error=false){
  }
  if(error){node.setAttribute('tabindex','-1');node.focus();}
 }
-function choose(next){mode=next;message('');$('password').minLength=next==='signup'?12:1;$('auth-help').textContent={login:'Log in with your email and password.',signup:'Use at least 12 characters. Check your email to confirm your account.',recover:'We will email you a link to reset your password.'}[next];document.querySelectorAll('[data-mode]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.mode===next)));$('password-label').hidden=next==='recover';$('password').required=next!=='recover';$('password').autocomplete=next==='signup'?'new-password':'current-password';$('firstName-label').hidden=next!=='signup';$('lastName-label').hidden=next!=='signup';$('firstName').required=false;$('lastName').required=false;$('password-confirm-label').hidden=next!=='signup';$('password-confirm').required=next==='signup';$('submit').textContent={login:'Log in',signup:'Create account',recover:'Send recovery email'}[next];updateRecoverButton();}
-let cooldownTimer=null;
-// Keeps the reset button disabled and counting down while a reset-email cooldown is running.
-function updateRecoverButton(){
- clearInterval(cooldownTimer);cooldownTimer=null;
- const left=mode==='recover'?cooldownRemainingMs(cooldownStore):0;
- $('submit').disabled=left>0;
- if(left>0){$('submit').textContent='Try again in '+formatWait(left);cooldownTimer=setInterval(updateRecoverButton,1000);}
- else if(mode==='recover')$('submit').textContent='Send recovery email';
-}
+function choose(next){mode=next;message('');$('password').minLength=next==='signup'?12:1;$('auth-help').textContent={login:'Log in with your email and password.',signup:'Use at least 12 characters. Check your email to confirm your account.',recover:'We will email you a link to reset your password.'}[next];document.querySelectorAll('[data-mode]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.mode===next)));$('password-label').hidden=next==='recover';$('password').required=next!=='recover';$('password').autocomplete=next==='signup'?'new-password':'current-password';$('firstName-label').hidden=next!=='signup';$('lastName-label').hidden=next!=='signup';$('firstName').required=false;$('lastName').required=false;$('password-confirm-label').hidden=next!=='signup';$('password-confirm').required=next==='signup';$('submit').textContent={login:'Log in',signup:'Create account',recover:'Send recovery email'}[next];}
 document.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>choose(b.dataset.mode));
 async function ensureProfile(user){const {data:existing}=await db.from('qh_profiles').select('user_id').eq('user_id',user.id).maybeSingle();if(existing)return;const m=user.user_metadata||{};const {error}=await db.from('qh_profiles').insert({user_id:user.id,display_name:m.display_name||''});if(error)console.error('Profile create failed:',error.message);}
 async function render(){
@@ -75,21 +65,19 @@ async function render(){
 }
 db.auth.onAuthStateChange(event=>{if(event==='PASSWORD_RECOVERY')recovering=true;setTimeout(render,0);});
 $('auth-form').onsubmit=async e=>{e.preventDefault();
-const waitLeft=mode==='recover'?cooldownRemainingMs(cooldownStore):0;
-if(waitLeft>0){message('Please wait '+formatWait(waitLeft)+' before requesting another reset email.',true);updateRecoverButton();return;}
 message(mode==='login'?'Signing in…':'Submitting…');$('submit').disabled=true;try{
 const email=$('email').value.trim(),password=$('password').value;let result;
 if(mode==='signup'){if(password.length<12)return message('Password must be at least 12 characters.');if(password!==$('password-confirm').value)return message('Passwords do not match.');}
 if(mode==='signup'){const firstName=$('firstName').value.trim(),lastName=$('lastName').value.trim();result=await db.auth.signUp({email,password,options:{emailRedirectTo:accountEmailRedirect(),data:{display_name:`${firstName} ${lastName}`.trim()}}});}
-else if(mode==='recover'){result=await db.auth.resetPasswordForEmail(email,{redirectTo:accountEmailRedirect()});if(!result.error)startCooldown(cooldownStore,RECOVER_COOLDOWN_MS);}
+else if(mode==='recover'){result=await db.auth.resetPasswordForEmail(email,{redirectTo:accountEmailRedirect()});}
 else result=await db.auth.signInWithPassword({email,password});
 if(mode==='signup'&&!result.error&&result.data.user&&result.data.user.identities?.length===0)return message('This email is already taken.');
 if(result.error)throw result.error;const returnTarget=requestedFatwaReturn();if(result.data?.session && returnTarget && mode==='login'){location.replace(returnTarget);return;}message(mode==='login'?'Signed in.':'Check your email for the next step.');await render();
 }catch(e){const invalid=mode==='login'&&(e.code==='invalid_credentials'||/invalid login credentials|invalid credentials|invalid email or password/i.test(e.message||''));
  if(invalid){message('Invalid email or password. Please try again.',true);}
  else if(/already (registered|been registered)/i.test(e.message||'')){message('This email is already taken.',true);}
- else{const friendly=friendlyAuthError(e);if(friendly.rateLimited&&mode==='recover')startCooldown(cooldownStore,friendly.waitSeconds*1000);message(friendly.message,true);}
-}finally{updateRecoverButton();}};
+ else{const friendly=friendlyAuthError(e);message(friendly.message,true);}
+}finally{$('submit').disabled=false;}};
 $('reset-form').onsubmit=async e=>{e.preventDefault();const pw=$('new-password').value;if(pw.length<12)return message('Password must be at least 12 characters.');if(pw!==$('new-password-confirm').value)return message('Passwords do not match.');const {error}=await db.auth.updateUser({password:$('new-password').value});if(error)return message(error.message);recovering=false;history.replaceState(null,'',location.pathname+location.search);message('Password updated. You can now open your instructor dashboard.');await render();};
 $('logout').onclick=async()=>{const {error}=await db.auth.signOut();if(error)return message(error.message);recovering=false;message('Logged out.');render();};
 $('export').onclick=()=>exportResearch().catch(e=>message(e.message));
