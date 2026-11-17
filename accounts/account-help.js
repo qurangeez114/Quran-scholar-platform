@@ -4,7 +4,8 @@ import {mountEmailLinkPanel} from './email-link.js';
 // for unconfirmed emails, and click-to-confirm handling for token-hash email links.
 const $=id=>document.getElementById(id);
 const params=new URLSearchParams(location.search);
-const reasons={instructor:'Please log in as an instructor to continue. After you log in, you will return to the page you were opening.'};
+const reasons={instructor:'Please log in as an instructor to continue. After you log in, you will return to the page you were opening.',
+ 'password-changed':'Password changed. Please log in with your new password.'};
 async function showReason(){
  const text=reasons[params.get('reason')];if(!text)return;
  const {data}=await db.auth.getSession();

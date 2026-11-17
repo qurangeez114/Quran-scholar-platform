@@ -89,12 +89,19 @@ $('password-form').onsubmit=async e=>{
  if(values.newPassword===values.currentPassword)return passwordError('Your new password must be different from the temporary password.');
  const button=form.querySelector('button');button.disabled=true;status('Saving your new password…');
  try{
+  const email=(await db.auth.getSession()).data.session?.user?.email||'';
   await lmsRequest('change_password',values);
   form.reset();
-  try{await db.auth.refreshSession();}catch{}
+  const next=state.role==='student'?'/student-dashboard.html':'/instructor-dashboard.html';
+  // Changing the password can end the current session. Keep the person signed in
+  // with the new password; if that fails, send them to log in with a clear message.
+  let signedIn=false;
+  try{const r=await db.auth.refreshSession();signedIn=!r.error&&!!r.data?.session;}catch{}
+  if(!signedIn&&email){try{const r=await db.auth.signInWithPassword({email,password:values.newPassword});signedIn=!r.error&&!!r.data?.session;}catch{}}
   try{window.dispatchEvent(new CustomEvent('qh-password-changed'));}catch{}
-  if(state.role==='student'){status('Password changed. Opening your Student Dashboard…');location.replace('/student-dashboard.html');return;}
-  status('Password changed.');await start();
+  if(!signedIn){status('Password changed. Please log in with your new password.');location.replace('/account.html?reason=password-changed&returnTo='+encodeURIComponent(next));return;}
+  if(state.role==='student'){status('Password changed. Opening your Student Dashboard…');location.replace('/student-dashboard.html?notice=password-changed');return;}
+  status('Password changed. You are signed in with your new password.');await start();
  }catch(error){passwordError(explainPasswordError(error.message));}
  finally{button.disabled=false;}
 };
@@ -128,7 +135,7 @@ async function start(){
  $('dashboard').hidden=true;$('password-panel').hidden=true;
  const {data}=await db.auth.getSession();if(!data.session){status('Please log in to continue.');location.replace(instructorLoginUrl());return;}
  state=await lmsRequest('session');
- if(state.account?.must_change_password){$('password-panel').hidden=false;if(state.role==='student')$('title').textContent='Choose your password';status('Set your own password to continue.');return;}
+ if(state.account?.must_change_password){$('password-panel').hidden=false;if(state.role==='student'){$('title').textContent='Choose your password';const nav=document.querySelector('header nav');if(nav)nav.hidden=true;}status('Set your own password to continue.');return;}
  if(!['owner','instructor'].includes(state.role)){status('This page is for authorized instructors and the owner.');return;}
  await refresh();$('dashboard').hidden=false;
 }
