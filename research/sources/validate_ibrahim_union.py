@@ -44,8 +44,9 @@ def validate():
         if len(classifications) == 1:
             assert row["classification"] in classifications, f"Classification drift for {row['key']}"
         for source_row in source_rows:
+            assert not any(source_row.get(flag) is True for flag in ("verified", "public", "published")), f"Public verse row in staging for {row['key']}"
             for candidate in source_row.get("candidates", []):
-                assert candidate.get("verified") is not True and candidate.get("public") is not True, f"Public candidate in staging for {row['key']}"
+                assert not any(candidate.get(flag) is True for flag in ("verified", "public", "published")), f"Public candidate in staging for {row['key']}"
     return "PASS: 52 unique Ibrahim keys; 32 explicit, 20 implicit; 14 staged; zero public"
 
 if __name__ == "__main__":
