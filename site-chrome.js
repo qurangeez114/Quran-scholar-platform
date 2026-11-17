@@ -3,6 +3,12 @@
    page didn't. Safe to include on every page (idempotent). */
 (function () {
   'use strict';
+  // Site icon for every page that loads the shared chrome.
+  if (!document.querySelector('link[rel~="icon"]')) {
+    var icon = document.createElement('link');
+    icon.rel = 'icon'; icon.type = 'image/svg+xml'; icon.href = '/favicon.svg';
+    document.head.appendChild(icon);
+  }
   // Professional English reading typography for translations and research passages.
   // All other scripts and navigation keep their existing typefaces.
   if (!document.getElementById('qh-english-reading-css')) {
@@ -122,6 +128,22 @@
     else { b.style.cssText += 'position:fixed;top:10px;right:10px;z-index:9998;background:#FDFAF4;'; document.body.appendChild(b); }
   }
 
+  // Accessibility: skip link to the main landmark and a visible keyboard focus ring.
+  function addA11y() {
+    if (document.getElementById('qh-skip')) return;
+    var st = document.createElement('style');
+    st.textContent = '#qh-skip{position:absolute;left:8px;top:-60px;z-index:10000;background:#17130c;color:#fff;padding:10px 14px;border-radius:6px;font-weight:700;text-decoration:none}#qh-skip:focus{top:8px}' +
+      'a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,[tabindex]:focus-visible{outline:3px solid #9c742a;outline-offset:2px}';
+    document.head.appendChild(st);
+    var m = document.querySelector('main');
+    if (!m) return;
+    if (!m.id) m.id = 'main';
+    if (!m.hasAttribute('tabindex')) m.setAttribute('tabindex', '-1');
+    var k = document.createElement('a'); k.id = 'qh-skip'; k.href = '#' + m.id; k.textContent = 'Skip to main content';
+    var kn = document.createElement('nav'); kn.setAttribute('aria-label', 'Skip link'); kn.appendChild(k);
+    document.body.insertBefore(kn, document.body.firstChild);
+  }
+
   function addAccount() {
     if (document.getElementById('qh-account-btn')) return;
     var a = document.createElement('a');
@@ -130,7 +152,7 @@
     a.style.cssText = 'text-decoration:none;border:1px solid #E8C97B;border-radius:50%;width:36px;height:36px;font-size:18px;color:#C9A84C;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:none;';
     var h = document.querySelector('header');
     if (h) { h.appendChild(a); }
-    else { a.style.cssText += 'position:fixed;top:10px;right:56px;z-index:9998;background:#FDFAF4;'; document.body.appendChild(a); }
+    else { a.style.cssText += 'position:fixed;top:10px;right:56px;z-index:9998;background:#FDFAF4;'; var nv = document.createElement('nav'); nv.setAttribute('aria-label', 'Account'); nv.appendChild(a); document.body.appendChild(nv); }
   }
 
   function addSchoolNav() {
@@ -184,7 +206,7 @@
       cinemaJs.src='/qh-cinematic-theme.js?v=20261105-lab1';
       document.body.appendChild(cinemaJs);
     }
-    loadModal(); addSchoolNav(); addNav(); setTimeout(addClock, 400); setTimeout(addAccount, 400);
+    loadModal(); addSchoolNav(); addA11y(); addNav(); setTimeout(addClock, 400); setTimeout(addAccount, 400);
     // Desktop Quran reader: dedicate the right edge to the existing approved
     // advertising slot while leaving phone and tablet layouts unchanged.
     if (file() === 'index.html' && !document.getElementById('qh-desktop-reader-rail-js')) {
