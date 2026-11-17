@@ -212,7 +212,7 @@
           <div class="form-group">
             <label id="contentLabel" for="lessonContent">Lesson content / instructions</label>
             <textarea id="lessonContent" placeholder="Enter lesson text or a short video summary..."></textarea>
-            <p id="quizHelp" style="display:none;color:#41594b;font-size:14px;">After saving a Quiz lesson, the Question Builder opens so you can create and explain its questions.</p>
+            <p id="quizHelp" style="display:none;color:#41594b;font-size:14px;">After saving a Quiz lesson, the Quiz Builder opens so you can create and explain its questions.</p>
           </div>
 
           <div class="form-group" id="videoUrlGroup" style="display:none;">
@@ -477,6 +477,20 @@
         if (savedLesson?.id) {
           try { await saveReflectionPrompt(savedLesson.id, document.getElementById('lessonReflectionPrompt').value); }
           catch (err) { showAlert('Lesson saved, but the reflection question failed: ' + (err.message || err), 'error'); }
+        }
+        // Assignment lessons need an assignment record (students submit to it, graders
+        // see it, and publishing requires it). Its instructions are the lesson content.
+        if (type === 'assignment' && savedLesson?.id) {
+          try {
+            const instructions = content.trim();
+            if (!instructions) throw Error('add the assignment instructions in "Lesson content / instructions"');
+            const { data: existing, error: findError } = await supabase.from('qh_assignments').select('id').eq('lesson_id', savedLesson.id).maybeSingle();
+            if (findError) throw findError;
+            const result = existing
+              ? await supabase.from('qh_assignments').update({ instructions }).eq('id', existing.id)
+              : await supabase.from('qh_assignments').insert({ lesson_id: savedLesson.id, instructions });
+            if (result.error) throw result.error;
+          } catch (err) { showAlert('Lesson saved, but the assignment instructions were not: ' + (err.message || err), 'error'); }
         }
 
         document.getElementById('lessonForm').reset();
