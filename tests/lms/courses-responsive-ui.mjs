@@ -73,7 +73,11 @@ assert.match(cards[0].querySelector('.course-actions a[href*="grading"]').href,/
 // One-click Publish on a draft card uses the readiness gate, then publishes.
 readyErrors=['Add at least one lesson'];
 await fakeWindow.togglePublish(second);
-assert.ok(logged.some(x=>x.type==='alert'&&x.message.includes('Add at least one lesson')));
+const checklistShows=text=>document.getElementById('publishModal').classList.contains('active')&&document.getElementById('publishChecklist').textContent.includes(text);
+assert.ok(checklistShows('Add at least one lesson'),'Publish shows the missing-items checklist');
+assert.ok(!logged.some(x=>x.type==='alert'),'Checklist replaces the blocking alert');
+fakeWindow.closePublishModal();
+assert.ok(!document.getElementById('publishModal').classList.contains('active'));
 assert.equal(courses[1].is_published,false,'Publish button respects course readiness');
 readyErrors=[];
 await fakeWindow.togglePublish(second);
@@ -92,7 +96,7 @@ document.getElementById('editPublished').checked=true;
 readyErrors=['Missing quiz']; 
 document.getElementById('editCourseForm').dispatchEvent(new domWindow.Event('submit',{cancelable:true}));
 await new Promise(r=>setTimeout(r,15));
-assert.ok(logged.some(x=>x.type==='alert'&&x.message.includes('Missing quiz')));
+assert.ok(checklistShows('Missing quiz'),'Edit dialog publish uses the checklist');fakeWindow.closePublishModal();
 assert.ok(!logged.some(x=>x.type==='edit'),'Course readiness blocks premature publication');
 readyErrors=[];
 document.getElementById('editCourseForm').dispatchEvent(new domWindow.Event('submit',{cancelable:true}));
@@ -108,4 +112,4 @@ allowDelete=false;await fakeWindow.deleteCourseConfirm(cid);
 assert.ok(courses.some(c=>c.id===cid),'Cancellation leaves course intact');
 allowDelete=true;await fakeWindow.deleteCourseConfirm(cid);
 assert.ok(!courses.some(c=>c.id===cid),'Confirmed deletion removes course');
-console.log('PASS: responsive card CSS, six readable action controls (including Publish/Unpublish), escaped text, course create/edit/publish gate, preview/results URLs, lessons navigation and confirmed delete.');
+console.log('PASS: responsive card CSS, six readable action controls (including Publish/Unpublish), escaped text, course create/edit/publish gate with missing-items checklist, preview/results URLs, lessons navigation and confirmed delete.');
