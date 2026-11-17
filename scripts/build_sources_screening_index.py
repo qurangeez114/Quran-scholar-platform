@@ -47,7 +47,12 @@ def main():
                 if not (1 <= sura <= len(SURAH_LENGTHS) and 1 <= aya <= SURAH_LENGTHS[sura - 1]):
                     raise ValueError("invalid verse key")
                 key = f"{sura}:{aya}"
-                # A staging ledger must never silently accept publication flags.\n                if row.get("public") is True or row.get("published") is True or row.get("verified") is True:\n                    raise ValueError("staging row claims public/published/verified status")\n                if row.get("public") not in (None, False) or row.get("published") not in (None, False) or row.get("verified") not in (None, False):\n                    raise ValueError("invalid staging publication flag")\n                candidates = row.get("candidate_sources", row.get("candidates", []))
+                # A staging ledger must never silently accept publication flags.
+                if row.get("public") is True or row.get("published") is True or row.get("verified") is True:
+                    raise ValueError("staging row claims public/published/verified status")
+                if row.get("public") not in (None, False) or row.get("published") not in (None, False) or row.get("verified") not in (None, False):
+                    raise ValueError("invalid staging publication flag")
+                candidates = row.get("candidate_sources", row.get("candidates", []))
                 if not isinstance(candidates, list):
                     raise ValueError("candidates must be a list")
                 if "source_locators" in row and not isinstance(row["source_locators"], list):
