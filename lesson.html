@@ -359,6 +359,12 @@
 
           <!-- Assignment Tab -->
           <div class="tab-content" id="assignmentTab">
+            <section id="assignmentBrief" aria-labelledby="assignmentBriefTitle" style="display:none;margin-bottom:1.25rem;padding:1rem;border:1px solid #E8E4DC;border-left:4px solid #667eea;border-radius:8px;background:#fff">
+              <h3 id="assignmentBriefTitle" style="margin:0 0 .5rem">Assignment</h3>
+              <p id="assignmentDue" style="display:none;margin:0 0 .5rem;font-weight:600;color:#41594b"></p>
+              <div id="assignmentInstructionsText" style="white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.6"></div>
+            </section>
+            <p id="assignmentMissing" style="display:none;color:#595959">Your instructor hasn't posted the instructions for this assignment yet.</p>
             <form id="assignmentForm" style="display:none;">
               <div class="form-group">
                 <label>Your Answer/Work</label>
@@ -975,11 +981,24 @@
           .from('qh_assignments')
           .select('*')
           .eq('lesson_id', currentLesson.id)
-          .single();
+          .order('created_at', { ascending: true })
+          .limit(1)
+          .maybeSingle();
 
         if (error) throw error;
+        if (!data) {
+          document.getElementById('assignmentMissing').style.display = 'block';
+          return;
+        }
 
         currentAssignment = data;
+        document.getElementById('assignmentInstructionsText').textContent = data.instructions || '';
+        const due = document.getElementById('assignmentDue');
+        if (data.due_date && !Number.isNaN(new Date(data.due_date).getTime())) {
+          due.textContent = 'Due: ' + new Date(data.due_date).toLocaleString([], { dateStyle: 'full', timeStyle: 'short' });
+          due.style.display = 'block';
+        }
+        document.getElementById('assignmentBrief').style.display = 'block';
         document.getElementById('assignmentForm').style.display = 'block';
         if(currentUser&&!preview){
           const {data:previous,error:previousError}=await supabase
