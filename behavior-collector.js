@@ -81,6 +81,9 @@
     return fetchVisit(type, label, countTime ? elapsed() : 0);
   }
   function moneyLabel(element) {
+    // An explicit label lets a funnel step be told apart (e.g. donate_checkout).
+    const explicit = element.getAttribute?.('data-qh-money') || '';
+    if (/^[a-z_]{1,40}$/.test(explicit)) return explicit;
     const href = element.getAttribute?.('href') || '';
     const text = (element.textContent || '').trim().slice(0, 80);
     if (/donate/i.test(href + text)) return 'donate';
