@@ -18,7 +18,7 @@
   // True only when the page already shows a Donate control the visitor can use.
   function hasVisibleDonateControl(){
     const controls = document.querySelectorAll(
-      'a[href*="paypal.com/donate"], [onclick*="openDonateModal"]'
+      'a[href*="paypal.com/donate"], [onclick*="openDonateModal"], a[href$="support.html"]'
     );
     return Array.prototype.some.call(controls, isShown);
   }

@@ -39,3 +39,9 @@ test('collector honours an explicit funnel label and keeps keyword fallback',()=
  assert.match(js,/\^\[a-z_\]\{1,40\}\$/);
  assert.match(js,/if \(\/donate\/i\.test/);
 });
+
+test('home menu links to the Support page and counts as a donate click',()=>{
+ const html=read('index.html');
+ assert.match(html,/<a href="support\.html" data-qh-money="donate"[^>]*>Support<\/a>/);
+ assert.match(read('donate-global.js'),/a\[href\$="support\.html"\]/);
+});
