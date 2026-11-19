@@ -23,5 +23,7 @@ assert.match(mig,/qh_instructor_quiz_keys/);
 assert.match(mig,/drop policy if exists lms_attempts_insert/);
 assert.match(mig,/revoke insert, update, delete on public\.qh_quiz_answers/);
 assert.match(mig,/p_save boolean default true/);
+assert.match(mig,/public\.qh_quiz_keys k/);
+assert.match(mig,/assert_course_publishable/);
 
 console.log('PASS: quiz keys sync on save, answers are stripped from student-visible questions, and only qh_grade_quiz writes scores.');

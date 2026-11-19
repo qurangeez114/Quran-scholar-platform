@@ -1,3 +1,104 @@
+-- Publish-readiness must accept answers stored in qh_quiz_keys, because
+-- questions are stripped of correct_answer after save. This check runs
+-- before the sync trigger and backfill below.
+
+create or replace function qh_lms_private.assert_course_publishable(p_course_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path to ''
+as $function$
+declare
+  l record;
+  q record;
+  qn record;
+  qq jsonb;
+  opts jsonb;
+  qtext text;
+begin
+  if not exists (select 1 from public.qh_lessons where course_id = p_course_id) then
+    raise exception 'Before publishing: add at least one lesson.' using errcode = 'check_violation';
+  end if;
+
+  for l in
+    select id, title, content, lesson_type, video_url
+    from public.qh_lessons
+    where course_id = p_course_id
+  loop
+    if coalesce(btrim(l.title), '') = '' then
+      raise exception 'Before publishing: give every lesson a title.' using errcode = 'check_violation';
+    end if;
+
+    if l.lesson_type = 'text' and coalesce(btrim(l.content), '') = '' then
+      raise exception 'Before publishing: "%" needs reading content.', l.title using errcode = 'check_violation';
+    end if;
+
+    if l.lesson_type = 'video' and not qh_lms_private.is_valid_https_url(l.video_url) then
+      raise exception 'Before publishing: "%" needs a valid HTTPS video link.', l.title using errcode = 'check_violation';
+    end if;
+
+    if l.lesson_type = 'assignment' and not exists (
+      select 1 from public.qh_assignments a where a.lesson_id = l.id
+    ) then
+      raise exception 'Before publishing: "%" needs assignment instructions.', l.title using errcode = 'check_violation';
+    end if;
+
+    if l.lesson_type = 'quiz' then
+      select * into q from public.qh_quizzes where lesson_id = l.id limit 1;
+      if not found or jsonb_typeof(q.questions) is distinct from 'array' or jsonb_array_length(q.questions) = 0 then
+        raise exception 'Before publishing: "%" needs quiz questions.', l.title using errcode = 'check_violation';
+      end if;
+      if q.passing_score is distinct from 90 then
+        raise exception 'Before publishing: "%" must use a 90 percent passing score.', l.title using errcode = 'check_violation';
+      end if;
+
+      for qn in select value as qq, (ordinality - 1)::int as idx
+                from jsonb_array_elements(q.questions) with ordinality
+      loop
+        qq := qn.qq;
+        if jsonb_typeof(qq) is distinct from 'object' then
+          raise exception 'Before publishing: "%" has a malformed question.', l.title using errcode = 'check_violation';
+        end if;
+
+        qtext := coalesce(nullif(btrim(qq->>'question'), ''), btrim(qq->>'q'), '');
+        if qtext = '' then
+          raise exception 'Before publishing: "%" has a question without text.', l.title using errcode = 'check_violation';
+        end if;
+
+        opts := qq->'options';
+        if jsonb_typeof(opts) is distinct from 'array' or jsonb_array_length(opts) < 2 then
+          raise exception 'Before publishing: "%" needs at least two answer choices per question.', l.title using errcode = 'check_violation';
+        end if;
+        if exists (
+          select 1 from jsonb_array_elements(opts) o
+          where jsonb_typeof(o) is distinct from 'string' or btrim(o #>> '{}') = ''
+        ) then
+          raise exception 'Before publishing: "%" has an empty answer choice.', l.title using errcode = 'check_violation';
+        end if;
+
+        if not (
+          (jsonb_typeof(qq->'correct_answer') = 'string'
+           and opts @> jsonb_build_array(qq->>'correct_answer'))
+          or exists (
+            select 1 from public.qh_quiz_keys k
+             where k.quiz_id = q.id
+               and k.question_index = qn.idx
+               and nullif(btrim(k.correct_answer), '') is not null
+               and opts @> jsonb_build_array(k.correct_answer)
+          )
+        ) then
+          raise exception 'Before publishing: "%" needs the correct answer to match one choice.', l.title using errcode = 'check_violation';
+        end if;
+
+        if coalesce(btrim(qq->>'explanation'), '') = '' then
+          raise exception 'Before publishing: "%" needs an explanation for each question.', l.title using errcode = 'check_violation';
+        end if;
+      end loop;
+    end if;
+  end loop;
+end;
+$function$;
+
 -- When an instructor saves a quiz, copy the answer key into qh_quiz_keys and
 -- remove answers from the student-visible questions column. qh_grade_quiz can
 -- then score new quizzes. Students can no longer write their own scores.
