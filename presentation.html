@@ -111,16 +111,45 @@ body.presenting #bottom-nav,body.presenting .bnav-fab{display:none!important}#pr
 <script src="monetization.js"></script>
 <link rel="stylesheet" href="activity-history.css">
   <script src="site-motion.js" defer></script>
-<style>:where(h1.qh-h1){margin:0;font-size:inherit;font-weight:inherit;line-height:inherit;font-family:inherit;min-width:0;overflow-wrap:anywhere}</style></head>
+<style>:where(h1.qh-h1){margin:0;font-size:inherit;font-weight:inherit;line-height:inherit;font-family:inherit;min-width:0;overflow-wrap:anywhere}</style><script>/* Lock the builder before first paint unless a member session is stored. presentation.html confirms with the server below. */(function(){var ok=false;try{var r=localStorage.getItem('sb-ylosytbxpzxzwfzjpaej-auth-token');if(r){var j=JSON.parse(r);var x=j&&(j.currentSession||j);ok=!!(x&&x.user&&(x.refresh_token||x.access_token))}}catch(e){}document.documentElement.classList.add(ok?'pres-checking':'pres-locked')})();</script>
+<style id="qh-pres-gate">.pres-gate{display:none}html.pres-locked .pres-gate{display:flex;min-height:70vh;align-items:center;justify-content:center;padding:24px 16px;box-sizing:border-box}html.pres-locked .topbar,html.pres-locked main.layout,html.pres-checking main.layout{display:none!important}.pres-gate-card{box-sizing:border-box;width:100%;max-width:460px;background:#fffdf8;border:1px solid #e3d7bd;border-radius:18px;padding:24px;box-shadow:0 10px 34px rgba(0,0,0,.12);font:15px/1.55 Inter,system-ui,sans-serif;color:#1f1a12}.pres-gate-card h1{margin:0 0 8px;font:700 22px/1.25 Inter,system-ui,sans-serif}.pres-gate-card p{margin:0 0 16px;color:#4b4335}.pres-gate-actions{display:flex;flex-wrap:wrap;gap:10px}.pres-gate-actions a{flex:1 1 140px;min-height:46px;display:inline-flex;align-items:center;justify-content:center;border-radius:12px;font:700 15px Inter,system-ui,sans-serif;text-decoration:none;box-sizing:border-box}.pg-primary{background:#245d4b;color:#fff;border:1px solid #245d4b}.pg-secondary{background:#fff;color:#245d4b;border:1px solid #245d4b}.pg-back{display:block;margin-top:14px;text-align:center;color:#6f6553;font-weight:600}</style>
+<script type="module">
+import {db} from '/accounts/client.js';
+window.__qhDb=db;
+const root=document.documentElement;
+document.addEventListener('DOMContentLoaded',()=>{const back=encodeURIComponent(location.pathname+location.search);document.querySelectorAll('.pres-gate-actions a').forEach(a=>{a.href=a.classList.contains('pg-primary')?'/account.html?returnTo='+back:'/account.html?mode=signup&returnTo='+back})});
+async function apply(session){
+  const user=session&&session.user||null;
+  window.__qhUser=user;
+  root.classList.remove('pres-checking');
+  root.classList.toggle('pres-locked',!user);
+  if(!user)return;
+  if(typeof loadCloudProjects==='function')loadCloudProjects();
+  try{const {data}=await db.rpc('qh_is_staff');const box=document.getElementById('adminProjects');if(box&&data===true){box.hidden=false;if(typeof loadAdminProjects==='function')loadAdminProjects()}}catch(e){}
+}
+try{const {data}=await db.auth.getSession();await apply(data.session)}catch(e){root.classList.remove('pres-checking');root.classList.add('pres-locked')}
+db.auth.onAuthStateChange((_e,session)=>{const had=!!window.__qhUser;const has=!!(session&&session.user);if(had!==has)apply(session)});
+</script>
+</head>
 <body>
+<section id="presGate" class="pres-gate" aria-labelledby="presGateTitle">
+  <div class="pres-gate-card">
+    <h1 id="presGateTitle">Sign in to build presentations</h1>
+    <p>The Presentation Builder is for members. Collect verses, hadith and search results, write speaker notes, present, and export to PowerPoint or PDF. Your presentations are private to your account.</p>
+    <div class="pres-gate-actions">
+      <a class="pg-primary" href="/account.html?returnTo=%2Fpresentation.html">Log in</a>
+      <a class="pg-secondary" href="/account.html?mode=signup&amp;returnTo=%2Fpresentation.html">Create free account</a>
+    </div>
+    <a class="pg-back" href="/research.html">Keep browsing as a guest</a>
+  </div>
+</section>
 <!-- PRESENTATION BUILDER START -->
 <header class="topbar">
   <a class="btn" href="index.html">← App</a>
   <div><h1 class="brand qh-h1">Presentation Builder</h1><div class="sub">Qur’an Scholar teaching export</div></div>
   <div class="spacer"></div>
   <button class="btn green" onclick="saveProject()">Save Local</button>
-  <button class="btn blue" onclick="saveProjectCloud()">Save Cloud</button>
-  <button class="btn" onclick="loadCloudProjects()">Load Cloud</button>
+  <button class="btn blue" onclick="saveProjectCloud()">Save to account</button>
   <button class="btn primary" onclick="exportHTML()">HTML</button>
   <button class="btn blue" onclick="gatedExportPDF()">PDF</button>
   <button class="btn" onclick="gatedExportPPTX()">PPTX</button>
@@ -194,20 +223,17 @@ body.presenting #bottom-nav,body.presenting .bnav-fab{display:none!important}#pr
     </div>
     <div class="panel-head"><div class="panel-title">Saved Projects</div><button class="btn small" onclick="newProject()">New</button></div>
     <div id="projectList" class="project-list"></div>
-    <div class="panel-head"><div class="panel-title">Cloud Save / Collaboration</div></div>
+    <div class="panel-head"><div class="panel-title">Saved to your account</div><button class="btn small" onclick="loadCloudProjects()">Refresh</button></div>
     <div class="edit-card">
-      <details class="cloud-details"><summary>Connection settings</summary><label>Supabase URL</label><input aria-label="https" id="cloudUrl" placeholder="https://your-project.supabase.co" value="https://ylosytbxpzxzwfzjpaej.supabase.co">
-      <label style="margin-top:10px">Supabase publishable / anon key</label><input aria-label="sb_publishable_ or anon key" id="cloudKey" placeholder="sb_publishable_ or anon key" value="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs">
-      </details><label style="margin-top:10px">Owner / workspace name</label><input aria-label="Owner or workspace name" id="cloudOwner" placeholder="example: Medhanie or team email" value="default">
-      <div class="cloud-actions">
-        <button class="btn green" onclick="saveCloudConfig()">Save Config</button>
-        <button class="btn blue" onclick="saveProjectCloud()">Save to Supabase</button>
-        <button class="btn" onclick="loadCloudProjects()">Refresh Cloud</button>
-      </div>
-      <div id="cloudStatus" class="cloud-status">Cloud is optional. Local save works without it. Anyone who types the same workspace name sees and can change its cloud projects, so use a name that is yours, not "default".</div>
+      <div class="cloud-actions"><button class="btn blue" onclick="saveProjectCloud()">Save to my account</button></div>
+      <div id="cloudStatus" class="cloud-status">Presentations you save here are private to your account. You can open them on any device where you are logged in.</div>
     </div>
-    <div class="panel-head"><div class="panel-title">Cloud Projects</div></div>
     <div id="cloudProjectList" class="project-list"></div>
+    <div id="adminProjects" hidden>
+      <div class="panel-head"><div class="panel-title">All members’ presentations (staff)</div><button class="btn small" onclick="loadAdminProjects()">Refresh</button></div>
+      <div class="edit-card"><div class="cloud-status">Staff view. You can open any member’s presentation to read it. You cannot change or delete it; saving makes a copy in your own account.</div></div>
+      <div id="adminProjectList" class="project-list"></div>
+    </div>
   </aside>
 </main>
 <div id="presentMode" hidden role="dialog" aria-modal="true" aria-label="Present slides">
@@ -244,7 +270,7 @@ function esc(s){return String(s||'').replace(/[&<>\"]/g,m=>({'&':'&amp;','<':'&l
 function typeLabel(t){return (sectionNames[t]||String(t||'item').replace(/_/g,' ')).replace(' Evidence','')}
 function perspectiveLabel(){return perspectiveLabels[perspective]||'Academic Research'}
 function normalize(raw){raw=raw||{};let t=String(raw.type||'research').toLowerCase();if(t==='verse')t='quran';return{ id:raw.id||id(t), type:t, title:raw.title||raw.slideTitle||typeLabel(t), slideTitle:raw.slideTitle||raw.title||typeLabel(t), reference:raw.reference||raw.source||'', text:raw.text||[raw.arabic,raw.english,raw.extra].filter(Boolean).join('\n\n'), arabic:raw.arabic||'', translations:raw.translations||null, notes:raw.notes||'', speakerNotes:raw.speakerNotes||'', sourceUrl:raw.sourceUrl||'', createdAt:raw.createdAt||raw.addedAt||new Date().toISOString(), section:raw.section||t }}
-function load(){slides=parse(BASKET_KEY,null);if(!Array.isArray(slides))slides=parse(LEGACY_KEY,[]);slides=slides.map(normalize);document.getElementById('themeSelect').value=theme;const p=document.getElementById('perspectiveSelect');if(p)p.value=perspective;loadCloudConfig();render();renderProjects();renderCloudProjects([])}
+function load(){slides=parse(BASKET_KEY,null);if(!Array.isArray(slides))slides=parse(LEGACY_KEY,[]);slides=slides.map(normalize);document.getElementById('themeSelect').value=theme;const p=document.getElementById('perspectiveSelect');if(p)p.value=perspective;loadCloudConfig();render();renderProjects();if(!window.__qhUser)renderCloudProjects([])}
 function syncTitle(){renderPreview()}
 function setTheme(t){theme=t;localStorage.setItem('qs_presentation_theme',t);renderPreview()}
 function setPerspective(p){perspective=p;localStorage.setItem(PERSPECTIVE_KEY,p);renderPreview()}
@@ -289,18 +315,20 @@ function deleteProject(pid){if(!confirm('Delete this saved presentation?'))retur
 function renameProject(pid){const p=projects();const pr=p.find(x=>x.id===pid);if(!pr)return;const n=prompt('New name:',pr.name);if(!n)return;pr.name=n;pr.updatedAt=new Date().toISOString();saveProjects(p);renderProjects()}
 function newProject(){if(confirm('Start a new empty presentation basket? Save current work first if needed.')){slides=[];activeProjectId=null;document.getElementById('presTitle').value='Untitled Qur’an Study';render()}}
 function renderProjects(){const box=document.getElementById('projectList');const p=projects();if(!p.length){box.innerHTML='<div class="empty">No saved projects yet.</div>';return}box.innerHTML=p.map(pr=>`<div class="project-row"><div><div class="project-name">${esc(pr.name)}</div><div class="project-meta">${(pr.slides||[]).length} slides • ${esc(perspectiveLabels[pr.perspective]||'Academic')} • ${new Date(pr.updatedAt).toLocaleString()}</div></div><div class="item-actions"><button class="btn small" onclick="loadProject('${pr.id}')">Load</button><button class="btn small" onclick="renameProject('${pr.id}')">Rename</button><button class="btn small red" onclick="deleteProject('${pr.id}')">Delete</button></div></div>`).join('')}
-function cloudConfig(){return parse(CLOUD_CONFIG_KEY,{url:'',key:'',owner:''})}
-function saveCloudConfig(){const cfg={url:document.getElementById('cloudUrl').value.trim().replace(/\/$/,''),key:document.getElementById('cloudKey').value.trim(),owner:document.getElementById('cloudOwner').value.trim()};localStorage.setItem(CLOUD_CONFIG_KEY,JSON.stringify(cfg));cloudStatus(cfg.url&&cfg.key?'Cloud config saved.':'Cloud config saved, but URL/key is incomplete.',cfg.url&&cfg.key?'ok':'err')}
-function loadCloudConfig(){const cfg=cloudConfig();['cloudUrl','cloudKey','cloudOwner'].forEach(id=>{const el=document.getElementById(id);if(!el)return;if(id==='cloudUrl')el.value=cfg.url||'';if(id==='cloudKey')el.value=cfg.key||'';if(id==='cloudOwner')el.value=cfg.owner||''})}
+/* ── Cloud saves: private to the signed-in member (database rules enforce it). Site staff can also view everyone's, read-only. ── */
+function cloudDb(){return window.__qhDb||null}
+function cloudUser(){return window.__qhUser||null}
 function cloudStatus(msg,kind=''){const el=document.getElementById('cloudStatus');if(el){el.textContent=msg;el.className='cloud-status '+kind}}
-function cloudHeaders(){const cfg=cloudConfig();if(!cfg.url||!cfg.key){cloudStatus('Add Supabase URL and publishable/anon key first.','err');return null}return {'apikey':cfg.key,'Authorization':'Bearer '+cfg.key,'Content-Type':'application/json','Prefer':'return=representation'}}
-function currentProjectPayload(name){const cfg=cloudConfig();return {id:activeProjectId||id('project'),name:name||document.getElementById('presTitle').value||'Qur’an Study',title:document.getElementById('presTitle').value||'Qur’an Study',theme,perspective,slides,owner_label:cfg.owner||'default',updated_at:new Date().toISOString()}}
-async function saveProjectCloud(){const h=cloudHeaders();if(!h)return;const name=prompt('Cloud project name:',document.getElementById('presTitle').value||'Qur’an Study');if(!name)return;const cfg=cloudConfig();const payload=currentProjectPayload(name);activeProjectId=payload.id;try{const url=`${cfg.url}/rest/v1/${CLOUD_TABLE}?on_conflict=id`;const r=await fetch(url,{method:'POST',headers:{...h,'Prefer':'resolution=merge-duplicates,return=representation'},body:JSON.stringify(payload)});const txt=await r.text();if(!r.ok)throw new Error(txt||r.statusText);saveProjectSilent(payload);cloudStatus('Saved to Supabase cloud. Other devices can load it with the same config.','ok');loadCloudProjects()}catch(e){cloudStatus('Cloud save failed. Check table SQL, RLS policy, URL, and key. '+e.message,'err')}}
+function cloudReady(){if(!cloudDb()||!cloudUser()){cloudStatus('Log in to save presentations to your account.','err');return false}return true}
+function loadCloudConfig(){}
+function currentProjectPayload(name){return {id:activeProjectId||id('project'),name:name||document.getElementById('presTitle').value||'Qur’an Study',title:document.getElementById('presTitle').value||'Qur’an Study',theme,perspective,slides,updated_at:new Date().toISOString()}}
+async function saveProjectCloud(){if(!cloudReady())return;const name=prompt('Name for this saved presentation:',document.getElementById('presTitle').value||'Qur’an Study');if(!name)return;const payload=currentProjectPayload(name);try{cloudStatus('Saving to your account...');const {error}=await cloudDb().from(CLOUD_TABLE).upsert(payload,{onConflict:'id'});if(error)throw error;activeProjectId=payload.id;saveProjectSilent(payload);cloudStatus('Saved to your account. Only you can see it.','ok');loadCloudProjects()}catch(e){cloudStatus('Cloud save failed. '+(e.message||e),'err')}}
 function saveProjectSilent(project){const p=projects();const idx=p.findIndex(x=>x.id===project.id);const local={...project,updatedAt:project.updated_at||project.updatedAt||new Date().toISOString()};if(idx>=0)p[idx]=local;else p.unshift(local);saveProjects(p);renderProjects()}
-async function loadCloudProjects(){const h=cloudHeaders();if(!h)return;const cfg=cloudConfig();try{cloudStatus('Loading cloud projects...');const owner=encodeURIComponent(cfg.owner||'default');const url=`${cfg.url}/rest/v1/${CLOUD_TABLE}?select=*&owner_label=eq.${owner}&order=updated_at.desc&limit=50`;const r=await fetch(url,{headers:h});const data=await r.json();if(!r.ok)throw new Error(JSON.stringify(data));renderCloudProjects(Array.isArray(data)?data:[]);cloudStatus(`Loaded ${Array.isArray(data)?data.length:0} cloud project(s).`,'ok')}catch(e){cloudStatus('Cloud load failed. '+e.message,'err')}}
-function renderCloudProjects(items){const box=document.getElementById('cloudProjectList');if(!box)return;if(!items.length){box.innerHTML='<div class="empty">No cloud projects found for this owner/workspace.</div>';return}box.innerHTML=items.map(pr=>`<div class="project-row"><div><div class="project-name">☁️ ${esc(pr.name||pr.title)}</div><div class="project-meta">${(pr.slides||[]).length} slides • ${esc(perspectiveLabels[pr.perspective]||'Academic')} • ${new Date(pr.updated_at||pr.created_at).toLocaleString()}</div></div><div class="item-actions"><button class="btn small" onclick="loadCloudProject('${pr.id}')">Load</button><button class="btn small red" onclick="deleteCloudProject('${pr.id}')">Delete</button></div></div>`).join('')}
-async function loadCloudProject(pid){const h=cloudHeaders();if(!h)return;const cfg=cloudConfig();try{const r=await fetch(`${cfg.url}/rest/v1/${CLOUD_TABLE}?select=*&id=eq.${encodeURIComponent(pid)}&limit=1`,{headers:h});const data=await r.json();if(!r.ok||!data[0])throw new Error(JSON.stringify(data));const pr=data[0];activeProjectId=pr.id;slides=(pr.slides||[]).map(normalize);theme=pr.theme||'academic';perspective=pr.perspective||'academic';document.getElementById('presTitle').value=pr.title||pr.name;document.getElementById('themeSelect').value=theme;const ps=document.getElementById('perspectiveSelect');if(ps)ps.value=perspective;saveBasket();saveProjectSilent({id:pr.id,name:pr.name,title:pr.title,theme:pr.theme,perspective:pr.perspective,slides:pr.slides,updatedAt:pr.updated_at});render();cloudStatus('Cloud project loaded into editor.','ok')}catch(e){cloudStatus('Cloud project load failed. '+e.message,'err')}}
-async function deleteCloudProject(pid){if(!confirm('Delete this project from Supabase cloud?'))return;const h=cloudHeaders();if(!h)return;const cfg=cloudConfig();try{const r=await fetch(`${cfg.url}/rest/v1/${CLOUD_TABLE}?id=eq.${encodeURIComponent(pid)}`,{method:'DELETE',headers:h});if(!r.ok)throw new Error(await r.text());cloudStatus('Cloud project deleted.','ok');loadCloudProjects()}catch(e){cloudStatus('Cloud delete failed. '+e.message,'err')}}
+async function loadCloudProjects(){if(!cloudReady())return;try{cloudStatus('Loading your saved presentations...');const {data,error}=await cloudDb().from(CLOUD_TABLE).select('id,name,title,theme,perspective,slides,updated_at,created_at').eq('owner_id',cloudUser().id).order('updated_at',{ascending:false}).limit(50);if(error)throw error;renderCloudProjects(data||[]);cloudStatus(`Loaded ${(data||[]).length} saved presentation(s) from your account.`,'ok')}catch(e){cloudStatus('Could not load your saved presentations. '+(e.message||e),'err')}}
+function renderCloudProjects(items){const box=document.getElementById('cloudProjectList');if(!box)return;if(!items.length){box.innerHTML='<div class="empty">No presentations saved to your account yet.</div>';return}box.innerHTML=items.map(pr=>`<div class="project-row"><div><div class="project-name">☁️ ${esc(pr.name||pr.title)}</div><div class="project-meta">${(pr.slides||[]).length} slides • ${esc(perspectiveLabels[pr.perspective]||'Academic')} • ${new Date(pr.updated_at||pr.created_at).toLocaleString()}</div></div><div class="item-actions"><button class="btn small" onclick="loadCloudProject('${esc(pr.id)}')">Load</button><button class="btn small red" onclick="deleteCloudProject('${esc(pr.id)}')">Delete</button></div></div>`).join('')}
+async function loadCloudProject(pid){if(!cloudReady())return;try{const {data,error}=await cloudDb().from(CLOUD_TABLE).select('*').eq('id',pid).limit(1);if(error)throw error;const pr=(data||[])[0];if(!pr)throw new Error('Not found, or not yours.');const mine=pr.owner_id===cloudUser().id;activeProjectId=mine?pr.id:null;slides=(pr.slides||[]).map(normalize);theme=pr.theme||'academic';perspective=pr.perspective||'academic';document.getElementById('presTitle').value=pr.title||pr.name;document.getElementById('themeSelect').value=theme;const ps=document.getElementById('perspectiveSelect');if(ps)ps.value=perspective;saveBasket();if(mine)saveProjectSilent({id:pr.id,name:pr.name,title:pr.title,theme:pr.theme,perspective:pr.perspective,slides:pr.slides,updatedAt:pr.updated_at});current=0;render();cloudStatus(mine?'Loaded into the editor.':'Opened a member’s presentation, read-only. Saving makes a copy in your own account; theirs is unchanged.','ok')}catch(e){cloudStatus('Could not open that presentation. '+(e.message||e),'err')}}
+async function deleteCloudProject(pid){if(!confirm('Delete this presentation from your account? This cannot be undone.'))return;if(!cloudReady())return;try{const {error}=await cloudDb().from(CLOUD_TABLE).delete().eq('id',pid).eq('owner_id',cloudUser().id);if(error)throw error;if(activeProjectId===pid)activeProjectId=null;cloudStatus('Deleted from your account.','ok');loadCloudProjects()}catch(e){cloudStatus('Delete failed. '+(e.message||e),'err')}}
+async function loadAdminProjects(){const box=document.getElementById('adminProjectList');if(!box||!cloudDb())return;box.innerHTML='<div class="empty">Loading…</div>';try{const {data,error}=await cloudDb().rpc('qh_presentation_projects_admin_list',{p_limit:200});if(error)throw error;if(!data||!data.length){box.innerHTML='<div class="empty">No member has saved a presentation yet.</div>';return}box.innerHTML=data.map(pr=>`<div class="project-row"><div><div class="project-name">${esc(pr.name||pr.title)}</div><div class="project-meta">${esc(pr.owner_email||'unknown member')} • ${pr.slide_count} slides • ${new Date(pr.updated_at).toLocaleString()}</div></div><div class="item-actions"><button class="btn small" onclick="loadCloudProject('${esc(pr.id)}')">Open</button></div></div>`).join('')}catch(e){box.innerHTML='<div class="empty">Could not load members’ presentations. '+esc(e.message||String(e))+'</div>'}}
 function deckHTML(printMode=false){const title=esc(document.getElementById('presTitle').value||'Qur’an Study');const css=document.querySelector('style').innerHTML;const deck=exportDeckSlides();const hasQuranTranslations=deck.some(s=>s.type==='quran'&&s.translations&&Object.keys(s.translations).some(k=>s.translations[k]));const langBar=hasQuranTranslations?`<div class="deck-lang-bar" style="position:fixed;top:12px;right:12px;z-index:9999;background:#fffdf8;border:1px solid #e3d7bd;border-radius:10px;padding:7px 10px;font:700 11px Inter,sans-serif;box-shadow:0 3px 14px rgba(0,0,0,.15);"><label style="margin-right:6px;color:#6f6553;">Verse language:</label><select id="deckLangSelect" onchange="window.__setDeckLang(this.value)" style="font:700 11px Inter,sans-serif;padding:4px 6px;border-radius:6px;border:1px solid #e3d7bd;background:#fff;"><option value="english">English</option><option value="tigrinya">ትግርኛ Tigrinya</option><option value="amharic">አማርኛ Amharic</option><option value="oromo">Oromoo</option><option value="somali">Somali</option></select><div style="margin-top:4px;font-weight:400;color:#9a8a70;">Hadith/Tafsir/Madhhab/Sira stay in English</div></div><script>window.__setDeckLang=function(lang){document.querySelectorAll('.deck-lang').forEach(function(el){el.style.display=(el.getAttribute('data-lang')===lang)?'':'none';});};<\/script>`:'';return `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><style>${css}.topbar,.panel,.toolbar{display:none}.layout,.center{display:block}.preview-wrap{display:block;padding:0}.slide{width:100vw;height:100vh;border-radius:0;box-shadow:none;page-break-after:always}.slide-body{overflow:hidden}.deck-notes{display:none;font:15px/1.5 Inter,sans-serif}.show-notes .deck-notes{display:block}#bottom-nav{display:none!important}.slide.long .slide-text{font-size:2.4vw}.slide.xlong .slide-text{font-size:1.9vw}.slide.long .slide-arabic{font-size:3vw}.slide.xlong .slide-arabic{font-size:2.4vw}@media print{.deck-lang-bar,#notesToggle{display:none!important}}<\/style></head><body class="${printMode&&notesInPdf()?'show-notes':''}">${langBar}${deck.map((s,i)=>slideMarkup(s,i,deck.length,title,true)).join('')}<button id="notesToggle" type="button" onclick="document.body.classList.toggle('show-notes')" style="position:fixed;bottom:12px;right:12px;z-index:9999;padding:9px 14px;border-radius:999px;border:1px solid #e3d7bd;background:#fffdf8;font:700 12px Inter,sans-serif;cursor:pointer;box-shadow:0 3px 14px rgba(0,0,0,.15)">Speaker notes (N)</button><script>document.addEventListener('keydown',function(e){if((e.key==='n'||e.key==='N')&&!e.metaKey&&!e.ctrlKey)document.body.classList.toggle('show-notes');});<\/script><\/body><\/html>`}
 function exportHTML(){if(!slides.length)return alert('No slides to export.');const blob=new Blob([deckHTML()],{type:'text/html'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=(document.getElementById('presTitle').value||'quran-presentation').replace(/[^a-z0-9]+/gi,'-').toLowerCase()+'.html';a.click();URL.revokeObjectURL(a.href)}
 function exportPDF(){if(!slides.length)return alert('No slides to export.');var html=deckHTML(true);var blob=new Blob([html],{type:'text/html'});var url=URL.createObjectURL(blob);var a=document.createElement('a');a.href=url;a.target='_blank';document.body.appendChild(a);a.click();document.body.removeChild(a);setTimeout(function(){URL.revokeObjectURL(url);},3000);setTimeout(function(){alert('Tap the menu → Print → Save as PDF to download.');},800);}
@@ -514,23 +542,6 @@ document.addEventListener('DOMContentLoaded', () => {
     badge.style.cssText = 'margin-left:auto;display:flex;align-items:center;gap:8px;';
     toolbar.appendChild(badge);
     renderReportBadge('plan-badge');
-  }
-});
-
-
-/* ── Auto-init Supabase config ── */
-document.addEventListener('DOMContentLoaded', () => {
-  const urlEl = document.getElementById('cloudUrl');
-  const keyEl = document.getElementById('cloudKey');
-  const ownerEl = document.getElementById('cloudOwner');
-  // Only set if user hasn't saved their own config
-  const saved = localStorage.getItem('qsPresentationCloudCfg');
-  if (!saved) {
-    if (urlEl && !urlEl.value) urlEl.value = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
-    if (keyEl && !keyEl.value) keyEl.value = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
-    if (ownerEl && !ownerEl.value) ownerEl.value = 'default';
-    // Auto save config
-    if (typeof saveConfig === 'function') saveConfig();
   }
 });
 
