@@ -31,7 +31,7 @@ picker?.addEventListener('change',()=>{
 loadClasses();
 
 const dobInput=form.querySelector('[name="date_of_birth"]');
-const guardianBox=$('guardian-fieldset');
+const MIN_AGE=18;
 function ageFromDob(value){
  const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value||'').trim());
  if(!m)return null;
@@ -46,24 +46,13 @@ function ageFromDob(value){
  if(now.getUTCMonth()+1<mo||(now.getUTCMonth()+1===mo&&now.getUTCDate()<d))age--;
  return age;
 }
-function syncGuardian(){
- const age=ageFromDob(dobInput&&dobInput.value);
- const minor=age!=null&&age<18;
- if(guardianBox)guardianBox.hidden=!minor;
- for(const el of (guardianBox?guardianBox.querySelectorAll('[data-guardian-required]'):[])){
-  el.required=!!minor;
-  if(!minor){el.removeAttribute('aria-invalid');el.style.outline='';}
- }
-}
 if(dobInput){
  const now=new Date();
- dobInput.max=now.toISOString().slice(0,10);
+ const adult=new Date(Date.UTC(now.getUTCFullYear()-MIN_AGE,now.getUTCMonth(),now.getUTCDate()));
+ dobInput.max=adult.toISOString().slice(0,10);
  const oldest=new Date(Date.UTC(now.getUTCFullYear()-120,now.getUTCMonth(),now.getUTCDate()));
  dobInput.min=oldest.toISOString().slice(0,10);
- dobInput.addEventListener('input',syncGuardian);
- dobInput.addEventListener('change',syncGuardian);
 }
-syncGuardian();
 
 form.addEventListener('submit',async event=>{
  event.preventDefault();
@@ -83,12 +72,11 @@ form.addEventListener('submit',async event=>{
  data.privacy_consent=true;
  const age=ageFromDob(data.date_of_birth);
  if(age==null){setStatus('Enter a valid date of birth.',true);if(dobInput){dobInput.setAttribute('aria-invalid','true');dobInput.focus();}return;}
- if(age<18){
-  if(data.guardian_consent!=='on'){setStatus('A parent or guardian must consent to this application.',true);return;}
-  data.guardian_consent=true;
- }else{
-  delete data.guardian_name;delete data.guardian_email;delete data.guardian_consent;
- }
+ if(age<MIN_AGE){setStatus('You must be at least 18 years old to apply.',true);if(dobInput){dobInput.setAttribute('aria-invalid','true');dobInput.focus();}return;}
+ delete data.guardian_name;delete data.guardian_email;delete data.guardian_consent;
+ if(typeof data.phone==='string')data.phone=data.phone.trim();
+ else data.phone='';
+ if(data.phone.length>40){setStatus('Phone number must be 40 characters or fewer.',true);return;}
  data.requested_course_ids=[...picker.querySelectorAll('input[data-course]:checked')].map(b=>b.value).slice(0,MAX_CLASSES);
  busy=true;button.disabled=true;setStatus('Submitting your application securely…');
  try{

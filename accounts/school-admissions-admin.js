@@ -38,13 +38,19 @@ async function refresh(){
     ['Learning goal',app.learning_goal],['Academic background',app.academic_background||'Not supplied'],
     ['Education level',app.education_level],['Teaching language',app.preferred_language],
     ['Study format',app.attendance_mode],['Location',[app.city,app.country].filter(Boolean).join(', ')||'Not supplied'],
+    ['Email',app.email||'Not supplied'],
+    ['Phone',app.phone||'Not supplied'],
     ['Date of birth',app.date_of_birth||'Not supplied'],
-    ['Age at submission',app.age_at_submission==null?'Not supplied':String(app.age_at_submission)+(under18?' (under 18)':'')],
-    ['Parent or guardian',under18?((app.guardian_name||'Name not supplied')+' · '+(app.guardian_email||'Email not supplied')+(app.guardian_consent?' · consent recorded':' · consent missing')):'Not required (applicant is 18 or over)']
+    ['Age at submission',app.age_at_submission==null?'Not supplied':String(app.age_at_submission)+(under18?' (under 18)':'')]
    ]){
     const line=append(body,element('p'));
     append(line,element('strong',name+': '));
     append(line,document.createTextNode(value||'Not supplied'));
+   }
+   if(under18||app.guardian_name||app.guardian_email||app.guardian_consent){
+    const line=append(body,element('p'));
+    append(line,element('strong','Parent or guardian: '));
+    append(line,document.createTextNode((app.guardian_name||'Name not supplied')+' · '+(app.guardian_email||'Email not supplied')+(app.guardian_consent?' · consent recorded':' · consent not recorded')));
    }
    const classes=append(box,element('p',undefined,'admissions-admin-meta'));
    classes.textContent='Requested classes: '+((app.requested_courses||[]).map(c=>c.title).join(', ')||'none selected');

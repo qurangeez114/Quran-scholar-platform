@@ -218,7 +218,13 @@
 
   <script type="module">
     import { supabase } from './accounts/client.js';
-    import { getCourses, getEnrollment, enrollInCourse, getLessonsByCourse, getStudentProgress } from './courses-api.js';
+    import { getCourses, getEnrollment, enrollInCourse, getLessonsByCourse, getStudentProgress, formatTuition } from './courses-api.js';
+    function courseTuitionLabel(course){
+      if(typeof formatTuition==='function')return formatTuition(course);
+      const paid=course&&course.tuition_type==='paid'&&course.tuition_amount!=null&&Number(course.tuition_amount)>0;
+      return paid?String(course.tuition_currency||'USD')+' '+Number(course.tuition_amount):'Free';
+    }
+
 
     let courses = [];
     let currentUser = null;
@@ -349,7 +355,7 @@
         const practiceMatch=String(course.description||'').match(/https?:\/\/quranhikma\.com\/sample-video-class\.html/i);
         if(practiceMatch){const practice=document.createElement('a');practice.href='/sample-video-class.html';practice.className='course-detail-link';practice.textContent='Try interactive class preview →';content.appendChild(practice);}
         const details=document.createElement('p');details.className='course-description course-extra';
-        details.textContent='Tuition, schedule and instructor: to be announced';
+        details.textContent='Tuition: '+courseTuitionLabel(course);
         content.appendChild(details);
         const meta=document.createElement('div');meta.className='course-meta';content.appendChild(meta);
         const state=document.createElement('span');meta.appendChild(state);
