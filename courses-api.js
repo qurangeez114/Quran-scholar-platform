@@ -414,19 +414,13 @@ export async function createDiscussionPost(threadId,content) {
 export async function submitQuiz(quizId, answers, score, passingScore = 90) {
   const user = (await supabase.auth.getUser()).data.user;
   if (!user) throw new Error('Not authenticated');
-
-  const { data, error } = await supabase
-    .from('qh_quiz_answers')
-    .insert({
-      quiz_id: quizId,
-      user_id: user.id,
-      answers,
-      score,
-      passed: score >= passingScore
-    })
-    .select()
-    .single();
-
+  // Score is computed only by qh_grade_quiz. Client-supplied score/passingScore are ignored.
+  const { data, error } = await supabase.rpc('qh_grade_quiz', {
+    p_quiz_id: quizId,
+    p_answers: answers,
+    p_stage: 'final',
+    p_save: true
+  });
   if (error) throw error;
   return data;
 }

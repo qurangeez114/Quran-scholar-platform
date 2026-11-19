@@ -871,13 +871,22 @@
       });
     }
 
-    // Returns the server grade, or null when server grading is not installed (function missing or no answer key).
-    async function gradeOnServer(quizId, answers, stage) {
-      const { data, error } = await supabase.rpc('qh_grade_quiz', { p_quiz_id: quizId, p_answers: answers, p_stage: stage === 'final' ? 'final' : 'original' });
-      if (!error && data) return data;
-      const code = String(error?.code || ''), msg = String(error?.message || '');
-      if (code === 'PGRST202' || code === '42883' || code === 'P0002' || /could not find the function|schema cache|No answer key/i.test(msg)) return null;
-      throw error;
+    // Server grading only. p_save=false is used for practice and instructor preview.
+    async function gradeOnServer(quizId, answers, stage, save) {
+      const { data, error } = await supabase.rpc('qh_grade_quiz', {
+        p_quiz_id: quizId,
+        p_answers: answers,
+        p_stage: stage === 'final' ? 'final' : 'original',
+        p_save: save !== false
+      });
+      if (error) throw error;
+      return data;
+    }
+    function applyServerAnswers(questions, server) {
+      (server?.results || []).forEach(r => {
+        const d = questions.findIndex(q => q._origIndex === r.index);
+        if (d >= 0 && r.correct_answer) questions[d] = {...questions[d], correct_answer: r.correct_answer};
+      });
     }
 
     function renderQuiz() {
@@ -972,6 +981,12 @@
       }
       try {
         const hasReworded = currentQuiz.questions.some(q=>q.variant?.q && Array.isArray(q.variant.options));
+        const saveAttempt = !preview && !(quizStage === 'practice' && hasReworded);
+        button.textContent = saveAttempt ? 'Saving results…' : 'Checking answers…';
+        const server = await gradeOnServer(currentQuiz.id, answersOriginal, quizStage, saveAttempt);
+        score = server.correct; percentage = server.score;
+        const passed = Boolean(server.passed);
+        applyServerAnswers(questions, server);
         if (quizStage === 'practice' && hasReworded) {
           result.replaceChildren();
           const info=document.createElement('p');
@@ -983,9 +998,6 @@
           result.scrollIntoView({behavior:'smooth',block:'start'});
           return;
         }
-
-        let passed = percentage >= Number(currentQuiz.passing_score || 90);
-        button.textContent='Saving results…';
         if(preview){
           result.replaceChildren();
           const info=document.createElement('p');
@@ -993,16 +1005,6 @@
           result.append(info);
           addExplanations(questions,answers,'Answer explanations (as students see them)');
           return;
-        }
-        // Prefer server-side grading (qh_grade_quiz, migration 20261104b) so the recorded score cannot be set by the browser.
-        // Falls back to the current client-graded insert only while the function or answer key does not exist yet.
-        const server = await gradeOnServer(currentQuiz.id, answersOriginal, quizStage);
-        if (server) {
-          score = server.correct; percentage = server.score; passed = Boolean(server.passed);
-          // server results use original question indexes; map to displayed positions
-          (server.results||[]).forEach(r=>{ const d=questions.findIndex(q=>q._origIndex===r.index); if(d>=0 && r.correct_answer) questions[d] = {...questions[d], correct_answer: r.correct_answer}; });
-        } else {
-          await submitQuiz(currentQuiz.id, answersOriginal, percentage, currentQuiz.passing_score);
         }
         // A later failed retry must not erase an earlier passing lesson completion.
         const existing = (await getStudentProgress(currentCourse.id))

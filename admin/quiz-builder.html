@@ -139,7 +139,20 @@ async function init(){
   if(quizError)throw quizError;
   const oddPass=quiz&&quiz.passing_score!=null&&Number(quiz.passing_score)!==PASS_MARK;
   if(oddPass)status('This quiz was saved with a '+quiz.passing_score+'% pass mark. Saving will set it to '+PASS_MARK+'%, which publishing requires.','error');
-  if(quiz){existingId=quiz.id;$('passMark').value=String(PASS_MARK);questions=Array.isArray(quiz.questions)?quiz.questions.map(normalized):[];}
+  if(quiz){
+    existingId=quiz.id;$('passMark').value=String(PASS_MARK);questions=Array.isArray(quiz.questions)?quiz.questions.map(normalized):[];
+    const {data:keys,error:keyError}=await supabase.rpc('qh_instructor_quiz_keys',{p_quiz_id:quiz.id});
+    if(keyError)throw keyError;
+    if(Array.isArray(keys))keys.forEach(k=>{
+      const q=questions[k.question_index];
+      if(!q)return;
+      if(k.correct_answer)q.correct_answer=k.correct_answer;
+      if(k.variant_answer&&q.variant&&Array.isArray(q.variant.options)){
+        const i=q.variant.options.indexOf(k.variant_answer);
+        if(i>=0)q.variant.answer=i;
+      }
+    });
+  }
   if(!questions.length)questions=[empty()];
   draw();$('editor').hidden=false;$('quizForm').hidden=false;
   if(!oddPass)status(existingId?'Loaded saved quiz. Changes will only apply after Save.':'New quiz draft. Add questions and save.','success');
