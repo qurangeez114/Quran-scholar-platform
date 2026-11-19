@@ -78,6 +78,36 @@ body { padding-bottom: 60px !important; }
 #presentationFloatBtn { bottom: 72px !important; right: 14px !important; }
 
 </style>
+<style id="qh-pres-v2">
+/* Presentation builder v2: notes off the slide, long text, present mode */
+.preview-wrap{flex-direction:column;gap:10px}
+.preview-notes{width:min(920px,100%);padding:10px 14px;border:1px dashed var(--line);border-radius:10px;background:#fffdf8;font:14px/1.5 Inter,sans-serif;color:#4f4636;white-space:normal}
+.preview-notes b{display:block;font:800 10px Inter,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);margin-bottom:4px}
+.preview-notes.empty{color:#9a8a70;font-style:italic}
+.notes-hint{font:12px/1.45 Inter,sans-serif;color:var(--muted);margin-top:4px}
+.notes-print{display:flex;gap:8px;align-items:flex-start;font:12px/1.4 Inter,sans-serif;color:var(--muted);margin-top:8px;text-transform:none;letter-spacing:0}
+.notes-print input{width:auto;margin-top:2px}
+#slidePreview .slide-body,.pm-stage .slide-body{overflow:auto}
+.slide.long .slide-text{font-size:17px}.slide.xlong .slide-text{font-size:14px}
+.slide.long .slide-arabic{font-size:26px}.slide.xlong .slide-arabic{font-size:21px}
+.cloud-details summary{cursor:pointer;font:700 12px Inter,sans-serif;color:var(--muted);margin:4px 0 8px}
+#presentMode{position:fixed;inset:0;z-index:2147483000;background:#141210;display:flex;flex-direction:column}
+#presentMode[hidden]{display:none}
+.pm-stage{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:12px;overflow:hidden;touch-action:pan-y}
+.pm-stage>.slide{width:min(100%,calc((100vh - 150px) * 16 / 9));max-height:100%;box-shadow:none}
+.pm-notes{max-height:32vh;overflow:auto;background:#fffdf8;color:#17130c;padding:12px 16px;font:15px/1.5 Inter,sans-serif;border-top:3px solid #c5a45a}
+.pm-notes b{display:block;font:800 10px Inter,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#8a651f;margin-bottom:4px}
+.pm-bar{display:flex;gap:8px;align-items:center;justify-content:center;padding:8px 10px calc(8px + env(safe-area-inset-bottom));background:#1d1914;flex-wrap:wrap}
+.pm-bar .btn{min-height:42px;min-width:64px}
+.pm-pos{color:#e2c98a;font:700 13px Inter,sans-serif;min-width:64px;text-align:center}
+@media(max-width:760px){
+ .slide.long .slide-text{font-size:13px}.slide.xlong .slide-text{font-size:12px}
+ .slide.long .slide-arabic,.slide.xlong .slide-arabic{font-size:18px}
+ .toolbar .btn{padding:9px 10px}
+ .pm-stage{padding:6px}
+ .pm-stage>.slide{width:100%}
+}
+</style>
 <script src="monetization.js"></script>
 <link rel="stylesheet" href="activity-history.css">
   <script src="site-motion.js" defer></script>
@@ -128,10 +158,10 @@ body { padding-bottom: 60px !important; }
   </div>
   <div id="manualTips" style="display:none;margin-top:8px;padding:10px;background:#f8f4ec;border:1px solid #e0d4b0;border-radius:6px;font-size:12px;color:#6b4f1e;line-height:1.7;">
     <strong>Add slides from:</strong><br>
-    &#x1F4D6; Quran reader &#8594; expand verse &#8594; <strong>&#xFF0B; Slides</strong><br>
-    &#x2696;&#xFE0F; Madhhab &#8594; open ruling &#8594; <strong>&#xFF0B; Add to Presentation</strong><br>
-    &#x2694;&#xFE0F; Contradictions &#8594; expand card &#8594; <strong>&#xFF0B; Presentation</strong><br>
-    &#x1F5C2;&#xFE0F; Theme Analysis &#8594; <strong>Add Theme</strong><br><br>
+    &#x1F50D; Research search &#8594; any verse, hadith, tafsir or other result &#8594; <strong>Add to presentation</strong><br>
+    &#x1F4DC; Research &#8594; open a hadith &#8594; <strong>Add to presentation</strong><br>
+    &#x1F4D6; Quran reader &#8594; the <strong>+</strong> button on a verse, or select verse text &#8594; <strong>Add to Presentation</strong><br>
+    &#x2696;&#xFE0F; Madhhab, S&#299;ra, Stories &#8594; <strong>+ Add to Presentation</strong> on a card<br><br>
     Then return here and tap:
     <button class="btn" style="width:100%;margin-top:4px;font-size:11px;" onclick="autoOrganize()">&#x2699; Organize My Slides</button>
   </div>
@@ -143,11 +173,12 @@ body { padding-bottom: 60px !important; }
   <section class="center">
     <div class="toolbar">
       <button class="btn" onclick="prevSlide()">← Prev</button><span id="pos" class="project-meta">0 / 0</span><button class="btn" onclick="nextSlide()">Next →</button>
+      <button class="btn primary" onclick="openPresent()" title="Show the slides full screen with your notes">▶ Present</button>
       <button class="btn" onclick="addBlankSlide()">+ Blank Slide</button>
       <button class="btn" onclick="moveSlide(-1)">↑ Move</button><button class="btn" onclick="moveSlide(1)">↓ Move</button>
       <button class="btn red" onclick="deleteCurrent()">Delete</button>
     </div>
-    <div class="preview-wrap"><div id="slidePreview" class="slide theme-academic"></div></div>
+    <div class="preview-wrap"><div id="slidePreview" class="slide theme-academic"></div><div id="previewNotes" class="preview-notes" aria-live="polite" hidden></div></div>
   </section>
 
   <aside class="panel right">
@@ -156,27 +187,40 @@ body { padding-bottom: 60px !important; }
       <label>Slide title</label><input aria-label="Slide title" id="editTitle" oninput="updateCurrent('slideTitle',this.value)">
       <label style="margin-top:10px">Reference</label><input aria-label="Slide reference" id="editRef" oninput="updateCurrent('reference',this.value)">
       <label for="editText" style="margin-top:10px">Main text</label><textarea id="editText" oninput="updateCurrent('text',this.value)"></textarea>
-      <label for="editNotes" style="margin-top:10px">Speaker notes / teaching notes</label><textarea id="editNotes" oninput="updateCurrent('speakerNotes',this.value)"></textarea>
+      <label for="editNotes" style="margin-top:10px">Speaker notes / teaching notes</label><textarea id="editNotes" oninput="updateCurrent('speakerNotes',this.value)" placeholder="What you want to say on this slide. Only you see this."></textarea>
+      <div class="notes-hint">Notes stay off the slide. You see them under the preview, in ▶ Present (tap Notes), in PowerPoint's notes pane, and in the HTML file (press N).</div>
+      <label class="notes-print"><input type="checkbox" id="notesInPdf"> Print my speaker notes under each slide in the PDF</label>
       <label style="margin-top:10px">Source URL / internal app link</label><input aria-label="Source URL" id="editUrl" oninput="updateCurrent('sourceUrl',this.value)">
     </div>
     <div class="panel-head"><div class="panel-title">Saved Projects</div><button class="btn small" onclick="newProject()">New</button></div>
     <div id="projectList" class="project-list"></div>
     <div class="panel-head"><div class="panel-title">Cloud Save / Collaboration</div></div>
     <div class="edit-card">
-      <label>Supabase URL</label><input aria-label="https" id="cloudUrl" placeholder="https://your-project.supabase.co" value="https://ylosytbxpzxzwfzjpaej.supabase.co">
+      <details class="cloud-details"><summary>Connection settings</summary><label>Supabase URL</label><input aria-label="https" id="cloudUrl" placeholder="https://your-project.supabase.co" value="https://ylosytbxpzxzwfzjpaej.supabase.co">
       <label style="margin-top:10px">Supabase publishable / anon key</label><input aria-label="sb_publishable_ or anon key" id="cloudKey" placeholder="sb_publishable_ or anon key" value="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs">
-      <label style="margin-top:10px">Owner / workspace name</label><input aria-label="example" id="cloudOwner" placeholder="example: Medhanie or team email" value="default">
+      </details><label style="margin-top:10px">Owner / workspace name</label><input aria-label="Owner or workspace name" id="cloudOwner" placeholder="example: Medhanie or team email" value="default">
       <div class="cloud-actions">
         <button class="btn green" onclick="saveCloudConfig()">Save Config</button>
         <button class="btn blue" onclick="saveProjectCloud()">Save to Supabase</button>
         <button class="btn" onclick="loadCloudProjects()">Refresh Cloud</button>
       </div>
-      <div id="cloudStatus" class="cloud-status">Cloud is optional. Local save still works without Supabase.</div>
+      <div id="cloudStatus" class="cloud-status">Cloud is optional. Local save works without it. Anyone who types the same workspace name sees and can change its cloud projects, so use a name that is yours, not "default".</div>
     </div>
     <div class="panel-head"><div class="panel-title">Cloud Projects</div></div>
     <div id="cloudProjectList" class="project-list"></div>
   </aside>
 </main>
+<div id="presentMode" hidden role="dialog" aria-modal="true" aria-label="Present slides">
+  <div class="pm-stage" id="pmStage"></div>
+  <div class="pm-notes" id="pmNotes" hidden></div>
+  <div class="pm-bar">
+    <button class="btn" type="button" onclick="presentStep(-1)" aria-label="Previous slide">← Prev</button>
+    <span class="pm-pos" id="pmPos">1 / 1</span>
+    <button class="btn" type="button" onclick="presentStep(1)" aria-label="Next slide">Next →</button>
+    <button class="btn" type="button" id="pmNotesBtn" onclick="togglePresentNotes()" aria-pressed="false">Notes</button>
+    <button class="btn red" type="button" onclick="closePresent()">Exit</button>
+  </div>
+</div>
 <script>
 const BASKET_KEY='presentationBasket';
 const LEGACY_KEY='qs_presentation_slides';
@@ -204,9 +248,9 @@ function load(){slides=parse(BASKET_KEY,null);if(!Array.isArray(slides))slides=p
 function syncTitle(){renderPreview()}
 function setTheme(t){theme=t;localStorage.setItem('qs_presentation_theme',t);renderPreview()}
 function setPerspective(p){perspective=p;localStorage.setItem(PERSPECTIVE_KEY,p);renderPreview()}
-function render(){const list=document.getElementById('slideList');document.getElementById('countBadge').textContent=slides.length+' items';list.innerHTML='';if(!slides.length){list.innerHTML='<div class="empty">No items yet. Go back to the app and tap “+ Add to Presentation”, or add a blank slide.</div>';current=0}else{slides.forEach((s,i)=>{const d=document.createElement('div');d.className='item '+(i===current?'active':'');d.draggable=true;d.ondragstart=e=>e.dataTransfer.setData('text/plain',i);d.ondragover=e=>e.preventDefault();d.ondrop=e=>{e.preventDefault();const from=+e.dataTransfer.getData('text/plain');reorder(from,i)};d.onclick=()=>{current=i;render()};d.innerHTML=`<div class="item-top"><span class="pill ${esc(s.type)}">${esc(typeLabel(s.type))}</span><div><div class="item-title">${esc(s.slideTitle||s.title)}</div><div class="item-ref">${esc(s.reference)}</div></div></div><div class="item-text">${esc(s.text).slice(0,240)}</div><div class="item-actions"><button class="btn small" onclick="event.stopPropagation();duplicateSlide(${i})">Duplicate</button><button class="btn small red" onclick="event.stopPropagation();deleteSlide(${i})">Remove</button></div>`;list.appendChild(d)})}saveBasket();renderPreview();renderEditor()}
+function render(){const list=document.getElementById('slideList');document.getElementById('countBadge').textContent=slides.length+' items';list.innerHTML='';if(!slides.length){list.innerHTML='<div class="empty">No items yet. Go back to the app and tap “+ Add to Presentation”, or add a blank slide.</div>';current=0}else{slides.forEach((s,i)=>{const d=document.createElement('div');d.className='item '+(i===current?'active':'');d.draggable=true;d.ondragstart=e=>e.dataTransfer.setData('text/plain',i);d.ondragover=e=>e.preventDefault();d.ondrop=e=>{e.preventDefault();const from=+e.dataTransfer.getData('text/plain');reorder(from,i)};d.onclick=()=>{current=i;render();if(window.matchMedia('(max-width:760px)').matches){const pw=document.querySelector('.preview-wrap');if(pw)pw.scrollIntoView({behavior:'smooth',block:'start'})}};d.innerHTML=`<div class="item-top"><span class="pill ${esc(s.type)}">${esc(typeLabel(s.type))}</span><div><div class="item-title">${esc(s.slideTitle||s.title)}</div><div class="item-ref">${esc(s.reference)}</div></div></div><div class="item-text">${esc(s.text).slice(0,240)}</div><div class="item-actions"><button class="btn small" onclick="event.stopPropagation();duplicateSlide(${i})">Duplicate</button><button class="btn small red" onclick="event.stopPropagation();deleteSlide(${i})">Remove</button></div>`;list.appendChild(d)})}saveBasket();renderPreview();renderEditor()}
 function slideMarkup(s,i,total,title,forExport){
-  const arabic=s.arabic?`<div class="slide-arabic">${esc(s.arabic)}</div>`:'';const notes=s.speakerNotes?`<div class="slide-notes">${esc(s.speakerNotes).replace(/\n/g,'<br>')}</div>`:'';const source=s.sourceUrl?`<a class="source-link" href="${esc(s.sourceUrl)}">${esc(s.reference||s.sourceUrl)}</a>`:esc(s.reference);
+  const arabic=s.arabic?`<div class="slide-arabic">${esc(s.arabic)}</div>`:'';const notes=(forExport&&s.speakerNotes)?`<div class="slide-notes deck-notes">${esc(s.speakerNotes).replace(/\n/g,'<br>')}</div>`:'';const lenCls=slideLenClass(s);const source=s.sourceUrl?`<a class="source-link" href="${esc(s.sourceUrl)}">${esc(s.reference||s.sourceUrl)}</a>`:esc(s.reference);
   let textBlock;
   if(forExport && s.type==='quran' && s.translations){
     const order=[['english','English'],['tigrinya','ትግርኛ'],['amharic','አማርኛ'],['oromo','Oromoo'],['somali','Somali']];
@@ -221,8 +265,8 @@ function slideMarkup(s,i,total,title,forExport){
     }
     textBlock=`<div class="slide-text">${esc(displayText).replace(/\n/g,'<br>')}</div>`;
   }
-  return `<div class="slide theme-${theme}"><div class="slide-header"><div class="slide-title">${esc(s.slideTitle||s.title)}</div><div class="slide-subtitle">${esc(typeLabel(s.type))} • ${esc(perspectiveLabel())}</div></div><div class="slide-body">${arabic}${textBlock}${notes}<div class="slide-source">${source}</div></div><div class="slide-footer"><span>${esc(title)}</span><span>${i+1}${total?' / '+total:''}</span></div></div>`}
-function renderPreview(){const s=slides[current];const box=document.getElementById('slidePreview');document.getElementById('pos').textContent=slides.length?`${current+1} / ${slides.length}`:'0 / 0';box.className='slide theme-'+theme;if(!s){box.innerHTML='<div class="slide-body"><div class="slide-title">Presentation Builder</div><div class="slide-text">Collect verses, hadith, madhhab rulings, sira events, tafsir, cross-references, and AI analysis from the app.</div></div>';return}box.innerHTML=slideMarkup(s,current,slides.length,document.getElementById('presTitle').value||'Qur’an Study');}
+  return `<div class="slide theme-${theme}${lenCls}"><div class="slide-header"><div class="slide-title">${esc(s.slideTitle||s.title)}</div><div class="slide-subtitle">${esc(typeLabel(s.type))} • ${esc(perspectiveLabel())}</div></div><div class="slide-body">${arabic}${textBlock}${notes}<div class="slide-source">${source}</div></div><div class="slide-footer"><span>${esc(title)}</span><span>${i+1}${total?' / '+total:''}</span></div></div>`}
+function renderPreview(){const s=slides[current];const box=document.getElementById('slidePreview');document.getElementById('pos').textContent=slides.length?`${current+1} / ${slides.length}`:'0 / 0';box.className='slide theme-'+theme;if(!s){renderPreviewNotes(null);box.innerHTML='<div class="slide-body"><div class="slide-title">Presentation Builder</div><div class="slide-text">Collect verses, hadith, madhhab rulings, sira events, tafsir, cross-references, and AI analysis from the app.</div></div>';return}box.innerHTML=slideMarkup(s,current,slides.length,document.getElementById('presTitle').value||'Qur’an Study');renderPreviewNotes(s);}
 function renderEditor(){const s=slides[current]||{};document.getElementById('editTitle').value=s.slideTitle||'';document.getElementById('editRef').value=s.reference||'';document.getElementById('editText').value=s.text||'';document.getElementById('editNotes').value=s.speakerNotes||'';document.getElementById('editUrl').value=s.sourceUrl||''}
 function updateCurrent(k,v){if(!slides[current])return;slides[current][k]=v;saveBasket();renderPreview();if(k==='slideTitle'||k==='reference'||k==='text')render()}
 function prevSlide(){if(current>0){current--;render()}}function nextSlide(){if(current<slides.length-1){current++;render()}}
@@ -257,41 +301,23 @@ async function loadCloudProjects(){const h=cloudHeaders();if(!h)return;const cfg
 function renderCloudProjects(items){const box=document.getElementById('cloudProjectList');if(!box)return;if(!items.length){box.innerHTML='<div class="empty">No cloud projects found for this owner/workspace.</div>';return}box.innerHTML=items.map(pr=>`<div class="project-row"><div><div class="project-name">☁️ ${esc(pr.name||pr.title)}</div><div class="project-meta">${(pr.slides||[]).length} slides • ${esc(perspectiveLabels[pr.perspective]||'Academic')} • ${new Date(pr.updated_at||pr.created_at).toLocaleString()}</div></div><div class="item-actions"><button class="btn small" onclick="loadCloudProject('${pr.id}')">Load</button><button class="btn small red" onclick="deleteCloudProject('${pr.id}')">Delete</button></div></div>`).join('')}
 async function loadCloudProject(pid){const h=cloudHeaders();if(!h)return;const cfg=cloudConfig();try{const r=await fetch(`${cfg.url}/rest/v1/${CLOUD_TABLE}?select=*&id=eq.${encodeURIComponent(pid)}&limit=1`,{headers:h});const data=await r.json();if(!r.ok||!data[0])throw new Error(JSON.stringify(data));const pr=data[0];activeProjectId=pr.id;slides=(pr.slides||[]).map(normalize);theme=pr.theme||'academic';perspective=pr.perspective||'academic';document.getElementById('presTitle').value=pr.title||pr.name;document.getElementById('themeSelect').value=theme;const ps=document.getElementById('perspectiveSelect');if(ps)ps.value=perspective;saveBasket();saveProjectSilent({id:pr.id,name:pr.name,title:pr.title,theme:pr.theme,perspective:pr.perspective,slides:pr.slides,updatedAt:pr.updated_at});render();cloudStatus('Cloud project loaded into editor.','ok')}catch(e){cloudStatus('Cloud project load failed. '+e.message,'err')}}
 async function deleteCloudProject(pid){if(!confirm('Delete this project from Supabase cloud?'))return;const h=cloudHeaders();if(!h)return;const cfg=cloudConfig();try{const r=await fetch(`${cfg.url}/rest/v1/${CLOUD_TABLE}?id=eq.${encodeURIComponent(pid)}`,{method:'DELETE',headers:h});if(!r.ok)throw new Error(await r.text());cloudStatus('Cloud project deleted.','ok');loadCloudProjects()}catch(e){cloudStatus('Cloud delete failed. '+e.message,'err')}}
-function deckHTML(printMode=false){const title=esc(document.getElementById('presTitle').value||'Qur’an Study');const css=document.querySelector('style').innerHTML;const deck=exportDeckSlides();const hasQuranTranslations=deck.some(s=>s.type==='quran'&&s.translations&&Object.keys(s.translations).some(k=>s.translations[k]));const langBar=hasQuranTranslations?`<div class="deck-lang-bar" style="position:fixed;top:12px;right:12px;z-index:9999;background:#fffdf8;border:1px solid #e3d7bd;border-radius:10px;padding:7px 10px;font:700 11px Inter,sans-serif;box-shadow:0 3px 14px rgba(0,0,0,.15);"><label style="margin-right:6px;color:#6f6553;">Verse language:</label><select id="deckLangSelect" onchange="window.__setDeckLang(this.value)" style="font:700 11px Inter,sans-serif;padding:4px 6px;border-radius:6px;border:1px solid #e3d7bd;background:#fff;"><option value="english">English</option><option value="tigrinya">ትግርኛ Tigrinya</option><option value="amharic">አማርኛ Amharic</option><option value="oromo">Oromoo</option><option value="somali">Somali</option></select><div style="margin-top:4px;font-weight:400;color:#9a8a70;">Hadith/Tafsir/Madhhab/Sira stay in English</div></div><script>window.__setDeckLang=function(lang){document.querySelectorAll('.deck-lang').forEach(function(el){el.style.display=(el.getAttribute('data-lang')===lang)?'':'none';});};<\/script>`:'';return `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><style>${css}.topbar,.panel,.toolbar{display:none}.layout,.center{display:block}.preview-wrap{display:block;padding:0}.slide{width:100vw;height:100vh;border-radius:0;box-shadow:none;page-break-after:always}@media print{.deck-lang-bar{display:none!important}}<\/style></head><body>${langBar}${deck.map((s,i)=>slideMarkup(s,i,deck.length,title,true)).join('')}
-
-
-
-
-<!-- BOTTOM NAV -->
-<nav id="bottom-nav">
-  <button class="bnav-btn " onclick="location.href='index.html'"><span class="bni">📖</span><span>Quran</span></button>
-  <button class="bnav-btn" onclick="location.href='campaigns.html'"><span class="bni">⚔️</span><span>Campaigns</span></button>
-  <button class="bnav-btn " onclick="location.href='research.html'"><span class="bni">🔬</span><span>Research</span></button>
-  <button class="bnav-btn " onclick="location.href='themes.html'"><span class="bni">🗂️</span><span>Themes</span></button>
-  <button class="bnav-btn " onclick="location.href='madhhab.html'"><span class="bni">⚖️</span><span>Madhhab</span></button>
-  <button class="bnav-btn " onclick="location.href='sira.html'"><span class="bni">🕌</span><span>Sīra</span></button>
-  <button class="bnav-btn " onclick="location.href='stories.html'"><span class="bni">📚</span><span>Stories</span></button>
-  <button class="bnav-btn " onclick="location.href='books.html'"><span class="bni">📕</span><span>Books</span></button>
-  <button class="bnav-btn" onclick="location.href='narrations.html'"><span class="bni">🧵</span><span>Narrations</span></button>
-</nav>
-
-<!-- ═══════════════════════════════════════════════════════
-     UNIFIED FAB MENU
-     ═══════════════════════════════════════════════════════ -->
-<style>
-#qhist-btn,#openResearchWorkspaceBtn,#openPresentationBuilderBtn,
-.presentation-builder-btn,.presentation-floating-btn,#presentationFloatBtn,
-[id*="presentationFloat"],.presentation-float,.research-workspace-open-btn {
-  display:none!important;visibility:hidden!important;pointer-events:none!important;
-}
-
-<\/style>
-
-
-<\/body><\/html>`}
+function deckHTML(printMode=false){const title=esc(document.getElementById('presTitle').value||'Qur’an Study');const css=document.querySelector('style').innerHTML;const deck=exportDeckSlides();const hasQuranTranslations=deck.some(s=>s.type==='quran'&&s.translations&&Object.keys(s.translations).some(k=>s.translations[k]));const langBar=hasQuranTranslations?`<div class="deck-lang-bar" style="position:fixed;top:12px;right:12px;z-index:9999;background:#fffdf8;border:1px solid #e3d7bd;border-radius:10px;padding:7px 10px;font:700 11px Inter,sans-serif;box-shadow:0 3px 14px rgba(0,0,0,.15);"><label style="margin-right:6px;color:#6f6553;">Verse language:</label><select id="deckLangSelect" onchange="window.__setDeckLang(this.value)" style="font:700 11px Inter,sans-serif;padding:4px 6px;border-radius:6px;border:1px solid #e3d7bd;background:#fff;"><option value="english">English</option><option value="tigrinya">ትግርኛ Tigrinya</option><option value="amharic">አማርኛ Amharic</option><option value="oromo">Oromoo</option><option value="somali">Somali</option></select><div style="margin-top:4px;font-weight:400;color:#9a8a70;">Hadith/Tafsir/Madhhab/Sira stay in English</div></div><script>window.__setDeckLang=function(lang){document.querySelectorAll('.deck-lang').forEach(function(el){el.style.display=(el.getAttribute('data-lang')===lang)?'':'none';});};<\/script>`:'';return `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><style>${css}.topbar,.panel,.toolbar{display:none}.layout,.center{display:block}.preview-wrap{display:block;padding:0}.slide{width:100vw;height:100vh;border-radius:0;box-shadow:none;page-break-after:always}.slide-body{overflow:hidden}.deck-notes{display:none;font:15px/1.5 Inter,sans-serif}.show-notes .deck-notes{display:block}#bottom-nav{display:none!important}.slide.long .slide-text{font-size:2.4vw}.slide.xlong .slide-text{font-size:1.9vw}.slide.long .slide-arabic{font-size:3vw}.slide.xlong .slide-arabic{font-size:2.4vw}@media print{.deck-lang-bar,#notesToggle{display:none!important}}<\/style></head><body class="${printMode&&notesInPdf()?'show-notes':''}">${langBar}${deck.map((s,i)=>slideMarkup(s,i,deck.length,title,true)).join('')}<button id="notesToggle" type="button" onclick="document.body.classList.toggle('show-notes')" style="position:fixed;bottom:12px;right:12px;z-index:9999;padding:9px 14px;border-radius:999px;border:1px solid #e3d7bd;background:#fffdf8;font:700 12px Inter,sans-serif;cursor:pointer;box-shadow:0 3px 14px rgba(0,0,0,.15)">Speaker notes (N)</button><script>document.addEventListener('keydown',function(e){if((e.key==='n'||e.key==='N')&&!e.metaKey&&!e.ctrlKey)document.body.classList.toggle('show-notes');});<\/script><\/body><\/html>`}
 function exportHTML(){if(!slides.length)return alert('No slides to export.');const blob=new Blob([deckHTML()],{type:'text/html'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=(document.getElementById('presTitle').value||'quran-presentation').replace(/[^a-z0-9]+/gi,'-').toLowerCase()+'.html';a.click();URL.revokeObjectURL(a.href)}
 function exportPDF(){if(!slides.length)return alert('No slides to export.');var html=deckHTML(true);var blob=new Blob([html],{type:'text/html'});var url=URL.createObjectURL(blob);var a=document.createElement('a');a.href=url;a.target='_blank';document.body.appendChild(a);a.click();document.body.removeChild(a);setTimeout(function(){URL.revokeObjectURL(url);},3000);setTimeout(function(){alert('Tap the menu → Print → Save as PDF to download.');},800);}
-function exportPPTX(){if(!slides.length)return alert('No slides to export.');const deck=exportDeckSlides();if(!window.PptxGenJS){alert('PPTX library is not loaded. Use HTML or PDF export now. Claude can add pptxgenjs later if desired.');return}try{const pptx=new PptxGenJS();pptx.layout='LAYOUT_WIDE';deck.forEach(s=>{const sl=pptx.addSlide();sl.addText(s.slideTitle||s.title,{x:.5,y:.35,w:12.3,h:.6,fontSize:28,bold:true});sl.addText((s.arabic?s.arabic+'\n\n':'')+s.text,{x:.7,y:1.25,w:12,h:4.6,fontSize:18,fit:'shrink'});sl.addNotes(s.speakerNotes||'');sl.addText((s.reference||'')+(s.sourceUrl?' — '+s.sourceUrl:''),{x:.7,y:6.3,w:12,h:.3,fontSize:9,color:'666666'})});pptx.writeFile({fileName:(document.getElementById('presTitle').value||'quran-presentation')+'.pptx'})}catch(e){alert('PPTX export failed. Use HTML/PDF export.')}}
+function loadPptxLib(){return new Promise(function(res,rej){if(window.PptxGenJS)return res();var el=document.createElement('script');el.src='https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js';el.onload=function(){window.PptxGenJS?res():rej(new Error('missing'))};el.onerror=function(){rej(new Error('load'))};document.head.appendChild(el)})}
+function slideDisplayText(s){let t=s.text||'';if(s.type==='quran'&&s.translations){const lang=getOutputLang();if(lang==='arabic_only')t='';else if(lang!=='english'&&s.translations[lang])t=s.translations[lang]}return t}
+async function exportPPTX(){if(!slides.length)return alert('No slides to export.');const deck=exportDeckSlides();try{await loadPptxLib()}catch(e){alert('PowerPoint export could not load. Check your connection, or use HTML or PDF export.');return}try{const pptx=new PptxGenJS();pptx.layout='LAYOUT_WIDE';deck.forEach(s=>{const sl=pptx.addSlide();sl.addText(s.slideTitle||s.title||'',{x:.5,y:.3,w:12.3,h:.7,fontSize:28,bold:true,fit:'shrink'});const body=slideDisplayText(s);let y=1.2;if(s.arabic){sl.addText(s.arabic,{x:.7,y:y,w:12,h:body?1.9:4.8,fontSize:24,rtlMode:true,align:'right',fontFace:'Arial',fit:'shrink'});y+=body?2.0:4.9}if(body)sl.addText(body,{x:.7,y:y,w:12,h:6.1-y,fontSize:18,valign:'top',fit:'shrink'});if(s.speakerNotes)sl.addNotes(s.speakerNotes);sl.addText((s.reference||'')+(s.sourceUrl?' — '+s.sourceUrl:''),{x:.7,y:6.6,w:12,h:.35,fontSize:9,color:'666666'})});await pptx.writeFile({fileName:(document.getElementById('presTitle').value||'quran-presentation').replace(/[\\/:*?"<>|]+/g,'-')+'.pptx'})}catch(e){alert('PowerPoint export failed. Use HTML or PDF export.')}}
+function notesInPdf(){const el=document.getElementById('notesInPdf');return !!(el&&el.checked)}
+function slideLenClass(s){const n=String(slideDisplayText(s)||'').length+String(s.arabic||'').length*1.4;return n>1100?' xlong':n>520?' long':''}
+function renderPreviewNotes(s){const el=document.getElementById('previewNotes');if(!el)return;if(!s){el.hidden=true;return}el.hidden=false;const n=String(s.speakerNotes||'').trim();el.classList.toggle('empty',!n);el.innerHTML='<b>Speaker notes (only you see these)</b>'+(n?esc(n).replace(/\n/g,'<br>'):'No notes yet. Write them in “Speaker notes” below.')}
+let presentIdx=0,presentTouchX=null;
+function openPresent(){if(!slides.length)return alert('Add some slides first.');presentIdx=current;const pm=document.getElementById('presentMode');pm.hidden=false;document.body.style.overflow='hidden';renderPresent();try{if(window.matchMedia('(min-width:761px)').matches&&pm.requestFullscreen)pm.requestFullscreen().catch(()=>{})}catch(e){}}
+function closePresent(){const pm=document.getElementById('presentMode');pm.hidden=true;document.body.style.overflow='';try{if(document.fullscreenElement)document.exitFullscreen()}catch(e){}current=presentIdx;render()}
+function presentStep(d){const n=presentIdx+d;if(n<0||n>=slides.length)return;presentIdx=n;renderPresent()}
+function togglePresentNotes(){const el=document.getElementById('pmNotes');el.hidden=!el.hidden;document.getElementById('pmNotesBtn').setAttribute('aria-pressed',String(!el.hidden));try{localStorage.setItem('qs_present_notes',el.hidden?'0':'1')}catch(e){}}
+function renderPresent(){const s=slides[presentIdx];if(!s)return;document.getElementById('pmStage').innerHTML=slideMarkup(s,presentIdx,slides.length,document.getElementById('presTitle').value||'Qur’an Study');document.getElementById('pmPos').textContent=(presentIdx+1)+' / '+slides.length;const n=String(s.speakerNotes||'').trim();document.getElementById('pmNotes').innerHTML='<b>Speaker notes</b>'+(n?esc(n).replace(/\n/g,'<br>'):'No notes for this slide.')}
+document.addEventListener('keydown',function(e){const pm=document.getElementById('presentMode');if(!pm||pm.hidden)return;if(['ArrowRight','PageDown',' '].includes(e.key)){e.preventDefault();presentStep(1)}else if(['ArrowLeft','PageUp'].includes(e.key)){e.preventDefault();presentStep(-1)}else if(e.key==='Escape'){closePresent()}else if(e.key==='n'||e.key==='N'){togglePresentNotes()}});
+document.addEventListener('DOMContentLoaded',function(){const st=document.getElementById('pmStage');if(st){st.addEventListener('touchstart',e=>{presentTouchX=e.touches[0].clientX},{passive:true});st.addEventListener('touchend',e=>{if(presentTouchX===null)return;const dx=e.changedTouches[0].clientX-presentTouchX;presentTouchX=null;if(Math.abs(dx)>50)presentStep(dx<0?1:-1)},{passive:true})}let keep='0';try{keep=localStorage.getItem('qs_present_notes')||'0'}catch(e){}if(keep==='1'){const n=document.getElementById('pmNotes');if(n){n.hidden=false;document.getElementById('pmNotesBtn').setAttribute('aria-pressed','true')}}document.addEventListener('fullscreenchange',function(){const pm=document.getElementById('presentMode');if(!document.fullscreenElement&&pm&&!pm.hidden&&window.matchMedia('(min-width:761px)').matches){closePresent()}})});
 
 const SB_URL2='https://ylosytbxpzxzwfzjpaej.supabase.co';
 const SB_K2='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
@@ -299,7 +325,7 @@ const SB_H2={apikey:SB_K2,'Authorization':'Bearer '+SB_K2};
 function toggleManual(){var el=document.getElementById('manualTips');if(el)el.style.display=el.style.display==='none'?'block':'none';}
 async function autoCollectAndBuild(){
   var title=(document.getElementById('presTitle').value||'').trim();
-  if(!title||title==="Untitled Qur'an Study"){alert('Enter a topic title first. One word works broadly (e.g. "Jihad"); add more words to narrow it down (e.g. "Jihad self defense") — all the words must appear, just not as an exact phrase.');return;}
+  if(!title||title==="Untitled Qur'an Study"||title==='Untitled Qur’an Study'){alert('Enter a topic title first. One word works broadly (e.g. "Jihad"); add more words to narrow it down (e.g. "Jihad self defense") — all the words must appear, just not as an exact phrase.');return;}
   var btn=document.querySelector('[onclick="autoCollectAndBuild()"]');
   if(btn){btn.innerHTML='⏳ Collecting...';btn.disabled=true;}
 
@@ -447,7 +473,7 @@ async function autoCollectAndBuild(){
     }
     var eids=new Set(existing.map(function(s){return s.id;}));
     slides=existing.concat(newSlides.filter(function(s){return !eids.has(s.id);}));
-    saveBasket();autoOrganize();render();if(typeof renderEditor==='function'&&slides.length){cur=0;renderEditor();}
+    saveBasket();autoOrganize();render();if(slides.length){current=0;render();}
 
     var summary='✅ Auto-Build complete for "'+title+'":\n\n'+
       '📖 Quran verses: '+counts.verses+'\n'+
