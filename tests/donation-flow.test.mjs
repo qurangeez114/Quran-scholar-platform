@@ -49,3 +49,13 @@ test('home menu links to the Support page and counts as a donate click',()=>{
  const html=read('index.html');
  assert.match(html,/<a href="support\.html" data-qh-money="donate"[^>]*>Support<\/a>/);
 });
+
+test('phones get a pinned Donate tab in the bottom nav instead of a floating pill',()=>{
+ const chrome=read('site-chrome.js');
+ assert.doesNotThrow(()=>new Function(chrome));
+ assert.match(chrome,/bnav-donate[^']*' \+ \(file\(\) === 'support\.html'/);
+ assert.match(chrome,/href="\/support\.html" data-qh-money="donate"/);
+ assert.match(chrome,/\.bnav-donate\{position:sticky!important;right:0!important/);
+ assert.match(chrome,/min-width:769px\)\{#bottom-nav \.bnav-donate\{display:none/);
+ assert.match(read('mobile-floating-layout.js'),/body:has\(#bottom-nav \.bnav-donate\) #quranhikma-global-donate \{ display: none/);
+});

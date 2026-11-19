@@ -73,6 +73,11 @@
     right: calc(14px + 52px + var(--floating-gap)) !important;
   }
 
+  /* Phones get Donate as a pinned tab at the right end of the bottom nav
+     (site-chrome.js), which never covers page content. The floating pill
+     stays only as a fallback on pages without that nav. */
+  body:has(#bottom-nav .bnav-donate) #quranhikma-global-donate { display: none !important; }
+
   /* Presentation-basket counter: one row above the FAB/donate row */
   #pb-float-btn {
     bottom: calc(var(--floating-base-bottom) + var(--floating-gap) + var(--nav-row) + 52px + var(--floating-gap)) !important;
