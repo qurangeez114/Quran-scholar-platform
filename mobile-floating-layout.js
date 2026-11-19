@@ -95,10 +95,6 @@
     box-sizing: border-box;
   }
 
-  /* When the user minimises the floating UI, give the space straight back. */
-  html.floating-ui-hidden body {
-    padding-bottom: calc(var(--bottom-nav-height) + var(--safe-b)) !important;
-  }
   /* Everything above is position:fixed, so it is positioned into a tidy
      stack but takes up no space in the document -- at the end of a scroll
      the stack sits on top of the content. Reserving trailing padding only
@@ -114,7 +110,6 @@
     box-sizing: border-box;
   }
 
-  html.floating-ui-hidden body { padding-bottom: 0; }
 }
 
 /* Mobile reader uses document scrolling so controls leave the viewport.
@@ -210,41 +205,6 @@
   body.qh-home-mode .qh-home-card-wrap, body.qh-home-mode .qh-home-item {
     touch-action:auto !important;
   }
-}
-
-/* Minimise control. index.html shipped its own #floatingUIToggle; every
-   other page had no way to clear the stack at all, which is why the
-   floating controls kept covering content on themes / stories / tensions.
-   Defined here, outside the media query, so one definition serves all
-   pages and works whatever element the page scrolls. */
-.floating-ui-hidden #qnav-return-bar,
-.floating-ui-hidden #qhist-drawer,
-.floating-ui-hidden #qhist-btn,
-.floating-ui-hidden #fab-menu,
-.floating-ui-hidden #pb-float-btn,
-.floating-ui-hidden #askqh-dock,
-.floating-ui-hidden #quranhikma-global-donate {
-  display: none !important;
-}
-
-/* Parked against the mid-right edge as a slim half-tab. The top-right
-   corner is already taken on most pages (Donate sits there in the header),
-   and the bottom rows belong to the floating stack itself, so the vertical
-   middle of the right edge is the only reliably free spot. */
-#qh-float-toggle {
-  position: fixed; right: 0; top: 58%; z-index: 100000;
-  width: 26px; height: 44px;
-  border-radius: 10px 0 0 10px;
-  background: rgba(201,168,76,.82); border: none; color: #fff;
-  font-size: 16px; line-height: 1; cursor: pointer; padding: 0;
-  box-shadow: 0 2px 8px rgba(0,0,0,.22);
-}
-#qh-float-toggle:active { opacity: .7; }
-@media (max-width: 600px) {
-  #qh-float-toggle { width: 16px; height: 40px; font-size: 13px; opacity: .78; }
-  html.qh-has-float-toggle body > .app #verseArea,
-  html.qh-has-float-toggle body .verse-card { box-sizing: border-box; }
-  html.qh-has-float-toggle body > .app #verseArea { padding-right: 18px !important; }
 }`;
 
   var style = document.createElement('style');
@@ -252,12 +212,11 @@
   style.textContent = css;
   document.head.appendChild(style);
 
-  // Restore the user's choice before first paint where possible.
-  try {
-    if (localStorage.getItem('floatingUIHidden') === 'true') {
-      document.documentElement.classList.add('floating-ui-hidden');
-    }
-  } catch (e) { /* private mode: fall through un-hidden */ }
+  // The +/- minimise tab was removed: it hid the Donate button with no clear
+  // benefit. Clear any hidden state a visitor saved with it, so their
+  // floating controls (Donate included) come back.
+  document.documentElement.classList.remove('floating-ui-hidden', 'qh-has-float-toggle');
+  try { localStorage.removeItem('floatingUIHidden'); } catch (e) { /* private mode */ }
 
   // Keep the home reader's height in sync with the optional school header.
   // Its height can change when the narrow navigation wraps or fonts load.
@@ -278,34 +237,5 @@
     document.addEventListener('DOMContentLoaded', syncHomeReaderHeight, { once: true });
   } else {
     syncHomeReaderHeight();
-  }
-
-  function addToggle() {
-    // index.html already ships its own control; do not stack two.
-    if (document.getElementById('floatingUIToggle')) return;
-    if (document.getElementById('qh-float-toggle')) return;
-    if (!document.body) return;
-
-    var hidden = document.documentElement.classList.contains('floating-ui-hidden');
-    var btn = document.createElement('button');
-    btn.id = 'qh-float-toggle';
-    btn.textContent = hidden ? '+' : '\u2212';
-    btn.title = hidden ? 'Show floating buttons' : 'Hide floating buttons';
-    btn.setAttribute('aria-label', btn.title);
-    btn.onclick = function () {
-      var on = document.documentElement.classList.toggle('floating-ui-hidden');
-      btn.textContent = on ? '+' : '\u2212';
-      btn.title = on ? 'Show floating buttons' : 'Hide floating buttons';
-      btn.setAttribute('aria-label', btn.title);
-      try { localStorage.setItem('floatingUIHidden', on); } catch (e) {}
-    };
-    document.body.appendChild(btn);
-    document.documentElement.classList.add('qh-has-float-toggle');
-  }
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', addToggle);
-  } else {
-    addToggle();
   }
 })();
