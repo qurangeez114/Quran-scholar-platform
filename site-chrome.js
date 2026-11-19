@@ -56,6 +56,13 @@
     mobileLayout.defer = true;
     document.head.appendChild(mobileLayout);
   }
+  // Presentation building is for signed-in members: visitors who tap an
+  // "Add to presentation" control get a sign-in prompt instead.
+  if (!document.querySelector('script[src*="presentation-gate.js"]')) {
+    var presGate = document.createElement('script');
+    presGate.src = '/presentation-gate.js?v=20261119';
+    document.head.appendChild(presGate);
+  }
   var NAV = [
     ['index.html','📖','Quran'],['my-pages.html','🗃️','My Page'],['campaigns.html','⚔️','Campaigns'],['research.html','🔬','Research'],
     ['themes.html','🗂️','Themes'],['madhhab.html','⚖️','Madhhab'],['sira.html','🕌','Sīra'],
