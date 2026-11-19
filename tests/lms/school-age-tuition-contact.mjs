@@ -35,8 +35,10 @@ assert.match(policies,/id="refund"/);
 assert.match(policies,/To be provided by QuranHikma/);
 
 const contact=readFileSync('contact.html','utf8');
-assert.match(contact,/>Email<\/td><td><span class="tbp">To be provided by QuranHikma<\/span>/);
-assert.match(contact,/>Phone<\/td><td><span class="tbp">To be provided by QuranHikma<\/span>/);
+assert.match(contact,/href="mailto:360quranhikma@gmail.com"/);
+assert.match(contact,/>Email<\/td><td><a href="mailto:360quranhikma@gmail.com">360quranhikma@gmail.com<\/a>/);
+assert.doesNotMatch(contact,/>Phone<\/td>/);
+assert.doesNotMatch(contact,/>Hours<\/td>/);
 
 const courses=readFileSync('admin/courses.html','utf8');
 assert.match(courses,/id="courseTuitionType"/);
@@ -55,4 +57,4 @@ assert.match(coursePage,/formatTuition/);
 const list=readFileSync('courses.html','utf8');
 assert.match(list,/Tuition: '\+courseTuitionLabel\(course\)/);
 
-console.log('PASS: minimum age 18 copy, instructor tuition helper and UI, contact values remain unset.');
+console.log('PASS: minimum age 18 copy, instructor tuition helper and UI, school contact email is published and phone/hours rows are omitted.');
