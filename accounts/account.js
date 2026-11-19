@@ -1,5 +1,6 @@
 import {db,message as setMessage,exportResearch} from './client.js';
 import {lmsRequest} from './lms-access.js';
+import {friendlyAuthError} from './auth-feedback.js';
 // Password-reset links arrive as ?mode=recovery (our redirect), #...type=recovery
 // (Supabase default link) or ?token_hash=…&type=recovery (token-hash template).
 const authLink=window.qhAuthLink||{};
@@ -91,7 +92,12 @@ else if(mode==='recover')result=await db.auth.resetPasswordForEmail(email,{redir
 else result=await db.auth.signInWithPassword({email,password});
 if(mode==='signup'&&!result.error&&result.data.user&&result.data.user.identities?.length===0)return message('This email is already taken.');
 if(result.error)throw result.error;const returnTarget=requestedFatwaReturn();if(result.data?.session && returnTarget && mode==='login'){location.replace(returnTarget);return;}message(mode==='login'?'Signed in.':mode==='recover'?'If '+email+' has a QuranHikma account, a password reset email is on its way. Open the newest email and click its link; it brings you back here to choose a new password.':'Check your email for the next step.');await render();
-}catch(e){const unconfirmed=mode==='login'&&(e.code==='email_not_confirmed'||/email not confirmed/i.test(e.message||''));if(unconfirmed){message('Your email address is not confirmed yet. Open the confirmation or invitation email sent to '+$('email').value.trim()+' and click its link, then log in here. Check your spam folder too. If the link expired or you cannot find it, choose "Resend confirmation email" below.',true);$('resend-confirmation').hidden=false;return;}const invalid=mode==='login'&&(e.code==='invalid_credentials'||/invalid login credentials|invalid credentials|invalid email or password/i.test(e.message||''));message(invalid?'Invalid email or password. Please try again.':/already (registered|been registered)/i.test(e.message)?'This email is already taken.':e.message,true);}finally{$('submit').disabled=false;}};
+}catch(e){const unconfirmed=mode==='login'&&(e.code==='email_not_confirmed'||/email not confirmed/i.test(e.message||''));if(unconfirmed){message('Your email address is not confirmed yet. Open the confirmation or invitation email sent to '+$('email').value.trim()+' and click its link, then log in here. Check your spam folder too. If the link expired or you cannot find it, choose "Resend confirmation email" below.',true);$('resend-confirmation').hidden=false;return;}
+const invalid=mode==='login'&&(e.code==='invalid_credentials'||/invalid login credentials|invalid credentials|invalid email or password/i.test(e.message||''));
+ if(invalid){message('Invalid email or password. Please try again.',true);}
+ else if(/already (registered|been registered)/i.test(e.message||'')){message('This email is already taken.',true);}
+ else{const friendly=friendlyAuthError(e);message(friendly.message,true);}
+}finally{$('submit').disabled=false;}};
 $('reset-form').onsubmit=async e=>{e.preventDefault();const form=e.currentTarget;const pw=$('new-password').value;if(pw.length<12)return message('Password must be at least 12 characters.',true);if(pw!==$('new-password-confirm').value)return message('Passwords do not match.',true);
  const button=form.querySelector('button:not(.pw-toggle)');if(button)button.disabled=true;message('Saving your new password…');
  try{const {error}=await db.auth.updateUser({password:pw});if(error)throw error;}
