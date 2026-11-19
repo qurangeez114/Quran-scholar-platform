@@ -14,8 +14,8 @@ await transform(api,{loader:'ts',format:'esm'});
 await transform(formJS,{loader:'js',format:'esm'});
 await transform(adminJS,{loader:'js',format:'esm'});
 const {document}=parseHTML(html);
-for(const name of ['full_name','email','country','city','program_interest','education_level',
- 'preferred_language','attendance_mode','academic_background','learning_goal','privacy_consent','organization_website']){
+for(const name of ['full_name','email','country','city','date_of_birth','program_interest','education_level',
+ 'preferred_language','attendance_mode','academic_background','learning_goal','privacy_consent','guardian_name','guardian_email','guardian_consent','organization_website']){
  assert.ok(document.querySelector('[name="'+name+'"]'),name+' application field missing');
 }
 assert.ok(document.getElementById('application-success'));
@@ -48,4 +48,18 @@ assert.ok(netlify.indexOf('from = "/apply"')<netlify.indexOf('from = "/*"'));
 for(const p of ['account.html','student-dashboard.html','instructor-dashboard.html']){
  assert.match(readFileSync(p,'utf8'),/href="\/apply\.html"/);
 }
-console.log('PASS: public application required fields, submission consent, private RLS tables, staff review, redirection and navigation.');
+
+assert.ok(document.getElementById('guardian-fieldset'));
+assert.ok(document.getElementById('guardian-fieldset').hasAttribute('hidden'));
+assert.match(formJS,/ageFromDob/);
+assert.match(formJS,/guardian_consent/);
+assert.match(html,/To be provided by QuranHikma/);
+assert.match(html,/href="\/contact\.html"/);
+assert.match(html,/href="\/calendar\.html"/);
+const guardianSql=readFileSync('supabase/migrations/20261119120000_school_application_guardian_consent.sql','utf8');
+assert.match(guardianSql,/date_of_birth/);
+assert.match(guardianSql,/guardian_consent/);
+assert.match(api,/age<18/);
+assert.match(api,/guardian_consent!==true/);
+assert.match(readFileSync('accounts/school-admissions-admin.js','utf8'),/Age at submission/);
+console.log('PASS: public application required fields, submission consent, private RLS tables, staff review, redirection, navigation, and under-18 guardian fields.');
