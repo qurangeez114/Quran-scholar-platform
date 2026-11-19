@@ -4,34 +4,12 @@
   const SUPPORT_URL = '/support.html';
   const NO_FLOAT_PATHS = /^\/(support|thank-you)(\.html)?\/?$/;
 
-  function isShown(el){
-    if (!el || !el.isConnected) return false;
-    // A link inside a closed modal is not something a visitor can see.
-    if (el.closest('#donateModal')) return false;
-    for (let node = el; node && node.nodeType === 1; node = node.parentElement) {
-      const cs = window.getComputedStyle(node);
-      if (cs.display === 'none' || cs.visibility === 'hidden') return false;
-    }
-    return el.getClientRects().length > 0;
-  }
-
-  // True only when the page already shows a Donate control the visitor can use.
-  function hasVisibleDonateControl(){
-    const controls = document.querySelectorAll(
-      'a[href*="paypal.com/donate"], [onclick*="openDonateModal"], a[href$="support.html"]'
-    );
-    return Array.prototype.some.call(controls, isShown);
-  }
-
   function addDonateButton(){
     if (document.getElementById('quranhikma-global-donate')) return;
     if (NO_FLOAT_PATHS.test(location.pathname)) return;
 
-    // Many pages already show a Donate control in their header. Only skip the
-    // floating button when that control is actually visible: a PayPal link
-    // inside a hidden modal, or a header button set to display:none, used to
-    // suppress it and left those pages (the home page included) with no Donate.
-    if (hasVisibleDonateControl()) return;
+    // Shown on every page (except Support and Thank-you, which are the
+    // destination), whatever else the page has, so Donate is always one tap away.
 
     const a = document.createElement('a');
     a.id = 'quranhikma-global-donate';

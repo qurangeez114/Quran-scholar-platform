@@ -78,7 +78,10 @@
     var cur = PARENT[file()] || file();
     return NAV.map(function (n) {
       return '<a class="bnav-btn' + (n[0] === cur ? ' active' : '') + '" href="/' + n[0] + '"' + (n[0] === cur ? ' aria-current="page"' : '') + '><span class="bni">' + n[1] + '</span><span>' + n[2] + '</span></a>';
-    }).join('');
+    }).join('') +
+      // Donate is pinned to the right end of the bar on phones (see CSS), so it
+      // is always one tap away without floating over the page content.
+      '<a class="bnav-btn bnav-donate' + (file() === 'support.html' ? ' active' : '') + '" href="/support.html" data-qh-money="donate" aria-label="Support Quran Hikma with a donation"><span class="bni">💛</span><span>Donate</span></a>';
   }
 
   function addNav() {
@@ -96,7 +99,10 @@
         '#bottom-nav .bnav-btn:focus-visible{outline:2px solid #9c742a!important;outline-offset:-3px!important}' +
         'body{padding-bottom:calc(72px + env(safe-area-inset-bottom,0px))!important}' +
         '#bnav,.fatwa-bottom-nav{display:none!important}' +
-        '@media(min-width:900px){#bottom-nav .bnav-btn{flex-basis:56px!important;min-width:56px!important;max-width:56px!important;width:56px!important}}';
+        '@media(min-width:900px){#bottom-nav .bnav-btn{flex-basis:56px!important;min-width:56px!important;max-width:56px!important;width:56px!important}}' +
+        '#bottom-nav .bnav-donate{position:sticky!important;right:0!important;margin-left:auto!important;z-index:1!important;background:#7d5f14!important;color:#fff!important;border-right:0!important;box-shadow:-3px 0 8px rgba(0,0,0,.14)!important}' +
+        '#bottom-nav .bnav-donate.active{background:#5e470f!important;color:#fff!important}' +
+        '@media(min-width:769px){#bottom-nav .bnav-donate{display:none!important}}';
       document.head.appendChild(st);
     }
     var existing = document.getElementById('bottom-nav');
