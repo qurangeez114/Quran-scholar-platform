@@ -62,6 +62,13 @@
     mobileLayout.defer = true;
     document.head.appendChild(mobileLayout);
   }
+  // Presentation building is for signed-in members: visitors who tap an
+  // "Add to presentation" control get a sign-in prompt instead.
+  if (!document.querySelector('script[src*="presentation-gate.js"]')) {
+    var presGate = document.createElement('script');
+    presGate.src = '/presentation-gate.js?v=20261119';
+    document.head.appendChild(presGate);
+  }
   var NAV = [
     ['index.html','📖','Quran'],['my-pages.html','🗃️','My Page'],['campaigns.html','⚔️','Campaigns'],['research.html','🔬','Research'],
     ['themes.html','🗂️','Themes'],['madhhab.html','⚖️','Madhhab'],['sira.html','🕌','Sīra'],
@@ -194,7 +201,7 @@
     document.head.appendChild(s);
     var root = document.createElement('nav'); root.id='qh-school-topnav'; root.setAttribute('aria-label','School navigation');
     var groups = [
-      ['Explore',[['Courses','/courses.html'],['Sample class','/sample-video-class.html'],['Apply to study','/apply.html'],['Faculty directory','/faculty.html']]],
+      ['Explore',[['Courses','/courses.html'],['Sample class','/sample-video-class.html'],['Apply to study','/apply.html'],['Faculty directory','/faculty.html'],['Academic calendar','/calendar.html'],['Contact','/contact.html']]],
       ['My Learning',[['Student dashboard','/student-dashboard.html'],['My courses','/academic-hub.html?tab=courses'],['Learning groups','/academic-hub.html?tab=groups'],['Live classes','/academic-hub.html?tab=live'],['Quiz results','/quiz-results.html'],['My progress','/my-progress.html'],['Transcript & certificates','/transcript.html']]],
       ['Teaching',[['Instructor dashboard','/instructor-dashboard.html'],['Manage courses','/admin/courses.html'],['Grading','/admin/grading.html'],['Bulk enrollment','/admin/bulk-enrollment.html'],['Instructor guide','/instructor-guide.html'],['Faculty profile','/faculty-profile.html']]],
       ['Community',[['Faculty','/faculty.html'],['Messages','/academic-hub.html?tab=messages'],['Research workspace','/my-research.html']]],

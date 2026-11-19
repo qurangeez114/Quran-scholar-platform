@@ -26,6 +26,26 @@ const choice=(value:any,key:keyof typeof allowed)=>{
    fail('Please choose a valid '+key.replaceAll('_',' '));
  return value;
 };
+
+const emailRe=/^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const dobRe=/^(\d{4})-(\d{2})-(\d{2})$/;
+const parseDob=(value:unknown)=>{
+ const raw=field(value,10,'date of birth',10);
+ const m=dobRe.exec(raw);
+ if(!m)fail('Enter a valid date of birth');
+ const y=+m[1],mo=+m[2],d=+m[3];
+ const dt=new Date(Date.UTC(y,mo-1,d));
+ if(dt.getUTCFullYear()!==y||dt.getUTCMonth()!==mo-1||dt.getUTCDate()!==d)fail('Enter a valid date of birth');
+ const now=new Date();
+ const today=Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate());
+ if(dt.getTime()>today)fail('Date of birth cannot be in the future');
+ const oldest=Date.UTC(now.getUTCFullYear()-120,now.getUTCMonth(),now.getUTCDate());
+ if(dt.getTime()<oldest)fail('Enter a valid date of birth');
+ let age=now.getUTCFullYear()-y;
+ if(now.getUTCMonth()+1<mo||(now.getUTCMonth()+1===mo&&now.getUTCDate()<d))age--;
+ if(age<0||age>120)fail('Enter a valid date of birth');
+ return {date:raw,age};
+};
 Deno.serve(async req=>{
  if(req.method==='OPTIONS')return new Response(null,{headers,status:204});
  if(req.method!=='POST')return new Response(JSON.stringify({error:'POST required'}),{status:405,headers});
@@ -44,7 +64,19 @@ Deno.serve(async req=>{
   // Consent is explicit; the server will not save a form without it.
   if(body.privacy_consent!==true)fail('Please agree to the admissions data notice');
   const email=field(body.email,254,'email',5).toLowerCase();
-  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))fail('Enter a valid email address');
+  if(!emailRe.test(email))fail('Enter a valid email address');
+  const {date:dateOfBirth,age}=parseDob(body.date_of_birth);
+  let guardian_name='';
+  let guardian_email='';
+  let guardian_consent=false;
+  if(age<18){
+   guardian_name=field(body.guardian_name,160,'guardian name',3);
+   guardian_email=field(body.guardian_email,254,'guardian email',5).toLowerCase();
+   if(!emailRe.test(guardian_email))fail('Enter a valid guardian email address');
+   if(guardian_email===email)fail('Guardian email must be different from the applicant email');
+   if(body.guardian_consent!==true)fail('A parent or guardian must consent to this application');
+   guardian_consent=true;
+  }
   const application={
    full_name:field(body.full_name,160,'full name',3),
    email,country:field(body.country||'',100,'country'),
@@ -56,6 +88,9 @@ Deno.serve(async req=>{
    preferred_language:field(body.preferred_language,80,'preferred language',2),
    attendance_mode:choice(body.attendance_mode,'attendance_mode'),
    privacy_consent:true,
+   date_of_birth:dateOfBirth,
+   age_at_submission:age,
+   guardian_name,guardian_email,guardian_consent,
    requested_course_ids:[] as string[],
    applicant_user_id:null as string|null
   };
