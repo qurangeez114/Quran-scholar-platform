@@ -14,8 +14,8 @@ await transform(api,{loader:'ts',format:'esm'});
 await transform(formJS,{loader:'js',format:'esm'});
 await transform(adminJS,{loader:'js',format:'esm'});
 const {document}=parseHTML(html);
-for(const name of ['full_name','email','country','city','date_of_birth','program_interest','education_level',
- 'preferred_language','attendance_mode','academic_background','learning_goal','privacy_consent','guardian_name','guardian_email','guardian_consent','organization_website']){
+for(const name of ['full_name','email','phone','country','city','date_of_birth','program_interest','education_level',
+ 'preferred_language','attendance_mode','academic_background','learning_goal','privacy_consent','organization_website']){
  assert.ok(document.querySelector('[name="'+name+'"]'),name+' application field missing');
 }
 assert.ok(document.getElementById('application-success'));
@@ -49,17 +49,26 @@ for(const p of ['account.html','student-dashboard.html','instructor-dashboard.ht
  assert.match(readFileSync(p,'utf8'),/href="\/apply\.html"/);
 }
 
-assert.ok(document.getElementById('guardian-fieldset'));
-assert.ok(document.getElementById('guardian-fieldset').hasAttribute('hidden'));
+assert.equal(document.getElementById('guardian-fieldset'),null,'Guardian fields must be removed from the public form');
+assert.ok(!document.querySelector('[name="guardian_name"]'));
+assert.ok(document.querySelector('[name="phone"]'));
+assert.equal(document.querySelector('[name="phone"]').hasAttribute('required'),false);
+assert.ok(document.querySelector('[name="email"]').hasAttribute('required'));
 assert.match(formJS,/ageFromDob/);
-assert.match(formJS,/guardian_consent/);
-assert.match(html,/To be provided by QuranHikma/);
+assert.match(formJS,/at least 18 years old/);
+assert.match(html,/Applicants must be at least 18 years old/);
+assert.doesNotMatch(html,/To be provided by QuranHikma/);
 assert.match(html,/href="\/contact\.html"/);
 assert.match(html,/href="\/calendar\.html"/);
 const guardianSql=readFileSync('supabase/migrations/20261119120000_school_application_guardian_consent.sql','utf8');
 assert.match(guardianSql,/date_of_birth/);
 assert.match(guardianSql,/guardian_consent/);
+const tuitionSql=readFileSync('supabase/migrations/20261119140000_course_tuition_and_application_phone.sql','utf8');
+assert.match(tuitionSql,/tuition_type/);
+assert.match(tuitionSql,/add column if not exists phone/);
 assert.match(api,/age<18/);
-assert.match(api,/guardian_consent!==true/);
+assert.match(api,/at least 18 years old/);
+assert.doesNotMatch(api,/guardian_consent!==true/);
 assert.match(readFileSync('accounts/school-admissions-admin.js','utf8'),/Age at submission/);
-console.log('PASS: public application required fields, submission consent, private RLS tables, staff review, redirection, navigation, and under-18 guardian fields.');
+assert.match(readFileSync('accounts/school-admissions-admin.js','utf8'),/Phone/);
+console.log('PASS: public application required fields, optional phone, minimum age 18, no guardian form, private RLS tables, staff review, redirection and navigation.');

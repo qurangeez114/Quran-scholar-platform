@@ -1,5 +1,7 @@
 // Course API helpers for LMS
 import { supabase } from './accounts/client.js';
+import { tuitionFieldsFromInput, formatTuition } from './accounts/tuition.js';
+export { formatTuition, tuitionFieldsFromInput } from './accounts/tuition.js';
 
 export async function getCourses(published_only = true) {
   let query = supabase.from('qh_courses').select('*');
@@ -36,7 +38,8 @@ export async function createCourse(title, description = '', options = {}) {
       created_by: user.id,
       is_published: false,
       visibility: options.visibility === 'private' ? 'private' : 'public',
-      faculty_reuse_enabled: options.faculty_reuse_enabled === true
+      faculty_reuse_enabled: options.faculty_reuse_enabled === true,
+      ...tuitionFieldsFromInput(options.tuition_type, options.tuition_amount, options.tuition_currency)
     })
     .select()
     .single();

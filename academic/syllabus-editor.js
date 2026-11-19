@@ -2,9 +2,10 @@
 // The page gate is visual; database RLS still authorizes every write.
 import {supabase} from '/accounts/client.js';
 import {lmsRequest} from '/accounts/lms-access.js';
+import {tuitionFieldsFromInput,formatTuition} from '/accounts/tuition.js';
 const $=id=>document.getElementById(id);
 const status=$('status');
-const FIELDS=['course_code','credit_hours','prerequisites','instructor_name','schedule','delivery_mode','tuition'];
+const FIELDS=['course_code','credit_hours','prerequisites','instructor_name','schedule','delivery_mode'];
 const ACADEMIC_COLS=['course_code','learning_outcomes','syllabus','credit_hours'];
 let courses=[],current=null,lessons=[],lessonsHaveObjectives=false;
 
@@ -31,9 +32,14 @@ export function validate(v){
  v.syllabus.readings.forEach((r,i)=>{if(!r.author||!r.title)p.push('Reading line '+(i+1)+' needs at least an author and a title.');});
  return p;
 }
+function syncTuitionPaid(){
+ const paid=$('tuition_type').value==='paid';
+ $('tuition_paid_fields').hidden=!paid;
+}
 function collect(){
  const v={};FIELDS.forEach(f=>{const s=$(f).value.trim();v[f]=s===''?null:s;});
  v.credit_hours=v.credit_hours==null?null:Number(v.credit_hours);
+ Object.assign(v,tuitionFieldsFromInput($('tuition_type').value,$('tuition_amount').value,$('tuition_currency').value));
  v.learning_outcomes=parseLines($('learning_outcomes').value);
  const base=(current&&current.syllabus&&typeof current.syllabus==='object')?{...current.syllabus}:{};
  v.syllabus={...base,office_hours:$('office_hours').value.trim()||null,late_work_policy:$('late_work_policy').value.trim()||null,
@@ -48,6 +54,11 @@ async function loadCourse(id){
  $('schemaWarn').hidden=!missing.length;$('save').disabled=!!missing.length;
  if(missing.length)$('schemaWarn').innerHTML='<strong>Database setup needed.</strong> The columns '+missing.join(', ')+' do not exist yet. Run <code>migrations/20261104_academic_standards.sql</code> in Supabase, then reload. You can still draft and check entries here, but saving is disabled.';
  FIELDS.forEach(f=>{$(f).value=current[f]??'';});
+ const paid=current.tuition_type==='paid';
+ $('tuition_type').value=paid?'paid':'free';
+ $('tuition_amount').value=paid&&current.tuition_amount!=null?current.tuition_amount:'';
+ $('tuition_currency').value=current.tuition_currency||'USD';
+ syncTuitionPaid();
  $('learning_outcomes').value=list(current.learning_outcomes).map(txt).join('\n');
  const s=(current.syllabus&&typeof current.syllabus==='object')?current.syllabus:{};
  $('office_hours').value=s.office_hours||'';$('late_work_policy').value=s.late_work_policy||'';
@@ -96,7 +107,7 @@ async function init(){
  const sel=$('course');courses.forEach(c=>{const o=document.createElement('option');o.value=c.id;o.textContent=(c.title||'Untitled')+(c.is_published?'':' (unpublished)');sel.append(o);});
  const want=new URLSearchParams(location.search).get('course');if(want&&courses.some(c=>c.id===want))sel.value=want;
  sel.onchange=()=>{history.replaceState(null,'','?course='+sel.value);loadCourse(sel.value);};
- $('validate').onclick=showCheck;$('form').addEventListener('submit',save);
+ $('validate').onclick=showCheck;$('form').addEventListener('submit',save);$('tuition_type').addEventListener('change',syncTuitionPaid);
  status.hidden=true;$('app').hidden=false;await loadCourse(sel.value);
 }
 if(typeof document!=='undefined'&&document.getElementById('app'))init();

@@ -65,21 +65,17 @@ Deno.serve(async req=>{
   if(body.privacy_consent!==true)fail('Please agree to the admissions data notice');
   const email=field(body.email,254,'email',5).toLowerCase();
   if(!emailRe.test(email))fail('Enter a valid email address');
+  const phone=field(body.phone||'',40,'phone');
   const {date:dateOfBirth,age}=parseDob(body.date_of_birth);
-  let guardian_name='';
-  let guardian_email='';
-  let guardian_consent=false;
-  if(age<18){
-   guardian_name=field(body.guardian_name,160,'guardian name',3);
-   guardian_email=field(body.guardian_email,254,'guardian email',5).toLowerCase();
-   if(!emailRe.test(guardian_email))fail('Enter a valid guardian email address');
-   if(guardian_email===email)fail('Guardian email must be different from the applicant email');
-   if(body.guardian_consent!==true)fail('A parent or guardian must consent to this application');
-   guardian_consent=true;
-  }
+  if(age<18)fail('You must be at least 18 years old to apply.');
+  // Guardian columns remain on the table for earlier rows; new applications are 18+ only.
+  const guardian_name='';
+  const guardian_email='';
+  const guardian_consent=false;
   const application={
    full_name:field(body.full_name,160,'full name',3),
-   email,country:field(body.country||'',100,'country'),
+   email,phone,
+   country:field(body.country||'',100,'country'),
    city:field(body.city||'',100,'city'),
    program_interest:choice(body.program_interest,'program_interest'),
    learning_goal:field(body.learning_goal,3000,'learning goal',20),
