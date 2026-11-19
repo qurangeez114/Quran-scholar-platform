@@ -28,7 +28,8 @@ const base={
  full_name:'Application Student',email:'student@example.invalid',country:'US',city:'Burbank',
  program_interest:'quranic_studies',learning_goal:'I want to research classical source evidence.',
  education_level:'secondary',preferred_language:'English',attendance_mode:'either',
- academic_background:'Independent reading',privacy_consent:true
+ academic_background:'Independent reading',privacy_consent:true,
+ date_of_birth:'1990-06-15'
 };
 async function submit(override={},options={}){
  const headers={'Content-Type':'application/json'};
@@ -55,4 +56,43 @@ assert.ok(!('reference' in r.data),'Duplicate email must never disclose existing
 r=await submit({email:'second@example.invalid'});assert.equal(r.code,201);
 assert.equal(records.length,2);
 assert.ok(serviceReads>=2);
-console.log('PASS: unauthenticated applications require consent, validate fields, reject bots, protect duplicate details and accept genuine student interest.');
+assert.equal(records[0].date_of_birth,'1990-06-15');
+assert.equal(records[0].age_at_submission>=18,true);
+assert.equal(records[0].guardian_consent,false);
+assert.equal(records[0].guardian_name,'');
+
+const minorDob=(new Date().getUTCFullYear()-16)+'-01-01';
+r=await submit({email:'minor-plain@example.invalid',date_of_birth:minorDob});
+assert.equal(r.code,400,'Under-18 applications need guardian consent');
+assert.equal(records.length,2,'Rejected minor application must not be stored');
+
+r=await submit({email:'minor-bad@example.invalid',date_of_birth:minorDob,
+ guardian_name:'Parent Example',guardian_email:'not-an-email',guardian_consent:true});
+assert.equal(r.code,400);
+assert.equal(records.length,2);
+
+r=await submit({email:'minor-same@example.invalid',date_of_birth:minorDob,
+ guardian_name:'Parent Example',guardian_email:'minor-same@example.invalid',guardian_consent:true});
+assert.equal(r.code,400,'Guardian email must differ from the applicant');
+assert.equal(records.length,2);
+
+r=await submit({email:'future@example.invalid',date_of_birth:'2999-01-01'});
+assert.equal(r.code,400);
+assert.equal(records.length,2);
+
+r=await submit({email:'minor-ok@example.invalid',date_of_birth:minorDob,
+ guardian_name:'Parent Example',guardian_email:'parent@example.invalid',guardian_consent:true});
+assert.equal(r.code,201,JSON.stringify(r.data));
+assert.equal(records.length,3);
+assert.equal(records[2].age_at_submission,16);
+assert.equal(records[2].guardian_name,'Parent Example');
+assert.equal(records[2].guardian_email,'parent@example.invalid');
+assert.equal(records[2].guardian_consent,true);
+
+r=await submit({email:'adult-extra@example.invalid',date_of_birth:'1990-06-15',
+ guardian_name:'Should Be Ignored',guardian_email:'ignored@example.invalid',guardian_consent:true});
+assert.equal(r.code,201);
+assert.equal(records[3].guardian_name,'');
+assert.equal(records[3].guardian_consent,false);
+
+console.log('PASS: unauthenticated applications require consent, validate fields, reject bots, protect duplicate details, require guardian consent under 18, and accept genuine student interest.');

@@ -32,11 +32,15 @@ async function refresh(){
    const summary=append(box,element('details'));
    append(summary,element('summary','Read applicant responses'));
    const body=append(summary,element('div',undefined,'admissions-admin-detail'));
+   const under18=Number(app.age_at_submission)<18;
    for(const [name,value] of [
     ['Area of interest',friendly[app.program_interest]||app.program_interest],
     ['Learning goal',app.learning_goal],['Academic background',app.academic_background||'Not supplied'],
     ['Education level',app.education_level],['Teaching language',app.preferred_language],
-    ['Study format',app.attendance_mode],['Location',[app.city,app.country].filter(Boolean).join(', ')||'Not supplied']
+    ['Study format',app.attendance_mode],['Location',[app.city,app.country].filter(Boolean).join(', ')||'Not supplied'],
+    ['Date of birth',app.date_of_birth||'Not supplied'],
+    ['Age at submission',app.age_at_submission==null?'Not supplied':String(app.age_at_submission)+(under18?' (under 18)':'')],
+    ['Parent or guardian',under18?((app.guardian_name||'Name not supplied')+' · '+(app.guardian_email||'Email not supplied')+(app.guardian_consent?' · consent recorded':' · consent missing')):'Not required (applicant is 18 or over)']
    ]){
     const line=append(body,element('p'));
     append(line,element('strong',name+': '));
