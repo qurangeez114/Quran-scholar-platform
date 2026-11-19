@@ -26,4 +26,6 @@ assert.match(mig,/p_save boolean default true/);
 assert.match(mig,/public\.qh_quiz_keys k/);
 assert.match(mig,/assert_course_publishable/);
 
+const drop=readFileSync('supabase/migrations/20261119191000_drop_qh_grade_quiz_3arg_overload.sql','utf8');
+assert.match(drop,/drop function if exists public\.qh_grade_quiz\(uuid, jsonb, text\)/);
 console.log('PASS: quiz keys sync on save, answers are stripped from student-visible questions, and only qh_grade_quiz writes scores.');
