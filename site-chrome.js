@@ -3,6 +3,7 @@
    page didn't. Safe to include on every page (idempotent). */
 (function () {
   'use strict';
+  var WHATSAPP_GROUP='https://chat.whatsapp.com/K1lPps6azg7LV5Us2aNjWj';
   // Site icon for every page that loads the shared chrome.
   if (!document.querySelector('link[rel~="icon"]')) {
     var icon = document.createElement('link');
@@ -204,16 +205,32 @@
       ['Explore',[['Courses','/courses.html'],['Sample class','/sample-video-class.html'],['Apply to study','/apply.html'],['Faculty directory','/faculty.html'],['Academic calendar','/calendar.html'],['Contact','/contact.html']]],
       ['My Learning',[['Student dashboard','/student-dashboard.html'],['My courses','/academic-hub.html?tab=courses'],['Learning groups','/academic-hub.html?tab=groups'],['Live classes','/academic-hub.html?tab=live'],['Quiz results','/quiz-results.html'],['My progress','/my-progress.html'],['Transcript & certificates','/transcript.html']]],
       ['Teaching',[['Instructor dashboard','/instructor-dashboard.html'],['Manage courses','/admin/courses.html'],['Grading','/admin/grading.html'],['Bulk enrollment','/admin/bulk-enrollment.html'],['Instructor guide','/instructor-guide.html'],['Faculty profile','/faculty-profile.html']]],
-      ['Community',[['Faculty','/faculty.html'],['Messages','/academic-hub.html?tab=messages'],['Research workspace','/my-research.html']]],
+      ['Community',[['Faculty','/faculty.html'],['Messages','/academic-hub.html?tab=messages'],['Research workspace','/my-research.html'],['Join our WhatsApp group',WHATSAPP_GROUP]]],
       ['Administration',[['Admin dashboard','/admin-dashboard.html'],['School administration','/admin/lms.html'],['Student applications','/admin/lms.html'],['Manage users','/admin-users.html'],['Analytics','/admin/analytics.html']]]
     ];
     var inner=document.createElement('div');inner.className='qh-school-inner';
     var brand=document.createElement('a');brand.className='qh-school-brand';brand.href='/courses.html';brand.textContent='QuranHikma School';inner.appendChild(brand);
-    groups.forEach(function(g){var d=document.createElement('details'),sm=document.createElement('summary'),m=document.createElement('div');sm.textContent=g[0];m.className='qh-school-menu';m.hidden=false;g[1].forEach(function(link){var a=document.createElement('a');a.href=link[1];a.textContent=link[0];if((location.pathname+location.search)===link[1] || (location.pathname===link[1] && !location.search))a.classList.add('qh-current');m.appendChild(a);});d.appendChild(sm);d.appendChild(m);d.addEventListener('toggle',function(){if(d.open){root.querySelectorAll('details').forEach(function(other){if(other!==d)other.open=false;});var rect=sm.getBoundingClientRect();m.style.top=Math.min(rect.bottom+4,window.innerHeight-75)+'px';m.style.left=Math.max(8,Math.min(rect.left,window.innerWidth-236))+'px';}});inner.appendChild(d);});
+    groups.forEach(function(g){var d=document.createElement('details'),sm=document.createElement('summary'),m=document.createElement('div');sm.textContent=g[0];m.className='qh-school-menu';m.hidden=false;g[1].forEach(function(link){var a=document.createElement('a');a.href=link[1];a.textContent=link[0];if(/^https?:\/\//.test(link[1])){a.target='_blank';a.rel='noopener';a.className='qh-whatsapp-join';}if((location.pathname+location.search)===link[1] || (location.pathname===link[1] && !location.search))a.classList.add('qh-current');m.appendChild(a);});d.appendChild(sm);d.appendChild(m);d.addEventListener('toggle',function(){if(d.open){root.querySelectorAll('details').forEach(function(other){if(other!==d)other.open=false;});var rect=sm.getBoundingClientRect();m.style.top=Math.min(rect.bottom+4,window.innerHeight-75)+'px';m.style.left=Math.max(8,Math.min(rect.left,window.innerWidth-236))+'px';}});inner.appendChild(d);});
     var account=document.createElement('a');account.href='/account.html';account.className='qh-school-link';account.textContent='Account';inner.appendChild(account);
     root.appendChild(inner);document.body.insertBefore(root,document.body.firstChild);
     document.addEventListener('click',function(e){if(!root.contains(e.target))root.querySelectorAll('details').forEach(function(d){d.open=false;});});
     document.addEventListener('keydown',function(e){if(e.key==='Escape')root.querySelectorAll('details').forEach(function(d){d.open=false;});});
+  }
+
+
+  function addWhatsAppFooter() {
+    if (document.getElementById('qh-site-footer') || document.getElementById('ac-footer') || document.body.classList.contains('ac')) return;
+    if (!document.getElementById('qh-site-footer-css')) {
+      var st=document.createElement('style');st.id='qh-site-footer-css';
+      st.textContent='#qh-site-footer{border-top:1px solid #d9cdb7;background:#f4ecd8;font:500 13px/1.7 Arial,sans-serif;color:#5a4612;margin-top:40px;padding:14px 16px;text-align:center}'+
+        '#qh-site-footer a{color:#5a4612;text-decoration:none}'+
+        '#qh-site-footer a:hover{text-decoration:underline}'+
+        '@media print{#qh-site-footer{display:none!important}}';
+      document.head.appendChild(st);
+    }
+    var f=document.createElement('footer');f.id='qh-site-footer';
+    var a=document.createElement('a');a.className='qh-whatsapp-join';a.href=WHATSAPP_GROUP;a.target='_blank';a.rel='noopener';a.textContent='Join our WhatsApp group';
+    f.appendChild(a);document.body.appendChild(f);
   }
 
   function init() {
@@ -229,7 +246,7 @@
       cinemaJs.src='/qh-cinematic-theme.js?v=20261105-lab1';
       document.body.appendChild(cinemaJs);
     }
-    loadModal(); addSchoolNav(); addA11y(); addNav(); setTimeout(addClock, 400); setTimeout(addAccount, 400);
+    loadModal(); addSchoolNav(); addA11y(); addNav(); addWhatsAppFooter(); setTimeout(addClock, 400); setTimeout(addAccount, 400);
     // Desktop Quran reader: dedicate the right edge to the existing approved
     // advertising slot while leaving phone and tablet layouts unchanged.
     if (file() === 'index.html' && !document.getElementById('qh-desktop-reader-rail-js')) {
