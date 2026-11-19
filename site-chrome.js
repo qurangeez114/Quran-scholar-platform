@@ -3,6 +3,12 @@
    page didn't. Safe to include on every page (idempotent). */
 (function () {
   'use strict';
+  // Site icon for every page that loads the shared chrome.
+  if (!document.querySelector('link[rel~="icon"]')) {
+    var icon = document.createElement('link');
+    icon.rel = 'icon'; icon.type = 'image/svg+xml'; icon.href = '/favicon.svg';
+    document.head.appendChild(icon);
+  }
   // Professional English reading typography for translations and research passages.
   // All other scripts and navigation keep their existing typefaces.
   if (!document.getElementById('qh-english-reading-css')) {
@@ -78,7 +84,10 @@
     var cur = PARENT[file()] || file();
     return NAV.map(function (n) {
       return '<a class="bnav-btn' + (n[0] === cur ? ' active' : '') + '" href="/' + n[0] + '"' + (n[0] === cur ? ' aria-current="page"' : '') + '><span class="bni">' + n[1] + '</span><span>' + n[2] + '</span></a>';
-    }).join('');
+    }).join('') +
+      // Donate is pinned to the right end of the bar on phones (see CSS), so it
+      // is always one tap away without floating over the page content.
+      '<a class="bnav-btn bnav-donate' + (file() === 'support.html' ? ' active' : '') + '" href="/support.html" data-qh-money="donate" aria-label="Support Quran Hikma with a donation"><span class="bni">💛</span><span>Donate</span></a>';
   }
 
   function addNav() {
@@ -96,7 +105,10 @@
         '#bottom-nav .bnav-btn:focus-visible{outline:2px solid #9c742a!important;outline-offset:-3px!important}' +
         'body{padding-bottom:calc(72px + env(safe-area-inset-bottom,0px))!important}' +
         '#bnav,.fatwa-bottom-nav{display:none!important}' +
-        '@media(min-width:900px){#bottom-nav .bnav-btn{flex-basis:56px!important;min-width:56px!important;max-width:56px!important;width:56px!important}}';
+        '@media(min-width:900px){#bottom-nav .bnav-btn{flex-basis:56px!important;min-width:56px!important;max-width:56px!important;width:56px!important}}' +
+        '#bottom-nav .bnav-donate{position:sticky!important;right:0!important;margin-left:auto!important;z-index:1!important;background:#7d5f14!important;color:#fff!important;border-right:0!important;box-shadow:-3px 0 8px rgba(0,0,0,.14)!important}' +
+        '#bottom-nav .bnav-donate.active{background:#5e470f!important;color:#fff!important}' +
+        '@media(min-width:769px){#bottom-nav .bnav-donate{display:none!important}}';
       document.head.appendChild(st);
     }
     var existing = document.getElementById('bottom-nav');
@@ -122,20 +134,46 @@
     else { b.style.cssText += 'position:fixed;top:10px;right:10px;z-index:9998;background:#FDFAF4;'; document.body.appendChild(b); }
   }
 
+  // Accessibility: skip link to the main landmark and a visible keyboard focus ring.
+  function addA11y() {
+    if (document.getElementById('qh-skip')) return;
+    var st = document.createElement('style');
+    st.textContent = '#qh-skip{position:absolute;left:8px;top:-60px;z-index:10000;background:#17130c;color:#fff;padding:10px 14px;border-radius:6px;font-weight:700;text-decoration:none}#qh-skip:focus{top:8px}' +
+      'a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,[tabindex]:focus-visible{outline:3px solid #9c742a;outline-offset:2px}';
+    document.head.appendChild(st);
+    var m = document.querySelector('main');
+    if (!m) return;
+    if (!m.id) m.id = 'main';
+    if (!m.hasAttribute('tabindex')) m.setAttribute('tabindex', '-1');
+    var k = document.createElement('a'); k.id = 'qh-skip'; k.href = '#' + m.id; k.textContent = 'Skip to main content';
+    var kn = document.createElement('nav'); kn.setAttribute('aria-label', 'Skip link'); kn.appendChild(k);
+    document.body.insertBefore(kn, document.body.firstChild);
+  }
+
   function addAccount() {
     if (document.getElementById('qh-account-btn')) return;
     var a = document.createElement('a');
     a.id = 'qh-account-btn'; a.href = '/account.html'; a.title = 'Log in / My account';
-    a.textContent = '👤'; a.setAttribute('aria-label', 'Log in or open your account');
+    a.textContent = '👤';
+    // Signed-in visitors see "My account", not a login prompt next to "Log out".
+    function label() {
+      var signedIn = false;
+      try { var raw = localStorage.getItem('sb-ylosytbxpzxzwfzjpaej-auth-token'); var t = raw && JSON.parse(raw); signedIn = !!(t && t.access_token && (!t.expires_at || t.expires_at * 1000 > Date.now() || t.refresh_token)); } catch (e) {}
+      a.title = signedIn ? 'My account' : 'Log in / My account';
+      a.setAttribute('aria-label', signedIn ? 'Open my account' : 'Log in or open your account');
+    }
+    label();
+    window.addEventListener('storage', function (e) { if (!e.key || e.key.indexOf('auth-token') !== -1) label(); });
+    setInterval(label, 5000);
     a.style.cssText = 'text-decoration:none;border:1px solid #E8C97B;border-radius:50%;width:36px;height:36px;font-size:18px;color:#C9A84C;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:none;';
     var h = document.querySelector('header');
     if (h) { h.appendChild(a); }
-    else { a.style.cssText += 'position:fixed;top:10px;right:56px;z-index:9998;background:#FDFAF4;'; document.body.appendChild(a); }
+    else { a.style.cssText += 'position:fixed;top:10px;right:56px;z-index:9998;background:#FDFAF4;'; var nv = document.createElement('nav'); nv.setAttribute('aria-label', 'Account'); nv.appendChild(a); document.body.appendChild(nv); }
   }
 
   function addSchoolNav() {
     var path = location.pathname.charAt(0)==='/' ? location.pathname.slice(1) : location.pathname;
-    if (!["courses.html","course.html","lesson.html","student-dashboard.html","instructor-dashboard.html","faculty.html","faculty-profile.html","faculty-admin.html","apply.html","academic-hub.html","account.html","login.html","my-pages.html","my-research.html","quiz-results.html","sample-course.html","sample-video-class.html","admin-dashboard.html","admin-users.html","admin-evaluation-manager.html","instructor-welcome.html","student-welcome.html","admin/lms.html","admin/courses.html","admin/lesson-manager.html","admin/quiz-builder.html","admin/grading.html","admin/bulk-enrollment.html","admin/analytics.html","admin/deleted-accounts.html"].includes(path)) return;
+    if (!["courses.html","course.html","lesson.html","student-dashboard.html","instructor-dashboard.html","faculty.html","faculty-profile.html","faculty-admin.html","apply.html","academic-hub.html","account.html","login.html","my-pages.html","my-research.html","quiz-results.html","sample-course.html","sample-video-class.html","admin-dashboard.html","admin-users.html","admin-evaluation-manager.html","instructor-welcome.html","student-welcome.html","instructor-guide.html","admin/lms.html","admin/courses.html","admin/lesson-manager.html","admin/quiz-builder.html","admin/grading.html","admin/bulk-enrollment.html","admin/analytics.html","admin/deleted-accounts.html"].includes(path)) return;
     if (document.getElementById('qh-school-topnav')) return;
     var s = document.createElement('style');
     s.id='qh-school-topnav-css';
@@ -157,8 +195,8 @@
     var root = document.createElement('nav'); root.id='qh-school-topnav'; root.setAttribute('aria-label','School navigation');
     var groups = [
       ['Explore',[['Courses','/courses.html'],['Sample class','/sample-video-class.html'],['Apply to study','/apply.html'],['Faculty directory','/faculty.html']]],
-      ['My Learning',[['Student dashboard','/student-dashboard.html'],['My courses','/academic-hub.html?tab=courses'],['Learning groups','/academic-hub.html?tab=groups'],['Live classes','/academic-hub.html?tab=live'],['Quiz results','/quiz-results.html']]],
-      ['Teaching',[['Instructor dashboard','/instructor-dashboard.html'],['Manage courses','/admin/courses.html'],['Lesson manager','/admin/lesson-manager.html'],['Quiz builder','/admin/quiz-builder.html'],['Grading','/admin/grading.html'],['Faculty profile','/faculty-profile.html']]],
+      ['My Learning',[['Student dashboard','/student-dashboard.html'],['My courses','/academic-hub.html?tab=courses'],['Learning groups','/academic-hub.html?tab=groups'],['Live classes','/academic-hub.html?tab=live'],['Quiz results','/quiz-results.html'],['My progress','/my-progress.html'],['Transcript & certificates','/transcript.html']]],
+      ['Teaching',[['Instructor dashboard','/instructor-dashboard.html'],['Manage courses','/admin/courses.html'],['Grading','/admin/grading.html'],['Bulk enrollment','/admin/bulk-enrollment.html'],['Instructor guide','/instructor-guide.html'],['Faculty profile','/faculty-profile.html']]],
       ['Community',[['Faculty','/faculty.html'],['Messages','/academic-hub.html?tab=messages'],['Research workspace','/my-research.html']]],
       ['Administration',[['Admin dashboard','/admin-dashboard.html'],['School administration','/admin/lms.html'],['Student applications','/admin/lms.html'],['Manage users','/admin-users.html'],['Analytics','/admin/analytics.html']]]
     ];
@@ -184,7 +222,7 @@
       cinemaJs.src='/qh-cinematic-theme.js?v=20261105-lab1';
       document.body.appendChild(cinemaJs);
     }
-    loadModal(); addSchoolNav(); addNav(); setTimeout(addClock, 400); setTimeout(addAccount, 400);
+    loadModal(); addSchoolNav(); addA11y(); addNav(); setTimeout(addClock, 400); setTimeout(addAccount, 400);
     // Desktop Quran reader: dedicate the right edge to the existing approved
     // advertising slot while leaving phone and tablet layouts unchanged.
     if (file() === 'index.html' && !document.getElementById('qh-desktop-reader-rail-js')) {

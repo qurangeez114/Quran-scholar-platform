@@ -215,6 +215,7 @@
 
     .alert.error { background: #ffebee; color: #c62828; border-left: 4px solid #c62828; }
     .alert.success { background: #e8f5e9; color: #2e7d32; border-left: 4px solid #2e7d32; }
+    .alert.info { background: #e8f1fb; color: #1d4f7a; border-left: 4px solid #1d4f7a; }
 
     .loader { text-align: center; color: #595959; padding: 2rem; }
 
@@ -359,6 +360,12 @@
 
           <!-- Assignment Tab -->
           <div class="tab-content" id="assignmentTab">
+            <section id="assignmentBrief" aria-labelledby="assignmentBriefTitle" style="display:none;margin-bottom:1.25rem;padding:1rem;border:1px solid #E8E4DC;border-left:4px solid #667eea;border-radius:8px;background:#fff">
+              <h3 id="assignmentBriefTitle" style="margin:0 0 .5rem">Assignment</h3>
+              <p id="assignmentDue" style="display:none;margin:0 0 .5rem;font-weight:600;color:#41594b"></p>
+              <div id="assignmentInstructionsText" style="white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.6"></div>
+            </section>
+            <p id="assignmentMissing" style="display:none;color:#595959">Your instructor hasn't posted the instructions for this assignment yet.</p>
             <form id="assignmentForm" style="display:none;">
               <div class="form-group">
                 <label>Your Answer/Work</label>
@@ -440,7 +447,9 @@
       currentUser = data.session?.user;
 
       if (!currentUser) {
-        window.location.href = '/account.html';
+        // Come back to this lesson after logging in.
+        window.location.href = '/account.html?mode=login&returnTo=' + encodeURIComponent(location.pathname + location.search);
+        throw Error('Sign in required');
       }
     }
 
@@ -472,7 +481,7 @@
         document.getElementById('lessonTitle').textContent = currentLesson.title;
         document.title = `${currentLesson.title} - QuranHikma`;
 
-        if(preview){await requireTeachingAccess();const managed=await lmsRequest('dashboard');if(!managed.courses.some(c=>c.id===currentCourse.id))throw Error('You can preview only classes you manage');}
+        if(preview){await requireTeachingAccess();const managed=await lmsRequest('dashboard');if(!managed.courses.some(c=>c.id===currentCourse.id))throw Error('You can preview only courses you manage');}
         renderLesson();
         renderLessonResources(currentLesson.id);
         void (async()=>{let isManager=currentCourse?.created_by===currentUser?.id;if(!isManager){try{isManager=(await lmsRequest('session'))?.role==='owner';}catch{}}
@@ -482,6 +491,8 @@
         document.getElementById('lessonContent').before(rules);
         // Secondary panels must not block the quiz or assignment.
         if(!preview){void refreshLessonProgress();void loadDiscussion();}
+        else showPreviewProgress();
+        void prepareNextLesson();
 
         // Load quiz or assignment if needed
         if (currentLesson.lesson_type === 'quiz') {
@@ -617,6 +628,13 @@
       const guide=document.createElement('div');guide.className='quiz-result';
       guide.textContent=currentLesson.lesson_type==='video' ? 'Step 1: Watch the video. For this sample, focus on 2:16–4:25. Then mark this lesson complete and choose Next Lesson.' : currentLesson.lesson_type==='quiz' ? 'Step 3: Open the Quiz tab. Answer five questions, submit, then read the explanations. The pass mark is 90%, so you need 5/5 correct.' : 'Step 2: Read the toolkit. Open the interactive challenge link for guided practice, then return and mark this reading lesson complete. Practice scores stay separate from the course quiz.';
       if(currentCourse.id==='c9c5bd84-0e8b-45ba-9597-7112cf5089b1') content.before(guide);
+      // Per-lesson learning objectives (qh_lessons.learning_objectives, added by migration 20261104b). Hidden when absent.
+      {const prev=document.getElementById('lessonObjectives');if(prev)prev.remove();
+       let obj=currentLesson.learning_objectives;if(typeof obj==='string'){try{obj=JSON.parse(obj);}catch(e){obj=obj.split(/\n+/);}}
+       obj=Array.isArray(obj)?obj.map(x=>String(typeof x==='object'&&x?(x.text||''):x).trim()).filter(Boolean):[];
+       if(obj.length){const box=document.createElement('section');box.id='lessonObjectives';box.className='quiz-result';box.setAttribute('aria-labelledby','lessonObjectivesTitle');
+        const h=document.createElement('h2');h.id='lessonObjectivesTitle';h.style.fontSize='1.05rem';h.textContent='Learning objectives for this lesson';
+        const ul=document.createElement('ul');obj.forEach(t=>{const li=document.createElement('li');li.textContent=t;ul.append(li);});box.append(h,ul);content.before(box);}}
 
       if (currentLesson.lesson_type === 'text') {
         content.replaceChildren();
@@ -785,7 +803,7 @@
         if (error) throw error;
 
         currentQuiz = data;
-        quizStage = 'practice';
+        restoreQuizAttempt();
         document.getElementById('quizResult').textContent = '';
         renderQuiz();
       } catch (error) {
@@ -799,9 +817,46 @@
 
     let quizStage = 'practice';
     let quizShuffleSeed = Math.floor(Math.random()*1000000);
+    // One seed per attempt, saved per quiz so a refresh keeps the same order.
+    // Grading never depends on position: answers are sent as option text in
+    // the original question order (what qh_grade_quiz expects).
+    const quizAttemptKey = () => 'qh_quiz_attempt_' + (currentQuiz && currentQuiz.id);
+    function saveQuizAttempt() {
+      try { localStorage.setItem(quizAttemptKey(), JSON.stringify({stage: quizStage, seed: quizShuffleSeed})); } catch (_) {}
+    }
+    function newQuizAttempt(stage) {
+      quizStage = stage;
+      quizShuffleSeed = Math.floor(Math.random()*1000000);
+      saveQuizAttempt();
+    }
+    function restoreQuizAttempt() {
+      let saved = null;
+      try { saved = JSON.parse(localStorage.getItem(quizAttemptKey()) || 'null'); } catch (_) {}
+      if (saved && Number.isFinite(saved.seed) && (saved.stage === 'practice' || saved.stage === 'final')) {
+        quizStage = saved.stage; quizShuffleSeed = saved.seed >>> 0;
+      } else newQuizAttempt('practice');
+    }
+    function seededOrder(n, seed) {
+      const order = Array.from({length: n}, (_, i) => i);
+      for (let j = n - 1; j > 0; j--) {
+        seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+        const k = seed % (j + 1); [order[j], order[k]] = [order[k], order[j]];
+      }
+      return order;
+    }
     const quizButton = () => document.querySelector('#quizForm button[type="submit"]');
+    const hasRewordedCheck = () => !!currentQuiz?.questions?.some(q=>q.variant?.q && Array.isArray(q.variant.options));
+    // The label must match what the button does: practice (not graded) only when a reworded final check follows.
+    function quizButtonLabel() {
+      // Enrolled students: say the attempt is graded and saved. "Practice"/"not saved" only where nothing is recorded.
+      if (quizStage === 'final') return preview ? 'Check Final Answers (preview, not saved)' : 'Submit Final Check (graded and saved)';
+      if (hasRewordedCheck()) return preview ? 'Practice: Check My Answers (preview, not saved)' : 'Practice round: Check My Answers (not saved)';
+      return preview ? 'Check My Answers (preview, not saved)' : 'Submit Quiz (graded and saved)';
+    }
     function currentRoundQuestions() {
-      return currentQuiz.questions.map((original,idx)=>{
+      const qOrder = seededOrder(currentQuiz.questions.length, (quizShuffleSeed ^ 0x5bd1e995) >>> 0);
+      return qOrder.map(idx=>{
+        const original=currentQuiz.questions[idx];
         const v=quizStage==='final'?original.variant:null;
         const candidate=v&&v.q&&Array.isArray(v.options)&&v.options.length>=2
           ? {...original,question:v.q,options:v.options,
@@ -810,22 +865,24 @@
         const options=candidate.options||[];
         // Seed is chosen once per quiz round; repeated rendering and grading
         // use the same arrangement, while a fresh attempt changes the order.
-        let seed=(quizShuffleSeed+idx*9973)>>>0;
-        const order=options.map((_,i)=>i);
-        // Shuffle temporarily disabled: options show in saved order (correct answer first).
-        const QUIZ_SHUFFLE_ENABLED=false;
-        for(let j=order.length-1;QUIZ_SHUFFLE_ENABLED&&j>0;j--){
-          seed=(Math.imul(seed,1664525)+1013904223)>>>0;
-          const k=seed%(j+1);[order[j],order[k]]=[order[k],order[j]];
-        }
-        return {...candidate,options:order.map(i=>options[i]),
+        const order=seededOrder(options.length,(quizShuffleSeed+idx*9973)>>>0);
+        return {...candidate,_origIndex:idx,options:order.map(i=>options[i]),
           option_explanations:order.map(i=>candidate.option_explanations?.[i]||'')};
       });
     }
 
+    // Returns the server grade, or null when server grading is not installed (function missing or no answer key).
+    async function gradeOnServer(quizId, answers, stage) {
+      const { data, error } = await supabase.rpc('qh_grade_quiz', { p_quiz_id: quizId, p_answers: answers, p_stage: stage === 'final' ? 'final' : 'original' });
+      if (!error && data) return data;
+      const code = String(error?.code || ''), msg = String(error?.message || '');
+      if (code === 'PGRST202' || code === '42883' || code === 'P0002' || /could not find the function|schema cache|No answer key/i.test(msg)) return null;
+      throw error;
+    }
+
     function renderQuiz() {
       if (!currentQuiz || !Array.isArray(currentQuiz.questions) || !currentQuiz.questions.length) {
-        document.getElementById('quizResult').textContent = 'No questions have been added to this quiz yet. Ask the instructor to open the Question Builder.';
+        document.getElementById('quizResult').textContent = 'No questions have been added to this quiz yet. Ask the instructor to add questions in the Quiz Builder.';
         document.getElementById('quizForm').style.display = 'none';
         return;
       }
@@ -834,8 +891,10 @@
       container.replaceChildren();
       const intro = document.createElement('p');
       intro.textContent = quizStage === 'final'
-        ? '🕵️ Final Detective Check: apply what you learned to the reworded questions. This round determines your recorded grade.'
-        : '🎯 Practice round: answer the questions. Explanations appear before the final reworded check when one is available.';
+        ? (preview ? '🕵️ Preview of the final check: nothing is saved.' : '🕵️ Final Detective Check: apply what you learned to the reworded questions. This round is graded and saved as your recorded grade.')
+        : !hasRewordedCheck()
+        ? (preview ? '🎯 Preview: answer the questions, then check them to see the score and your explanations. Nothing is saved.' : '🎯 Answer every question, then submit. This quiz has no practice round: your submission is graded and saved to your record, and explanations appear afterwards.')
+        : '🎯 Practice round (not saved): answer the questions. Explanations appear before the final reworded check, which is graded and saved.';
       container.append(intro);
       questions.forEach((q, idx) => {
         const section = document.createElement('section');
@@ -856,7 +915,7 @@
         });
         container.append(section);
       });
-      quizButton().textContent = quizStage === 'final' ? 'Submit Final Check' : 'Practice: Check My Answers (not graded)';
+      quizButton().textContent = quizButtonLabel();
       document.getElementById('quizForm').style.display = 'block';
     }
 
@@ -895,8 +954,11 @@
         const checked = document.querySelector('input[name="q'+i+'"]:checked');
         return checked && Array.isArray(q.options) ? q.options[Number(checked.value)] || '' : '';
       });
-      const score = answers.filter((ans,i)=>ans === questions[i].correct_answer).length;
-      const percentage = Math.round(score / questions.length * 100);
+      // Same answers, re-indexed to the original question order for storage and server grading.
+      const answersOriginal = new Array(currentQuiz.questions.length).fill('');
+      questions.forEach((q,i)=>{ answersOriginal[q._origIndex] = answers[i]; });
+      let score = answers.filter((ans,i)=>ans === questions[i].correct_answer).length;
+      let percentage = Math.round(score / questions.length * 100);
       const result = document.getElementById('quizResult');
       const missing = answers.map((a,i)=>a?null:i+1).filter(Boolean);
       if (missing.length) {
@@ -905,7 +967,7 @@
         const firstQ = document.querySelector('input[name="q'+(missing[0]-1)+'"]');
         if (firstQ) firstQ.scrollIntoView({behavior:'smooth',block:'center'});
         button.disabled = false;
-        button.textContent = quizStage==='final' ? 'Submit Final Check' : 'Practice: Check My Answers (not graded)';
+        button.textContent = quizButtonLabel();
         return;
       }
       try {
@@ -916,17 +978,32 @@
           info.textContent='Practice: '+score+'/'+questions.length+' ('+percentage+'%). Review every answer below; your grade is not yet recorded. Then complete the final reworded check.';
           result.append(info);
           addExplanations(questions,answers,'Practice feedback — learn from every answer');
-          quizStage='final';
-          quizShuffleSeed=Math.floor(Math.random()*1000000);
+          newQuizAttempt('final');
           renderQuiz();
           result.scrollIntoView({behavior:'smooth',block:'start'});
           return;
         }
 
-        const passed = percentage >= Number(currentQuiz.passing_score || 90);
+        let passed = percentage >= Number(currentQuiz.passing_score || 90);
         button.textContent='Saving results…';
-        if(preview){result.textContent='Preview score: '+percentage+'%. Nothing was saved.';return;}
-        await submitQuiz(currentQuiz.id, answers, percentage, currentQuiz.passing_score);
+        if(preview){
+          result.replaceChildren();
+          const info=document.createElement('p');
+          info.textContent='Preview score: '+score+'/'+questions.length+' ('+percentage+'%). Required: '+(currentQuiz.passing_score||90)+'%. Nothing was saved. Students see these explanations after they submit.';
+          result.append(info);
+          addExplanations(questions,answers,'Answer explanations (as students see them)');
+          return;
+        }
+        // Prefer server-side grading (qh_grade_quiz, migration 20261104b) so the recorded score cannot be set by the browser.
+        // Falls back to the current client-graded insert only while the function or answer key does not exist yet.
+        const server = await gradeOnServer(currentQuiz.id, answersOriginal, quizStage);
+        if (server) {
+          score = server.correct; percentage = server.score; passed = Boolean(server.passed);
+          // server results use original question indexes; map to displayed positions
+          (server.results||[]).forEach(r=>{ const d=questions.findIndex(q=>q._origIndex===r.index); if(d>=0 && r.correct_answer) questions[d] = {...questions[d], correct_answer: r.correct_answer}; });
+        } else {
+          await submitQuiz(currentQuiz.id, answersOriginal, percentage, currentQuiz.passing_score);
+        }
         // A later failed retry must not erase an earlier passing lesson completion.
         const existing = (await getStudentProgress(currentCourse.id))
           .find(p=>p.lesson_id===currentLesson.id);
@@ -945,13 +1022,14 @@
         notice.append(heading,detail);result.append(notice);
         addExplanations(questions,answers,'Answer explanations');
         document.getElementById('quizForm').style.display='none';
+        newQuizAttempt('practice'); // next visit or retry starts a fresh, differently ordered attempt
         if (!passed) {
           const again=document.createElement('button');
           again.className='btn btn-primary';
           again.type='button';
           again.textContent='↻ Retry the quiz';
           again.addEventListener('click',()=>{
-            quizStage='practice';quizShuffleSeed=Math.floor(Math.random()*1000000);result.replaceChildren();renderQuiz();
+            result.replaceChildren();renderQuiz();
             document.getElementById('quizForm').scrollIntoView({behavior:'smooth'});
           });
           result.append(again);
@@ -959,13 +1037,13 @@
         await refreshLessonProgress();
         showAlert(progressResult.enrollmentWarning
           ? 'Score saved, but dashboard sync needs attention: '+progressResult.enrollmentWarning
-          : 'Quiz grade and lesson progress saved.',progressResult.enrollmentWarning?'error':'success');
+          : 'Quiz grade and lesson progress saved.'+completionNote(progressResult),progressResult.enrollmentWarning?'error':(progressResult.certificateWarning?'info':'success'));
       } catch (error) {
         console.error('Error submitting quiz:',error);
         showAlert('Quiz result or progress could not be saved: '+(error.message||'Please retry.'),'error');
       } finally {
         button.disabled=false;
-        button.textContent=quizStage==='final'?'Submit Final Check':'Practice: Check My Answers (not graded)';
+        button.textContent=quizButtonLabel();
       }
     });
 
@@ -975,11 +1053,24 @@
           .from('qh_assignments')
           .select('*')
           .eq('lesson_id', currentLesson.id)
-          .single();
+          .order('created_at', { ascending: true })
+          .limit(1)
+          .maybeSingle();
 
         if (error) throw error;
+        if (!data) {
+          document.getElementById('assignmentMissing').style.display = 'block';
+          return;
+        }
 
         currentAssignment = data;
+        document.getElementById('assignmentInstructionsText').textContent = data.instructions || '';
+        const due = document.getElementById('assignmentDue');
+        if (data.due_date && !Number.isNaN(new Date(data.due_date).getTime())) {
+          due.textContent = 'Due: ' + new Date(data.due_date).toLocaleString([], { dateStyle: 'full', timeStyle: 'short' });
+          due.style.display = 'block';
+        }
+        document.getElementById('assignmentBrief').style.display = 'block';
         document.getElementById('assignmentForm').style.display = 'block';
         if(currentUser&&!preview){
           const {data:previous,error:previousError}=await supabase
@@ -1192,17 +1283,43 @@
       window.location.href = `/course.html?course=${currentCourse.id}${preview?'&preview=1':''}`;
     };
 
-    window.goToNextLesson = async function() {
-      if (!lessons.length) {
-        const all = await getLessonsByCourse(currentCourse.id);
-        lessons = all;
-      }
+    // Instructor preview never records progress: say so instead of "checking…".
+    function showPreviewProgress() {
+      document.getElementById('lessonStatus').textContent = 'Preview: progress is not saved';
+      document.getElementById('progressText').textContent = 'Instructor preview. Completion, quiz scores and submissions are not recorded.';
+    }
 
-      const currentIndex = lessons.findIndex(l => l.id === currentLesson.id);
-      if (currentIndex < lessons.length - 1) {
-        window.location.href = `/lesson.html?lesson=${lessons[currentIndex + 1].id}${preview?'&preview=1':''}`;
-      } else {
-        window.location.href = `/course.html?course=${currentCourse.id}${preview?'&preview=1':''}`;
+    async function loadLessonList() {
+      if (!lessons.length) lessons = (await getLessonsByCourse(currentCourse.id)) || [];
+      return lessons;
+    }
+
+    // Label the button for what it will do (next lesson, or back to the outline on the last one).
+    async function prepareNextLesson() {
+      const button = document.getElementById('nextLessonBtn');
+      try {
+        const list = await loadLessonList();
+        const index = list.findIndex(l => l.id === currentLesson.id);
+        button.textContent = index >= 0 && index < list.length - 1 ? 'Next Lesson →' : 'Back to course outline →';
+        if (preview && index >= 0) document.getElementById('progressText').textContent += ' Lesson ' + (index + 1) + ' of ' + list.length + '.';
+      } catch (error) {
+        console.error('Lesson list unavailable:', error);
+      }
+    }
+
+    window.goToNextLesson = async function() {
+      if (!currentLesson || !currentCourse) { showAlert('The lesson is still loading. Please try again in a moment.', 'info'); return; }
+      try {
+        const list = await loadLessonList();
+        const currentIndex = list.findIndex(l => l.id === currentLesson.id);
+        if (currentIndex >= 0 && currentIndex < list.length - 1) {
+          window.location.href = `/lesson.html?lesson=${encodeURIComponent(list[currentIndex + 1].id)}${preview?'&preview=1':''}`;
+        } else {
+          window.location.href = `/course.html?course=${encodeURIComponent(currentCourse.id)}${preview?'&preview=1':''}`;
+        }
+      } catch (error) {
+        console.error('Next lesson unavailable:', error);
+        showAlert('Could not open the next lesson: ' + (error.message || 'please go back to the course outline.'), 'error');
       }
     };
 
@@ -1225,6 +1342,13 @@
       }
     }
 
+    // Course-complete message: certificate issued, or a plain note when it could not be issued yet.
+    function completionNote(r) {
+      if (r?.certificate?.certificate_code) return ' Course complete — your certificate is ready on your Student Dashboard.';
+      if (r?.certificateWarning) return ' Course complete. ' + r.certificateWarning;
+      return '';
+    }
+
     window.markLessonComplete = async function() {
       const button = document.getElementById('completeBtn');
       if(preview){showAlert('Preview only: completion is not saved.','info');return;}
@@ -1233,7 +1357,7 @@
       try {
         const result = await updateStudentProgress(currentCourse.id,currentLesson.id,true);
         button.textContent='✓ Completed and saved';
-        showAlert(result.enrollmentWarning ? 'Lesson saved. Dashboard sync needs attention: '+result.enrollmentWarning : 'Lesson completed and saved. Use Next Lesson when you are ready.',result.enrollmentWarning?'error':'success');
+        showAlert(result.enrollmentWarning ? 'Lesson saved. Dashboard sync needs attention: '+result.enrollmentWarning : 'Lesson completed and saved.'+(completionNote(result)||' Use Next Lesson when you are ready.'),result.enrollmentWarning?'error':(result.certificateWarning?'info':'success'));
         await refreshLessonProgress();
       } catch (error) {
         button.disabled=false;button.textContent='Retry saving completion';

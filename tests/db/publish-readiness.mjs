@@ -22,6 +22,8 @@ create table public.qh_assignments (id uuid primary key default gen_random_uuid(
 await c.query(stub);
 await c.query(fs.readFileSync("../../supabase/migrations/20261116090000_enforce_course_publish_readiness.sql", "utf8"));
 console.log("MIGRATION APPLIED");
+await c.query(fs.readFileSync("../../supabase/migrations/20261116130000_publish_requires_syllabus.sql", "utf8"));
+console.log("SYLLABUS MIGRATION APPLIED (no syllabus column yet: rule skipped)");
 
 const goodQuiz = `[{"question":"Q?","options":["A","B"],"correct_answer":"A","explanation":"Because"}]`;
 let pass = 0, fail = 0;
@@ -79,6 +81,17 @@ await run("published course: adding a complete lesson is accepted", true, async 
 await run("unpublishing a published course is accepted", true, async () => { const cid = await course(); await lesson(cid, "text", { content: "Hi" }); await publish(cid); await q("update public.qh_courses set is_published=false where id=$1", [cid]); });
 await run("deleting a published course succeeds", true, async () => { const cid = await course(); await lesson(cid, "text", { content: "Hi" }); await publish(cid); await q("delete from public.qh_courses where id=$1", [cid]); });
 
+// Syllabus rule: active once the academic-standards columns exist.
+await c.query("alter table public.qh_courses add column learning_outcomes jsonb, add column syllabus jsonb");
+const sched = '{"weekly_schedule":[{"week":1,"topic":"Introduction","due":""}]}';
+async function textCourse(outcomes, syllabus) { const cid = await course(); await q("update public.qh_courses set learning_outcomes=$2::jsonb, syllabus=$3::jsonb where id=$1", [cid, outcomes, syllabus]); await lesson(cid, "text", { content: "Hi" }); return cid; }
+await run("syllabus: publish without syllabus is rejected", false, async () => { await publish(await textCourse(null, null)); });
+await run("syllabus: outcomes but no weekly schedule is rejected", false, async () => { await publish(await textCourse('["Explain X"]', '{"weekly_schedule":[]}')); });
+await run("syllabus: blank outcome is rejected", false, async () => { await publish(await textCourse('[" "]', sched)); });
+await run("syllabus: outcomes and weekly schedule accepted", true, async () => { await publish(await textCourse('["Explain X"]', sched)); });
+await run("syllabus: object outcomes accepted", true, async () => { await publish(await textCourse('[{"text":"Explain X"}]', sched)); });
+await run("syllabus: filling syllabus and publishing in one update accepted", true, async () => { const cid = await textCourse(null, null); await q("update public.qh_courses set learning_outcomes='[\"Explain X\"]'::jsonb, syllabus=$2::jsonb, is_published=true where id=$1", [cid, sched]); });
+await run("syllabus: still requires lessons", false, async () => { const cid = await course(); await q("update public.qh_courses set learning_outcomes='[\"Explain X\"]'::jsonb, syllabus=$2::jsonb where id=$1", [cid, sched]); await publish(cid); });
 console.log(`\n${pass} passed, ${fail} failed`);
 await c.end();
 await pgInst.stop();

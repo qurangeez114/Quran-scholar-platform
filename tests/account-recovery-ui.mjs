@@ -23,6 +23,6 @@ assert.equal(d.getElementById('submit').disabled,false,'button stays usable afte
 press();await tick();
 assert.equal(resetCalls,2,'repeat press reaches the auth call: no client-side restriction');
 resetMode='ok';press();await tick();
-assert.equal(resetCalls,3);assert.match(d.getElementById('status').textContent,/Check your email/);
+assert.equal(resetCalls,3);assert.match(d.getElementById('status').textContent,/password reset email is on its way/);
 console.log('PASS: friendly rate-limit message, no client-side reset restriction, accepted reset confirmed (auth mocked).');
 w.close();

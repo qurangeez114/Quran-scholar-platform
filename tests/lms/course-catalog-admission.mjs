@@ -69,8 +69,8 @@ const {document:courseDocument}=parseHTML(courseHTML);
 const rStart=courseHTML.indexOf('    function renderLessons() {'),rEnd=courseHTML.indexOf('    async function loadMaterials()',rStart);
 assert.ok(rStart>0&&rEnd>rStart);
 const renderCode=courseHTML.slice(rStart,rEnd);
-function renderCase({enrollment=null,enrollmentRequest=null,includedByInstructor=null,lessons=[]}){
- const context={document:courseDocument,enrollment,enrollmentRequest,
+function renderCase({enrollment=null,enrollmentRequest=null,includedByInstructor=null,lessons=[],currentCourse={id:'c1',is_published:true}}){
+ const context={document:courseDocument,enrollment,enrollmentRequest,currentCourse,
  includedByInstructor,preview:false,lessons,esc:v=>String(v)};
  runInNewContext(renderCode+';renderLessons()',context);
  return courseDocument.getElementById('lessonsList').textContent;
@@ -78,8 +78,9 @@ function renderCase({enrollment=null,enrollmentRequest=null,includedByInstructor
 assert.match(renderCase({enrollmentRequest:{status:'pending'}}),/Waiting for instructor approval/);
 assert.match(renderCase({enrollmentRequest:{status:'pending'}}),/once the receiving instructor approves/);
 assert.match(renderCase({enrollmentRequest:{status:'consent_pending'}}),/Your confirmation is needed/);
-assert.match(renderCase({}),/Class lessons require enrollment/);
-assert.match(renderCase({enrollment:{id:'enrolled'},lessons:[]}),/No lessons have been published/);
+assert.match(renderCase({}),/Course lessons require enrollment/);
+assert.match(renderCase({enrollment:{id:'enrolled'},lessons:[]}),/No lessons have been added to this course yet/);
+assert.match(renderCase({enrollment:{id:'enrolled'},lessons:[],currentCourse:{id:'c1',is_published:false}}),/This course hasn\u2019t been published yet/,'Enrolled students in a draft course are told it is not published yet');
 const gStart=courseHTML.indexOf('    window.goToLesson = function(lessonId) {');
 const gEnd=courseHTML.indexOf('    window.handleAction = function()',gStart);
 assert.ok(gStart>0&&gEnd>gStart);

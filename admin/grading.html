@@ -232,7 +232,9 @@
   <div class="header">
     <h1>📋 Grading Dashboard</h1>
     <div class="header-nav">
-      <a href="courses.html">Courses</a>
+      <a href="/instructor-dashboard.html">Instructor Dashboard</a>
+      <a href="/admin/courses.html">Manage Courses</a>
+      <a href="/instructor-guide.html#grade">Instructor guide</a>
       <a href="/account.html">My Account</a>
     </div>
   </div>
@@ -308,6 +310,9 @@
 
   <script type="module">
     import { supabase } from '../accounts/client.js';
+    import { requireTeachingAccess } from '../accounts/lms-access.js';
+    // Only https/http file links from storage are opened; anything else is shown as text.
+    const safeUrl = value => { try { const u = new URL(String(value || '')); return ['https:', 'http:'].includes(u.protocol) ? u.href : ''; } catch { return ''; } };
 
     let currentUser = null;
     let currentAssignment = null;
@@ -320,17 +325,25 @@
       currentUser = data.session?.user;
 
       if (!currentUser) {
-        window.location.href = '/account.html';
+        window.location.href = '/account.html?reason=instructor&returnTo=' + encodeURIComponent(location.pathname + location.search);
+        throw Error('Sign in required');
       }
+      // Same access rule as the Instructor Dashboard (active instructor or owner; temporary password replaced).
+      const state = await requireTeachingAccess();
+      teachingRole = state?.role || 'instructor';
+    }
+
+    // Owners grade every course; instructors see only courses they created.
+    let teachingRole = 'instructor';
+    function managedCourses() {
+      const query = supabase.from('qh_courses').select('id');
+      return teachingRole === 'owner' ? query : query.eq('created_by', currentUser.id);
     }
 
     async function loadAssignments() {
       try {
         // Get all courses created by user
-        const { data: courses, error: courseError } = await supabase
-          .from('qh_courses')
-          .select('id')
-          .eq('created_by', currentUser.id);
+        const { data: courses, error: courseError } = await managedCourses();
 
         if (courseError) throw courseError;
 
@@ -407,7 +420,7 @@
              onclick="selectAssignment('${a.id}', '${a.submission.id}')">
           <div class="submission-title">${escapeText(a.qh_lessons?.title||"Research assignment")}</div>
           <div class="submission-meta">
-            Student: ${a.submission.qh_profiles?.first_name || 'Unknown'} ${a.submission.qh_profiles?.last_name || ''} |
+            Student: ${escapeText(a.submission.qh_profiles?.first_name || 'Unknown')} ${escapeText(a.submission.qh_profiles?.last_name || '')} |
             Submitted: ${new Date(a.submission.submitted_at).toLocaleDateString()}
           </div>
           <span class="submission-status status-ungraded">Not Graded</span>
@@ -437,10 +450,10 @@
           <div style="border-top: 1px solid #ddd; padding-top: 1rem;">
             <strong>📎 Uploaded File:</strong>
             <div style="margin-top: 0.5rem;">
-              <a href="${item.submission.file_url}" target="_blank" style="color: #667eea; text-decoration: none; font-weight: 600;">
-                ${item.submission.file_name || 'Download File'}
+              <a href="${escapeText(safeUrl(item.submission.file_url))}" target="_blank" rel="noopener" style="color: #667eea; text-decoration: none; font-weight: 600;">
+                ${escapeText(item.submission.file_name || 'Download File')}
               </a>
-              <a href="${item.submission.file_url}" target="_blank" download style="margin-left: 1rem; color: #667eea; font-size: 0.9rem;">[Download]</a>
+              <a href="${escapeText(safeUrl(item.submission.file_url))}" target="_blank" rel="noopener" download style="margin-left: 1rem; color: #667eea; font-size: 0.9rem;">[Download]</a>
             </div>
           </div>
         `;
@@ -508,10 +521,7 @@
 
     async function loadQuizzes() {
       try {
-        const { data: courses, error: courseError } = await supabase
-          .from('qh_courses')
-          .select('id')
-          .eq('created_by', currentUser.id);
+        const { data: courses, error: courseError } = await managedCourses();
 
         if (courseError) throw courseError;
         if (!courses.length) { document.getElementById('quizzesList').textContent = 'No courses available for this instructor.'; return; }
@@ -611,8 +621,17 @@
     }
 
     // Initialize
-    await checkAuth();
-    if (currentUser) {
+    let allowed = false;
+    try { await checkAuth(); allowed = true; }
+    catch (error) {
+      if (!/Sign in required|temporary password/i.test(error.message || '')) {
+        const box = document.getElementById('alertContainer');
+        const note = document.createElement('div'); note.className = 'alert error';
+        note.textContent = 'The Grading Dashboard is for QuranHikma instructors. ' + (error.message || '');
+        box.appendChild(note);
+      }
+    }
+    if (allowed && currentUser) {
       if (new URLSearchParams(location.search).get('tab') === 'quizzes') window.switchTab('quizzes');
       else await loadAssignments();
     }

@@ -192,6 +192,14 @@ export async function mountAcademicDashboard(){
  // placed in the page before the authenticated API response.
  const {data,error}=await db.auth.getSession();
  if(error||!data?.session){setStatus('Sign in to view your academic activity.',true);return;}
+ // While a temporary password must be replaced, the academic API refuses access;
+ // wait for the change instead of showing "Account access is restricted".
+ try{
+  const {data:state}=await db.functions.invoke('lms-admin',{body:{action:'session'}});
+  if(state?.account?.must_change_password){
+   setStatus('');window.addEventListener('qh-password-changed',()=>refresh(),{once:true});return;
+  }
+ }catch{}
  await refresh();
 }
 mountAcademicDashboard().catch(e=>setStatus(e.message,true));

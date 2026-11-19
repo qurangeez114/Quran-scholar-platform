@@ -6,7 +6,7 @@ const root=new URL('../../',import.meta.url);
 const html=await readFile(new URL('admin/lms.html',root),'utf8'),source=(await readFile(new URL('accounts/lms-dashboard.js',root),'utf8')).replace(/^import .*\n/gm,'');
 const teacher='t1',owner='o1',student='s1';
 const snapshot={role:'owner',accounts:[{user_id:teacher,role:'instructor',display_name:'Test Teacher',email:'teacher@example.invalid',country:'Eritrea',city:'Asmara',active:true,must_change_password:false}],courses:[{id:'c1',created_by:teacher,title:'Test class',is_published:false}],people:[{user_id:teacher,display_name:'Test Teacher',email:'teacher@example.invalid'},{user_id:student,display_name:'Student One',email:'student@example.invalid'}],enrollments:[{user_id:student,course_id:'c1'}],lessons:[{id:'l1',course_id:'c1',title:'Quiz lesson'}],quizzes:[{id:'q1',lesson_id:'l1'}],attempts:[{id:'a2',quiz_id:'q1',user_id:student,score:80,passed:false,submitted_at:'2026-10-16T00:00:00Z',answers:{q:1}},{id:'a1',quiz_id:'q1',user_id:student,score:100,passed:true,submitted_at:'2026-10-15T00:00:00Z',answers:{q:2}}],progress:[{user_id:student,course_id:'c1',completed:true}],assignments:[],submissions:[]};
-async function setup(state){
+async function setup(state,auth={}){
  const {document,window}=parseHTML(html);const calls=[];const location={replaced:null,replace(url){this.replaced=url;}};
  for(const form of document.querySelectorAll('form')){
   Object.defineProperty(form,'elements',{value:Object.fromEntries([...form.querySelectorAll('[name]')].map(el=>[el.name,el]))});
@@ -15,7 +15,7 @@ async function setup(state){
  for(const select of document.querySelectorAll('select'))Object.defineProperty(select,'value',{configurable:true,get(){return this.querySelector('option[selected]')?.value||this.querySelector('option')?.value||'';},set(v){for(const o of this.querySelectorAll('option')){if(o.value===v)o.setAttribute('selected','');else o.removeAttribute('selected');}}});
  for(const el of document.querySelectorAll('*'))el.scrollIntoView=()=>{};
  class FormData{constructor(form){this.entries=Object.entries(form.elements).map(([k,v])=>[k,v.value]);}[Symbol.iterator](){return this.entries[Symbol.iterator]();}}
- runInNewContext(source,{document,FormData,console,location,db:{auth:{getSession:async()=>({data:{session:{user:{id:owner}}}}),refreshSession:async()=>({})}},lmsRequest:async(action,values)=>{calls.push({action,values});return action==='session'?state:action==='dashboard'?snapshot:{message:'Saved'};}});
+ runInNewContext(source,{document,FormData,console,location,db:{auth:{getSession:async()=>({data:{session:{user:{id:owner,email:'pending@example.invalid'}}}}),refreshSession:auth.refreshSession||(async()=>({data:{session:{}}})),signInWithPassword:auth.signIn||(async()=>({error:{message:'Invalid login'}}))}},lmsRequest:async(action,values)=>{calls.push({action,values});return action==='session'?state:action==='dashboard'?snapshot:{message:'Saved'};}});
  await new Promise(r=>setTimeout(r,10));return {document,window,calls,location};
 }
 let {document:d,window,calls}=await setup({role:'owner'});
@@ -56,5 +56,16 @@ const instructor=await setup({role:'instructor',account:{display_name:'Teacher',
 const pendingStudent=await setup({role:'student',account:{must_change_password:true}});
 const passwordForm=pendingStudent.document.getElementById('password-form');
 passwordForm.elements.currentPassword.value='temporary-password-123';passwordForm.elements.newPassword.value='new-password-123';passwordForm.elements.confirmPassword.value='new-password-123';
-await passwordForm.onsubmit({preventDefault(){},currentTarget:passwordForm});assert.equal(pendingStudent.location.replaced,'/student-dashboard.html');
+await passwordForm.onsubmit({preventDefault(){},currentTarget:passwordForm});assert.equal(pendingStudent.location.replaced,'/student-dashboard.html?notice=password-changed');
+// Session ended by the password change and re-login fails: go to login with a clear message.
+const loggedOut=await setup({role:'student',account:{must_change_password:true}},{refreshSession:async()=>({error:{message:'Invalid Refresh Token'}})});
+const f2=loggedOut.document.getElementById('password-form');
+f2.elements.currentPassword.value='temporary-password-123';f2.elements.newPassword.value='new-password-123';f2.elements.confirmPassword.value='new-password-123';
+await f2.onsubmit({preventDefault(){},currentTarget:f2});assert.equal(loggedOut.location.replaced,'/account.html?reason=password-changed&returnTo=%2Fstudent-dashboard.html');
+// Session ended but signing in with the new password works: stay signed in.
+let signInArgs=null;
+const relogin=await setup({role:'student',account:{must_change_password:true}},{refreshSession:async()=>({error:{message:'Invalid Refresh Token'}}),signIn:async a=>{signInArgs=a;return {data:{session:{}}};}});
+const f3=relogin.document.getElementById('password-form');
+f3.elements.currentPassword.value='temporary-password-123';f3.elements.newPassword.value='new-password-123';f3.elements.confirmPassword.value='new-password-123';
+await f3.onsubmit({preventDefault(){},currentTarget:f3});assert.equal(relogin.location.replaced,'/student-dashboard.html?notice=password-changed');assert.equal(signInArgs.password,'new-password-123');
 console.log('PASS: dashboard rendering, latest/best scores, search, enrollment controls, password clearing, temporary-password screen, and instructor navigation.');

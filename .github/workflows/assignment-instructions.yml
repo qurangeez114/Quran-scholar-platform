@@ -1,0 +1,36 @@
+name: Assignment instructions editor
+on:
+  pull_request:
+    paths:
+      - 'admin/lesson-manager.html'
+      - 'lesson.html'
+      - 'courses-api.js'
+      - 'supabase/migrations/**'
+      - 'tests/lms/assignment-instructions-*.mjs'
+      - '.github/workflows/assignment-instructions.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'admin/lesson-manager.html'
+      - 'lesson.html'
+      - 'courses-api.js'
+      - 'supabase/migrations/**'
+      - 'tests/lms/assignment-instructions-*.mjs'
+permissions:
+  contents: read
+jobs:
+  assignment-instructions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --prefix tests/lms
+      - name: Syntax check
+        run: node --check courses-api.js
+      - name: Access rules and publish readiness for assignment instructions
+        run: node --test tests/lms/assignment-instructions-db.mjs
+      - name: Lesson manager editor and student assignment view
+        run: node --test tests/lms/assignment-instructions-ui.mjs

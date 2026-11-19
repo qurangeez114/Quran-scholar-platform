@@ -283,7 +283,8 @@
 <body>
   <div class="header">
     <h1>Bulk Enrollment</h1>
-    <p>Enroll multiple students in a course at once</p>
+    <p>Enroll several students in one of your courses, or recommend them to another instructor's published course</p>
+    <p style="margin-top:.5rem"><a href="/instructor-dashboard.html" style="color:inherit">← Instructor Dashboard</a> · <a href="/admin/courses.html" style="color:inherit">Manage Courses</a> · <a href="/instructor-guide.html" style="color:inherit">Instructor guide</a></p>
   </div>
 
   <div class="container">
@@ -296,7 +297,7 @@
         <select id="courseSelect" required>
           <option value="">-- Select a course --</option>
         </select>
-        <div class="form-hint">Choose the course you want to enroll students in</div>
+        <div class="form-hint" id="courseHint">Your own courses (drafts included) enroll students directly. Other instructors' published courses send a recommendation that the student and the receiving instructor must approve.</div>
       </div>
     </div>
 
@@ -304,8 +305,8 @@
       <h2>Add Students</h2>
 
       <div class="tabs">
-        <button class="tab-btn active" onclick="switchTab('paste')">Paste Emails</button>
-        <button class="tab-btn" onclick="switchTab('csv')">Upload CSV</button>
+        <button type="button" class="tab-btn active" data-tab="paste" onclick="switchTab('paste', this)">Paste Emails</button>
+        <button type="button" class="tab-btn" data-tab="csv" onclick="switchTab('csv', this)">Upload CSV</button>
       </div>
 
       <!-- Paste Tab -->
@@ -376,55 +377,86 @@
   <script type="module">
     import { supabase } from '../accounts/client.js';
     import { bulkEnrollStudents, getCourses } from '../courses-api.js';
+    import { requireTeachingAccess, lmsRequest } from '../accounts/lms-access.js';
 
     let currentUser = null;
+    let teachingRole = null;
+    let ownCourseIds = new Set();
+    const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
+    // Same access rule as the Instructor Dashboard: an active instructor
+    // (qh_lms_accounts) or the owner, checked by the lms-admin function.
     async function checkAuth() {
+      try {
+        const state = await requireTeachingAccess();
+        teachingRole = state.role;
+      } catch (error) {
+        if (/Sign in required|temporary password/i.test(error.message)) return false; // redirecting
+        showAlert('This page is for QuranHikma instructors. ' + (error.message || ''), 'error');
+        return false;
+      }
       const { data } = await supabase.auth.getSession();
-      currentUser = data.session?.user;
-
-      if (!currentUser) {
-        window.location.href = '/account.html';
-        return;
-      }
-
-      // Check if user is instructor/admin
-      const { data: profile } = await supabase
-        .from('qh_profiles')
-        .select('role')
-        .eq('user_id', currentUser.id)
-        .single();
-
-      if (profile?.role !== 'instructor' && profile?.role !== 'admin') {
-        showAlert('Access denied. Only instructors can access this page.', 'error');
-        setTimeout(() => {
-          window.location.href = '/';
-        }, 2000);
-      }
+      currentUser = data.session?.user || null;
+      return !!currentUser;
     }
 
     async function loadCourses() {
       try {
-        const courses = await getCourses();
+        const all = await getCourses(false); // include your drafts
+        // Owners can enroll students directly into any course.
+        const isOwner = teachingRole === 'owner';
+        const mine = isOwner ? all : all.filter(c => c.created_by === currentUser.id);
+        const others = isOwner ? [] : all.filter(c => c.created_by !== currentUser.id && c.is_published);
+        ownCourseIds = new Set(mine.map(c => c.id));
         const courseSelect = document.getElementById('courseSelect');
-
-        courses.forEach(course => {
-          const option = document.createElement('option');
-          option.value = course.id;
-          option.textContent = course.title;
-          courseSelect.appendChild(option);
-        });
+        const group = (label, list, suffix) => {
+          if (!list.length) return;
+          const g = document.createElement('optgroup');
+          g.label = label;
+          list.forEach(course => {
+            const option = document.createElement('option');
+            option.value = course.id;
+            option.textContent = (course.title || 'Untitled course') + suffix(course);
+            g.appendChild(option);
+          });
+          courseSelect.appendChild(g);
+        };
+        group(isOwner ? 'All courses (enroll directly)' : 'My courses (enroll directly)', mine, c => c.is_published ? '' : ' (draft)');
+        group("Other instructors' published courses (recommend)", others, () => '');
+        if (!mine.length && !others.length) {
+          showAlert('You have no courses yet. Create one in Manage Courses first.', 'info');
+        }
       } catch (error) {
         console.error('Error loading courses:', error);
-        showAlert('Failed to load courses', 'error');
+        showAlert('Failed to load courses: ' + (error.message || 'please reload'), 'error');
       }
     }
 
-    window.switchTab = function(tabName) {
+    // Own course: the same lms-admin "provision" call as the dashboard's
+    // "Enroll a student" form. Existing accounts are enrolled and emailed;
+    // addresses without an account must be added one at a time on the
+    // Instructor Dashboard, because a new account needs a temporary password.
+    async function enrollOwnCourse(courseId, emails) {
+      const results = { successful: [], failed: [] };
+      for (const email of emails) {
+        try {
+          const res = await lmsRequest('provision', { role: 'student', email, display_name: email.split('@')[0], course_id: courseId });
+          results.successful.push({ email, notice: res?.message || 'Enrolled' });
+        } catch (error) {
+          const msg = error.message || 'Could not enroll';
+          results.failed.push({ email, reason: /temporary password/i.test(msg)
+            ? 'No QuranHikma account yet. Add this student on the Instructor Dashboard (Enroll a student) with a temporary password.'
+            : msg });
+        }
+      }
+      return results;
+    }
+
+    window.switchTab = function(tabName, button) {
       document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
       document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
 
-      event.target.classList.add('active');
+      (button || document.querySelector('.tab-btn[data-tab="' + tabName + '"]'))?.classList.add('active');
       document.getElementById(tabName + 'Tab').classList.add('active');
     };
 
@@ -483,7 +515,9 @@
       document.getElementById('loader').classList.add('active');
 
       try {
-        const results = await bulkEnrollStudents(courseId, validEmails);
+        const results = ownCourseIds.has(courseId)
+          ? await enrollOwnCourse(courseId, validEmails)
+          : await bulkEnrollStudents(courseId, validEmails);
 
         // Display results
         displayResults(results);
@@ -534,8 +568,8 @@
         const successList = document.getElementById('successList');
         successList.innerHTML = results.successful.map(item => `
           <div class="detail-item">
-            <span class="detail-email">${item.email}</span>
-            <span class="detail-status success">✓ Enrolled</span>
+            <span class="detail-email">${esc(item.email)}</span>
+            <span class="detail-status success">✓ ${esc(item.notice || 'Enrolled')}</span>
           </div>
         `).join('');
         document.getElementById('successDetails').style.display = 'block';
@@ -546,8 +580,8 @@
         const failureList = document.getElementById('failureList');
         failureList.innerHTML = results.failed.map(item => `
           <div class="detail-item">
-            <span class="detail-email">${item.email}</span>
-            <span class="detail-status error">${item.reason}</span>
+            <span class="detail-email">${esc(item.email)}</span>
+            <span class="detail-status error">${esc(item.reason)}</span>
           </div>
         `).join('');
         document.getElementById('failureDetails').style.display = 'block';
@@ -575,8 +609,7 @@
     }
 
     // Initialize
-    await checkAuth();
-    await loadCourses();
+    if (await checkAuth()) await loadCourses();
   </script>
 <script src="/quran-verse-audio.js" defer></script>
 </body>
