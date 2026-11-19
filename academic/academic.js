@@ -24,8 +24,8 @@ export async function lessonsFor(id){
 }
 export function asList(v){if(v==null)return [];if(Array.isArray(v))return v;if(typeof v==='string'){try{const j=JSON.parse(v);if(Array.isArray(j))return j;}catch(e){}return v.split(/\n+/).map(s=>s.trim()).filter(Boolean);}return [v];}
 export const FOOTER_LINKS=[
-  ['Academics',[['Course Catalog','/catalog.html'],['All Courses','/courses.html'],['Faculty Directory','/faculty.html'],['Academic Calendar','/student-handbook.html#calendar']]],
-  ['Students',[['Admissions','/student-handbook.html#admissions'],['Student Handbook','/student-handbook.html'],['My Progress','/my-progress.html'],['Transcript & Certificates','/transcript.html'],['Verify a Certificate','/certificate.html'],['FAQ','/student-handbook.html#faq']]],
+  ['Academics',[['Course Catalog','/catalog.html'],['All Courses','/courses.html'],['Faculty Directory','/faculty.html'],['Academic Calendar','/calendar.html']]],
+  ['Students',[['Admissions','/student-handbook.html#admissions'],['Student Handbook','/student-handbook.html'],['My Progress','/my-progress.html'],['Transcript & Certificates','/transcript.html'],['Verify a Certificate','/certificate.html'],['Contact','/contact.html'],['FAQ','/student-handbook.html#faq']]],
   ['Policies',[['Academic Integrity','/policies.html#integrity'],['Grading Policy','/policies.html#grading'],['Attendance & Participation','/policies.html#attendance'],['Accessibility','/policies.html#accessibility']]],
   ['Legal',[['Privacy Policy','/policies.html#privacy'],['Terms of Use','/policies.html#terms'],['Refund Policy','/policies.html#refund']]]
 ];
