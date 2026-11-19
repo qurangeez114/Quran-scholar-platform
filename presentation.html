@@ -91,7 +91,7 @@ body { padding-bottom: 60px !important; }
 .slide.long .slide-text{font-size:17px}.slide.xlong .slide-text{font-size:14px}
 .slide.long .slide-arabic{font-size:26px}.slide.xlong .slide-arabic{font-size:21px}
 .cloud-details summary{cursor:pointer;font:700 12px Inter,sans-serif;color:var(--muted);margin:4px 0 8px}
-#presentMode{position:fixed;inset:0;z-index:2147483000;background:#141210;display:flex;flex-direction:column}
+body.presenting #bottom-nav,body.presenting .bnav-fab{display:none!important}#presentMode{position:fixed;inset:0;z-index:2147483647;background:#141210;display:flex;flex-direction:column}
 #presentMode[hidden]{display:none}
 .pm-stage{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:12px;overflow:hidden;touch-action:pan-y}
 .pm-stage>.slide{width:min(100%,calc((100vh - 150px) * 16 / 9));max-height:100%;box-shadow:none}
@@ -311,8 +311,8 @@ function notesInPdf(){const el=document.getElementById('notesInPdf');return !!(e
 function slideLenClass(s){const n=String(slideDisplayText(s)||'').length+String(s.arabic||'').length*1.4;return n>1100?' xlong':n>520?' long':''}
 function renderPreviewNotes(s){const el=document.getElementById('previewNotes');if(!el)return;if(!s){el.hidden=true;return}el.hidden=false;const n=String(s.speakerNotes||'').trim();el.classList.toggle('empty',!n);el.innerHTML='<b>Speaker notes (only you see these)</b>'+(n?esc(n).replace(/\n/g,'<br>'):'No notes yet. Write them in “Speaker notes” below.')}
 let presentIdx=0,presentTouchX=null;
-function openPresent(){if(!slides.length)return alert('Add some slides first.');presentIdx=current;const pm=document.getElementById('presentMode');pm.hidden=false;document.body.style.overflow='hidden';renderPresent();try{if(window.matchMedia('(min-width:761px)').matches&&pm.requestFullscreen)pm.requestFullscreen().catch(()=>{})}catch(e){}}
-function closePresent(){const pm=document.getElementById('presentMode');pm.hidden=true;document.body.style.overflow='';try{if(document.fullscreenElement)document.exitFullscreen()}catch(e){}current=presentIdx;render()}
+function openPresent(){if(!slides.length)return alert('Add some slides first.');presentIdx=current;const pm=document.getElementById('presentMode');pm.hidden=false;document.body.style.overflow='hidden';document.body.classList.add('presenting');renderPresent();try{if(window.matchMedia('(min-width:761px)').matches&&pm.requestFullscreen)pm.requestFullscreen().catch(()=>{})}catch(e){}}
+function closePresent(){const pm=document.getElementById('presentMode');pm.hidden=true;document.body.style.overflow='';document.body.classList.remove('presenting');try{if(document.fullscreenElement)document.exitFullscreen()}catch(e){}current=presentIdx;render()}
 function presentStep(d){const n=presentIdx+d;if(n<0||n>=slides.length)return;presentIdx=n;renderPresent()}
 function togglePresentNotes(){const el=document.getElementById('pmNotes');el.hidden=!el.hidden;document.getElementById('pmNotesBtn').setAttribute('aria-pressed',String(!el.hidden));try{localStorage.setItem('qs_present_notes',el.hidden?'0':'1')}catch(e){}}
 function renderPresent(){const s=slides[presentIdx];if(!s)return;document.getElementById('pmStage').innerHTML=slideMarkup(s,presentIdx,slides.length,document.getElementById('presTitle').value||'Qur’an Study');document.getElementById('pmPos').textContent=(presentIdx+1)+' / '+slides.length;const n=String(s.speakerNotes||'').trim();document.getElementById('pmNotes').innerHTML='<b>Speaker notes</b>'+(n?esc(n).replace(/\n/g,'<br>'):'No notes for this slide.')}
