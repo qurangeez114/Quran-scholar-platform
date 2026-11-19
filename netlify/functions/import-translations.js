@@ -4,7 +4,9 @@
 // Chains: quran.com -> verse_translations (upsert) -> story_comparison (propagate).
 
 const SB_URL = 'https://ylosytbxpzxzwfzjpaej.supabase.co';
-const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
+// Writes need the service role key: since migration 20261119200000 visitors (the
+// anon key) can no longer insert or change verse_translations or run the propagate RPC.
+const SB_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
 const API = 'https://api.quran.com/api/v4';
 
 // code -> quran.com translation resource_id (verify at /resources/translations)
@@ -39,6 +41,7 @@ async function fetchChapter(resourceId, chapter) {
 }
 
 exports.handler = async (event) => {
+  if (!SB_KEY) return { statusCode: 500, body: JSON.stringify({ error: 'SUPABASE_SERVICE_ROLE_KEY is not set' }) };
   try {
     const q = event.queryStringParameters || {};
     const lang = (q.lang || 'ur').toLowerCase();
