@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Course Management - QuranHikma Admin</title>
+  <title>Manage Courses - QuranHikma</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -20,15 +20,18 @@
       display: flex;
       gap: 1rem;
       flex-wrap: wrap;
-      justify-content: space-between;
+      justify-content: flex-start;
       align-items: center;
     }
     .header h1 { font-size: 1.8rem; }
-    .header-nav { display: flex; gap: 1rem; }
+    .header-nav { display: flex; flex-wrap: wrap; gap: 0.5rem 0.6rem; margin-left: auto; }
+    /* Account and history buttons from site-chrome.js sit inside the header, after the links. */
+    .header > #qh-clock-btn, .header > #qh-account-btn { flex: 0 0 auto; }
     .header-nav a {
       color: white;
       text-decoration: none;
-      padding: 0.5rem 1rem;
+      padding: 0.45rem 0.8rem;
+      font-size: 0.93rem;
       background: rgba(255,255,255,0.09);
       border-radius: 6px;
       transition: background 0.3s;
@@ -77,6 +80,22 @@
       font-size: 1rem;
     }
     .form-group textarea { min-height: 100px; }
+    .form-group .checkbox-label {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.6rem;
+      cursor: pointer;
+    }
+    .form-group .checkbox-label input[type="checkbox"] {
+      width: 1.1rem;
+      height: 1.1rem;
+      flex: 0 0 auto;
+      margin-top: 0.2rem;
+      padding: 0;
+    }
+    .course-item { scroll-margin: 1rem 0 calc(84px + env(safe-area-inset-bottom, 0px)); }
+    .course-item.just-created { border-color: #176d69; box-shadow: 0 0 0 3px rgba(23,109,105,.18); }
+    .draft-hint { font-size: 0.8rem; color: #8a5a14; margin-top: 0.45rem; }
     .form-group input:focus,
     .form-group textarea:focus {
       outline: none;
@@ -145,6 +164,7 @@
       overflow-wrap: anywhere;
     }
 
+    .course-creator { margin-top: 4px; font-weight: 600; color: #41594b; }
     .course-meta {
       font-size: 0.78rem;
       color: #6f818b;
@@ -259,18 +279,26 @@
       color: #595959;
     }
     .page-title-icon-wrap { display: flex; align-items: center; gap: 0.5rem; }
+    #publishModal .modal-content { position: relative; max-width: 560px; }
+    .publish-checklist { list-style: none; padding: 0; margin: 0 0 1.25rem; }
+    .publish-checklist > li { padding: 0.65rem 0.75rem; border: 1px solid #e3e3e3; border-radius: 8px; margin-bottom: 0.6rem; }
+    .publish-checklist > li.ok { background: #f1f8f2; border-color: #b9dcbf; }
+    .publish-checklist > li.missing { background: #fff6f4; border-color: #e7b9b0; }
+    .publish-checklist .mark { font-weight: 700; margin-right: 0.4rem; }
+    .publish-checklist ul { margin: 0.4rem 0 0 1.4rem; font-size: 0.92rem; }
+    .publish-actions { display: flex; gap: 0.75rem; flex-wrap: wrap; }
     .class-icon { width: 1em; height: 1em; flex-shrink: 0; }
   </style>
 <script src="/site-chrome.js" defer></script></head>
 <body>
-  <div class="header">
-    <h1 class="page-title-icon-wrap"><svg class="class-icon" viewBox="0 0 24 24" width="1em" height="1em" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9.5 12 5l10 4.5-10 4.5L2 9.5Z"/><path d="M6 11.5V16c0 1.4 2.7 3 6 3s6-1.6 6-3v-4.5"/><path d="M22 9.5V15"/><path d="M12 20.5v-1"/><path d="M5.5 19.5h13"/></svg> Course Management</h1>
-    <div class="header-nav"><a href="/instructor-dashboard.html">Teaching Dashboard</a><a href="/admin/grading.html?tab=quizzes">Quiz Results</a>
+  <header class="header">
+    <h1 class="page-title-icon-wrap"><svg class="class-icon" viewBox="0 0 24 24" width="1em" height="1em" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9.5 12 5l10 4.5-10 4.5L2 9.5Z"/><path d="M6 11.5V16c0 1.4 2.7 3 6 3s6-1.6 6-3v-4.5"/><path d="M22 9.5V15"/><path d="M12 20.5v-1"/><path d="M5.5 19.5h13"/></svg> Manage Courses</h1>
+    <div class="header-nav"><a href="/instructor-dashboard.html">Instructor Dashboard</a><a href="/instructor-guide.html">Instructor guide</a><a href="/admin/grading.html?tab=quizzes">Quiz Results</a>
       <a href="/courses.html">View Courses</a>
       <a href="/account.html">My Account</a>
       <a href="/">Home</a>
     </div>
-  </div>
+  </header>
 
   <div class="container">
     <div id="alertContainer"></div>
@@ -290,8 +318,8 @@
         <div class="form-group"><label for="courseVisibility">Student access</label>
           <select id="courseVisibility"><option value="private">Private — only my enrolled students</option>
           <option value="public">Public — students may discover and request access</option></select></div>
-        <div class="form-group"><label><input type="checkbox" id="courseFacultyReuse">
-          Allow other instructors to include my course in their classes</label>
+        <div class="form-group"><label class="checkbox-label"><input type="checkbox" id="courseFacultyReuse">
+          <span>Allow other instructors to include my course in their courses</span></label>
           <p style="font-size:12px;color:#657580;margin-top:6px">This is separate from student access. You keep authorship and private grades; sharing can be revoked.</p></div>
         <button type="submit" class="btn btn-primary">Create Course</button>
       </form>
@@ -322,15 +350,15 @@
           <textarea id="editDescription"></textarea>
         </div>
         <div class="form-group">
-          <label>
-            <input type="checkbox" id="editPublished"> Published
+          <label class="checkbox-label">
+            <input type="checkbox" id="editPublished"> <span>Published (visible to students)</span>
           </label>
         </div>
         <div class="form-group"><label for="editVisibility">Student access</label>
           <select id="editVisibility"><option value="private">Private — only my enrolled students</option>
           <option value="public">Public — students may discover and request access</option></select></div>
-        <div class="form-group"><label><input type="checkbox" id="editFacultyReuse">
-          Other instructors may include this course in their classes</label>
+        <div class="form-group"><label class="checkbox-label"><input type="checkbox" id="editFacultyReuse">
+          <span>Other instructors may include this course in their courses</span></label>
           <p style="font-size:12px;color:#657580;margin-top:6px">Uncheck to revoke linked access. This does not transfer ownership or grades.</p></div>
         <div style="display: flex; gap: 1rem;">
           <button type="submit" class="btn btn-primary" style="flex: 1;">Save Changes</button>
@@ -340,29 +368,55 @@
     </div>
   </div>
 
+  <!-- Publish checklist: shown when a course is not ready to publish -->
+  <div class="modal" id="publishModal" role="dialog" aria-modal="true" aria-labelledby="publishModalTitle">
+    <div class="modal-content">
+      <button class="modal-close" type="button" aria-label="Close" onclick="closePublishModal()">&times;</button>
+      <div class="modal-header" id="publishModalTitle">Before publishing</div>
+      <p id="publishModalIntro" style="margin-bottom:1rem">This course cannot be published yet. Complete the items marked ✗, then choose Publish again.</p>
+      <ul class="publish-checklist" id="publishChecklist"></ul>
+      <p id="publishSyllabusNote" style="font-size:0.9rem;color:#595959;margin-bottom:1rem" hidden>The course syllabus (learning outcomes and weekly schedule) is entered in the <a id="publishSyllabusLink" href="/admin/syllabus-editor.html">Syllabus &amp; Outcomes editor</a>, which is available to QuranHikma administrators. If you cannot open it, ask a QuranHikma administrator to complete the syllabus for this course.</p>
+      <div class="publish-actions" id="publishActions"></div>
+    </div>
+  </div>
+
   <script type="module">
     import { supabase } from '../accounts/client.js';
-    import { requireTeachingAccess } from '../accounts/lms-access.js';
+    import { requireTeachingAccess, lmsRequest } from '../accounts/lms-access.js';
     import { getCourses, createCourse, updateCourse, deleteCourse } from '../courses-api.js';
 
     import {loadCourseReadiness} from '../accounts/course-readiness.js';
     let currentUser = null;
     let courses = [];
+    let teachingRole = 'instructor';
+    let creatorNames = new Map();
 
     async function checkAuth() {
-      await requireTeachingAccess();
+      const state = await requireTeachingAccess();
+      teachingRole = state?.role || 'instructor';
       const { data } = await supabase.auth.getSession();
       currentUser = data.session?.user;
 
       if (!currentUser) {
-        window.location.href = '/account.html';
+        window.location.href = '/account.html?reason=instructor&returnTo=' + encodeURIComponent(location.pathname + location.search);
       }
     }
 
     async function loadCourses() {
       try {
-        const allCourses = await getCourses(false); // Include unpublished
-        courses = allCourses.filter(c => c.created_by === currentUser.id);
+        if (teachingRole === 'owner') {
+          // Owners manage every course. The lms-admin dashboard lists all courses
+          // with creator names; fall back to a direct read if it is unavailable.
+          let dash = null;
+          try { dash = await lmsRequest('dashboard'); } catch (e) { console.warn('Dashboard unavailable:', e); }
+          creatorNames = new Map();
+          for (const p of dash?.people || []) creatorNames.set(p.user_id, p.display_name || p.email || '');
+          for (const a of dash?.accounts || []) if (a?.user_id && a.display_name) creatorNames.set(a.user_id, a.display_name);
+          courses = dash?.courses || await getCourses(false);
+        } else {
+          const allCourses = await getCourses(false); // Include unpublished
+          courses = allCourses.filter(c => c.created_by === currentUser.id);
+        }
         renderCourses();
       } catch (error) {
         console.error('Error loading courses:', error);
@@ -376,28 +430,45 @@
         ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     }
 
+    const NO_ACCESS = 'your account does not have permission to change this course. If you are the site owner, apply the owner course access migration (see docs/SETUP_CHECKLIST.md).';
+    // A blocked update returns no row (PGRST116); explain it instead of showing the raw code.
+    function friendlyError(error) {
+      if (error?.code === 'PGRST116') return NO_ACCESS;
+      return error?.message || 'please retry';
+    }
+
+    // Owner view: say who created each course.
+    function creatorLabel(course) {
+      if (course.created_by === currentUser?.id) return 'Created by you';
+      const name = creatorNames.get(course.created_by);
+      return name ? 'Created by ' + name : 'Created by another instructor';
+    }
+
     function renderCourses() {
       const container = document.getElementById('coursesList');
 
       if (courses.length === 0) {
-        container.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: #595959;">No courses yet. Create your first course above!</div>';
+        container.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: #595959;">No courses yet. Create your first course above. New courses start as drafts; publish when lessons are ready.</div>';
         return;
       }
 
       container.innerHTML = courses.map(course => `
-        <div class="course-item">
+        <div class="course-item" data-course-id="${escapeHTML(course.id)}">
           <div class="course-title">${escapeHTML(course.title)}</div>
           <div class="course-description">${escapeHTML(course.description || 'No description')}</div>
           <div class="course-meta">
             Created: ${new Date(course.created_at).toLocaleDateString()}
+            ${teachingRole === 'owner' ? `<div class="course-creator">${escapeHTML(creatorLabel(course))}</div>` : ''}
           </div>
           <div class="course-state">
             <span class="status-badge ${course.is_published ? 'published' : 'draft'}">
               ${course.is_published ? '✓ Published' : 'Draft'}
             </span>
+            ${course.is_published ? '' : '<div class="draft-hint">Students cannot see a draft. Add lessons, then choose Publish.</div>'}
           </div>
           <div class="course-actions" role="group" aria-label="Actions for ${escapeHTML(course.title)}">
             <button type="button" class="btn btn-primary" onclick="viewLessons('${course.id}')">Lessons</button>
+            <button type="button" class="btn ${course.is_published ? 'btn-secondary' : 'btn-success'} course-publish" onclick="togglePublish('${course.id}')">${course.is_published ? 'Unpublish' : 'Publish'}</button>
             <button type="button" class="btn btn-secondary" onclick="editCourse('${course.id}')">Edit</button>
             <a class="btn btn-secondary course-preview" href="/course.html?course=${course.id}&preview=1">Preview as student</a>
             <a class="btn btn-secondary" href="/admin/grading.html?tab=quizzes&course=${course.id}">Results</a>
@@ -414,16 +485,19 @@
       const description = document.getElementById('courseDescription').value;
 
       try {
-        await createCourse(title, description,{
+        const created = await createCourse(title, description,{
           visibility:document.getElementById('courseVisibility').value,
           faculty_reuse_enabled:document.getElementById('courseFacultyReuse').checked
         });
-        showAlert('Course created successfully!', 'success');
+        showAlert('Course created as a draft. Next: open Lessons to add content, then choose Publish.', 'success');
         document.getElementById('createCourseForm').reset();
         await loadCourses();
+        // Bring the new card into view above the bottom toolbar.
+        const card = created?.id && [...document.querySelectorAll('.course-item')].find(el => el.dataset.courseId === String(created.id));
+        if (card) { card.classList.add('just-created'); card.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
       } catch (error) {
         console.error('Error creating course:', error);
-        showAlert('Failed to create course', 'error');
+        showAlert('Failed to create course: ' + (error.message || 'please retry'), 'error');
       }
     });
 
@@ -441,6 +515,51 @@
       document.getElementById('editModal').classList.add('active');
     };
 
+    // Show the instructor what is done and what is still missing before publishing.
+    function showPublishChecklist(courseId, issues) {
+      const items = Array.isArray(issues.checklist) && issues.checklist.length
+        ? issues.checklist
+        : [{ key: 'content', label: 'Course content checks', ok: false, issues: [...issues] }];
+      const list = document.getElementById('publishChecklist');
+      list.replaceChildren();
+      for (const item of items) {
+        const li = document.createElement('li');
+        li.className = item.ok ? 'ok' : 'missing';
+        const mark = document.createElement('span');
+        mark.className = 'mark';
+        mark.textContent = item.ok ? '✓' : '✗';
+        mark.setAttribute('aria-label', item.ok ? 'Done' : 'Missing');
+        li.append(mark, document.createTextNode(item.label));
+        if (!item.ok && item.issues?.length) {
+          const sub = document.createElement('ul');
+          for (const text of item.issues) { const x = document.createElement('li'); x.textContent = text; sub.append(x); }
+          li.append(sub);
+        }
+        list.append(li);
+      }
+      const syllabusMissing = items.some(i => i.key === 'syllabus' && !i.ok);
+      document.getElementById('publishSyllabusNote').hidden = !syllabusMissing;
+      document.getElementById('publishSyllabusLink').href = '/admin/syllabus-editor.html?course=' + encodeURIComponent(courseId);
+      const actions = document.getElementById('publishActions');
+      actions.replaceChildren();
+      const lessonsBtn = document.createElement('button');
+      lessonsBtn.type = 'button'; lessonsBtn.className = 'btn btn-primary'; lessonsBtn.textContent = 'Open Lessons';
+      lessonsBtn.onclick = () => window.viewLessons(courseId);
+      const previewLink = document.createElement('a');
+      previewLink.className = 'btn btn-secondary'; previewLink.textContent = 'Preview as student';
+      previewLink.href = '/course.html?course=' + encodeURIComponent(courseId) + '&preview=1';
+      const close = document.createElement('button');
+      close.type = 'button'; close.className = 'btn btn-secondary'; close.textContent = 'Close';
+      close.onclick = () => window.closePublishModal();
+      actions.append(lessonsBtn, previewLink, close);
+      document.getElementById('publishModal').classList.add('active');
+      lessonsBtn.focus?.();
+    }
+
+    window.closePublishModal = function() {
+      document.getElementById('publishModal').classList.remove('active');
+    };
+
     window.closeEditModal = function() {
       document.getElementById('editModal').classList.remove('active');
     };
@@ -456,16 +575,37 @@
       const faculty_reuse_enabled = document.getElementById('editFacultyReuse').checked;
 
       try {
-        if(is_published){const issues=await loadCourseReadiness(supabase,courseId);if(issues.length){alert('Before publishing:\n\n'+issues.join('\n'));return;}}
+        const wasPublished = courses.find(c => c.id === courseId)?.is_published === true;
+        if(is_published && !wasPublished){const issues=await loadCourseReadiness(supabase,courseId);if(issues.length){window.closeEditModal();showPublishChecklist(courseId,issues);return;}}
         await updateCourse(courseId, { title, description, is_published, visibility, faculty_reuse_enabled });
         showAlert('Course updated successfully!', 'success');
-        closeEditModal();
+        window.closeEditModal();
         await loadCourses();
       } catch (error) {
         console.error('Error updating course:', error);
-        showAlert('Failed to update course', 'error');
+        showAlert('Failed to update course: ' + friendlyError(error), 'error');
       }
     });
+
+    // One-click publish control on each card. Publishing uses the same readiness
+    // checks as the Edit dialog; the server also enforces them.
+    window.togglePublish = async function(courseId) {
+      const course = courses.find(c => c.id === courseId);
+      if (!course) return;
+      const is_published = !course.is_published;
+      try {
+        if (is_published) {
+          const issues = await loadCourseReadiness(supabase, courseId);
+          if (issues.length) { showPublishChecklist(courseId, issues); return; }
+        } else if (!confirm('Unpublish this course? Students will no longer see it until you publish again.')) return;
+        await updateCourse(courseId, { is_published });
+        showAlert(is_published ? 'Course published. Students with access can now see it.' : 'Course unpublished and returned to draft.', 'success');
+        await loadCourses();
+      } catch (error) {
+        console.error('Error changing publish state:', error);
+        showAlert((is_published ? 'Could not publish: ' : 'Could not unpublish: ') + friendlyError(error), 'error');
+      }
+    };
 
     window.viewLessons = function(courseId) {
       window.location.href = `/admin/lesson-manager.html?course=${courseId}`;
@@ -480,7 +620,7 @@
         await loadCourses();
       } catch (error) {
         console.error('Error deleting course:', error);
-        showAlert('Failed to delete course', 'error');
+        showAlert('Failed to delete course: ' + friendlyError(error), 'error');
       }
     };
 

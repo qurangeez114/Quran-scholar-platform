@@ -307,6 +307,7 @@
 <script src="/site-chrome.js" defer></script>
 </head>
 <body>
+<main id="main">
   <div class="hero">
     <h1 id="courseTitle">Loading...</h1>
     <p id="courseDescription"></p>
@@ -382,6 +383,7 @@
       </div>
     </div>
   </div>
+</main>
 
   <script type="module">
     import { supabase } from './accounts/client.js';
@@ -502,7 +504,7 @@
           }
         }
 
-        if(preview){await requireTeachingAccess();const managed=await lmsRequest('dashboard');if(!managed.courses.some(c=>c.id===courseId))throw Error('You can preview only classes you manage');}
+        if(preview){await requireTeachingAccess();const managed=await lmsRequest('dashboard');if(!managed.courses.some(c=>c.id===courseId))throw Error('You can preview only courses you manage');}
         if(enrollment&&!preview)progress=await getStudentProgress(courseId);
         await loadLessons();
         if(!currentUser)document.getElementById('enrollmentStatus').textContent='Sign in to apply';
@@ -513,8 +515,8 @@
 
       } catch (error) {
         console.error('Error loading course:', error);
-        showAlert('This class could not be opened. It may be private, unpublished, closed or temporarily unavailable. If you are already enrolled, sign in and try again.', 'error');
-        document.getElementById('courseTitle').textContent='Class unavailable';
+        showAlert('This course could not be opened. It may be private, unpublished, closed or temporarily unavailable. If you are already enrolled, sign in and try again.', 'error');
+        document.getElementById('courseTitle').textContent='Course unavailable';
         document.getElementById('lessonsList').textContent='Course content could not be loaded. Return to the catalog or sign in.';
       }
     }
@@ -531,7 +533,18 @@
 
     function renderLessons() {
       const container = document.getElementById('lessonsList');
-      document.getElementById('lessonCount').textContent = (!enrollment && !preview && !includedByInstructor) ? 'Locked' : lessons.length;
+      const lc=document.getElementById('lessonCount');
+      lc.textContent = (!enrollment && !preview && !includedByInstructor) ? 'After enrollment' : lessons.length;
+      // Guests: show the real lesson count when the public count function (migration 20261104b) is installed.
+      if (!enrollment && !preview && !includedByInstructor) {
+        // Optional enhancement: never let it stop the lesson list from rendering.
+        try{
+          Promise.resolve(supabase.rpc('qh_public_lesson_counts',{p_course_ids:[currentCourse.id]})).then(({data,error})=>{
+            const n=!error&&Array.isArray(data)&&data[0]?Number(data[0].lesson_count):NaN;
+            if(Number.isFinite(n)) lc.textContent = n+' (enroll to open)';
+          }).catch(()=>{});
+        }catch(_){}
+      }
 
       // A pending application is NOT enrollment. Lesson rows are invisible
       // under RLS before approval, which must never be labeled "No lessons".
@@ -542,13 +555,13 @@
         heading.textContent=enrollmentRequest?.status==='consent_pending'
           ? 'Your confirmation is needed'
           : enrollmentRequest?.status==='pending'?'Waiting for instructor approval'
-          : 'Class lessons require enrollment';
+          : 'Course lessons require enrollment';
         const copy=document.createElement('p');
         copy.textContent=enrollmentRequest?.status==='pending'
-          ? 'Your application has been sent. You can access the class lessons once the receiving instructor approves enrollment.'
+          ? 'Your application has been sent. You can access the course lessons once the receiving instructor approves enrollment.'
           : enrollmentRequest?.status==='consent_pending'
-          ? 'An instructor has recommended this class. Please accept the recommendation and wait for the receiving instructor to approve you.'
-          : 'Explore the class details here, then sign in and request admission to access the lessons.';
+          ? 'An instructor has recommended this course. Please accept the recommendation and wait for the receiving instructor to approve you.'
+          : 'Explore the course details here, then sign in and request admission to access the lessons.';
         explanation.append(heading,copy);
         if(enrollmentRequest){
           const a=document.createElement('a');
@@ -561,7 +574,11 @@
       }
 
       if (lessons.length === 0) {
-        container.textContent='No lessons have been published for this class yet. Please contact the instructor.';
+        // An enrolled student can reach a draft course: say it is not published yet.
+        container.textContent=(!preview&&currentCourse&&currentCourse.is_published===false)
+          ? 'This course hasn\u2019t been published yet. Your instructor is still preparing it; please check back later.'
+          : preview ? 'This course has no lessons yet. Open Manage Courses \u2192 Lessons to add the first one.'
+          : 'No lessons have been added to this course yet. Please contact the instructor.';
         return;
       }
 
@@ -724,7 +741,7 @@
 
     window.goToLesson = function(lessonId) {
       if (!enrollment && !preview && !includedByInstructor) {
-        showAlert('Class lessons unlock after the instructor approves your enrollment request', 'info');
+        showAlert('Course lessons unlock after the instructor approves your enrollment request', 'info');
         return;
       }
       if(!lessonId)return;

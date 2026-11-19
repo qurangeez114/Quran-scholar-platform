@@ -29,9 +29,13 @@ async function loadAd(){
   const today = new Date().toISOString().slice(0,10);
   try{
     const url = SB_URL + '/rest/v1/ads?select=id,business_name,ad_text,link_url,image_url,status,starts_at,ends_at&status=eq.active&limit=50';
-    const r = await fetch(url, { headers:{ apikey:SB_KEY, Authorization:'Bearer '+SB_KEY } });
+    const headers = { apikey:SB_KEY, Authorization:'Bearer '+SB_KEY, 'Content-Type':'application/json' };
+    // Prefer the public active-ads function (migration 20261104b); fall back to the table read.
+    let r = await fetch(SB_URL + '/rest/v1/rpc/qh_active_ads', { method:'POST', headers, body:'{}' });
+    if(!r.ok) r = await fetch(url, { headers });
     if(!r.ok) return;
     let ads = await r.json();
+    if(!Array.isArray(ads)) return;
     ads = ads.filter(ad =>
       (!ad.starts_at || ad.starts_at <= today) &&
       (!ad.ends_at || ad.ends_at >= today)

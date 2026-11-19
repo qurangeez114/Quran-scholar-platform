@@ -29,7 +29,7 @@ summary{cursor:pointer;font-weight:700}#quizForm[hidden],#editor[hidden]{display
 </style>
 <script src="/site-chrome.js" defer></script></head>
 <body>
-<header><a href="/admin/courses.html">← Courses</a> <span aria-hidden="true">·</span> <a id="backLessons" href="/admin/courses.html">Lessons</a></header>
+<header><a href="/instructor-dashboard.html">Instructor Dashboard</a> <span aria-hidden="true">·</span> <a href="/admin/courses.html">Manage Courses</a> <span aria-hidden="true">·</span> <a id="backLessons" href="/admin/courses.html">Lessons</a> <span aria-hidden="true">·</span> <a href="/instructor-guide.html#quiz">Instructor guide</a></header>
 <main>
 <h1>🎮 Quiz Builder</h1>
 <p class="muted">Add explanations for every answer. An optional reworded final check confirms understanding after the first round.</p>
@@ -38,8 +38,8 @@ summary{cursor:pointer;font-weight:700}#quizForm[hidden],#editor[hidden]{display
 <section class="card">
 <h2 id="lessonName">Quiz</h2>
 <div class="row">
-<label class="column">Pass mark (%)<input id="passMark" type="number" value="90" min="1" max="100" required></label>
-<div class="column muted">With five equally weighted questions, a 90% threshold requires five correct answers. Draft edits are not published until you save.</div>
+<label class="column">Pass mark (%)<input id="passMark" type="number" value="90" min="90" max="90" readonly aria-describedby="passHint"></label>
+<div class="column muted" id="passHint" aria-live="polite">QuranHikma quizzes use a 90% pass mark; a course cannot be published with a different one. Draft edits are not published until you save.</div>
 </div>
 </section>
 <form id="quizForm" hidden>
@@ -62,6 +62,15 @@ let courseId,existingId=null;
 const empty=()=>({id:crypto.randomUUID(),question:'',options:['','',''],correct_answer:'',explanation:'',option_explanations:['','',''],variant:null});
 let questions=[];
 function status(message,type=''){ $('status').textContent=message;$('status').className=type; }
+// Explain the pass mark with the real number of questions (equal weighting).
+const PASS_MARK=90;
+function updatePassHint(){
+ const n=document.querySelectorAll('.question-card').length;
+ const need=Math.ceil(n*PASS_MARK/100-1e-9);
+ $('passHint').textContent=n
+  ?'With '+n+' equally weighted question'+(n===1?'':'s')+', a '+PASS_MARK+'% pass mark requires '+need+' of '+n+' correct. QuranHikma quizzes use a '+PASS_MARK+'% pass mark; a course cannot be published with a different one. Draft edits are not published until you save.'
+  :'QuranHikma quizzes use a '+PASS_MARK+'% pass mark. Add questions, then save.';
+}
 function normalized(q){return {id:q?.id||crypto.randomUUID(),question:q?.question||'',options:[0,1,2].map(i=>q?.options?.[i]||''),correct_answer:q?.correct_answer||'',explanation:q?.explanation||'',option_explanations:[0,1,2].map(i=>q?.option_explanations?.[i]||''),variant:q?.variant||null};}
 function collect(strict=false){
  const cards=[...document.querySelectorAll('.question-card')];
@@ -91,6 +100,7 @@ function draw(){
   const variantRows=[0,1,2].map(i=>'<div class="option"><label>Reworded choice '+String.fromCharCode(65+i)+'<input data-field="variant-option'+i+'" value="'+esc(v.options?.[i]||'')+'"></label><label class="muted">Feedback for this choice<textarea data-field="variant-reason'+i+'">'+esc(v.rationale?.[i]||'')+'</textarea></label></div>').join('');
   return '<section class="card question-card" data-id="'+esc(q.id)+'"><div class="row"><h2 class="column">Question '+(index+1)+'</h2><button class="danger remove-question" type="button">Remove</button></div><label>Question text<input data-field="question" value="'+esc(q.question)+'" required></label><div class="options">'+optionRows+'</div><label>Correct answer<select data-field="correct">'+[0,1,2].map(i=>'<option value="'+i+'"'+(correct===i?' selected':'')+'>Choice '+String.fromCharCode(65+i)+'</option>').join('')+'</select></label><label>Explanation of the correct answer<textarea data-field="explanation" required>'+esc(q.explanation)+'</textarea></label><details '+(q.variant?'open':'')+'><summary>Optional reworded final check</summary><p class="muted">Students answer this after reviewing the original question. Enter all fields to activate it.</p><label>Reworded question<input data-field="variant-question" value="'+esc(v.q)+'"></label><div class="options">'+variantRows+'</div><label>Correct reworded choice<select data-field="variant-correct">'+[0,1,2].map(i=>'<option value="'+i+'"'+(Number(v.answer)===i?' selected':'')+'>Choice '+String.fromCharCode(65+i)+'</option>').join('')+'</select></label></details></section>';
  }).join('');
+ updatePassHint();
 }
 $('addQuestion').addEventListener('click',()=>{questions=collect().map(normalized);questions.push(empty());draw();document.querySelector('.question-card:last-child input[data-field="question"]')?.focus();});
 $('questions').addEventListener('click',e=>{if(!e.target.closest('.remove-question'))return;if(!confirm('Remove this question from the draft?'))return;const id=e.target.closest('.question-card').dataset.id;questions=collect().filter(q=>q.id!==id).map(normalized);draw();});
@@ -99,8 +109,7 @@ $('quizForm').addEventListener('submit',async e=>{
  try{
   const items=collect(true);
   if(!items.length)throw Error('Add at least one question.');
-  const passing=Number($('passMark').value);
-  if(!Number.isInteger(passing)||passing<1||passing>100)throw Error('Pass mark must be between 1 and 100.');
+  const passing=PASS_MARK;$('passMark').value=String(PASS_MARK);
   const payload={lesson_id:lessonId,passing_score:passing,questions:items};
   const result=existingId?await supabase.from('qh_quizzes').update(payload).eq('id',existingId).select('id').single():await supabase.from('qh_quizzes').insert(payload).select('id').single();
   if(result.error)throw result.error;
@@ -113,7 +122,7 @@ $('quizForm').addEventListener('submit',async e=>{
 async function init(){
  try{
   if(!lessonId)throw Error('Missing lesson ID. Open this page from the course lesson manager.');
-  await requireTeachingAccess();
+  const access=await requireTeachingAccess();
   const {data:auth,error:authError}=await supabase.auth.getUser();
   if(authError||!auth.user)throw Error('Sign in as the course instructor.');
   const {data:lesson,error:lessonError}=await supabase.from('qh_lessons').select('id,course_id,title,lesson_type').eq('id',lessonId).single();
@@ -121,17 +130,19 @@ async function init(){
   courseId=lesson.course_id;
   const {data:course,error:courseError}=await supabase.from('qh_courses').select('id,created_by').eq('id',courseId).single();
   if(courseError)throw courseError;
-  if(course.created_by!==auth.user.id)throw Error('Only the course creator may edit this quiz.');
+  if(access?.role!=='owner'&&course.created_by!==auth.user.id)throw Error('Only the course creator or a site owner may edit this quiz.');
   if(lesson.lesson_type!=='quiz')throw Error('This lesson is not a quiz. Change its type to Quiz in Lesson Manager first.');
   $('lessonName').textContent=lesson.title;
   $('backLessons').href='/admin/lesson-manager.html?course='+encodeURIComponent(courseId);
-  $('openLesson').href='/lesson.html?lesson='+encodeURIComponent(lessonId);
+  $('openLesson').href='/lesson.html?lesson='+encodeURIComponent(lessonId)+'&preview=1';$('openLesson').textContent='Preview lesson as student';
   const {data:quiz,error:quizError}=await supabase.from('qh_quizzes').select('id,passing_score,questions').eq('lesson_id',lessonId).maybeSingle();
   if(quizError)throw quizError;
-  if(quiz){existingId=quiz.id;$('passMark').value=quiz.passing_score??90;questions=Array.isArray(quiz.questions)?quiz.questions.map(normalized):[];}
+  const oddPass=quiz&&quiz.passing_score!=null&&Number(quiz.passing_score)!==PASS_MARK;
+  if(oddPass)status('This quiz was saved with a '+quiz.passing_score+'% pass mark. Saving will set it to '+PASS_MARK+'%, which publishing requires.','error');
+  if(quiz){existingId=quiz.id;$('passMark').value=String(PASS_MARK);questions=Array.isArray(quiz.questions)?quiz.questions.map(normalized):[];}
   if(!questions.length)questions=[empty()];
   draw();$('editor').hidden=false;$('quizForm').hidden=false;
-  status(existingId?'Loaded saved quiz. Changes will only apply after Save.':'New quiz draft. Add questions and save.','success');
+  if(!oddPass)status(existingId?'Loaded saved quiz. Changes will only apply after Save.':'New quiz draft. Add questions and save.','success');
  }catch(err){status('Quiz Builder unavailable: '+(err.message||err),'error');}
 }
 init();

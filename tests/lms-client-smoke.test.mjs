@@ -39,8 +39,10 @@ test('Quiz builder saves answers, explanations, and 90% pass threshold',()=>{
 test('Student must finish final reworded check before graded save',()=>{
  const p=html('lesson.html');
  const part=p.slice(p.indexOf("quizStage === 'practice' && hasReworded"));
- assert.ok(part.indexOf("quizStage='final'")>0);
- assert.ok(part.indexOf("quizStage='final'")<part.indexOf("await submitQuiz("));
+ // The final stage is entered with newQuizAttempt('final') (fresh shuffle) since the quiz-shuffle change.
+ const finalAt=Math.max(part.indexOf("quizStage='final'"),part.indexOf("newQuizAttempt('final')"));
+ assert.ok(finalAt>0);
+ assert.ok(finalAt<part.indexOf("await submitQuiz("));
  assert.match(p,/passed \|\| Boolean\(existing\?\.completed\)/);
 });
 test('YouTube playback is tracked separately from earned completion',()=>{

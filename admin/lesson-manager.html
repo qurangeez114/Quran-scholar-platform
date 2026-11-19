@@ -12,20 +12,25 @@
       color: #333;
     }
     .header {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: #173446;
       color: white;
-      padding: 1.5rem;
+      border-bottom: 3px solid #b69a60;
+      padding: 1.25rem clamp(1rem, 3vw, 2rem);
       display: flex;
-      justify-content: space-between;
+      gap: 1rem;
+      flex-wrap: wrap;
+      justify-content: flex-start;
       align-items: center;
     }
     .header h1 { font-size: 1.8rem; }
-    .header-nav { display: flex; gap: 1rem; }
+    .header-nav { display: flex; flex-wrap: wrap; gap: 0.5rem 0.6rem; margin-left: auto; }
+    /* Account and history buttons from site-chrome.js sit inside the header, after the links. */
+    .header > #qh-clock-btn, .header > #qh-account-btn { flex: 0 0 auto; }
     .header-nav a {
       color: white;
       text-decoration: none;
       padding: 0.5rem 1rem;
-      background: rgba(255,255,255,0.2);
+      background: rgba(255,255,255,0.09);
       border-radius: 6px;
     }
 
@@ -42,7 +47,7 @@
       margin-bottom: 2rem;
       font-size: 0.9rem;
     }
-    .breadcrumb a { color: #667eea; cursor: pointer; }
+    .breadcrumb a { color: #176d69; cursor: pointer; }
     .breadcrumb a:hover { text-decoration: underline; }
 
     .two-column {
@@ -71,7 +76,7 @@
       font-size: 1.3rem;
       margin-bottom: 1.5rem;
       color: #333;
-      border-bottom: 2px solid #667eea;
+      border-bottom: 2px solid #176d69;
       padding-bottom: 0.5rem;
     }
 
@@ -99,8 +104,8 @@
     .form-group textarea:focus,
     .form-group select:focus {
       outline: none;
-      border-color: #667eea;
-      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+      border-color: #176d69;
+      box-shadow: 0 0 0 3px rgba(23, 109, 105, 0.1);
     }
 
     .btn {
@@ -111,8 +116,8 @@
       font-weight: 600;
       transition: background 0.3s;
     }
-    .btn-primary { background: #667eea; color: white; }
-    .btn-primary:hover { background: #5568d3; }
+    .btn-primary { background: #176d69; color: white; }
+    .btn-primary:hover { background: #125c59; }
     .btn-danger { background: #f44336; color: white; }
     .btn-danger:hover { background: #da190b; }
     .btn-small { padding: 0.5rem 1rem; font-size: 0.9rem; }
@@ -125,7 +130,7 @@
 
     .lesson-item {
       background: #f9f9f9;
-      border-left: 4px solid #667eea;
+      border-left: 4px solid #176d69;
       padding: 1rem;
       border-radius: 6px;
       transition: background 0.3s;
@@ -134,7 +139,7 @@
     .lesson-item:hover { background: #f0f0f0; }
     .lesson-item.active {
       background: #e8eaf6;
-      border-left-color: #667eea;
+      border-left-color: #176d69;
     }
 
     .lesson-item-title {
@@ -174,16 +179,17 @@
       color: #595959;
       padding: 2rem;
     }
+    @media (max-width: 760px) { .two-column { grid-template-columns: minmax(0, 1fr); } }
   </style>
 <script src="/site-chrome.js" defer></script></head>
 <body>
-  <div class="header">
+  <header class="header">
     <h1>📖 Lesson Manager</h1>
-    <div class="header-nav"><a href="/instructor-dashboard.html">Teaching Dashboard</a>
+    <div class="header-nav"><a href="/instructor-dashboard.html">Instructor Dashboard</a>
       <a href="courses.html">Back to Courses</a>
       <a href="/account.html">My Account</a>
     </div>
-  </div>
+  </header>
 
   <div class="container">
     <div class="breadcrumb">
@@ -215,7 +221,7 @@
           <div class="form-group">
             <label id="contentLabel" for="lessonContent">Lesson content / instructions</label>
             <textarea id="lessonContent" placeholder="Enter lesson text or a short video summary..."></textarea>
-            <p id="quizHelp" style="display:none;color:#41594b;font-size:14px;">After saving a Quiz lesson, the Question Builder opens so you can create and explain its questions.</p>
+            <p id="quizHelp" style="display:none;color:#41594b;font-size:14px;">After saving a Quiz lesson, the Quiz Builder opens so you can create and explain its questions.</p>
           </div>
 
           <div class="form-group" id="videoUrlGroup" style="display:none;">
@@ -249,7 +255,7 @@
           <div class="loader">Loading lessons...</div>
         </div>
         <details id="bulkAdd" style="margin-top:1.5rem">
-          <summary style="cursor:pointer;font-weight:600;color:#667eea">➕ Add many lessons at once</summary>
+          <summary style="cursor:pointer;font-weight:600;color:#176d69">➕ Add many lessons at once</summary>
           <p style="color:#595959;font-size:14px;margin:.5rem 0">Paste an outline, one lesson title per line. Lessons are added in this order after the existing ones as Text lessons. Leading numbers or bullets (1. / - / *) are removed.</p>
           <div class="form-group" style="margin-bottom:.5rem">
             <textarea id="bulkOutline" aria-label="Lesson outline, one per line" placeholder="1. Introduction to Surah al-Fatiha&#10;2. Meaning of al-Hamd&#10;3. Guidance and the straight path"></textarea>
@@ -367,13 +373,15 @@
     }
     document.getElementById('lessonType').addEventListener('change',updateQuizHint);
 
+    let teachingRole = 'instructor';
     async function checkAuth() {
-      await requireTeachingAccess();
+      const state = await requireTeachingAccess();
+      teachingRole = state?.role || 'instructor';
       const { data } = await supabase.auth.getSession();
       currentUser = data.session?.user;
 
       if (!currentUser) {
-        window.location.href = '/account.html';
+        window.location.href = '/account.html?reason=instructor&returnTo=' + encodeURIComponent(location.pathname + location.search);
       }
     }
 
@@ -393,7 +401,8 @@
       try {
         currentCourse = await getCourseById(courseId);
 
-        if (currentCourse.created_by !== currentUser.id) {
+        // Owners may manage any course; instructors only their own.
+        if (teachingRole !== 'owner' && currentCourse.created_by !== currentUser.id) {
           showAlert('You do not have permission to edit this course', 'error');
           window.location.href = 'courses.html';
           return;
@@ -550,6 +559,20 @@
         if (savedLesson?.id) {
           try { await saveReflectionPrompt(savedLesson.id, document.getElementById('lessonReflectionPrompt').value); }
           catch (err) { showAlert('Lesson saved, but the reflection question failed: ' + (err.message || err), 'error'); }
+        }
+        // Assignment lessons need an assignment record (students submit to it, graders
+        // see it, and publishing requires it). Its instructions are the lesson content.
+        if (type === 'assignment' && savedLesson?.id) {
+          try {
+            const instructions = content.trim();
+            if (!instructions) throw Error('add the assignment instructions in "Lesson content / instructions"');
+            const { data: existing, error: findError } = await supabase.from('qh_assignments').select('id').eq('lesson_id', savedLesson.id).maybeSingle();
+            if (findError) throw findError;
+            const result = existing
+              ? await supabase.from('qh_assignments').update({ instructions }).eq('id', existing.id)
+              : await supabase.from('qh_assignments').insert({ lesson_id: savedLesson.id, instructions });
+            if (result.error) throw result.error;
+          } catch (err) { showAlert('Lesson saved, but the assignment instructions were not: ' + (err.message || err), 'error'); }
         }
 
         document.getElementById('lessonForm').reset();
