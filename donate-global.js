@@ -1,23 +1,21 @@
 (function(){
-  const PAYPAL_DONATE_URL = 'https://www.paypal.com/donate/?hosted_button_id=YRYY537HG4RX2';
+  // The floating button opens the Support page, which explains what gifts pay for
+  // and then hands off to PayPal. Visitors who read why are more likely to give.
+  const SUPPORT_URL = '/support.html';
+  const NO_FLOAT_PATHS = /^\/(support|thank-you)(\.html)?\/?$/;
 
   function addDonateButton(){
     if (document.getElementById('quranhikma-global-donate')) return;
+    if (NO_FLOAT_PATHS.test(location.pathname)) return;
 
-    // Most Quran Hikma pages already provide a Donate control in the page header.
-    // Do not add a second fixed Donate button when a PayPal donate link is present.
-    const existingDonate = Array.from(document.querySelectorAll('a[href]')).some(function(link){
-      return link.href && link.href.indexOf('paypal.com/donate') !== -1;
-    });
-    if (existingDonate) return;
+    // Shown on every page (except Support and Thank-you, which are the
+    // destination), whatever else the page has, so Donate is always one tap away.
 
     const a = document.createElement('a');
     a.id = 'quranhikma-global-donate';
-    a.href = PAYPAL_DONATE_URL;
-    a.target = '_blank';
-    a.rel = 'noopener';
+    a.href = SUPPORT_URL;
     a.textContent = '💛 Donate';
-    a.setAttribute('aria-label', 'Donate to Quran Hikma via PayPal');
+    a.setAttribute('aria-label', 'Support Quran Hikma with a donation');
     a.style.cssText = [
       'position:fixed',
       'right:14px',

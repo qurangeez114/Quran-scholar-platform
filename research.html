@@ -168,7 +168,7 @@ section.src h2{font-size:25px;font-weight:600;margin-top:34px}
 .smart-controls p{margin:0;font-size:13px;color:#6B6358}
 .smart-notice{background:#eef5f0;border-left:3px solid #3e7a68;padding:12px 14px;margin:14px 0;font-size:15px;line-height:1.5}
 @media(max-width:600px){.smart-controls{margin:10px 0}.smart-actions{gap:5px}.smart-actions button{padding:7px 10px}}
-.result-actions{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0}.result-actions button{font:inherit;font-size:14px;padding:7px 10px;border:1px solid #d6c69f;border-radius:7px;background:#fffaf0;color:#315c56;cursor:pointer}.result-full{white-space:pre-wrap;border-top:1px solid var(--line);margin-top:10px;padding-top:4px}.result-status{font-size:14px;color:var(--ink2)}
+.result-actions{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0}.result-actions button.pres-add{background:#FDF5DE;border-color:#b8902a;color:#6b4d12;font-weight:700}.result-actions button.pres-added{background:#e8f4ea;border-color:#2E7D32;color:#1f5c25}.result-status a{color:#315c56;font-weight:700}.result-actions button{font:inherit;font-size:14px;padding:7px 10px;border:1px solid #d6c69f;border-radius:7px;background:#fffaf0;color:#315c56;cursor:pointer}.result-full{white-space:pre-wrap;border-top:1px solid var(--line);margin-top:10px;padding-top:4px}.result-status{font-size:14px;color:var(--ink2)}
 
 /* Research: single, compact selected-book results with readable mobile states. */
 #src-books .book-error,#src-books .book-checks{margin:14px 0;padding:12px 14px;background:#fff;border:1px solid #e8e0d0;border-radius:10px;font-size:15px;line-height:1.5}
@@ -465,6 +465,28 @@ function raId(key,r){
   return key+':'+(h>>>0).toString(36);
 }
 
+function qhAddToPresentation(item){
+ let basket=[];try{basket=JSON.parse(localStorage.getItem('presentationBasket')||'[]');if(!Array.isArray(basket))basket=[];}catch(_){basket=[];}
+ const sig=x=>[x.type,x.reference,String(x.text||'').slice(0,400)].join('|');
+ if(basket.some(x=>sig(x)===sig(item)))return -basket.length;
+ basket.push({id:'rs_'+item.type+'_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),createdAt:new Date().toISOString(),...item});
+ try{const json=JSON.stringify(basket);localStorage.setItem('presentationBasket',json);localStorage.setItem('qs_presentation_slides',json);}catch(_){return 0;}
+ return basket.length;
+}
+function qhPresentationStatus(status,button,n){
+ status.replaceChildren();
+ if(n===0){status.textContent='Could not save to your presentation on this device.';return;}
+ status.append(document.createTextNode(n>0?'Added to your presentation. ':'Already in your presentation. '));
+ const a=document.createElement('a');a.href='/presentation.html';a.textContent='Open presentation ('+Math.abs(n)+' slide'+(Math.abs(n)===1?'':'s')+') →';status.append(a);
+ if(button){button.textContent='✓ In presentation';button.classList.add('pres-added');}
+}
+function addHadithToPresentation(button){
+ const h=window.__qhHadith;if(!h)return;
+ const ref=(h.collection||'Hadith')+(h.hadith_number?' #'+h.hadith_number:'');
+ const notes=[h.grade?'Grade: '+h.grade:'',h.narrator?'Narrator: '+h.narrator:'',h.tradition?'Tradition: '+h.tradition:'',h.book_chapter?'Chapter: '+h.book_chapter:''].filter(Boolean).join('\n');
+ const n=qhAddToPresentation({type:'hadith',title:ref,slideTitle:ref,reference:ref,text:h.text_english||'',arabic:h.text_arabic||'',speakerNotes:notes,sourceUrl:'research.html?hadith='+encodeURIComponent(h.id)});
+ qhPresentationStatus(document.getElementById('hadithPresStatus'),button,n);
+}
 function resultData(el){try{return JSON.parse(el.closest('.card').dataset.result)}catch(_){return null}}
 function resultLink(key,r){
  if(key==='quran'&&Number(r.sura)>0&&Number(r.aya)>0)return '/?sura='+Number(r.sura)+'&aya='+Number(r.aya);
@@ -494,8 +516,7 @@ function card(key,r,vars){
  const badge=key==='hadith'&&r.reference_status?(r.reference_status==='verified_publisher_mapping'?'<span class="ref-badge">Curated publisher reference mapping</span>':'<span class="ref-badge caution">Unverified local catalogue candidate</span>'):'';
  const context=(key==='tafsir'||key==='asbab')&&Number(r.sura)>0&&Number(r.aya)>0?'<a href="/?sura='+Number(r.sura)+'&amp;aya='+Number(r.aya)+'">Open associated verse</a>':'';
  const source=key==='quran'||key==='hadith'?'<a href="'+esc(resultLink(key,r))+'">Open '+(key==='quran'?'verse':'hadith')+' →</a>':context;
- return '<div class="card"'+raAttr+' data-result="'+payload+'"'+(key==='quran'?' data-sura="'+Number(r.sura)+'" data-aya="'+Number(r.aya)+'"':'')+'><div class="meta">'+esc(ref)+'</div>'+tradition+badge+(r.title?'<div class="ttl">'+highlight(r.title,vars)+'</div>':'')+(r.arabic?'<div class="txt" dir="rtl" lang="ar" style="font-size:1.25em;line-height:1.9">'+highlight(snip(r.arabic,vars),vars)+'</div>':'')+'<div class="txt">'+highlight(snip(r.text,vars),vars)+'</div><div class="more">'+source+'</div><div class="result-actions"><button type="button" onclick="resultAction(this,\'read\')">Read passage</button><button type="button" onclick="addResearchComparison(this)">Compare passage</button><button type="button" onclick="resultAction(this,\'copy\')">Copy</button><button type="button" onclick="resultAction(this,\'share\')">Share</button><button type="button" onclick="resultAction(this,\'save\')">Save to research</button><button type="button" onclick="resultAction(this,\'listen\')">Listen to text</button><button type="button" onclick="resultAction(this,\'related\')">Find related verses & stories</button></div><div class="result-full" hidden></div><p class="result-status" role="status" aria-live="polite"></p>'+raTools+citation+verified+related+'</div>';
-}
+ return '<div class="card"'+raAttr+' data-result="'+payload+'"'+(key==='quran'?' data-sura="'+Number(r.sura)+'" data-aya="'+Number(r.aya)+'"':'')+'><div class="meta">'+esc(ref)+'</div>'+tradition+badge+(r.title?'<div class="ttl">'+highlight(r.title,vars)+'</div>':'')+(r.arabic?'<div class="txt" dir="rtl" lang="ar" style="font-size:1.25em;line-height:1.9">'+highlight(snip(r.arabic,vars),vars)+'</div>':'')+'<div class="txt">'+highlight(snip(r.text,vars),vars)+'</div><div class="more">'+source+'</div><div class="result-actions"><button type="button" onclick="resultAction(this,\'read\')">Read passage</button><button type="button" class="pres-add" onclick="resultAction(this,\'present\')">Add to presentation</button><button type="button" onclick="addResearchComparison(this)">Compare passage</button><button type="button" onclick="resultAction(this,\'copy\')">Copy</button><button type="button" onclick="resultAction(this,\'share\')">Share</button><button type="button" onclick="resultAction(this,\'save\')">Save to research</button><button type="button" onclick="resultAction(this,\'listen\')">Listen to text</button><button type="button" onclick="resultAction(this,\'related\')">Find related verses & stories</button></div><div class="result-full" hidden></div><p class="result-status" role="status" aria-live="polite"></p>'+raTools+citation+verified+related+'</div>';}
 function resultNormalize(v){return String(v||'').replace(/…/g,'').replace(/\s+/g,' ').trim();}
 async function resultPassage(data){
  const {key,r}=data;
@@ -572,6 +593,14 @@ async function resultAction(button,action){
  }
  if(action==='save'){
   try{sessionStorage.setItem('qh_research_pending',JSON.stringify({item_type:key==='quran'?'verse':key==='hadith'?'hadith':'source',reference:ref||r.title||query,title:r.title||ref||'Search result',content:(body+(passage.complete?'':'\n\n[Search excerpt; full text unavailable]')).slice(0,10000)}));location.href='/my-research.html?pending=1';}catch(_){status.textContent='Could not prepare the passage for saving.';}return;
+ }
+ if(action==='present'){
+  const typeMap={quran:'quran',hadith:'hadith',tafsir:'tafsir',madhhab:'madhhab',sira:'sira',campaigns:'sira',asbab:'tafsir',tensions:'ai_analysis',propositions:'research',themes:'research',stories:'research',library:'research',topics:'research'};
+  const isVerse=key==='quran';
+  const title=isVerse?'Quran '+ref:(r.title||ref||'Search result');
+  const notes=[key==='hadith'&&ref?'Source: '+ref:'',key==='tafsir'&&r.tradition?'Tradition: '+r.tradition:'',passage.complete?'':'Note: only a search excerpt was available; check the full text before presenting.',query?'Found by searching “'+query+'”.':''].filter(Boolean).join('\n');
+  const n=qhAddToPresentation({type:typeMap[key]||'research',title,slideTitle:title,reference:isVerse?'Quran '+ref:(ref||r.title||''),text:passage.text,arabic:passage.arabic,speakerNotes:notes,sourceUrl:resultLink(key,r).replace(/^\/\?/,'index.html?').replace(/^\//,'')});
+  qhPresentationStatus(status,button,n);return;
  }
  if(action==='listen'){
   if(!('speechSynthesis' in window)){status.textContent='Text-to-speech is unavailable on this device.';return;}
@@ -1127,6 +1156,7 @@ async function showHadith(id,hq){
     links=await r.json();
   }catch(e){}
   if(!h){ $('out').innerHTML='<div class="empty">That hadith could not be found.</div>'; return; }
+  window.__qhHadith=h;
   try{
     const r=await fetch(SB+'/rest/v1/external_reference_map?hadith_corpus_id=eq.'+encodeURIComponent(id)+'&site=eq.sunnah.com&select=external_reference,url,verified_on&limit=10',{headers:H});
     if(r.ok)publisherRefs=(await r.json()).filter(x=>/^https:\/\/sunnah\.com\/(?:abudawud|bukhari|muslim|tirmidhi|ibnmajah|nasai):[0-9]+[a-z]?$/.test(x.url||''));
@@ -1138,6 +1168,7 @@ async function showHadith(id,hq){
   const vs=new Set(); (links||[]).forEach(l=>vs.add(l.sura_id+':'+l.aya_number));
   $('out').innerHTML=`<div class="hub"><button class="back" onclick="history.length>1?history.back():location.href='research.html'">← Back to results</button>
    <h2>${esc(h.collection)}${h.hadith_number?' #'+esc(h.hadith_number):''}</h2>
+   <div class="result-actions"><button type="button" class="pres-add" onclick="addHadithToPresentation(this)">Add to presentation</button></div><p class="result-status" id="hadithPresStatus" role="status" aria-live="polite"></p>
    <div class="kicker">${[h.grade,h.tradition,h.narrator&&('Narrator: '+h.narrator),h.book_chapter].filter(Boolean).map(esc).join(' · ')}</div>
    ${referenceAudit?.ambiguous?`<div class="ref-banner caution"><strong>Reference collision detected</strong><p>${esc(referenceAudit.notice)} The record below is only one of the candidates; confirm the edition before citing it.</p></div>`:!publisherRefs.length?`<div class="ref-banner caution"><strong>Publisher reference not verified</strong><p>The number and text below come from an imported local record. The source citation must be reconciled against the publisher edition before scholarly use.</p></div>`:''}
    <div class="hpair">

@@ -110,6 +110,57 @@ export async function updateLesson(id, updates) {
   return data;
 }
 
+// Assignment instructions live in qh_assignments, one row per assignment lesson.
+// RLS (lms_assignments_teach) lets only the class's instructor or the owner write them.
+export const ASSIGNMENT_INSTRUCTIONS_MAX = 20000;
+
+export async function getAssignmentsForLessons(lessonIds) {
+  const ids = (lessonIds || []).filter(Boolean);
+  if (!ids.length) return [];
+  const { data, error } = await supabase
+    .from('qh_assignments')
+    .select('id,lesson_id,instructions,due_date,created_at')
+    .in('lesson_id', ids)
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  // Keep the first row per lesson; lesson.html reads the same one.
+  const byLesson = new Map();
+  for (const row of data || []) if (!byLesson.has(row.lesson_id)) byLesson.set(row.lesson_id, row);
+  return [...byLesson.values()];
+}
+
+export async function saveAssignment(lessonId, { instructions, due_date = null } = {}) {
+  const text = String(instructions ?? '').trim();
+  if (!lessonId) throw new Error('Save the lesson before adding assignment instructions');
+  if (!text) throw new Error('Write the assignment instructions');
+  if (text.length > ASSIGNMENT_INSTRUCTIONS_MAX) {
+    throw new Error('Assignment instructions must be at most ' + ASSIGNMENT_INSTRUCTIONS_MAX + ' characters');
+  }
+  let due = null;
+  if (due_date) {
+    const parsed = new Date(due_date);
+    if (Number.isNaN(parsed.getTime())) throw new Error('Choose a valid due date');
+    due = parsed.toISOString();
+  }
+  const { data: existing, error: readError } = await supabase
+    .from('qh_assignments')
+    .select('id')
+    .eq('lesson_id', lessonId)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (readError) throw readError;
+  const query = existing
+    ? supabase.from('qh_assignments')
+        .update({ instructions: text, due_date: due, updated_at: new Date().toISOString() })
+        .eq('id', existing.id)
+    : supabase.from('qh_assignments')
+        .insert({ lesson_id: lessonId, instructions: text, due_date: due });
+  const { data, error } = await query.select('id,lesson_id,instructions,due_date,created_at').single();
+  if (error) throw error;
+  return data;
+}
+
 export async function deleteLesson(id) {
   const { error } = await supabase
     .from('qh_lessons')

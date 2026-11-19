@@ -56,6 +56,15 @@
       gap: 2rem;
     }
 
+    .field-help { color:#41594b; font-size:14px; margin-top:.5rem; }
+    .lesson-flag { color:#8a4b00; font-weight:600; }
+    @media (max-width: 760px) {
+      .container { padding: 1rem; }
+      .two-column { grid-template-columns: 1fr; gap: 1.25rem; }
+      .section { padding: 1.25rem; }
+      .lesson-item-actions { flex-wrap: wrap; }
+    }
+
     .section {
       background: white;
       border-radius: 12px;
@@ -220,6 +229,13 @@
             <input type="url" id="lessonVideoUrl" placeholder="https://www.youtube.com/watch?v=..." autocomplete="off">
             <p class="muted" style="font-size:14px;">Paste the video address here; use the content field above for viewing instructions.</p>
           </div>
+          <div class="form-group" id="assignmentGroup" style="display:none;">
+            <label for="assignmentInstructions">Assignment instructions for students</label>
+            <textarea id="assignmentInstructions" maxlength="20000" placeholder="What should students write or upload? Say how long it should be, which sources to use and how you will grade it."></textarea>
+            <label for="assignmentDueDate" style="margin-top:1rem">Due date (optional)</label>
+            <input type="datetime-local" id="assignmentDueDate">
+            <p class="field-help">Students see these instructions and the due date on the lesson's Assignment tab. A class can't be published until every assignment lesson has instructions.</p>
+          </div>
           <div class="form-group">
             <label for="lessonReflectionPrompt">Reflection question for students (optional)</label>
             <textarea id="lessonReflectionPrompt" maxlength="2000" style="min-height:80px" placeholder="e.g. How does this passage change how you read verse 2:256? Answer in a few sentences."></textarea>
@@ -297,13 +313,38 @@
   <script type="module">
     import { supabase } from '../accounts/client.js';
     import { requireTeachingAccess } from '../accounts/lms-access.js';
-    import { getCourseById, getLessonsByCourse, createLesson, updateLesson, deleteLesson } from '../courses-api.js';
+    import { getCourseById, getLessonsByCourse, createLesson, updateLesson, deleteLesson, getAssignmentsForLessons, saveAssignment } from '../courses-api.js';
 
     let currentUser = null;
     let currentCourse = null;
     let lessons = [];
     let selectedLessonId = null;
     let reflectionPrompts = new Map();
+    let assignmentsByLesson = new Map();
+    const pad2 = n => String(n).padStart(2, '0');
+    // datetime-local works in the instructor's own time zone; the database stores UTC.
+    function toLocalInput(iso) {
+      if (!iso) return '';
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return '';
+      return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) + 'T' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+    }
+    function fromLocalInput(value) {
+      if (!value) return null;
+      const d = new Date(value);
+      return Number.isNaN(d.getTime()) ? null : d.toISOString();
+    }
+    async function loadAssignments() {
+      const ids = lessons.filter(l => l.lesson_type === 'assignment').map(l => l.id);
+      try {
+        assignmentsByLesson = new Map((await getAssignmentsForLessons(ids)).map(a => [a.lesson_id, a]));
+      } catch (error) {
+        console.error('Error loading assignment instructions:', error);
+        assignmentsByLesson = new Map();
+        showAlert('Assignment instructions could not be loaded: ' + (error.message || error), 'error');
+      }
+    }
+    const PUBLISHED_ASSIGNMENT_MESSAGE = 'This class is published, so a new assignment lesson can\'t be added until its instructions exist. In Manage courses, untick Published, add the assignment with its instructions here, then publish again.';
     async function loadReflectionPrompts() {
       const { data, error } = await supabase.from('qh_lesson_reflection_prompts').select('lesson_id,prompt').eq('course_id', currentCourse.id);
       reflectionPrompts = new Map((error ? [] : data || []).map(r => [r.lesson_id, r.prompt]));
@@ -326,7 +367,9 @@
       document.getElementById('quizHelp').style.display=type==='quiz'?'block':'none';
       document.getElementById('videoUrlGroup').style.display=type==='video'?'block':'none';
       document.getElementById('lessonVideoUrl').required=type==='video';
-      document.getElementById('contentLabel').textContent=type==='video'?'Video summary and viewing instructions':'Lesson content / instructions';
+      document.getElementById('assignmentGroup').style.display=type==='assignment'?'block':'none';
+      document.getElementById('assignmentInstructions').required=type==='assignment';
+      document.getElementById('contentLabel').textContent=type==='video'?'Video summary and viewing instructions':type==='assignment'?'Introduction shown above the assignment (optional)':'Lesson content / instructions';
     }
     document.getElementById('lessonType').addEventListener('change',updateQuizHint);
 
@@ -377,6 +420,7 @@
       try {
         lessons = await getLessonsByCourse(currentCourse.id);
         await loadReflectionPrompts();
+        await loadAssignments();
         renderLessons();
       } catch (error) {
         console.error('Error loading lessons:', error);
@@ -396,7 +440,7 @@
       container.innerHTML = lessons.map(lesson => `
         <div class="lesson-item ${selectedLessonId === lesson.id ? 'active' : ''}" onclick="selectLesson('${lesson.id}')">
           <div class="lesson-item-title">${lesson.lesson_order}. ${htmlEscape(lesson.title)}</div>
-          <div class="lesson-item-meta">Type: ${htmlEscape(lesson.lesson_type)}${reflectionPrompts.has(lesson.id) ? ' · 📝 Reflection' : ''}</div>
+          <div class="lesson-item-meta">Type: ${htmlEscape(lesson.lesson_type)}${reflectionPrompts.has(lesson.id) ? ' · 📝 Reflection' : ''}${assignmentMeta(lesson)}</div>
           <div class="lesson-item-actions">
             <a class="btn btn-small btn-primary" href="/lesson.html?lesson=${encodeURIComponent(lesson.id)}" onclick="event.stopPropagation()" style="text-decoration:none;display:inline-block;">Open lesson</a>
             ${lesson.lesson_type === 'quiz' ? '<a class="btn btn-small btn-primary" href="/admin/quiz-builder.html?lesson='+encodeURIComponent(lesson.id)+'" onclick="event.stopPropagation()" style="text-decoration:none;display:inline-block;">Edit questions</a>' : ''}
@@ -406,6 +450,13 @@
           </div>
         </div>
       `).join('');
+    }
+
+    function assignmentMeta(lesson) {
+      if (lesson.lesson_type !== 'assignment') return '';
+      const a = assignmentsByLesson.get(lesson.id);
+      if (!a) return ' · <span class="lesson-flag">⚠ Needs instructions</span>';
+      return ' · Instructions added' + (a.due_date ? ' · Due ' + htmlEscape(new Date(a.due_date).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })) : '');
     }
 
     window.selectLesson = function(lessonId) {
@@ -425,6 +476,9 @@
       document.getElementById('lessonContent').value = lesson.content || '';
       document.getElementById('lessonVideoUrl').value = lesson.video_url || '';
       document.getElementById('lessonReflectionPrompt').value = reflectionPrompts.get(lessonId) || '';
+      const assignment = assignmentsByLesson.get(lessonId);
+      document.getElementById('assignmentInstructions').value = assignment?.instructions || '';
+      document.getElementById('assignmentDueDate').value = toLocalInput(assignment?.due_date);
       document.getElementById('lessonForm').dataset.editId = lessonId;
       document.getElementById('cancelBtn').style.display = 'block';
       document.getElementById('saveLessonBtn').textContent = 'Save Changes';
@@ -455,12 +509,31 @@
       const editId = document.getElementById('lessonForm').dataset.editId;
       const saveButton = document.getElementById('saveLessonBtn');
       if (saveButton.disabled) return;
+      const isAssignment = type === 'assignment';
+      const assignmentInput = {
+        instructions: document.getElementById('assignmentInstructions').value,
+        due_date: fromLocalInput(document.getElementById('assignmentDueDate').value)
+      };
+      if (isAssignment && !assignmentInput.instructions.trim()) {
+        showAlert('Write the assignment instructions before saving.', 'error');
+        document.getElementById('assignmentInstructions').focus();
+        return;
+      }
+      // A published class is re-checked on every lesson change, so a brand-new
+      // assignment lesson would be refused before its instructions could be saved.
+      if (isAssignment && !editId && currentCourse.is_published) {
+        showAlert(PUBLISHED_ASSIGNMENT_MESSAGE, 'error');
+        return;
+      }
       saveButton.disabled = true;
       saveButton.textContent = 'Saving…';
 
       try {
         let savedLesson;
         if (editId) {
+          // Save instructions first so a published class still passes its
+          // readiness check when a lesson becomes an assignment.
+          if (isAssignment) await saveAssignment(editId, assignmentInput);
           savedLesson = await updateLesson(editId, {
             title,
             lesson_type: type,
@@ -475,6 +548,12 @@
             content,
             video_url: type === 'video' ? videoUrl : null
           });
+          if (isAssignment && savedLesson?.id) {
+            try { await saveAssignment(savedLesson.id, assignmentInput); }
+            catch (err) {
+              showAlert('Lesson created, but the assignment instructions were not saved: ' + (err.message || err) + ' Use Edit to add them.', 'error');
+            }
+          }
           showAlert('Lesson created!', 'success');
         }
         if (savedLesson?.id) {
@@ -523,6 +602,7 @@
       if (e) e.stopPropagation();
       const src = lessons.find(l => l.id === lessonId);
       if (!src) return;
+      if (src.lesson_type === 'assignment' && currentCourse.is_published) { showAlert(PUBLISHED_ASSIGNMENT_MESSAGE, 'error'); return; }
       try {
         const copy = await createLesson(currentCourse.id, (src.title + ' (copy)').slice(0, 300), nextLessonOrder(), {
           lesson_type: src.lesson_type, content: src.content, video_url: src.video_url
@@ -543,6 +623,13 @@
             notes.push(error ? 'quiz questions not copied' : 'quiz questions copied');
           }
         }
+        if (src.lesson_type === 'assignment') {
+          const srcAssignment = assignmentsByLesson.get(src.id);
+          if (srcAssignment) {
+            try { await saveAssignment(copy.id, { instructions: srcAssignment.instructions, due_date: srcAssignment.due_date }); notes.push('assignment instructions copied'); }
+            catch { notes.push('assignment instructions not copied'); }
+          }
+        }
         showAlert('Duplicated as "' + copy.title + '"' + (notes.length ? ' (' + notes.join(', ') + ')' : '') + '.', 'success');
         await loadLessons();
       } catch (error) {
@@ -558,8 +645,9 @@
       if (!titles.length) { status.textContent = 'Paste at least one lesson title.'; return; }
       if (titles.length > 100) { status.textContent = 'Add up to 100 lessons at a time.'; return; }
       if (!confirm('Create ' + titles.length + ' lesson(s) in this order?')) return;
-      btn.disabled = true;
       const type = document.getElementById('bulkType').value;
+      if (type === 'assignment' && currentCourse.is_published) { status.textContent = PUBLISHED_ASSIGNMENT_MESSAGE; return; }
+      btn.disabled = true;
       let order = nextLessonOrder(), made = 0;
       try {
         for (const title of titles) {
@@ -567,7 +655,7 @@
           await createLesson(currentCourse.id, title, order++, { lesson_type: type, content: '', video_url: null });
           made++;
         }
-        status.textContent = 'Created ' + made + ' lesson(s). Open each one with Edit to add content.';
+        status.textContent = 'Created ' + made + ' lesson(s). Open each one with Edit to add ' + (type === 'assignment' ? 'its instructions.' : 'content.');
         document.getElementById('bulkOutline').value = '';
       } catch (error) {
         status.textContent = 'Stopped after ' + made + ' lesson(s): ' + (error.message || error);
