@@ -18,9 +18,9 @@
 
 ## Guarded implementation (proposed only)
 
-- [SQL proposal](../../supabase/proposed/20261120_tafsir_108_1_qurtubi_name_fidelity.sql): checks exact verse/scholar/language identities, Arabic and English record hashes, one specific phrase, and the expected new hash, then changes the single English row. **Never run automatically.**
-- [Rollback](../../supabase/proposed/20261120_tafsir_108_1_qurtubi_name_fidelity_ROLLBACK.sql): restores only if the new row hash still matches exactly.
-- [Machine-readable evidence](../../data/tafsir/staging/qurtubi-108-1-name-fidelity-proposal-2026-11-20.json): locator, witness, hashes, pending reviewer decision and preservation controls.
+- [SQL proposal](../supabase/proposed/20261120_tafsir_108_1_qurtubi_name_fidelity.sql): checks exact verse/scholar/language identities, Arabic and English record hashes, one specific phrase, and the expected new hash, then changes the single English row. **Never run automatically.**
+- [Rollback](../supabase/proposed/20261120_tafsir_108_1_qurtubi_name_fidelity_ROLLBACK.sql): restores only if the new row hash still matches exactly.
+- [Machine-readable evidence](../data/tafsir/staging/qurtubi-108-1-name-fidelity-proposal-2026-11-20.json): locator, witness, hashes, pending reviewer decision and preservation controls.
 
 ## Publication gates and next checkpoint
 
