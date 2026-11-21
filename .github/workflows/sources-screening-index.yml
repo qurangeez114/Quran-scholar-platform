@@ -1,0 +1,43 @@
+name: Sources screening index tests
+on:
+  pull_request:
+    paths:
+      - 'scripts/build_sources_screening_index.py'
+      - 'tests/test_sources_screening_index.py'
+      - '.github/workflows/sources-screening-index.yml'
+      - 'research/sources/validate_ibrahim_union.py'
+      - 'research/sources/staging/ibrahim-14-*.json'
+  push:
+    branches:
+      - 'research/sources-coverage-reconciliation-audit-20261114'
+    paths:
+      - 'scripts/build_sources_screening_index.py'
+      - 'tests/test_sources_screening_index.py'
+      - '.github/workflows/sources-screening-index.yml'
+      - 'research/sources/validate_ibrahim_union.py'
+      - 'research/sources/staging/ibrahim-14-*.json'
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Syntax validation
+        run: python -m py_compile scripts/build_sources_screening_index.py tests/test_sources_screening_index.py research/sources/validate_ibrahim_union.py
+      - name: Regression tests (no production access)
+        run: python -m unittest discover -s tests -p test_sources_screening_index.py -v
+      - name: Validate Surah Ibrahim coverage provenance (nonpublic)
+        run: python research/sources/validate_ibrahim_union.py
+      - name: Build checked-in staging coverage index (nonpublic, no DB access)
+        run: python scripts/build_sources_screening_index.py
+      - name: Upload preliminary coverage index for reconciliation
+        uses: actions/upload-artifact@v4
+        with:
+          name: sources-screening-index-preliminary
+          path: data/sources/staging/screening-index-main-and-branch.json
+          if-no-files-found: error
+          retention-days: 14
