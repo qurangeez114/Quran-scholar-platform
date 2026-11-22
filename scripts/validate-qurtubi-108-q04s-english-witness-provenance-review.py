@@ -24,11 +24,16 @@ req(f['english_translation_source_identity_established'] is False and f['abridgm
 r=d['review_and_action']
 req(r['independent_human_scholarly_review']=='pending' and not r['human_editor_approval_observed'] and not r['sql_executed'] and not r['database_written'] and not r['merge_performed'] and not r['deployment_performed'] and not r['live_quran_ui_validation_performed'],'action boundary')
 req(d['next_target']['hold_must_remain_active'] is True,'next step must preserve hold')
+u=d['checkpoint_update']
+req(u['last_bounded_target']['claim_id']=='108-Q03' and u['last_bounded_target']['reviewer_status']=='research_agent_second_pass_only; independent_human_scholarly_review_pending','Q03 human review status')
+req(u['inventory']['source_level_claims']==74 and u['inventory']['active_chapter_holds']==48 and u['inventory']['holds_cleared']==0,'preserve chapter inventory')
+req(len(u['unresolved_qurtubi_holds'])==8 and u['actions']['human_scholarly_approval']=='pending','preserve Qurtubi holds/approval')
+req(u['next_target']=='108-Q04A' and d['next_target']['claim_id']=='108-Q04A','next claim target')
 a=d['english_edition_provenance_addendum']
 req(a['identifiable_english_edition_candidate']['translator']=='Aisha Bewley' and '1–141' in a['identifiable_english_edition_candidate']['edition_scope'],'edition scope')
 req(a['identifiable_english_edition_candidate']['conclusion'].find('cannot identify row 38030')>=0,'do not conflate candidate with row source')
 req(a['interpretation'].find('does not classify it as a mistranslation')>=0,'keep translation-error finding unresolved')
-req(d['next_target']['claim_id']=='108-Q03','next Qurtubi claim target')
+req(d['next_target']['claim_id']=='108-Q04A','next Qurtubi claim target')
 audit=d['ingestion_provenance_audit']
 req(audit['workflow']['fields_selected']==['id','aya','language','content','source_name','source_url'] and not audit['workflow']['translator_edition_or_ingest_fields_selected'],'workflow provenance field boundary')
 req(audit['existing_plan']['english_witness_entry_id']==38030 and not audit['existing_plan']['translator_edition_import_job_or_asset_id_recorded'],'plan provenance gap')
@@ -38,6 +43,6 @@ req(audit['historical_importer_check']['surah_filter']=='110 through 114' and au
 req(audit['live_catalog_reads']['ancient_sources_table']['id_671_row_count']==0,'legacy id absent from ancient_sources')
 req(audit['repository_search']['additional_search']['relevant_match_for_qurtubi_english_row_38030'] is False,'no relevant importer match')
 req(audit['finding'].find('provenance remains unresolved')>=0 and audit['conclusion'].find('Do not infer')==0,'preserve unresolved provenance')
-req(d['next_target']['claim_id']=='108-Q03' and d['next_target']['hold_must_remain_active'] is True,'next target retains active hold')
+req(d['next_target']['claim_id']=='108-Q04A' and d['next_target']['hold_must_remain_active'] is True,'next target retains active hold')
 
 print('PASS: Q04S records the English-edition provenance gap, records the abridged Aisha Bewley volume as outside the verse scope, preserves the observed omission without calling it a translation error, and retains all 48 holds, records missing ingest provenance without calling it a translation error, and records the source-catalog lookup.')
