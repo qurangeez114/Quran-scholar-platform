@@ -13260,7 +13260,7 @@ function exportHadithAsDoc(hadithId) {
     if (!pinA || Date.now() > pinUntil) { pinA = null; return; }
     restoreAnchor(pinA); pinFrame = requestAnimationFrame(pinStep);
   }
-  ['wheel', 'touchmove', 'keydown'].forEach(function(ev){
+  ['wheel', 'touchmove', 'keydown', 'pointerdown'].forEach(function(ev){
     window.addEventListener(ev, function(e){
       if (e.target && e.target.closest && e.target.closest('#langPickerPanel,#qhSingleLangSheet')) return;
       pinA = null;
@@ -13272,7 +13272,10 @@ function exportHadithAsDoc(hadithId) {
     if (typeof window.applyLangState !== 'function' || window.applyLangState.__qhKeepPlace) return;
     var orig = window.applyLangState;
     var wrapped = function(){
-      var a = held || captureAnchor();
+      // Only changes made from the language picker are anchored; page loads and jumps
+      // to a verse keep their own scrolling.
+      if (!held) return orig.apply(this, arguments);
+      var a = held;
       var r = orig.apply(this, arguments);
       restoreAnchor(a); pin(a);
       return r;
@@ -13285,7 +13288,7 @@ function exportHadithAsDoc(hadithId) {
     if (!f || typeof f.render !== 'function' || f.render.__qhKeepPlace) return;
     var orig = f.render;
     var wrapped = function(){
-      var a = (f.active && hasVerses()) ? (held || captureAnchor()) : null;
+      var a = (f.active && hasVerses()) ? held : null;
       var r = orig.apply(this, arguments);
       if (a) { a.card = null; a.part = null; restoreAnchor(a); pin(a); }
       return r;
@@ -13334,7 +13337,7 @@ function exportHadithAsDoc(hadithId) {
   }
   function closeSingleSheet(){
     var s = document.getElementById('qhSingleLangSheet'), o = document.getElementById('qhSingleLangOverlay');
-    var a = pinA || captureAnchor();
+    var a = pinA || held;
     if (s) s.classList.remove('qh-open'); if (o) o.classList.remove('qh-open');
     held = null; restoreAnchor(a); pin(a); refresh(); if (fab) fab.focus({ preventScroll: true });
   }
@@ -13352,13 +13355,13 @@ function exportHadithAsDoc(hadithId) {
     // Release the held verse when the main picker closes, whichever way.
     if (typeof window.closeLangPicker === 'function' && !window.closeLangPicker.__qhKeepPlace) {
       var oc = window.closeLangPicker;
-      window.closeLangPicker = function(){ var a = pinA || held || captureAnchor(); var r = oc.apply(this, arguments); held = null; restoreAnchor(a); pin(a); refresh(); return r; };
+      window.closeLangPicker = function(){ var a = pinA || held; var r = oc.apply(this, arguments); held = null; restoreAnchor(a); pin(a); refresh(); return r; };
       window.closeLangPicker.__qhKeepPlace = true;
     }
     if (typeof window.toggleLangPicker === 'function' && !window.toggleLangPicker.__qhKeepPlace) {
       var ot = window.toggleLangPicker;
       window.toggleLangPicker = function(){
-        var wasOpen = pickerOpen(), a = wasOpen ? (pinA || held || captureAnchor()) : null;
+        var wasOpen = pickerOpen(), a = wasOpen ? (pinA || held) : null;
         if (!wasOpen) held = held || captureAnchor();
         var r = ot.apply(this, arguments);
         if (!pickerOpen()) { held = null; if (a) { restoreAnchor(a); pin(a); } }
