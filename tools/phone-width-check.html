@@ -1,0 +1,21 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Phone width check</title>
+<style>body{font:12px/1.4 monospace;margin:8px;background:#fff}.row{display:flex;gap:12px;align-items:flex-start}iframe{border:1px solid #888}pre{white-space:pre-wrap;width:390px;margin:0}</style></head>
+<body><div class="row" id="frames"></div><script>
+const widths=(new URLSearchParams(location.search).get('w')||'360,390').split(',').map(Number);
+const scroll=Number(new URLSearchParams(location.search).get('scroll')||0);
+const box=document.getElementById('frames');
+for(const w of widths){
+ const col=document.createElement('div');const f=document.createElement('iframe');f.width=w;f.height=740;f.src='/index.html';const pre=document.createElement('pre');pre.textContent=w+'px: loading…';col.append(f,pre);box.append(col);
+ f.onload=()=>{let tries=0;const t=setInterval(()=>{const d=f.contentDocument,win=f.contentWindow;if(!d.querySelector('#qh-home-grid .qh-home-item')&&tries++<40)return;clearInterval(t);setTimeout(()=>{
+  const de=d.documentElement,q=s=>d.querySelector(s);const top=s=>{const e=q(s);if(!e)return'none';const r=e.getBoundingClientRect();return r.height?Math.round(r.top+win.scrollY)+'+'+Math.round(r.height):'hidden'};
+  const small=[...d.querySelectorAll('#qh-home-directory :is(a,button,input,select)')].filter(e=>{const r=e.getBoundingClientRect();return r.width&&r.height&&r.height<43.5}).map(e=>(e.id||e.className||e.tagName)+':'+Math.round(e.getBoundingClientRect().height));
+  const wide=[...d.querySelectorAll('body *')].filter(e=>{const r=e.getBoundingClientRect();return r.width&&r.right>w+1&&!e.closest('#bottom-nav,.qh-home-shortcuts')&&win.getComputedStyle(e).position!=='fixed'}).slice(0,6).map(e=>e.tagName+'.'+e.className);
+  const go=q('.qh-quick-go'),gs=go&&win.getComputedStyle(go);
+  let out=w+'px  docScrollW='+de.scrollWidth+' clientW='+de.clientWidth+' docH='+de.scrollHeight+'\n';
+  for(const s of ['.qh-home-heading','#qh-home-search','.qh-home-shortcuts','#qh-quick-jump','#qh-home-single-form','#qh-home-sura-filter','#qh-home-grid','.qh-home-item','.qh-feature-strip','.qh-home-menu','.qh-gold-quick'])out+=s+' '+top(s)+'\n';
+  out+='go color='+(gs&&gs.color)+' bg='+(gs&&gs.backgroundColor)+'\n';
+  out+='wider than screen: '+(wide.join(', ')||'none')+'\nunder 44px: '+(small.join(', ')||'none')+'\n';
+  if(scroll){win.scrollTo(0,scroll);setTimeout(()=>{out+='after scroll '+scroll+': filter top='+Math.round(q('#qh-home-sura-filter').getBoundingClientRect().top)+'\n';pre.textContent=out;},400);}else pre.textContent=out;
+ },1500);},250);};
+}
+</script></body></html>
