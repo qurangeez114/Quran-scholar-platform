@@ -1,7 +1,20 @@
 // Course API helpers for LMS
 import { supabase } from './accounts/client.js';
 import { tuitionFieldsFromInput, formatTuition } from './accounts/tuition.js';
-export { formatTuition, tuitionFieldsFromInput } from './accounts/tuition.js';
+export { formatTuition, tuitionFieldsFromInput, fillCurrencySelect, TUITION_CURRENCIES } from './accounts/tuition.js';
+import { normalizeClassFormat, isMissingClassFormatColumn } from './accounts/class-format.js';
+export { classFormatLabel, CLASS_FORMATS } from './accounts/class-format.js';
+
+// If the class_format column has not been added yet, save everything else
+// rather than failing the whole course save.
+async function withoutMissingClassFormat(row, run) {
+  const first = await run(row);
+  if (first.error && 'class_format' in row && isMissingClassFormatColumn(first.error)) {
+    const { class_format, ...rest } = row;
+    return run(rest);
+  }
+  return first;
+}
 
 export async function getCourses(published_only = true) {
   let query = supabase.from('qh_courses').select('*');
@@ -30,31 +43,28 @@ export async function createCourse(title, description = '', options = {}) {
   const user = (await supabase.auth.getUser()).data.user;
   if (!user) throw new Error('Not authenticated');
 
-  const { data, error } = await supabase
-    .from('qh_courses')
-    .insert({
-      title,
-      description,
-      created_by: user.id,
-      is_published: false,
-      visibility: options.visibility === 'private' ? 'private' : 'public',
-      faculty_reuse_enabled: options.faculty_reuse_enabled === true,
-      ...tuitionFieldsFromInput(options.tuition_type, options.tuition_amount, options.tuition_currency)
-    })
-    .select()
-    .single();
+  const row = {
+    title,
+    description,
+    created_by: user.id,
+    is_published: false,
+    visibility: options.visibility === 'private' ? 'private' : 'public',
+    faculty_reuse_enabled: options.faculty_reuse_enabled === true,
+    ...tuitionFieldsFromInput(options.tuition_type, options.tuition_amount, options.tuition_currency)
+  };
+  if (options.class_format !== undefined) row.class_format = normalizeClassFormat(options.class_format);
+  const { data, error } = await withoutMissingClassFormat(row, r =>
+    supabase.from('qh_courses').insert(r).select().single());
 
   if (error) throw error;
   return data;
 }
 
 export async function updateCourse(id, updates) {
-  const { data, error } = await supabase
-    .from('qh_courses')
-    .update(updates)
-    .eq('id', id)
-    .select()
-    .single();
+  const row = { ...updates };
+  if (row.class_format !== undefined) row.class_format = normalizeClassFormat(row.class_format);
+  const { data, error } = await withoutMissingClassFormat(row, r =>
+    supabase.from('qh_courses').update(r).eq('id', id).select().single());
 
   if (error) throw error;
   return data;

@@ -2,7 +2,7 @@
 // The page gate is visual; database RLS still authorizes every write.
 import {supabase} from '/accounts/client.js';
 import {lmsRequest} from '/accounts/lms-access.js';
-import {tuitionFieldsFromInput,formatTuition} from '/accounts/tuition.js';
+import {tuitionFieldsFromInput,formatTuition,fillCurrencySelect} from '/accounts/tuition.js';
 const $=id=>document.getElementById(id);
 const status=$('status');
 const FIELDS=['course_code','credit_hours','prerequisites','instructor_name','schedule','delivery_mode'];
@@ -57,7 +57,7 @@ async function loadCourse(id){
  const paid=current.tuition_type==='paid';
  $('tuition_type').value=paid?'paid':'free';
  $('tuition_amount').value=paid&&current.tuition_amount!=null?current.tuition_amount:'';
- $('tuition_currency').value=current.tuition_currency||'USD';
+ fillCurrencySelect($('tuition_currency'),current.tuition_currency||'USD');
  syncTuitionPaid();
  $('learning_outcomes').value=list(current.learning_outcomes).map(txt).join('\n');
  const s=(current.syllabus&&typeof current.syllabus==='object')?current.syllabus:{};
