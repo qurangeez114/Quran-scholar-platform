@@ -24,7 +24,7 @@ assert d["translation_and_scope"]["stored_english_has_corresponding_meaning"] is
 assert d["translation_and_scope"]["translation_is_not_stored_or_approved"] is False
 assert d["translation_and_scope"]["own_position"] == "reported_only; not Qurṭubī's specific preferred view"
 assert d["voice_classification"]["isnad_or_oral_route_present"] is False
-assert d["voice_classification"]["historical_identity_of_ibn_kaysan_resolved"] is False
+assert d["translation_and_scope"]["historical_identity_of_ibn_kaysan_resolved"] is False
 assert len(d["edition_and_parallel_witnesses"]) == 5
 assert len(d["active_holds"]) == 8
 for key in ("published","database_changed","ui_validated","claim_complete","scholar_complete","chapter_complete"):
