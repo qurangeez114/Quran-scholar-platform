@@ -23,6 +23,11 @@ def main() -> None:
     require(data["inventory_boundary"]["active_chapter_holds"] == 48, "chapter hold count changed")
     require(data["inventory_boundary"]["holds_cleared"] == 0, "review must not clear holds")
     require(data["inventory_boundary"]["chapter_complete"] is False, "chapter cannot be marked complete")
+    ci = data["repository_review"]
+    observations = ci["ci_observations"]
+    require(observations[0]["head_sha"] == "949e9d15e98009f04adecaefb485c34b33813a9c", "first preview observation is not tied to its commit")
+    require(observations[1]["head_sha"] == ci["staged_validator_commit_sha"], "second preview observation is not tied to its commit")
+    require(all(row["netlify_preview_status_at_check"] in {"pending", "success", "failure"} for row in observations), "preview observation state missing")
     live = data["live_read_only_recheck"]
     ar = live["arabic_entry"]
     en = live["english_entry"]
