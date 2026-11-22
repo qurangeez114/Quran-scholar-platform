@@ -29,5 +29,12 @@ req(a['identifiable_english_edition_candidate']['translator']=='Aisha Bewley' an
 req(a['identifiable_english_edition_candidate']['conclusion'].find('cannot identify row 38030')>=0,'do not conflate candidate with row source')
 req(a['interpretation'].find('does not classify it as a mistranslation')>=0,'keep translation-error finding unresolved')
 req(d['next_target']['claim_id']=='108-Q04S-ingest-provenance','provenance follow-up')
+audit=d['ingestion_provenance_audit']
+req(audit['workflow']['fields_selected']==['id','aya','language','content','source_name','source_url'] and not audit['workflow']['translator_edition_or_ingest_fields_selected'],'workflow provenance field boundary')
+req(audit['existing_plan']['english_witness_entry_id']==38030 and not audit['existing_plan']['translator_edition_import_job_or_asset_id_recorded'],'plan provenance gap')
+req(audit['live_catalog_reads']['sources_table']['qurtubi_work_record']['id']==3 and audit['live_catalog_reads']['sources_table']['id_671_row_count']==0 and audit['live_catalog_reads']['source_references_table']['qurtubi_title_or_id_671_row_count']==0,'catalog lookup evidence')
+req(audit['live_catalog_reads']['translator_edition_publisher_import_job_or_asset_field_present'] is False and audit['live_catalog_reads']['writes']==0 and audit['live_catalog_reads']['paired_rows_fetched_at'].startswith('2026-05-05'),'live row metadata boundary')
+req(audit['finding'].find('provenance remains unresolved')>=0 and audit['conclusion'].find('Do not infer')==0,'preserve unresolved provenance')
+req(d['next_target']['claim_id']=='108-Q04S-ingest-provenance' and d['next_target']['hold_must_remain_active'] is True,'next target retains hold')
 
-print('PASS: Q04S records the English-edition provenance gap, records the abridged Aisha Bewley volume as outside the verse scope, preserves the observed omission without calling it a translation error, and retains all 48 holds.')
+print('PASS: Q04S records the English-edition provenance gap, records the abridged Aisha Bewley volume as outside the verse scope, preserves the observed omission without calling it a translation error, and retains all 48 holds, records missing ingest provenance without calling it a translation error, and records the source-catalog lookup.')
