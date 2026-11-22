@@ -13173,5 +13173,199 @@ function exportHadithAsDoc(hadithId) {
   hideOnEnter.observe(document.body, { childList: true, subtree: true });
 })();
 </script>
+<style id="qh-inplace-lang-style">
+/* Change or add verse languages from wherever you are reading. */
+#qhLangFab{position:fixed;right:14px;bottom:calc(74px + env(safe-area-inset-bottom,0px));z-index:99990;display:none;align-items:center;gap:6px;min-height:46px;padding:0 15px;border:2px solid #D4A830;border-radius:23px;background:#FDF5DE;color:#7d5f14;font:700 14px/1 Arial,sans-serif;box-shadow:0 3px 14px rgba(0,0,0,.22);cursor:pointer;-webkit-tap-highlight-color:transparent}
+#qhLangFab.qh-show{display:inline-flex}
+#qhLangFab .qh-fab-count{background:#7d5f14;color:#fff;border-radius:10px;padding:2px 7px;font-size:11px}
+#qhLangFab:focus-visible{outline:3px solid #9c742a;outline-offset:2px}
+#qhSingleLangSheet{display:none;position:fixed;left:0;right:0;bottom:0;z-index:9999999;background:#fff;border-radius:20px 20px 0 0;padding:18px 16px calc(24px + env(safe-area-inset-bottom,0px));box-shadow:0 -4px 24px rgba(0,0,0,.15);max-height:70vh;overflow-y:auto}
+#qhSingleLangSheet.qh-open{display:block}
+#qhSingleLangSheet .qh-sl-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:14px}
+#qhSingleLangSheet .qh-sl-title{font-size:16px;font-weight:700;color:#1a1a1a}
+#qhSingleLangSheet .qh-sl-list{display:flex;flex-wrap:wrap;gap:10px}
+#qhSingleLangSheet button{min-height:44px;padding:8px 14px;border:1px solid #E8C97B;border-radius:22px;background:#FDF8EE;color:#7d5f14;font-size:14px;font-weight:700;cursor:pointer}
+#qhSingleLangSheet button.active{background:#7d5f14;color:#fff;border-color:#7d5f14}
+#qhSingleLangOverlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:9999998}
+#qhSingleLangOverlay.qh-open{display:block}
+@media (min-width:901px){#qhLangFab{bottom:calc(76px + env(safe-area-inset-bottom,0px));right:22px}}
+</style>
+<script id="qh-inplace-lang-script">
+/* Readers deep in a sura can change languages without scrolling to the top:
+   a floating "Languages" button appears once the top language bar is out of
+   view, opens the same picker, and every language change keeps the verse
+   being read in the same place on screen. */
+(function(){
+  var fab, topVisible = true, held = null;
+  function verseArea(){ return document.getElementById('verseArea'); }
+  function singleActive(){ return !!(window.qhSingleMode && window.qhSingleMode.active && document.querySelector('#verseArea .qh-single-card')); }
+  function hasVerses(){ var a = verseArea(); return !!(a && a.offsetParent !== null && a.querySelector('.verse-card')); }
+  function pickerOpen(){
+    var p = document.getElementById('langPickerPanel'), s = document.getElementById('qhSingleLangSheet');
+    return (p && p.style.display !== 'none' && p.style.display !== '') || (s && s.classList.contains('qh-open'));
+  }
+  function scroller(){
+    var el = verseArea();
+    while (el && el !== document.body && el !== document.documentElement) {
+      var oy = getComputedStyle(el).overflowY;
+      if ((oy === 'auto' || oy === 'scroll') && el.scrollHeight > el.clientHeight + 1) return el;
+      el = el.parentElement;
+    }
+    return null;
+  }
+  function viewTop(){ var s = scroller(); return s ? Math.max(0, s.getBoundingClientRect().top) : 0; }
+  function shown(el){ return !!(el && el.getClientRects().length); }
+
+  // The verse (and the language block inside it) at the top of the reading view.
+  function captureAnchor(){
+    var area = verseArea(); if (!area) return null;
+    var top = viewTop(), cards = area.querySelectorAll('.verse-card'), card = null;
+    for (var i = 0; i < cards.length; i++) {
+      if (!shown(cards[i])) continue;
+      if (cards[i].getBoundingClientRect().bottom > top + 4) { card = cards[i]; break; }
+    }
+    if (!card) return null;
+    var part = null, parts = card.querySelectorAll('.verse-body > [class*="lang-"]');
+    for (var j = 0; j < parts.length; j++) {
+      if (!shown(parts[j])) continue;
+      if (parts[j].getBoundingClientRect().bottom > top + 4) { part = parts[j]; break; }
+    }
+    return { card: card, cardTop: card.getBoundingClientRect().top, part: part,
+             partTop: part ? part.getBoundingClientRect().top : 0,
+             aya: card.getAttribute('data-aya'), sura: card.getAttribute('data-sura') };
+  }
+  function scrollBy(dy){
+    if (!dy || Math.abs(dy) < 1) return;
+    var s = scroller();
+    if (s) s.scrollTop += dy; else window.scrollBy(0, dy);
+  }
+  function restoreAnchor(a){
+    if (!a) return;
+    if (a.part && shown(a.part) && document.contains(a.part)) { scrollBy(a.part.getBoundingClientRect().top - a.partTop); return; }
+    var card = document.contains(a.card) ? a.card : document.getElementById('vc-' + a.aya);
+    if (card && shown(card)) scrollBy(card.getBoundingClientRect().top - a.cardTop);
+  }
+
+  // Every language change keeps the reader's verse in place.
+  function wrapApply(){
+    if (typeof window.applyLangState !== 'function' || window.applyLangState.__qhKeepPlace) return;
+    var orig = window.applyLangState;
+    var wrapped = function(){
+      var a = held || captureAnchor();
+      var r = orig.apply(this, arguments);
+      restoreAnchor(a);
+      if (held) held = captureAnchor();
+      return r;
+    };
+    wrapped.__qhKeepPlace = true;
+    window.applyLangState = wrapped;
+  }
+  function wrapSingleRender(){
+    var f = window.qhSingleMode;
+    if (!f || typeof f.render !== 'function' || f.render.__qhKeepPlace) return;
+    var orig = f.render;
+    var wrapped = function(){
+      var a = (f.active && hasVerses()) ? (held || captureAnchor()) : null;
+      var r = orig.apply(this, arguments);
+      if (a) { a.card = null; a.part = null; restoreAnchor(a); }
+      return r;
+    };
+    wrapped.__qhKeepPlace = true;
+    f.render = wrapped;
+  }
+
+  function countLangs(){
+    if (singleActive()) { var f = window.qhSingleMode; return (f.languages[f.lang] || [f.lang])[0]; }
+    var c = document.getElementById('langCount'); return c ? c.textContent : '';
+  }
+  function refresh(){
+    if (!fab) return;
+    var show = hasVerses() && !topVisible && !pickerOpen();
+    fab.classList.toggle('qh-show', show);
+    var cnt = fab.querySelector('.qh-fab-count'); if (cnt) cnt.textContent = countLangs();
+  }
+
+  function openSingleSheet(){
+    var f = window.qhSingleMode; if (!f) return;
+    var sheet = document.getElementById('qhSingleLangSheet');
+    if (!sheet) {
+      var ov = document.createElement('div'); ov.id = 'qhSingleLangOverlay'; document.body.appendChild(ov);
+      sheet = document.createElement('div'); sheet.id = 'qhSingleLangSheet';
+      sheet.setAttribute('role', 'dialog'); sheet.setAttribute('aria-label', 'Reading language');
+      sheet.innerHTML = '<div class="qh-sl-head"><div class="qh-sl-title">Reading language</div><button type="button" data-close="1">✕ Done</button></div><div class="qh-sl-list"></div>';
+      document.body.appendChild(sheet);
+      ov.addEventListener('click', closeSingleSheet);
+      sheet.addEventListener('click', function(e){
+        var b = e.target.closest('button'); if (!b) return;
+        if (b.getAttribute('data-close')) { closeSingleSheet(); return; }
+        var code = b.getAttribute('data-lang'); if (!code || code === f.lang) { closeSingleSheet(); return; }
+        f.lang = code; f.render(); closeSingleSheet();
+      });
+    }
+    var list = sheet.querySelector('.qh-sl-list'); list.innerHTML = '';
+    Object.keys(f.languages).forEach(function(code){
+      var b = document.createElement('button'); b.type = 'button'; b.setAttribute('data-lang', code);
+      b.textContent = f.languages[code][0]; if (code === f.lang) { b.className = 'active'; b.setAttribute('aria-pressed', 'true'); }
+      list.appendChild(b);
+    });
+    held = captureAnchor();
+    sheet.classList.add('qh-open'); document.getElementById('qhSingleLangOverlay').classList.add('qh-open');
+    refresh();
+  }
+  function closeSingleSheet(){
+    var s = document.getElementById('qhSingleLangSheet'), o = document.getElementById('qhSingleLangOverlay');
+    if (s) s.classList.remove('qh-open'); if (o) o.classList.remove('qh-open');
+    held = null; refresh(); if (fab) fab.focus({ preventScroll: true });
+  }
+
+  function openFromHere(){
+    wrapApply(); wrapSingleRender();
+    if (singleActive()) { openSingleSheet(); return; }
+    held = captureAnchor();
+    if (typeof window.toggleLangPicker === 'function') window.toggleLangPicker();
+    refresh();
+  }
+
+  function init(){
+    wrapApply(); wrapSingleRender();
+    // Release the held verse when the main picker closes, whichever way.
+    if (typeof window.closeLangPicker === 'function' && !window.closeLangPicker.__qhKeepPlace) {
+      var oc = window.closeLangPicker;
+      window.closeLangPicker = function(){ var r = oc.apply(this, arguments); held = null; refresh(); return r; };
+      window.closeLangPicker.__qhKeepPlace = true;
+    }
+    if (typeof window.toggleLangPicker === 'function' && !window.toggleLangPicker.__qhKeepPlace) {
+      var ot = window.toggleLangPicker;
+      window.toggleLangPicker = function(){ if (!pickerOpen()) held = held || captureAnchor(); var r = ot.apply(this, arguments); if (!pickerOpen()) held = null; refresh(); return r; };
+      window.toggleLangPicker.__qhKeepPlace = true;
+    }
+    fab = document.createElement('button');
+    fab.type = 'button'; fab.id = 'qhLangFab';
+    fab.setAttribute('aria-label', 'Change or add languages for the verses you are reading');
+    fab.title = 'Languages';
+    fab.innerHTML = '<span aria-hidden="true">🌐</span><span>Languages</span><span class="qh-fab-count"></span>';
+    fab.addEventListener('click', openFromHere);
+    document.body.appendChild(fab);
+
+    var bar = document.getElementById('langPickerBtn');
+    if (bar && 'IntersectionObserver' in window) {
+      new IntersectionObserver(function(es){
+        es.forEach(function(e){ topVisible = e.isIntersecting && shown(bar); });
+        refresh();
+      }).observe(bar);
+    } else { topVisible = false; }
+    var mo = new MutationObserver(function(){
+      if (bar && !shown(bar)) topVisible = false;
+      wrapSingleRender(); refresh();
+    });
+    var area = verseArea(); if (area) mo.observe(area, { childList: true });
+    var lc = document.getElementById('langCount'); if (lc) mo.observe(lc, { childList: true, characterData: true, subtree: true });
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    var p = document.getElementById('langPickerPanel'); if (p) mo.observe(p, { attributes: true, attributeFilter: ['style'] });
+    refresh();
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+})();
+</script>
 </body>
 </html>
