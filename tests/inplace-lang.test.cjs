@@ -57,7 +57,6 @@ test('change languages mid-sura without leaving the verse', { timeout: 300000 },
     for (const width of WIDTHS) {
       const ctx = await browser.newContext({ viewport: { width, height: width < 700 ? 800 : 900 }, isMobile: width < 700, hasTouch: width < 700 });
       const page = await ctx.newPage();
-      page.on('framenavigated', f => { if (f === page.mainFrame()) console.log(`${width}px nav ${f.url().replace(/^https?:\/\/[^/]+/, '')}`); });
       page.on('pageerror', e => console.log(`${width}px page error: ${String(e.message).slice(0, 200)}`));
       await page.goto(`${base}/index.html?sura=2&aya=199`, { waitUntil: 'domcontentloaded' });
       await page.waitForSelector('#vc-199', { timeout: 60000 });
@@ -114,14 +113,6 @@ test('change languages mid-sura without leaving the verse', { timeout: 300000 },
       await page.waitForTimeout(2500);
       await page.evaluate(() => document.getElementById('vc-199').scrollIntoView({ block: 'start' }));
       await page.waitForTimeout(800);
-      const diag = await page.evaluate(() => {
-        const bar = document.getElementById('langPickerBtn'), area = document.getElementById('verseArea'), fab = document.getElementById('qhLangFab');
-        const r = bar && bar.getBoundingClientRect();
-        return { html: document.documentElement.className, scrollY: window.scrollY, barRects: bar ? bar.getClientRects().length : -1,
-          barTop: r && Math.round(r.top), barBottom: r && Math.round(r.bottom), areaOffsetParent: !!(area && area.offsetParent),
-          areaPos: area && getComputedStyle(area).position, fab: fab && fab.className, vc199: Math.round(document.getElementById('vc-199').getBoundingClientRect().top) };
-      });
-      console.log(`${width}px single diag`, JSON.stringify(diag));
       try {
         await page.waitForSelector('#qhLangFab.qh-show', { timeout: 10000 });
       } catch (e) {
@@ -141,21 +132,9 @@ test('change languages mid-sura without leaving the verse', { timeout: 300000 },
       await page.click('#qhLangFab');
       await page.waitForSelector('#qhSingleLangSheet.qh-open');
       await shot(page, `${width}-4-single-sheet.png`);
-      const sheetState = await page.evaluate(() => { const s = document.getElementById('qhSingleLangSheet'); return { url: location.pathname + location.search, sheets: document.querySelectorAll('#qhSingleLangSheet').length, open: !!(s && s.classList.contains('qh-open')), buttons: s ? [...s.querySelectorAll('button')].map(b => b.getAttribute('data-lang') || b.textContent.trim()).join(',') : '' }; });
-      console.log(`${width}px sheet`, JSON.stringify(sheetState));
-      await page.evaluate(() => {
-        const log = window.__scrollLog = [];
-        const note = (kind) => log.push({ t: Math.round(performance.now()), kind, y: Math.round(scrollY), stack: (new Error().stack || '').split('\n').slice(2, 5).map(s => s.trim().slice(0, 120)).join(' | ') });
-        const siv = Element.prototype.scrollIntoView; Element.prototype.scrollIntoView = function () { note('scrollIntoView ' + (this.id || this.className)); return siv.apply(this, arguments); };
-        const st = window.scrollTo; window.scrollTo = function () { note('scrollTo'); return st.apply(this, arguments); };
-        const sb = window.scrollBy; window.scrollBy = function () { note('scrollBy ' + JSON.stringify([...arguments])); return sb.apply(this, arguments); };
-        let lastY = scrollY; window.addEventListener('scroll', () => { if (Math.abs(scrollY - lastY) > 200) note('jump ' + Math.round(lastY) + '->' + Math.round(scrollY)); lastY = scrollY; }, true);
-      });
       await page.click('#qhSingleLangSheet button[data-lang="de"]', { timeout: 10000 });
-      const samples = [];
-      for (const ms of [0, 150, 300, 600, 1000, 1600, 2500]) { await page.waitForTimeout(ms ? ms - (samples.at(-1)?.ms || 0) : 0); samples.push({ ms, ...(await page.evaluate(readingVerse)) }); }
-      console.log(`${width}px single samples`, JSON.stringify(samples.map(s => `${s.ms}:${s.aya}@${s.top}`)));
-      console.log(`${width}px single scroll log`, JSON.stringify(await page.evaluate(() => window.__scrollLog.slice(0, 12))));
+      // Read after late layout changes have settled, not just straight after the switch.
+      await page.waitForTimeout(3000);
       const sAfter = await page.evaluate(readingVerse);
       await shot(page, `${width}-5-single-after.png`);
       assert.strictEqual(await page.evaluate(() => window.qhSingleMode.lang), 'de');
