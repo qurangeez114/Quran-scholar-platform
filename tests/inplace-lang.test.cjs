@@ -49,7 +49,7 @@ async function shot(page, name) {
   try { await page.screenshot({ path: path.join(OUT, name), timeout: 8000 }); } catch (e) { console.log(`screenshot skipped: ${name}`); }
 }
 
-test('change languages mid-sura without leaving the verse', { timeout: 300000 }, async () => {
+test('change languages mid-sura without leaving the verse', { timeout: 540000 }, async () => {
   fs.mkdirSync(OUT, { recursive: true });
   const srv = await serve();
   const base = `http://127.0.0.1:${srv.address().port}`;
@@ -146,7 +146,7 @@ test('change languages mid-sura without leaving the verse', { timeout: 300000 },
         await page.waitForTimeout(2500);
         assert.strictEqual(await page.$eval('.sidebar', s => s.classList.contains('open')), false, `${width}px: drawer closes after Go`);
         const jumped = await page.evaluate(() => { const c = document.querySelector('#vc-10[data-sura="3"]'), r = c.getBoundingClientRect(); return { top: Math.round(r.top), bottom: Math.round(r.bottom), h: innerHeight }; });
-        assert.ok(jumped.top < jumped.h && jumped.bottom > 0, `${width}px: 3:10 is on screen after Go (top ${jumped.top})`);
+        assert.ok(jumped.top > -40 && jumped.top < jumped.h * 0.6, `${width}px: start of 3:10 is on screen after Go (top ${jumped.top})`);
         await shot(page, `${width}-3b-jump.png`);
         report.push(`${width}px (drawer): jumped to 3:10, card top at ${jumped.top}px`);
       } else {

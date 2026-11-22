@@ -6401,6 +6401,13 @@ function resolveGotoSuraId() {
   return hit ? (hit.sura_id || hit.id) : null;
 }
 
+// A verse shown in many languages can be taller than a phone screen; centering
+// it would hide its first lines, so a tall card is brought to the top instead.
+function scrollVerseIntoView(card) {
+  const tall = card.offsetHeight > window.innerHeight * 0.7;
+  card.style.scrollMarginTop = '8px';
+  card.scrollIntoView({ behavior: 'smooth', block: tall ? 'start' : 'center' });
+}
 async function gotoVerse() {
   const sura = resolveGotoSuraId();
   const aya = parseInt(document.getElementById('gotoAya').value);
@@ -6415,7 +6422,7 @@ async function gotoVerse() {
     requestAnimationFrame(() => {
       const card = document.getElementById('vc-' + aya);
       if (card) {
-        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        scrollVerseIntoView(card);
         highlightVerse(card);
       } else {
         alert('Verse ' + aya + ' not found in Sura ' + sura);
@@ -6607,7 +6614,7 @@ async function loadVerseContext(suraId, targetAya, before, after) {
     requestAnimationFrame(() => {
       const card = document.getElementById('vc-' + targetAya);
       if (card) {
-        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        scrollVerseIntoView(card);
         highlightVerse(card);
       }
     });
