@@ -24,7 +24,7 @@ def main() -> None:
     require(ar["id"] == 13239 and ar["language"] == "ar" and "قال هلال بن يساف" in ar["exact_anchor"], "Arabic attribution anchor missing")
     require(ar["source_url_value"] == "671" and ar["source_url_kind"] == "legacy_numeric_source_identifier_not_url", "legacy ID misrepresented")
     require(en["id"] == 38030 and en["language"] == "en" and en["coverage_finding"].startswith("The English row ends after the first and second interpretations"), "English omission boundary missing")
-    require(all(en["phrase_searches"].get(term) == 0 for term in ("Hilal ibn Yasaf", "Messenger of God", "no deity but God")), "English absence checks changed")
+    require(all(en["phrase_searches"].get(term) == 0 for term in ("Hilal ibn Yasaf", "thirteenth")), "English absence checks changed")
     finding = data["review_findings"]
     require("explicitly reports" in finding["attribution_type"] and "does not provide a transmission chain" in finding["direct_attribution_vs_chain"], "named-report/no-chain distinction missing")
     require(finding["historical_authenticity_assessed"] is False, "historical authenticity out of scope")
