@@ -61,6 +61,16 @@ test('change languages mid-sura without leaving the verse', { timeout: 300000 },
       await page.goto(`${base}/index.html?sura=2&aya=199`, { waitUntil: 'domcontentloaded' });
       try {
         await page.waitForSelector('#vc-199', { timeout: 60000 });
+      } catch (first) {
+        // The reader loads live data; retry once if the database was briefly unreachable.
+        const down = await page.evaluate(() => /Cannot connect/i.test((document.getElementById('verseArea') || {}).innerText || ''));
+        if (!down) throw first;
+        console.log(`${width}px: database briefly unreachable, reloading once`);
+        await page.waitForTimeout(5000);
+        await page.reload({ waitUntil: 'domcontentloaded' });
+      }
+      try {
+        await page.waitForSelector('#vc-199', { timeout: 60000 });
       } catch (e) {
         console.log(`${width}px load state`, JSON.stringify(await page.evaluate(() => {
           const area = document.getElementById('verseArea'), c = document.getElementById('vc-199');
