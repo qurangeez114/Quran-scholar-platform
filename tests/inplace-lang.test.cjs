@@ -98,6 +98,14 @@ test('change languages mid-sura without leaving the verse', { timeout: 300000 },
       await page.waitForTimeout(2500);
       await page.evaluate(() => document.getElementById('vc-199').scrollIntoView({ block: 'start' }));
       await page.waitForTimeout(800);
+      const diag = await page.evaluate(() => {
+        const bar = document.getElementById('langPickerBtn'), area = document.getElementById('verseArea'), fab = document.getElementById('qhLangFab');
+        const r = bar && bar.getBoundingClientRect();
+        return { html: document.documentElement.className, scrollY: window.scrollY, barRects: bar ? bar.getClientRects().length : -1,
+          barTop: r && Math.round(r.top), barBottom: r && Math.round(r.bottom), areaOffsetParent: !!(area && area.offsetParent),
+          areaPos: area && getComputedStyle(area).position, fab: fab && fab.className, vc199: Math.round(document.getElementById('vc-199').getBoundingClientRect().top) };
+      });
+      console.log(`${width}px single diag`, JSON.stringify(diag));
       await page.waitForSelector('#qhLangFab.qh-show', { timeout: 10000 });
       const sBefore = await page.evaluate(readingVerse);
       await page.click('#qhLangFab');
