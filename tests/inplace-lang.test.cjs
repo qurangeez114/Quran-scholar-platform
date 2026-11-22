@@ -220,8 +220,17 @@ test('change languages mid-sura without leaving the verse', { timeout: 540000 },
       if (width <= 768) {
         await page.click('#qhDrawerHandle');
         await page.waitForSelector('.sidebar.open #qhDrawerLang.qh-show', { timeout: 10000 });
+        // Wait until the drawer has finished sliding in before tapping inside it.
+        await page.waitForFunction(() => { const r = document.getElementById('qhDrawerLang').getBoundingClientRect(); return r.left >= 0 && r.width > 0; }, null, { timeout: 15000 });
         await page.waitForTimeout(400);
-        await page.click('#qhDrawerLang');
+        try {
+          await page.click('#qhDrawerLang', { timeout: 15000 });
+        } catch (e) {
+          const d = await page.evaluate(() => { const b = document.getElementById('qhDrawerLang'), sb = document.querySelector('.sidebar'), r = b.getBoundingClientRect(), cs = getComputedStyle(sb);
+            return { rect: [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)], sb: sb.className, transform: cs.transform, sbScroll: sb.scrollTop, y: scrollY, top: document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)?.id || '' }; });
+          console.log(`${width}px single drawer tap stuck`, JSON.stringify(d));
+          throw e;
+        }
       } else {
         await page.click('#qhLangFab');
       }
