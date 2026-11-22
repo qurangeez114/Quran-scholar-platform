@@ -13248,6 +13248,24 @@ function exportHadithAsDoc(hadithId) {
     var card = document.contains(a.card) ? a.card : document.getElementById('vc-' + a.aya);
     if (card && shown(card)) scrollBy(card.getBoundingClientRect().top - a.cardTop);
   }
+  // Late layout changes (header showing again, tab counts, fonts) can still move the page
+  // after a change, so hold the verse in place for a moment unless the reader scrolls.
+  var pinA = null, pinUntil = 0, pinFrame = 0;
+  function pin(a){
+    if (!a) return; pinA = a; pinUntil = Date.now() + 1500;
+    if (!pinFrame) pinFrame = requestAnimationFrame(pinStep);
+  }
+  function pinStep(){
+    pinFrame = 0;
+    if (!pinA || Date.now() > pinUntil) { pinA = null; return; }
+    restoreAnchor(pinA); pinFrame = requestAnimationFrame(pinStep);
+  }
+  ['wheel', 'touchmove', 'keydown'].forEach(function(ev){
+    window.addEventListener(ev, function(e){
+      if (e.target && e.target.closest && e.target.closest('#langPickerPanel,#qhSingleLangSheet')) return;
+      pinA = null;
+    }, { passive: true, capture: true });
+  });
 
   // Every language change keeps the reader's verse in place.
   function wrapApply(){
@@ -13256,8 +13274,7 @@ function exportHadithAsDoc(hadithId) {
     var wrapped = function(){
       var a = held || captureAnchor();
       var r = orig.apply(this, arguments);
-      restoreAnchor(a);
-      if (held) held = captureAnchor();
+      restoreAnchor(a); pin(a);
       return r;
     };
     wrapped.__qhKeepPlace = true;
@@ -13270,7 +13287,7 @@ function exportHadithAsDoc(hadithId) {
     var wrapped = function(){
       var a = (f.active && hasVerses()) ? (held || captureAnchor()) : null;
       var r = orig.apply(this, arguments);
-      if (a) { a.card = null; a.part = null; restoreAnchor(a); }
+      if (a) { a.card = null; a.part = null; restoreAnchor(a); pin(a); }
       return r;
     };
     wrapped.__qhKeepPlace = true;
@@ -13317,8 +13334,9 @@ function exportHadithAsDoc(hadithId) {
   }
   function closeSingleSheet(){
     var s = document.getElementById('qhSingleLangSheet'), o = document.getElementById('qhSingleLangOverlay');
+    var a = pinA || captureAnchor();
     if (s) s.classList.remove('qh-open'); if (o) o.classList.remove('qh-open');
-    held = null; refresh(); if (fab) fab.focus({ preventScroll: true });
+    held = null; restoreAnchor(a); pin(a); refresh(); if (fab) fab.focus({ preventScroll: true });
   }
 
   function openFromHere(){
@@ -13334,12 +13352,18 @@ function exportHadithAsDoc(hadithId) {
     // Release the held verse when the main picker closes, whichever way.
     if (typeof window.closeLangPicker === 'function' && !window.closeLangPicker.__qhKeepPlace) {
       var oc = window.closeLangPicker;
-      window.closeLangPicker = function(){ var r = oc.apply(this, arguments); held = null; refresh(); return r; };
+      window.closeLangPicker = function(){ var a = pinA || held || captureAnchor(); var r = oc.apply(this, arguments); held = null; restoreAnchor(a); pin(a); refresh(); return r; };
       window.closeLangPicker.__qhKeepPlace = true;
     }
     if (typeof window.toggleLangPicker === 'function' && !window.toggleLangPicker.__qhKeepPlace) {
       var ot = window.toggleLangPicker;
-      window.toggleLangPicker = function(){ if (!pickerOpen()) held = held || captureAnchor(); var r = ot.apply(this, arguments); if (!pickerOpen()) held = null; refresh(); return r; };
+      window.toggleLangPicker = function(){
+        var wasOpen = pickerOpen(), a = wasOpen ? (pinA || held || captureAnchor()) : null;
+        if (!wasOpen) held = held || captureAnchor();
+        var r = ot.apply(this, arguments);
+        if (!pickerOpen()) { held = null; if (a) { restoreAnchor(a); pin(a); } }
+        refresh(); return r;
+      };
       window.toggleLangPicker.__qhKeepPlace = true;
     }
     fab = document.createElement('button');
