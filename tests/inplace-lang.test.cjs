@@ -106,7 +106,21 @@ test('change languages mid-sura without leaving the verse', { timeout: 300000 },
           areaPos: area && getComputedStyle(area).position, fab: fab && fab.className, vc199: Math.round(document.getElementById('vc-199').getBoundingClientRect().top) };
       });
       console.log(`${width}px single diag`, JSON.stringify(diag));
-      await page.waitForSelector('#qhLangFab.qh-show', { timeout: 10000 });
+      try {
+        await page.waitForSelector('#qhLangFab.qh-show', { timeout: 10000 });
+      } catch (e) {
+        const after = await page.evaluate(() => {
+          const bar = document.getElementById('langPickerBtn'), fab = document.getElementById('qhLangFab'), r = fab.getBoundingClientRect(), cs = getComputedStyle(fab);
+          const p = document.getElementById('langPickerPanel'), sh = document.getElementById('qhSingleLangSheet');
+          return { html: document.documentElement.className, scrollY: window.scrollY, barShown: !!(bar && bar.getClientRects().length), fab: fab.className,
+            display: cs.display, vis: cs.visibility, box: [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)],
+            panel: p && p.style.display, sheet: sh && sh.className, cards: document.querySelectorAll('#verseArea .verse-card').length,
+            single: document.querySelectorAll('#verseArea .qh-single-card').length };
+        });
+        console.log(`${width}px single after-timeout`, JSON.stringify(after));
+        await page.screenshot({ path: path.join(OUT, `${width}-single-timeout.png`) });
+        throw e;
+      }
       const sBefore = await page.evaluate(readingVerse);
       await page.click('#qhLangFab');
       await page.waitForSelector('#qhSingleLangSheet.qh-open');
