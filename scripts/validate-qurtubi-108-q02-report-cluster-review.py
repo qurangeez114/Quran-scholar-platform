@@ -42,6 +42,11 @@ def check(d):
     assert a['human_scholarly_approval']=='pending' and a['publication_status']=='not_published'
     assert d['unresolved_holds']==[f'108-QURTUBI-SCHOLAR-H0{i}' for i in range(1,9)]
     assert d['next_target']['claim_id']=='108-Q03'
+    c=d['independent_source_confirmation']
+    assert c['status'].startswith('text_and_boundary_second_pass_confirmed')
+    assert 'milk' in c['fidelity_result']['translation_variant'] and 'snow' in c['fidelity_result']['translation_variant']
+    assert c['fidelity_result']['no_route_inference'] is True and c['fidelity_result']['historical_authenticity']=='not assessed'
+    assert len(c['hadith_reference_checks'])==3 and any('quran.ksu.edu.sa' in x['url'] for x in d['edition_locators'])
 
 check(D)
 mutations=[
