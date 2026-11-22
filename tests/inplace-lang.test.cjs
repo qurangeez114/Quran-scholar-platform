@@ -42,6 +42,11 @@ const readingVerse = () => {
 
 const WIDTHS = [360, 390, 430, 768, 1280];
 
+// Screenshots are evidence only: a slow web font must not fail the check.
+async function shot(page, name) {
+  try { await page.screenshot({ path: path.join(OUT, name), timeout: 8000 }); } catch (e) { console.log(`screenshot skipped: ${name}`); }
+}
+
 test('change languages mid-sura without leaving the verse', { timeout: 300000 }, async () => {
   fs.mkdirSync(OUT, { recursive: true });
   const srv = await serve();
@@ -63,12 +68,12 @@ test('change languages mid-sura without leaving the verse', { timeout: 300000 },
       const fab = await page.$eval('#qhLangFab', b => { const r = b.getBoundingClientRect(); return { l: r.left, r: r.right, t: r.top, b: r.bottom, w: innerWidth, h: innerHeight }; });
       assert.ok(fab.l >= 0 && fab.r <= fab.w && fab.t >= 0 && fab.b <= fab.h, `button inside the screen at ${width}px`);
       const before = await page.evaluate(readingVerse);
-      await page.screenshot({ path: path.join(OUT, `${width}-1-reading.png`) });
+      await shot(page, `${width}-1-reading.png`);
 
       await page.click('#qhLangFab');
       await page.waitForSelector('#langPickerPanel', { state: 'visible' });
       assert.strictEqual(await page.$eval('#qhLangFab', b => b.classList.contains('qh-show')), false, 'button hides while the picker is open');
-      await page.screenshot({ path: path.join(OUT, `${width}-2-picker.png`) });
+      await shot(page, `${width}-2-picker.png`);
 
       // Add every language, then remove Arabic and add it back.
       await page.click('#langPickerPanel button:has-text("All On")');
@@ -81,7 +86,7 @@ test('change languages mid-sura without leaving the verse', { timeout: 300000 },
       await page.click('#langPickerPanel button:has-text("Done")');
       await page.waitForTimeout(400);
       const after = await page.evaluate(readingVerse);
-      await page.screenshot({ path: path.join(OUT, `${width}-3-after.png`) });
+      await shot(page, `${width}-3-after.png`);
       assert.ok(await page.$eval('#qhLangFab', b => b.classList.contains('qh-show')), 'button returns after closing the picker');
 
       for (const [label, v] of [['after adding', afterAdd], ['after removing', afterRemove], ['after closing', after]]) {
@@ -118,17 +123,17 @@ test('change languages mid-sura without leaving the verse', { timeout: 300000 },
             single: document.querySelectorAll('#verseArea .qh-single-card').length };
         });
         console.log(`${width}px single after-timeout`, JSON.stringify(after));
-        await page.screenshot({ path: path.join(OUT, `${width}-single-timeout.png`) });
+        await shot(page, `${width}-single-timeout.png`);
         throw e;
       }
       const sBefore = await page.evaluate(readingVerse);
       await page.click('#qhLangFab');
       await page.waitForSelector('#qhSingleLangSheet.qh-open');
-      await page.screenshot({ path: path.join(OUT, `${width}-4-single-sheet.png`) });
+      await shot(page, `${width}-4-single-sheet.png`);
       await page.click('#qhSingleLangSheet button[data-lang="de"]');
       await page.waitForTimeout(800);
       const sAfter = await page.evaluate(readingVerse);
-      await page.screenshot({ path: path.join(OUT, `${width}-5-single-after.png`) });
+      await shot(page, `${width}-5-single-after.png`);
       assert.strictEqual(await page.evaluate(() => window.qhSingleMode.lang), 'de');
       assert.strictEqual(sAfter.aya, sBefore.aya, `${width}px single mode: same verse (was ${sBefore.aya}, now ${sAfter.aya})`);
       report.push(`${width}px single: 2:${sBefore.aya} at ${sBefore.top}px -> 2:${sAfter.aya} at ${sAfter.top}px after English to German`);
