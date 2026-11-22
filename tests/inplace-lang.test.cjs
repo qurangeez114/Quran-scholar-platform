@@ -129,8 +129,20 @@ test('change languages mid-sura without leaving the verse', { timeout: 300000 },
         await page.fill('#gotoSura', '3');
         await page.$eval('#gotoSura', i => i.dispatchEvent(new Event('change', { bubbles: true })));
         await page.fill('#gotoAya', '10');
+        const pending = new Map();
+        page.on('request', r => pending.set(r, r.url()));
+        page.on('requestfinished', r => pending.delete(r));
+        page.on('requestfailed', r => pending.delete(r));
+        const t0 = Date.now();
         await page.click('#panel-suras button[onclick="gotoVerse()"]');
-        await page.waitForSelector('#vc-10[data-sura="3"]', { timeout: 60000 });
+        try {
+          await page.waitForSelector('#vc-10[data-sura="3"]', { timeout: 60000 });
+        } catch (e) {
+          const still = [...pending.values()].map(u => { try { const x = new URL(u); return x.host + x.pathname; } catch (_) { return u.slice(0, 80); } });
+          console.log(`${width}px jump stuck; area: ${JSON.stringify(await page.evaluate(() => (document.getElementById('verseArea') || {}).innerText.slice(0, 160)))}; open requests: ${JSON.stringify(still.slice(0, 15))}`);
+          throw e;
+        }
+        report.push(`${width}px (drawer): 3:10 shown ${Date.now() - t0}ms after Go`);
         await page.waitForTimeout(2500);
         assert.strictEqual(await page.$eval('.sidebar', s => s.classList.contains('open')), false, `${width}px: drawer closes after Go`);
         const jumped = await page.evaluate(() => { const c = document.querySelector('#vc-10[data-sura="3"]'), r = c.getBoundingClientRect(); return { top: Math.round(r.top), bottom: Math.round(r.bottom), h: innerHeight }; });

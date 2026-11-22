@@ -6535,14 +6535,25 @@ async function loadVerseContext(suraId, targetAya, before, after) {
     // External Arabic/transliteration lookups, scoped to exactly the rows in
     // this range (parallel, one call per verse -- still tiny compared to a
     // whole-sura call, and stays proportional to context size, not sura length).
+    // These lookups only polish the Arabic and transliteration, so a slow or stalled
+    // response must never leave the reader stuck on "Loading verse...": each one
+    // gives up after a few seconds and the verse shows with the stored text instead.
+    const extFetch = (url) => {
+      const ctl = typeof AbortController === 'function' ? new AbortController() : null;
+      const timer = setTimeout(() => { if (ctl) ctl.abort(); }, 6000);
+      return Promise.race([
+        fetch(url, ctl ? { signal: ctl.signal } : undefined).then(r => r.json()),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 6500))
+      ]).finally(() => clearTimeout(timer));
+    };
     const [translitResults, arabicResults] = await Promise.all([
       Promise.all(ayaRows.map(a =>
-        fetch(`https://api.alquran.cloud/v1/ayah/${suraId}:${a.aya_number}/en.transliteration`)
-          .then(r => r.json()).then(d => ({ n: a.aya_number, text: d.data?.text || '' })).catch(() => ({ n: a.aya_number, text: '' }))
+        extFetch(`https://api.alquran.cloud/v1/ayah/${suraId}:${a.aya_number}/en.transliteration`)
+          .then(d => ({ n: a.aya_number, text: d.data?.text || '' })).catch(() => ({ n: a.aya_number, text: '' }))
       )),
       Promise.all(ayaRows.map(a =>
-        fetch(`https://api.alquran.cloud/v1/ayah/${suraId}:${a.aya_number}/quran-uthmani`)
-          .then(r => r.json()).then(d => ({ n: a.aya_number, text: d.data?.text || '' })).catch(() => ({ n: a.aya_number, text: '' }))
+        extFetch(`https://api.alquran.cloud/v1/ayah/${suraId}:${a.aya_number}/quran-uthmani`)
+          .then(d => ({ n: a.aya_number, text: d.data?.text || '' })).catch(() => ({ n: a.aya_number, text: '' }))
       ))
     ]);
     const translitMap = {}, arabicMap = {};
