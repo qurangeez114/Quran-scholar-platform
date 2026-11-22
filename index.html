@@ -13199,7 +13199,7 @@ function exportHadithAsDoc(hadithId) {
    view, opens the same picker, and every language change keeps the verse
    being read in the same place on screen. */
 (function(){
-  var fab, topVisible = true, held = null;
+  var fab, held = null;
   function verseArea(){ return document.getElementById('verseArea'); }
   function singleActive(){ return !!(window.qhSingleMode && window.qhSingleMode.active && document.querySelector('#verseArea .qh-single-card')); }
   function hasVerses(){ var a = verseArea(); return !!(a && a.offsetParent !== null && a.querySelector('.verse-card')); }
@@ -13301,9 +13301,23 @@ function exportHadithAsDoc(hadithId) {
     if (singleActive()) { var f = window.qhSingleMode; return (f.languages[f.lang] || [f.lang])[0]; }
     var c = document.getElementById('langCount'); return c ? c.textContent : '';
   }
+  // The button shows once the reader's own language control is off screen: the single-language
+  // toolbar in single-language reading, otherwise the Languages button in the top bar.
+  function controlsOnScreen(){
+    var el = singleActive() ? document.querySelector('#verseArea .qh-single-toolbar') : document.getElementById('langPickerBtn');
+    if (!shown(el)) return false;
+    var r = el.getBoundingClientRect(), sc = scroller();
+    var top = (sc && sc.contains(el)) ? Math.max(0, sc.getBoundingClientRect().top) : 0;
+    return r.bottom > top + 4 && r.top < window.innerHeight - 4;
+  }
+  var refreshQueued = false;
+  function queueRefresh(){
+    if (refreshQueued) return; refreshQueued = true;
+    requestAnimationFrame(function(){ refreshQueued = false; refresh(); });
+  }
   function refresh(){
     if (!fab) return;
-    var show = hasVerses() && !topVisible && !pickerOpen();
+    var show = hasVerses() && !controlsOnScreen() && !pickerOpen();
     fab.classList.toggle('qh-show', show);
     var cnt = fab.querySelector('.qh-fab-count'); if (cnt) cnt.textContent = countLangs();
   }
@@ -13377,17 +13391,10 @@ function exportHadithAsDoc(hadithId) {
     fab.addEventListener('click', openFromHere);
     document.body.appendChild(fab);
 
-    var bar = document.getElementById('langPickerBtn');
-    if (bar && 'IntersectionObserver' in window) {
-      new IntersectionObserver(function(es){
-        es.forEach(function(e){ topVisible = e.isIntersecting && shown(bar); });
-        refresh();
-      }).observe(bar);
-    } else { topVisible = false; }
-    var mo = new MutationObserver(function(){
-      if (bar && !shown(bar)) topVisible = false;
-      wrapSingleRender(); refresh();
-    });
+    // Scrolling happens on the window on phones and inside the reading pane on wide screens.
+    window.addEventListener('scroll', queueRefresh, { passive: true, capture: true });
+    window.addEventListener('resize', queueRefresh, { passive: true });
+    var mo = new MutationObserver(function(){ wrapSingleRender(); queueRefresh(); });
     var area = verseArea(); if (area) mo.observe(area, { childList: true });
     var lc = document.getElementById('langCount'); if (lc) mo.observe(lc, { childList: true, characterData: true, subtree: true });
     mo.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });

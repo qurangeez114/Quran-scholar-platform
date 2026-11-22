@@ -65,14 +65,23 @@ test('change languages mid-sura without leaving the verse', { timeout: 300000 },
       await page.evaluate(() => document.getElementById('vc-199').scrollIntoView({ block: 'start' }));
       await page.waitForTimeout(800);
 
-      // The floating button is there once the top language bar is off screen.
-      await page.waitForSelector('#qhLangFab.qh-show', { timeout: 10000 });
-      const fab = await page.$eval('#qhLangFab', b => { const r = b.getBoundingClientRect(); return { l: r.left, r: r.right, t: r.top, b: r.bottom, w: innerWidth, h: innerHeight }; });
-      assert.ok(fab.l >= 0 && fab.r <= fab.w && fab.t >= 0 && fab.b <= fab.h, `button inside the screen at ${width}px`);
+      // The floating button is there once the top language bar is off screen. On wide screens
+      // where the top bar stays on screen, its own Languages button is the one to tap.
+      const topOnScreen = await page.$eval('#langPickerBtn', b => { const r = b.getBoundingClientRect(); return b.getClientRects().length > 0 && r.bottom > 4 && r.top < innerHeight - 4; });
+      let opener = '#qhLangFab';
+      if (topOnScreen) {
+        opener = '#langPickerBtn';
+        await page.waitForTimeout(300);
+        assert.strictEqual(await page.$eval('#qhLangFab', b => b.classList.contains('qh-show')), false, `${width}px: no extra button while the top Languages button is on screen`);
+      } else {
+        await page.waitForSelector('#qhLangFab.qh-show', { timeout: 10000 });
+        const fab = await page.$eval('#qhLangFab', b => { const r = b.getBoundingClientRect(); return { l: r.left, r: r.right, t: r.top, b: r.bottom, w: innerWidth, h: innerHeight }; });
+        assert.ok(fab.l >= 0 && fab.r <= fab.w && fab.t >= 0 && fab.b <= fab.h, `button inside the screen at ${width}px`);
+      }
       const before = await page.evaluate(readingVerse);
       await shot(page, `${width}-1-reading.png`);
 
-      await page.click('#qhLangFab');
+      await page.click(opener);
       await page.waitForSelector('#langPickerPanel', { state: 'visible' });
       assert.strictEqual(await page.$eval('#qhLangFab', b => b.classList.contains('qh-show')), false, 'button hides while the picker is open');
       await shot(page, `${width}-2-picker.png`);
@@ -89,12 +98,12 @@ test('change languages mid-sura without leaving the verse', { timeout: 300000 },
       await page.waitForTimeout(400);
       const after = await page.evaluate(readingVerse);
       await shot(page, `${width}-3-after.png`);
-      assert.ok(await page.$eval('#qhLangFab', b => b.classList.contains('qh-show')), 'button returns after closing the picker');
+      if (!topOnScreen) assert.ok(await page.$eval('#qhLangFab', b => b.classList.contains('qh-show')), 'button returns after closing the picker');
 
       for (const [label, v] of [['after adding', afterAdd], ['after removing', afterRemove], ['after closing', after]]) {
         assert.strictEqual(v.aya, before.aya, `${width}px: same verse ${label} (was ${before.aya}, now ${v.aya})`);
       }
-      report.push(`${width}px: reading verse 2:${before.aya} at ${before.top}px; after add ${afterAdd.aya} at ${afterAdd.top}px; after remove ${afterRemove.aya} at ${afterRemove.top}px; after close ${after.aya} at ${after.top}px`);
+      report.push(`${width}px (${topOnScreen ? 'top bar button' : 'floating button'}): reading verse 2:${before.aya} at ${before.top}px; after add ${afterAdd.aya} at ${afterAdd.top}px; after remove ${afterRemove.aya} at ${afterRemove.top}px; after close ${after.aya} at ${after.top}px`);
 
       // Single-language mode: the same button switches the reading language in place.
       // Same link the home page uses for single-language reading (sura + language, no verse).
