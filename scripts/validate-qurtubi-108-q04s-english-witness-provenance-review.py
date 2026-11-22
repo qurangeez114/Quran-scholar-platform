@@ -34,6 +34,8 @@ req(audit['workflow']['fields_selected']==['id','aya','language','content','sour
 req(audit['existing_plan']['english_witness_entry_id']==38030 and not audit['existing_plan']['translator_edition_import_job_or_asset_id_recorded'],'plan provenance gap')
 req(audit['live_catalog_reads']['sources_table']['qurtubi_work_record']['id']==3 and audit['live_catalog_reads']['sources_table']['id_671_row_count']==0 and audit['live_catalog_reads']['source_references_table']['qurtubi_title_or_id_671_row_count']==0,'catalog lookup evidence')
 req(audit['live_catalog_reads']['translator_edition_publisher_import_job_or_asset_field_present'] is False and audit['live_catalog_reads']['writes']==0 and audit['live_catalog_reads']['paired_rows_fetched_at'].startswith('2026-05-05'),'live row metadata boundary')
+req(audit['live_catalog_reads']['ancient_sources_table']['id_671_row_count']==0,'legacy id absent from ancient_sources')
+req(audit['repository_search']['additional_search']['relevant_match_for_qurtubi_english_row_38030'] is False,'no relevant importer match')
 req(audit['finding'].find('provenance remains unresolved')>=0 and audit['conclusion'].find('Do not infer')==0,'preserve unresolved provenance')
 req(d['next_target']['claim_id']=='108-Q04S-ingest-provenance' and d['next_target']['hold_must_remain_active'] is True,'next target retains hold')
 
