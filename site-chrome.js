@@ -70,12 +70,13 @@
     presGate.src = '/presentation-gate.js?v=20261119';
     document.head.appendChild(presGate);
   }
+  // Grouped left to right: scripture and sources | the Prophet and history |
+  // study tools | your account. A 4th item of 1 marks the last button of a group.
   var NAV = [
-    ['index.html','📖','Quran'],['my-pages.html','🗃️','My Page'],['campaigns.html','⚔️','Campaigns'],['research.html','🔬','Research'],
-    ['themes.html','🗂️','Themes'],['madhhab.html','⚖️','Madhhab'],['sira.html','🕌','Sīra'],
-    ['stories.html','📚','Stories'],['books.html','📕','Books'],['fatwas.html','🧾','Fatwa'],['narrations.html','🧵','Narrations'],
-    ['marketplace.html','🛒','Market'],['muhammad.html','☪️','Muhammad'],['contradiction.html','⚡','Tensions'],
-    ['knowledge-graph.html','🕸️','Graph'],['tafsir-fidelity.html','🔍','Tefsir Fidelity'],['my-research.html','🗄️','Saved']
+    ['index.html','📖','Quran'],['narrations.html','🧵','Narrations'],['tafsir-fidelity.html','🔍','Tefsir'],['books.html','📕','Books'],['fatwas.html','🧾','Fatwa',1],
+    ['muhammad.html','☪️','Muhammad'],['sira.html','🕌','Sīra'],['campaigns.html','⚔️','Campaigns'],['stories.html','📚','Stories',1],
+    ['themes.html','🗂️','Themes'],['madhhab.html','⚖️','Madhhab'],['contradiction.html','⚡','Tensions'],['research.html','🔬','Research'],['knowledge-graph.html','🕸️','Graph',1],
+    ['marketplace.html','🛒','Market'],['my-pages.html','🗃️','My Page'],['my-research.html','🗄️','Saved']
   ];
   function file() { var f = location.pathname.split('/').pop(); return f || 'index.html'; }
 
@@ -91,7 +92,7 @@
   function navHtml() {
     var cur = PARENT[file()] || file();
     return NAV.map(function (n) {
-      return '<a class="bnav-btn' + (n[0] === cur ? ' active' : '') + '" href="/' + n[0] + '"' + (n[0] === cur ? ' aria-current="page"' : '') + '><span class="bni">' + n[1] + '</span><span>' + n[2] + '</span></a>';
+      return '<a class="bnav-btn' + (n[3] ? ' bnav-grp-end' : '') + (n[0] === cur ? ' active' : '') + '" href="/' + n[0] + '"' + (n[0] === cur ? ' aria-current="page"' : '') + '><span class="bni">' + n[1] + '</span><span>' + n[2] + '</span></a>';
     }).join('') +
       // Donate is pinned to the right end of the bar on phones (see CSS), so it
       // is always one tap away without floating over the page content.
@@ -109,6 +110,7 @@
         '#bottom-nav::-webkit-scrollbar{display:none!important}' +
         '#bottom-nav .bnav-btn{box-sizing:border-box!important;flex:0 0 66px!important;min-width:66px!important;max-width:66px!important;width:66px!important;height:56px!important;min-height:56px!important;display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;gap:1px!important;padding:2px 1px!important;margin:0!important;background:transparent!important;border:0!important;border-right:1px solid #EEE5D7!important;border-radius:0!important;color:#524a3b!important;font:600 10px/1.2 Arial,sans-serif!important;letter-spacing:0!important;text-transform:none!important;text-decoration:none!important;text-align:center!important;overflow:hidden!important;white-space:nowrap!important;cursor:pointer!important;}' +
         '#bottom-nav .bnav-btn .bni{font-size:19px!important;line-height:23px!important;display:block!important;margin:0!important}' +
+        '#bottom-nav .bnav-btn.bnav-grp-end{border-right:2px solid #D4C7AA!important}' +
         '#bottom-nav .bnav-btn.active{background:#F3E8CF!important;color:#754e0c!important;box-shadow:inset 0 3px #886a1f!important}' +
         '#bottom-nav .bnav-btn:focus-visible{outline:2px solid #9c742a!important;outline-offset:-3px!important}' +
         'body{padding-bottom:calc(72px + env(safe-area-inset-bottom,0px))!important}' +
