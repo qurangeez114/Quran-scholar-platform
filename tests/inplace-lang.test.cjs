@@ -90,8 +90,11 @@ test('change languages mid-sura without leaving the verse', { timeout: 300000 },
       report.push(`${width}px: reading verse 2:${before.aya} at ${before.top}px; after add ${afterAdd.aya} at ${afterAdd.top}px; after remove ${afterRemove.aya} at ${afterRemove.top}px; after close ${after.aya} at ${after.top}px`);
 
       // Single-language mode: the same button switches the reading language in place.
-      await page.goto(`${base}/index.html?sura=2&aya=199&single=en`, { waitUntil: 'domcontentloaded' });
-      await page.waitForSelector('#vc-199.qh-single-card', { timeout: 60000 });
+      // Same link the home page uses for single-language reading (sura + language, no verse).
+      await page.evaluate(() => { try { localStorage.removeItem('qh_last_pos'); } catch (e) {} });
+      await page.goto(`${base}/index.html?sura=2&single=en`, { waitUntil: 'domcontentloaded' });
+      await page.waitForSelector('#verseArea .qh-single-card', { timeout: 60000 });
+      await page.waitForSelector('#vc-199.qh-single-card', { state: 'attached', timeout: 30000 });
       await page.waitForTimeout(2500);
       await page.evaluate(() => document.getElementById('vc-199').scrollIntoView({ block: 'start' }));
       await page.waitForTimeout(800);
