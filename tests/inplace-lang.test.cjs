@@ -57,6 +57,8 @@ test('change languages mid-sura without leaving the verse', { timeout: 300000 },
     for (const width of WIDTHS) {
       const ctx = await browser.newContext({ viewport: { width, height: width < 700 ? 800 : 900 }, isMobile: width < 700, hasTouch: width < 700 });
       const page = await ctx.newPage();
+      page.on('framenavigated', f => { if (f === page.mainFrame()) console.log(`${width}px nav ${f.url().replace(/^https?:\/\/[^/]+/, '')}`); });
+      page.on('pageerror', e => console.log(`${width}px page error: ${String(e.message).slice(0, 200)}`));
       await page.goto(`${base}/index.html?sura=2&aya=199`, { waitUntil: 'domcontentloaded' });
       await page.waitForSelector('#vc-199', { timeout: 60000 });
       await page.waitForTimeout(2500);
@@ -130,7 +132,9 @@ test('change languages mid-sura without leaving the verse', { timeout: 300000 },
       await page.click('#qhLangFab');
       await page.waitForSelector('#qhSingleLangSheet.qh-open');
       await shot(page, `${width}-4-single-sheet.png`);
-      await page.click('#qhSingleLangSheet button[data-lang="de"]');
+      const sheetState = await page.evaluate(() => { const s = document.getElementById('qhSingleLangSheet'); return { url: location.pathname + location.search, sheets: document.querySelectorAll('#qhSingleLangSheet').length, open: !!(s && s.classList.contains('qh-open')), buttons: s ? [...s.querySelectorAll('button')].map(b => b.getAttribute('data-lang') || b.textContent.trim()).join(',') : '' }; });
+      console.log(`${width}px sheet`, JSON.stringify(sheetState));
+      await page.click('#qhSingleLangSheet button[data-lang="de"]', { timeout: 10000 });
       await page.waitForTimeout(800);
       const sAfter = await page.evaluate(readingVerse);
       await shot(page, `${width}-5-single-after.png`);
