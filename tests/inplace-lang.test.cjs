@@ -59,7 +59,16 @@ test('change languages mid-sura without leaving the verse', { timeout: 300000 },
       const page = await ctx.newPage();
       page.on('pageerror', e => console.log(`${width}px page error: ${String(e.message).slice(0, 200)}`));
       await page.goto(`${base}/index.html?sura=2&aya=199`, { waitUntil: 'domcontentloaded' });
-      await page.waitForSelector('#vc-199', { timeout: 60000 });
+      try {
+        await page.waitForSelector('#vc-199', { timeout: 60000 });
+      } catch (e) {
+        console.log(`${width}px load state`, JSON.stringify(await page.evaluate(() => {
+          const area = document.getElementById('verseArea'), c = document.getElementById('vc-199');
+          return { cards: document.querySelectorAll('#verseArea .verse-card').length, attached: !!c, rects: c ? c.getClientRects().length : 0,
+            areaShown: !!(area && area.getClientRects().length), text: area ? area.innerText.slice(0, 160) : '' };
+        })));
+        throw e;
+      }
       await page.waitForTimeout(2500);
       await page.evaluate(() => document.getElementById('vc-199').scrollIntoView({ block: 'start' }));
       await page.waitForTimeout(800);
