@@ -60,6 +60,21 @@ def check(d):
     assert f['ata_parallel_location_disagreement'] == "al-Qurtubi says at the gathering; the al-Tabari parallel says in Paradise"
     assert f['four_caliphs_claim_part_of_muslim_report'] is False
     assert f['historical_authenticity_conclusion'] == f['route_independence_conclusion'] == 'not_assessed'
+    second = d['independent_source_confirmation']
+    assert second['status'].startswith('source_text_and_voice_boundaries_confirmed')
+    assert len(second['commentary_witnesses']) == 2
+    assert 'lines 35–37' in second['commentary_witnesses'][0]['locator']
+    assert 'pp. 216–217' in second['commentary_witnesses'][1]['locator']
+    assert second['collection_witness']['reference'].startswith('Sahih Muslim 400a')
+    assert second['parallel_commentary_witness']['reference'].startswith('Al-Tabari')
+    assert 'al-mawqif' in second['unresolved_variants'][1] and 'fi al-jannah' in second['unresolved_variants'][1]
+    assert 'Matar/Fitr' in second['unresolved_variants'][0] and 'unresolved' in second['unresolved_variants'][0]
+    assert second['no_new_judgment']['historical_authenticity'] == 'not assessed'
+    assert second['no_new_judgment']['route_independence'] == 'not assessed'
+    assert second['live_span_result'].startswith('All seven')
+    assert d['live_read_only_witnesses']['exact_span_readback']['sha256_matches'] == 7
+    assert d['live_read_only_witnesses']['exact_span_readback']['mismatches'] == 0
+    assert d['next_target']['claim_id'] == '108-Q04A'
     a = d['actions']
     assert a['source_review_performed'] and a['exact_span_hashes_recorded'] and a['collection_references_recorded']
     assert all(a[k] is False for k in ('live_database_written', 'sql_executed', 'pr_merged', 'deployed'))
