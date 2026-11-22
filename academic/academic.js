@@ -1,6 +1,7 @@
 // Shared helpers for QuranHikma academic pages. Read-only (GET) access to public data.
 import {formatTuition} from '/accounts/tuition.js';
-export {formatTuition};
+import {classFormatLabel} from '/accounts/class-format.js';
+export {formatTuition,classFormatLabel};
 export const SUPABASE_URL='https://ylosytbxpzxzwfzjpaej.supabase.co';
 export const ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
 export const TBP='To be provided by QuranHikma';

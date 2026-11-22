@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createContext, runInContext} from 'node:vm';
 
-const src=readFileSync('accounts/tuition.js','utf8').replaceAll('export function ','function ');
+const src=readFileSync('accounts/tuition.js','utf8').replaceAll('export function ','function ').replaceAll('export const ','var ');
 const ctx=createContext({Intl,Number,String,Error,Math});
 runInContext(src+'\nthis.formatTuition=formatTuition;this.tuitionFieldsFromInput=tuitionFieldsFromInput;this.isPaidTuition=isPaidTuition;',ctx);
 const {formatTuition,tuitionFieldsFromInput,isPaidTuition}=ctx;

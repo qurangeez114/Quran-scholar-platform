@@ -321,6 +321,9 @@
         <div class="form-group"><label class="checkbox-label"><input type="checkbox" id="courseFacultyReuse">
           <span>Allow other instructors to include my course in their courses</span></label>
           <p style="font-size:12px;color:#657580;margin-top:6px">This is separate from student access. You keep authorship and private grades; sharing can be revoked.</p></div>
+        <div class="form-group"><label for="courseClassFormat">Class format</label>
+          <select id="courseClassFormat"><option value="video_text" selected>Video + text</option></select>
+          <p style="font-size:12px;color:#657580;margin-top:6px">How you will teach this course. Students see it on the course page and catalog. Each lesson can still be text, video with notes, quiz or assignment. For live classes, schedule sessions in the <a href="/academic-hub.html">Academic Hub</a> (Live classrooms).</p></div>
         <div class="form-group"><label for="courseTuitionType">Tuition</label>
           <select id="courseTuitionType">
             <option value="free" selected>Free</option>
@@ -331,7 +334,8 @@
           <label for="courseTuitionAmount">Amount</label>
           <input type="number" id="courseTuitionAmount" min="0.01" step="0.01" inputmode="decimal" placeholder="e.g. 25">
           <label for="courseTuitionCurrency" style="margin-top:0.6rem">Currency</label>
-          <input type="text" id="courseTuitionCurrency" value="USD" maxlength="3" style="text-transform:uppercase">
+          <select id="courseTuitionCurrency"><option value="USD" selected>USD — US dollar</option></select>
+          <p style="font-size:12px;color:#657580;margin-top:6px">Students see the price in this currency.</p>
         </div>
         <button type="submit" class="btn btn-primary">Create Course</button>
       </form>
@@ -372,6 +376,8 @@
         <div class="form-group"><label class="checkbox-label"><input type="checkbox" id="editFacultyReuse">
           <span>Other instructors may include this course in their courses</span></label>
           <p style="font-size:12px;color:#657580;margin-top:6px">Uncheck to revoke linked access. This does not transfer ownership or grades.</p></div>
+        <div class="form-group"><label for="editClassFormat">Class format</label>
+          <select id="editClassFormat"><option value="video_text" selected>Video + text</option></select></div>
         <div class="form-group"><label for="editTuitionType">Tuition</label>
           <select id="editTuitionType">
             <option value="free">Free</option>
@@ -381,7 +387,7 @@
           <label for="editTuitionAmount">Amount</label>
           <input type="number" id="editTuitionAmount" min="0.01" step="0.01" inputmode="decimal">
           <label for="editTuitionCurrency" style="margin-top:0.6rem">Currency</label>
-          <input type="text" id="editTuitionCurrency" value="USD" maxlength="3" style="text-transform:uppercase">
+          <select id="editTuitionCurrency"><option value="USD" selected>USD — US dollar</option></select>
         </div>
         <div style="display: flex; gap: 1rem;">
           <button type="submit" class="btn btn-primary" style="flex: 1;">Save Changes</button>
@@ -406,7 +412,8 @@
   <script type="module">
     import { supabase } from '../accounts/client.js';
     import { requireTeachingAccess, lmsRequest } from '../accounts/lms-access.js';
-    import { getCourses, createCourse, updateCourse, deleteCourse, tuitionFieldsFromInput, formatTuition } from '../courses-api.js';
+    import { getCourses, createCourse, updateCourse, deleteCourse, tuitionFieldsFromInput, formatTuition, fillCurrencySelect } from '../courses-api.js';
+    import { fillClassFormatSelect, classFormatLabel, normalizeClassFormat } from '../accounts/class-format.js';
 
     import {loadCourseReadiness} from '../accounts/course-readiness.js';
     let currentUser = null;
@@ -427,10 +434,19 @@
       if(!Number.isFinite(n)||n<=0)throw new Error('Enter a tuition amount greater than 0, or choose Free.');
       return {tuition_type:'paid',tuition_amount:n,tuition_currency:String(currency||'USD').trim().toUpperCase()||'USD',tuition:String(currency||'USD')+' '+n};
     }
+    // Wrappers keep the page working if a helper module is not loaded (e.g. in unit tests).
+    const setCurrencyOptions=(el,v)=>{if(typeof fillCurrencySelect==='function')fillCurrencySelect(el,v);else if(el)el.value=v||'USD';};
+    const setFormatOptions=(el,v)=>{if(typeof fillClassFormatSelect==='function')fillClassFormatSelect(el,v);else if(el&&v)el.value=v;};
+    const formatLabel=v=>typeof classFormatLabel==='function'?classFormatLabel(v):'';
+    const readFormat=v=>typeof normalizeClassFormat==='function'?normalizeClassFormat(v):(v||null);
+    setCurrencyOptions(document.getElementById('courseTuitionCurrency'),'USD');
+    setCurrencyOptions(document.getElementById('editTuitionCurrency'),'USD');
+    setFormatOptions(document.getElementById('courseClassFormat'));
+    setFormatOptions(document.getElementById('editClassFormat'));
     document.getElementById('courseTuitionType').addEventListener('change',()=>syncTuitionFields('courseTuitionType','courseTuitionPaidFields'));
     document.getElementById('editTuitionType').addEventListener('change',()=>syncTuitionFields('editTuitionType','editTuitionPaidFields'));
     function courseTuitionLabel(course){
-      if(typeof formatTuition==='function')return courseTuitionLabel(course);
+      if(typeof formatTuition==='function')return formatTuition(course);
       const paid=course&&course.tuition_type==='paid'&&course.tuition_amount!=null&&Number(course.tuition_amount)>0;
       return paid?String(course.tuition_currency||'USD')+' '+Number(course.tuition_amount):'Free';
     }
@@ -502,7 +518,7 @@
       container.innerHTML = courses.map(course => `
         <div class="course-item" data-course-id="${escapeHTML(course.id)}">
           <div class="course-title">${escapeHTML(course.title)}</div>
-          <div class="course-meta">Tuition: ${escapeHTML(courseTuitionLabel(course))}</div>
+          <div class="course-meta">Tuition: ${escapeHTML(courseTuitionLabel(course))}${formatLabel(course.class_format)?' · Format: '+escapeHTML(formatLabel(course.class_format)):''}</div>
           <div class="course-description">${escapeHTML(course.description || 'No description')}</div>
           <div class="course-meta">
             Created: ${new Date(course.created_at).toLocaleDateString()}
@@ -537,11 +553,13 @@
         const created = await createCourse(title, description,{
           visibility:document.getElementById('courseVisibility').value,
           faculty_reuse_enabled:document.getElementById('courseFacultyReuse').checked,
+          class_format:readFormat(document.getElementById('courseClassFormat').value),
           ...tuition
         });
         showAlert('Course created as a draft. Next: open Lessons to add content, then choose Publish.', 'success');
         document.getElementById('createCourseForm').reset();
-        document.getElementById('courseTuitionCurrency').value='USD';
+        setCurrencyOptions(document.getElementById('courseTuitionCurrency'),'USD');
+        setFormatOptions(document.getElementById('courseClassFormat'));
         syncTuitionFields('courseTuitionType','courseTuitionPaidFields');
         await loadCourses();
         // Bring the new card into view above the bottom toolbar.
@@ -566,7 +584,8 @@
       const paid=course.tuition_type==='paid';
       document.getElementById('editTuitionType').value = paid?'paid':'free';
       document.getElementById('editTuitionAmount').value = paid&&course.tuition_amount!=null?course.tuition_amount:'';
-      document.getElementById('editTuitionCurrency').value = (course.tuition_currency||'USD');
+      setCurrencyOptions(document.getElementById('editTuitionCurrency'), course.tuition_currency||'USD');
+      setFormatOptions(document.getElementById('editClassFormat'), course.class_format);
       syncTuitionFields('editTuitionType','editTuitionPaidFields');
 
       document.getElementById('editModal').classList.add('active');
@@ -635,7 +654,8 @@
         const wasPublished = courses.find(c => c.id === courseId)?.is_published === true;
         if(is_published && !wasPublished){const issues=await loadCourseReadiness(supabase,courseId);if(issues.length){window.closeEditModal();showPublishChecklist(courseId,issues);return;}}
         const tuition=readTuition('editTuitionType','editTuitionAmount','editTuitionCurrency');
-        await updateCourse(courseId, { title, description, is_published, visibility, faculty_reuse_enabled, ...tuition });
+        const class_format = readFormat(document.getElementById('editClassFormat').value);
+        await updateCourse(courseId, { title, description, is_published, visibility, faculty_reuse_enabled, class_format, ...tuition });
         showAlert('Course updated successfully!', 'success');
         window.closeEditModal();
         await loadCourses();
