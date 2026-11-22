@@ -13271,14 +13271,30 @@ function exportHadithAsDoc(hadithId) {
 #qhSingleLangOverlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4)}
 #qhSingleLangOverlay.qh-open{display:block}
 @media (min-width:901px){#qhLangFab{bottom:calc(76px + env(safe-area-inset-bottom,0px));right:22px}}
+/* Phones: no floating button over the verses. A slim tab on the left edge opens the
+   reading drawer, which holds languages plus chapter and verse. */
+#qhDrawerHandle{display:none;position:fixed;left:0;top:50%;transform:translateY(-50%);z-index:997;width:22px;height:64px;padding:0;border:1px solid #D4A830;border-left:0;border-radius:0 12px 12px 0;background:rgba(253,245,222,.92);color:#7d5f14;box-shadow:2px 0 8px rgba(0,0,0,.15);cursor:pointer;-webkit-tap-highlight-color:transparent;align-items:center;justify-content:center}
+#qhDrawerHandle::before{content:"";position:absolute;left:0;right:-14px;top:-8px;bottom:-8px}
+#qhDrawerHandle .qh-grip{display:block;width:4px;height:26px;border-left:2px solid #b08a2e;border-right:2px solid #b08a2e;opacity:.8}
+#qhDrawerHandle:focus-visible{outline:3px solid #9c742a;outline-offset:2px}
+#qhDrawerLang{display:none;align-items:center;justify-content:space-between;gap:8px;margin:10px 12px 4px;min-height:44px;padding:0 14px;border:1px solid #D4A830;border-radius:10px;background:#FDF5DE;color:#7d5f14;font:700 14px/1 Arial,sans-serif;cursor:pointer;flex-shrink:0}
+#qhDrawerLang .qh-dl-count{background:#7d5f14;color:#fff;border-radius:10px;padding:3px 8px;font-size:11px}
+@media (max-width:768px){
+  #qhLangFab{display:none!important}
+  #qhDrawerHandle.qh-show{display:flex}
+  #qhDrawerLang.qh-show{display:flex}
+  /* Keep the drawer's last rows above the fixed bottom bar. */
+  html.qh-has-bottom-nav .sidebar{height:auto;bottom:calc(60px + env(safe-area-inset-bottom,0px))}
+}
 /* Language sheets sit above the fixed bottom bar so their last row is never hidden behind it. */
 #langPickerOverlay,#qhSingleLangOverlay{z-index:2147483001!important}
 #langPickerPanel,#qhSingleLangSheet{z-index:2147483002!important}
 </style>
 <script id="qh-inplace-lang-script">
 /* Readers deep in a sura can change languages without scrolling to the top:
-   a floating "Languages" button appears once the top language bar is out of
-   view, opens the same picker, and every language change keeps the verse
+   on wide screens a floating "Languages" button appears once the top language bar
+   is out of view; on phones a slim tab on the left edge opens the reading drawer
+   (languages, chapter and verse). Both open the same picker, and every language change keeps the verse
    being read in the same place on screen. */
 (function(){
   var fab, held = null;
@@ -13398,6 +13414,7 @@ function exportHadithAsDoc(hadithId) {
     requestAnimationFrame(function(){ refreshQueued = false; refresh(); });
   }
   function refresh(){
+    refreshDrawer();
     if (!fab) return;
     var show = hasVerses() && !controlsOnScreen() && !pickerOpen();
     fab.classList.toggle('qh-show', show);
@@ -13435,7 +13452,8 @@ function exportHadithAsDoc(hadithId) {
     var s = document.getElementById('qhSingleLangSheet'), o = document.getElementById('qhSingleLangOverlay');
     var a = pinA || held;
     if (s) s.classList.remove('qh-open'); if (o) o.classList.remove('qh-open');
-    held = null; restoreAnchor(a); pin(a); refresh(); if (fab) fab.focus({ preventScroll: true });
+    held = null; restoreAnchor(a); pin(a); refresh();
+    var back = phoneMq.matches ? handle : fab; if (back && back.classList.contains('qh-show')) back.focus({ preventScroll: true });
   }
 
   function openFromHere(){
@@ -13444,6 +13462,85 @@ function exportHadithAsDoc(hadithId) {
     held = captureAnchor();
     if (typeof window.toggleLangPicker === 'function') window.toggleLangPicker();
     refresh();
+  }
+
+  // ---- Phone reading drawer: left-edge tab, languages, chapter and verse ----
+  var handle, drawerLang, phoneMq = window.matchMedia('(max-width:768px)');
+  function sidebarEl(){ return document.querySelector('.sidebar'); }
+  function drawerOpen(){ var sb = sidebarEl(); return !!(sb && sb.classList.contains('open')); }
+  function menuOnScreen(){
+    var m = document.querySelector('.top-bar .menu-toggle');
+    if (!shown(m)) return false;
+    var r = m.getBoundingClientRect();
+    return r.bottom > 4 && r.top < window.innerHeight - 4;
+  }
+  // Start the chapter and verse boxes at the verse being read, so Prev/Next and Go work from here.
+  function prefillGoto(){
+    if (!hasVerses()) return;
+    var a = captureAnchor(); if (!a || !a.sura) return;
+    try { if (typeof window.syncGotoSuraDisplay === 'function') window.syncGotoSuraDisplay(Number(a.sura)); } catch(e){}
+    var ay = document.getElementById('gotoAya'); if (ay && a.aya) ay.value = a.aya;
+  }
+  function openDrawer(){
+    if (typeof window.toggleSidebar === 'function' && !drawerOpen()) window.toggleSidebar();
+  }
+  function wrapSidebar(){
+    if (typeof window.toggleSidebar !== 'function' || window.toggleSidebar.__qhDrawer) return;
+    var ot = window.toggleSidebar;
+    window.toggleSidebar = function(){
+      var r = ot.apply(this, arguments);
+      if (drawerOpen()) prefillGoto();
+      queueRefresh(); return r;
+    };
+    window.toggleSidebar.__qhDrawer = true;
+    if (typeof window.closeSidebar === 'function') {
+      var oc = window.closeSidebar;
+      window.closeSidebar = function(){ var r = oc.apply(this, arguments); queueRefresh(); return r; };
+    }
+  }
+  function buildDrawer(){
+    handle = document.createElement('button');
+    handle.type = 'button'; handle.id = 'qhDrawerHandle';
+    handle.setAttribute('aria-label', 'Open reading menu: languages, chapter and verse');
+    handle.title = 'Languages, chapter and verse';
+    handle.innerHTML = '<span class="qh-grip" aria-hidden="true"></span>';
+    handle.addEventListener('click', openDrawer);
+    document.body.appendChild(handle);
+
+    var sb = sidebarEl(), head = sb && sb.querySelector('.sidebar-header');
+    if (head) {
+      drawerLang = document.createElement('button');
+      drawerLang.type = 'button'; drawerLang.id = 'qhDrawerLang';
+      drawerLang.setAttribute('aria-label', 'Change or add languages for the verses you are reading');
+      drawerLang.innerHTML = '<span><span aria-hidden="true">🌐 </span>Languages</span><span class="qh-dl-count"></span>';
+      drawerLang.addEventListener('click', function(){
+        // Close the drawer first so the anchor is taken from the reading view itself.
+        if (typeof window.closeSidebar === 'function') window.closeSidebar();
+        openFromHere();
+      });
+      head.parentNode.insertBefore(drawerLang, head.nextSibling);
+    }
+    // Swipe left inside the open drawer to close it.
+    if (sb) {
+      var sx = null, sy = 0;
+      sb.addEventListener('touchstart', function(e){ if (!phoneMq.matches || !drawerOpen()) return; sx = e.touches[0].clientX; sy = e.touches[0].clientY; }, { passive: true });
+      sb.addEventListener('touchend', function(e){
+        if (sx === null) return;
+        var t = e.changedTouches[0], dx = t.clientX - sx, dy = t.clientY - sy; sx = null;
+        if (dx < -60 && Math.abs(dy) < 40 && typeof window.closeSidebar === 'function') window.closeSidebar();
+      }, { passive: true });
+    }
+    if (document.getElementById('bottom-nav')) document.documentElement.classList.add('qh-has-bottom-nav');
+  }
+  function refreshDrawer(){
+    if (!handle) return;
+    if (!document.documentElement.classList.contains('qh-has-bottom-nav') && document.getElementById('bottom-nav')) document.documentElement.classList.add('qh-has-bottom-nav');
+    var reading = hasVerses();
+    handle.classList.toggle('qh-show', phoneMq.matches && reading && !menuOnScreen() && !drawerOpen() && !pickerOpen());
+    if (drawerLang) {
+      drawerLang.classList.toggle('qh-show', reading);
+      var c = drawerLang.querySelector('.qh-dl-count'); if (c) c.textContent = countLangs();
+    }
   }
 
   function init(){
@@ -13472,6 +13569,7 @@ function exportHadithAsDoc(hadithId) {
     fab.innerHTML = '<span aria-hidden="true">🌐</span><span>Languages</span><span class="qh-fab-count"></span>';
     fab.addEventListener('click', openFromHere);
     document.body.appendChild(fab);
+    wrapSidebar(); buildDrawer();
 
     // Scrolling happens on the window on phones and inside the reading pane on wide screens.
     window.addEventListener('scroll', queueRefresh, { passive: true, capture: true });
@@ -13481,6 +13579,7 @@ function exportHadithAsDoc(hadithId) {
     var lc = document.getElementById('langCount'); if (lc) mo.observe(lc, { childList: true, characterData: true, subtree: true });
     mo.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
     var p = document.getElementById('langPickerPanel'); if (p) mo.observe(p, { attributes: true, attributeFilter: ['style'] });
+    var sbx = sidebarEl(); if (sbx) mo.observe(sbx, { attributes: true, attributeFilter: ['class'] });
     refresh();
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();

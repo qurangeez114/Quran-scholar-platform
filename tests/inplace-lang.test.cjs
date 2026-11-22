@@ -1,5 +1,7 @@
-// Checks that a reader deep in a sura can change languages without scrolling
-// to the top, and that the verse they were reading stays on screen.
+// Checks that a reader deep in a sura can change languages, and on phones jump to
+// another chapter and verse, without scrolling to the top, and that the verse they
+// were reading stays on screen. Phones (768px and below) use the left-edge tab and
+// reading drawer; wider screens use the floating Languages button.
 // Runs the real index.html from a local static server at phone and desktop widths.
 const { test } = require('node:test');
 const assert = require('node:assert');
@@ -83,6 +85,59 @@ test('change languages mid-sura without leaving the verse', { timeout: 300000 },
       await page.evaluate(() => document.getElementById('vc-199').scrollIntoView({ block: 'start' }));
       await page.waitForTimeout(800);
 
+      const phone = width <= 768;
+      if (phone) {
+        // Phones: no floating button over the verses; the left-edge tab opens the reading drawer.
+        const menuOn = await page.$eval('.top-bar .menu-toggle', b => { const r = b.getBoundingClientRect(); return b.getClientRects().length > 0 && r.bottom > 4 && r.top < innerHeight - 4; });
+        if (!menuOn) await page.waitForSelector('#qhDrawerHandle.qh-show', { timeout: 10000 });
+        assert.strictEqual(await page.$eval('#qhLangFab', b => getComputedStyle(b).display), 'none', `${width}px: no floating button on phones`);
+        const h = await page.$eval('#qhDrawerHandle', b => { const r = b.getBoundingClientRect(); return { w: Math.round(r.width), l: r.left }; });
+        if (!menuOn) assert.ok(h.l === 0 && h.w <= 24, `${width}px: tab is slim and on the left edge (${h.w}px)`);
+        const before = await page.evaluate(readingVerse);
+        await shot(page, `${width}-1-reading.png`);
+        await page.click(menuOn ? '.top-bar .menu-toggle' : '#qhDrawerHandle');
+        await page.waitForSelector('.sidebar.open #qhDrawerLang.qh-show', { timeout: 10000 });
+        await page.waitForTimeout(400);
+        assert.strictEqual(await page.$eval('#gotoAya', i => i.value), before.aya, `${width}px: verse box starts at the verse being read`);
+        assert.ok(/^2 - /.test(await page.$eval('#gotoSura', i => i.value)), `${width}px: chapter box starts at the chapter being read`);
+        assert.strictEqual(await page.$eval('#qhDrawerHandle', b => b.classList.contains('qh-show')), false, 'tab hides while the drawer is open');
+        await shot(page, `${width}-2-drawer.png`);
+        await page.click('#qhDrawerLang');
+        await page.waitForSelector('#langPickerPanel', { state: 'visible' });
+        assert.strictEqual(await page.$eval('.sidebar', s => s.classList.contains('open')), false, 'drawer closes when the picker opens');
+        await page.click('#langPickerPanel button:has-text("All On")');
+        await page.waitForTimeout(300);
+        const afterAdd = await page.evaluate(readingVerse);
+        await page.click('#chip-arabic');
+        await page.waitForTimeout(300);
+        const afterRemove = await page.evaluate(readingVerse);
+        await page.click('#chip-arabic');
+        await page.click('#langPickerPanel button:has-text("Done")');
+        await page.waitForTimeout(400);
+        const after = await page.evaluate(readingVerse);
+        await shot(page, `${width}-3-after.png`);
+        for (const [label, v] of [['after adding', afterAdd], ['after removing', afterRemove], ['after closing', after]]) {
+          assert.strictEqual(v.aya, before.aya, `${width}px: same verse ${label} (was ${before.aya}, now ${v.aya})`);
+        }
+        report.push(`${width}px (drawer): reading 2:${before.aya}; after add ${afterAdd.aya}, remove ${afterRemove.aya}, close ${after.aya}`);
+
+        // Jump to another chapter and verse from the drawer, without going to the top.
+        const reopen = await page.$eval('#qhDrawerHandle', b => b.classList.contains('qh-show')) ? '#qhDrawerHandle' : '.top-bar .menu-toggle';
+        await page.click(reopen);
+        await page.waitForSelector('.sidebar.open', { timeout: 10000 });
+        await page.waitForTimeout(400);
+        await page.fill('#gotoSura', '3');
+        await page.$eval('#gotoSura', i => i.dispatchEvent(new Event('change', { bubbles: true })));
+        await page.fill('#gotoAya', '10');
+        await page.click('#panel-suras button[onclick="gotoVerse()"]');
+        await page.waitForSelector('#vc-10[data-sura="3"]', { timeout: 60000 });
+        await page.waitForTimeout(2500);
+        assert.strictEqual(await page.$eval('.sidebar', s => s.classList.contains('open')), false, `${width}px: drawer closes after Go`);
+        const jumped = await page.evaluate(() => { const c = document.querySelector('#vc-10[data-sura="3"]'), r = c.getBoundingClientRect(); return { top: Math.round(r.top), bottom: Math.round(r.bottom), h: innerHeight }; });
+        assert.ok(jumped.top < jumped.h && jumped.bottom > 0, `${width}px: 3:10 is on screen after Go (top ${jumped.top})`);
+        await shot(page, `${width}-3b-jump.png`);
+        report.push(`${width}px (drawer): jumped to 3:10, card top at ${jumped.top}px`);
+      } else {
       // The floating button is there once the top language bar is off screen. On wide screens
       // where the top bar stays on screen, its own Languages button is the one to tap.
       const topOnScreen = await page.$eval('#langPickerBtn', b => { const r = b.getBoundingClientRect(); return b.getClientRects().length > 0 && r.bottom > 4 && r.top < innerHeight - 4; });
@@ -122,6 +177,7 @@ test('change languages mid-sura without leaving the verse', { timeout: 300000 },
         assert.strictEqual(v.aya, before.aya, `${width}px: same verse ${label} (was ${before.aya}, now ${v.aya})`);
       }
       report.push(`${width}px (${topOnScreen ? 'top bar button' : 'floating button'}): reading verse 2:${before.aya} at ${before.top}px; after add ${afterAdd.aya} at ${afterAdd.top}px; after remove ${afterRemove.aya} at ${afterRemove.top}px; after close ${after.aya} at ${after.top}px`);
+      }
 
       // Single-language mode: the same button switches the reading language in place.
       // Same link the home page uses for single-language reading (sura + language, no verse).
@@ -132,8 +188,9 @@ test('change languages mid-sura without leaving the verse', { timeout: 300000 },
       await page.waitForTimeout(2500);
       await page.evaluate(() => document.getElementById('vc-199').scrollIntoView({ block: 'start' }));
       await page.waitForTimeout(800);
+      const opener = width <= 768 ? '#qhDrawerHandle' : '#qhLangFab';
       try {
-        await page.waitForSelector('#qhLangFab.qh-show', { timeout: 10000 });
+        await page.waitForSelector(`${opener}.qh-show`, { timeout: 10000 });
       } catch (e) {
         const after = await page.evaluate(() => {
           const bar = document.getElementById('langPickerBtn'), fab = document.getElementById('qhLangFab'), r = fab.getBoundingClientRect(), cs = getComputedStyle(fab);
@@ -148,7 +205,14 @@ test('change languages mid-sura without leaving the verse', { timeout: 300000 },
         throw e;
       }
       const sBefore = await page.evaluate(readingVerse);
-      await page.click('#qhLangFab');
+      if (width <= 768) {
+        await page.click('#qhDrawerHandle');
+        await page.waitForSelector('.sidebar.open #qhDrawerLang.qh-show', { timeout: 10000 });
+        await page.waitForTimeout(400);
+        await page.click('#qhDrawerLang');
+      } else {
+        await page.click('#qhLangFab');
+      }
       await page.waitForSelector('#qhSingleLangSheet.qh-open');
       await shot(page, `${width}-4-single-sheet.png`);
       await page.click('#qhSingleLangSheet button[data-lang="de"]', { timeout: 10000 });
