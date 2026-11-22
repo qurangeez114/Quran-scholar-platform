@@ -24,4 +24,10 @@ req(f['english_translation_source_identity_established'] is False and f['abridgm
 r=d['review_and_action']
 req(r['independent_human_scholarly_review']=='pending' and not r['human_editor_approval_observed'] and not r['sql_executed'] and not r['database_written'] and not r['merge_performed'] and not r['deployment_performed'] and not r['live_quran_ui_validation_performed'],'action boundary')
 req(d['next_target']['hold_must_remain_active'] is True,'next step must preserve hold')
-print('PASS: Q04S records the English-edition provenance gap, preserves the observed omission without calling it a translation error, and retains all 48 holds.')
+a=d['english_edition_provenance_addendum']
+req(a['identifiable_english_edition_candidate']['translator']=='Aisha Bewley' and '1–141' in a['identifiable_english_edition_candidate']['edition_scope'],'edition scope')
+req(a['identifiable_english_edition_candidate']['conclusion'].find('cannot identify row 38030')>=0,'do not conflate candidate with row source')
+req(a['interpretation'].find('does not classify it as a mistranslation')>=0,'keep translation-error finding unresolved')
+req(d['next_target']['claim_id']=='108-Q04S-ingest-provenance','provenance follow-up')
+
+print('PASS: Q04S records the English-edition provenance gap, records the abridged Aisha Bewley volume as outside the verse scope, preserves the observed omission without calling it a translation error, and retains all 48 holds.')
