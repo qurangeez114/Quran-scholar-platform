@@ -78,7 +78,7 @@ def check(d):
     assert all(not act[k] for k in ("live_database_written", "sql_executed", "pr_merged", "deployed"))
     assert act["publication_status"] == "not_published"
     assert d["unresolved_holds"] == [f"108-QURTUBI-SCHOLAR-H0{i}" for i in range(1, 9)]
-    assert d["next_target"]["claim_id"] in {"108-Q07-C", "108-Q07-E"}
+    assert d["next_target"]["claim_id"] in {"108-Q07-C", "108-Q07-E", "108-Q07-F"}
     if d["next_target"]["claim_id"] == "108-Q07-E":
         review = d["bounded_revalidation_q07d"]
         assert review["claim_id"] == "108-Q07-D"
@@ -90,6 +90,21 @@ def check(d):
         assert not review["publication_gate"]["independent_human_scholarly_review_observed"]
         assert not review["publication_gate"]["production_database_write_performed"]
         assert review["baseline"]["active_holds"] == 48 and review["baseline"]["holds_cleared"] == 0
+    if d["next_target"]["claim_id"] == "108-Q07-F":
+        review = d["bounded_revalidation_q07e"]
+        assert review["claim_id"] == "108-Q07-E"
+        assert review["exact_q07e_span"]["coordinate_system"] == "zero-based Unicode code points, half-open [start,end)"
+        assert (review["exact_q07e_span"]["arabic"]["start_cp"], review["exact_q07e_span"]["arabic"]["end_cp"], review["exact_q07e_span"]["arabic"]["length_cp"]) == (1840, 1935, 95)
+        assert (review["exact_q07e_span"]["english"]["start_cp"], review["exact_q07e_span"]["english"]["end_cp"], review["exact_q07e_span"]["english"]["length_cp"]) == (3275, 3447, 172)
+        assert review["attribution_boundary"]["outer_author"] == "al-Qurtubi"
+        assert review["attribution_boundary"]["lexicographer_reporter"] == "al-Farra"
+        assert review["attribution_boundary"]["informants"] == "unnamed Arabs"
+        assert review["attribution_boundary"]["lexical_example_is_not_isnad"]
+        assert review["variant_handling"]["not_imported_into_qurtubi_text"]
+        assert not review["primary_witness_status"]["al_farra_maani_direct_witness_opened"]
+        assert review["publication_gate"]["active_holds"] == 48
+        assert not review["publication_gate"]["independent_human_scholarly_review_observed"]
+        assert not review["publication_gate"]["production_database_write_performed"]
 
 
 check(D)
