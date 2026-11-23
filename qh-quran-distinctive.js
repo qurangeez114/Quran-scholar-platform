@@ -19,6 +19,25 @@
       { text: 'Antiquities', em: true },
       { text: ' 1.12), but none connects Abraham to a sanctuary in Makkah. This narrative is known through the Qur’an and later Islamic tradition. The absence of an earlier written source is not evidence for or against the account; it reflects the limits of the surviving record.' }
     ]
+  }, {
+    // Musa research set 2026-11-23: wording awaiting review before the Musa rows go live.
+    id: 'musa-samiri',
+    story: 'musa',
+    label: 'Qur’an 20:85, 95–96',
+    ayat: ['20:85', '20:95', '20:96'],
+    heading: 'No pre-Islamic textual parallel identified.',
+    body: [
+      { text: ' In the Qur’an a man called al-Sāmirī leads the Israelites astray with the calf while Musa is away, and Musa sentences him to say “No touching” for the rest of his life. No surviving source that predates the Qur’an names al-Sāmirī or tells this part of the story; in Exodus 32 it is Aaron who makes the golden calf. Modern scholars have proposed links between the name and the Samaritans, but these are proposals about the name, not earlier written versions of the account. The absence of an earlier written source is not evidence for or against the account; it reflects the limits of the surviving record.' }
+    ]
+  }, {
+    id: 'musa-pharaoh-body',
+    story: 'musa',
+    label: 'Qur’an 10:92',
+    ayat: ['10:92'],
+    heading: 'No pre-Islamic textual parallel identified.',
+    body: [
+      { text: ' The Qur’an says that Pharaoh’s body was saved so that he would be a sign for those who came after him. Exodus 14:28 and Psalm 136:15 describe Pharaoh’s army, and in the psalm Pharaoh himself, drowning in the sea, but no surviving source that predates the Qur’an speaks of his body being kept as a sign. The absence of an earlier written source is not evidence for or against the account; it reflects the limits of the surviving record.' }
+    ]
   }];
 
   function forVerse(sura, aya) {

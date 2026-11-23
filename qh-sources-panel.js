@@ -5,7 +5,7 @@
   const SELECT = 'source_title,tradition,approx_date,source_type,source_locator,relationship_kind,parallel_summary,similarity_note,difference_note,reference_link,source_edition,verification_note,verification_status';
   // A checked, dated snapshot keeps citations available during transient PostgREST failures.
   // Never promote unreviewed rows or pretend a cached snapshot is current live data.
-  const SNAPSHOT_URL = '/qh-sources-verified-snapshot.json?v=20261122-ibrahim-sources';
+  const SNAPSHOT_URL = '/qh-sources-verified-snapshot.json?v=20261123-musa-sources';
   let snapshotPromise = null;
 
   function el(tag, text, css) {
@@ -337,5 +337,5 @@
       }
     }
   };
-  window.qhSourcesPanelVersion = '2026-11-23-ibrahim-distinctive-v14';
+  window.qhSourcesPanelVersion = '2026-11-23-musa-sources-v15';
 })();

@@ -19,7 +19,7 @@ test('Stories mobile source headings stack long manuscript tradition above the r
 });
 
 test('Quran reader requests updated verified Sources implementation', () => {
-  assert.match(reader, /qh-sources-panel\.js\?v=20261123-ibrahim-distinctive-v14/);
+  assert.match(reader, /qh-sources-panel\.js\?v=20261123-musa-sources-v15/);
   assert.match(panel, /window\.loadAncientPanel\s*=/);
   assert.match(panel, /readVerifiedSnapshot\(suraId, num\)/);
   assert.match(panel, /fromPublished/);
