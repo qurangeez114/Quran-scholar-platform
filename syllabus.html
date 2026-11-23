@@ -6,23 +6,24 @@
 <article id="syl" hidden></article>
 </main>
 <script type="module">
-import {courseById,lessonsFor,esc,val,tbp,asList,formatTuition,classFormatLabel,renderFooter} from '/academic/academic.js';
+import {courseById,lessonsFor,esc,val,row,asList,formatTuition,classFormatLabel,renderFooter} from '/academic/academic.js';
 renderFooter();
 document.getElementById('print').onclick=e=>{e.preventDefault();window.print();};
 const id=new URLSearchParams(location.search).get('course');
 const st=document.getElementById('status');
-function list(v,what,ordered){const a=asList(v);if(!a.length)return '<p>'+tbp(what)+'</p>';const t=ordered?'ol':'ul';return '<'+t+'>'+a.map(x=>'<li>'+esc(typeof x==='object'?(x.text||x.title||JSON.stringify(x)):x)+'</li>').join('')+'</'+t+'>';}
-function readings(v){const a=asList(v);if(!a.length)return '<p>'+tbp('Required readings with full citations (author, title, publisher, year, pages)')+'</p>';
+function list(v,ordered){const a=asList(v);if(!a.length)return '';const t=ordered?'ol':'ul';return '<'+t+'>'+a.map(x=>'<li>'+esc(typeof x==='object'?(x.text||x.title||JSON.stringify(x)):x)+'</li>').join('')+'</'+t+'>';}
+function readings(v){const a=asList(v);if(!a.length)return '';
  return '<ol>'+a.map(r=>{if(typeof r==='string')return '<li>'+esc(r)+'</li>';return '<li>'+[esc(r.author),r.title?'<i>'+esc(r.title)+'</i>':'',esc(r.publisher),esc(r.year),esc(r.pages)].filter(Boolean).join(', ')+(r.required===false?' (recommended)':'')+'</li>';}).join('')+'</ol>';}
 function objectives(ls){const rows=ls.map(l=>({t:l.title,o:asList(l.learning_objectives).map(x=>typeof x==='object'&&x?x.text:x).filter(Boolean)})).filter(r=>r.o.length);
- if(!rows.length)return '<p>'+tbp('Per-lesson learning objectives')+(ls.length?'':' Lesson details are visible to enrolled students.')+'</p>';
+ if(!rows.length)return '';
  return rows.map(r=>'<h3>'+esc(r.t)+'</h3><ul>'+r.o.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>').join('');}
 function alignment(outcomes,ass){const o=asList(outcomes),a=asList(ass).filter(x=>x&&typeof x==='object');
- if(!o.length||!a.length||!a.some(x=>Array.isArray(x.outcomes)&&x.outcomes.length))return '<p>'+tbp('Mapping of each learning outcome to the assessments that measure it')+'</p>';
+ if(!o.length||!a.length||!a.some(x=>Array.isArray(x.outcomes)&&x.outcomes.length))return '';
  return '<div class="tablewrap"><table><caption>Which assessments measure each outcome (✓ = assessed)</caption><thead><tr><th scope="col">Learning outcome</th>'+a.map(x=>'<th scope="col">'+esc(x.name)+'</th>').join('')+'</tr></thead><tbody>'+
  o.map((t,i)=>'<tr><th scope="row">'+(i+1)+'. '+esc(typeof t==='object'?t.text:t)+'</th>'+a.map(x=>{const on=(x.outcomes||[]).map(Number).includes(i+1);return '<td>'+(on?'<span aria-label="assessed">✓</span>':'<span class="sr-only">not assessed</span>')+'</td>';}).join('')+'</tr>').join('')+'</tbody></table></div>';}
-function assessments(v){const a=asList(v);if(!a.length)return '<p>'+tbp('Assessment components and weights')+'</p>';
- return '<div class="tablewrap"><table><thead><tr><th>Component</th><th>Weight</th><th>Description</th></tr></thead><tbody>'+a.map(x=>typeof x==='string'?'<tr><td colspan="3">'+esc(x)+'</td></tr>':'<tr><td>'+esc(x.name)+'</td><td>'+(x.weight!=null?esc(x.weight)+'%':tbp(''))+'</td><td>'+esc(x.description||'')+'</td></tr>').join('')+'</tbody></table></div>';}
+function assessments(v){const a=asList(v);if(!a.length)return '';
+ return '<div class="tablewrap"><table><thead><tr><th>Component</th><th>Weight</th><th>Description</th></tr></thead><tbody>'+a.map(x=>typeof x==='string'?'<tr><td colspan="3">'+esc(x)+'</td></tr>':'<tr><td>'+esc(x.name)+'</td><td>'+(x.weight!=null?esc(x.weight)+'%':'')+'</td><td>'+esc(x.description||'')+'</td></tr>').join('')+'</tbody></table></div>';}
+function section(title,html){return html?'<h2>'+title+'</h2>'+html:'';}
 async function main(){
  if(!id){st.innerHTML='No course selected. Choose one from the <a href="/catalog.html">catalog</a>.';return;}
  let c;try{c=await courseById(id);}catch(e){st.textContent='Could not load this course ('+e.message+').';return;}
@@ -31,20 +32,31 @@ async function main(){
  document.title=c.title+' · Syllabus · QuranHikma';
  const weeks=asList(syl.weekly_schedule);
  const sched=weeks.length?'<div class="tablewrap"><table><thead><tr><th>Week</th><th>Topic</th><th>Readings / work due</th></tr></thead><tbody>'+weeks.map((w,i)=>'<tr><td>'+esc(w.week||i+1)+'</td><td>'+esc(w.topic||w)+'</td><td>'+esc(w.due||'')+'</td></tr>').join('')+'</tbody></table></div>'
-  :(ls.length?'<p>Lesson sequence (dates '+tbp('')+'):</p><ol>'+ls.map(l=>'<li>'+esc(l.title)+' <span class="meta">('+esc(l.lesson_type||'lesson')+')</span></li>').join('')+'</ol>':'<p>'+tbp('Weekly schedule')+' Lesson list is visible to enrolled students on the course page.</p>');
+  :(ls.length?'<ol>'+ls.map(l=>'<li>'+esc(l.title)+' <span class="meta">('+esc(l.lesson_type||'lesson')+')</span></li>').join('')+'</ol>':'');
+ const outcomes=list(c.learning_outcomes,true);
+ const assess=assessments(syl.assessments);
+ const align=alignment(c.learning_outcomes,syl.assessments);
+ const obj=objectives(ls);
+ const late=val(syl.late_work_policy);
  const el=document.getElementById('syl');
  el.innerHTML='<p class="eyebrow">Course Syllabus'+(c.course_code?' · '+esc(c.course_code):'')+'</p><h1>'+esc(c.title)+'</h1>'+
- '<div class="tablewrap"><table><tr><th scope="row">Instructor</th><td>'+(c.instructor_name?esc(c.instructor_name):tbp(''))+(c.instructor_id?' · <a href="/faculty.html?id='+encodeURIComponent(c.instructor_id)+'">Faculty profile</a>':'')+'</td></tr>'+
- '<tr><th scope="row">Credit hours</th><td>'+val(c.credit_hours,'')+'</td></tr><tr><th scope="row">Prerequisites</th><td>'+val(c.prerequisites,'')+'</td></tr>'+
- '<tr><th scope="row">Term / schedule</th><td>'+val(c.schedule,'')+'</td></tr><tr><th scope="row">Delivery</th><td>'+val(c.delivery_mode,'')+'</td></tr>'+(classFormatLabel(c.class_format)?'<tr><th scope="row">Class format</th><td>'+esc(classFormatLabel(c.class_format))+'</td></tr>':'')+
- '<tr><th scope="row">Tuition</th><td>'+esc(formatTuition(c))+' · <a href="/policies.html#refund">Refund policy</a></td></tr><tr><th scope="row">Office hours / contact</th><td>'+val(syl.office_hours,'')+'</td></tr></table></div>'+
- '<h2>Course description</h2><p>'+val(c.description,'Course description')+'</p>'+
- '<h2>Learning outcomes</h2><p>By the end of this course, students will be able to:</p>'+list(c.learning_outcomes,'Measurable learning outcomes',true)+
- '<h2>Weekly schedule</h2>'+sched+
- '<h2>Lesson learning objectives</h2>'+objectives(ls)+
- '<h2>Required and recommended readings</h2>'+readings(syl.readings)+
- '<h2>Assessment and grading</h2>'+assessments(syl.assessments)+'<h3>Outcome-to-assessment alignment</h3>'+alignment(c.learning_outcomes,syl.assessments)+'<p>Final letter grades follow the <a href="/policies.html#grading">QuranHikma grading scale</a>.</p>'+
- '<h2>Course policies</h2><ul><li><a href="/policies.html#integrity">Academic integrity</a></li><li><a href="/policies.html#attendance">Attendance and participation</a></li><li><a href="/policies.html#accessibility">Accessibility and accommodations</a></li><li>Late work: '+val(syl.late_work_policy,'')+'</li></ul>'+
+ '<div class="tablewrap"><table>'+
+ row('Instructor',(c.instructor_name?esc(c.instructor_name):'')+(c.instructor_id?' · <a href="/faculty.html?id='+encodeURIComponent(c.instructor_id)+'">Faculty profile</a>':''))+
+ row('Credit hours',val(c.credit_hours))+
+ row('Prerequisites',val(c.prerequisites))+
+ row('Term / schedule',val(c.schedule))+
+ row('Delivery',val(c.delivery_mode))+
+ row('Class format',classFormatLabel(c.class_format)?esc(classFormatLabel(c.class_format)):'')+
+ row('Tuition',esc(formatTuition(c))+' · <a href="/policies.html#refund">Refund policy</a>')+
+ row('Office hours / contact',val(syl.office_hours))+
+ '</table></div>'+
+ section('Course description',c.description?'<p>'+esc(c.description)+'</p>':'')+
+ (outcomes?'<h2>Learning outcomes</h2><p>By the end of this course, students will be able to:</p>'+outcomes:'')+
+ section('Weekly schedule',sched)+
+ section('Lesson learning objectives',obj)+
+ section('Required and recommended readings',readings(syl.readings))+
+ (assess||align?'<h2>Assessment and grading</h2>'+assess+(align?'<h3>Outcome-to-assessment alignment</h3>'+align:'')+'<p>Final letter grades follow the <a href="/policies.html#grading">QuranHikma grading scale</a>.</p>':'<h2>Assessment and grading</h2><p>Final letter grades follow the <a href="/policies.html#grading">QuranHikma grading scale</a>.</p>')+
+ '<h2>Course policies</h2><ul><li><a href="/policies.html#integrity">Academic integrity</a></li><li><a href="/policies.html#attendance">Attendance and participation</a></li><li><a href="/policies.html#accessibility">Accessibility and accommodations</a></li>'+(late?'<li>Late work: '+late+'</li>':'')+'</ul>'+
  '<p class="meta">Syllabus generated from course record; last updated '+esc((c.updated_at||'').slice(0,10))+'. The instructor may revise this syllabus with notice to enrolled students.</p>';
  el.hidden=false;st.hidden=true;}
 main();

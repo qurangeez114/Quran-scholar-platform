@@ -14,10 +14,9 @@ assert.doesNotMatch(contact,/>Phone<\/td>/);
 assert.doesNotMatch(contact,/>Hours<\/td>/);
 assert.doesNotMatch(contact,new RegExp(TBP));
 assert.match(calendar,/<h1>Academic calendar<\/h1>/);
-for(const event of ['Term start','Enrollment deadline','Last day to withdraw with full refund','Last day to withdraw (grade of W)','Final assessments due','Grades posted','Institutional holidays']){
- assert.ok(calendar.includes(event),event+' missing');
-}
-assert.equal((calendar.match(new RegExp(TBP,'g'))||[]).length>=7,true);
+assert.match(calendar,/Term dates have not been published yet/);
+assert.doesNotMatch(calendar,new RegExp(TBP));
+assert.doesNotMatch(calendar,/<td>Term start<\/td>/);
 assert.match(calendar,new RegExp('mailto:'+MAIL));
 assert.doesNotMatch(calendar,/\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+20\d\d/);
 assert.match(footer,/\['Academic Calendar','\/calendar\.html'\]/);
@@ -30,7 +29,10 @@ assert.match(handbook,/id="complaints"/);
 assert.match(policies,/href="\/contact\.html"/);
 assert.match(policies,new RegExp('mailto:'+MAIL));
 assert.match(policies,/accessibility contact/);
-assert.match(policies,/Before the course start date[\s\S]*To be provided by QuranHikma/);
+assert.doesNotMatch(policies,new RegExp(TBP));
+assert.match(policies,/refund schedule will be published before enrollment/);
+assert.doesNotMatch(policies,/Before the course start date/);
+
 assert.match(calendar,/href="\/contact\.html"/);
 const WA='https://chat.whatsapp.com/K1lPps6azg7LV5Us2aNjWj';
 assert.match(contact,/>WhatsApp<\/td><td><a class="qh-whatsapp-join" href="https:\/\/chat\.whatsapp\.com\/K1lPps6azg7LV5Us2aNjWj" target="_blank" rel="noopener">Join our WhatsApp group<\/a>/);
@@ -44,4 +46,4 @@ assert.match(chrome,/function addWhatsAppFooter\(\)/);
 assert.match(chrome,/id='qh-site-footer'/);
 assert.match(chrome,/a\.target='_blank';a\.rel='noopener'/);
 assert.match(chrome,/addWhatsAppFooter\(\);/);
-console.log('PASS: school contact email is published, phone and hours are omitted, calendar and refund dates stay unset, pages link together, and the WhatsApp group join link is on contact, handbook support and the shared footer.');
+console.log('PASS: school contact email is published, phone and hours are omitted, unpublished calendar and refund details are hidden, pages link together, and the WhatsApp group join link is on contact, handbook support and the shared footer.');
