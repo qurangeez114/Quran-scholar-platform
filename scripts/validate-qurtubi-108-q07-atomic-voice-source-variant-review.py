@@ -91,6 +91,9 @@ def check(d):
         assert not review["publication_gate"]["production_database_write_performed"]
         assert review["baseline"]["active_holds"] == 48 and review["baseline"]["holds_cleared"] == 0
     if d["next_target"]["claim_id"] == "108-Q07-F":
+        reviewd = d["bounded_revalidation_q07d"]
+        assert not reviewd["publication_gate"]["independent_human_scholarly_review_observed"]
+        assert not reviewd["publication_gate"]["production_database_write_performed"]
         review = d["bounded_revalidation_q07e"]
         assert review["claim_id"] == "108-Q07-E"
         assert review["exact_q07e_span"]["coordinate_system"] == "zero-based Unicode code points, half-open [start,end)"
