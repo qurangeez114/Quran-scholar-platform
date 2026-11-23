@@ -28,6 +28,17 @@ assert items["108-Q10B-R01"]["relation"] == "contextual_lexical_companion_candid
 assert all(x["decision"] == "suggestion_only" for x in items.values())
 assert len(d["unresolved_holds"]) == 8 and d["status_ledger"]["publication"] == "not_published"
 assert d["status_ledger"]["human_scholarly_review"] == "pending"
-assert all(v is False for k,v in d["actions"].items() if k != "candidate_crosswalk_added")
+assert all(v is False for k,v in d["actions"].items() if k not in {"candidate_crosswalk_added", "source_role_review_added"})
 assert d["actions"]["candidate_crosswalk_added"] is True
-print("PASS: candidate crosswalk staged only; canonical plan, counts, holds, and live rows unchanged")
+
+roles = d["source_role_review"]
+assert roles["status"] == "staged_source_attribution_review_pending_scholar"
+assert roles["database_changed"] is False and roles["canonical_claim_count_changed"] is False
+assert len(roles["roles"]) == 2
+assert "does not independently verify" in roles["roles"][0]["independent_check"]
+assert "vol.2, p.708" in roles["roles"][1]["locator"]
+assert all(x["reviewer_status"] == "independent_scholarly_review_pending" for x in [roles])
+assert d["preflight"]["source_role_reviews_added"] == 1
+assert d["actions"]["source_role_review_added"] is True
+print("PASS: source-role distinctions staged; no canon, translation, or live DB change")
+
