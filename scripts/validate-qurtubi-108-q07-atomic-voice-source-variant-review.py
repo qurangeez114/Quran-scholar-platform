@@ -78,7 +78,18 @@ def check(d):
     assert all(not act[k] for k in ("live_database_written", "sql_executed", "pr_merged", "deployed"))
     assert act["publication_status"] == "not_published"
     assert d["unresolved_holds"] == [f"108-QURTUBI-SCHOLAR-H0{i}" for i in range(1, 9)]
-    assert d["next_target"]["claim_id"] == "108-Q07-C"
+    assert d["next_target"]["claim_id"] in {"108-Q07-C", "108-Q07-E"}
+    if d["next_target"]["claim_id"] == "108-Q07-E":
+        review = d["bounded_revalidation_q07d"]
+        assert review["claim_id"] == "108-Q07-D"
+        assert review["exact_q07d_span"]["coordinate_system"] == "zero-based Unicode code points, half-open [start,end)"
+        assert (review["exact_q07d_span"]["arabic"]["start_cp"], review["exact_q07d_span"]["arabic"]["end_cp"], review["exact_q07d_span"]["arabic"]["length_cp"]) == (1673, 1761, 88)
+        assert (review["exact_q07d_span"]["english"]["start_cp"], review["exact_q07d_span"]["english"]["end_cp"], review["exact_q07d_span"]["english"]["length_cp"]) == (2965, 3103, 138)
+        assert review["attribution_boundary"]["explicit_route_in_this_unit"] == ["Abu Salih", "Ibn Abbas"]
+        assert review["publication_gate"]["owner_direction_to_publish_recorded"]
+        assert not review["publication_gate"]["independent_human_scholarly_review_observed"]
+        assert not review["publication_gate"]["production_database_write_performed"]
+        assert review["baseline"]["active_holds"] == 48 and review["baseline"]["holds_cleared"] == 0
 
 
 check(D)
@@ -106,7 +117,8 @@ mutations = [
     ("span", lambda x: x["exact_q07_outer_spans"]["arabic"].__setitem__("start_cp", 1032)),
     ("hash", lambda x: x["exact_q07_outer_spans"]["english"].__setitem__("sha256", "0" * 64)),
     ("url", lambda x: x["live_read_only_witnesses"]["arabic"].__setitem__("source_url_kind", "verified_url")),
-    ("merge", lambda x: x["repository_state"].__setitem__("merged", True))
+    ("merge", lambda x: x["repository_state"].__setitem__("merged", True)),
+    ("review_gate", lambda x: x["bounded_revalidation_q07d"]["publication_gate"].__setitem__("independent_human_scholarly_review_observed", True))
 ]
 for name, mutate in mutations:
     bad = copy.deepcopy(D)
