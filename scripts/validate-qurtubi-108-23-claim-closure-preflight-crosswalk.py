@@ -10,6 +10,12 @@ assert d["project"] == "QuranHikma"
 assert d["supabase_project_id"] == "ylosytbxpzxzwfzjpaej"
 assert d["pull_request"]["number"] == 470
 assert d["source_plan_history"][2]["message"] == "Record Qurtubi 23-row plan preflight pass"
+assert d["live_qurtubi_108_3_boundary_recheck"]["arabic_entry"]["id"] == 13241
+assert d["live_qurtubi_108_3_boundary_recheck"]["q09_last_plan_anchor_marker"]["position_1_based"] == 1471
+assert d["live_qurtubi_108_3_boundary_recheck"]["adjacent_attribution"]["position_1_based"] == 1491
+assert d["live_qurtubi_108_3_boundary_recheck"]["q10a_lexicon_heading"]["position_1_based"] == 1522
+assert d["live_qurtubi_108_3_boundary_recheck"]["q10b_heading"]["position_1_based"] == 2215
+assert d["live_qurtubi_108_3_boundary_recheck"]["adjacent_attribution"]["classification"] == "voice_and_scope_unresolved"
 assert any(x["sha"] == "7a0605ccf68440e38f299f6cd2be69f40caed1d6" for x in d["source_plan_history"])
 assert any(x["sha"] == "eafc37022cd30adc9d7afa22e9eabcf066568394" for x in d["source_plan_history"])
 assert d["pull_request"]["draft"] is True and d["pull_request"]["merged"] is False
