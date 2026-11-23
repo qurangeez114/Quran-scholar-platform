@@ -10,6 +10,12 @@ assert d["project"] == "QuranHikma"
 assert d["supabase_project_id"] == "ylosytbxpzxzwfzjpaej"
 assert d["pull_request"]["number"] == 470
 assert d["source_plan_history"][2]["message"] == "Record Qurtubi 23-row plan preflight pass"
+assert d["q09_adjacent_phrase_bilingual_review"]["arabic"]["following_attribution"] == "قاله أيضا عكرمة وشهر بن حوشب"
+assert d["q09_adjacent_phrase_bilingual_review"]["english"]["corresponding_fragment"] == "as 'Ikrimah and Shahr ibn Hawshab also said."
+assert d["q09_adjacent_phrase_bilingual_review"]["assessment"]["canonical_plan_updated"] is False
+assert d["q09_adjacent_phrase_bilingual_review"]["assessment"]["claim_count_increased"] is False
+assert d["q09_adjacent_phrase_bilingual_review"]["assessment"]["hold_cleared"] is False
+assert d["q09_adjacent_phrase_bilingual_review"]["assessment"]["human_scholarly_review"] == "pending"
 assert d["live_qurtubi_108_3_boundary_recheck"]["arabic_entry"]["id"] == 13241
 assert d["live_qurtubi_108_3_boundary_recheck"]["q09_last_plan_anchor_marker"]["position_1_based"] == 1471
 assert d["live_qurtubi_108_3_boundary_recheck"]["adjacent_attribution"]["position_1_based"] == 1491
