@@ -102,7 +102,7 @@ def check(d):
         assert review["attribution_boundary"]["lexical_example_is_not_isnad"]
         assert review["variant_handling"]["not_imported_into_qurtubi_text"]
         assert not review["primary_witness_status"]["al_farra_maani_direct_witness_opened"]
-        assert review["publication_gate"]["active_holds"] == 48
+        assert review["baseline"]["active_holds"] == 48
         assert not review["publication_gate"]["independent_human_scholarly_review_observed"]
         assert not review["publication_gate"]["production_database_write_performed"]
 
