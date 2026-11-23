@@ -9,6 +9,9 @@ d = json.loads(path.read_text(encoding="utf-8"))
 assert d["project"] == "QuranHikma"
 assert d["supabase_project_id"] == "ylosytbxpzxzwfzjpaej"
 assert d["pull_request"]["number"] == 470
+assert d["source_plan_history"][2]["message"] == "Record Qurtubi 23-row plan preflight pass"
+assert any(x["sha"] == "7a0605ccf68440e38f299f6cd2be69f40caed1d6" for x in d["source_plan_history"])
+assert any(x["sha"] == "eafc37022cd30adc9d7afa22e9eabcf066568394" for x in d["source_plan_history"])
 assert d["pull_request"]["draft"] is True and d["pull_request"]["merged"] is False
 pre = d["preflight"]
 assert (pre["baseline_claims_all_scholars"], pre["qurtubi_claims"], pre["active_holds_all_scholars"]) == (74, 23, 48)
