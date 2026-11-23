@@ -5,7 +5,7 @@
   const SELECT = 'source_title,tradition,approx_date,source_type,source_locator,relationship_kind,parallel_summary,similarity_note,difference_note,reference_link,source_edition,verification_note,verification_status';
   // A checked, dated snapshot keeps citations available during transient PostgREST failures.
   // Never promote unreviewed rows or pretend a cached snapshot is current live data.
-  const SNAPSHOT_URL = '/qh-sources-verified-snapshot.json?v=20261108-qumran-research-batch';
+  const SNAPSHOT_URL = '/qh-sources-verified-snapshot.json?v=20261122-ibrahim-sources';
   let snapshotPromise = null;
 
   function el(tag, text, css) {
@@ -73,6 +73,10 @@
       a.href='/stories.html?story=dhul-qarnayn#story-scholars';
       timelineHost.replaceChildren(a);
     });
+  }
+  function distinctiveNote(suraId, num) {
+    const api = window.QHQuranDistinctive;
+    return api && typeof api.forVerse === 'function' ? api.forVerse(suraId, num) : null;
   }
   function validReference(row) {
     if (row.verification_status !== 'verified' || !row.source_title ||
@@ -288,7 +292,13 @@
           '. Live database synchronization may follow later.',
           'font:400 13px/1.55 system-ui,sans-serif;color:#655e4c;margin:0 0 12px;'));
       }
-      if (rows.length === 0) {
+      // Qur'an-distinctive narratives get a reviewed statement, never the generic empty state.
+      // A verse with a verified source never shows "No pre-Islamic textual parallel identified".
+      const distinctive = rows.length === 0 ? distinctiveNote(suraId, num) : null;
+      if (distinctive) wrap.appendChild(window.QHQuranDistinctive.render(distinctive));
+      if (distinctive) {
+        // The distinctive statement above replaces the "not yet published" message.
+      } else if (rows.length === 0) {
         wrap.appendChild(el('p', snapshotAsOf
           ? 'No checked historical source is present in this dated snapshot for this verse. This is not a complete live catalogue.'
           : 'No independently checked historical source association has been published for this verse yet. This does not mean that no relevant historical literature exists.',
@@ -308,6 +318,7 @@
       if (document.getElementById('vc-' + num) !== card) return;
       console.error('Verse Sources load failed:', error);
       const wrap = el('section', null, 'max-width:74ch;margin:0 auto;');
+      // Sources unknown on error, so no distinctive claim is made here.
       wrap.appendChild(el('p', 'Sources could not be loaded. Your connection or the source database may be temporarily unavailable.',
         'font:400 16px/1.65 system-ui,sans-serif;color:#5a4536;'));
       const retry = el('button', 'Retry Sources',
@@ -326,5 +337,5 @@
       }
     }
   };
-  window.qhSourcesPanelVersion = '2026-11-08-dhulqarnayn-versewide-timeline-v11';
+  window.qhSourcesPanelVersion = '2026-11-23-ibrahim-distinctive-v14';
 })();
