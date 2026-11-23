@@ -248,6 +248,21 @@
       cinemaJs.src='/qh-cinematic-theme.js?v=20261105-lab1';
       document.body.appendChild(cinemaJs);
     }
+    if (!document.getElementById('qh-phone-utilities')) {
+      var ut = document.createElement('style');
+      ut.id = 'qh-phone-utilities';
+      ut.textContent =
+        '@media(max-width:720px){' +
+        '#qh-account-btn,#qh-clock-btn{position:fixed!important;top:8px!important;z-index:10050!important;background:#f5f3ea!important;width:36px!important;height:36px!important;left:auto!important}' +
+        '#qh-clock-btn{right:10px!important}' +
+        '#qh-account-btn{right:52px!important}' +
+        '#qh-membership{padding-right:104px!important}' +
+        /* Stories hides the guest bar, so the same two buttons sit on the fixed page header. */
+        'body.qh-page--stories #hdr{padding-right:96px;box-sizing:border-box}' +
+        'body.qh-page--stories #hdr h1{min-width:0}' +
+        '}';
+      document.head.appendChild(ut);
+    }
     loadModal(); addSchoolNav(); addA11y(); addNav(); addWhatsAppFooter(); setTimeout(addClock, 400); setTimeout(addAccount, 400);
     // Desktop Quran reader: dedicate the right edge to the existing approved
     // advertising slot while leaving phone and tablet layouts unchanged.
