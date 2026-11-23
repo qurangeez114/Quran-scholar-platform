@@ -78,7 +78,7 @@ def check(d):
     assert all(not act[k] for k in ("live_database_written", "sql_executed", "pr_merged", "deployed"))
     assert act["publication_status"] == "not_published"
     assert d["unresolved_holds"] == [f"108-QURTUBI-SCHOLAR-H0{i}" for i in range(1, 9)]
-    assert d["next_target"]["claim_id"] in {"108-Q07-C", "108-Q07-E", "108-Q07-F"}
+    assert d["next_target"]["claim_id"] == "108-Q07-G"
     if d["next_target"]["claim_id"] == "108-Q07-E":
         review = d["bounded_revalidation_q07d"]
         assert review["claim_id"] == "108-Q07-D"
@@ -110,6 +110,39 @@ def check(d):
         assert not review["publication_gate"]["production_database_write_performed"]
 
 
+    for key in ("bounded_revalidation_q07d", "bounded_revalidation_q07e"):
+        gate = d[key]["publication_gate"]
+        assert gate["independent_human_scholarly_review_observed"] is False
+        assert gate["production_database_write_performed"] is False
+        assert gate["pr_merged"] is False and gate["deployed"] is False
+    reviewf = d["bounded_revalidation_q07f"]
+    assert reviewf["claim_id"] == "108-Q07-F"
+    assert reviewf["repository_state"]["latest_main_sha_observed"] == "e1f4c53bc3c47a728505dc0f601026f4d765eb12"
+    assert reviewf["repository_state"]["head_sha_before_this_checkpoint"] == "c8436fc77922c588fde140f5510f96860fc2d77d"
+    assert reviewf["repository_state"]["review_submissions"] == 0
+    assert reviewf["repository_state"]["competing_open_surah_108_tafsir_prs"] == 0
+    assert reviewf["live_read_only_rows"]["writes"] == 0 and reviewf["live_read_only_rows"]["tafsir_accuracy_analysis_rows_for_surah_108"] == 0
+    ar_f, en_f = reviewf["exact_q07f_span"]["arabic"], reviewf["exact_q07f_span"]["english"]
+    assert (ar_f["entry_id"], ar_f["start_cp"], ar_f["end_cp"], ar_f["length_cp"], ar_f["span_md5"]) == (13240, 1935, 2037, 102, "ebda3a4ab8e6997588f7a5b7fee39699")
+    assert (en_f["entry_id"], en_f["start_cp"], en_f["end_cp"], en_f["length_cp"], en_f["span_md5"]) == (38031, 3447, 3621, 174, "73920b6c922f49d03a288fe4fdde2c12")
+    assert ar_f["span_sha256"] == "90bf52f614c87db2546df5ffba2b2bf2cc7c774bcf82c75edd94c7ca6f2042f0"
+    assert en_f["span_sha256"] == "40b55663682a76a8264a82d80d0f587a081756033fdf737314f5cb62d81bcfba"
+    assert "ابن الأعرابي" in ar_f["source_text"] and "Ibn al-A'rabi" in en_f["source_text"]
+    assert reviewf["attribution_boundary"]["quoted_authority_as_written"] == "Ibn al-A'rabi (ابن الأعرابي)"
+    assert reviewf["attribution_boundary"]["route"] == "not supplied in this passage"
+    assert not reviewf["attribution_boundary"]["isnad_claimed"] and not reviewf["attribution_boundary"]["qurtubi_adoption_established"]
+    assert reviewf["attribution_boundary"]["not_the_jurist"].startswith("Abu Bakr Ibn al-Arabi")
+    assert reviewf["variant_and_provenance_handling"]["direct_dependence_of_qurtubi_on_lisan_established"] is False
+    assert reviewf["variant_and_provenance_handling"]["no_text_or_spelling_change_proposed"] is True
+    source_ids = {x["source_id"] for x in reviewf["source_anchors"]}
+    assert {"qurtubi_q07f", "lisan_al_arab_nahr", "ibn_al_arabi_lexicographer_biography", "ibn_al_arabi_jurist_biography", "live_qurtubi_arabic_q07f", "live_qurtubi_english_q07f"} == source_ids
+    assert reviewf["baseline"]["active_holds"] == 48 and reviewf["baseline"]["holds_cleared"] == 0
+    assert reviewf["publication_gate"]["owner_direction_to_publish_recorded"] is True
+    assert reviewf["publication_gate"]["independent_human_scholarly_review_observed"] is False
+    assert reviewf["publication_gate"]["production_database_write_performed"] is False
+    assert reviewf["publication_gate"]["pr_merged"] is False and reviewf["publication_gate"]["deployed"] is False
+
+
 check(D)
 mutations = [
     ("publish", lambda x: x["actions"].__setitem__("publication_status", "published")),
@@ -136,7 +169,11 @@ mutations = [
     ("hash", lambda x: x["exact_q07_outer_spans"]["english"].__setitem__("sha256", "0" * 64)),
     ("url", lambda x: x["live_read_only_witnesses"]["arabic"].__setitem__("source_url_kind", "verified_url")),
     ("merge", lambda x: x["repository_state"].__setitem__("merged", True)),
-    ("review_gate", lambda x: x["bounded_revalidation_q07d"]["publication_gate"].__setitem__("independent_human_scholarly_review_observed", True))
+    ("review_gate", lambda x: x["bounded_revalidation_q07d"]["publication_gate"].__setitem__("independent_human_scholarly_review_observed", True)),
+    ("q07f_published", lambda x: x["bounded_revalidation_q07f"]["publication_gate"].__setitem__("pr_merged", True)),
+    ("q07f_route", lambda x: x["bounded_revalidation_q07f"]["attribution_boundary"].__setitem__("route", "full_isnad")),
+    ("q07f_identity", lambda x: x["bounded_revalidation_q07f"]["attribution_boundary"].__setitem__("quoted_authority_as_written", "Ibn al-Arabi (jurist)")),
+    ("q07f_holds", lambda x: x["bounded_revalidation_q07f"]["baseline"].__setitem__("holds_cleared", 1))
 ]
 for name, mutate in mutations:
     bad = copy.deepcopy(D)
@@ -148,3 +185,4 @@ for name, mutate in mutations:
     else:
         raise AssertionError(f"unsafe mutation accepted: {name}")
 print(f"PASS: Qurtubi 108-Q07 atomic voice/source-variant review; {len(mutations)}/{len(mutations)} unsafe mutations rejected; 0 writes; 48 holds active")
+
