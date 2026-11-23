@@ -17,7 +17,7 @@ assert en["id"]==38032 and en["q10b_english_block_present"] is False
 assert all(v==0 for v in en["positions"].values())
 assert len(d["source_boundary_findings"]["discrete_readings"])==5
 assert d["source_boundary_findings"]["closing_source"].endswith("not a hadith chain or oral isnad.")
-assert d["source_boundary_findings"]["variance"].find("Al-Asma'i")>=0
+assert d["source_boundary_findings"]["variance"].find("al-Asma'i")>=0
 assert d["status"]["human_scholarly_review"]=="pending" and d["status"]["published"] is False
 assert d["actions"]["database_written"] is False and d["actions"]["translation_drafted"] is False
 assert d["next_target"]["claim_id"]=="108-QURTUBI-CLOSURE-PREFLIGHT-01"
