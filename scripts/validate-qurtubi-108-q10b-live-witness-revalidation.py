@@ -19,6 +19,6 @@ assert len(d["source_boundary_findings"]["discrete_readings"])==5
 assert d["source_boundary_findings"]["closing_source"].endswith("not a hadith chain or oral isnad.")
 assert d["source_boundary_findings"]["variance"].find("al-Asma'i")>=0
 assert d["status"]["human_scholarly_review"]=="pending" and d["status"]["published"] is False
-assert d["actions"]["database_written"] is False and d["actions"]["translation_drafted"] is False
+assert d["actions"]["database_written"] is False and d["status"]["translation_drafted"] is False
 assert d["next_target"]["claim_id"]=="108-QURTUBI-CLOSURE-PREFLIGHT-01"
 print("PASS Qurtubi Q10B live absence/source-boundary revalidation; no publication or hold cleared")
