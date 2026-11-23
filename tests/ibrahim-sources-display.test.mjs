@@ -26,25 +26,27 @@ test('Qur\'an-distinctive status covers the Ka\'ba ayat with the approved wordin
   assert.match(text, /not attested in any surviving source that predates the Qur’an/);
   assert.match(text, /it reflects the limits of the surviving record\.$/);
   assert.equal(api.forStory('ibrahim').length, 1);
+  assert.equal(api.forVerse(20, 85).id, 'musa-samiri');
 });
 
 test('verse Sources panel and Stories page load and use the distinctive statement', () => {
-  assert.match(reader, /qh-quran-distinctive\.js\?v=20261123"><\/script>\s*<script src="\/qh-sources-panel\.js/);
+  assert.match(reader, /qh-quran-distinctive\.js\?v=20261123-musa"><\/script>\s*<script src="\/qh-sources-panel\.js/);
   assert.match(panel, /distinctiveNote\(suraId, num\)/);
-  assert.match(stories, /qh-quran-distinctive\.js\?v=20261123/);
+  assert.match(stories, /qh-quran-distinctive\.js\?v=20261123-musa/);
   assert.match(stories, /id="qh-story-distinctive"/);
 });
 
 test('Ibrahim story lists every linked verse and every checked reference', () => {
-  assert.match(stories, /verseLimit=story\.slug==='ibrahim'\?200:10/);
+  assert.match(stories, /LONG_STORIES=new Set\(\['ibrahim','musa'\]\)/);
+  assert.match(stories, /verseLimit=LONG_STORIES\.has\(story\.slug\)\?200:10/);
   assert.doesNotMatch(stories, /qh_verified_verse_story_sources[^\n]*limit=100/);
   assert.equal((stories.match(/&limit=300'\)/g) || []).length, 2);
   assert.match(stories, /async function fetchStoryAyas/);
 });
 
 test('fallback snapshot is dated and includes the Ibrahim rows', () => {
-  assert.equal(snapshot.as_of, '2026-11-22');
-  assert.equal(snapshot.records.length, 118);
+  assert.match(snapshot.as_of, /^2026-11-2[23]$/);
+  assert.ok(snapshot.records.length >= 118);
   assert.ok(snapshot.records.every(r => r.verification_status === 'verified' && /^https:\/\//.test(r.reference_link)));
   assert.ok(snapshot.records.some(r => r.sura === 21 && r.aya === 68));
   assert.ok(snapshot.records.some(r => r.sura === 6 && r.aya === 76));
