@@ -293,9 +293,10 @@
           'font:400 13px/1.55 system-ui,sans-serif;color:#655e4c;margin:0 0 12px;'));
       }
       // Qur'an-distinctive narratives get a reviewed statement, never the generic empty state.
-      const distinctive = distinctiveNote(suraId, num);
+      // A verse with a verified source never shows "No pre-Islamic textual parallel identified".
+      const distinctive = rows.length === 0 ? distinctiveNote(suraId, num) : null;
       if (distinctive) wrap.appendChild(window.QHQuranDistinctive.render(distinctive));
-      if (rows.length === 0 && distinctive) {
+      if (distinctive) {
         // The distinctive statement above replaces the "not yet published" message.
       } else if (rows.length === 0) {
         wrap.appendChild(el('p', snapshotAsOf
@@ -317,8 +318,7 @@
       if (document.getElementById('vc-' + num) !== card) return;
       console.error('Verse Sources load failed:', error);
       const wrap = el('section', null, 'max-width:74ch;margin:0 auto;');
-      const distinctiveOnError = distinctiveNote(suraId, num);
-      if (distinctiveOnError) wrap.appendChild(window.QHQuranDistinctive.render(distinctiveOnError));
+      // Sources unknown on error, so no distinctive claim is made here.
       wrap.appendChild(el('p', 'Sources could not be loaded. Your connection or the source database may be temporarily unavailable.',
         'font:400 16px/1.65 system-ui,sans-serif;color:#5a4536;'));
       const retry = el('button', 'Retry Sources',
@@ -337,5 +337,5 @@
       }
     }
   };
-  window.qhSourcesPanelVersion = '2026-11-22-ibrahim-distinctive-v13';
+  window.qhSourcesPanelVersion = '2026-11-23-ibrahim-distinctive-v14';
 })();

@@ -7,7 +7,7 @@
 <script src="/qh-dhulqarnayn-timeline.js?v=20261108" defer></script>
 <script src="/qh-stories-history.js?v=20261108-unified"></script>
 <script src="/qh-abraham-sacrifice-brief.js?v=20261108-research"></script>
-<script src="/qh-quran-distinctive.js?v=20261122"></script>
+<script src="/qh-quran-distinctive.js?v=20261123"></script>
 
 <script>
 window.controversyScore=function(v){var t=[v.english,v.aya_text,v.text_english,v.hadith_text,v.topic,v.brief_description,v.content,v.reason_text,v.story_en,v.title_en,v.summary,v.name_english,v.theme].filter(Boolean).join(' ').toLowerCase();var s=0;['kill','slay','smite','amputat','crucif','stone','whip','lash','apostat','slave','captive','concubin','beat.*wife','wife.*beat','fight.*until','jihad','warfare','adulter','zina','thief.*hand','homosexual','liwat','blasphemy','jizya','dhimmi','women.*half','inherit.*half','polygam','nushuz','sex slave','cut hand'].forEach(function(k){try{if(new RegExp(k).test(t))s+=12;}catch(e){}});['divorce','talaq','inheritance','veil','hijab','niqab','disbeliev','infidel','kafir','hellfire','punishment','torment','war','battle','riba','usury','intoxicant','alcohol','honor kill','martyr'].forEach(function(k){if(t.indexOf(k)!==-1)s+=5;});['alhamdulillah','merciful','compassionate','forgiving','be patient'].forEach(function(k){if(t.indexOf(k)!==-1)s-=2;});if(v.controversy_level)s+=(parseInt(v.controversy_level)-1)*4;if(v.human_rights_score!=null)s+=Math.max(0,(5-parseFloat(v.human_rights_score))*2);return s;};
@@ -1002,8 +1002,11 @@ async function openStory(story, updateAddress = false){
   if(requestId !== activeStoryRequest)return; // Old click must not replace newer selection.
   const suras=story.primary_suras||[];
   const distinctiveApi=window.QHQuranDistinctive;
-  const distinctiveFor=(s,a)=>distinctiveApi&&typeof distinctiveApi.forVerse==='function'?distinctiveApi.forVerse(s,a):null;
-  const storyDistinctive=distinctiveApi&&typeof distinctiveApi.forStory==='function'?distinctiveApi.forStory(story.slug):[];
+  // Verses with a verified source never show "No pre-Islamic textual parallel identified".
+  const sourcedAyat=new Set(ancientSources.map(a=>Number(a.sura)+':'+Number(a.aya)));
+  const narrow=note=>distinctiveApi&&typeof distinctiveApi.withoutSourced==='function'?distinctiveApi.withoutSourced(note,sourcedAyat):note;
+  const distinctiveFor=(s,a)=>distinctiveApi&&typeof distinctiveApi.forVerse==='function'&&!sourcedAyat.has(Number(s)+':'+Number(a))?distinctiveApi.forVerse(s,a):null;
+  const storyDistinctive=distinctiveApi&&typeof distinctiveApi.forStory==='function'?distinctiveApi.forStory(story.slug).map(narrow).filter(Boolean):[];
   const verseCard = v=>`
     <div class="v-card">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">

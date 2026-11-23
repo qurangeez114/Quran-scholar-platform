@@ -29,9 +29,9 @@ test('Qur\'an-distinctive status covers the Ka\'ba ayat with the approved wordin
 });
 
 test('verse Sources panel and Stories page load and use the distinctive statement', () => {
-  assert.match(reader, /qh-quran-distinctive\.js\?v=20261122"><\/script>\s*<script src="\/qh-sources-panel\.js/);
+  assert.match(reader, /qh-quran-distinctive\.js\?v=20261123"><\/script>\s*<script src="\/qh-sources-panel\.js/);
   assert.match(panel, /distinctiveNote\(suraId, num\)/);
-  assert.match(stories, /qh-quran-distinctive\.js\?v=20261122/);
+  assert.match(stories, /qh-quran-distinctive\.js\?v=20261123/);
   assert.match(stories, /id="qh-story-distinctive"/);
 });
 
@@ -49,4 +49,31 @@ test('fallback snapshot is dated and includes the Ibrahim rows', () => {
   assert.ok(snapshot.records.some(r => r.sura === 21 && r.aya === 68));
   assert.ok(snapshot.records.some(r => r.sura === 6 && r.aya === 76));
   assert.ok(snapshot.records.filter(r => r.sura === 37 && r.aya === 102).length >= 5);
+});
+
+test('verses with a verified source never show the distinctive statement', () => {
+  const api = loadDistinctive();
+  const note = api.forStory('ibrahim')[0];
+  const narrowed = api.withoutSourced(note, new Set(['2:127', '22:26']));
+  assert.deepEqual([...narrowed.ayat], ['2:125', '2:126', '22:27']);
+  assert.equal(narrowed.label, 'Qur’an 2:125–126; 22:27');
+  assert.equal(api.withoutSourced(note, new Set()), note);
+  assert.equal(api.withoutSourced(note, new Set(note.ayat)), null);
+  // Verse panel: statement only when the verse has no verified rows, never on a load error.
+  assert.match(panel, /rows\.length === 0 \? distinctiveNote\(suraId, num\) : null/);
+  assert.doesNotMatch(panel, /distinctiveOnError/);
+  // Stories page: chip and story note skip verses that have verified evidence.
+  assert.match(stories, /sourcedAyat=new Set\(ancientSources\.map/);
+  assert.match(stories, /!sourcedAyat\.has\(Number\(s\)\+':'\+Number\(a\)\)/);
+});
+
+test('snapshot carries the two note fixes', () => {
+  const recs = snapshot.records;
+  assert.ok(!JSON.stringify(recs).includes('the user raised'));
+  const altars = recs.filter(r => /^Genesis 12:7–8; 13:18/.test(r.source_title || ''));
+  assert.ok(altars.length >= 2);
+  for (const r of altars) {
+    assert.equal(r.source_title, 'Genesis 12:7–8; 13:18 — Abraham\'s altars, no Ka\'ba');
+    assert.equal(r.relationship_kind, 'contrast');
+  }
 });

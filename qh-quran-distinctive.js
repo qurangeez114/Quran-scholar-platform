@@ -28,6 +28,36 @@
   function forStory(slug) {
     return NOTES.filter(note => note.story === slug);
   }
+  // Builds "Qur’an 2:125–126; 22:27" from a list of "sura:aya" keys.
+  function labelFor(ayat) {
+    const bySura = new Map();
+    ayat.forEach(key => {
+      const [s, a] = key.split(':').map(Number);
+      if (!bySura.has(s)) bySura.set(s, []);
+      bySura.get(s).push(a);
+    });
+    const parts = [];
+    bySura.forEach((list, s) => {
+      list.sort((x, y) => x - y);
+      const runs = [];
+      list.forEach(a => {
+        const last = runs[runs.length - 1];
+        if (last && a === last[1] + 1) last[1] = a; else runs.push([a, a]);
+      });
+      parts.push(s + ':' + runs.map(r => r[0] === r[1] ? r[0] : r[0] + '–' + r[1]).join(', '));
+    });
+    return 'Qur’an ' + parts.join('; ');
+  }
+  // A verse with a verified source never shows "No pre-Islamic textual parallel identified".
+  // Returns the note narrowed to verses without a verified source, or null if none remain.
+  function withoutSourced(note, sourcedKeys) {
+    if (!note) return null;
+    const has = key => sourcedKeys && (typeof sourcedKeys.has === 'function' ? sourcedKeys.has(key) : sourcedKeys.includes(key));
+    const ayat = note.ayat.filter(key => !has(key));
+    if (!ayat.length) return null;
+    if (ayat.length === note.ayat.length) return note;
+    return Object.assign({}, note, { ayat, label: labelFor(ayat) });
+  }
   function ensureStyle() {
     if (document.getElementById('qh-distinctive-style')) return;
     const style = document.createElement('style');
@@ -81,5 +111,5 @@
     box.appendChild(p);
     return box;
   }
-  window.QHQuranDistinctive = { STATUS, NOTES, forVerse, forStory, render };
+  window.QHQuranDistinctive = { STATUS, NOTES, forVerse, forStory, withoutSourced, render };
 })();
