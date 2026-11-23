@@ -27,11 +27,13 @@ assert len(pre["qurtubi_active_hold_ids"]) == 8
 assert set(pre["qurtubi_active_hold_ids"]) == {f"108-QURTUBI-SCHOLAR-H{i:02d}" for i in range(1, 9)}
 cw = d["crosswalk"]
 assert cw["canonical_claim_count_remains"] == 23 and cw["no_new_claim_ids_allocated"] is True
+assert "108-Q09" in cw["canonical_rows_without_dedicated_review_artifact"]
+assert all(x["canonical_claim_id"] != "108-Q09" for x in cw["direct_canonical_review_artifacts"])
 assert cw["opening_name_proposal"]["claim_id_declared"] is False
 assert cw["opening_name_proposal"]["mapping"] == "unmapped_fragment_outside_canonical_anchor"
 assert "108-Q10" not in plan and "108-Q10A-R01" not in plan and "108-Q10B-R01" not in plan
 ids = {x["id"] for x in cw["additional_staged_identifiers"]}
-assert {"108-Q04O", "108-Q04P", "108-Q04Q", "108-Q04R", "108-Q04S", "108-Q07-H", "108-Q10A-R01", "108-Q10A-R02", "108-Q10B-R01"} <= ids
+assert {"108-Q04O", "108-Q04P", "108-Q04Q", "108-Q04R", "108-Q04S", "108-Q07-H", "108-Q10A-R01", "108-Q10A-R02", "108-Q10B-R01", "108-Q09C-R01"} <= ids
 assert all(x["mapping"] in {"supplemental_child_of_canonical", "unmapped_extra_claim"} for x in cw["additional_staged_identifiers"])
 assert d["latest_live_read_only_rows"]["database_write_statements"] == 0
 assert d["latest_live_read_only_rows"]["tafsir_accuracy_analysis_surah_108_rows"] == 0
