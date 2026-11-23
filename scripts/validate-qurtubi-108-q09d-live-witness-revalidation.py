@@ -20,6 +20,7 @@ for row in data["live_read_only_readback"]["rows"]:
     assert row["source_url"] == "671"
     assert row["span_occurrences"] == 1
     assert len(row["span_text"]) == row["span_chars"]
+    assert row["span_end_1_based_exclusive"] == row["span_start_1_based"] + row["span_chars"]
     assert hashlib.md5(row["span_text"].encode("utf-8")).hexdigest() == row["span_md5"]
 assert data["live_read_only_readback"]["rows"][0]["row_md5"] == "4963824f42a040edcaa995b7afbf8678"
 assert data["live_read_only_readback"]["rows"][1]["row_md5"] == "a9d8970d560e8683641ee47e22a38a24"
