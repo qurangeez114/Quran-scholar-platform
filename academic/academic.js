@@ -40,6 +40,6 @@ export function renderFooter(){
   if(document.getElementById('ac-footer'))return;
   const f=document.createElement('footer');f.id='ac-footer';f.className='ac-footer';
   f.innerHTML='<div class="ac-wrap">'+FOOTER_LINKS.map(([h,ls])=>'<nav aria-label="'+esc(h)+'"><h2 class="fh">'+esc(h)+'</h2>'+ls.map(([t,u])=>footerAnchor(t,u)).join('')+'</nav>').join('')+
-  '<p class="fine">© QuranHikma. Accreditation status: '+tbp('')+' QuranHikma does not claim accreditation unless stated here by the institution.</p></div>';
+  '<p class="fine">© QuranHikma.</p></div>';
   document.body.appendChild(f);
 }
