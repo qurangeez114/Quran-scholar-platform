@@ -531,7 +531,6 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid #f2d9
 <link rel="stylesheet" href="/qh-abraham-sacrifice-brief.css?v=20261108-research">
 </head>
 <body class="qh-design qh-page--stories qh-theme-dark">
-<div style="position:sticky;top:0;z-index:9999;display:flex;justify-content:flex-end;padding:6px 12px;background:#FDF8EE;border-bottom:1px solid #E8D8A0;"></div>
 
 <div id="hdr">
   <button id="menuBtn" onclick="toggleSB()">☰</button>
@@ -1804,6 +1803,18 @@ document.addEventListener('DOMContentLoaded', addRWButtons);
     var label = PAGE_LABELS[from];
     var url = buildBackUrl(from);
 
+    // Stories has a fixed header (#hdr). A separate sticky bar here sat on top
+    // of that header and the search box, so reuse the header's back link instead.
+    var hdrLink = document.querySelector('#hdr > a');
+    if (hdrLink) {
+      hdrLink.id = 'universal-back-banner';
+      hdrLink.href = url;
+      hdrLink.textContent = '\u2190 ' + label.replace(/^\S+\s+/, '');
+      hdrLink.title = 'You came from here';
+      hdrLink.setAttribute('aria-label', 'Back to ' + label.replace(/^\S+\s+/, '') + ' (you came from here)');
+      return;
+    }
+
     var banner = document.createElement('div');
     banner.id = 'universal-back-banner';
     banner.style.cssText = 'position:sticky;top:0;z-index:500;background:var(--bg2,#1a1008);border-bottom:1px solid var(--bronze-d,#6b4f1e);padding:8px 16px;display:flex;align-items:center;gap:10px;';
@@ -2203,5 +2214,20 @@ window.QNAV_PAGE_LABEL='Stories of the Prophets';window.QNAV_PAGE_ICON='📚';if
 <script src="verse-toolbar.js" defer></script>
 <script src="social-card.js" defer></script>
 <script src="social-card-autowire.js" defer></script><script src="/quran-verse-audio.js" defer></script>
+<style id="stories-header-offset-20261122">
+/* Keep the scrolling area below the fixed header at every width, even when the title wraps. */
+#wrap{top:var(--qh-stories-top,64px)}
+/* Stories is a fixed app layout: shared bars injected into the page flow sit under the
+   fixed header and show through the reading area without being clickable. */
+body.qh-page--stories>#qh-membership,body.qh-page--stories>#qh-site-footer{display:none!important}
+@media(max-width:1200px){#main,#sb{top:var(--qh-stories-top,64px)!important}#overlay.open{inset:var(--qh-stories-top,64px) 0 68px!important}}
+</style>
+<script>
+(function(){
+  function sync(){var h=document.getElementById('hdr');if(!h)return;document.documentElement.style.setProperty('--qh-stories-top',Math.ceil(h.getBoundingClientRect().bottom)+'px');}
+  sync();window.addEventListener('resize',sync);window.addEventListener('load',sync);
+  if(window.ResizeObserver){var h=document.getElementById('hdr');if(h)new ResizeObserver(sync).observe(h);}
+})();
+</script>
 </body>
 </html>
