@@ -99,6 +99,10 @@ body.presenting #bottom-nav,body.presenting .bnav-fab{display:none!important}#pr
 .pm-notes b{display:block;font:800 10px Inter,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#8a651f;margin-bottom:4px}
 .pm-bar{display:flex;gap:8px;align-items:center;justify-content:center;padding:8px 10px calc(8px + env(safe-area-inset-bottom));background:#1d1914;flex-wrap:wrap}
 .pm-bar .btn{min-height:42px;min-width:64px}
+.pm-lang{width:auto;max-width:160px;min-height:42px;padding:6px 8px;border-radius:10px;font:700 12px Inter,sans-serif;background:#fff9ec;color:#17130c;border:1px solid #e3d7bd}
+.slide-langnote{font:italic 13px/1.4 Inter,sans-serif;opacity:.7}
+.lang-note{font:12px/1.4 Inter,sans-serif;color:#8a7a55;margin-top:6px}
+.qh-verse-lang .notes-print{margin-top:8px}
 .pm-pos{color:#e2c98a;font:700 13px Inter,sans-serif;min-width:64px;text-align:center}
 @media(max-width:760px){
  .slide.long .slide-text{font-size:13px}.slide.xlong .slide-text{font-size:12px}
@@ -158,17 +162,32 @@ db.auth.onAuthStateChange((_e,session)=>{const had=!!window.__qhUser;const has=!
 <main class="layout">
   <aside class="panel">
     <div class="panel-head"><div class="panel-title">Presentation</div><button class="btn small red" onclick="clearBasket()">Clear Basket</button></div>
-    <div class="field"><label style="margin-top:10px">Slide text language</label><div class="field"><label for="outputLang" style="margin-top:10px">Slide text language (Qur'an verses)</label><select id="outputLang" onchange="setOutputLang()" style="width:100%;padding:8px;border:1px solid #D4C9A8;border-radius:8px;font-family:'Inter',sans-serif;">
+    <div class="field qh-verse-lang"><label for="outputLang">Verse language (Qur'an slides)</label><select id="outputLang" onchange="setOutputLang()">
   <option value="english">English</option>
-  <option value="arabic_only">Arabic only</option>
-  <option value="tigrinya">Tigrinya</option>
-  <option value="amharic">Amharic</option>
-  <option value="oromo">Oromo</option>
-  <option value="somali">Somali</option>
+  <option value="arabic_only">Arabic only (no translation)</option>
+  <option value="tigrinya">ትግርኛ Tigrinya</option>
+  <option value="amharic">አማርኛ Amharic</option>
+  <option value="oromo">Afaan Oromoo Oromo</option>
+  <option value="somali">Soomaali Somali</option>
+  <option value="german">Deutsch German</option>
+  <option value="urdu">اردو Urdu</option>
+  <option value="french">Français French</option>
+  <option value="spanish">Español Spanish</option>
+  <option value="indonesian">Bahasa Indonesia Indonesian</option>
+  <option value="malay">Bahasa Melayu Malay</option>
+  <option value="turkish">Türkçe Turkish</option>
+  <option value="persian">فارسی Persian</option>
+  <option value="bengali">বাংলা Bengali</option>
+  <option value="chinese">中文 Chinese</option>
+  <option value="swahili">Kiswahili Swahili</option>
+  <option value="hausa">Hausa</option>
+  <option value="swedish">Svenska Swedish</option>
+  <option value="norwegian">Norsk Norwegian</option>
 </select>
-<div id="langAutoNote" style="font-size:11px;color:#8a7a55;margin-top:4px;"></div>
+<label class="notes-print" for="showArabic"><input type="checkbox" id="showArabic" checked onchange="setShowArabic(this.checked)"> Show the Arabic text with the translation</label>
+<div id="langAutoNote" class="lang-note" role="status" aria-live="polite"></div>
 </div>
-<label for="presTitle">Presentation title</label><input id="presTitle" value="Untitled Qur’an Study" oninput="syncTitle()"></div>
+<div class="field"><label for="presTitle">Presentation title</label><input id="presTitle" value="Untitled Qur’an Study" oninput="syncTitle()"></div>
     <div class="field"><label for="themeSelect">Design theme</label><select id="themeSelect" onchange="setTheme(this.value)"><option value="academic">Academic Research</option><option value="mosque">Mosque Lecture</option><option value="debate">Debate / Comparison</option><option value="youth">Youth Class</option><option value="dark">Dark Modern</option><option value="manuscript">Ancient Manuscript</option></select></div>
     <div class="field"><label for="perspectiveSelect">Presentation perspective</label><select id="perspectiveSelect" onchange="setPerspective(this.value)"><option value="devotional">Devotional / Teaching</option><option value="academic">Academic Research</option><option value="comparative">Comparative Religion</option><option value="madhhab">Madhhab Comparison</option><option value="historical">Historical Analysis</option><option value="debate">Debate Preparation</option><option value="critical">Critical Analysis</option><option value="custom">Custom</option></select></div>
     <div class="field">
@@ -243,6 +262,7 @@ db.auth.onAuthStateChange((_e,session)=>{const had=!!window.__qhUser;const has=!
     <button class="btn" type="button" onclick="presentStep(-1)" aria-label="Previous slide">← Prev</button>
     <span class="pm-pos" id="pmPos">1 / 1</span>
     <button class="btn" type="button" onclick="presentStep(1)" aria-label="Next slide">Next →</button>
+    <select id="pmLang" class="pm-lang" aria-label="Verse language" onchange="setPresentLang(this.value)"></select>
     <button class="btn" type="button" id="pmNotesBtn" onclick="togglePresentNotes()" aria-pressed="false">Notes</button>
     <button class="btn red" type="button" onclick="closePresent()">Exit</button>
   </div>
@@ -269,27 +289,21 @@ function id(p='s'){return p+'_'+Date.now()+'_'+Math.random().toString(36).slice(
 function esc(s){return String(s||'').replace(/[&<>\"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[m]))}
 function typeLabel(t){return (sectionNames[t]||String(t||'item').replace(/_/g,' ')).replace(' Evidence','')}
 function perspectiveLabel(){return perspectiveLabels[perspective]||'Academic Research'}
-function normalize(raw){raw=raw||{};let t=String(raw.type||'research').toLowerCase();if(t==='verse')t='quran';return{ id:raw.id||id(t), type:t, title:raw.title||raw.slideTitle||typeLabel(t), slideTitle:raw.slideTitle||raw.title||typeLabel(t), reference:raw.reference||raw.source||'', text:raw.text||[raw.arabic,raw.english,raw.extra].filter(Boolean).join('\n\n'), arabic:raw.arabic||'', translations:raw.translations||null, notes:raw.notes||'', speakerNotes:raw.speakerNotes||'', sourceUrl:raw.sourceUrl||'', createdAt:raw.createdAt||raw.addedAt||new Date().toISOString(), section:raw.section||t }}
+function normalize(raw){raw=raw||{};let t=String(raw.type||'research').toLowerCase();if(t==='verse')t='quran';return{ id:raw.id||id(t), type:t, title:raw.title||raw.slideTitle||typeLabel(t), slideTitle:raw.slideTitle||raw.title||typeLabel(t), reference:raw.reference||raw.source||'', text:raw.text||[raw.arabic,raw.english,raw.extra].filter(Boolean).join('\n\n'), arabic:raw.arabic||'', translations:raw.translations||null, notes:raw.notes||'', speakerNotes:raw.speakerNotes||'', sourceUrl:raw.sourceUrl||'', createdAt:raw.createdAt||raw.addedAt||new Date().toISOString(), section:raw.section||t, selectedText:raw.selectedText||'', language:raw.language||'', versesLoaded:!!raw.versesLoaded, vtTried:Array.isArray(raw.vtTried)?raw.vtTried:[] }}
 function load(){slides=parse(BASKET_KEY,null);if(!Array.isArray(slides))slides=parse(LEGACY_KEY,[]);slides=slides.map(normalize);document.getElementById('themeSelect').value=theme;const p=document.getElementById('perspectiveSelect');if(p)p.value=perspective;loadCloudConfig();render();renderProjects();if(!window.__qhUser)renderCloudProjects([])}
 function syncTitle(){renderPreview()}
 function setTheme(t){theme=t;localStorage.setItem('qs_presentation_theme',t);renderPreview()}
 function setPerspective(p){perspective=p;localStorage.setItem(PERSPECTIVE_KEY,p);renderPreview()}
 function render(){const list=document.getElementById('slideList');document.getElementById('countBadge').textContent=slides.length+' items';list.innerHTML='';if(!slides.length){list.innerHTML='<div class="empty">No items yet. Go back to the app and tap “+ Add to Presentation”, or add a blank slide.</div>';current=0}else{slides.forEach((s,i)=>{const d=document.createElement('div');d.className='item '+(i===current?'active':'');d.draggable=true;d.ondragstart=e=>e.dataTransfer.setData('text/plain',i);d.ondragover=e=>e.preventDefault();d.ondrop=e=>{e.preventDefault();const from=+e.dataTransfer.getData('text/plain');reorder(from,i)};d.onclick=()=>{current=i;render();if(window.matchMedia('(max-width:760px)').matches){const pw=document.querySelector('.preview-wrap');if(pw)pw.scrollIntoView({behavior:'smooth',block:'start'})}};d.innerHTML=`<div class="item-top"><span class="pill ${esc(s.type)}">${esc(typeLabel(s.type))}</span><div><div class="item-title">${esc(s.slideTitle||s.title)}</div><div class="item-ref">${esc(s.reference)}</div></div></div><div class="item-text">${esc(s.text).slice(0,240)}</div><div class="item-actions"><button class="btn small" onclick="event.stopPropagation();duplicateSlide(${i})">Duplicate</button><button class="btn small red" onclick="event.stopPropagation();deleteSlide(${i})">Remove</button></div>`;list.appendChild(d)})}saveBasket();renderPreview();renderEditor()}
 function slideMarkup(s,i,total,title,forExport){
-  const arabic=s.arabic?`<div class="slide-arabic">${esc(s.arabic)}</div>`:'';const notes=(forExport&&s.speakerNotes)?`<div class="slide-notes deck-notes">${esc(s.speakerNotes).replace(/\n/g,'<br>')}</div>`:'';const lenCls=slideLenClass(s);const source=s.sourceUrl?`<a class="source-link" href="${esc(s.sourceUrl)}">${esc(s.reference||s.sourceUrl)}</a>`:esc(s.reference);
+  const arabic=(s.arabic&&(showArabicOn()||getOutputLang()==='arabic_only'))?`<div class="slide-arabic" lang="ar" dir="rtl">${esc(s.arabic)}</div>`:'';const notes=(forExport&&s.speakerNotes)?`<div class="slide-notes deck-notes">${esc(s.speakerNotes).replace(/\n/g,'<br>')}</div>`:'';const lenCls=slideLenClass(s);const source=s.sourceUrl?`<a class="source-link" href="${esc(s.sourceUrl)}">${esc(s.reference||s.sourceUrl)}</a>`:esc(s.reference);
   let textBlock;
-  if(forExport && s.type==='quran' && s.translations){
-    const order=[['english','English'],['tigrinya','ትግርኛ'],['amharic','አማርኛ'],['oromo','Oromoo'],['somali','Somali']];
-    const variants=order.filter(([k])=>s.translations[k]).map(([k])=>`<div class="slide-text deck-lang" data-lang="${k}"${k==='english'?'':' style="display:none"'}>${esc(s.translations[k]).replace(/\n/g,'<br>')}</div>`).join('');
+  if(forExport && isVerseSlide(s) && s.translations){
+    const variants=exportVerseVariants(s);
     textBlock=variants||`<div class="slide-text">${esc(s.text).replace(/\n/g,'<br>')}</div>`;
   }else{
-    let displayText=s.text;
-    const lang=getOutputLang();
-    if(s.type==='quran'&&s.translations){
-      if(lang==='arabic_only'){displayText='';}
-      else if(lang!=='english'&&s.translations[lang]){displayText=s.translations[lang];}
-    }
-    textBlock=`<div class="slide-text">${esc(displayText).replace(/\n/g,'<br>')}</div>`;
+    const d=verseDisplay(s);
+    textBlock=(d.text?`<div class="slide-text"${d.rtl?' dir="rtl"':''}>${esc(d.text).replace(/\n/g,'<br>')}</div>`:'')+(d.note&&!forExport?`<div class="slide-langnote">${esc(d.note)}</div>`:'');
   }
   return `<div class="slide theme-${theme}${lenCls}"><div class="slide-header"><div class="slide-title">${esc(s.slideTitle||s.title)}</div><div class="slide-subtitle">${esc(typeLabel(s.type))} • ${esc(perspectiveLabel())}</div></div><div class="slide-body">${arabic}${textBlock}${notes}<div class="slide-source">${source}</div></div><div class="slide-footer"><span>${esc(title)}</span><span>${i+1}${total?' / '+total:''}</span></div></div>`}
 function renderPreview(){const s=slides[current];const box=document.getElementById('slidePreview');document.getElementById('pos').textContent=slides.length?`${current+1} / ${slides.length}`:'0 / 0';box.className='slide theme-'+theme;if(!s){renderPreviewNotes(null);box.innerHTML='<div class="slide-body"><div class="slide-title">Presentation Builder</div><div class="slide-text">Collect verses, hadith, madhhab rulings, sira events, tafsir, cross-references, and AI analysis from the app.</div></div>';return}box.innerHTML=slideMarkup(s,current,slides.length,document.getElementById('presTitle').value||'Qur’an Study');renderPreviewNotes(s);}
@@ -329,22 +343,22 @@ function renderCloudProjects(items){const box=document.getElementById('cloudProj
 async function loadCloudProject(pid){if(!cloudReady())return;try{const {data,error}=await cloudDb().from(CLOUD_TABLE).select('*').eq('id',pid).limit(1);if(error)throw error;const pr=(data||[])[0];if(!pr)throw new Error('Not found, or not yours.');const mine=pr.owner_id===cloudUser().id;activeProjectId=mine?pr.id:null;slides=(pr.slides||[]).map(normalize);theme=pr.theme||'academic';perspective=pr.perspective||'academic';document.getElementById('presTitle').value=pr.title||pr.name;document.getElementById('themeSelect').value=theme;const ps=document.getElementById('perspectiveSelect');if(ps)ps.value=perspective;saveBasket();if(mine)saveProjectSilent({id:pr.id,name:pr.name,title:pr.title,theme:pr.theme,perspective:pr.perspective,slides:pr.slides,updatedAt:pr.updated_at});current=0;render();cloudStatus(mine?'Loaded into the editor.':'Opened a member’s presentation, read-only. Saving makes a copy in your own account; theirs is unchanged.','ok')}catch(e){cloudStatus('Could not open that presentation. '+(e.message||e),'err')}}
 async function deleteCloudProject(pid){if(!confirm('Delete this presentation from your account? This cannot be undone.'))return;if(!cloudReady())return;try{const {error}=await cloudDb().from(CLOUD_TABLE).delete().eq('id',pid).eq('owner_id',cloudUser().id);if(error)throw error;if(activeProjectId===pid)activeProjectId=null;cloudStatus('Deleted from your account.','ok');loadCloudProjects()}catch(e){cloudStatus('Delete failed. '+(e.message||e),'err')}}
 async function loadAdminProjects(){const box=document.getElementById('adminProjectList');if(!box||!cloudDb())return;box.innerHTML='<div class="empty">Loading…</div>';try{const {data,error}=await cloudDb().rpc('qh_presentation_projects_admin_list',{p_limit:200});if(error)throw error;if(!data||!data.length){box.innerHTML='<div class="empty">No member has saved a presentation yet.</div>';return}box.innerHTML=data.map(pr=>`<div class="project-row"><div><div class="project-name">${esc(pr.name||pr.title)}</div><div class="project-meta">${esc(pr.owner_email||'unknown member')} • ${pr.slide_count} slides • ${new Date(pr.updated_at).toLocaleString()}</div></div><div class="item-actions"><button class="btn small" onclick="loadCloudProject('${esc(pr.id)}')">Open</button></div></div>`).join('')}catch(e){box.innerHTML='<div class="empty">Could not load members’ presentations. '+esc(e.message||String(e))+'</div>'}}
-function deckHTML(printMode=false){const title=esc(document.getElementById('presTitle').value||'Qur’an Study');const css=document.querySelector('style').innerHTML;const deck=exportDeckSlides();const hasQuranTranslations=deck.some(s=>s.type==='quran'&&s.translations&&Object.keys(s.translations).some(k=>s.translations[k]));const langBar=hasQuranTranslations?`<div class="deck-lang-bar" style="position:fixed;top:12px;right:12px;z-index:9999;background:#fffdf8;border:1px solid #e3d7bd;border-radius:10px;padding:7px 10px;font:700 11px Inter,sans-serif;box-shadow:0 3px 14px rgba(0,0,0,.15);"><label style="margin-right:6px;color:#6f6553;">Verse language:</label><select id="deckLangSelect" onchange="window.__setDeckLang(this.value)" style="font:700 11px Inter,sans-serif;padding:4px 6px;border-radius:6px;border:1px solid #e3d7bd;background:#fff;"><option value="english">English</option><option value="tigrinya">ትግርኛ Tigrinya</option><option value="amharic">አማርኛ Amharic</option><option value="oromo">Oromoo</option><option value="somali">Somali</option></select><div style="margin-top:4px;font-weight:400;color:#9a8a70;">Hadith/Tafsir/Madhhab/Sira stay in English</div></div><script>window.__setDeckLang=function(lang){document.querySelectorAll('.deck-lang').forEach(function(el){el.style.display=(el.getAttribute('data-lang')===lang)?'':'none';});};<\/script>`:'';return `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><style>${css}.topbar,.panel,.toolbar{display:none}.layout,.center{display:block}.preview-wrap{display:block;padding:0}.slide{width:100vw;height:100vh;border-radius:0;box-shadow:none;page-break-after:always}.slide-body{overflow:hidden}.deck-notes{display:none;font:15px/1.5 Inter,sans-serif}.show-notes .deck-notes{display:block}#bottom-nav{display:none!important}.slide.long .slide-text{font-size:2.4vw}.slide.xlong .slide-text{font-size:1.9vw}.slide.long .slide-arabic{font-size:3vw}.slide.xlong .slide-arabic{font-size:2.4vw}@media print{.deck-lang-bar,#notesToggle{display:none!important}}<\/style></head><body class="${printMode&&notesInPdf()?'show-notes':''}">${langBar}${deck.map((s,i)=>slideMarkup(s,i,deck.length,title,true)).join('')}<button id="notesToggle" type="button" onclick="document.body.classList.toggle('show-notes')" style="position:fixed;bottom:12px;right:12px;z-index:9999;padding:9px 14px;border-radius:999px;border:1px solid #e3d7bd;background:#fffdf8;font:700 12px Inter,sans-serif;cursor:pointer;box-shadow:0 3px 14px rgba(0,0,0,.15)">Speaker notes (N)</button><script>document.addEventListener('keydown',function(e){if((e.key==='n'||e.key==='N')&&!e.metaKey&&!e.ctrlKey)document.body.classList.toggle('show-notes');});<\/script><\/body><\/html>`}
+function deckHTML(printMode=false){const title=esc(document.getElementById('presTitle').value||'Qur’an Study');const css=document.querySelector('style').innerHTML;const deck=exportDeckSlides();const langBar=deckLangBar(deck);return `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><style>${css}.topbar,.panel,.toolbar{display:none}.layout,.center{display:block}.preview-wrap{display:block;padding:0}.slide{width:100vw;height:100vh;border-radius:0;box-shadow:none;page-break-after:always}.slide-body{overflow:hidden}.deck-notes{display:none;font:15px/1.5 Inter,sans-serif}.show-notes .deck-notes{display:block}#bottom-nav{display:none!important}.slide.long .slide-text{font-size:2.4vw}.slide.xlong .slide-text{font-size:1.9vw}.slide.long .slide-arabic{font-size:3vw}.slide.xlong .slide-arabic{font-size:2.4vw}@media print{.deck-lang-bar,#notesToggle{display:none!important}}<\/style></head><body class="${printMode&&notesInPdf()?'show-notes':''}">${langBar}${deck.map((s,i)=>slideMarkup(s,i,deck.length,title,true)).join('')}<button id="notesToggle" type="button" onclick="document.body.classList.toggle('show-notes')" style="position:fixed;bottom:12px;right:12px;z-index:9999;padding:9px 14px;border-radius:999px;border:1px solid #e3d7bd;background:#fffdf8;font:700 12px Inter,sans-serif;cursor:pointer;box-shadow:0 3px 14px rgba(0,0,0,.15)">Speaker notes (N)</button><script>document.addEventListener('keydown',function(e){if((e.key==='n'||e.key==='N')&&!e.metaKey&&!e.ctrlKey)document.body.classList.toggle('show-notes');});<\/script><\/body><\/html>`}
 function exportHTML(){if(!slides.length)return alert('No slides to export.');const blob=new Blob([deckHTML()],{type:'text/html'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=(document.getElementById('presTitle').value||'quran-presentation').replace(/[^a-z0-9]+/gi,'-').toLowerCase()+'.html';a.click();URL.revokeObjectURL(a.href)}
 function exportPDF(){if(!slides.length)return alert('No slides to export.');var html=deckHTML(true);var blob=new Blob([html],{type:'text/html'});var url=URL.createObjectURL(blob);var a=document.createElement('a');a.href=url;a.target='_blank';document.body.appendChild(a);a.click();document.body.removeChild(a);setTimeout(function(){URL.revokeObjectURL(url);},3000);setTimeout(function(){alert('Tap the menu → Print → Save as PDF to download.');},800);}
 function loadPptxLib(){return new Promise(function(res,rej){if(window.PptxGenJS)return res();var el=document.createElement('script');el.src='https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js';el.onload=function(){window.PptxGenJS?res():rej(new Error('missing'))};el.onerror=function(){rej(new Error('load'))};document.head.appendChild(el)})}
-function slideDisplayText(s){let t=s.text||'';if(s.type==='quran'&&s.translations){const lang=getOutputLang();if(lang==='arabic_only')t='';else if(lang!=='english'&&s.translations[lang])t=s.translations[lang]}return t}
-async function exportPPTX(){if(!slides.length)return alert('No slides to export.');const deck=exportDeckSlides();try{await loadPptxLib()}catch(e){alert('PowerPoint export could not load. Check your connection, or use HTML or PDF export.');return}try{const pptx=new PptxGenJS();pptx.layout='LAYOUT_WIDE';deck.forEach(s=>{const sl=pptx.addSlide();sl.addText(s.slideTitle||s.title||'',{x:.5,y:.3,w:12.3,h:.7,fontSize:28,bold:true,fit:'shrink'});const body=slideDisplayText(s);let y=1.2;if(s.arabic){sl.addText(s.arabic,{x:.7,y:y,w:12,h:body?1.9:4.8,fontSize:24,rtlMode:true,align:'right',fontFace:'Arial',fit:'shrink'});y+=body?2.0:4.9}if(body)sl.addText(body,{x:.7,y:y,w:12,h:6.1-y,fontSize:18,valign:'top',fit:'shrink'});if(s.speakerNotes)sl.addNotes(s.speakerNotes);sl.addText((s.reference||'')+(s.sourceUrl?' — '+s.sourceUrl:''),{x:.7,y:6.6,w:12,h:.35,fontSize:9,color:'666666'})});await pptx.writeFile({fileName:(document.getElementById('presTitle').value||'quran-presentation').replace(/[\\/:*?"<>|]+/g,'-')+'.pptx'})}catch(e){alert('PowerPoint export failed. Use HTML or PDF export.')}}
+function slideDisplayText(s){return verseDisplay(s).text}
+async function exportPPTX(){if(!slides.length)return alert('No slides to export.');const deck=exportDeckSlides();try{await loadPptxLib()}catch(e){alert('PowerPoint export could not load. Check your connection, or use HTML or PDF export.');return}try{const pptx=new PptxGenJS();pptx.layout='LAYOUT_WIDE';deck.forEach(s=>{const sl=pptx.addSlide();sl.addText(s.slideTitle||s.title||'',{x:.5,y:.3,w:12.3,h:.7,fontSize:28,bold:true,fit:'shrink'});const body=slideDisplayText(s);let y=1.2;if(s.arabic&&(showArabicOn()||getOutputLang()==='arabic_only')){sl.addText(s.arabic,{x:.7,y:y,w:12,h:body?1.9:4.8,fontSize:24,rtlMode:true,align:'right',fontFace:'Arial',fit:'shrink'});y+=body?2.0:4.9}if(body)sl.addText(body,{x:.7,y:y,w:12,h:6.1-y,fontSize:18,valign:'top',fit:'shrink'});if(s.speakerNotes)sl.addNotes(s.speakerNotes);sl.addText((s.reference||'')+(s.sourceUrl?' — '+s.sourceUrl:''),{x:.7,y:6.6,w:12,h:.35,fontSize:9,color:'666666'})});await pptx.writeFile({fileName:(document.getElementById('presTitle').value||'quran-presentation').replace(/[\\/:*?"<>|]+/g,'-')+'.pptx'})}catch(e){alert('PowerPoint export failed. Use HTML or PDF export.')}}
 function notesInPdf(){const el=document.getElementById('notesInPdf');return !!(el&&el.checked)}
 function slideLenClass(s){const n=String(slideDisplayText(s)||'').length+String(s.arabic||'').length*1.4;return n>1100?' xlong':n>520?' long':''}
 function renderPreviewNotes(s){const el=document.getElementById('previewNotes');if(!el)return;if(!s){el.hidden=true;return}el.hidden=false;const n=String(s.speakerNotes||'').trim();el.classList.toggle('empty',!n);el.innerHTML='<b>Speaker notes (only you see these)</b>'+(n?esc(n).replace(/\n/g,'<br>'):'No notes yet. Write them in “Speaker notes” below.')}
 let presentIdx=0,presentTouchX=null;
-function openPresent(){if(!slides.length)return alert('Add some slides first.');presentIdx=current;const pm=document.getElementById('presentMode');pm.hidden=false;document.body.style.overflow='hidden';document.body.classList.add('presenting');renderPresent();try{if(window.matchMedia('(min-width:761px)').matches&&pm.requestFullscreen)pm.requestFullscreen().catch(()=>{})}catch(e){}}
+function openPresent(){if(!slides.length)return alert('Add some slides first.');presentIdx=current;const pm=document.getElementById('presentMode');syncLangSelects();pm.hidden=false;document.body.style.overflow='hidden';document.body.classList.add('presenting');renderPresent();try{if(window.matchMedia('(min-width:761px)').matches&&pm.requestFullscreen)pm.requestFullscreen().catch(()=>{})}catch(e){}}
 function closePresent(){const pm=document.getElementById('presentMode');pm.hidden=true;document.body.style.overflow='';document.body.classList.remove('presenting');try{if(document.fullscreenElement)document.exitFullscreen()}catch(e){}current=presentIdx;render()}
 function presentStep(d){const n=presentIdx+d;if(n<0||n>=slides.length)return;presentIdx=n;renderPresent()}
 function togglePresentNotes(){const el=document.getElementById('pmNotes');el.hidden=!el.hidden;document.getElementById('pmNotesBtn').setAttribute('aria-pressed',String(!el.hidden));try{localStorage.setItem('qs_present_notes',el.hidden?'0':'1')}catch(e){}}
 function renderPresent(){const s=slides[presentIdx];if(!s)return;document.getElementById('pmStage').innerHTML=slideMarkup(s,presentIdx,slides.length,document.getElementById('presTitle').value||'Qur’an Study');document.getElementById('pmPos').textContent=(presentIdx+1)+' / '+slides.length;const n=String(s.speakerNotes||'').trim();document.getElementById('pmNotes').innerHTML='<b>Speaker notes</b>'+(n?esc(n).replace(/\n/g,'<br>'):'No notes for this slide.')}
-document.addEventListener('keydown',function(e){const pm=document.getElementById('presentMode');if(!pm||pm.hidden)return;if(['ArrowRight','PageDown',' '].includes(e.key)){e.preventDefault();presentStep(1)}else if(['ArrowLeft','PageUp'].includes(e.key)){e.preventDefault();presentStep(-1)}else if(e.key==='Escape'){closePresent()}else if(e.key==='n'||e.key==='N'){togglePresentNotes()}});
+document.addEventListener('keydown',function(e){const pm=document.getElementById('presentMode');if(!pm||pm.hidden)return;if(e.key!=='Escape'&&e.target&&/^(SELECT|INPUT|TEXTAREA)$/.test(e.target.tagName))return;if(['ArrowRight','PageDown',' '].includes(e.key)){e.preventDefault();presentStep(1)}else if(['ArrowLeft','PageUp'].includes(e.key)){e.preventDefault();presentStep(-1)}else if(e.key==='Escape'){closePresent()}else if(e.key==='n'||e.key==='N'){togglePresentNotes()}});
 document.addEventListener('DOMContentLoaded',function(){const st=document.getElementById('pmStage');if(st){st.addEventListener('touchstart',e=>{presentTouchX=e.touches[0].clientX},{passive:true});st.addEventListener('touchend',e=>{if(presentTouchX===null)return;const dx=e.changedTouches[0].clientX-presentTouchX;presentTouchX=null;if(Math.abs(dx)>50)presentStep(dx<0?1:-1)},{passive:true})}let keep='0';try{keep=localStorage.getItem('qs_present_notes')||'0'}catch(e){}if(keep==='1'){const n=document.getElementById('pmNotes');if(n){n.hidden=false;document.getElementById('pmNotesBtn').setAttribute('aria-pressed','true')}}document.addEventListener('fullscreenchange',function(){const pm=document.getElementById('presentMode');if(!document.fullscreenElement&&pm&&!pm.hidden&&window.matchMedia('(min-width:761px)').matches){closePresent()}})});
 
 const SB_URL2='https://ylosytbxpzxzwfzjpaej.supabase.co';
@@ -563,7 +577,7 @@ document.addEventListener('DOMContentLoaded', () => {
 /* ── Output language for slide text (Qur'an verses) ── */
 function detectBrowserVerseLang(){
   const code = (navigator.language||navigator.userLanguage||'en').toLowerCase().slice(0,2);
-  const map = { ti:'tigrinya', am:'amharic', om:'oromo', so:'somali', ar:'arabic_only' };
+  const map = { ti:'tigrinya', am:'amharic', om:'oromo', so:'somali', ar:'arabic_only', de:'german', ur:'urdu', fr:'french', es:'spanish', id:'indonesian', ms:'malay', tr:'turkish', fa:'persian', bn:'bengali', zh:'chinese', sw:'swahili', ha:'hausa', sv:'swedish', nb:'norwegian', nn:'norwegian', no:'norwegian' };
   return map[code] || 'english';
 }
 function getOutputLang(){
@@ -573,16 +587,19 @@ function getOutputLang(){
 }
 function setOutputLang(){
   const v=document.getElementById('outputLang').value;
-  localStorage.setItem('qsOutputLang', v);
+  try{localStorage.setItem('qsOutputLang', v);}catch(e){}
   document.getElementById('langAutoNote').textContent='';
-  if(typeof renderPreview==='function') renderPreview();
+  syncLangSelects();
+  refreshVerseViews();
+  hydrateVerseSlides();
 }
 function resetOutputLangToEnglish(){
   localStorage.setItem('qsOutputLang','english');
   const sel=document.getElementById('outputLang');
   if(sel) sel.value='english';
   document.getElementById('langAutoNote').textContent='';
-  if(typeof renderPreview==='function') renderPreview();
+  refreshVerseViews();
+  hydrateVerseSlides();
 }
 document.addEventListener('DOMContentLoaded', () => {
   const sel=document.getElementById('outputLang');
@@ -596,8 +613,141 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
+/* ── Verse language for Qur'an slides ──
+   Verses reach the basket from many places (reader "+", text selection,
+   cross-reference reading, Auto-Build). Only Auto-Build stored translations,
+   so the language menu did nothing for the rest. Each Qur'an slide that names
+   its verse (e.g. "Quran 2:255" or "2:255–257") now loads its Arabic and
+   translations from the site's own verse tables, so any language can be shown
+   in the editor, in Present mode and in exports. Read-only queries. */
+const PRES_LANGS=[
+  // key, label, ayas column (null = verse_translations only), verse_translations code
+  ['english','English','english','en'],['tigrinya','Tigrinya','tigrinya','ti'],['amharic','Amharic','amharic','am'],
+  ['oromo','Oromo','oromo','om'],['somali','Somali','somali','so'],['german','German','german','de'],
+  ['urdu','Urdu','urdu','ur'],['swedish','Swedish','swedish','sv'],['norwegian','Norwegian','norwegian','no'],
+  ['french','French',null,'fr'],['spanish','Spanish',null,'es'],['indonesian','Indonesian',null,'id'],
+  ['malay','Malay',null,'ms'],['turkish','Turkish',null,'tr'],['persian','Persian',null,'fa'],
+  ['bengali','Bengali',null,'bn'],['chinese','Chinese',null,'zh'],['swahili','Swahili',null,'sw'],['hausa','Hausa',null,'ha']
+];
+const PRES_LANG_INFO=Object.fromEntries(PRES_LANGS.map(l=>[l[0],{label:l[1],col:l[2],vt:l[3]}]));
+const PRES_RTL=new Set(['urdu','persian']);
+function presLangName(k){if(k==='arabic_only')return 'Arabic';return (PRES_LANG_INFO[k]||{}).label||k}
+function showArabicOn(){try{return localStorage.getItem('qsShowArabic')!=='0'}catch(e){return true}}
+function setShowArabic(on){try{localStorage.setItem('qsShowArabic',on?'1':'0')}catch(e){}refreshVerseViews()}
+function isVerseSlide(s){return !!s&&s.type==='quran'&&!s.selectedText}
+/* The verses a slide names: "Quran 2:255", "2:255-257", or ?sura=2&aya=255 in its link. One sura, at most 30 verses. */
+function verseRefs(s){
+  if(!isVerseSlide(s))return [];
+  const pick=str=>{const m=String(str||'').match(/(?:^|[^\d:])(\d{1,3})\s*:\s*(\d{1,3})(?:\s*[-–—]\s*(\d{1,3}))?(?![\d:])/);return m?[+m[1],+m[2],m[3]?+m[3]:+m[2]]:null};
+  let r=pick(s.reference)||pick(s.slideTitle)||pick(s.title);
+  if(!r&&s.sourceUrl){try{const u=new URL(s.sourceUrl,location.href);const su=+u.searchParams.get('sura'),a=+u.searchParams.get('aya');if(su&&a)r=[su,a,a]}catch(e){}}
+  if(!r)return [];
+  const [su,a,b]=r;if(su<1||su>114||a<1||b<a)return [];
+  const out=[];for(let x=a;x<=Math.min(b,a+29);x++)out.push(su+':'+x);return out;
+}
+function verseDisplay(s){
+  const lang=getOutputLang();const t=s.text||'';
+  if(!isVerseSlide(s))return {text:t,note:''};
+  const tr=s.translations||{};
+  if(lang==='arabic_only')return {text:s.arabic?'':t,note:s.arabic?'':(verseRefs(s).length&&!s.versesLoaded&&!presVerseError?'Loading the Arabic text…':'')};
+  if(lang==='english')return {text:t||tr.english||'',note:''};
+  if(tr[lang])return {text:tr[lang],note:'',rtl:PRES_RTL.has(lang)};
+  if(verseRefs(s).length&&!presVerseError&&!(s.vtTried||[]).includes(lang))return {text:t,note:'Loading '+presLangName(lang)+'…'};
+  return {text:t,note:'No '+presLangName(lang)+' translation is stored for this verse, so the original text is shown.'};
+}
+function exportVerseVariants(s){
+  const tr=s.translations||{};const lang=getOutputLang();
+  const have=PRES_LANGS.map(l=>l[0]).filter(k=>k==='english'?(s.text||tr.english):tr[k]);
+  if(!have.length)return '';
+  const shown=lang==='arabic_only'?(s.arabic?'':have[0]):(have.includes(lang)?lang:(have.includes('english')?'english':have[0]));
+  return have.map(k=>{const v=k==='english'?(s.text||tr.english):tr[k];return `<div class="slide-text deck-lang" data-lang="${k}"${PRES_RTL.has(k)?' dir="rtl"':''}${k===shown?'':' style="display:none"'}>${esc(v).replace(/\n/g,'<br>')}</div>`}).join('');
+}
+function deckLangBar(deck){
+  const verse=deck.filter(s=>isVerseSlide(s)&&s.translations);
+  if(!verse.length)return '';
+  const keys=PRES_LANGS.map(l=>l[0]).filter(k=>verse.some(s=>k==='english'?(s.text||s.translations.english):s.translations[k]));
+  const cur=getOutputLang();
+  const opts=keys.map(k=>`<option value="${k}"${k===cur?' selected':''}>${esc(presLangName(k))}</option>`).join('')+`<option value="arabic_only"${cur==='arabic_only'?' selected':''}>Arabic only</option>`;
+  const js="window.__setDeckLang=function(lang){document.querySelectorAll('.slide').forEach(function(sl){var v=sl.querySelectorAll('.deck-lang');if(!v.length)return;var hit=false;v.forEach(function(el){var on=el.getAttribute('data-lang')===lang;el.style.display=on?'':'none';if(on)hit=true;});if(!hit&&lang!=='arabic_only'){var en=sl.querySelector('.deck-lang[data-lang=\"english\"]')||v[0];en.style.display='';}});};";
+  return `<div class="deck-lang-bar" style="position:fixed;top:12px;right:12px;z-index:9999;max-width:calc(100vw - 24px);background:#fffdf8;border:1px solid #e3d7bd;border-radius:10px;padding:7px 10px;font:700 11px Inter,sans-serif;box-shadow:0 3px 14px rgba(0,0,0,.15);"><label for="deckLangSelect" style="display:inline;margin-right:6px;color:#6f6553;">Verse language:</label><select id="deckLangSelect" onchange="window.__setDeckLang(this.value)" style="width:auto;font:700 11px Inter,sans-serif;padding:4px 6px;border-radius:6px;border:1px solid #e3d7bd;background:#fff;">${opts}</select><div style="margin-top:4px;font-weight:400;color:#9a8a70;">Hadith/Tafsir/Madhhab/Sira stay in English</div></div><script>${js}<\/script>`;
+}
+function syncLangSelects(){
+  const main=document.getElementById('outputLang'),pm=document.getElementById('pmLang');
+  const v=getOutputLang();
+  if(main&&main.value!==v)main.value=v;
+  if(pm&&main){if(pm.options.length!==main.options.length)pm.innerHTML=main.innerHTML;pm.value=v}
+  const cb=document.getElementById('showArabic');if(cb)cb.checked=showArabicOn();
+}
+function setPresentLang(v){const main=document.getElementById('outputLang');if(!main)return;main.value=v;setOutputLang()}
+function refreshVerseViews(){
+  if(typeof renderPreview==='function')renderPreview();
+  const pm=document.getElementById('presentMode');
+  if(pm&&!pm.hidden&&typeof renderPresent==='function')renderPresent();
+}
+function initVerseLangControls(){syncLangSelects()}
+function langNote(msg){const el=document.getElementById('langAutoNote');if(el&&!el.querySelector('a'))el.textContent=msg||''}
+async function presFetch(table,qs){const r=await fetch(SB_URL2+'/rest/v1/'+table+'?'+qs,{headers:SB_H2});if(!r.ok)throw new Error(table+' returned '+r.status);return r.json()}
+function joinVerses(refs,map){
+  const vals=refs.map(k=>String(map.get(k)||'').trim());
+  if(!vals.some(Boolean))return '';
+  if(refs.length===1)return vals[0];
+  return refs.map((k,i)=>vals[i]?'('+k.split(':')[1]+') '+vals[i]:'').filter(Boolean).join('\n');
+}
+let hydrateRun=0,presVerseError=false;
+async function hydrateVerseSlides(){
+  const run=++hydrateRun;presVerseError=false;
+  const lang=getOutputLang();
+  const info=PRES_LANG_INFO[lang];
+  const list=slides.filter(s=>verseRefs(s).length);
+  const coreNeed=list.filter(s=>!s.versesLoaded);
+  const vtNeed=info?list.filter(s=>!(s.translations||{})[lang]&&!(s.vtTried||[]).includes(lang)):[];
+  if(!coreNeed.length&&!vtNeed.length)return;
+  langNote('Loading verse text…');
+  try{
+    if(coreNeed.length){
+      const keys=[...new Set(coreNeed.flatMap(verseRefs))];
+      const cols=PRES_LANGS.filter(l=>l[2]).map(l=>l[2]);
+      const rows=new Map();
+      for(let i=0;i<keys.length;i+=25){
+        const batch=keys.slice(i,i+25);
+        const data=await presFetch('ayas','select=sura_id,aya_number,arabic,'+cols.join(',')+'&or=('+batch.map(k=>{const p=k.split(':');return 'and(sura_id.eq.'+p[0]+',aya_number.eq.'+p[1]+')'}).join(',')+')');
+        data.forEach(v=>rows.set(v.sura_id+':'+v.aya_number,v));
+      }
+      coreNeed.forEach(s=>{
+        const refs=verseRefs(s);const tr=s.translations=Object.assign({},s.translations||{});
+        PRES_LANGS.filter(l=>l[2]).forEach(([k,,col])=>{if(!tr[k]){const v=joinVerses(refs,new Map(refs.map(r=>[r,(rows.get(r)||{})[col]])));if(v)tr[k]=v}});
+        if(!s.arabic){const a=joinVerses(refs,new Map(refs.map(r=>[r,(rows.get(r)||{}).arabic])));if(a)s.arabic=a}
+        if(!s.text&&tr.english)s.text=tr.english;
+        s.versesLoaded=true;
+      });
+    }
+    const still=info?list.filter(s=>!(s.translations||{})[lang]&&!(s.vtTried||[]).includes(lang)):[];
+    if(still.length){
+      const keys=[...new Set(still.flatMap(verseRefs))];
+      const map=new Map();
+      for(let i=0;i<keys.length;i+=25){
+        const batch=keys.slice(i,i+25);
+        const data=await presFetch('verse_translations','select=verse_key,text&lang=eq.'+info.vt+'&verse_key=in.('+batch.map(k=>'"'+k+'"').join(',')+')');
+        data.forEach(v=>map.set(v.verse_key,v.text));
+      }
+      still.forEach(s=>{const v=joinVerses(verseRefs(s),map);s.translations=Object.assign({},s.translations||{});if(v)s.translations[lang]=v;s.vtTried=[...new Set([...(s.vtTried||[]),lang])]});
+    }
+    if(run!==hydrateRun)return;
+    saveBasket();
+    const missing=info?list.filter(s=>!(s.translations||{})[lang]).length:0;
+    langNote(missing?missing+' verse slide'+(missing===1?' has':'s have')+' no '+presLangName(lang)+' translation stored; the original text is shown there.':'');
+    refreshVerseViews();
+    if(typeof renderEditor==='function')renderEditor();
+  }catch(e){
+    if(run!==hydrateRun)return;
+    langNote('Could not load verse text right now ('+e.message+'). Check your connection and choose the language again.');
+    presVerseError=true;
+    refreshVerseViews();
+  }
+}
+
 /* ── Load the basket on open. Without this call, items added from the Quran reader, search or hadith pages never showed here. ── */
-document.addEventListener('DOMContentLoaded', () => { try { load(); } catch (e) { console.error('Presentation load failed', e); } });
+document.addEventListener('DOMContentLoaded', () => { try { load(); } catch (e) { console.error('Presentation load failed', e); } try { initVerseLangControls(); hydrateVerseSlides(); } catch (e) { console.error('Verse language setup failed', e); } });
 </script>
 <!-- PRESENTATION BUILDER END -->
 <script src="/quran-verse-audio.js" defer></script>
