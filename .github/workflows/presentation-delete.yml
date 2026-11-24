@@ -1,0 +1,30 @@
+name: Presentation delete
+on:
+  pull_request:
+    paths:
+      - presentation.html
+      - tests/presentation-delete.test.cjs
+      - .github/workflows/presentation-delete.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  presentation-delete:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Playwright Chromium
+        run: |
+          npm install --no-save playwright@1.49.1
+          npx playwright install --with-deps chromium
+      - name: Delete saved presentations at phone and desktop widths
+        run: node --test tests/presentation-delete.test.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: presentation-delete-screens
+          path: test-results/presentation-delete
