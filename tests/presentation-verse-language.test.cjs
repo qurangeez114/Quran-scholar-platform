@@ -200,9 +200,18 @@ test('cross-reference flowing text adds its verses to the presentation in the re
       for (let i = 0; i < 100 && add.hidden; i++) await new Promise(r => setTimeout(r, 100));
       if (add.hidden) throw new Error('add button never appeared');
       if (!/Add these 2 verses to presentation/.test(add.textContent)) throw new Error('label: ' + add.textContent);
+      // A guest gets the sign-in prompt and nothing is added.
+      localStorage.removeItem('sb-ylosytbxpzxzwfzjpaej-auth-token');
       add.click();
-      return { basket: JSON.parse(localStorage.getItem('presentationBasket')), lang: localStorage.getItem('qsOutputLang'), label: add.textContent };
+      const gate = document.getElementById('qh-pres-gate');
+      const guestBlocked = !!gate && !gate.hidden && !localStorage.getItem('presentationBasket');
+      if (gate) gate.hidden = true;
+      // A member adds the verses.
+      localStorage.setItem('sb-ylosytbxpzxzwfzjpaej-auth-token', JSON.stringify({ user: { id: 'test-user' }, refresh_token: 'x' }));
+      add.click();
+      return { guestBlocked, gateLoaded: !!window.__qhPresentationGate, basket: JSON.parse(localStorage.getItem('presentationBasket')), lang: localStorage.getItem('qsOutputLang'), label: add.textContent };
     });
+    if (basket.gateLoaded) assert.ok(basket.guestBlocked, 'guests see the sign-in prompt');
     assert.strictEqual(basket.basket.length, 2);
     assert.strictEqual(basket.basket[0].reference, 'Quran 2:255');
     assert.strictEqual(basket.basket[0].translations.tigrinya, 'TIGRINYA 2:255');
