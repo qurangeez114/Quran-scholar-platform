@@ -2694,13 +2694,14 @@ function qhXrefToggle(id, btn) {
 }
 
 
+const QH_XREF_PRES_KEYS={en:'english',ti:'tigrinya',am:'amharic',om:'oromo',so:'somali',de:'german',ur:'urdu',bn:'bengali',ms:'malay',es:'spanish',zh:'chinese',sw:'swahili',ha:'hausa',sv:'swedish',no:'norwegian'};
 const QH_XREF_LANGS={
  ar:['Arabic','arabic'],ti:['Tigrinya','tigrinya'],en:['English','english'],am:['Amharic','amharic'],
  om:['Oromo','oromo'],so:['Somali','somali'],de:['German','german'],ur:['Urdu','urdu'],
  bn:['Bengali','bn'],ms:['Malay','ms'],es:['Spanish','es'],zh:['Chinese','zh'],
  sw:['Swahili','sw'],ha:['Hausa','ha'],sv:['Swedish','sv'],no:['Norwegian','no']
 };
-function qhAddXrefFlowControl(panel){
+function qhAddXrefFlowControl(panel,sourceRef){
  if(!panel || panel.querySelector('.qh-xref-flow-tools'))return;
  const refs=[...new Set([...panel.querySelectorAll('.xref-chip-btn')].map(x=>x.textContent.trim()).filter(x=>/^\d+:\d+$/.test(x)))];
  if(!refs.length)return;
@@ -2712,9 +2713,41 @@ function qhAddXrefFlowControl(panel){
  const button=document.createElement('button');button.type='button';button.textContent='Read as flowing text';
  const output=document.createElement('div');output.className='qh-xref-flow-text';output.hidden=true;
  const message=document.createElement('p');message.className='qh-xref-flow-note';message.textContent='References are shown once each in the order listed above. Each number opens its original verse.';
- tools.append(label,select,button,message);panel.prepend(tools);tools.after(output);
+ const addBtn=document.createElement('button');addBtn.type='button';addBtn.className='qh-xref-flow-add';addBtn.hidden=true;addBtn.setAttribute('data-add-presentation','');
+ let shown=null;
+ tools.append(label,select,button,addBtn,message);panel.prepend(tools);tools.after(output);
+ // Adds every verse shown in the flowing text to the presentation, one slide per
+ // verse, in the reading language. The presentation page loads the other
+ // languages for these slides, so the deck can switch language later.
+ addBtn.addEventListener('click',()=>{
+   if(!shown)return;
+   const key=QH_XREF_PRES_KEYS[shown.code]||'';
+   let basket=[];try{basket=JSON.parse(localStorage.getItem('presentationBasket')||'[]');if(!Array.isArray(basket))basket=[];}catch(e){}
+   const have=new Set(basket.filter(x=>x&&x.type==='quran').map(x=>x.reference));
+   let added=0;
+   shown.refs.forEach((ref,i)=>{
+     const reference='Quran '+ref;if(have.has(reference))return;
+     const value=String(shown.results.get(ref)||'').trim(),parts=ref.split(':');
+     const tr={};if(key&&value)tr[key]=value;
+     basket.push({type:'quran',id:'xref_'+parts[0]+'_'+parts[1]+'_'+Date.now().toString(36)+i,title:reference,
+       slideTitle:reference+(sourceRef?' · cross-reference of '+sourceRef:''),reference,
+       text:key==='english'?value:'',arabic:shown.code==='ar'?value:'',translations:tr,
+       speakerNotes:sourceRef?'Cross-reference of Quran '+sourceRef+'.':'',
+       sourceUrl:'index.html?sura='+parts[0]+'&aya='+parts[1],createdAt:new Date().toISOString()});
+     have.add(reference);added++;
+   });
+   try{
+     localStorage.setItem('presentationBasket',JSON.stringify(basket));
+     // Open the deck in the language these verses were read in.
+     localStorage.setItem('qsOutputLang',shown.code==='ar'?'arabic_only':(key||'english'));
+   }catch(e){alert('Could not save these verses to the presentation on this device.');return;}
+   const name=QH_XREF_LANGS[shown.code][0];
+   const msg=added?'✓ '+added+' verse'+(added===1?'':'s')+' added to presentation in '+name:'These verses are already in your presentation';
+   if(typeof showToastMsg==='function')showToastMsg(msg);
+   addBtn.textContent=added?'✓ Added to presentation':'✓ Already in presentation';
+ });
  button.addEventListener('click',async()=>{
-   if(!output.hidden){output.hidden=true;button.textContent='Read as flowing text';return;}
+   if(!output.hidden){output.hidden=true;addBtn.hidden=true;button.textContent='Read as flowing text';return;}
    button.disabled=true;button.textContent='Loading verses…';output.hidden=false;output.replaceChildren();
    try{
     const code=select.value,field=QH_XREF_LANGS[code][1],results=new Map();
@@ -2751,6 +2784,7 @@ function qhAddXrefFlowControl(panel){
     }
     if(missing){const note=document.createElement('p');note.className='qh-xref-flow-note';note.textContent=missing+' of '+refs.length+' verses do not have stored translations in this language.';output.prepend(note);}
     button.textContent='Hide flowing text';
+    shown={code,refs:refs.slice(),results};addBtn.hidden=false;addBtn.textContent='Add these '+refs.length+' verses to presentation';
    }catch(err){output.textContent='Unable to retrieve the selected translation: '+err.message;button.textContent='Retry flowing text';output.hidden=false;}
    finally{button.disabled=false;}
  });
@@ -2924,7 +2958,7 @@ async function loadCrossReferences(sura, aya) {
     });
 
     panel.innerHTML = html;
-    qhAddXrefFlowControl(panel);
+    qhAddXrefFlowControl(panel, sura + ':' + aya);
 
 // Global cache of cross-ref verse lists by theme
 window._crossRefThemeLists = {};
