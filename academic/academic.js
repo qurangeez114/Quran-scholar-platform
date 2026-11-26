@@ -4,10 +4,23 @@ import {classFormatLabel} from '/accounts/class-format.js';
 export {formatTuition,classFormatLabel};
 export const SUPABASE_URL='https://ylosytbxpzxzwfzjpaej.supabase.co';
 export const ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3N5dGJ4cHp4endmempwYWVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDY1MjcsImV4cCI6MjA5MTcyMjUyN30.yqigL9ILlXkQ7zi37rX3AUs7vjQBobTKuV-KzkSsAAs';
+// Shown on public pages only when filled. Leave empty to hide the field.
+export const INSTITUTION={
+  catalogYear:'',
+  accreditation:'',
+  creditHourDefinition:'',
+  certificateCredit:'',
+  certificateAccreditation:'',
+  officialTranscriptNote:''
+};
 export const TBP='To be provided by QuranHikma';
 export function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-export function tbp(what){return '<span class="tbp">'+esc(what?what+': ':'')+TBP+'</span>';}
-export function val(v,what){if(v==null||v===''||(Array.isArray(v)&&!v.length))return tbp(what);return esc(v);}
+export function filled(v){return !(v==null||v===''||(Array.isArray(v)&&!v.length));}
+// Kept for older callers; public pages no longer render placeholder text.
+export function tbp(what){return '';}
+export function val(v,what){return filled(v)?esc(v):'';}
+export function row(label,inner){return inner?'<tr><th scope="row">'+esc(label)+'</th><td>'+inner+'</td></tr>':'';}
+export function meta(label,inner){return inner?'<strong>'+esc(label)+':</strong> '+inner+'<br>':'';}
 export async function rest(path){
   const r=await fetch(SUPABASE_URL+'/rest/v1/'+path,{headers:{apikey:ANON,Authorization:'Bearer '+ANON}});
   if(!r.ok)throw new Error('HTTP '+r.status);return r.json();

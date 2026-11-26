@@ -32,7 +32,8 @@ const policies=readFileSync('policies.html','utf8');
 assert.match(policies,/Minimum age to enroll is 18/);
 assert.match(policies,/Tuition is set by the instructor for each course/);
 assert.match(policies,/id="refund"/);
-assert.match(policies,/To be provided by QuranHikma/);
+assert.doesNotMatch(policies,/To be provided by QuranHikma/);
+assert.match(policies,/refund schedule will be published before enrollment/);
 
 const contact=readFileSync('contact.html','utf8');
 assert.match(contact,/href="mailto:360quranhikma@gmail.com"/);
@@ -48,7 +49,7 @@ assert.match(courses,/tuitionFieldsFromInput/);
 
 const catalog=readFileSync('catalog.html','utf8');
 assert.match(catalog,/formatTuition/);
-assert.match(catalog,/<strong>Tuition:<\/strong>/);
+assert.match(catalog,/meta\('Tuition',esc\(formatTuition\(c\)\)\)/);
 
 const coursePage=readFileSync('course.html','utf8');
 assert.match(coursePage,/id="courseTuition"/);
