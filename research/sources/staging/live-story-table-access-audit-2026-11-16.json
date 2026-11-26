@@ -1,0 +1,58 @@
+{
+  "schema": "qh-live-story-table-access-audit-v1",
+  "date": "2026-11-16",
+  "scope": "read-only current pg_policies and pg_class grants",
+  "project_ref": "ylosytbxpzxzwfzjpaej",
+  "publication_allowed": false,
+  "findings": [
+    {
+      "table": "ancient_sources",
+      "rls": true,
+      "anon_select_grant": true,
+      "authenticated_select_grant": true,
+      "select_policy": "verified status AND nonblank source_locator",
+      "assessment": "catalog restriction observed; API-level role test and other views/RPC still required"
+    },
+    {
+      "table": "story_sources",
+      "rls": true,
+      "anon_select_grant": false,
+      "authenticated_select_grant": false,
+      "select_policy": null,
+      "assessment": "current base table denies ordinary anon/authenticated SELECT by grant and RLS; verify any service-role, view, or RPC exposure separately"
+    },
+    {
+      "table": "quranic_stories",
+      "rls": true,
+      "anon_select_grant": true,
+      "authenticated_select_grant": true,
+      "select_policy": "public USING(true)",
+      "assessment": "story metadata visible; no verification_status field in prior schema audit"
+    },
+    {
+      "table": "story_verses",
+      "rls": true,
+      "anon_select_grant": true,
+      "authenticated_select_grant": true,
+      "select_policy": "public USING(true)",
+      "assessment": "story-verse mappings visible; check provenance/publication model"
+    }
+  ],
+  "change_since_prior_audit": "Previous 2026-11-14 checkpoint reported story_sources public SELECT USING(true) and anon grant. Current live catalog has neither; do not extrapolate former exposure to current state. Previous ancient_sources unrestricted policy also replaced by verified-only condition.",
+  "new_ayat_reviewed": 0,
+  "new_verified_public": 0,
+  "new_dossiers": 0,
+  "production_writes": 0,
+  "limitations": [
+    "No anonymous PostgREST requests or role impersonation",
+    "No view/function/SECURITY DEFINER inventory",
+    "No 6236-ayah main/PR/database coverage union",
+    "No independent primary-source edition validation"
+  ],
+  "next_actions": [
+    "Inspect view/RPC indirect disclosure routes",
+    "Run anonymous PostgREST smoke test with appropriate credentials",
+    "Reconcile unique ayah ledger across main and PR branches",
+    "Advance earliest proven uncovered ayat"
+  ]
+}
